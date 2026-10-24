@@ -377,3 +377,20 @@ func TestImageTooLargeIsDropped(t *testing.T) {
 		t.Fatalf("oversized image should be dropped, got %d items", len(items))
 	}
 }
+
+func TestClipJSONKeepsRunesIntact(t *testing.T) {
+	// A leading ASCII byte shifts the cut point into the middle of a rune.
+	body := "a" + strings.Repeat("汉", maxTextLen)
+	raw := json.RawMessage(`{"content":"` + body + `"}`)
+	var out map[string]string
+	if err := json.Unmarshal(clipJSON(raw), &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsRune(out["content"], '�') {
+		t.Fatal("clipJSON cut a rune in half")
+	}
+	// clipTo appends a "\n…（已截断，共 N 字节）" suffix, so allow a little slack over the limit.
+	if len(out["content"]) > maxTextLen/2+64 {
+		t.Fatalf("content was not shortened: %d bytes", len(out["content"]))
+	}
+}
