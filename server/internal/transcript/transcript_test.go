@@ -394,3 +394,11 @@ func TestClipJSONKeepsRunesIntact(t *testing.T) {
 		t.Fatalf("content was not shortened: %d bytes", len(out["content"]))
 	}
 }
+
+func TestRecapDropsConfigHint(t *testing.T) {
+	var m Meta
+	items := ParseLine(1, []byte(`{"type":"system","subtype":"away_summary","uuid":"u","content":"目标是 X。下一步 Y。 (disable recaps in /config)"}`), &m)
+	if len(items) != 1 || items[0].Kind != proto.KindRecap || items[0].Text != "目标是 X。下一步 Y。" {
+		t.Fatalf("items = %+v", items)
+	}
+}

@@ -59,11 +59,12 @@ type block struct {
 
 // Meta is session-level information collected while parsing.
 type Meta struct {
-	Title    string
-	Cwd      string
-	Model    string
-	LastText string
-	Updated  time.Time
+	FirstUser string // first thing the user typed; titles untitled (headless) sessions
+	Title     string
+	Cwd       string
+	Model     string
+	LastText  string
+	Updated   time.Time
 }
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
@@ -102,7 +103,15 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			text = "上下文已压缩"
 		case "api_error":
 			text = "API 错误：" + rawString(e.Content)
-		case "informational", "away_summary":
+		case "away_summary":
+			recap := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(rawString(e.Content)), "(disable recaps in /config)"))
+			if recap == "" {
+				return nil
+			}
+			it := mk(0, "system", proto.KindRecap)
+			it.Text = clip(recap)
+			return []proto.Item{it}
+		case "informational":
 			text = rawString(e.Content)
 		default:
 			return nil
@@ -127,7 +136,11 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			if e.IsMeta {
 				return nil
 			}
-			return userText(mk, s)
+			items := userText(mk, s)
+			if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
+				meta.FirstUser = items[0].Text
+			}
+			return items
 		}
 		var blocks []block
 		if json.Unmarshal(e.Message.Content, &blocks) != nil {

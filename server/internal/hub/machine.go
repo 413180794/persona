@@ -322,6 +322,14 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "screen", "machine_id": m.cfg.ID, "session_id": p.SessionID,
 			"text": p.Text, "status": p.Status, "ts": time.Now().UTC()})
+	case "session.delta":
+		var p struct {
+			SessionID string `json:"session_id"`
+			Text      string `json:"text"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
+		}
 	case "state.put":
 		var p struct {
 			SessionID string         `json:"session_id"`

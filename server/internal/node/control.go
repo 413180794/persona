@@ -318,6 +318,9 @@ func (n *Node) keys(ctx context.Context, id string, keys []string, text string) 
 }
 
 func (n *Node) screen(ctx context.Context, id string, lines int) (string, string, error) {
+	if n.isAssistantSession(id) {
+		return "", proto.StatusIdle, nil // headless: no terminal; live text arrives as session.delta
+	}
 	if lines <= 0 || lines > 400 {
 		lines = 60
 	}
@@ -356,7 +359,20 @@ type watch struct {
 func (n *Node) watch(id string, since int) error {
 	f, err := n.file(id)
 	if err != nil {
-		return err
+		if !n.isAssistantSession(id) {
+			return err
+		}
+		// A brand-new headless conversation has no transcript until claude writes its first line.
+		go func() {
+			for i := 0; i < 60; i++ {
+				time.Sleep(500 * time.Millisecond)
+				if _, err := n.file(id); err == nil {
+					_ = n.watch(id, since)
+					return
+				}
+			}
+		}()
+		return nil
 	}
 	n.mu.Lock()
 	if _, ok := n.watches[id]; ok {

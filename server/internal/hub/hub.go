@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -26,6 +27,7 @@ type Hub struct {
 	mail     Mail
 	push     *Pusher
 	store    Store // nil in unit tests: nothing is persisted
+	ai       *ai.Client
 
 	mu           sync.Mutex
 	clients      map[*client]struct{}
@@ -100,6 +102,7 @@ func Run(ctx context.Context, version string) error {
 		}
 	}
 	h.push = newPusher(cfg.dir, h.store, h.logf)
+	h.ai = ai.New(cfg.AI)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)

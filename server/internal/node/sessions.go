@@ -106,6 +106,7 @@ type quickMeta struct {
 	size     int64
 	mtime    time.Time
 	title    string
+	first    string
 	cwd      string
 	model    string
 	lastText string
@@ -140,13 +141,14 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	head := make([]byte, 32*1024)
 	nr, _ := f.Read(head)
 	for _, line := range bytes.Split(head[:nr], []byte("\n")) {
-		if bytes.Contains(line, []byte(`"cwd"`)) {
+		if bytes.Contains(line, []byte(`"cwd"`)) || bytes.Contains(line, []byte(`"type":"user"`)) {
 			transcript.ParseLine(0, line, &tm)
-			if tm.Cwd != "" {
+			if tm.Cwd != "" && tm.FirstUser != "" {
 				break
 			}
 		}
 	}
+	first := tm.FirstUser
 	const tail = 384 * 1024
 	off := max(st.Size()-tail, 0)
 	buf := make([]byte, st.Size()-off)
@@ -166,7 +168,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 			transcript.ParseLine(0, line, &tm)
 		}
 	}
-	m.title, m.cwd, m.model, m.lastText = tm.Title, tm.Cwd, tm.Model, tm.LastText
+	m.title, m.cwd, m.model, m.lastText, m.first = tm.Title, tm.Cwd, tm.Model, tm.LastText, first
 	return m
 }
 
@@ -245,6 +247,10 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				if m.title != "" {
 					s.Title = m.title
 				}
+				if s.Title == "" || s.Title == "Claude Code" {
+					s.Title = ""
+					untitled(&s, m)
+				}
 				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), st.ModTime().UTC()
 			}
 		}
@@ -253,6 +259,12 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		seen[id] = true
 	}
 
+	for _, s := range n.assistantSessions() {
+		if !seen[s.SessionID] {
+			out = append(out, s)
+			seen[s.SessionID] = true
+		}
+	}
 	for _, s := range n.offline(seen) {
 		n.decorate(&s)
 		out = append(out, s)
@@ -316,12 +328,25 @@ func (n *Node) scanOffline() []proto.Session {
 		n.mu.Lock()
 		n.paths[id] = c.path
 		n.mu.Unlock()
-		out = append(out, proto.Session{
+		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
 			LastText: snippet(m.lastText), UpdatedAt: c.st.ModTime().UTC(),
-		})
+		}
+		untitled(&s, m)
+		out = append(out, s)
 	}
 	return out
+}
+
+// untitled gives sessions without an AI title (headless ones) their first message as title.
+func untitled(s *proto.Session, m quickMeta) {
+	if s.Title == "" && m.first != "" {
+		r := []rune(snippet(m.first))
+		if len(r) > 40 {
+			r = append(r[:40], '…')
+		}
+		s.Title = string(r)
+	}
 }
 
 func (n *Node) decorate(s *proto.Session) {

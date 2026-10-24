@@ -101,6 +101,7 @@ const assistantPrompt = `# Jarvis 助手
 - 不确定数据在哪台机器、哪个邮箱时先查再答，不要猜；查不到就直说查了哪些地方。
 - 有风险的事（删除、给别人发消息 / 邮件、改线上配置、推代码）先用 AskUserQuestion 说清楚要做什么、让他确认。
 - 需要长时间跑的开发任务，建议他在 Jarvis 的「开发」里对应项目新开会话，而不是在这里做。
+- 你是无头运行的（claude -p），没有终端界面；需要他做选择时用 AskUserQuestion，会出现在他的手机上。
 - 这个目录（` + "`~/.jarvis/assistant`" + `）是你的工作区，可以在这里放笔记、临时文件；本文件由 Jarvis 自动生成，会被覆盖，别改它。
 `
 
@@ -187,22 +188,17 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD()}, &prep); err != nil {
 		return nil, err
 	}
-	first := prompt
-	if len(images) > 0 {
-		first = "" // images go through session.send, which knows how to hand them to claude
-	}
+	// Headless claude (node/assistant.go): no herdr tab, streamed tokens, any launcher per message.
 	var res struct {
-		Session proto.Session `json:"session"`
+		SessionID string `json:"session_id"`
 	}
-	if err := m.call(ctx, "session.start", map[string]any{"cwd": prep.Cwd, "launcher": cfg.Launcher, "prompt": first}, &res); err != nil {
+	if err := m.call(ctx, "assistant.send", map[string]any{"cwd": prep.Cwd, "launcher": cfg.Launcher, "text": prompt, "images": images}, &res); err != nil {
 		return nil, err
 	}
-	if len(images) > 0 {
-		if err := m.call(ctx, "session.send", map[string]any{"session_id": res.Session.SessionID, "text": prompt, "images": images}, nil); err != nil {
-			return nil, err
-		}
-	}
-	res.Session.MachineID = m.cfg.ID
-	res.Session.Assistant = true
-	return &res.Session, nil
+	s := proto.Session{SessionID: res.SessionID, Cwd: prep.Cwd, Status: proto.StatusWorking, Launcher: cfg.Launcher,
+		StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
+	s.MachineID = m.cfg.ID
+	s.Assistant = true
+	s.State = proto.StateWorking
+	return &s, nil
 }

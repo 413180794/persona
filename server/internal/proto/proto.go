@@ -118,6 +118,7 @@ const (
 	KindToolResult = "tool_result"
 	KindNotice     = "notice"
 	KindImage      = "image"
+	KindRecap      = "recap" // Claude Code's "while you were away" summary
 )
 
 type Image struct {

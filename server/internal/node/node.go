@@ -35,11 +35,12 @@ type Node struct {
 	files    map[string]*transcript.File // session id -> parsed transcript
 	paths    map[string]string           // session id -> transcript path
 	watches  map[string]*watch
-	agents   map[string]herdr.Agent // session id -> live agent
-	panes    map[string]string      // pane id -> session id (learned from hooks)
-	layout   layout                 // workspace / tab names from the last herdr snapshot
-	lastList string                 // serialized last sessions.changed payload
-	metas    map[string]quickMeta   // transcript path -> cached meta
+	agents   map[string]herdr.Agent    // session id -> live agent
+	panes    map[string]string         // pane id -> session id (learned from hooks)
+	layout   layout                    // workspace / tab names from the last herdr snapshot
+	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
+	lastList string                    // serialized last sessions.changed payload
+	metas    map[string]quickMeta      // transcript path -> cached meta
 }
 
 func New(version string) (*Node, error) {
@@ -73,6 +74,7 @@ func New(version string) (*Node, error) {
 		watches: map[string]*watch{},
 		agents:  map[string]herdr.Agent{},
 		panes:   map[string]string{},
+		procs:   map[string]*assistantProc{},
 		metas:   map[string]quickMeta{},
 	}
 	n.state = newState()
@@ -96,6 +98,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 		defer ln.Close()
 	}
 	go n.pollAgents(ctx)
+	go n.reapAssistants(ctx)
 	return n.peer.Serve(ctx, os.Stdin)
 }
 
@@ -192,11 +195,21 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.start":
 		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID)
 		return map[string]any{"session": s}, err
+	case "assistant.send":
+		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images)
+		return map[string]any{"session_id": id}, err
 	case "session.send":
+		if n.isAssistantSession(p.SessionID) {
+			_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images)
+			return ok(err)
+		}
 		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))
 	case "session.keys":
 		return ok(n.keys(ctx, p.SessionID, p.Keys, p.Text))
 	case "session.interrupt":
+		if n.isAssistantSession(p.SessionID) {
+			return ok(n.assistantInterrupt(p.SessionID))
+		}
 		return ok(n.keys(ctx, p.SessionID, []string{"esc"}, ""))
 	case "session.screen":
 		text, status, err := n.screen(ctx, p.SessionID, p.Lines)
@@ -221,6 +234,22 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.unwatch":
 		n.unwatch(p.SessionID)
 		return ok(nil)
+	case "claude.settings":
+		list, err := n.getClaudeSettings()
+		return map[string]any{"settings": list}, err
+	case "claude.settings.set":
+		var a struct {
+			Key   string `json:"key"`
+			Value any    `json:"value"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		if err := n.setClaudeSetting(a.Key, a.Value); err != nil {
+			return nil, err
+		}
+		list, err := n.getClaudeSettings()
+		return map[string]any{"settings": list}, err
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd)
 	case "assistant.prepare":
@@ -240,6 +269,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return map[string]any{"cwd": dir}, nil
 	case "session.close":
+		if n.isAssistantSession(p.SessionID) {
+			n.stopAssistant(p.SessionID)
+			return ok(nil)
+		}
 		return ok(n.close(ctx, p.SessionID))
 	}
 	return nil, fmt.Errorf("unknown method %s", method)

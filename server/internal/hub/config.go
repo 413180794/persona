@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"github.com/mdp/qrterminal/v3"
+
+	"github.com/chyroc/jarvis/server/internal/ai"
 )
 
 type MachineConfig struct {
@@ -28,8 +30,10 @@ type Config struct {
 	PublicURL          string `json:"public_url"`
 	HookTimeoutMinutes int    `json:"hook_timeout_minutes"`
 	// DatabaseURL points at the Postgres container (scripts/deploy.sh creates it and fills this in).
-	DatabaseURL string          `json:"database_url"`
-	Machines    []MachineConfig `json:"machines"`
+	DatabaseURL string `json:"database_url"`
+	// AI configures the Messages API used for in-app AI helpers (defaults to the cc_ds gateway on example-machine).
+	AI       ai.Config       `json:"ai"`
+	Machines []MachineConfig `json:"machines"`
 
 	dir string
 }
