@@ -268,6 +268,13 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return map[string]any{"cwd": dir}, nil
+	case "session.queue.edit":
+		var a struct {
+			Keep []int `json:"keep"`
+		}
+		_ = json.Unmarshal(params, &a)
+		queue, err := n.editQueue(ctx, p.SessionID, a.Keep)
+		return map[string]any{"queue": queue}, err
 	case "session.close":
 		if n.isAssistantSession(p.SessionID) {
 			n.stopAssistant(p.SessionID)

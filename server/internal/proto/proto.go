@@ -103,8 +103,10 @@ type Session struct {
 	SlotIndex  int    `json:"slot_index,omitempty"`
 	// State is the unified agent state the apps render (needs_you, working, unread, idle, offline, unknown),
 	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
-	State               string    `json:"state"`
-	SeenAt              time.Time `json:"seen_at,omitempty"`
+	State  string    `json:"state"`
+	SeenAt time.Time `json:"seen_at,omitempty"`
+	// Queued is input typed while the agent works, waiting to be taken (shown above the composer, not in the chat).
+	Queued              []string  `json:"queued,omitempty"`
 	UpdatedAt           time.Time `json:"updated_at"`
 	LastText            string    `json:"last_text,omitempty"`
 	PendingInteractions int       `json:"pending_interactions"`

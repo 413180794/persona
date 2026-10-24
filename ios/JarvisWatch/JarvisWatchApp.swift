@@ -117,11 +117,7 @@ struct WatchRootView: View {
     var body: some View {
         NavigationStack {
             if model.config == nil {
-                VStack(spacing: 8) {
-                    Image(systemName: "iphone.and.arrow.forward").font(.title2).foregroundStyle(Theme.accent)
-                    Text("在 iPhone 上打开 Jarvis 完成配对").font(.footnote).multilineTextAlignment(.center)
-                }
-                .padding()
+                WatchPairView()
             } else {
                 List {
                     if !model.interactions.isEmpty {
@@ -323,5 +319,43 @@ struct WatchSessionView: View {
     private func load() async {
         guard let api = model.api, let res = try? await api.items(session.key, beforeSeq: nil, limit: 40) else { return }
         items = res.items.filter { $0.kind == .text }
+    }
+}
+
+/// Shown until the watch has the phone's pairing: pull it from the phone (when nearby) instead of only waiting.
+struct WatchPairView: View {
+    @State private var syncing = false
+    @State private var failed = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 10) {
+                Image(systemName: "iphone.and.arrow.forward").font(.title2).foregroundStyle(Theme.accent)
+                Text("还没有配对").font(.headline)
+                Text("iPhone 上的 Jarvis 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button {
+                    syncing = true
+                    failed = false
+                    WatchSync.shared.requestConfig { ok in
+                        syncing = false
+                        failed = !ok
+                        WKInterfaceDevice.current().play(ok ? .success : .failure)
+                    }
+                } label: {
+                    HStack {
+                        if syncing { ProgressView() }
+                        Text("从 iPhone 同步").lineLimit(1)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(syncing)
+                if failed {
+                    Text("连不上 iPhone：打开 iPhone 上的 Jarvis，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.attention)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding()
+        }
     }
 }

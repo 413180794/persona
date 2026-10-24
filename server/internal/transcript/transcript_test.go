@@ -435,3 +435,35 @@ func TestLastActivityIgnoresSystemLines(t *testing.T) {
 		t.Fatalf("last activity = %s", got)
 	}
 }
+
+func TestPastedContentTagsAreStripped(t *testing.T) {
+	var m Meta
+	items := ParseLine(1, []byte(`{"type":"user","uuid":"u","message":{"role":"user","content":"\n\n<pasted_content id=\"ae9b\">\n我用语音输入的一段话\n</pasted_content id=\"ae9b\">"}}`), &m)
+	if len(items) != 1 || items[0].Text != "我用语音输入的一段话" {
+		t.Fatalf("items = %+v", items)
+	}
+	nested := ParseLine(2, []byte(`{"type":"user","uuid":"v","message":{"role":"user","content":"a <\\pasted_content id=\"x\">b<\\/pasted_content id=\"x\">"}}`), &m)
+	if len(nested) != 1 || nested[0].Text != "a b" {
+		t.Fatalf("nested = %+v", nested)
+	}
+}
+
+func TestQueueOperations(t *testing.T) {
+	var m Meta
+	for i, l := range []string{
+		`{"type":"queue-operation","operation":"enqueue","content":"A"}`,
+		`{"type":"queue-operation","operation":"enqueue","content":"B"}`,
+		`{"type":"queue-operation","operation":"enqueue","content":"C"}`,
+		`{"type":"queue-operation","operation":"dequeue"}`,
+		`{"type":"queue-operation","operation":"remove","content":"C","reason":"absorbed_mid_turn"}`,
+	} {
+		ParseLine(i+1, []byte(l), &m)
+	}
+	if len(m.Queue) != 1 || m.Queue[0] != "B" {
+		t.Fatalf("queue = %v", m.Queue)
+	}
+	ParseLine(9, []byte(`{"type":"queue-operation","operation":"popAll","content":"B"}`), &m)
+	if len(m.Queue) != 0 {
+		t.Fatalf("queue after popAll = %v", m.Queue)
+	}
+}

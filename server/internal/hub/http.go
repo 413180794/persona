@@ -47,6 +47,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/seen", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		h.markSeen(m.cfg.ID, r.PathValue("sid"))
 		writeJSON(w, map[string]any{"ok": true})

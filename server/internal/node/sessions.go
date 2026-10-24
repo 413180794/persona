@@ -108,6 +108,7 @@ type quickMeta struct {
 	title    string
 	first    string
 	activity time.Time // last real exchange; zero when unknown
+	queue    []string
 	cwd      string
 	model    string
 	lastText string
@@ -169,7 +170,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 			transcript.ParseLine(0, line, &tm)
 		}
 	}
-	m.title, m.cwd, m.model, m.lastText, m.first, m.activity = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity
+	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	return m
 }
 
@@ -253,6 +254,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), lastUsed(m, st)
+				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
+					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
+				}
 			}
 		}
 		n.decorate(&s)
@@ -537,7 +541,7 @@ func (n *Node) pollAgents(ctx context.Context) {
 func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
-		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10)
+		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued)
 	}
 	return b.String()
 }

@@ -36,6 +36,7 @@ type entry struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 	AITitle    string `json:"aiTitle"`
+	Operation  string `json:"operation"`
 	Attachment *struct {
 		Type        string          `json:"type"`
 		Prompt      json.RawMessage `json:"prompt"`
@@ -67,6 +68,9 @@ type block struct {
 
 // Meta is session-level information collected while parsing.
 type Meta struct {
+	// Queue holds input typed while Claude works and not yet taken (queue-operation lines:
+	// enqueue / dequeue / remove / popAll — popAll is "up arrow pulls them back into the input").
+	Queue []string
 	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
 	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
 	LastActivity time.Time
@@ -77,6 +81,10 @@ type Meta struct {
 	LastText     string
 	Updated      time.Time
 }
+
+// pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
+// the phone, e.g. a WeChat voice-input transcript, turns into): <pasted_content id="ae9b">…</pasted_content id="ae9b">.
+var pastedRe = regexp.MustCompile(`<[\\/]*pasted_content(?:\s+id="[^"]*")?\s*>`) // also <\pasted…> / <\/pasted…> from nested pastes
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
@@ -101,6 +109,10 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	if !e.Timestamp.IsZero() {
 		meta.Updated = e.Timestamp
+	}
+	if e.Type == "queue-operation" {
+		meta.applyQueue(e.Operation, rawString(e.Content))
+		return nil
 	}
 	if e.Type == "ai-title" && e.AITitle != "" {
 		meta.Title = e.AITitle
@@ -272,8 +284,38 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	return nil
 }
 
+func (m *Meta) applyQueue(op, content string) {
+	removeOne := func() bool {
+		for i, q := range m.Queue {
+			if q == content {
+				m.Queue = append(m.Queue[:i:i], m.Queue[i+1:]...)
+				return true
+			}
+		}
+		return false
+	}
+	switch op {
+	case "enqueue":
+		if content != "" {
+			m.Queue = append(m.Queue, content)
+		}
+	case "dequeue":
+		if len(m.Queue) > 0 {
+			m.Queue = m.Queue[1:]
+		}
+	case "remove", "popAll":
+		if content == "" || !removeOne() {
+			if op == "popAll" {
+				m.Queue = nil
+			} else if len(m.Queue) > 0 {
+				m.Queue = m.Queue[1:]
+			}
+		}
+	}
+}
+
 func userText(mk func(int, string, string) proto.Item, s string) []proto.Item {
-	trimmed := strings.TrimSpace(s)
+	trimmed := strings.TrimSpace(pastedRe.ReplaceAllString(s, ""))
 	if trimmed == "" {
 		return nil
 	}

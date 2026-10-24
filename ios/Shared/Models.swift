@@ -103,6 +103,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var slotIndex: Int?
     var state: AgentState
     var seenAt: Date?
+    var queued: [String]?
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -116,7 +117,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at",
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -143,6 +144,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
+        queued = try c.decodeIfPresent([String].self, forKey: .queued)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
@@ -162,6 +164,9 @@ extension Session {
     }
 
     var displayTitle: String { title.isEmpty || title == "Claude Code" ? folderName : title }
+
+    /// Idle or unclassified: folded away in busy spaces.
+    var isQuiet: Bool { state == .idle || state == .unknown }
 }
 
 /// Unified agent state (docs/agent-states.md), computed by the hub from herdr status, pending interactions and

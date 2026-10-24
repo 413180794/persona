@@ -142,6 +142,13 @@ nonisolated struct APIClient: Sendable {
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 
+    struct QueueEdit: Encodable { var keep: [Int] }
+    struct QueueResponse: Decodable { var queue: [String] }
+    /// Pulls the queued input back out of claude and re-queues the indexes in `keep`; returns what was queued.
+    func editQueue(_ k: SessionKey, keep: [Int]) async throws -> [String] {
+        try await post(sp(k) + "/queue", body: QueueEdit(keep: keep), as: QueueResponse.self).queue
+    }
+
     struct AssistantState: Codable, Sendable {
         var machineID: String
         var launcher: String

@@ -43,6 +43,12 @@ final class AppModel {
             assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
         }
         live.onEvent = { [weak self] in self?.handle($0) }
+        WatchSync.shared.configProvider = { Keychain.serverConfig }
+        WatchSync.shared.onActivated = { [weak self] in
+            guard let self, let cfg = self.config else { return }
+            WatchSync.shared.push(config: cfg)
+            WatchSync.shared.push(summary: self.watchSummary())
+        }
         live.onConnected = { [weak self] in self?.didConnect() }
     }
 
@@ -283,6 +289,25 @@ final class AppModel {
             Haptics.success()
         } catch {
             if (error as? APIError)?.status != 410 { interactions[ix.id] = ix }
+            show(error)
+        }
+    }
+
+    /// Unsent composer text per chat (also where an edited queued message lands).
+    var drafts: [SessionKey: String] = [:]
+
+    /// Edit or delete one queued message: everything is pulled back out of claude and the others re-queued.
+    func editQueued(_ key: SessionKey, index: Int, delete: Bool) async {
+        guard let api, let queue = session(key)?.queued, queue.indices.contains(index) else { return }
+        do {
+            let pulled = try await api.editQueue(key, keep: queue.indices.filter { $0 != index })
+            if !delete, pulled.indices.contains(index) {
+                let current = drafts[key] ?? ""
+                drafts[key] = current.isEmpty ? pulled[index] : current + "\n" + pulled[index]
+            }
+            Haptics.success()
+            toast = Toast(delete ? "已从队列删除" : "已撤回到输入框，改好再发送", style: .success)
+        } catch {
             show(error)
         }
     }

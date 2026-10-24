@@ -450,3 +450,47 @@ func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File, w *
 		}
 	}
 }
+
+// editQueue takes the queued input back out of claude (the TUI's "press up to edit queued messages" pulls every
+// queued message into the input box), clears the input, and re-queues the ones listed in keep, in order.
+// It returns the messages that were queued so the phone can put the edited one in its composer.
+func (n *Node) editQueue(ctx context.Context, id string, keep []int) ([]string, error) {
+	pane, err := n.paneFor(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	p := n.transcriptPath(id)
+	if p == "" {
+		return nil, fmt.Errorf("transcript for session %s not found", id)
+	}
+	st, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	queue := n.meta(p, st).queue
+	if len(queue) == 0 {
+		return nil, fmt.Errorf("nothing is queued")
+	}
+	if err := n.herdr.PaneSendKeys(ctx, pane, "up"); err != nil {
+		return nil, err
+	}
+	time.Sleep(300 * time.Millisecond)
+	// ctrl+u only clears the current line: walk back through every line of the pulled-back text.
+	lines := 0
+	for _, q := range queue {
+		lines += strings.Count(q, "\n") + 1
+	}
+	for i := 0; i < lines; i++ {
+		_ = n.herdr.PaneSendKeys(ctx, pane, "ctrl+u", "backspace")
+	}
+	_ = n.herdr.PaneSendKeys(ctx, pane, "ctrl+u")
+	for _, k := range keep {
+		if k >= 0 && k < len(queue) {
+			if err := n.herdr.AgentPrompt(ctx, pane, queue[k]); err != nil {
+				return queue, fmt.Errorf("re-queue: %w", err)
+			}
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+	return queue, nil
+}

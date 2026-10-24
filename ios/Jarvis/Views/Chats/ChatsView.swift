@@ -11,7 +11,7 @@ struct SpaceGroup: Identifiable {
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
-    var isQuiet: Bool { sessions.allSatisfy { $0.state == .idle || $0.state == .unknown } }
+    var isQuiet: Bool { sessions.allSatisfy(\.isQuiet) }
 
     func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
 
@@ -46,6 +46,7 @@ struct ChatsView: View {
     @State private var showNew = false
     @State private var showAllRecent = false
     @State private var expandedQuiet = Set<String>()
+    @State private var expandedIdle = Set<String>()
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
@@ -84,7 +85,30 @@ struct ChatsView: View {
 
                 ForEach(active) { g in
                     Section {
-                        ForEach(g.sessions) { s in slotRow(s) }
+                        // Busy agents first; idle ones fold into one row so a big workspace stays compact.
+                        let idle = g.sessions.filter(\.isQuiet)
+                        let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
+                        ForEach(g.sessions.filter { !$0.isQuiet }) { s in slotRow(s) }
+                        if !idle.isEmpty {
+                            if showIdle {
+                                ForEach(idle) { s in slotRow(s) }
+                                if query.isEmpty {
+                                    Button {
+                                        withAnimation(.snappy) { _ = expandedIdle.remove(g.id) }
+                                    } label: {
+                                        Label("收起空闲的 \(idle.count) 个", systemImage: "chevron.up")
+                                            .font(.subheadline.weight(.medium))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            } else {
+                                Button {
+                                    Haptics.tap()
+                                    withAnimation(.snappy) { _ = expandedIdle.insert(g.id) }
+                                } label: { IdleFoldRow(sessions: idle) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
                     } header: {
                         Button { path.append(SpaceRoute(id: g.id)) } label: {
                             SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
@@ -323,6 +347,41 @@ struct SlotRow: View {
             }
         }
         .padding(.vertical, 3)
+    }
+}
+
+/// The idle agents of a busy space folded into one line: count plus their tab names.
+struct IdleFoldRow: View {
+    var sessions: [Session]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chevron.down.circle")
+                .foregroundStyle(.secondary)
+            Text("还有 \(sessions.count) 个空闲")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(sessions.prefix(6)) { s in
+                        Text(s.slotLabel ?? s.displayTitle)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.primary.opacity(0.05), in: .capsule)
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+            .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .leading, endPoint: .trailing))
+        }
+        .padding(.vertical, 4)
+        .contentShape(.rect)
+        .accessibilityLabel("展开 \(sessions.count) 个空闲的 agent")
     }
 }
 

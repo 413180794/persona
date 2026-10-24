@@ -55,6 +55,21 @@ struct SettingsView: View {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
                 }
 
+                Section {
+                    Button {
+                        if let cfg = model.config {
+                            WatchSync.shared.push(config: cfg)
+                            WatchSync.shared.push(summary: model.watchSummary())
+                            Haptics.success()
+                            model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
+                        }
+                    } label: {
+                        Label("同步到 Apple Watch", systemImage: "applewatch").lineLimit(1)
+                    }
+                } footer: {
+                    Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
+                }
+
                 Section("服务器") {
                     Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
                     Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: "xmark.circle") }

@@ -53,8 +53,11 @@ struct ChatView: View {
                 } else if rows.isEmpty {
                     EmptyStateView(symbol: "text.bubble", title: "还没有消息", message: "发一句话开始吧。")
                 }
+                // Finished turns read like the assistant: thoughts hidden, tool runs folded into one line.
+                // Only the turn still running (after the last user message) shows every step.
+                let liveFrom = status.isActive ? (rows.lastIndex { if case .user = $0 { true } else { false } } ?? -1) : rows.count
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    rowView(row, isLatest: index == rows.count - 1)
+                    rowView(row, isLatest: index == rows.count - 1, live: index > liveFrom)
                         .id(row.id)
                 }
                 if style == .assistant {
@@ -66,6 +69,11 @@ struct ChatView: View {
                         TypingIndicator(text: "Jarvis 正在思考…").id("typing")
                     }
                 }
+                // Bottom sentinel: while it is on screen we are at the end and the "jump to bottom" arrow hides
+                // (geometry math missed the composer / queue insets and kept the arrow up at the very end).
+                Color.clear
+                    .frame(height: 1)
+                    .onScrollVisibilityChange(threshold: 0.01) { visible in atBottom = visible }
                 if let err = store.error {
                     Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger)
                 }
@@ -77,11 +85,7 @@ struct ChatView: View {
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
-        .onScrollGeometryChange(for: Bool.self) { geo in
-            geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 120
-        } action: { _, near in
-            atBottom = near
-        }
+
         .onChange(of: rows.last?.id) { _, _ in
             if atBottom { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } }
         }
@@ -109,6 +113,9 @@ struct ChatView: View {
                         Task { await model.interrupt(key) }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                if let queued = session?.queued, !queued.isEmpty, style == .dev {
+                    QueueStrip(key: key, queued: queued)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : nil)
             }
@@ -214,14 +221,14 @@ struct ChatView: View {
         return [machine, place.isEmpty ? nil : place, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
 
-    @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool) -> some View {
+    @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
         switch row {
         case .user(let i): UserBubble(item: i)
         case .assistant(let i): AssistantText(item: i)
         case .thinking(let i):
-            if style == .dev { ThinkingRow(item: i) }
+            if style == .dev && live { ThinkingRow(item: i) }
         case .tools(let steps):
-            if style == .assistant { AssistantToolsRow(steps: steps) } else { ToolGroupView(steps: steps, isLatest: isLatest) }
+            if style == .dev && live { ToolGroupView(steps: steps, isLatest: isLatest) } else { AssistantToolsRow(steps: steps) }
         case .notice(let i): NoticeRow(item: i)
         case .recap(let i): RecapCard(item: i)
         case .image(let i):
@@ -253,7 +260,11 @@ struct Composer: View {
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?
-    @State private var text = ""
+    private var text: String {
+        get { model.drafts[key] ?? "" }
+        nonmutating set { model.drafts[key] = newValue }
+    }
+    private var textBinding: Binding<String> { Binding(get: { text }, set: { text = $0 }) }
     @State private var picks: [PhotosPickerItem] = []
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var sending = false
@@ -299,7 +310,7 @@ struct Composer: View {
                 .buttonStyle(.glass)
                 .clipShape(.circle)
 
-                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: $text, axis: .vertical)
+                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 14)
@@ -438,5 +449,60 @@ struct TerminalSheet: View {
 
     private func poll() async {
         if let s = try? await model.api?.screen(key, lines: 200) { text = s.text }
+    }
+}
+
+/// Input typed while Claude works and not yet taken, shown above the composer instead of in the chat.
+/// Editing pulls it back (like ↑ in the terminal); the other queued messages are re-queued in order.
+struct QueueStrip: View {
+    @Environment(AppModel.self) private var model
+    let key: SessionKey
+    var queued: [String]
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "tray.and.arrow.down")
+                Text("排队中 \(queued.count) 条 · Claude 忙完会依次处理").lineLimit(1)
+                Spacer(minLength: 0)
+                if busy { ProgressView().controlSize(.mini) }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            ForEach(Array(queued.enumerated()), id: \.offset) { i, q in
+                Menu {
+                    Button { act(i, delete: false) } label: { Label("撤回编辑", systemImage: "pencil") }
+                    Button { UIPasteboard.general.string = q } label: { Label("拷贝", systemImage: "doc.on.doc") }
+                    Button(role: .destructive) { act(i, delete: true) } label: { Label("删除", systemImage: "trash") }
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(i + 1)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 18, height: 18)
+                            .background(Theme.accent.opacity(0.14), in: .circle)
+                        Text(q).font(.subheadline).foregroundStyle(Color.primary).lineLimit(2).multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
+                        Image(systemName: "ellipsis").font(.caption).foregroundStyle(.secondary).padding(.top, 3)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+                }
+                .disabled(busy)
+            }
+        }
+        .padding(10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func act(_ i: Int, delete: Bool) {
+        busy = true
+        Task {
+            await model.editQueued(key, index: i, delete: delete)
+            busy = false
+        }
     }
 }
