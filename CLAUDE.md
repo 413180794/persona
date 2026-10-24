@@ -17,8 +17,8 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
   App Store Connect API key 在 `~/.appstoreconnect/AuthKey_KEYID00001.p8`（不在 iCloud），发布证书在 `~/.appstoreconnect/signing/`。
 - **密钥绝不入库**：hub token、数据库密码只存在 example-machine `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
 - 服务端状态全部在 example-machine 的 Postgres 容器 `jarvis-postgres`（`docs/server.md`），不要再往 `~/.jarvis/` 写 JSON 状态文件。
-- 分工：设计、UI、交互、协议、核心链路由 leader（当前 Opus）实现；不吃模型智能的活（脚本、样板、邮件协议封装等）在 herdr
-  当前 workspace 新开 tab 用 `cc_ds` 实现，leader 派发和验收。
+- 分工：设计、UI、交互、协议、核心链路由 leader（当前 Opus）实现；其余可以派出去的活在 herdr 当前 workspace 新开 tab，
+  **用 `ccc` 启动（Opus 5.5）**，leader 派发和验收。（2026-10-24 用户要求：之前用的 `cc_ds` 不再用于派活。）
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ## 目录
