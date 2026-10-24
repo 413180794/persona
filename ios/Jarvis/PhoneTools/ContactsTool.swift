@@ -16,7 +16,7 @@ enum ContactsTool {
                     Use this to look up a colleague's number before calling or drafting a message.
                     """,
                     inputSchema: Schema.object([
-                        "query": Schema.string("Text to match against name, company, job title, email or phone number. An empty string returns the most recently modified contacts."),
+                        "query": Schema.string("Text to match against name, company, job title, email or phone number. Matching is case-insensitive and looks for the text anywhere in the field; a phone number matches with or without spaces and dashes. Pass an empty string to get the first contacts in the address book's own order."),
                         "limit": Schema.integer("Maximum number of contacts to return, default 10, max 50.", min: 1, max: 50),
                     ], required: ["query"])
                 ),

@@ -13,8 +13,8 @@ enum PhotosTool {
                     List recent photos and videos, newest first. Each row has the Photos local \
                     identifier, creation date (ISO 8601), media type (image/video), pixel width and \
                     height, whether it is a screenshot, whether it is a favorite, duration in seconds \
-                    for videos, and the place name if the photo is geotagged. Pass an id to \
-                    phone_photo_get to actually see the image.
+                    for videos, and the latitude/longitude where the photo was taken when it is \
+                    geotagged. Pass an id to phone_photo_get to actually see the image.
                     """,
                     inputSchema: Schema.object([
                         "limit": Schema.integer("Maximum number of assets, default 20, max 100.", min: 1, max: 100),
