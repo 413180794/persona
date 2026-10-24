@@ -246,7 +246,9 @@ struct ToolDetail: View {
                     Text("运行中…").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            ForEach(Array(call.images.enumerated()), id: \.offset) { _, img in Base64Image(payload: img) }
+            ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in
+                Base64Image(payload: img, gallery: call.images, index: i)
+            }
         }
     }
 
@@ -352,23 +354,58 @@ struct TodoList: View {
     }
 }
 
+/// An inline image from a tool result (or a message). Tapping opens the
+/// full-screen viewer; pass `gallery` to make every image of the same row
+/// swipeable there.
 struct Base64Image: View {
     var payload: ImagePayload
+    /// All images shown in this row; `nil` means this one alone.
+    var gallery: [ImagePayload]?
+    var index: Int = 0
+
     @State private var image: UIImage?
+    @State private var open = false
+    @State private var sourceID = UUID()
+    @Namespace private var namespace
+
+    private var images: [ImagePayload] {
+        if let gallery, !gallery.isEmpty { return gallery }
+        return [payload]
+    }
+    private var startIndex: Int { min(max(index, 0), images.count - 1) }
 
     var body: some View {
         Group {
             if let image {
                 Image(uiImage: image).resizable().scaledToFit()
                     .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                    .frame(maxHeight: 280)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                    }
+                    .matchedTransitionSource(id: sourceID, in: namespace) { source in
+                        source.clipShape(.rect(cornerRadius: 12, style: .continuous))
+                    }
+                    // The drawn image is letterboxed inside its frame; make the
+                    // whole box tappable so the edges open the viewer too.
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        Haptics.tap()
+                        open = true
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("全屏查看")
             } else {
                 RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)).frame(height: 120)
             }
         }
+        .frame(maxHeight: 280)
         .task(id: payload.data.count) {
-            let data = payload.data
-            image = await Task.detached { Data(base64Encoded: data).flatMap(UIImage.init(data:)) }.value
+            image = await ImageDecoder.thumbnail(base64: payload.data)
+        }
+        .fullScreenCover(isPresented: $open) {
+            ImageViewer(images: images, startIndex: startIndex, sourceID: sourceID, namespace: namespace)
+                .presentationBackground(.clear)
         }
     }
 }
