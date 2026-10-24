@@ -56,5 +56,6 @@ struct FilePathTests {
         let text = "cat > ~/.config/systemd/user/jarvisd.service 并读 /tmp/jarvis-tasks/05-image-viewer.md 和 ios/Jarvis/Foo.swift，网址 https://example.com/a/b 不算"
         let paths = FilePaths.find(in: text)
         #expect(paths == ["~/.config/systemd/user/jarvisd.service", "/tmp/jarvis-tasks/05-image-viewer.md", "ios/Jarvis/Foo.swift"])
+        #expect(FilePaths.find(in: "模型 deepseek/v4.1-flash-chain 和 model_hub/es1_orange_o50").isEmpty)
     }
 }

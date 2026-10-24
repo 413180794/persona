@@ -36,8 +36,9 @@ struct FileRef: Identifiable, Hashable {
 nonisolated enum FilePaths {
     // Home-relative (~/x), absolute (/x/y) or relative with a directory and an extension (ios/Jarvis/Foo.swift).
     // The "~" must stay part of the match: dropping it turned ~/.config/… into /.config/….
+    // Relative paths need a letter-led extension so model names like deepseek/v4.1-flash are not files.
     private static let pattern = try! NSRegularExpression(
-        pattern: #"(?<![\w/:.\-~])(~(?:/[\w.@+\-]+)+/?|/[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z0-9]{1,8})(?![\w/])"#)
+        pattern: #"(?<![\w/:.\-~])(~(?:/[\w.@+\-]+)+/?|/[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![\w/\-])"#)
 
     /// File-looking paths in text, in order, without duplicates or URL fragments.
     static func find(in text: String, limit: Int = 6) -> [String] {
