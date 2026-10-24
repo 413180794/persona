@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"github.com/chyroc/jarvis/server/internal/db"
 	"io"
 	"log"
 	"net/url"
@@ -161,7 +162,7 @@ func newTestHub(t *testing.T) *Hub {
 		cfg: cfg, version: "test", logger: log.New(io.Discard, "", 0),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
 		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{},
-		push: newPusher(cfg.dir, func(string, ...any) {}),
+		push: newPusher(cfg.dir, nil, func(string, ...any) {}),
 	}
 }
 
@@ -469,17 +470,24 @@ func TestCallToolDispatch(t *testing.T) {
 }
 
 func TestPhoneToolsPersist(t *testing.T) {
+	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on example-machine)")
+	}
+	database, err := db.Open(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
 	h := newTestHub(t)
+	h.store = database
 	tools := []proto.Tool{{Name: "phone_device_info", Description: "info", InputSchema: json.RawMessage(`{"type":"object"}`)}}
 	h.setPhoneTools(tools)
 	if got := h.mcpTools(); len(got) != 1 || got[0].Name != "phone_device_info" {
 		t.Fatalf("tools = %+v", got)
 	}
-	if _, err := os.Stat(h.phoneToolsPath()); err != nil {
-		t.Fatalf("tools were not written: %v", err)
-	}
 	reloaded := newTestHub(t)
-	reloaded.cfg.dir = h.cfg.dir
+	reloaded.store = database
 	reloaded.loadPhoneTools()
 	if got := reloaded.mcpTools(); len(got) != 1 || got[0].Name != "phone_device_info" {
 		t.Fatalf("reloaded tools = %+v", got)

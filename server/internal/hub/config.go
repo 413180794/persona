@@ -23,11 +23,13 @@ type MachineConfig struct {
 }
 
 type Config struct {
-	Listen             string          `json:"listen"`
-	Token              string          `json:"token"`
-	PublicURL          string          `json:"public_url"`
-	HookTimeoutMinutes int             `json:"hook_timeout_minutes"`
-	Machines           []MachineConfig `json:"machines"`
+	Listen             string `json:"listen"`
+	Token              string `json:"token"`
+	PublicURL          string `json:"public_url"`
+	HookTimeoutMinutes int    `json:"hook_timeout_minutes"`
+	// DatabaseURL points at the Postgres container (scripts/deploy.sh creates it and fills this in).
+	DatabaseURL string          `json:"database_url"`
+	Machines    []MachineConfig `json:"machines"`
 
 	dir string
 }

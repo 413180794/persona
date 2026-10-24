@@ -12,7 +12,7 @@ import (
 func newServiceWithAccount(t *testing.T, srv *testIMAP) *Service {
 	t.Helper()
 	dir := t.TempDir()
-	s, err := New(dir)
+	s, err := New(dir, newMemRecords())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestListMessagesAllAccounts(t *testing.T) {
 	srvA := newTestIMAP(t)
 	srvB := newTestIMAP(t)
 	dir := t.TempDir()
-	s, err := New(dir)
+	s, err := New(dir, newMemRecords())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -56,9 +56,9 @@ type conn struct {
 	lastUsed time.Time
 }
 
-// New creates a Service storing state in dataDir.
-func New(dataDir string) (*Service, error) {
-	st, err := openStore(dataDir)
+// New creates a Service. Accounts live in recs; dataDir holds the encryption key (secret.key).
+func New(dataDir string, recs Records) (*Service, error) {
+	st, err := openStore(dataDir, recs)
 	if err != nil {
 		return nil, err
 	}

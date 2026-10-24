@@ -81,6 +81,7 @@ type Session struct {
 	Launcher            string    `json:"launcher,omitempty"`
 	Model               string    `json:"model,omitempty"`
 	StartedByJarvis     bool      `json:"started_by_jarvis"`
+	Assistant           bool      `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
 	UpdatedAt           time.Time `json:"updated_at"`
 	LastText            string    `json:"last_text,omitempty"`
 	PendingInteractions int       `json:"pending_interactions"`

@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -13,16 +14,25 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/chyroc/jarvis/server/internal/db"
 )
 
-// store keeps accounts on disk with their secrets encrypted.
+// Records is where accounts are persisted: Postgres (internal/db) in production, memory in tests.
+// The mail package encrypts secrets before they reach it, with a key that never leaves dataDir.
+type Records interface {
+	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
+	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
+}
+
+// store keeps accounts in Records with their secrets encrypted.
 type store struct {
-	path string
+	recs Records
 	key  []byte // 32-byte AES-256 key
 	mu   sync.Mutex
 }
 
-// accountFile is the on-disk JSON shape. Secrets are base64 AES-GCM blobs.
+// accountFile is the legacy on-disk JSON shape (mail_accounts.json), imported once into Records.
 type accountFile struct {
 	Accounts []accountRecord `json:"accounts"`
 }
@@ -48,8 +58,8 @@ type accountRecord struct {
 	OAuthEnc string `json:"oauth_enc,omitempty"`
 }
 
-// openStore loads (or creates) dataDir/secret.key and dataDir/mail_accounts.json.
-func openStore(dataDir string) (*store, error) {
+// openStore loads (or creates) dataDir/secret.key and imports a legacy dataDir/mail_accounts.json into recs.
+func openStore(dataDir string, recs Records) (*store, error) {
 	if dataDir == "" {
 		return nil, errors.New("mail: data dir is empty")
 	}
@@ -61,7 +71,56 @@ func openStore(dataDir string) (*store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &store{path: filepath.Join(dataDir, "mail_accounts.json"), key: key}, nil
+	st := &store{recs: recs, key: key}
+	if err := st.importLegacy(filepath.Join(dataDir, "mail_accounts.json")); err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+// importLegacy moves accounts from the old JSON file into Records (only when Records is still empty),
+// then renames the file so it is not imported twice.
+func (s *store) importLegacy(path string) error {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("mail: read legacy accounts: %w", err)
+	}
+	existing, err := s.recs.MailAccounts(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(existing) == 0 {
+		var f accountFile
+		if err := json.Unmarshal(b, &f); err != nil {
+			return fmt.Errorf("mail: parse legacy accounts: %w", err)
+		}
+		rows := make([]db.MailAccountRow, 0, len(f.Accounts))
+		for _, r := range f.Accounts {
+			row, err := r.row()
+			if err != nil {
+				return err
+			}
+			rows = append(rows, row)
+		}
+		if err := s.recs.ReplaceMailAccounts(context.Background(), rows); err != nil {
+			return fmt.Errorf("mail: import legacy accounts: %w", err)
+		}
+	}
+	return os.Rename(path, path+".migrated")
+}
+
+// row converts a record (secrets already encrypted) to its database shape.
+func (r accountRecord) row() (db.MailAccountRow, error) {
+	pw, oauth := r.PasswordEnc, r.OAuthEnc
+	r.PasswordEnc, r.OAuthEnc = "", ""
+	data, err := json.Marshal(r)
+	if err != nil {
+		return db.MailAccountRow{}, err
+	}
+	return db.MailAccountRow{ID: r.ID, Email: r.Email, Data: data, PasswordEnc: pw, OAuthEnc: oauth}, nil
 }
 
 func loadOrCreateKey(path string) ([]byte, error) {
@@ -145,16 +204,18 @@ func (s *store) load() ([]*MailAccount, error) {
 }
 
 func (s *store) loadLocked() ([]*MailAccount, error) {
-	b, err := os.ReadFile(s.path)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+	rows, err := s.recs.MailAccounts(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("mail: read accounts: %w", err)
+		return nil, fmt.Errorf("mail: load accounts: %w", err)
 	}
 	var f accountFile
-	if err := json.Unmarshal(b, &f); err != nil {
-		return nil, fmt.Errorf("mail: parse accounts: %w", err)
+	for _, row := range rows {
+		var r accountRecord
+		if err := json.Unmarshal(row.Data, &r); err != nil {
+			return nil, fmt.Errorf("mail: parse account %s: %w", row.ID, err)
+		}
+		r.ID, r.PasswordEnc, r.OAuthEnc = row.ID, row.PasswordEnc, row.OAuthEnc
+		f.Accounts = append(f.Accounts, r)
 	}
 	accounts := make([]*MailAccount, 0, len(f.Accounts))
 	for _, r := range f.Accounts {
@@ -248,40 +309,18 @@ func (s *store) save(accounts []*MailAccount) error {
 		f.Accounts = append(f.Accounts, r)
 	}
 
-	b, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
+	rows := make([]db.MailAccountRow, 0, len(f.Accounts))
+	for _, r := range f.Accounts {
+		row, err := r.row()
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row)
 	}
-	return writeFileAtomic(s.path, b, 0o600)
-}
-
-// writeFileAtomic writes b to path via a temp file in the same directory, so a
-// crash never leaves a half-written account file.
-func writeFileAtomic(path string, b []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp*")
-	if err != nil {
-		return err
+	if err := s.recs.ReplaceMailAccounts(context.Background(), rows); err != nil {
+		return fmt.Errorf("mail: save accounts: %w", err)
 	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	return nil
 }
 
 // normalizeEmail lowercases the address and trims spaces.

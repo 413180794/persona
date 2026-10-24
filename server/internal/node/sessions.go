@@ -19,11 +19,12 @@ import (
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
 
-// stateFile remembers which sessions Jarvis started and with which launcher.
+// stateFile remembers which sessions Jarvis started and with which launcher. It lives in the hub's Postgres:
+// loaded with `state.load` when the node starts and written through with `state.put` events.
 type stateFile struct {
-	path     string
 	mu       sync.Mutex
 	Sessions map[string]sessionState `json:"sessions"`
+	persist  func(id string, v sessionState)
 }
 
 type sessionState struct {
@@ -33,15 +34,28 @@ type sessionState struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
-func loadState(path string) *stateFile {
-	s := &stateFile{path: path, Sessions: map[string]sessionState{}}
+func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }
+
+// legacyState reads the pre-Postgres ~/.jarvis/sessions.json, if any.
+func legacyState(path string) map[string]sessionState {
+	var f struct {
+		Sessions map[string]sessionState `json:"sessions"`
+	}
 	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, s)
+		_ = json.Unmarshal(b, &f)
 	}
-	if s.Sessions == nil {
-		s.Sessions = map[string]sessionState{}
+	return f.Sessions
+}
+
+// merge adds sessions loaded from the hub without overwriting ones touched since the node started.
+func (s *stateFile) merge(m map[string]sessionState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, v := range m {
+		if _, ok := s.Sessions[id]; !ok {
+			s.Sessions[id] = v
+		}
 	}
-	return s
 }
 
 func (s *stateFile) get(id string) (sessionState, bool) {
@@ -79,15 +93,12 @@ func (s *stateFile) setPane(id, pane string) {
 
 func (s *stateFile) put(id string, v sessionState) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Sessions[id] = v
-	// Forget sessions older than 60 days.
-	for k, old := range s.Sessions {
-		if time.Since(old.StartedAt) > 60*24*time.Hour {
-			delete(s.Sessions, k)
-		}
+	persist := s.persist
+	s.mu.Unlock()
+	if persist != nil {
+		persist(id, v)
 	}
-	_ = writeJSON(s.path, s)
 }
 
 // quickMeta is a cheap summary of a transcript read from its head and tail only.

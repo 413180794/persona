@@ -15,7 +15,8 @@ import (
 
 func TestEncryptedStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	s, err := New(dir)
+	recs := newMemRecords()
+	s, err := New(dir, recs)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -50,26 +51,16 @@ func TestEncryptedStoreRoundTrip(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 
-	// The account file must not contain the secrets in clear text.
-	raw, err := os.ReadFile(filepath.Join(dir, "mail_accounts.json"))
-	if err != nil {
-		t.Fatalf("read accounts: %v", err)
-	}
+	// What reaches the database must not contain the secrets in clear text.
+	raw := recs.dump()
 	for _, secret := range []string{"hunter2", "rtok", "csecret"} {
-		if strings.Contains(string(raw), secret) {
-			t.Fatalf("account file leaks %q: %s", secret, raw)
+		if strings.Contains(raw, secret) {
+			t.Fatalf("stored rows leak %q: %s", secret, raw)
 		}
-	}
-	fileInfo, err := os.Stat(filepath.Join(dir, "mail_accounts.json"))
-	if err != nil {
-		t.Fatalf("stat accounts: %v", err)
-	}
-	if got := fileInfo.Mode().Perm(); got != 0o600 {
-		t.Fatalf("mail_accounts.json mode = %o, want 600", got)
 	}
 
 	// Reload through a fresh Service: secrets must decrypt back.
-	s2, err := New(dir)
+	s2, err := New(dir, recs)
 	if err != nil {
 		t.Fatalf("New again: %v", err)
 	}
@@ -104,7 +95,7 @@ func TestStoreRejectsBadKey(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "secret.key"), []byte("short"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openStore(dir); err == nil {
+	if _, err := openStore(dir, newMemRecords()); err == nil {
 		t.Fatal("openStore accepted a 5-byte key")
 	}
 }
@@ -211,7 +202,7 @@ func TestBuildAccountInfersOAuth(t *testing.T) {
 
 func TestOAuthTokenCache(t *testing.T) {
 	dir := t.TempDir()
-	s, err := New(dir)
+	s, err := New(dir, newMemRecords())
 	if err != nil {
 		t.Fatal(err)
 	}

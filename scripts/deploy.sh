@@ -28,6 +28,7 @@ install_bin() { # host binary
 for t in "${TARGETS[@]}"; do
   case "$t" in
     example-machine)
+      ssh example-machine 'bash -s' < ../scripts/db.sh
       install_bin example-machine bin/jarvisd-linux-amd64
       ssh example-machine 'bash -s' <<'EOF'
 set -e

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
@@ -17,19 +18,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // Device is an iPhone or Watch that wants push notifications.
-type Device struct {
-	DeviceID  string    `json:"device_id"`
-	Name      string    `json:"name"`
-	Kind      string    `json:"kind"`
-	APNSToken string    `json:"apns_token,omitempty"`
-	APNSEnv   string    `json:"apns_env,omitempty"` // sandbox | production
-	Topic     string    `json:"topic,omitempty"`    // bundle id
-	UpdatedAt time.Time `json:"updated_at"`
-}
+type Device = db.Device
 
 // apnsConfig lives in ~/.jarvis/apns.json; without it push is disabled.
 type apnsConfig struct {
@@ -40,11 +34,12 @@ type apnsConfig struct {
 }
 
 type Pusher struct {
-	dir  string
-	logf func(string, ...any)
-	cfg  *apnsConfig
-	key  *ecdsa.PrivateKey
-	http *http.Client
+	dir   string
+	store Store
+	logf  func(string, ...any)
+	cfg   *apnsConfig
+	key   *ecdsa.PrivateKey
+	http  *http.Client
 
 	mu      sync.Mutex
 	devices map[string]Device
@@ -52,10 +47,16 @@ type Pusher struct {
 	jwtAt   time.Time
 }
 
-func newPusher(dir string, logf func(string, ...any)) *Pusher {
-	p := &Pusher{dir: dir, logf: logf, devices: map[string]Device{}, http: &http.Client{Timeout: 15 * time.Second}}
-	if b, err := os.ReadFile(filepath.Join(dir, "devices.json")); err == nil {
-		_ = json.Unmarshal(b, &p.devices)
+func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
+	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, http: &http.Client{Timeout: 15 * time.Second}}
+	if store != nil {
+		if list, err := store.Devices(context.Background()); err == nil {
+			for _, d := range list {
+				p.devices[d.DeviceID] = d
+			}
+		} else {
+			logf("load devices: %v", err)
+		}
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "apns.json"))
 	if err != nil {
@@ -92,9 +93,12 @@ func (p *Pusher) register(d Device) {
 	d.UpdatedAt = time.Now().UTC()
 	p.mu.Lock()
 	p.devices[d.DeviceID] = d
-	b, _ := json.MarshalIndent(p.devices, "", "  ")
 	p.mu.Unlock()
-	_ = os.WriteFile(filepath.Join(p.dir, "devices.json"), b, 0o600)
+	if p.store != nil {
+		if err := p.store.UpsertDevice(context.Background(), d); err != nil {
+			p.logf("save device: %v", err)
+		}
+	}
 }
 
 func (p *Pusher) token() (string, error) {
@@ -169,6 +173,14 @@ func (p *Pusher) send(payload map[string]any, collapseID string) {
 				}
 				_ = json.NewDecoder(resp.Body).Decode(&e)
 				p.logf("apns %s: %d %s", d.Name, resp.StatusCode, e.Reason)
+				if resp.StatusCode == 410 || e.Reason == "BadDeviceToken" || e.Reason == "Unregistered" {
+					p.mu.Lock()
+					delete(p.devices, d.DeviceID)
+					p.mu.Unlock()
+					if p.store != nil {
+						_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
+					}
+				}
 			}
 		}(d)
 	}

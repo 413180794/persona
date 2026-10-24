@@ -69,6 +69,20 @@ func (h *Hub) routes() http.Handler {
 		h.push.register(d)
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
+		if h.store == nil {
+			writeJSON(w, map[string]any{"interactions": []any{}})
+			return
+		}
+		q := r.URL.Query()
+		recs, err := h.store.Interactions(r.Context(), q.Get("machine_id"), q.Get("session_id"), atoi(q.Get("limit")))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, map[string]any{"interactions": recs})
+	})
+	h.assistantRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())

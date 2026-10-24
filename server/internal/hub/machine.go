@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -321,6 +322,16 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "screen", "machine_id": m.cfg.ID, "session_id": p.SessionID,
 			"text": p.Text, "status": p.Status, "ts": time.Now().UTC()})
+	case "state.put":
+		var p struct {
+			SessionID string         `json:"session_id"`
+			State     db.NodeSession `json:"state"`
+		}
+		if json.Unmarshal(params, &p) == nil && p.SessionID != "" && m.hub.store != nil {
+			if err := m.hub.store.PutNodeSession(context.Background(), m.cfg.ID, p.SessionID, p.State); err != nil {
+				m.hub.logf("[%s] save session state: %v", m.cfg.ID, err)
+			}
+		}
 	case "interaction.cancel":
 		var p struct {
 			ID string `json:"id"`
@@ -358,6 +369,15 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		p.Interaction.MachineID = m.cfg.ID
 		return m.hub.waitInteraction(ctx, p.Interaction)
+	case "state.load":
+		out := map[string]db.NodeSession{}
+		if m.hub.store != nil {
+			var err error
+			if out, err = m.hub.store.NodeSessions(ctx, m.cfg.ID); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]any{"sessions": out}, nil
 	case "mcp.tools":
 		return map[string]any{"tools": m.hub.mcpTools()}, nil
 	case "mcp.call":

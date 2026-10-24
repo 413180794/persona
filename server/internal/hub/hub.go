@@ -8,12 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -25,6 +25,7 @@ type Hub struct {
 	byID     map[string]*Machine
 	mail     Mail
 	push     *Pusher
+	store    Store // nil in unit tests: nothing is persisted
 
 	mu           sync.Mutex
 	clients      map[*client]struct{}
@@ -41,7 +42,25 @@ type Mail interface {
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).
-var NewMail func(dataDir string) (Mail, error)
+var NewMail func(dataDir string, store Store) (Mail, error)
+
+// Store is the hub's persistence (internal/db on Postgres).
+type Store interface {
+	ReplacePhoneTools(ctx context.Context, tools []proto.Tool) error
+	PhoneTools(ctx context.Context) ([]proto.Tool, error)
+	UpsertDevice(ctx context.Context, d db.Device) error
+	Devices(ctx context.Context) ([]db.Device, error)
+	DeleteDevice(ctx context.Context, id string) error
+	InsertInteraction(ctx context.Context, ix proto.Interaction) error
+	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
+	Interactions(ctx context.Context, machine, session string, limit int) ([]db.InteractionRecord, error)
+	PutNodeSession(ctx context.Context, machine, id string, s db.NodeSession) error
+	NodeSessions(ctx context.Context, machine string) (map[string]db.NodeSession, error)
+	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
+	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
+	Setting(ctx context.Context, key string, out any) (bool, error)
+	PutSetting(ctx context.Context, key string, v any) error
+}
 
 type pending struct {
 	ix   proto.Interaction
@@ -60,13 +79,23 @@ func Run(ctx context.Context, version string) error {
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{},
 	}
+	database, err := db.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	h.store = database
+	if err := database.ExpireStaleInteractions(ctx); err != nil {
+		h.logf("expire stale interactions: %v", err)
+	}
+	h.importLegacy(ctx)
 	h.loadPhoneTools()
 	if NewMail != nil {
-		if h.mail, err = NewMail(cfg.dir); err != nil {
+		if h.mail, err = NewMail(cfg.dir, h.store); err != nil {
 			h.logf("mail disabled: %v", err)
 		}
 	}
-	h.push = newPusher(cfg.dir, h.logf)
+	h.push = newPusher(cfg.dir, h.store, h.logf)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)
@@ -114,8 +143,10 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.mu.Unlock()
+	dir := m.assistantCwd()
 	for i := range list {
 		list[i].PendingInteractions = counts[list[i].SessionID]
+		list[i].Assistant = isAssistant(list[i].Cwd, dir)
 	}
 	return list
 }
@@ -198,6 +229,7 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 		_ = m.call(kctx, "session.keys", map[string]any{"session_id": s.SessionID, "keys": r.Keys, "text": r.Text}, nil)
 	}}
 	h.mu.Unlock()
+	h.record(ix)
 	h.announce(ix)
 }
 
@@ -240,6 +272,7 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	}
 	h.interactions[ix.ID] = p
 	h.mu.Unlock()
+	h.record(ix)
 	h.announce(ix)
 	defer h.finishInteraction(ix.ID)
 	timer := time.NewTimer(time.Until(ix.ExpiresAt))
@@ -248,9 +281,30 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	case r := <-p.done:
 		return r, nil
 	case <-timer.C:
+		h.recordEnd(ix.ID, "expired", nil)
 		return proto.Resolution{Dismiss: true}, nil
 	case <-ctx.Done():
+		h.recordEnd(ix.ID, "cancelled", nil)
 		return proto.Resolution{Dismiss: true}, nil
+	}
+}
+
+// record / recordEnd keep the interaction history in the database (best effort).
+func (h *Hub) record(ix proto.Interaction) {
+	if h.store == nil {
+		return
+	}
+	if err := h.store.InsertInteraction(context.Background(), ix); err != nil {
+		h.logf("record interaction: %v", err)
+	}
+}
+
+func (h *Hub) recordEnd(id, status string, r *proto.Resolution) {
+	if h.store == nil {
+		return
+	}
+	if err := h.store.FinishInteraction(context.Background(), id, status, r); err != nil {
+		h.logf("record interaction outcome: %v", err)
 	}
 }
 
@@ -262,6 +316,11 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 	if p == nil {
 		return fmt.Errorf("interaction %s is no longer pending", id)
 	}
+	status := "resolved"
+	if r.Dismiss {
+		status = "dismissed"
+	}
+	h.recordEnd(id, status, &r)
 	if p.local != nil {
 		h.finishInteraction(id)
 		go p.local(r)
@@ -340,20 +399,28 @@ func (h *Hub) expireLoop(ctx context.Context) {
 
 // ---- MCP tools ----
 
-func (h *Hub) phoneToolsPath() string { return filepath.Join(h.cfg.dir, "phone_tools.json") }
-
 func (h *Hub) loadPhoneTools() {
-	if b, err := os.ReadFile(h.phoneToolsPath()); err == nil {
-		_ = json.Unmarshal(b, &h.phoneTools)
+	if h.store == nil {
+		return
 	}
+	tools, err := h.store.PhoneTools(context.Background())
+	if err != nil {
+		h.logf("load phone tools: %v", err)
+		return
+	}
+	h.mu.Lock()
+	h.phoneTools = tools
+	h.mu.Unlock()
 }
 
 func (h *Hub) setPhoneTools(tools []proto.Tool) {
 	h.mu.Lock()
 	h.phoneTools = tools
 	h.mu.Unlock()
-	if b, err := json.Marshal(tools); err == nil {
-		_ = os.WriteFile(h.phoneToolsPath(), b, 0o600)
+	if h.store != nil {
+		if err := h.store.ReplacePhoneTools(context.Background(), tools); err != nil {
+			h.logf("save phone tools: %v", err)
+		}
 	}
 }
 

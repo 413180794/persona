@@ -14,7 +14,8 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 - 代码注释、提交信息用英文；文档用中文；App 界面文案用中文。
 - **绝不访问 iCloud 目录**（`~/Library/Mobile Documents/...`）：这台 Mac 未解锁，一访问就卡死。需要里面的东西就直接问用户。
   App Store Connect API key 在 `~/.appstoreconnect/AuthKey_KEYID00001.p8`（不在 iCloud），发布证书在 `~/.appstoreconnect/signing/`。
-- **密钥绝不入库**：hub token、邮箱密码只存在 example-machine `~/.jarvis/`（`chmod 600`，邮箱凭据 AES-GCM 加密）。
+- **密钥绝不入库**：hub token、数据库密码只存在 example-machine `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
+- 服务端状态全部在 example-machine 的 Postgres 容器 `jarvis-postgres`（`docs/server.md`），不要再往 `~/.jarvis/` 写 JSON 状态文件。
 - 分工：设计、UI、交互、协议、核心链路由 leader（当前 Opus）实现；不吃模型智能的活（脚本、样板、邮件协议封装等）在 herdr
   当前 workspace 新开 tab 用 `cc_ds` 实现，leader 派发和验收。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
@@ -56,7 +57,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 
 ## 构建与验证
 
-- 服务端：`cd server && go test ./...`；部署 `./scripts/deploy.sh [example-machine|example-machine|…]`。
+- 服务端：`./scripts/test-server.sh`（在 example-machine 上连真实 Postgres 跑全部测试）；部署 `./scripts/deploy.sh [example-machine|example-machine|…]`。
 - iOS：`./scripts/sim.sh [-openSession <machine>/<session>]` 编译、装到 iPhone 17 Pro 模拟器、自动配对真实 hub；截图 `xcrun simctl io <udid> screenshot`。
 - 发布：`docs/release.md`。
 

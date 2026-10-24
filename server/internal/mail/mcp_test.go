@@ -149,7 +149,7 @@ func TestMCPUnknownTool(t *testing.T) {
 }
 
 func TestMCPNoAccounts(t *testing.T) {
-	s, err := New(t.TempDir())
+	s, err := New(t.TempDir(), newMemRecords())
 	if err != nil {
 		t.Fatal(err)
 	}

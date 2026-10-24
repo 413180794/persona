@@ -74,8 +74,7 @@ func New(version string) (*Node, error) {
 		panes:   map[string]string{},
 		metas:   map[string]quickMeta{},
 	}
-	n.state = loadState(filepath.Join(dir, "sessions.json"))
-	n.panes = n.state.panes()
+	n.state = newState()
 	return n, nil
 }
 
@@ -88,6 +87,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	}
 	n.peer = rpc.New("n", os.Stdout)
 	n.peer.OnRequest = n.handle
+	go n.loadState(ctx)
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
 		n.logger.Printf("hook socket: %v", err)
@@ -96,6 +96,41 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	}
 	go n.pollAgents(ctx)
 	return n.peer.Serve(ctx, os.Stdin)
+}
+
+// loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once.
+func (n *Node) loadState(ctx context.Context) {
+	n.state.mu.Lock()
+	n.state.persist = func(id string, v sessionState) {
+		_ = n.peer.Notify("state.put", map[string]any{"session_id": id, "state": v})
+	}
+	n.state.mu.Unlock()
+	legacyPath := filepath.Join(n.dir, "sessions.json")
+	if legacy := legacyState(legacyPath); len(legacy) > 0 {
+		for id, v := range legacy {
+			_ = n.peer.Notify("state.put", map[string]any{"session_id": id, "state": v})
+		}
+		n.state.merge(legacy)
+		_ = os.Rename(legacyPath, legacyPath+".migrated")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var res struct {
+		Sessions map[string]sessionState `json:"sessions"`
+	}
+	if err := n.peer.Call(ctx, "state.load", map[string]any{}, &res); err != nil {
+		n.logger.Printf("load state from hub: %v", err)
+		return
+	}
+	n.state.merge(res.Sessions)
+	panes := n.state.panes()
+	n.mu.Lock()
+	for pane, id := range panes {
+		if _, ok := n.panes[pane]; !ok {
+			n.panes[pane] = id
+		}
+	}
+	n.mu.Unlock()
 }
 
 func (n *Node) writeClaudeConfig() error {
@@ -184,6 +219,22 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.unwatch":
 		n.unwatch(p.SessionID)
 		return ok(nil)
+	case "assistant.prepare":
+		var a struct {
+			Dir      string `json:"dir"`
+			ClaudeMD string `json:"claude_md"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil || a.Dir == "" || strings.Contains(a.Dir, "..") {
+			return nil, fmt.Errorf("bad assistant dir")
+		}
+		dir := filepath.Join(n.home, a.Dir)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(a.ClaudeMD), 0o600); err != nil {
+			return nil, err
+		}
+		return map[string]any{"cwd": dir}, nil
 	case "session.close":
 		return ok(n.close(ctx, p.SessionID))
 	}
