@@ -401,11 +401,24 @@ func dialAndLogin(a *MailAccount, accessToken func(context.Context, *OAuthCreds)
 	if err != nil {
 		return nil, err
 	}
+	// NetEase (163/126) rejects logins from clients that do not identify
+	// themselves, so send ID before authenticating. Servers without the ID
+	// extension answer BAD; that is harmless here.
+	if c.Caps().Has(imap.CapID) {
+		sendClientID(c)
+	}
 	if err := loginIMAP(c, a, accessToken); err != nil {
 		c.Close()
 		return nil, err
 	}
 	return c, nil
+}
+
+// sendClientID announces the client to the server (RFC 2971), best effort.
+func sendClientID(c *imapclient.Client) {
+	data := &imap.IDData{Name: "Jarvis", Version: "1.0", Vendor: "chyroc"}
+	cmd := c.ID(data)
+	_, _ = cmd.Wait()
 }
 
 func imapSecurity(a *MailAccount) string {
