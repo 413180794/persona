@@ -1,0 +1,372 @@
+import Foundation
+
+// Wire types mirroring docs/protocol.md. Explicit CodingKeys everywhere: key strategies would also rewrite
+// arbitrary JSON keys inside tool inputs and answer dictionaries.
+
+nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var kind: String
+    var icon: String?
+    var sshHost: String?
+    var online: Bool
+    var error: String?
+    var hostname: String?
+    var os: String?
+    var arch: String?
+    var home: String?
+    var herdrVersion: String?
+    var claudeVersion: String?
+    var lastSeen: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, kind, icon, online, error, hostname, os, arch, home
+        case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
+    }
+
+    var symbol: String {
+        switch icon {
+        case "server": "server.rack"
+        case "desktop": "desktopcomputer"
+        default: "laptopcomputer"
+        }
+    }
+}
+
+nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
+    var name: String
+    var baseURL: String?
+    var model: String?
+    var id: String { name }
+
+    enum CodingKeys: String, CodingKey {
+        case name, model
+        case baseURL = "base_url"
+    }
+}
+
+nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {
+    var name: String
+    var path: String
+    var isGit: Bool
+    var id: String { path }
+    enum CodingKeys: String, CodingKey { case name, path; case isGit = "is_git" }
+}
+
+nonisolated struct RecentDir: Codable, Hashable, Sendable, Identifiable {
+    var path: String
+    var name: String
+    var lastUsed: Date?
+    var id: String { path }
+    enum CodingKeys: String, CodingKey { case path, name; case lastUsed = "last_used" }
+}
+
+nonisolated struct DirList: Codable, Sendable {
+    var path: String
+    var parent: String?
+    var entries: [DirEntry]
+    var recent: [RecentDir]?
+}
+
+nonisolated enum SessionStatus: String, Codable, Sendable {
+    case idle, working, blocked, done, unknown, offline
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SessionStatus(rawValue: raw) ?? .unknown
+    }
+
+    var isActive: Bool { self == .working || self == .blocked }
+    var isLive: Bool { self != .offline }
+}
+
+nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
+    var machineID: String
+    var sessionID: String
+    var title: String
+    var cwd: String
+    var status: SessionStatus
+    var paneID: String?
+    var tabID: String?
+    var workspaceID: String?
+    var agentName: String?
+    var launcher: String?
+    var model: String?
+    var startedByJarvis: Bool
+    var updatedAt: Date?
+    var lastText: String?
+    var pendingInteractions: Int
+
+    var id: String { machineID + "/" + sessionID }
+    var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
+    var folderName: String { (cwd as NSString).lastPathComponent }
+
+    enum CodingKeys: String, CodingKey {
+        case title, cwd, status, launcher, model
+        case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
+             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis",
+             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        machineID = try c.decodeIfPresent(String.self, forKey: .machineID) ?? ""
+        sessionID = try c.decode(String.self, forKey: .sessionID)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        cwd = try c.decodeIfPresent(String.self, forKey: .cwd) ?? ""
+        status = try c.decodeIfPresent(SessionStatus.self, forKey: .status) ?? .unknown
+        paneID = try c.decodeIfPresent(String.self, forKey: .paneID)
+        tabID = try c.decodeIfPresent(String.self, forKey: .tabID)
+        workspaceID = try c.decodeIfPresent(String.self, forKey: .workspaceID)
+        agentName = try c.decodeIfPresent(String.self, forKey: .agentName)
+        launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
+        pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
+    }
+}
+
+nonisolated struct SessionKey: Hashable, Sendable, Codable {
+    var machineID: String
+    var sessionID: String
+}
+
+nonisolated struct ImagePayload: Codable, Hashable, Sendable {
+    var mime: String
+    var data: String
+}
+
+nonisolated enum ItemKind: String, Codable, Sendable {
+    case text, thinking, toolUse = "tool_use", toolResult = "tool_result", notice, image, unknown
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ItemKind(rawValue: raw) ?? .unknown
+    }
+}
+
+nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var seq: Int
+    var ts: Date?
+    var role: String
+    var kind: ItemKind
+    var text: String?
+    var toolUseID: String?
+    var toolName: String?
+    var toolInput: JSONValue?
+    var isError: Bool?
+    var image: ImagePayload?
+
+    enum CodingKeys: String, CodingKey {
+        case id, seq, ts, role, kind, text, image
+        case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error"
+    }
+}
+
+nonisolated enum InteractionKind: String, Codable, Sendable {
+    case question, plan, permission, screen
+}
+
+nonisolated struct QuestionOption: Codable, Hashable, Sendable {
+    var label: String
+    var description: String?
+}
+
+nonisolated struct Question: Codable, Hashable, Sendable, Identifiable {
+    var question: String
+    var header: String?
+    var multiSelect: Bool
+    var options: [QuestionOption]
+    var id: String { question }
+
+    enum CodingKeys: String, CodingKey { case question, header, options; case multiSelect = "multi_select" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        question = try c.decode(String.self, forKey: .question)
+        header = try c.decodeIfPresent(String.self, forKey: .header)
+        multiSelect = try c.decodeIfPresent(Bool.self, forKey: .multiSelect) ?? false
+        options = try c.decodeIfPresent([QuestionOption].self, forKey: .options) ?? []
+    }
+
+    init(question: String, header: String?, multiSelect: Bool, options: [QuestionOption]) {
+        self.question = question
+        self.header = header
+        self.multiSelect = multiSelect
+        self.options = options
+    }
+}
+
+nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var machineID: String
+    var sessionID: String
+    var sessionTitle: String?
+    var cwd: String?
+    var kind: InteractionKind
+    var createdAt: Date?
+    var expiresAt: Date?
+    var toolName: String?
+    var toolUseID: String?
+    var questions: [Question]?
+    var plan: String?
+    var toolInput: JSONValue?
+    var summary: String?
+    var screen: String?
+
+    var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, questions, plan, summary, screen, cwd
+        case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
+             createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
+             toolInput = "tool_input"
+    }
+}
+
+nonisolated struct Resolution: Codable, Sendable {
+    var answers: [String: String]?
+    var approve: Bool?
+    var mode: String?
+    var feedback: String?
+    var allow: Bool?
+    var always: Bool?
+    var message: String?
+    var keys: [String]?
+    var text: String?
+    var dismiss: Bool?
+
+    static let dismissed = Resolution(dismiss: true)
+}
+
+nonisolated struct ToolSpec: Codable, Sendable {
+    var name: String
+    var description: String
+    var inputSchema: JSONValue
+
+    enum CodingKeys: String, CodingKey { case name, description; case inputSchema = "input_schema" }
+}
+
+nonisolated struct ToolContent: Codable, Sendable {
+    var type: String
+    var text: String?
+    var data: String?
+    var mimeType: String?
+
+    enum CodingKeys: String, CodingKey { case type, text, data; case mimeType = "mime_type" }
+
+    static func text(_ s: String) -> ToolContent { ToolContent(type: "text", text: s) }
+    static func image(_ data: Data, mime: String) -> ToolContent {
+        ToolContent(type: "image", data: data.base64EncodedString(), mimeType: mime)
+    }
+}
+
+// MARK: - Mail
+
+nonisolated struct MailAddress: Codable, Hashable, Sendable {
+    var name: String?
+    var email: String
+
+    var display: String { (name?.isEmpty == false ? name! : email) }
+}
+
+nonisolated struct MailAccount: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String?
+    var email: String
+    var provider: String?
+    var auth: String?
+    var username: String?
+    var imapHost: String?
+    var imapPort: Int?
+    var smtpHost: String?
+    var smtpPort: Int?
+    var smtpSecurity: String?
+    var status: String?
+    var error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, email, provider, auth, username, status, error
+        case imapHost = "imap_host", imapPort = "imap_port", smtpHost = "smtp_host", smtpPort = "smtp_port",
+             smtpSecurity = "smtp_security"
+    }
+}
+
+nonisolated struct MailSummary: Codable, Identifiable, Hashable, Sendable {
+    var accountID: String
+    var mailbox: String
+    var uid: UInt32
+    var messageID: String?
+    var subject: String?
+    var from: MailAddress?
+    var to: [MailAddress]?
+    var date: Date?
+    var snippet: String?
+    var seen: Bool
+    var flagged: Bool
+    var hasAttachments: Bool
+
+    var id: String { "\(accountID)/\(mailbox)/\(uid)" }
+
+    enum CodingKeys: String, CodingKey {
+        case mailbox, uid, subject, from, to, date, snippet, seen, flagged
+        case accountID = "account_id", messageID = "message_id", hasAttachments = "has_attachments"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accountID = try c.decode(String.self, forKey: .accountID)
+        mailbox = try c.decodeIfPresent(String.self, forKey: .mailbox) ?? "INBOX"
+        uid = try c.decode(UInt32.self, forKey: .uid)
+        messageID = try c.decodeIfPresent(String.self, forKey: .messageID)
+        subject = try c.decodeIfPresent(String.self, forKey: .subject)
+        from = try c.decodeIfPresent(MailAddress.self, forKey: .from)
+        to = try c.decodeIfPresent([MailAddress].self, forKey: .to)
+        date = try c.decodeIfPresent(Date.self, forKey: .date)
+        snippet = try c.decodeIfPresent(String.self, forKey: .snippet)
+        seen = try c.decodeIfPresent(Bool.self, forKey: .seen) ?? true
+        flagged = try c.decodeIfPresent(Bool.self, forKey: .flagged) ?? false
+        hasAttachments = try c.decodeIfPresent(Bool.self, forKey: .hasAttachments) ?? false
+    }
+}
+
+nonisolated struct MailAttachment: Codable, Hashable, Sendable {
+    var filename: String?
+    var mime: String?
+    var size: Int?
+}
+
+nonisolated struct MailMessage: Codable, Hashable, Sendable {
+    var accountID: String
+    var mailbox: String?
+    var uid: UInt32
+    var messageID: String?
+    var subject: String?
+    var from: MailAddress?
+    var to: [MailAddress]?
+    var cc: [MailAddress]?
+    var date: Date?
+    var text: String?
+    var html: String?
+    var attachments: [MailAttachment]?
+    var inReplyTo: String?
+    var references: [String]?
+    var seen: Bool?
+    var flagged: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case mailbox, uid, subject, from, to, cc, date, text, html, attachments, references, seen, flagged
+        case accountID = "account_id", messageID = "message_id", inReplyTo = "in_reply_to"
+    }
+}
+
+nonisolated struct Mailbox: Codable, Hashable, Sendable, Identifiable {
+    var name: String
+    var role: String?
+    var unseen: Int?
+    var total: Int?
+    var id: String { name }
+}

@@ -1,0 +1,146 @@
+name: Jarvis
+options:
+  bundleIdPrefix: com.chirpet
+  deploymentTarget:
+    iOS: "26.0"
+    watchOS: "26.0"
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+packages:
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    from: 2.4.1
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    DEVELOPMENT_TEAM: ABCDE12345
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+  configs:
+    Release:
+      # Anti-tampering basics: no symbols or reflection names in the shipped binary.
+      STRIP_INSTALLED_PRODUCT: YES
+      STRIP_STYLE: all
+      DEPLOYMENT_POSTPROCESSING: YES
+      DEAD_CODE_STRIPPING: YES
+      SWIFT_REFLECTION_METADATA_LEVEL: without-names
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: -O
+targets:
+  Jarvis:
+    type: application
+    platform: iOS
+    sources:
+      - path: Jarvis
+        excludes: ["**/*.md"]
+      - path: Shared
+    dependencies:
+      - target: JarvisWatch
+      - package: MarkdownUI
+    entitlements:
+      path: Jarvis/Resources/Jarvis.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chirpet.jarvis
+        PRODUCT_NAME: Jarvis
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Jarvis/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Jarvis
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleURLTypes:
+          - CFBundleURLName: com.chirpet.jarvis
+            CFBundleURLSchemes: [jarvis]
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.productivity
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [remote-notification]
+        # The hub lives on the company example-machine over plain HTTP inside the corporate network.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSCameraUsageDescription: "Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your example-machine."
+        NSContactsUsageDescription: "Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
+        NSCalendarsFullAccessUsageDescription: "Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
+        NSRemindersFullAccessUsageDescription: "Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
+        NSLocationWhenInUseUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSHealthShareUsageDescription: "Jarvis lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night."
+        NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
+        NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
+        NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
+        NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+  JarvisWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: JarvisWatch
+      - path: Shared
+    info:
+      path: JarvisWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Jarvis
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.chirpet.jarvis
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chirpet.jarvis.watchkitapp
+        PRODUCT_NAME: Jarvis
+        TARGETED_DEVICE_FAMILY: "4"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+  JarvisTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: JarvisTests
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chirpet.jarvis.tests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Jarvis"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+        JarvisTests: [test]
+    run:
+      config: Debug
+    test:
+      targets: [JarvisTests]
+  JarvisWatch:
+    build:
+      targets:
+        JarvisWatch: all
+    run:
+      config: Debug

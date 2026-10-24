@@ -1,0 +1,198 @@
+import Foundation
+import Observation
+
+/// One tool invocation with its result, as shown in a chat.
+nonisolated struct ToolCall: Identifiable, Hashable, Sendable {
+    var use: Item
+    var result: Item?
+    var images: [ImagePayload] = []
+
+    var id: String { use.id }
+    var name: String { use.toolName ?? "tool" }
+    var input: JSONValue { use.toolInput ?? .object([:]) }
+    var isRunning: Bool { result == nil }
+    var isError: Bool { result?.isError ?? false }
+}
+
+nonisolated enum ChatRow: Identifiable, Hashable, Sendable {
+    case user(Item)
+    case assistant(Item)
+    case thinking(Item)
+    case tools([ToolStep])
+    case notice(Item)
+    case image(Item)
+
+    var id: String {
+        switch self {
+        case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i): i.id
+        case .tools(let steps): "tools-" + (steps.first?.id ?? "")
+        }
+    }
+}
+
+/// A step inside a run of tool activity: a call, or a thought between calls.
+nonisolated enum ToolStep: Identifiable, Hashable, Sendable {
+    case call(ToolCall)
+    case thought(Item)
+
+    var id: String {
+        switch self {
+        case .call(let c): c.id
+        case .thought(let i): i.id
+        }
+    }
+}
+
+/// Transcript items and live state of one session, shared by every view showing it.
+@Observable
+final class ChatStore {
+    let key: SessionKey
+    private(set) var items: [Item] = []
+    private(set) var rows: [ChatRow] = []
+    private(set) var hasMore = false
+    private(set) var loadedOnce = false
+    var screen: String = ""
+    var screenStatus: SessionStatus = .unknown
+    var screenUpdatedAt: Date?
+    var error: String?
+    var isLoadingOlder = false
+
+    @ObservationIgnored private var ids = Set<String>()
+
+    init(key: SessionKey) { self.key = key }
+
+    var lastSeq: Int { items.last?.seq ?? 0 }
+
+    func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
+        var changed = false
+        for it in new where !ids.contains(it.id) {
+            ids.insert(it.id)
+            items.append(it)
+            changed = true
+        }
+        if let hasMore, backlog, !loadedOnce || items.count <= new.count { self.hasMore = hasMore }
+        if backlog { loadedOnce = true }
+        guard changed else { return }
+        items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
+        rows = ChatStore.buildRows(items)
+    }
+
+    func prepend(_ older: [Item], hasMore: Bool) {
+        self.hasMore = hasMore
+        merge(older)
+    }
+
+    /// Live preview: the lines Claude is currently printing, cut above the input box.
+    var livePreview: [String] { ScreenParser.activity(screen) }
+    var spinnerLine: String? { ScreenParser.spinner(screen) }
+
+    static func buildRows(_ items: [Item]) -> [ChatRow] {
+        var results: [String: Item] = [:]
+        var images: [String: [ImagePayload]] = [:]
+        for it in items {
+            guard let tid = it.toolUseID else { continue }
+            if it.kind == .toolResult { results[tid] = it }
+            if it.kind == .image, let img = it.image { images[tid, default: []].append(img) }
+        }
+        var rows: [ChatRow] = []
+        var run: [ToolStep] = []
+        var pendingThoughts: [Item] = []
+
+        func flushThoughts(asRows: Bool) {
+            if asRows { rows.append(contentsOf: pendingThoughts.map { .thinking($0) }) }
+            else { run.append(contentsOf: pendingThoughts.map { .thought($0) }) }
+            pendingThoughts.removeAll()
+        }
+        func flushRun() {
+            if !run.isEmpty { rows.append(.tools(run)); run.removeAll() }
+        }
+
+        for it in items {
+            switch it.kind {
+            case .toolUse:
+                flushThoughts(asRows: run.isEmpty)
+                var call = ToolCall(use: it, result: it.toolUseID.flatMap { results[$0] })
+                call.images = it.toolUseID.flatMap { images[$0] } ?? []
+                run.append(.call(call))
+            case .thinking:
+                pendingThoughts.append(it)
+            case .toolResult:
+                continue
+            case .image where it.toolUseID != nil:
+                continue
+            default:
+                if run.isEmpty { flushThoughts(asRows: true) } else { flushThoughts(asRows: false); flushRun() }
+                switch it.kind {
+                case .text: rows.append(it.role == "user" ? .user(it) : .assistant(it))
+                case .notice: rows.append(.notice(it))
+                case .image: rows.append(.image(it))
+                default: break
+                }
+            }
+        }
+        if !run.isEmpty {
+            flushThoughts(asRows: false)
+            flushRun()
+        } else {
+            flushThoughts(asRows: true)
+        }
+        return rows
+    }
+}
+
+/// Extracts useful bits from Claude Code's terminal screen.
+nonisolated enum ScreenParser {
+    private static let spinnerGlyphs: Set<Character> = ["✻", "✶", "✳", "✢", "✽", "·", "*", "⏺", "◐", "◓", "◑", "◒"]
+
+    /// "Cogitating… (12s · ↓ 3.2k tokens)" from the status line above the input box.
+    static func spinner(_ screen: String) -> String? {
+        for line in screen.split(separator: "\n", omittingEmptySubsequences: true).reversed() {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard let first = t.first, spinnerGlyphs.contains(first), t.contains("…") else { continue }
+            var s = String(t.dropFirst()).trimmingCharacters(in: .whitespaces)
+            s = s.replacingOccurrences(of: " · esc to interrupt", with: "").replacingOccurrences(of: "esc to interrupt", with: "")
+            return s.replacingOccurrences(of: "()", with: "").trimmingCharacters(in: .whitespaces)
+        }
+        return nil
+    }
+
+    /// The last few content lines above the prompt box (what is streaming right now).
+    static func activity(_ screen: String, max: Int = 8) -> [String] {
+        var lines = screen.components(separatedBy: "\n")
+        // Cut at the first horizontal rule from the bottom that starts the input box.
+        if let idx = lines.lastIndex(where: { isRule($0) }), let top = lines[..<idx].lastIndex(where: { isRule($0) }) {
+            lines = Array(lines[..<top])
+        } else if let idx = lines.lastIndex(where: { isRule($0) }) {
+            lines = Array(lines[..<idx])
+        }
+        let content = lines
+            .map { $0.replacingOccurrences(of: "\u{00a0}", with: " ") }
+            .filter { line in
+                let t = line.trimmingCharacters(in: .whitespaces)
+                return !t.isEmpty && spinner(t) == nil
+            }
+        return Array(content.suffix(max))
+    }
+
+    static func isRule(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        return t.count > 20 && t.allSatisfy { $0 == "─" || $0 == "━" || $0 == "-" }
+    }
+
+    /// Numbered options on a TUI dialog ("❯ 1. Yes", "2. No") → (number, label).
+    static func options(_ screen: String) -> [(key: String, label: String, selected: Bool)] {
+        var out: [(String, String, Bool)] = []
+        for raw in screen.components(separatedBy: "\n") {
+            var t = raw.trimmingCharacters(in: .whitespaces)
+            var selected = false
+            if t.hasPrefix("❯") { selected = true; t = String(t.dropFirst()).trimmingCharacters(in: .whitespaces) }
+            guard let dot = t.firstIndex(of: "."), let n = Int(t[..<dot]), n >= 1, n <= 9 else { continue }
+            let label = t[t.index(after: dot)...].trimmingCharacters(in: .whitespaces)
+            guard !label.isEmpty else { continue }
+            out.append((String(n), label, selected))
+        }
+        // Keep only the trailing contiguous 1…N block (the active dialog).
+        if let lastOne = out.lastIndex(where: { $0.0 == "1" }) { out = Array(out[lastOne...]) }
+        return out
+    }
+}
