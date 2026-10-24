@@ -24,9 +24,9 @@ API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProv
 
 1. ✅ 2026-10-24 `python3 scripts/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送和 HealthKit、建两个 App Store
    描述文件并装到本机。幂等，能力变了随时重跑。
-2. ⬜ **网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称 `Jarvis`、主要语言简体中文、
+2. ✅ 2026-10-24 App ID 1234567890（商店名 `Jarvis Herd`，「Jarvis」已被占用；桌面显示名仍是 Jarvis）。**网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称 `Jarvis`、主要语言简体中文、
    Bundle ID `com.chirpet.jarvis`、SKU `jarvis-001`、完全访问权限。把 App ID 写进 `scripts/app_id.txt`。
-3. ⬜ `python3 scripts/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把 tester@example.com 加进去。
+3. ✅ 2026-10-24 `python3 scripts/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把 tester@example.com 加进去。
 4. ⬜ `NO_UPLOAD=1 ./scripts/release.sh` 验证归档 + 导出（不需要 App 记录就能跑）。
 5. ⬜ `./scripts/release.sh` 上传第一个构建 → `python3 scripts/asc_testflight.py wait` 等处理完并自动加入 Internal。
 
@@ -87,3 +87,10 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 ## 待 leader 处理
 
 （无。2026-10-24：clipJSON 截断中文的问题已修，transcript.go 已 gofmt。）
+
+## 推送（APNs）
+
+- 2026-10-24 在 developer.apple.com 建了 APNs key「Jarvis APNs」，Key ID `APNSKEY001`，Sandbox & Production，Team Scoped。
+- 文件：本机 `~/.appstoreconnect/AuthKey_APNSKEY001_APNs.p8`、example-machine `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），
+  1Password `密码管理器`。key 只能下载一次，丢了就重建。
+- 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。

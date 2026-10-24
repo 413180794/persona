@@ -64,7 +64,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 
 - hub 已部署在 example-machine（:18660），example-machine / example-machine / example-machine 在线，mac-home 隧道未装。
 - 端到端跑通：手机新建会话、提问、计划审批、手机工具（`docs/testing.md`）。邮件模块上线，还没加账号。
-- 待办：App Store Connect App 记录（需用户登录网页）、APNs key（推送）、TestFlight 首次上传、真机验证。
+- App Store Connect App ID 1234567890（Jarvis Herd），APNs 已开（`docs/release.md`）。待办：真机验证。
 
 ## 经验
 
