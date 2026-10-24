@@ -86,9 +86,4 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 
 ## 待 leader 处理
 
-- `server/internal/transcript/transcript.go` 的 `clipJSON` 在截断超长 tool input 时按 `s[:maxTextLen/2]` 硬切字节，
-  可能把一个 UTF-8 字符切成两半（例如 `Write` 的内容是中文时），结果里出现 `�`。写测试时用
-  `"a" + strings.Repeat("汉", 24576)` 复现过。建议改成和 `clip()` 一样回退到字符边界（`for cut > 0 && (s[cut]&0xC0) == 0x80 { cut-- }`）。
-  测试里没有断言这个行为，修好后可以在 `transcript_test.go` 加一条断言。
-- `internal/transcript/transcript.go` 目前不是 `gofmt` 干净的（`entry` 结构体字段对齐），`gofmt -w` 一下即可。
-
+（无。2026-10-24：clipJSON 截断中文的问题已修，transcript.go 已 gofmt。）

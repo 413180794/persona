@@ -35,8 +35,8 @@ type entry struct {
 		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
-	AITitle  string `json:"aiTitle"`
-	Cwd      string `json:"cwd"`
+	AITitle       string          `json:"aiTitle"`
+	Cwd           string          `json:"cwd"`
 	ToolUseResult json.RawMessage `json:"toolUseResult"`
 }
 
@@ -311,11 +311,14 @@ func rawString(raw json.RawMessage) string {
 	return string(raw)
 }
 
-func clip(s string) string {
-	if len(s) <= maxTextLen {
+func clip(s string) string { return clipTo(s, maxTextLen) }
+
+// clipTo cuts s to at most n bytes on a UTF-8 boundary and notes the original size.
+func clipTo(s string, n int) string {
+	if len(s) <= n {
 		return s
 	}
-	cut := maxTextLen
+	cut := n
 	for cut > 0 && (s[cut]&0xC0) == 0x80 {
 		cut--
 	}
@@ -333,7 +336,7 @@ func clipJSON(raw json.RawMessage) json.RawMessage {
 	}
 	for k, v := range m {
 		if s, ok := v.(string); ok && len(s) > maxTextLen/2 {
-			m[k] = clip(s[:maxTextLen/2])
+			m[k] = clipTo(s, maxTextLen/2)
 		}
 	}
 	b, _ := json.Marshal(m)
