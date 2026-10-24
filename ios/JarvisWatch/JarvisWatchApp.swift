@@ -32,6 +32,9 @@ final class WatchModel {
         if let data = UserDefaults.standard.data(forKey: "config"), let c = try? JSONDecoder().decode(ServerConfig.self, from: data) {
             config = c
         }
+        #if DEBUG
+        if let s = UserDefaults.standard.string(forKey: "pairURL"), let c = ServerConfig(pairURL: s) { config = c }
+        #endif
         WatchSync.shared.onConfig = { [weak self] c in
             self?.config = c
             UserDefaults.standard.set(try? JSONEncoder().encode(c), forKey: "config")
@@ -47,8 +50,12 @@ final class WatchModel {
 
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
         let hadNew = interactions.contains { ix in !self.interactions.contains { $0.id == ix.id } }
+        func rank(_ s: Session) -> Int {
+            if s.pendingInteractions > 0 || s.status == .blocked { return 0 }
+            switch s.status { case .working: return 1; case .done: return 2; default: return 3 }
+        }
         self.sessions = sessions.filter { $0.status.isLive }
-            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         self.interactions = interactions
         if !machines.isEmpty { self.machines = machines }
         lastUpdate = .now
