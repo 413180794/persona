@@ -1,0 +1,11 @@
+.DS_Store
+/server/bin/
+/build/
+/build-release/
+/ios/*.xcodeproj
+/ios/build/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+__pycache__/
+/tmp/
