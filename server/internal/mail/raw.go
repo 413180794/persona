@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/emersion/go-imap/v2"
 )
@@ -30,7 +28,7 @@ func (s *Service) gmailSearch(ctx context.Context, a *MailAccount, mailbox, quer
 	}
 	defer raw.close()
 
-	if err := raw.login(ctx, a, s.accessTokenFn()); err != nil {
+	if err := raw.login(ctx, a); err != nil {
 		return nil, err
 	}
 	if _, err := raw.command(ctx, "SELECT "+quoteIMAP(mailbox)); err != nil {
@@ -153,16 +151,7 @@ func (rc *rawConn) command(ctx context.Context, cmd string) ([]string, error) {
 	}
 }
 
-func (rc *rawConn) login(ctx context.Context, a *MailAccount, accessToken func(context.Context, *OAuthCreds) (string, time.Time, error)) error {
-	if a.Auth == AuthOAuth2 {
-		token, _, err := accessToken(ctx, a.OAuth)
-		if err != nil {
-			return err
-		}
-		payload := base64.StdEncoding.EncodeToString([]byte("user=" + a.Username + "\x01auth=Bearer " + token + "\x01\x01"))
-		_, err = rc.command(ctx, "AUTHENTICATE XOAUTH2 "+payload)
-		return err
-	}
+func (rc *rawConn) login(ctx context.Context, a *MailAccount) error {
 	_, err := rc.command(ctx, "LOGIN "+quoteIMAP(a.Username)+" "+quoteIMAP(a.Password))
 	return err
 }

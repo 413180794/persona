@@ -20,14 +20,15 @@ Gmail 额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后
 | 发件箱留存 | 非 Gmail 账号（SMTP 不会自动保存副本）发完后 `APPEND` 到 `\Sent`；失败只记日志，不影响发信结果 |
 | MCP 工具 | `mail_accounts`、`mail_search`、`mail_read`、`mail_send`；发信前一定先让用户在手机上批准 |
 
-HTTP 路由、JSON 字段与 `docs/protocol.md` 的「邮件 API」一节严格一致；密码和 OAuth 凭据永远不出现在响应里
+HTTP 路由、JSON 字段与 `docs/protocol.md` 的「邮件 API」一节严格一致；密码永远不出现在响应里
 （`json:"-"` + 独立存储文件）。
 
 ## Gmail 接入方式
 
-Gmail 现在**不接受**账号密码直接登录（会报 `Application-specific password required`），必须从下面两种里选一种。
+Gmail 现在**不接受**账号密码直接登录（会报 `Application-specific password required`），只能用应用专用密码。
+（2026-10-24 用户要求移除了 OAuth2 / XOAUTH2 接入，只保留应用专用密码。）
 
-### 方式一：应用专用密码（推荐，配置最简单）
+### 应用专用密码
 
 1. 账号必须开启两步验证：<https://myaccount.google.com/security> →「两步验证」。没开的话下面入口不存在。
 2. 打开 <https://myaccount.google.com/apppasswords>，新建一个应用专用密码（名称随便填，比如 `Jarvis`）。
@@ -38,47 +39,16 @@ Gmail 现在**不接受**账号密码直接登录（会报 `Application-specific
 
 补充：如果 `imap.gmail.com` 登录时报 `IMAP access is disabled`，去 Gmail 网页版「设置 → 转发和 POP/IMAP」启用 IMAP。
 
-### 方式二：OAuth2（XOAUTH2，refreshtoken 长期有效，不受两步验证重置影响）
+## 飞书邮箱
 
-需要先自己建一个 Google Cloud OAuth 客户端。整个过程大约 10 分钟，做一次的 refresh token 可以长期用。
+App 里选「飞书」，只填邮箱和密码（`provider: "feishu"`）。邮箱在公司自己的域名上，按域名猜不出服务器，所以服务器固定：
 
-1. 建项目：<https://console.cloud.google.com/projectcreate>，随便是哪个项目。
-2. 启用 Gmail API：<https://console.cloud.google.com/apis/library/gmail.googleapis.com> →「启用」。
-   （IMAP/SMTP 的 XOAUTH2 走的是 Gmail API 的授权范围，必须启用。）
-3. 配置 OAuth 同意屏幕：<https://console.cloud.google.com/apis/credentials/consent>
-   - User Type 选「外部」，填应用名和邮箱；
-   - Scopes 里添加 `https://mail.google.com/`（IMAP/SMTP 全套权限）；
-   - **Publishing status 改成「In production」**。停在 Testing 状态时 refresh token 只有 7 天有效期，
-     过期后账号直接失效；发布后不会过期（未验证应用会显示警告，点「继续」即可，自己用不需要验证）。
-   - 如果留在 Testing，记得把自己的 Gmail 加进「Test users」。
-4. 建凭据：<https://console.cloud.google.com/apis/credentials> →「创建凭据」→「OAuth 客户端 ID」，
-   应用类型选「桌面应用」；建好后记下 `client_id` 和 `client_secret`。
-5. 拿授权码（浏览器打开，把三个占位符替换成自己的）：
+| | 服务器 | 端口 |
+| --- | --- | --- |
+| 收信 IMAP | `imap.larkoffice.com` | 993，SSL |
+| 发信 SMTP | `smtp.larkoffice.com` | 465，SSL |
 
-   ```
-   https://accounts.google.com/o/oauth2/v2/auth?client_id=CLIENT_ID&redirect_uri=http://localhost&response_type=code&scope=https://mail.google.com/&access_type=offline&prompt=consent
-   ```
-
-   同意后浏览器会跳到 `http://localhost/?code=4/0A...`（页面打不开是正常的，看地址栏）。从地址栏复制 `code` 的值。
-   `access_type=offline` 和 `prompt=consent` 都不能省，否则拿不到 refresh token。
-6. 用授权码换 refresh token：
-
-   ```
-   curl -s https://oauth2.googleapis.com/token \
-     -d client_id=CLIENT_ID \
-     -d client_secret=CLIENT_SECRET \
-     -d code='粘贴上面的 code' \
-     -d grant_type=authorization_code \
-     -d redirect_uri=http://localhost
-   ```
-
-   返回值里的 `refresh_token` 就是长期凭据（同时还会有一个一小时的 `access_token`，服务端会自己刷新，不用管）。
-   授权码有效期很短（约 10 分钟）且只能用一次，报 `invalid_grant` 就重新走第 5 步。
-7. 在 Jarvis 里新增账号：邮箱 `you@gmail.com`，认证方式 `oauth2`，填三样：
-   `client_id`、`client_secret`、`refresh_token`。
-
-服务端拿到 refresh token 后自己换 `access_token`（`POST https://oauth2.googleapis.com/token`，form 编码 +
-Basic 认证），内存缓存到过期前 1 分钟再刷；IMAP 用 `AUTHENTICATE XOAUTH2`，SMTP 用 `AUTH XOAUTH2`。
+选了飞书时，请求里带的 host / port 会被忽略。密码是飞书邮箱设置里为第三方客户端生成的登录密码（服务器叫它「授权码」，填错会报 `wrong authorization code`）。
 
 ## 其他服务商
 
@@ -104,12 +74,12 @@ SMTP 不给时按端口推断（465 = TLS，587/25 = STARTTLS，其余 TLS）。
 
 | 文件 | 权限 | 内容 |
 | --- | --- | --- |
-| `<dataDir>/secret.key` | 0600 | 32 字节随机主密钥，首次启动时创建，绝不入库、不返回给客户端 |
-| `<dataDir>/mail_accounts.json` | 0600 | 账号列表：主机、端口、显示名等明文；`password_enc`、`oauth_enc` 为密文 |
+| `<dataDir>/secret.key` | 0600 | 32 字节随机主密钥，首次启动时创建，绝不进数据库、不返回给客户端 |
+| Postgres `mail_accounts` 表 | — | 主机、端口、显示名等非敏感字段（jsonb）；`password_enc` 为密文（`oauth_enc` 列是 OAuth 移除前留下的，不再写入） |
 
 - 算法 AES-256-GCM，随机 12 字节 nonce 拼在密文前面，整体 base64。
 - 每次保存都用新 nonce 重新加密（同一份明文不会产生同一段密文）。
-- 写文件走「临时文件 + rename」，避免写一半断电留下坏 JSON。
+- 整组账号在一个事务里替换写入。
 - 换机器 / 重装 hub 时，只要 `secret.key` 丢了，所有密码都要重填。
 - hub 的 `~/.jarvis` 目录建议 `chmod 700`。
 

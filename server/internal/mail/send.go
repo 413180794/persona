@@ -231,10 +231,7 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 
 	_ = client.Hello(localHostname())
 
-	if auth, err := s.smtpAuth(ctx, a); err != nil {
-		if a.OAuth != nil {
-			s.invalidateAccessToken(a.OAuth)
-		}
+	if auth, err := s.smtpAuth(a); err != nil {
 		return err
 	} else if auth != nil {
 		if err := client.Auth(auth); err != nil {
@@ -319,7 +316,7 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 	client.CommandTimeout = networkTimeout
 
 	_ = client.Hello(localHostname())
-	auth, err := s.smtpAuth(ctx, a)
+	auth, err := s.smtpAuth(a)
 	if err != nil {
 		return err
 	}

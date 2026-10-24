@@ -38,7 +38,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |
 | `docs/server.md` | jarvisd 各模式、配置、部署、运维 |
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
-| `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（应用专用密码 / OAuth XOAUTH2）、凭据存储 |
+| `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（应用专用密码）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |

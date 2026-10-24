@@ -13,13 +13,13 @@ type Address struct {
 // Authentication methods.
 const (
 	AuthPassword = "password"
-	AuthOAuth2   = "oauth2"
 )
 
 // Providers.
 const (
-	ProviderGmail = "gmail"
-	ProviderIMAP  = "imap"
+	ProviderGmail  = "gmail"
+	ProviderIMAP   = "imap"
+	ProviderFeishu = "feishu" // Feishu / Lark mail on a company domain: fixed larkoffice.com servers
 )
 
 // Mailbox roles. The values match the role field in docs/protocol.md.
@@ -38,7 +38,7 @@ type MailAccount struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Provider string `json:"provider"` // gmail | imap
-	Auth     string `json:"auth"`     // password | oauth2
+	Auth     string `json:"auth"`     // password
 	Username string `json:"username"`
 
 	IMAPHost string `json:"imap_host"`
@@ -56,15 +56,7 @@ type MailAccount struct {
 	Error  string `json:"error"`
 
 	// Secrets. Never marshalled into API responses.
-	Password string      `json:"-"`
-	OAuth    *OAuthCreds `json:"-"`
-}
-
-// OAuthCreds holds the Google OAuth client configuration for an account.
-type OAuthCreds struct {
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	RefreshToken string `json:"refresh_token"`
+	Password string `json:"-"`
 }
 
 // AddAccountRequest is the POST /api/v1/mail/accounts body. Fields that the
@@ -76,8 +68,7 @@ type AddAccountRequest struct {
 	Auth     string `json:"auth,omitempty"`
 	Username string `json:"username,omitempty"`
 
-	Password string      `json:"password,omitempty"`
-	OAuth    *OAuthCreds `json:"oauth,omitempty"`
+	Password string `json:"password,omitempty"`
 
 	IMAPHost     string `json:"imap_host,omitempty"`
 	IMAPPort     int    `json:"imap_port,omitempty"`

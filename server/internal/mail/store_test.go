@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/emersion/go-imap/v2"
 )
@@ -42,7 +41,6 @@ func TestEncryptedStoreRoundTrip(t *testing.T) {
 		Auth:     AuthPassword,
 		Username: "me@gmail.com",
 		Password: "hunter2-中文",
-		OAuth:    &OAuthCreds{ClientID: "cid", ClientSecret: "csecret", RefreshToken: "rtok"},
 		IMAPHost: "imap.gmail.com", IMAPPort: 993,
 		SMTPHost: "smtp.gmail.com", SMTPPort: 465, SMTPSecurity: "tls",
 		Status: "ok",
@@ -53,7 +51,7 @@ func TestEncryptedStoreRoundTrip(t *testing.T) {
 
 	// What reaches the database must not contain the secrets in clear text.
 	raw := recs.dump()
-	for _, secret := range []string{"hunter2", "rtok", "csecret"} {
+	for _, secret := range []string{"hunter2"} {
 		if strings.Contains(raw, secret) {
 			t.Fatalf("stored rows leak %q: %s", secret, raw)
 		}
@@ -72,13 +70,10 @@ func TestEncryptedStoreRoundTrip(t *testing.T) {
 	if got.Password != a.Password {
 		t.Fatalf("password = %q, want %q", got.Password, a.Password)
 	}
-	if got.OAuth == nil || *got.OAuth != *a.OAuth {
-		t.Fatalf("oauth = %+v, want %+v", got.OAuth, a.OAuth)
-	}
 
 	// Public views never expose secrets.
 	pub := got.public()
-	if pub.Password != "" || pub.OAuth != nil {
+	if pub.Password != "" {
 		t.Fatalf("public() leaked secrets: %+v", pub)
 	}
 	b, err := json.Marshal(pub)
@@ -171,7 +166,7 @@ func TestBuildAccountValidation(t *testing.T) {
 		{"missing email", AddAccountRequest{Password: "p"}, "email is required"},
 		{"unknown domain", AddAccountRequest{Email: "me@nowhere.example", Password: "p"}, "unknown mail provider"},
 		{"password auth without password", AddAccountRequest{Email: "me@gmail.com", Auth: AuthPassword}, "password is required"},
-		{"oauth without creds", AddAccountRequest{Email: "me@gmail.com", Auth: AuthOAuth2}, "oauth with client_id"},
+		{"unsupported auth", AddAccountRequest{Email: "me@gmail.com", Auth: "oauth2", Password: "x"}, "invalid auth"},
 		{"bad auth", AddAccountRequest{Email: "me@gmail.com", Auth: "carrier-pigeon", Password: "p"}, "invalid auth"},
 	}
 	for _, tc := range cases {
@@ -181,89 +176,6 @@ func TestBuildAccountValidation(t *testing.T) {
 				t.Fatalf("err = %v, want it to contain %q", err, tc.want)
 			}
 		})
-	}
-}
-
-func TestBuildAccountInfersOAuth(t *testing.T) {
-	a, err := buildAccount(AddAccountRequest{
-		Email: "me@gmail.com",
-		OAuth: &OAuthCreds{ClientID: "c", ClientSecret: "s", RefreshToken: "r"},
-	})
-	if err != nil {
-		t.Fatalf("buildAccount: %v", err)
-	}
-	if a.Auth != AuthOAuth2 {
-		t.Fatalf("auth = %q, want oauth2", a.Auth)
-	}
-	if a.Username != "me@gmail.com" {
-		t.Fatalf("username = %q, want the email", a.Username)
-	}
-}
-
-func TestOAuthTokenCache(t *testing.T) {
-	dir := t.TempDir()
-	s, err := New(dir, newMemRecords())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-
-	calls := 0
-	now := time.Now()
-	s.now = func() time.Time { return now }
-	s.accessToken = func(ctx context.Context, c *OAuthCreds) (string, time.Time, error) {
-		calls++
-		return "tok-" + string(rune('0'+calls)), now.Add(time.Hour), nil
-	}
-	// The stub bypasses the cache by design, so exercise cachedAccessToken
-	// directly with the real fetch path replaced by a local server.
-	_ = s.accessToken
-
-	tok, _, err := s.cachedAccessToken(context.Background(), &OAuthCreds{ClientID: "c", RefreshToken: "r"})
-	if err == nil {
-		t.Fatalf("expected a network failure for the fake credentials, got %q", tok)
-	}
-
-	// Now cache a token by hand and check it is reused until it is close to
-	// expiry.
-	creds := &OAuthCreds{ClientID: "c", RefreshToken: "r"}
-	key := creds.ClientID + "\x00" + creds.RefreshToken
-	cache := &oauthCache{token: "cached", expires: now.Add(10 * time.Minute)}
-	s.mu.Lock()
-	s.oauths[key] = cache
-	s.mu.Unlock()
-
-	tok, _, err = s.cachedAccessToken(context.Background(), creds)
-	if err != nil || tok != "cached" {
-		t.Fatalf("cachedAccessToken = %q, %v; want cached", tok, err)
-	}
-
-	// Within a minute of expiry the cache is stale.
-	now = now.Add(9*time.Minute + 30*time.Second)
-	if _, _, err := s.cachedAccessToken(context.Background(), creds); err == nil {
-		t.Fatal("expected a refresh attempt for an almost-expired token")
-	}
-}
-
-func TestXOAUTH2Client(t *testing.T) {
-	c := newXOAUTH2Client("me@example.com", "ya29.token")
-	mech, ir, err := c.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mech != "XOAUTH2" {
-		t.Fatalf("mech = %q", mech)
-	}
-	want := "user=me@example.com\x01auth=Bearer ya29.token\x01\x01"
-	if string(ir) != want {
-		t.Fatalf("initial response = %q, want %q", ir, want)
-	}
-	resp, err := c.Next([]byte("invalid"))
-	if err != nil || len(resp) != 0 {
-		t.Fatalf("Next on failure = %q, %v; want an empty response", resp, err)
-	}
-	if _, err := c.Next(nil); err == nil {
-		t.Fatal("Next after done should error")
 	}
 }
 
@@ -305,5 +217,17 @@ func TestIsConnError(t *testing.T) {
 	}
 	if isConnError(context.DeadlineExceeded) {
 		t.Fatal("a deadline is not a broken connection")
+	}
+}
+
+func TestFeishuProviderUsesFixedServers(t *testing.T) {
+	a, err := buildAccount(AddAccountRequest{Email: "person@example.com", Provider: ProviderFeishu, Password: "pw",
+		IMAPHost: "ignored.example.com", IMAPPort: 143})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.IMAPHost != "imap.larkoffice.com" || a.IMAPPort != 993 || a.SMTPHost != "smtp.larkoffice.com" ||
+		a.SMTPPort != 465 || a.SMTPSecurity != "tls" || a.Provider != ProviderFeishu || a.Username != "person@example.com" {
+		t.Fatalf("feishu account = %+v", a)
 	}
 }

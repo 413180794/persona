@@ -30,11 +30,10 @@ type Service struct {
 	dir   string
 	store *store
 
-	mu     sync.Mutex
-	accts  map[string]*MailAccount // by ID, as loaded from disk
-	conns  map[string]*conn        // by account ID
-	oauths map[string]*oauthCache  // by key
-	opMu   map[string]*sync.Mutex  // per-account IMAP serialization
+	mu    sync.Mutex
+	accts map[string]*MailAccount // by ID, as loaded from disk
+	conns map[string]*conn        // by account ID
+	opMu  map[string]*sync.Mutex  // per-account IMAP serialization
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -44,8 +43,6 @@ type Service struct {
 	now func() time.Time
 	// imapDial and smtpDial are swappable in tests; nil means the real network.
 	imapDial func(a *MailAccount) (*imapclient.Client, error)
-	// accessToken fetches an OAuth access token; nil uses Google's endpoint.
-	accessToken func(ctx context.Context, c *OAuthCreds) (string, time.Time, error)
 	// sendMail delivers a rendered message over SMTP; nil uses the real network.
 	sendMail func(ctx context.Context, a *MailAccount, from string, to []string, raw []byte) error
 }
@@ -63,13 +60,12 @@ func New(dataDir string, recs Records) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		dir:    dataDir,
-		store:  st,
-		accts:  make(map[string]*MailAccount),
-		conns:  make(map[string]*conn),
-		oauths: make(map[string]*oauthCache),
-		stop:   make(chan struct{}),
-		now:    time.Now,
+		dir:   dataDir,
+		store: st,
+		accts: make(map[string]*MailAccount),
+		conns: make(map[string]*conn),
+		stop:  make(chan struct{}),
+		now:   time.Now,
 	}
 	accounts, err := st.load()
 	if err != nil {
@@ -166,7 +162,6 @@ func (s *Service) account(id string) (*MailAccount, error) {
 func (a *MailAccount) public() *MailAccount {
 	cp := *a
 	cp.Password = ""
-	cp.OAuth = nil
 	return &cp
 }
 
@@ -210,7 +205,6 @@ func (s *Service) DeleteAccount(id string) error {
 	delete(s.accts, id)
 	c := s.conns[id]
 	delete(s.conns, id)
-	delete(s.oauths, id)
 	accounts := s.snapshotLocked()
 	s.mu.Unlock()
 
@@ -273,7 +267,6 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 		SMTPPort:     req.SMTPPort,
 		SMTPSecurity: strings.ToLower(strings.TrimSpace(req.SMTPSecurity)),
 		Password:     req.Password,
-		OAuth:        req.OAuth,
 		Status:       "ok",
 	}
 	if a.Name == "" {
@@ -284,6 +277,11 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 	}
 
 	preset := presetFor(email)
+	// Providers with fixed servers (Feishu) win over the email domain, which is the company's own.
+	if p := providerPresets[req.Provider]; p != nil {
+		preset = p
+		a.IMAPHost, a.IMAPPort, a.SMTPHost, a.SMTPPort, a.SMTPSecurity = "", 0, "", 0, ""
+	}
 	if preset != nil {
 		if a.Provider == "" {
 			a.Provider = preset.Provider
@@ -310,24 +308,15 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 	if a.Provider == "" {
 		a.Provider = ProviderIMAP
 	}
-	if a.Provider != ProviderGmail && a.Provider != ProviderIMAP {
+	if a.Provider != ProviderGmail && a.Provider != ProviderIMAP && a.Provider != ProviderFeishu {
 		return nil, fmt.Errorf("invalid provider %q", a.Provider)
 	}
 
 	switch a.Auth = req.Auth; a.Auth {
-	case "":
-		if a.OAuth != nil {
-			a.Auth = AuthOAuth2
-		} else {
-			a.Auth = AuthPassword
-		}
-	case AuthPassword:
+	case "", AuthPassword:
+		a.Auth = AuthPassword
 		if a.Password == "" {
-			return nil, errors.New("password is required for password auth")
-		}
-	case AuthOAuth2:
-		if a.OAuth == nil || a.OAuth.RefreshToken == "" || a.OAuth.ClientID == "" || a.OAuth.ClientSecret == "" {
-			return nil, errors.New("oauth with client_id, client_secret and refresh_token is required for oauth2 auth")
+			return nil, errors.New("password is required")
 		}
 	default:
 		return nil, fmt.Errorf("invalid auth %q", a.Auth)
@@ -363,7 +352,7 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	}
 	ch := make(chan result, 1)
 	go func() {
-		c, err := dialAndLogin(a, s.accessTokenFn())
+		c, err := dialAndLogin(a)
 		ch <- result{c, err}
 	}()
 	select {
@@ -379,7 +368,7 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	}
 }
 
-func dialAndLogin(a *MailAccount, accessToken func(context.Context, *OAuthCreds) (string, time.Time, error)) (*imapclient.Client, error) {
+func dialAndLogin(a *MailAccount) (*imapclient.Client, error) {
 	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
 	opts := &imapclient.Options{
 		TLSConfig:   &tls.Config{ServerName: a.IMAPHost},
@@ -407,7 +396,7 @@ func dialAndLogin(a *MailAccount, accessToken func(context.Context, *OAuthCreds)
 	if c.Caps().Has(imap.CapID) {
 		sendClientID(c)
 	}
-	if err := loginIMAP(c, a, accessToken); err != nil {
+	if err := loginIMAP(c, a); err != nil {
 		c.Close()
 		return nil, err
 	}

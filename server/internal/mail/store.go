@@ -54,7 +54,7 @@ type accountRecord struct {
 
 	// PasswordEnc holds the IMAP/SMTP password, encrypted.
 	PasswordEnc string `json:"password_enc,omitempty"`
-	// OAuthEnc holds the JSON OAuth credentials, encrypted.
+	// OAuthEnc is left over from removed Gmail OAuth support; it is never written.
 	OAuthEnc string `json:"oauth_enc,omitempty"`
 }
 
@@ -227,17 +227,6 @@ func (s *store) loadLocked() ([]*MailAccount, error) {
 			}
 			a.Password = string(plain)
 		}
-		if r.OAuthEnc != "" {
-			plain, err := s.decrypt(r.OAuthEnc)
-			if err != nil {
-				return nil, fmt.Errorf("mail: decrypt oauth for %s: %w", r.Email, err)
-			}
-			var oc OAuthCreds
-			if err := json.Unmarshal(plain, &oc); err != nil {
-				return nil, fmt.Errorf("mail: parse oauth for %s: %w", r.Email, err)
-			}
-			a.OAuth = &oc
-		}
 		accounts = append(accounts, a)
 	}
 	return accounts, nil
@@ -294,17 +283,6 @@ func (s *store) save(accounts []*MailAccount) error {
 				return fmt.Errorf("mail: encrypt password: %w", err)
 			}
 			r.PasswordEnc = enc
-		}
-		if a.OAuth != nil {
-			plain, err := json.Marshal(a.OAuth)
-			if err != nil {
-				return err
-			}
-			enc, err := s.encrypt(plain)
-			if err != nil {
-				return fmt.Errorf("mail: encrypt oauth: %w", err)
-			}
-			r.OAuthEnc = enc
 		}
 		f.Accounts = append(f.Accounts, r)
 	}

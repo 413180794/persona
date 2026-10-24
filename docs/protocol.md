@@ -174,10 +174,10 @@ node → hub 请求：
 
 ```jsonc
 // MailAccount
-{"id":"acc_…","name":"Gmail","email":"x@gmail.com","provider":"gmail|imap","auth":"password|oauth2",
+{"id":"acc_…","name":"Gmail","email":"x@gmail.com","provider":"gmail|feishu|imap","auth":"password",
  "username":"…","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"smtp.gmail.com","smtp_port":465,
  "smtp_security":"tls|starttls","status":"ok|error","error":""}
-// 新增时额外字段：password（password 认证）或 oauth:{client_id,client_secret,refresh_token}（oauth2）
+// 新增时额外字段：password。provider 为 feishu 时服务器固定为 imap/smtp.larkoffice.com（993 / 465，SSL）
 // MailSummary
 {"account_id","mailbox","uid":123,"message_id","subject","from":{"name","email"},"to":[{"name","email"}],
  "date","snippet","seen":false,"flagged":false,"has_attachments":false}

@@ -38,24 +38,19 @@ extension APIClient {
     }
     func sendMail(_ m: SendMail) async throws { try await post("/api/v1/mail/send", body: m, timeout: 60) }
     struct AddAccount: Encodable {
-        struct OAuth: Encodable {
-            var clientID: String, clientSecret: String, refreshToken: String
-            enum CodingKeys: String, CodingKey { case clientID = "client_id", clientSecret = "client_secret", refreshToken = "refresh_token" }
-        }
         var name: String
         var email: String
         var provider: String?
         var auth: String
         var username: String?
         var password: String?
-        var oauth: OAuth?
         var imapHost: String?
         var imapPort: Int?
         var smtpHost: String?
         var smtpPort: Int?
         var smtpSecurity: String?
         enum CodingKeys: String, CodingKey {
-            case name, email, provider, auth, username, password, oauth
+            case name, email, provider, auth, username, password
             case imapHost = "imap_host", imapPort = "imap_port", smtpHost = "smtp_host", smtpPort = "smtp_port", smtpSecurity = "smtp_security"
         }
     }
@@ -84,7 +79,7 @@ struct MailView: View {
             Group {
                 if loadedAccounts && accounts.isEmpty {
                     EmptyStateView(symbol: "envelope.badge", title: "添加邮箱",
-                                   message: "Gmail 或任意 IMAP/SMTP 邮箱。凭据加密保存在 example-machine 上，Claude 也能帮你查信、回信（发信前会在手机上确认）。",
+                                   message: "Gmail、飞书邮箱或任意 IMAP/SMTP 邮箱。凭据加密保存在 example-machine 上，Claude 也能帮你查信、回信（发信前会在手机上确认）。",
                                    action: ("添加邮箱", { showAccounts = true }))
                 } else {
                     list
@@ -461,11 +456,11 @@ struct MailAccountsView: View {
                 Section {
                     ForEach(accounts) { a in
                         HStack {
-                            Image(systemName: a.provider == "gmail" ? "g.circle.fill" : "envelope.circle.fill")
+                            Image(systemName: a.provider == "gmail" ? "g.circle.fill" : a.provider == "feishu" ? "paperplane.circle.fill" : "envelope.circle.fill")
                                 .font(.title2).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading) {
                                 Text(a.email).font(.body.weight(.medium))
-                                Text(a.status == "error" ? (a.error ?? "错误") : "\(a.imapHost ?? "") · \(a.auth == "oauth2" ? "OAuth" : "密码")")
+                                Text(a.status == "error" ? (a.error ?? "错误") : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
                                     .font(.caption).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
@@ -496,13 +491,10 @@ struct MailAccountsView: View {
 struct AddMailAccountView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    enum Kind: String, CaseIterable, Identifiable { case gmail = "Gmail", gmailOAuth = "Gmail OAuth", imap = "其他 IMAP"; var id: String { rawValue } }
+    enum Kind: String, CaseIterable, Identifiable { case gmail = "Gmail", feishu = "飞书", imap = "其他 IMAP"; var id: String { rawValue } }
     @State private var kind: Kind = .gmail
     @State private var email = ""
     @State private var password = ""
-    @State private var clientID = ""
-    @State private var clientSecret = ""
-    @State private var refreshToken = ""
     @State private var imapHost = ""
     @State private var imapPort = "993"
     @State private var smtpHost = ""
@@ -518,18 +510,11 @@ struct AddMailAccountView: View {
                     .listRowBackground(Color.clear)
                 Section {
                     TextField("邮箱地址", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    switch kind {
-                    case .gmail, .imap:
-                        SecureField(kind == .gmail ? "应用专用密码（16 位）" : "密码 / 授权码", text: $password)
-                    case .gmailOAuth:
-                        TextField("Client ID", text: $clientID).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        SecureField("Client Secret", text: $clientSecret)
-                        SecureField("Refresh Token", text: $refreshToken)
-                    }
+                    SecureField(kind == .gmail ? "应用专用密码（16 位）" : "密码 / 授权码", text: $password)
                 } footer: {
                     switch kind {
                     case .gmail: Text("Google 账号开启两步验证后，在 myaccount.google.com/apppasswords 生成应用专用密码。")
-                    case .gmailOAuth: Text("在 Google Cloud 建 OAuth 客户端并取得 refresh token（scope https://mail.google.com/），步骤见 docs/mail.md。")
+                    case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
                     case .imap: Text("QQ / 163 / Outlook / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。")
                     }
                 }
@@ -549,7 +534,7 @@ struct AddMailAccountView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
-                        .disabled(saving || email.isEmpty)
+                        .disabled(saving || email.isEmpty || password.isEmpty)
                 }
             }
         }
@@ -559,14 +544,14 @@ struct AddMailAccountView: View {
         guard let api = model.api else { return }
         saving = true
         defer { saving = false }
-        var req = APIClient.AddAccount(name: email, email: email, auth: kind == .gmailOAuth ? "oauth2" : "password")
+        var req = APIClient.AddAccount(name: email, email: email, auth: "password")
         switch kind {
         case .gmail:
             req.provider = "gmail"
             req.password = password.replacingOccurrences(of: " ", with: "")
-        case .gmailOAuth:
-            req.provider = "gmail"
-            req.oauth = .init(clientID: clientID, clientSecret: clientSecret, refreshToken: refreshToken)
+        case .feishu:
+            req.provider = "feishu"
+            req.password = password
         case .imap:
             req.provider = "imap"
             req.password = password

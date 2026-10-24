@@ -71,6 +71,15 @@ var presets = map[string]*preset{
 	},
 }
 
+// providerPresets are chosen explicitly in the app because the address is on the company's own domain.
+var providerPresets = map[string]*preset{
+	// Feishu / Lark mail: SSL on both, account + password only.
+	ProviderFeishu: {
+		Provider: ProviderFeishu, IMAPHost: "imap.larkoffice.com", IMAPPort: 993,
+		SMTPHost: "smtp.larkoffice.com", SMTPPort: 465, SMTPSecurity: "tls",
+	},
+}
+
 // presetFor returns the server preset for an email address, or nil when the
 // domain is unknown.
 func presetFor(email string) *preset {
