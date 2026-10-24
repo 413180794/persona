@@ -69,18 +69,6 @@ var presets = map[string]*preset{
 		Provider: ProviderIMAP, IMAPHost: "imap.mail.yahoo.co.jp", IMAPPort: 993,
 		SMTPHost: "smtp.mail.yahoo.co.jp", SMTPPort: 465, SMTPSecurity: "tls",
 	},
-	"provider.com": {
-		Provider: ProviderIMAP, IMAPHost: "imap.feishu.cn", IMAPPort: 993,
-		SMTPHost: "smtp.feishu.cn", SMTPPort: 465, SMTPSecurity: "tls",
-	},
-	"larksuite.com": {
-		Provider: ProviderIMAP, IMAPHost: "imap.feishu.cn", IMAPPort: 993,
-		SMTPHost: "smtp.feishu.cn", SMTPPort: 465, SMTPSecurity: "tls",
-	},
-	"feishu.cn": {
-		Provider: ProviderIMAP, IMAPHost: "imap.feishu.cn", IMAPPort: 993,
-		SMTPHost: "smtp.feishu.cn", SMTPPort: 465, SMTPSecurity: "tls",
-	},
 }
 
 // presetFor returns the server preset for an email address, or nil when the

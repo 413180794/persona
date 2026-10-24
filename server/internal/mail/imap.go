@@ -571,7 +571,7 @@ func messageFrom(a *MailAccount, mailbox string, m *imapclient.FetchMessageBuffe
 	if sum.Date == "" && !m.InternalDate.IsZero() {
 		sum.Date = m.InternalDate.UTC().Format(time.RFC3339)
 	}
-	msg := &MailMessage{MailSummary: sum, Attachments: []Attachment{}}
+	msg := &MailMessage{MailSummary: sum, Attachments: []Attachment{}, References: []string{}, Cc: []Address{}}
 
 	var raw []byte
 	for _, sec := range m.BodySection {
@@ -602,7 +602,7 @@ func parseMessage(raw []byte, msg *MailMessage) {
 		if ids, err := h.MsgIDList("In-Reply-To"); err == nil && len(ids) > 0 {
 			msg.InReplyTo = ids[len(ids)-1]
 		}
-		if ids, err := h.MsgIDList("References"); err == nil {
+		if ids, err := h.MsgIDList("References"); err == nil && len(ids) > 0 {
 			msg.References = ids
 		}
 		if len(msg.To) == 0 {

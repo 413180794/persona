@@ -32,9 +32,9 @@ type Service struct {
 
 	mu     sync.Mutex
 	accts  map[string]*MailAccount // by ID, as loaded from disk
-	conns  map[string]*conn       // by account ID
-	oauths map[string]*oauthCache // by key
-	opMu   map[string]*sync.Mutex // per-account IMAP serialization
+	conns  map[string]*conn        // by account ID
+	oauths map[string]*oauthCache  // by key
+	opMu   map[string]*sync.Mutex  // per-account IMAP serialization
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -489,6 +489,12 @@ func (s *Service) dropConn(id string) {
 // withConn runs fn on the cached connection; a transport-level error closes the
 // connection and fn is retried once on a fresh one.
 func (s *Service) withConn(ctx context.Context, a *MailAccount, fn func(*imapclient.Client) error) error {
+	// IMAP is stateful (SELECT), so a cached connection can only serve one
+	// command sequence at a time.
+	mu := s.accountMutex(a.ID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	deadline := time.Now().Add(networkTimeout)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d

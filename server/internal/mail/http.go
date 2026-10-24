@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,7 +23,60 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/mail/messages/{aid}/{uid}", s.handleGetMessage)
 	mux.HandleFunc("POST /api/v1/mail/messages/{aid}/{uid}/flags", s.handleSetFlags)
 	mux.HandleFunc("POST /api/v1/mail/send", s.handleSend)
-	return mux
+	// ServeMux answers 404/405 in plain text; the API contract is JSON errors.
+	return jsonErrors{mux}
+}
+
+// jsonErrors rewrites ServeMux's plain-text 404/405 responses as
+// {"error":"..."} so every failure looks the same to the app.
+type jsonErrors struct {
+	h http.Handler
+}
+
+func (j jsonErrors) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rec := &statusRecorder{ResponseWriter: w}
+	j.h.ServeHTTP(rec, r)
+	if rec.status < 400 || rec.jsonWritten || rec.body.Len() == 0 {
+		if rec.headerWritten {
+			w.WriteHeader(rec.status)
+		}
+		w.Write(rec.body.Bytes())
+		return
+	}
+	msg := strings.TrimSpace(rec.body.String())
+	if msg == "" {
+		msg = http.StatusText(rec.status)
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(rec.status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// statusRecorder buffers a handler's response so it can be rewritten.
+type statusRecorder struct {
+	http.ResponseWriter
+	status        int
+	headerWritten bool
+	jsonWritten   bool
+	body          bytes.Buffer
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	if r.headerWritten {
+		return
+	}
+	r.headerWritten = true
+	r.status = status
+	if ct := r.Header().Get("Content-Type"); strings.Contains(ct, "application/json") {
+		r.jsonWritten = true
+	}
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	if !r.headerWritten {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.body.Write(b)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
