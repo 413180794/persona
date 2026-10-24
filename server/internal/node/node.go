@@ -1,0 +1,257 @@
+// Package node runs on every machine: it drives herdr/claude locally and talks to the hub over stdio RPC.
+package node
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/transcript"
+)
+
+type Node struct {
+	Version string
+
+	home   string
+	dir    string // ~/.jarvis
+	bin    string // absolute path of this executable
+	herdr  *herdr.Client
+	peer   *rpc.Peer
+	logger *log.Logger
+
+	mu       sync.Mutex
+	state    *stateFile
+	files    map[string]*transcript.File // session id -> parsed transcript
+	paths    map[string]string           // session id -> transcript path
+	watches  map[string]*watch
+	agents   map[string]herdr.Agent // session id -> live agent
+	lastList string                 // serialized last sessions.changed payload
+	metas    map[string]quickMeta   // transcript path -> cached meta
+}
+
+func New(version string) (*Node, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	bin, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	if p, err := filepath.EvalSymlinks(bin); err == nil {
+		bin = p
+	}
+	// ssh sessions get a minimal PATH; herdr and claude usually live in ~/.local/bin.
+	extra := []string{filepath.Join(home, ".local/bin"), filepath.Join(home, "bin"), filepath.Join(home, "go/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/local/go/bin"}
+	os.Setenv("PATH", strings.Join(append(extra, os.Getenv("PATH")), string(os.PathListSeparator)))
+	dir := filepath.Join(home, ".jarvis")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	n := &Node{
+		Version: version,
+		home:    home,
+		dir:     dir,
+		bin:     bin,
+		herdr:   herdr.New(),
+		logger:  log.New(os.Stderr, "node: ", log.LstdFlags|log.Lmsgprefix),
+		files:   map[string]*transcript.File{},
+		paths:   map[string]string{},
+		watches: map[string]*watch{},
+		agents:  map[string]herdr.Agent{},
+		metas:   map[string]quickMeta{},
+	}
+	n.state = loadState(filepath.Join(dir, "sessions.json"))
+	return n, nil
+}
+
+// ServeStdio runs the node protocol on stdin/stdout until the hub disconnects.
+func (n *Node) ServeStdio(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if err := n.writeClaudeConfig(); err != nil {
+		n.logger.Printf("write claude config: %v", err)
+	}
+	n.peer = rpc.New("n", os.Stdout)
+	n.peer.OnRequest = n.handle
+	ln, err := n.listenHookSocket(ctx)
+	if err != nil {
+		n.logger.Printf("hook socket: %v", err)
+	} else {
+		defer ln.Close()
+	}
+	go n.pollAgents(ctx)
+	return n.peer.Serve(ctx, os.Stdin)
+}
+
+func (n *Node) writeClaudeConfig() error {
+	cmd := shellQuote(n.bin) + " hook"
+	blocking := func(matcher string) map[string]any {
+		return map[string]any{"matcher": matcher, "hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": 86400}}}
+	}
+	notify := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": cmd, "timeout": 10}}}
+	settings := map[string]any{"hooks": map[string]any{
+		"PreToolUse":        []any{blocking("AskUserQuestion")},
+		"PermissionRequest": []any{blocking("*")},
+		"Notification":      []any{notify},
+		"Stop":              []any{notify},
+		"UserPromptSubmit":  []any{notify},
+		"SessionStart":      []any{notify},
+	}}
+	if err := writeJSON(filepath.Join(n.dir, "claude-settings.json"), settings); err != nil {
+		return err
+	}
+	mcp := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}}}}
+	return writeJSON(filepath.Join(n.dir, "mcp.json"), mcp)
+}
+
+func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	var p struct {
+		Path            string          `json:"path"`
+		SessionID       string          `json:"session_id"`
+		Cwd             string          `json:"cwd"`
+		Launcher        string          `json:"launcher"`
+		Prompt          string          `json:"prompt"`
+		ResumeSessionID string          `json:"resume_session_id"`
+		Text            string          `json:"text"`
+		Images          []proto.Image   `json:"images"`
+		Keys            []string        `json:"keys"`
+		Lines           int             `json:"lines"`
+		BeforeSeq       int             `json:"before_seq"`
+		AfterSeq        *int            `json:"after_seq"`
+		Limit           int             `json:"limit"`
+		SinceSeq        int             `json:"since_seq"`
+		Raw             json.RawMessage `json:"-"`
+	}
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("bad params: %w", err)
+		}
+	}
+	switch method {
+	case "node.info":
+		return n.info(ctx), nil
+	case "launchers.list":
+		ls, err := n.launchers(ctx)
+		return map[string]any{"launchers": ls}, err
+	case "dirs.list":
+		return n.dirs(p.Path)
+	case "sessions.list":
+		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
+	case "session.start":
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID)
+		return map[string]any{"session": s}, err
+	case "session.send":
+		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))
+	case "session.keys":
+		return ok(n.keys(ctx, p.SessionID, p.Keys, p.Text))
+	case "session.interrupt":
+		return ok(n.keys(ctx, p.SessionID, []string{"esc"}, ""))
+	case "session.screen":
+		text, status, err := n.screen(ctx, p.SessionID, p.Lines)
+		return map[string]any{"text": text, "status": status}, err
+	case "session.items":
+		f, err := n.file(p.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		n.refresh(p.SessionID, f)
+		limit := p.Limit
+		if limit <= 0 || limit > 500 {
+			limit = 80
+		}
+		if p.AfterSeq != nil {
+			return map[string]any{"items": nonNil(f.After(*p.AfterSeq, 500)), "has_more": false}, nil
+		}
+		items, more := f.Page(p.BeforeSeq, limit)
+		return map[string]any{"items": nonNil(items), "has_more": more}, nil
+	case "session.watch":
+		return ok(n.watch(p.SessionID, p.SinceSeq))
+	case "session.unwatch":
+		n.unwatch(p.SessionID)
+		return ok(nil)
+	case "session.close":
+		return ok(n.close(ctx, p.SessionID))
+	}
+	return nil, fmt.Errorf("unknown method %s", method)
+}
+
+func ok(err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true}, nil
+}
+
+func nonNil(items []proto.Item) []proto.Item {
+	if items == nil {
+		return []proto.Item{}
+	}
+	return items
+}
+
+func (n *Node) info(ctx context.Context) proto.NodeInfo {
+	host, _ := os.Hostname()
+	return proto.NodeInfo{
+		Hostname:      host,
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH,
+		Home:          n.home,
+		HerdrVersion:  n.herdr.Version(ctx),
+		ClaudeVersion: claudeVersion(ctx),
+		Version:       n.Version,
+	}
+}
+
+func claudeVersion(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := loginShell(ctx, "command claude --version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(string(out)), "(Claude Code)"))
+}
+
+// loginShell runs a command in an interactive zsh so ~/.zshrc functions and PATH are available.
+func loginShell(ctx context.Context, script string) *exec.Cmd {
+	shell := "zsh"
+	if _, err := exec.LookPath("zsh"); err != nil {
+		shell = "bash"
+	}
+	cmd := exec.CommandContext(ctx, shell, "-ic", script)
+	cmd.Stdin = nil
+	return cmd
+}
+
+func writeJSON(path string, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func shellQuote(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r == '/' || r == '.' || r == '-' || r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z')
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}

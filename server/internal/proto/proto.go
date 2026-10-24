@@ -1,0 +1,192 @@
+// Package proto holds the wire types shared by hub, node and clients. See docs/protocol.md.
+package proto
+
+import (
+	"encoding/json"
+	"time"
+)
+
+type Machine struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Kind          string    `json:"kind"` // local | ssh
+	Icon          string    `json:"icon"` // server | laptop | desktop
+	SSHHost       string    `json:"ssh_host,omitempty"`
+	Online        bool      `json:"online"`
+	Error         string    `json:"error,omitempty"`
+	Hostname      string    `json:"hostname,omitempty"`
+	OS            string    `json:"os,omitempty"`
+	Arch          string    `json:"arch,omitempty"`
+	Home          string    `json:"home,omitempty"`
+	HerdrVersion  string    `json:"herdr_version,omitempty"`
+	ClaudeVersion string    `json:"claude_version,omitempty"`
+	LastSeen      time.Time `json:"last_seen,omitempty"`
+}
+
+type NodeInfo struct {
+	Hostname      string `json:"hostname"`
+	OS            string `json:"os"`
+	Arch          string `json:"arch"`
+	Home          string `json:"home"`
+	HerdrVersion  string `json:"herdr_version"`
+	ClaudeVersion string `json:"claude_version"`
+	Version       string `json:"version"`
+}
+
+type Launcher struct {
+	Name    string `json:"name"`
+	BaseURL string `json:"base_url"`
+	Model   string `json:"model"`
+}
+
+type DirEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsGit bool   `json:"is_git"`
+}
+
+type RecentDir struct {
+	Path     string    `json:"path"`
+	Name     string    `json:"name"`
+	LastUsed time.Time `json:"last_used"`
+}
+
+type DirList struct {
+	Path    string      `json:"path"`
+	Parent  string      `json:"parent"`
+	Entries []DirEntry  `json:"entries"`
+	Recent  []RecentDir `json:"recent"`
+}
+
+// Session statuses mirror herdr agent states, plus offline for transcripts with no live agent.
+const (
+	StatusIdle    = "idle"
+	StatusWorking = "working"
+	StatusBlocked = "blocked"
+	StatusDone    = "done"
+	StatusUnknown = "unknown"
+	StatusOffline = "offline"
+)
+
+type Session struct {
+	MachineID           string    `json:"machine_id"`
+	SessionID           string    `json:"session_id"`
+	Title               string    `json:"title"`
+	Cwd                 string    `json:"cwd"`
+	Status              string    `json:"status"`
+	PaneID              string    `json:"pane_id,omitempty"`
+	TabID               string    `json:"tab_id,omitempty"`
+	WorkspaceID         string    `json:"workspace_id,omitempty"`
+	AgentName           string    `json:"agent_name,omitempty"`
+	Launcher            string    `json:"launcher,omitempty"`
+	Model               string    `json:"model,omitempty"`
+	StartedByJarvis     bool      `json:"started_by_jarvis"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	LastText            string    `json:"last_text,omitempty"`
+	PendingInteractions int       `json:"pending_interactions"`
+}
+
+// Item kinds.
+const (
+	KindText       = "text"
+	KindThinking   = "thinking"
+	KindToolUse    = "tool_use"
+	KindToolResult = "tool_result"
+	KindNotice     = "notice"
+	KindImage      = "image"
+)
+
+type Image struct {
+	Mime string `json:"mime"`
+	Data string `json:"data"`
+}
+
+// Item is one content block of a Claude Code transcript.
+type Item struct {
+	ID        string          `json:"id"`
+	Seq       int             `json:"seq"`
+	TS        time.Time       `json:"ts"`
+	Role      string          `json:"role"`
+	Kind      string          `json:"kind"`
+	Text      string          `json:"text,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	ToolName  string          `json:"tool_name,omitempty"`
+	ToolInput json.RawMessage `json:"tool_input,omitempty"`
+	IsError   bool            `json:"is_error,omitempty"`
+	Image     *Image          `json:"image,omitempty"`
+}
+
+// Interaction kinds.
+const (
+	IxQuestion   = "question"
+	IxPlan       = "plan"
+	IxPermission = "permission"
+	IxScreen     = "screen"
+)
+
+type QuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type Question struct {
+	Question    string           `json:"question"`
+	Header      string           `json:"header,omitempty"`
+	MultiSelect bool             `json:"multi_select"`
+	Options     []QuestionOption `json:"options"`
+}
+
+type Interaction struct {
+	ID           string          `json:"id"`
+	MachineID    string          `json:"machine_id"`
+	SessionID    string          `json:"session_id"`
+	SessionTitle string          `json:"session_title,omitempty"`
+	Cwd          string          `json:"cwd,omitempty"`
+	Kind         string          `json:"kind"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ExpiresAt    time.Time       `json:"expires_at"`
+	ToolName     string          `json:"tool_name,omitempty"`
+	ToolUseID    string          `json:"tool_use_id,omitempty"`
+	Questions    []Question      `json:"questions,omitempty"`
+	Plan         string          `json:"plan,omitempty"`
+	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
+	Summary      string          `json:"summary,omitempty"`
+	Screen       string          `json:"screen,omitempty"`
+}
+
+type Resolution struct {
+	Answers  map[string]string `json:"answers,omitempty"`
+	Approve  *bool             `json:"approve,omitempty"`
+	Mode     string            `json:"mode,omitempty"`
+	Feedback string            `json:"feedback,omitempty"`
+	Allow    *bool             `json:"allow,omitempty"`
+	Always   bool              `json:"always,omitempty"`
+	Message  string            `json:"message,omitempty"`
+	Keys     []string          `json:"keys,omitempty"`
+	Text     string            `json:"text,omitempty"`
+	Dismiss  bool              `json:"dismiss,omitempty"`
+}
+
+// Tool is an MCP tool definition.
+type Tool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
+}
+
+// Content is an MCP tool result content block.
+type Content struct {
+	Type     string `json:"type"` // text | image
+	Text     string `json:"text,omitempty"`
+	Data     string `json:"data,omitempty"`
+	MimeType string `json:"mime_type,omitempty"`
+}
+
+type ToolResult struct {
+	Content []Content `json:"content"`
+	IsError bool      `json:"is_error"`
+}
+
+func TextResult(text string, isErr bool) ToolResult {
+	return ToolResult{Content: []Content{{Type: "text", Text: text}}, IsError: isErr}
+}
