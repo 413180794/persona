@@ -206,6 +206,7 @@ struct ToolCallRow: View {
 
 struct ToolDetail: View {
     var call: ToolCall
+    @Environment(\.openFile) private var openFile
 
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
@@ -246,13 +247,27 @@ struct ToolDetail: View {
                     Text("运行中…").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            ForEach(Array(call.images.enumerated()), id: \.offset) { _, img in Base64Image(payload: img) }
+            ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
         }
     }
 
     @ViewBuilder private func path(_ p: String?) -> some View {
         if let p, !p.isEmpty {
-            Text(p).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2).truncationMode(.head).textSelection(.enabled)
+            if let openFile {
+                Button { openFile(p) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: FileViewer.symbol(for: p)).font(.caption2)
+                        Text(p).lineLimit(2).truncationMode(.head)
+                        Image(systemName: "arrow.up.forward.square").font(.caption2)
+                    }
+                    .font(.caption.monospaced())
+                    .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("查看文件 \((p as NSString).lastPathComponent)")
+            } else {
+                Text(p).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2).truncationMode(.head).textSelection(.enabled)
+            }
         }
     }
 }
@@ -352,23 +367,42 @@ struct TodoList: View {
     }
 }
 
+/// Thumbnail of an image in a conversation; tap opens the full-screen viewer (paging through `gallery`).
 struct Base64Image: View {
     var payload: ImagePayload
+    var gallery: [ImagePayload] = []
+    var index = 0
     @State private var image: UIImage?
+    @State private var showViewer = false
+    @Namespace private var zoom
 
     var body: some View {
         Group {
             if let image {
                 Image(uiImage: image).resizable().scaledToFit()
                     .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
                     .frame(maxHeight: 280)
+                    .contentShape(.rect)
+                    .onTapGesture { showViewer = true }
+                    .matchedTransitionSource(id: "image", in: zoom)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("图片，点按查看大图")
             } else {
                 RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)).frame(height: 120)
             }
         }
+        .fullScreenCover(isPresented: $showViewer) {
+            ImageViewer(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index)
+                .navigationTransition(.zoom(sourceID: "image", in: zoom))
+        }
         .task(id: payload.data.count) {
             let data = payload.data
-            image = await Task.detached { Data(base64Encoded: data).flatMap(UIImage.init(data:)) }.value
+            // Thumbnails only need ~2x their on-screen size.
+            image = await Task.detached {
+                guard let d = Data(base64Encoded: data), let full = UIImage(data: d) else { return nil }
+                return full.preparingThumbnail(of: ZoomMath.fittedSize(image: full.size, in: CGSize(width: 900, height: 900))) ?? full
+            }.value
         }
     }
 }

@@ -17,6 +17,7 @@ struct ChatView: View {
     @State private var atBottom = true
     @State private var showTerminal = false
     @State private var file: FileRef?
+    @State private var debugImages: [ImagePayload]?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -138,6 +139,17 @@ struct ChatView: View {
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .sheet(isPresented: $showTerminal) { TerminalSheet(key: key) }
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        #if DEBUG
+        // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
+        .onChange(of: store.rows.count) { _, _ in
+            guard UserDefaults.standard.bool(forKey: "openFirstImage"), debugImages == nil else { return }
+            let imgs = store.items.compactMap(\.image)
+            if !imgs.isEmpty { debugImages = imgs }
+        }
+        .fullScreenCover(isPresented: Binding(get: { debugImages != nil }, set: { if !$0 { debugImages = [] } })) {
+            if let imgs = debugImages, !imgs.isEmpty { ImageViewer(images: imgs, index: 0) }
+        }
+        #endif
         .environment(\.openFile) { path in
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
         }

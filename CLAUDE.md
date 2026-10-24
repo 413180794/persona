@@ -40,6 +40,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（应用专用密码）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
+| `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
