@@ -100,16 +100,7 @@ cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme J
 编出来的 `Jarvis.app/Metadata.appintents/extract.actionsdata` 里能看到 4 个 action、3 条 autoShortcut；
 Siri 是否可用还取决于真机安装后系统索引，模拟器里只能确认元数据生成正确。
 
-## 待 leader 处理
+## 已处理（2026-10-24 leader）
 
-- **CLAUDE.md 文档索引**：新加了 `docs/intents.md`，索引表里还没有这一行（本任务不让改 CLAUDE.md），建议补
-  `| docs/intents.md | App Intents：Siri / 快捷指令能做什么、短语规则、选择和错误文案 |`。
-- **project.yml 不用改**：`Jarvis/Intents/` 落在 targets.Jarvis 的 `sources: - path: Jarvis` 下面，XcodeGen 自动收进来；
-  AppIntents 的宏和元数据也由 Xcode 自动处理。已实测 `build` 与 `test` 都通过。
-- **发布检查**：`scripts/release.sh` 目前只查 `Info.plist` 的用途文案和 DEBUG 字符串。如果想更稳，可以在归档后断言
-  `Jarvis.app/Metadata.appintents/extract.actionsdata` 存在（缺了说明 AppIntents 元数据没生成，Siri 就找不到这些动作）。
-  这需要改 `scripts/release.sh`，不在本任务允许的路径里。
-- **本地化**：intent 的 `title` / `description` / 短语都是中文字面量（`developmentLanguage: zh-Hans`），没有走 String Catalog。
-  以后要出英文界面，需要给 `AppShortcutsProvider` 和 intent 的 `LocalizedStringResource` 建 `Localizable.xcstrings`。
-- **`newChat.machine`**：Siri 里选中的机器不会写回这个 key（只有 App 的新建对话页会写），所以「上次用的机器」始终以 App 里为准；
-  想改成「Siri 也记住」的话，改 `AskClaudeIntent.resolveMachine` 即可，但那会和 App 的默认机器互相覆盖，暂不改。
+- CLAUDE.md 索引已补；release.sh 断言 AppIntents 元数据存在。
+- 本地化、Siri 记住机器：暂不做。

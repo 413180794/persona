@@ -32,6 +32,8 @@ WATCH="$APP/Watch/Jarvis.app"
 # Placeholder purpose strings get the build rejected automatically: stop before uploading.
 python3 scripts/check_bundle_strings.py "$APP"
 if [ -d "$WATCH" ]; then python3 scripts/check_bundle_strings.py "$WATCH"; fi
+# Siri / Shortcuts only see the intents if their metadata was extracted at build time.
+[ -f "$APP/Metadata.appintents/extract.actionsdata" ] || { echo "missing AppIntents metadata in $APP"; exit 1; }
 # Release must not contain the DEBUG-only simulator switches (ios/Jarvis/App/JarvisApp.swift).
 if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat)'; then
   echo "DEBUG switches found in the Release binary" >&2; exit 1

@@ -39,6 +39,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（应用专用密码 / OAuth XOAUTH2）、凭据存储 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
+| `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
 
