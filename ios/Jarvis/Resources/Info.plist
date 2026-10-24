@@ -50,6 +50,8 @@
 	<string>Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Jarvis lets Claude read health summaries when you ask, for example how many steps you walked this week or how long you slept last night.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Jarvis only reads health data and never writes it; if a future version saves data, for example a workout Claude logs for you, it will ask here first.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
 	<key>NSMicrophoneUsageDescription</key>
