@@ -163,7 +163,7 @@ func TestMCPNoAccounts(t *testing.T) {
 
 // resultText flattens a tool result into one string, whatever its content
 // shape is.
-func resultText(t *testing.T, res interface{ }) string {
+func resultText(t *testing.T, res interface{}) string {
 	t.Helper()
 	b, err := json.Marshal(res)
 	if err != nil {
