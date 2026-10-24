@@ -85,6 +85,13 @@ nonisolated enum Fmt {
         return p
     }
 
+    /// Markdown → plain one-liner for previews.
+    static func plain(_ s: String) -> String {
+        var t = s
+        for token in ["**", "__", "`", "### ", "## ", "# ", "> "] { t = t.replacingOccurrences(of: token, with: "") }
+        return t
+    }
+
     /// Model names like "deepseek/v4.1-flash-chain" → "v4.1-flash-chain".
     static func model(_ m: String?) -> String? {
         guard let m, !m.isEmpty else { return nil }

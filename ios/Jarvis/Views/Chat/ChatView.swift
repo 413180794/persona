@@ -117,6 +117,7 @@ struct ChatView: View {
                 }
             }
         }
+        .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showTerminal) { TerminalSheet(key: key) }
         .onAppear {
             model.subscribe(key)

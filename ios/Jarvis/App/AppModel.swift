@@ -20,6 +20,7 @@ final class AppModel {
     var selectedTab: AppTab = .chats
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
+    var debugShowNewChat = false
 
     @ObservationIgnored private var chats: [SessionKey: ChatStore] = [:]
     @ObservationIgnored private var subscribed = Set<SessionKey>()
@@ -33,6 +34,10 @@ final class AppModel {
         live.onEvent = { [weak self] in self?.handle($0) }
         live.onConnected = { [weak self] in self?.didConnect() }
     }
+
+    #if DEBUG
+    func adopt(_ cfg: ServerConfig) { config = cfg }
+    #endif
 
     func start() {
         guard let config else { return }

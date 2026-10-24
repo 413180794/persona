@@ -7,6 +7,7 @@ struct ChatsView: View {
     @State private var machineFilter: String?
     @State private var showNew = false
     @State private var showAllRecent = false
+    @State private var showAllIdle = false
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
@@ -16,11 +17,23 @@ struct ChatsView: View {
         }
     }
 
-    private var live: [Session] {
-        filtered.filter { $0.status.isLive }.sorted { a, b in
+    private func byTime(_ a: Session, _ b: Session) -> Bool { (a.updatedAt ?? .distantPast) > (b.updatedAt ?? .distantPast) }
+
+    /// Working or waiting for the user.
+    private var active: [Session] {
+        filtered.filter { $0.status.isActive || $0.pendingInteractions > 0 }.sorted { a, b in
             let pa = priority(a), pb = priority(b)
-            return pa != pb ? pa < pb : (a.updatedAt ?? .distantPast) > (b.updatedAt ?? .distantPast)
+            return pa != pb ? pa < pb : byTime(a, b)
         }
+    }
+
+    /// Finished a turn the user has not looked at yet.
+    private var finished: [Session] {
+        filtered.filter { $0.status == .done && $0.pendingInteractions == 0 }.sorted(by: byTime)
+    }
+
+    private var idle: [Session] {
+        filtered.filter { ($0.status == .idle || $0.status == .unknown) && $0.pendingInteractions == 0 }.sorted(by: byTime)
     }
 
     private var recent: [Session] {
@@ -57,11 +70,31 @@ struct ChatsView: View {
                     }
                 }
 
-                if !live.isEmpty {
+                if !active.isEmpty {
                     Section {
-                        ForEach(live) { s in row(s) }
+                        ForEach(active) { s in row(s) }
                     } header: {
-                        SectionHeader(title: "运行中", count: live.count, tint: Theme.working)
+                        SectionHeader(title: "进行中", count: active.count, tint: Theme.working)
+                    }
+                }
+
+                if !finished.isEmpty {
+                    Section {
+                        ForEach(finished) { s in row(s) }
+                    } header: {
+                        SectionHeader(title: "刚完成", count: finished.count, tint: Theme.done)
+                    }
+                }
+
+                if !idle.isEmpty {
+                    Section {
+                        ForEach(showAllIdle ? idle : Array(idle.prefix(8))) { s in row(s) }
+                        if idle.count > 8 && !showAllIdle {
+                            Button("显示全部 \(idle.count) 个") { withAnimation { showAllIdle = true } }
+                                .font(.subheadline.weight(.medium))
+                        }
+                    } header: {
+                        SectionHeader(title: "空闲", count: idle.count, tint: Theme.idle)
                     }
                 }
 
@@ -104,10 +137,13 @@ struct ChatsView: View {
                     path.append(session.key)
                 }
             }
-            .onChange(of: model.openChat) { _, key in
+            .onChange(of: model.openChat, initial: true) { _, key in
                 guard let key else { return }
                 path = [key]
                 model.openChat = nil
+            }
+            .onAppear {
+                if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
             }
         }
     }
@@ -200,10 +236,9 @@ struct SessionRow: View {
                         Text("· " + machine.name).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    if let model = Fmt.model(session.model) { Chip(text: model) }
                 }
                 if let last = session.lastText, !last.isEmpty {
-                    Text(last)
+                    Text(Fmt.plain(last))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

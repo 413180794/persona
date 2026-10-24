@@ -165,15 +165,7 @@ struct LiveActivityBar: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("打开终端")
-                Button(action: interrupt) {
-                    Image(systemName: "stop.fill")
-                        .font(.caption)
-                        .frame(width: 26, height: 26)
-                        .background(Theme.danger.opacity(0.15), in: .circle)
-                        .foregroundStyle(Theme.danger)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("中断")
+
             }
             if expanded && !lines.isEmpty {
                 Text(lines.joined(separator: "\n"))

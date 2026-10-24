@@ -33,9 +33,30 @@ struct JarvisApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        #if DEBUG
+        // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`
+        if let s = UserDefaults.standard.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
+            Keychain.serverConfig = cfg
+            AppModel.shared.adopt(cfg)
+        }
+        let d = UserDefaults.standard
+        switch d.string(forKey: "tab") {
+        case "machines": AppModel.shared.selectedTab = .machines
+        case "mail": AppModel.shared.selectedTab = .mail
+        case "settings": AppModel.shared.selectedTab = .settings
+        default: break
+        }
+        if let open = d.string(forKey: "openSession"), let slash = open.firstIndex(of: "/") {
+            AppModel.shared.openChat = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+        }
+        AppModel.shared.debugShowNewChat = d.bool(forKey: "showNewChat")
+        let automation = d.string(forKey: "pairURL") != nil
+        #else
+        let automation = false
+        #endif
         WatchSync.shared.activate()
         AppModel.shared.start()
-        PushRegistrar.shared.registerIfPossible()
+        if !automation { PushRegistrar.shared.registerIfPossible() }
         return true
     }
 
