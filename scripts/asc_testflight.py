@@ -89,7 +89,13 @@ def newest_valid():
 
 
 def attach(build, gid: str):
-    """Put the build in the internal group so testers get it (internal groups are auto-approved)."""
+    """Put the build in the internal group so testers get it (internal groups are auto-approved).
+
+    Groups with hasAccessToAllBuilds already see every build and reject explicit assignment."""
+    g = request("GET", f"/v1/betaGroups/{gid}")
+    if g["data"]["attributes"].get("hasAccessToAllBuilds"):
+        print("build", build["attributes"]["version"], "is available to", GROUP, "(all builds)")
+        return
     request("POST", f"/v1/betaGroups/{gid}/relationships/builds",
             {"data": [{"type": "builds", "id": build["id"]}]})
     print("build", build["attributes"]["version"], "is now in", GROUP)
