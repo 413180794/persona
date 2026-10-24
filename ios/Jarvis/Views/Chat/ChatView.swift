@@ -54,12 +54,20 @@ struct ChatView: View {
                 } else if rows.isEmpty {
                     EmptyStateView(symbol: "text.bubble", title: "还没有消息", message: "发一句话开始吧。")
                 }
-                // Finished turns read like the assistant: thoughts hidden, tool runs folded into one line.
-                // Only the turn still running (after the last user message) shows every step.
-                let liveFrom = status.isActive ? (rows.lastIndex { if case .user = $0 { true } else { false } } ?? -1) : rows.count
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    rowView(row, isLatest: index == rows.count - 1, live: index > liveFrom)
-                        .id(row.id)
+                // Finished turns: the user's messages (queued ones gathered), one folded "process" row, the answer.
+                // The turn still running shows every step in arrival order.
+                let blocks = Self.debugTrim(store.blocks)
+                let liveTurn: Turn? = { if status.isActive, case .turn(let t) = blocks.last { return t } else { return nil } }()
+                ForEach(liveTurn == nil ? blocks : Array(blocks.dropLast())) { block in
+                    switch block {
+                    case .row(let row): rowView(row, isLatest: false, live: false).id(row.id)
+                    case .turn(let turn): TurnView(turn: turn, style: style) { row in rowView(row, isLatest: false, live: true) }.id(block.id)
+                    }
+                }
+                if let liveTurn, let start = rows.firstIndex(where: { $0.id == liveTurn.id }) {
+                    ForEach(Array(rows[start...].enumerated()), id: \.element.id) { offset, row in
+                        rowView(row, isLatest: start + offset == rows.count - 1, live: true).id(row.id)
+                    }
                 }
                 if style == .assistant {
                     let live = store.liveText
@@ -205,16 +213,7 @@ struct ChatView: View {
         .environment(\.openFile) { path in
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
         }
-        .onAppear {
-            model.subscribe(key)
-            model.visibleSession = key
-            model.markSeen(key)
-            if style == .dev { AppModel.rememberChat(key) }
-            #if DEBUG
-            if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
-            if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
-            #endif
-        }
+        .onAppear(perform: appeared)
         .onDisappear {
             model.unsubscribe(key)
             if model.visibleSession == key { model.visibleSession = nil }
@@ -222,6 +221,43 @@ struct ChatView: View {
         .onChange(of: session?.state) { _, st in
             if st == .unread && model.visibleSession == key { model.markSeen(key) }
         }
+    }
+
+    private func appeared() {
+            model.subscribe(key)
+            model.visibleSession = key
+            model.markSeen(key)
+            if style == .dev { AppModel.rememberChat(key) }
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
+            if UserDefaults.standard.bool(forKey: "loadAll") {
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    while model.chat(key).hasMore { await model.loadOlder(key) }
+                    try? await Task.sleep(for: .seconds(1))
+                    position.scrollTo(edge: .top)
+                }
+            }
+            #endif
+    }
+
+    /// Simulator automation: `-fromSeq N` renders from the turn holding the user message with that seq
+    /// (scrolling a long lazy history to a turn drifts while rows above size themselves).
+    private static func debugTrim(_ blocks: [ChatBlock]) -> [ChatBlock] {
+        #if DEBUG
+        let seq = UserDefaults.standard.integer(forKey: "fromSeq")
+        if seq > 0, let i = blocks.firstIndex(where: { b in
+            if case .turn(let t) = b { return t.users.contains { if case .user(let u) = $0 { u.seq == seq } else { false } } }
+            return false
+        }) {
+            var out = Array(blocks[i...])
+            // `-dropUsers YES`: hide that turn's messages so its process row and answer fit one screenshot.
+            if UserDefaults.standard.bool(forKey: "dropUsers"), case .turn(var t) = out[0] { t.users = []; out[0] = .turn(t) }
+            return out
+        }
+        #endif
+        return blocks
     }
 
     private func switchTo(_ next: SessionKey) {
@@ -668,5 +704,58 @@ struct DevInfoCard: View {
         case 1_000...: String(format: "%.1fk", Double(n) / 1_000)
         default: "\(n)"
         }
+    }
+}
+
+/// A finished exchange: messages, the folded process, the answer.
+struct TurnView<Row: View>: View {
+    let turn: Turn
+    var style: ChatStyle
+    @ViewBuilder var row: (ChatRow) -> Row
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(turn.users) { u in row(u) }
+            if !turn.process.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        Haptics.tap()
+                        withAnimation(.snappy) { open.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "list.bullet.indent")
+                            Text(summary).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).rotationEffect(.degrees(open ? 90 : 0))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.primary.opacity(0.04), in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    if open {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(turn.process) { r in row(r) }
+                        }
+                        .padding(.leading, 10)
+                        .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 2) }
+                        .transition(.opacity)
+                    }
+                }
+            }
+            if let answer = turn.answer { row(answer) }
+            ForEach(turn.trailing) { r in row(r) }
+        }
+    }
+
+    private var summary: String {
+        var parts: [String] = []
+        if turn.toolCount > 0 { parts.append("用了 \(turn.toolCount) 个工具") }
+        if turn.thoughtCount > 0 { parts.append("思考 \(turn.thoughtCount) 段") }
+        if turn.interimCount > 0 { parts.append("中间回复 \(turn.interimCount) 条") }
+        return "过程 · " + (parts.isEmpty ? "\(turn.process.count) 步" : parts.joined(separator: " · "))
     }
 }

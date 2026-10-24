@@ -35,7 +35,7 @@ node 的 `session.start`：
 | --- | --- | --- |
 | PreToolUse | `AskUserQuestion` | 阻塞等手机回答，timeout 86400 |
 | PermissionRequest | `*` | ExitPlanMode → 计划审批；其他 → 工具授权 |
-| Notification / Stop / UserPromptSubmit / SessionStart | — | 只上报（推送「完成了」、记 pane） |
+| Notification / Stop / UserPromptSubmit / SessionStart | — | 只上报（记 pane）；「完成了」推送由 hub 按会话状态变化发，不靠 Stop |
 
 实测：
 

@@ -215,10 +215,19 @@ final class AppModel {
     }
 
     func registerPhone() {
+        #if DEBUG
+        // Simulator automation (scripts/sim.sh) must not take the real iPhone's phone_* tool calls.
+        if UserDefaults.standard.string(forKey: "pairURL") != nil { return }
+        #endif
         let tools = PhoneToolRegistry.enabledSpecs()
         guard let data = try? JSON.encoder.encode(tools),
               let arr = try? JSONSerialization.jsonObject(with: data) else { return }
-        live.send(["type": "register_phone", "device_name": UIDevice.current.name, "tools": arr])
+        #if targetEnvironment(simulator)
+        let simulator = true
+        #else
+        let simulator = false
+        #endif
+        live.send(["type": "register_phone", "device_name": UIDevice.current.name, "tools": arr, "simulator": simulator])
     }
 
     private func handle(_ ev: ServerEvent) {

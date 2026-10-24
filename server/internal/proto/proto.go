@@ -141,6 +141,7 @@ type Item struct {
 	ToolInput json.RawMessage `json:"tool_input,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
 	Image     *Image          `json:"image,omitempty"`
+	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
 }
 
 // Interaction kinds.

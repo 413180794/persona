@@ -196,6 +196,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			}
 		}
 		items := userText(mk, text)
+		for i := range items {
+			items[i].Queued = true
+		}
 		if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
 			meta.FirstUser = items[0].Text
 		}

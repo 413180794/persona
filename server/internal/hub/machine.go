@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -235,6 +236,16 @@ func (m *Machine) setSessions(list []proto.Session) {
 		list[i].MachineID = m.cfg.ID
 	}
 	m.mu.Lock()
+	before := make(map[string]string, len(m.sessions))
+	for _, s := range m.sessions {
+		before[s.SessionID] = s.Status
+	}
+	for _, s := range list {
+		// Any agent (herdr or headless, started by Jarvis or not) finishing a turn notifies the phone.
+		if before[s.SessionID] == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle) {
+			go m.notifyFinished(s.SessionID)
+		}
+	}
 	m.sessions = list
 	m.lastSeen = time.Now().UTC()
 	m.mu.Unlock()
@@ -353,15 +364,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			p["type"] = "hook_event"
 			p["machine_id"] = m.cfg.ID
 			m.hub.broadcast(p)
-			if p["event"] == "Stop" {
-				sid, _ := p["session_id"].(string)
-				text, _ := p["last_assistant_message"].(string)
-				title := "Claude 完成了"
-				if s, ok := m.session(sid); ok && s.Title != "" {
-					title = s.Title
-				}
-				m.hub.push.notifyDone(m.cfg.ID, m.cfg.Name, sid, title, text)
-			}
+
 		}
 	}
 }
@@ -400,4 +403,29 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
+}
+
+// notifyFinished pushes "finished" once the agent has stayed done for a moment (status flickers between tool calls).
+func (m *Machine) notifyFinished(id string) {
+	time.Sleep(4 * time.Second)
+	s, ok := m.session(id)
+	if !ok || (s.Status != proto.StatusDone && s.Status != proto.StatusIdle) {
+		return
+	}
+	title := s.Title
+	if title == "" || title == "Claude Code" {
+		title = path.Base(s.Cwd)
+	}
+	place := m.cfg.Name
+	if s.SpaceName != "" {
+		place += " · " + s.SpaceName
+		if s.SlotName != "" && s.SlotName != fmt.Sprint(s.SlotIndex) {
+			place += " › " + s.SlotName
+		}
+	}
+	text := s.LastText
+	if text == "" {
+		text = "完成了"
+	}
+	m.hub.push.notifyDone(m.cfg.ID, place, id, "✅ "+title, text)
 }

@@ -24,8 +24,10 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间同伴条（开发页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
-- 展示逻辑（助手和开发统一）：已完成的轮次隐藏思考、工具调用折成一行「用了 N 个工具」；正在进行的那一轮（最后一条用户消息之后，
-  且 agent 工作中）完整显示每一步。
+- 展示逻辑（助手和开发统一，`ChatBlock.build`）：按轮次分组。一轮 = 一条用户消息 + 这一轮里 Claude 工作时吸收的排队消息
+  （transcript 的 `queued_command`，`Item.queued`）。已完成的轮次显示成：用户消息 1、2、3…连续排在最前 → 一行折叠的
+  「过程 · 用了 N 个工具 · 思考 M 段 · 中间回复 K 条」（点开看全部步骤）→ 最后一条回复。轮次中途的上下文压缩 / API 错误归入过程，
+  「已中断」跟在轮次末尾；recap 单独成行。正在进行的那一轮（agent 工作中的最后一轮）按到达顺序完整显示每一步。
 - 排队消息：Claude 工作中发的消息不进对话记录，显示在输入框上方的「排队中」列表；每条可「撤回编辑」（回到输入框）、拷贝、删除。
   实现照 TUI：↑ 把全部排队消息拉回输入框（transcript 记 popAll），清空输入框后把保留的重新排队（`POST …/queue {"keep":[…]}`）。
 - 开发列表：忙碌的空间里只显示需要你 / 工作中 / 完成未看的 agent，空闲的折成一行「还有 N 个空闲」，点开展开。
@@ -51,7 +53,8 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
   每个会话一个 `ChatStore`（按 id 去重、按 seq 排序、`buildRows` 生成展示行）。
 - 进入对话页 `subscribe`，离开 `unsubscribe`；hub 推 `items` / `screen` / `sessions` / `interaction`。
 - 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
-- 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和「完成了」推送。前台且正在看该会话时不弹。
+- 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和 agent 完成推送：会话从 working 变成 done / idle，4 秒后仍未恢复工作就推「✅ 标题」，
+  副标题「机器 · 空间 › 标签」，正文是最后一条回复。前台且正在看该会话时不弹。模拟器自动化（`-pairURL`）不申请通知权限、不注册成手机。
 - 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」
   （sendMessage 请求，iPhone 回复配对）；iPhone 设置里有「同步到 Apple Watch」。
 - 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
@@ -60,4 +63,6 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`。`scripts/sim.sh` 封装了编译、安装、配对、启动。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
+`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。

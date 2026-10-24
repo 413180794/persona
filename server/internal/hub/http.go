@@ -280,6 +280,7 @@ type client struct {
 	mu    sync.Mutex
 	subs  map[[2]string]bool
 	phone bool
+	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
 	name  string
 	since time.Time
 }
@@ -336,9 +337,13 @@ func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
 func (h *Hub) phoneClient() *client {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// Prefer a real iPhone over a simulator, then the most recently registered.
 	var best *client
 	for c := range h.clients {
-		if c.phone && (best == nil || c.since.After(best.since)) {
+		if !c.phone {
+			continue
+		}
+		if best == nil || (best.sim && !c.sim) || (best.sim == c.sim && c.since.After(best.since)) {
 			best = c
 		}
 	}
@@ -425,6 +430,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		SessionID  string          `json:"session_id"`
 		SinceSeq   int             `json:"since_seq"`
 		DeviceName string          `json:"device_name"`
+		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
 		CallID     string          `json:"call_id"`
 		Content    []proto.Content `json:"content"`
@@ -459,7 +465,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		}
 	case "register_phone":
 		h.mu.Lock()
-		c.phone, c.name, c.since = true, msg.DeviceName, time.Now()
+		c.phone, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()
 		h.mu.Unlock()
 		if len(msg.Tools) > 0 {
 			h.setPhoneTools(msg.Tools)

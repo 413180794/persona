@@ -44,12 +44,99 @@ nonisolated enum ToolStep: Identifiable, Hashable, Sendable {
     }
 }
 
+/// One exchange: what the user said (including messages queued while the agent worked), everything the agent did,
+/// and its final answer. Finished turns render as messages → one folded "process" row → the answer.
+nonisolated struct Turn: Identifiable, Hashable, Sendable {
+    var id: String
+    var users: [ChatRow] = []
+    var process: [ChatRow] = []
+    var answer: ChatRow?
+    var trailing: [ChatRow] = [] // notices that belong to the turn (e.g. "interrupted")
+
+    var toolCount: Int {
+        process.reduce(0) { n, r in
+            if case .tools(let steps) = r { return n + steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } } }
+            return n
+        }
+    }
+    var thoughtCount: Int {
+        process.reduce(0) { n, r in
+            switch r {
+            case .thinking: return n + 1
+            case .tools(let steps): return n + steps.reduce(0) { if case .thought = $1 { $0 + 1 } else { $0 } }
+            default: return n
+            }
+        }
+    }
+    var interimCount: Int { process.filter { if case .assistant = $0 { true } else { false } }.count }
+}
+
+/// Rows grouped for display: turns, plus standalone rows (recaps, compaction notices) between them.
+nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
+    case turn(Turn)
+    case row(ChatRow)
+
+    var id: String {
+        switch self {
+        case .turn(let t): "turn-" + t.id
+        case .row(let r): r.id
+        }
+    }
+
+    static func build(_ rows: [ChatRow]) -> [ChatBlock] {
+        var blocks: [ChatBlock] = []
+        var current: Turn?
+
+        func close() {
+            guard var t = current else { return }
+            // The answer is the last thing the assistant said; everything before it is process.
+            // (Steps after the final words, rare trailing tool calls, stay in the process.)
+            if let i = t.process.lastIndex(where: { if case .assistant = $0 { true } else { false } }) {
+                t.answer = t.process.remove(at: i)
+            }
+            blocks.append(.turn(t))
+            current = nil
+        }
+
+        for row in rows {
+            switch row {
+            case .user(let item):
+                if item.queued == true, current != nil {
+                    current!.users.append(row) // queued input joins the turn it was sent during
+                } else {
+                    close()
+                    current = Turn(id: row.id, users: [row])
+                }
+            case .recap:
+                close()
+                blocks.append(.row(row))
+            case .notice(let item):
+                // Inside a turn: "interrupted" closes it visibly; compaction / API errors are part of the process
+                // (auto-compaction happens mid-turn and must not split it).
+                if current == nil {
+                    blocks.append(.row(row))
+                } else if (item.text ?? "").contains("中断") {
+                    current!.trailing.append(row)
+                } else {
+                    current!.process.append(row)
+                }
+            default:
+                if current == nil { current = Turn(id: row.id) }
+                current!.process.append(row)
+            }
+        }
+        close()
+        return blocks
+    }
+}
+
 /// Transcript items and live state of one session, shared by every view showing it.
 @Observable
 final class ChatStore {
     let key: SessionKey
     private(set) var items: [Item] = []
     private(set) var rows: [ChatRow] = []
+    private(set) var blocks: [ChatBlock] = []
     private(set) var hasMore = false
     private(set) var loadedOnce = false
     var screen: String = ""
@@ -79,6 +166,7 @@ final class ChatStore {
         guard changed else { return }
         items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
         rows = ChatStore.buildRows(items)
+        blocks = ChatBlock.build(rows)
     }
 
     func prepend(_ older: [Item], hasMore: Bool) {

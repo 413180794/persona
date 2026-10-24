@@ -59,3 +59,49 @@ struct FilePathTests {
         #expect(FilePaths.find(in: "模型 deepseek/v4.1-flash-chain 和 model_hub/es1_orange_o50").isEmpty)
     }
 }
+
+@MainActor
+struct TurnTests {
+    private func item(_ seq: Int, _ kind: ItemKind, role: String = "assistant", text: String? = nil, tool: String? = nil, id: String? = nil, queued: Bool? = nil) -> Item {
+        Item(id: "\(seq)#0", seq: seq, ts: nil, role: role, kind: kind, text: text, toolUseID: id, toolName: tool, toolInput: nil, isError: nil, image: nil, queued: queued)
+    }
+
+    @Test func finishedTurnGathersQueuedMessagesAndKeepsTheLastAnswer() {
+        let items = [
+            item(1, .text, role: "user", text: "do it"),
+            item(2, .text, text: "你好，我先看看"),
+            item(3, .toolUse, tool: "Bash", id: "a"),
+            item(4, .toolResult, role: "user", text: "ok", id: "a"),
+            item(5, .text, role: "user", text: "also this", queued: true),
+            item(6, .thinking, text: "hmm"),
+            item(7, .toolUse, tool: "Read", id: "b"),
+            item(8, .text, text: "done: here is the result"),
+            item(9, .recap, role: "system", text: "recap"),
+            item(10, .text, role: "user", text: "next"),
+            item(11, .text, text: "sure"),
+        ]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 3)
+        guard case .turn(let t) = blocks[0] else { Issue.record("turn expected"); return }
+        #expect(t.users.count == 2)
+        #expect(t.toolCount == 2)
+        #expect(t.interimCount == 1)
+        if case .assistant(let a) = t.answer { #expect(a.text == "done: here is the result") } else { Issue.record("answer") }
+        if case .row(.recap) = blocks[1] {} else { Issue.record("recap stays standalone") }
+    }
+
+    @Test func compactionMidTurnDoesNotSplitIt() {
+        let items = [
+            item(1, .text, role: "user", text: "do it"),
+            item(2, .toolUse, tool: "Bash", id: "a"),
+            item(3, .notice, role: "system", text: "上下文已压缩"),
+            item(4, .toolUse, tool: "Read", id: "b"),
+            item(5, .text, text: "done"),
+        ]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 1)
+        guard case .turn(let t) = blocks[0] else { Issue.record("turn expected"); return }
+        #expect(t.users.count == 1)
+        #expect(t.toolCount == 2)
+    }
+}

@@ -236,9 +236,11 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var toolInput: JSONValue?
     var isError: Bool?
     var image: ImagePayload?
+    /// User input typed while the agent worked and absorbed mid-turn.
+    var queued: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image
+        case id, seq, ts, role, kind, text, image, queued
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error"
     }
 }

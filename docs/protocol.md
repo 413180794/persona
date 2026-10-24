@@ -109,7 +109,7 @@
 | --- | --- |
 | `subscribe` | `machine_id`, `session_id`, `since_seq`（可选；有则补发其后的 items，否则补发最后 80 条） |
 | `unsubscribe` | `machine_id`, `session_id` |
-| `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义） |
+| `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
 

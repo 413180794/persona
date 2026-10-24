@@ -414,7 +414,7 @@ func TestFirstUserFromContentBlocks(t *testing.T) {
 func TestQueuedInputShowsAsUserText(t *testing.T) {
 	var m Meta
 	items := ParseLine(1, []byte(`{"type":"attachment","uuid":"a","attachment":{"type":"queued_command","prompt":"顺便修一下这个","commandMode":"prompt","origin":{"kind":"human"}}}`), &m)
-	if len(items) != 1 || items[0].Role != "user" || items[0].Kind != proto.KindText || items[0].Text != "顺便修一下这个" {
+	if len(items) != 1 || items[0].Role != "user" || items[0].Kind != proto.KindText || items[0].Text != "顺便修一下这个" || !items[0].Queued {
 		t.Fatalf("items = %+v", items)
 	}
 	// Notifications the harness queues are not user input.

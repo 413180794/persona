@@ -93,6 +93,10 @@ final class PushRegistrar {
 
     func registerIfPossible() {
         guard AppModel.shared.isPaired else { return }
+        #if DEBUG
+        // Simulator automation: no permission alert covering the screenshots.
+        if UserDefaults.standard.string(forKey: "pairURL") != nil { return }
+        #endif
         Task {
             let center = UNUserNotificationCenter.current()
             let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge, .timeSensitive])) ?? false

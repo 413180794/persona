@@ -94,4 +94,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 - WatchConnectivity 在 activate 完成前 updateApplicationContext 会被丢弃：配对信息要在 activationDidComplete 后再推。
 - Claude 工作中输入的消息（电脑或手机）会被「中途吸收」，transcript 里存成 `attachment/queued_command`（commandMode=prompt、
   origin.kind=human）而不是 user 消息，解析器要单独处理，否则手机上看不到。
+- 多个 agent 同时在这个仓库干活：模拟器各用各的（`SIM=<udid> scripts/sim.sh`），别人没写完的文件编译不过时在 `git worktree` 里构建自己的改动；
+  提交只暂存自己的文件 / hunk。
+- `ScrollView` + `defaultScrollAnchor(.bottom)` + `LazyVStack`：跳到很远的 id 会因为上方懒加载视图实际高度与估算不同而漂移，验证历史渲染用 `-fromSeq`。
 - 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器。
