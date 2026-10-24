@@ -1,0 +1,391 @@
+package mail
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"net/mail"
+	"os"
+
+	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
+	gomessage "github.com/emersion/go-message"
+	gomail "github.com/emersion/go-message/mail"
+	"github.com/emersion/go-smtp"
+)
+
+// RenderMessage builds the RFC 5322 message for a send request. Sender is the
+// From address, e.g. "张三 <me@example.com>".
+func RenderMessage(req SendRequest, from Address) ([]byte, error) {
+	if len(req.To) == 0 && len(req.Cc) == 0 && len(req.Bcc) == 0 {
+		return nil, errors.New("mail: no recipients")
+	}
+
+	var h gomail.Header
+	h.SetDate(time.Now())
+	if err := h.GenerateMessageID(); err != nil {
+		// A missing Message-ID is not fatal, but it breaks threading; fall back
+		// to a random local id.
+		h.SetMessageID(fmt.Sprintf("%d.jarvis", time.Now().UnixNano()))
+	}
+	h.SetSubject(req.Subject)
+	h.SetAddressList("From", []*mail.Address{{Name: from.Name, Address: from.Email}})
+	h.SetAddressList("To", toNetAddresses(req.To))
+	if len(req.Cc) > 0 {
+		h.SetAddressList("Cc", toNetAddresses(req.Cc))
+	}
+	if req.InReplyTo != "" {
+		h.SetMsgIDList("In-Reply-To", []string{trimMsgID(req.InReplyTo)})
+	}
+	if refs := parseReferences(req.References, req.InReplyTo); len(refs) > 0 {
+		h.SetMsgIDList("References", refs)
+	}
+
+	var buf bytes.Buffer
+	if req.HTML != "" {
+		mw, err := gomail.CreateInlineWriter(&buf, h)
+		if err != nil {
+			return nil, err
+		}
+		if req.Text != "" {
+			tw, err := mw.CreatePart(textPartHeader())
+			if err != nil {
+				return nil, err
+			}
+			if _, err := tw.Write([]byte(req.Text)); err != nil {
+				return nil, err
+			}
+			if err := tw.Close(); err != nil {
+				return nil, err
+			}
+		}
+		hw, err := mw.CreatePart(htmlPartHeader())
+		if err != nil {
+			return nil, err
+		}
+		if _, err := hw.Write([]byte(req.HTML)); err != nil {
+			return nil, err
+		}
+		if err := hw.Close(); err != nil {
+			return nil, err
+		}
+		if err := mw.Close(); err != nil {
+			return nil, err
+		}
+	} else {
+		sw, err := gomail.CreateSingleInlineWriter(&buf, h)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := sw.Write([]byte(req.Text)); err != nil {
+			return nil, err
+		}
+		if err := sw.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+func textPartHeader() gomail.InlineHeader {
+	var h gomessage.Header
+	h.SetContentType("text/plain", map[string]string{"charset": "utf-8"})
+	return gomail.InlineHeader{Header: h}
+}
+
+func htmlPartHeader() gomail.InlineHeader {
+	var h gomessage.Header
+	h.SetContentType("text/html", map[string]string{"charset": "utf-8"})
+	return gomail.InlineHeader{Header: h}
+}
+
+func toNetAddresses(addrs []Address) []*mail.Address {
+	out := make([]*mail.Address, 0, len(addrs))
+	for _, a := range addrs {
+		out = append(out, &mail.Address{Name: a.Name, Address: strings.TrimSpace(a.Email)})
+	}
+	return out
+}
+
+// trimMsgID strips angle brackets so go-message can add them back.
+func trimMsgID(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "<")
+	s = strings.TrimSuffix(s, ">")
+	return s
+}
+
+// parseReferences splits a References value into message ids.
+func parseReferences(refs, inReplyTo string) []string {
+	refs = strings.TrimSpace(refs)
+	if refs == "" {
+		if inReplyTo == "" {
+			return nil
+		}
+		return []string{trimMsgID(inReplyTo)}
+	}
+	var out []string
+	for _, tok := range strings.Fields(refs) {
+		id := trimMsgID(tok)
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Send composes and delivers a message over SMTP, then appends it to the
+// provider's Sent mailbox when the provider does not do that itself.
+func (s *Service) Send(ctx context.Context, req SendRequest) error {
+	a, err := s.account(req.AccountID)
+	if err != nil {
+		return err
+	}
+	from := Address{Name: a.Name, Email: a.Email}
+	if a.Name == "" || a.Name == a.Email {
+		from.Name = ""
+	}
+	raw, err := RenderMessage(req, from)
+	if err != nil {
+		return err
+	}
+	var rcpts []string
+	for _, list := range [][]Address{req.To, req.Cc, req.Bcc} {
+		for _, addr := range list {
+			rcpts = append(rcpts, strings.TrimSpace(addr.Email))
+		}
+	}
+
+	if s.sendMail != nil {
+		if err := s.sendMail(ctx, a, a.Email, rcpts, raw); err != nil {
+			return err
+		}
+	} else if err := s.smtpSend(ctx, a, a.Email, rcpts, raw); err != nil {
+		return err
+	}
+
+	if a.Provider != ProviderGmail {
+		s.appendToSent(ctx, a, raw)
+	}
+	return nil
+}
+
+// smtpSend delivers raw over SMTP with the account's security settings.
+func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcpts []string, raw []byte) error {
+	security := a.SMTPSecurity
+	if security == "" {
+		if a.SMTPPort == 465 {
+			security = "tls"
+		} else {
+			security = "starttls"
+		}
+	}
+	addr := fmt.Sprintf("%s:%d", a.SMTPHost, a.SMTPPort)
+	tlsConfig := &tls.Config{ServerName: a.SMTPHost}
+
+	type dialResult struct {
+		c   *smtp.Client
+		err error
+	}
+	ch := make(chan dialResult, 1)
+	go func() {
+		var (
+			c   *smtp.Client
+			err error
+		)
+		switch security {
+		case "tls":
+			c, err = smtp.DialTLS(addr, tlsConfig)
+		case "starttls":
+			c, err = smtp.DialStartTLS(addr, tlsConfig)
+		case "none":
+			c, err = smtp.Dial(addr)
+		default:
+			err = fmt.Errorf("mail: unknown smtp security %q", security)
+		}
+		ch <- dialResult{c, err}
+	}()
+	var client *smtp.Client
+	select {
+	case <-ctx.Done():
+		go func() {
+			if r := <-ch; r.c != nil {
+				r.c.Close()
+			}
+		}()
+		return ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return fmt.Errorf("smtp: dial %s: %w", addr, r.err)
+		}
+		client = r.c
+	}
+	defer client.Close()
+	client.CommandTimeout = networkTimeout
+	client.SubmissionTimeout = networkTimeout
+
+	_ = client.Hello(localHostname())
+
+	if auth, err := s.smtpAuth(ctx, a); err != nil {
+		if a.OAuth != nil {
+			s.invalidateAccessToken(a.OAuth)
+		}
+		return err
+	} else if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("smtp: auth: %w", err)
+		}
+	}
+
+	// MAIL FROM with UTF-8 support when the server offers SMTPUTF8.
+	var mailOpts *smtp.MailOptions
+	if ok, _ := client.Extension("SMTPUTF8"); ok && (!isASCII(from) || !isASCII(a.Username)) {
+		mailOpts = &smtp.MailOptions{UTF8: true}
+	}
+	if err := client.Mail(from, mailOpts); err != nil {
+		return fmt.Errorf("smtp: mail from: %w", err)
+	}
+	for _, rcpt := range rcpts {
+		if err := client.Rcpt(rcpt, nil); err != nil {
+			return fmt.Errorf("smtp: rcpt %s: %w", rcpt, err)
+		}
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp: data: %w", err)
+	}
+	if _, err := w.Write(raw); err != nil {
+		return fmt.Errorf("smtp: write body: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("smtp: finish body: %w", err)
+	}
+	return client.Quit()
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+// localHostname is used for the SMTP EHLO greeting.
+func localHostname() string {
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "localhost"
+}
+
+// checkSMTP verifies the SMTP server is reachable and the credentials are
+// accepted, without sending any mail.
+func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
+	security := a.SMTPSecurity
+	if security == "" {
+		if a.SMTPPort == 465 {
+			security = "tls"
+		} else {
+			security = "starttls"
+		}
+	}
+	addr := fmt.Sprintf("%s:%d", a.SMTPHost, a.SMTPPort)
+	tlsConfig := &tls.Config{ServerName: a.SMTPHost}
+	var (
+		client *smtp.Client
+		err    error
+	)
+	switch security {
+	case "tls":
+		client, err = smtp.DialTLS(addr, tlsConfig)
+	case "starttls":
+		client, err = smtp.DialStartTLS(addr, tlsConfig)
+	case "none":
+		client, err = smtp.Dial(addr)
+	default:
+		return fmt.Errorf("unknown smtp security %q", security)
+	}
+	if err != nil {
+		return fmt.Errorf("dial %s: %w", addr, err)
+	}
+	defer client.Close()
+	client.CommandTimeout = networkTimeout
+
+	_ = client.Hello(localHostname())
+	auth, err := s.smtpAuth(ctx, a)
+	if err != nil {
+		return err
+	}
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("auth: %w", err)
+	}
+	return client.Quit()
+}
+
+// appendToSent copies the sent message into the account's Sent mailbox. Failures
+// are logged but not returned: the mail itself was delivered.
+func (s *Service) appendToSent(ctx context.Context, a *MailAccount, raw []byte) {
+	ctx, cancel := context.WithTimeout(ctx, networkTimeout)
+	defer cancel()
+	sent, err := s.sentMailbox(ctx, a)
+	if err != nil {
+		logf("mail: find sent mailbox for %s: %v", a.Email, err)
+		return
+	}
+	if sent == "" {
+		return
+	}
+	err = s.withConn(ctx, a, func(c *imapclient.Client) error {
+		cmd := c.Append(sent, int64(len(raw)), &imap.AppendOptions{
+			Flags: []imap.Flag{imap.FlagSeen},
+			Time:  time.Now(),
+		})
+		if _, err := cmd.Write(raw); err != nil {
+			return err
+		}
+		if err := cmd.Close(); err != nil {
+			return err
+		}
+		_, err := cmd.Wait()
+		return err
+	})
+	if err != nil {
+		logf("mail: append to %s for %s: %v", sent, a.Email, err)
+	}
+}
+
+// sentMailbox finds the Sent mailbox name, preferring SPECIAL-USE \Sent.
+func (s *Service) sentMailbox(ctx context.Context, a *MailAccount) (string, error) {
+	var out string
+	err := s.withConn(ctx, a, func(c *imapclient.Client) error {
+		out = ""
+		data, err := c.List("", "*", &imap.ListOptions{ReturnSpecialUse: true}).Collect()
+		if err != nil {
+			return err
+		}
+		for _, ld := range data {
+			if hasAttr(ld.Attrs, imap.MailboxAttrSent) {
+				out = ld.Mailbox
+				return nil
+			}
+		}
+		for _, ld := range data {
+			if roleOf(ld.Mailbox, ld.Attrs) == RoleSent {
+				out = ld.Mailbox
+				return nil
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
