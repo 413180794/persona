@@ -120,6 +120,7 @@ struct InteractionPanel: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
     @State private var collapsed = false
+    @State private var formHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -145,11 +146,11 @@ struct InteractionPanel: View {
             .contentShape(.rect)
             .onTapGesture { withAnimation(.snappy) { collapsed.toggle() } }
             if !collapsed {
-                ViewThatFits(in: .vertical) {
-                    form
-                    ScrollView { form }.scrollBounceBehavior(.basedOnSize)
+                ScrollView {
+                    form.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
                 }
-                .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: formHeight == 0 ? nil : min(formHeight, UIScreen.main.bounds.height * 0.45))
                 .transition(.opacity)
             }
         }
@@ -330,7 +331,7 @@ struct PlanForm: View {
                 HStack {
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: true, mode: "acceptEdits")) }
-                    } label: { Text("批准，自动接受编辑").frame(maxWidth: .infinity) }
+                    } label: { Text("自动接受编辑").frame(maxWidth: .infinity) }
                     Button { withAnimation { rejecting = true } } label: { Text("打回").frame(maxWidth: .infinity) }
                 }
                 .buttonStyle(.glass)

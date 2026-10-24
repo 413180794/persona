@@ -75,6 +75,7 @@ func New(version string) (*Node, error) {
 		metas:   map[string]quickMeta{},
 	}
 	n.state = loadState(filepath.Join(dir, "sessions.json"))
+	n.panes = n.state.panes()
 	return n, nil
 }
 

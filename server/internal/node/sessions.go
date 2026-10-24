@@ -27,6 +27,7 @@ type stateFile struct {
 }
 
 type sessionState struct {
+	Pane      string    `json:"pane,omitempty"`
 	Launcher  string    `json:"launcher"`
 	Cwd       string    `json:"cwd"`
 	StartedAt time.Time `json:"started_at"`
@@ -48,6 +49,32 @@ func (s *stateFile) get(id string) (sessionState, bool) {
 	defer s.mu.Unlock()
 	v, ok := s.Sessions[id]
 	return v, ok
+}
+
+// panes returns the remembered pane of every session (herdr pane ids are not reused while the server lives).
+func (s *stateFile) panes() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	for id, v := range s.Sessions {
+		if v.Pane != "" {
+			out[v.Pane] = id
+		}
+	}
+	return out
+}
+
+func (s *stateFile) setPane(id, pane string) {
+	s.mu.Lock()
+	v, ok := s.Sessions[id]
+	if !ok || v.Pane == pane {
+		s.mu.Unlock()
+		return
+	}
+	v.Pane = pane
+	s.Sessions[id] = v
+	s.mu.Unlock()
+	s.put(id, v)
 }
 
 func (s *stateFile) put(id string, v sessionState) {
@@ -331,7 +358,7 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 	}
 	n.mu.Unlock()
 	for _, a := range unknown {
-		if id := n.guessSession(a.Cwd, m); id != "" {
+		if id := n.guessSession(a, m); id != "" {
 			m[id] = a
 		}
 	}
@@ -348,23 +375,34 @@ func (n *Node) bindPane(pane, id string) {
 	n.mu.Lock()
 	n.panes[pane] = id
 	n.mu.Unlock()
+	n.state.setPane(id, pane)
 }
 
 var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
 
-func (n *Node) guessSession(cwd string, taken map[string]herdr.Agent) string {
-	if cwd == "" {
+// guessSession picks a transcript for an agent herdr could not identify. Claude sets the terminal title to the
+// session's AI title, so a title match wins; otherwise the newest unclaimed transcript in the project directory.
+func (n *Node) guessSession(a herdr.Agent, taken map[string]herdr.Agent) string {
+	if a.Cwd == "" {
 		return ""
 	}
-	dir := filepath.Join(n.projectsDir(), nonAlnum.ReplaceAllString(cwd, "-"))
+	dir := filepath.Join(n.projectsDir(), nonAlnum.ReplaceAllString(a.Cwd, "-"))
 	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	title := strings.TrimSpace(a.Title)
 	best, bestT := "", time.Time{}
 	for _, p := range files {
 		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		if _, used := taken[id]; used || !validID(id) {
 			continue
 		}
-		if st, err := os.Stat(p); err == nil && st.ModTime().After(bestT) {
+		st, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if title != "" && n.meta(p, st).title == title {
+			return id
+		}
+		if st.ModTime().After(bestT) {
 			best, bestT = id, st.ModTime()
 		}
 	}
