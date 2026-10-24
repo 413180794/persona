@@ -36,6 +36,7 @@ type Node struct {
 	paths    map[string]string           // session id -> transcript path
 	watches  map[string]*watch
 	agents   map[string]herdr.Agent // session id -> live agent
+	panes    map[string]string      // pane id -> session id (learned from hooks)
 	lastList string                 // serialized last sessions.changed payload
 	metas    map[string]quickMeta   // transcript path -> cached meta
 }
@@ -70,6 +71,7 @@ func New(version string) (*Node, error) {
 		paths:   map[string]string{},
 		watches: map[string]*watch{},
 		agents:  map[string]herdr.Agent{},
+		panes:   map[string]string{},
 		metas:   map[string]quickMeta{},
 	}
 	n.state = loadState(filepath.Join(dir, "sessions.json"))

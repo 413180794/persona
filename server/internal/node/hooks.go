@@ -118,6 +118,7 @@ func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string)
 	if json.Unmarshal(raw, &in) != nil || n.peer == nil {
 		return nil
 	}
+	n.bindPane(pane, in.SessionID)
 	if in.TranscriptPath != "" && validID(in.SessionID) {
 		n.mu.Lock()
 		n.paths[in.SessionID] = in.TranscriptPath

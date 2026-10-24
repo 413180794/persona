@@ -90,6 +90,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume string) 
 		screen, _ := n.herdr.PaneRead(ctx, pane, "recent-unwrapped", 30)
 		return nil, fmt.Errorf("%v\n%s", err, lastLines(screen, 12))
 	}
+	n.bindPane(pane, id)
 	_ = n.herdr.AgentRename(ctx, pane, "j-"+id[:6])
 	if prompt != "" {
 		if err := n.herdr.AgentPrompt(ctx, pane, prompt); err != nil {
@@ -114,43 +115,51 @@ func (n *Node) workspaceFor(ctx context.Context, cwd string) (string, error) {
 	return "", nil
 }
 
-// waitReady polls until herdr sees claude in the pane and it is ready for input, accepting the folder-trust dialog.
+// waitReady polls until claude's input box is on screen, accepting the folder-trust dialog on the way.
+// herdr reports the trust dialog as idle, so the screen is the source of truth.
 func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration) (*herdr.Agent, error) {
 	deadline := time.Now().Add(timeout)
-	trusted := false
+	readyStreak := 0
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(500 * time.Millisecond):
 		}
+		screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		if err != nil {
+			continue
+		}
+		if keys := trustKeys(screen); keys != nil {
+			_ = n.herdr.PaneSendKeys(ctx, pane, keys...)
+			readyStreak = 0
+			time.Sleep(time.Second)
+			continue
+		}
 		a, err := n.herdr.AgentGet(ctx, pane)
 		if err != nil || a.Agent != "claude" {
-			// claude may still be printing a pre-TUI dialog; look for the trust prompt on the raw screen.
-			if !trusted {
-				if screen, err := n.herdr.PaneRead(ctx, pane, "visible", 40); err == nil {
-					if keys := trustKeys(screen); keys != nil {
-						_ = n.herdr.PaneSendKeys(ctx, pane, keys...)
-						trusted = true
-					}
-				}
+			readyStreak = 0
+			continue
+		}
+		if a.AgentStatus == proto.StatusBlocked {
+			return a, nil // some other dialog; the phone shows it as a screen interaction
+		}
+		if (a.AgentStatus == proto.StatusIdle || a.AgentStatus == proto.StatusDone) && inputBoxVisible(screen) {
+			readyStreak++
+			if readyStreak >= 2 {
+				return a, nil
 			}
 			continue
 		}
-		switch a.AgentStatus {
-		case proto.StatusIdle, proto.StatusDone:
-			return a, nil
-		case proto.StatusBlocked:
-			screen, _ := n.herdr.PaneRead(ctx, pane, "visible", 40)
-			if keys := trustKeys(screen); keys != nil && !trusted {
-				_ = n.herdr.PaneSendKeys(ctx, pane, keys...)
-				trusted = true
-				continue
-			}
-			return a, nil // some other dialog; the phone shows it as a screen interaction
-		}
+		readyStreak = 0
 	}
 	return nil, fmt.Errorf("claude did not become ready within %s", timeout)
+}
+
+// inputBoxVisible reports whether Claude Code's prompt footer is rendered.
+func inputBoxVisible(screen string) bool {
+	return strings.Contains(screen, "shift+tab") || strings.Contains(screen, "? for shortcuts") ||
+		strings.Contains(screen, "bypass permissions") || strings.Contains(screen, "esc to interrupt")
 }
 
 // trustKeys returns the keys that select "Yes, I trust this folder" on Claude Code's trust dialog.

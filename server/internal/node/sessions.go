@@ -309,19 +309,66 @@ func snippet(s string) string {
 	return s
 }
 
+// setAgents maps live claude agents to session ids: herdr's own report when its claude integration is installed,
+// else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
 func (n *Node) setAgents(agents []herdr.Agent) {
 	m := map[string]herdr.Agent{}
+	var unknown []herdr.Agent
+	n.mu.Lock()
 	for _, a := range agents {
 		if a.Agent != "claude" {
 			continue
 		}
-		if id := a.SessionID(); id != "" {
+		id := a.SessionID()
+		if id == "" {
+			id = n.panes[a.PaneID]
+		}
+		if id == "" {
+			unknown = append(unknown, a)
+			continue
+		}
+		m[id] = a
+	}
+	n.mu.Unlock()
+	for _, a := range unknown {
+		if id := n.guessSession(a.Cwd, m); id != "" {
 			m[id] = a
 		}
 	}
 	n.mu.Lock()
 	n.agents = m
 	n.mu.Unlock()
+}
+
+// bindPane records which session runs in a pane (from start() and from hook events).
+func (n *Node) bindPane(pane, id string) {
+	if pane == "" || !validID(id) {
+		return
+	}
+	n.mu.Lock()
+	n.panes[pane] = id
+	n.mu.Unlock()
+}
+
+var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
+
+func (n *Node) guessSession(cwd string, taken map[string]herdr.Agent) string {
+	if cwd == "" {
+		return ""
+	}
+	dir := filepath.Join(n.projectsDir(), nonAlnum.ReplaceAllString(cwd, "-"))
+	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	best, bestT := "", time.Time{}
+	for _, p := range files {
+		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
+		if _, used := taken[id]; used || !validID(id) {
+			continue
+		}
+		if st, err := os.Stat(p); err == nil && st.ModTime().After(bestT) {
+			best, bestT = id, st.ModTime()
+		}
+	}
+	return best
 }
 
 func (n *Node) agent(id string) (herdr.Agent, bool) {
