@@ -67,6 +67,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 - hub 已部署在 example-machine（:18660），example-machine / example-machine / example-machine 在线，mac-home 隧道未装。
 - 端到端跑通：手机新建会话、提问、计划审批、手机工具（`docs/testing.md`）。邮件模块上线，还没加账号。
 - App Store Connect App ID 1234567890（Jarvis Herd），APNs 已开（`docs/release.md`）。待办：真机验证。
+- 2026-10-24 服务端状态迁到 example-machine Postgres 容器 `jarvis-postgres`；新增「对话」tab（Jarvis 助手），TestFlight 202610242210。
 
 ## 经验
 
