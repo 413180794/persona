@@ -114,17 +114,26 @@ enum PlanText {
     }
 }
 
-/// Full interaction UI pinned above the composer in a chat.
+/// Full interaction UI pinned above the composer in a chat. Capped in height (scrolls inside) and collapsible,
+/// so a long question never hides the conversation it is about.
 struct InteractionPanel: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
+    @State private var collapsed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: interaction.kind.symbol).foregroundStyle(Theme.attention)
                 Text(interaction.kind.title).font(.subheadline.weight(.semibold))
-                Spacer()
+                if collapsed {
+                    Text(previewText).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsed ? 180 : 0))
                 Menu {
                     Button { Task { await model.resolve(interaction, .dismissed) } } label: {
                         Label("交给电脑上的终端处理", systemImage: "desktopcomputer")
@@ -133,16 +142,38 @@ struct InteractionPanel: View {
                     Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
                 }
             }
-            switch interaction.kind {
-            case .question: QuestionForm(interaction: interaction)
-            case .plan: PlanForm(interaction: interaction)
-            case .permission: PermissionForm(interaction: interaction)
-            case .screen: ScreenForm(interaction: interaction)
+            .contentShape(.rect)
+            .onTapGesture { withAnimation(.snappy) { collapsed.toggle() } }
+            if !collapsed {
+                ViewThatFits(in: .vertical) {
+                    form
+                    ScrollView { form }.scrollBounceBehavior(.basedOnSize)
+                }
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+                .transition(.opacity)
             }
         }
         .padding(16)
         .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    @ViewBuilder private var form: some View {
+        switch interaction.kind {
+        case .question: QuestionForm(interaction: interaction)
+        case .plan: PlanForm(interaction: interaction)
+        case .permission: PermissionForm(interaction: interaction)
+        case .screen: ScreenForm(interaction: interaction)
+        }
+    }
+
+    private var previewText: String {
+        switch interaction.kind {
+        case .question: interaction.questions?.first?.question ?? ""
+        case .plan: PlanText.title(interaction.plan ?? "")
+        case .permission: interaction.summary ?? ""
+        case .screen: ""
+        }
     }
 }
 
@@ -268,7 +299,7 @@ struct PlanForm: View {
                     .markdownTheme(.jarvis)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 260)
+            .frame(maxHeight: 200)
             .scrollBounceBehavior(.basedOnSize)
             .overlay(alignment: .bottomTrailing) {
                 Button { showFull = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }

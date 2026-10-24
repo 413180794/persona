@@ -33,13 +33,46 @@ type sockRequest struct {
 }
 
 func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
+	ln, err := n.listenOnce(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// A node from an earlier hub connection may still be shutting down; if its cleanup (or anything else) removes
+	// our socket file, hooks silently fall back to the terminal. Re-create it whenever it disappears.
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			if _, err := os.Stat(SocketPath()); os.IsNotExist(err) {
+				n.logger.Printf("hook socket vanished, re-creating")
+				if _, err := n.listenOnce(ctx); err != nil {
+					n.logger.Printf("hook socket: %v", err)
+				}
+			}
+		}
+	}()
+	return ln, nil
+}
+
+func (n *Node) listenOnce(ctx context.Context) (net.Listener, error) {
 	path := SocketPath()
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
 	}
+	// Never unlink on close: by then the path may belong to a newer node.
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
 	_ = os.Chmod(path, 0o600)
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
 	go func() {
 		for {
 			c, err := ln.Accept()

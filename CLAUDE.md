@@ -76,4 +76,6 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 - `herdr agent wait` 可能在 herdr 识别出 agent 之前就返回 agent_not_found：启动后要轮询 `agent get`。
 - example-machine 的 herdr 没装 claude integration，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。
 - 这台 Mac 屏幕锁着时 computer-use 拿不到模拟器窗口：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
+- Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，
+  hook / MCP 全部静默失效（hook 连不上就放行给 TUI）。已 `SetUnlinkOnClose(false)` 并每 15 秒自检重建。
 - 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器。
