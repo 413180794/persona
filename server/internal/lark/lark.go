@@ -124,6 +124,7 @@ type Conversation struct {
 	Name      string    `json:"name"`
 	Avatar    string    `json:"avatar,omitempty"`
 	IsGroup   bool      `json:"is_group"`
+	IsTopic   bool      `json:"is_topic,omitempty"` // topic group: the chat is a list of threads
 	Unread    int       `json:"unread"`
 	AtMe      bool      `json:"at_me"`
 	Muted     bool      `json:"muted"`
@@ -137,6 +138,7 @@ type rawConversation struct {
 	Name          string `json:"name"`
 	AvatarURL     string `json:"avatarUrl"`
 	IsGroup       bool   `json:"isGroup"`
+	ChatMode      string `json:"chatMode"`
 	UnreadCount   int    `json:"unreadCount"`
 	HasUnreadAtMe bool   `json:"hasUnreadAtMe"`
 	IsMuted       bool   `json:"isMuted"`
@@ -155,7 +157,7 @@ type rawConversation struct {
 }
 
 func (r rawConversation) normalize() Conversation {
-	c := Conversation{ID: r.FeedID, Name: r.Name, Avatar: MediaURL(r.AvatarURL), IsGroup: r.IsGroup, Unread: r.UnreadCount, AtMe: r.HasUnreadAtMe, Muted: r.IsMuted}
+	c := Conversation{ID: r.FeedID, Name: r.Name, Avatar: MediaURL(r.AvatarURL), IsGroup: r.IsGroup, IsTopic: r.ChatMode == "topic", Unread: r.UnreadCount, AtMe: r.HasUnreadAtMe, Muted: r.IsMuted}
 	if r.Preview != nil {
 		var b strings.Builder
 		for _, e := range r.Preview.Digest.Elements {
@@ -320,7 +322,21 @@ func MediaURL(u string) string {
 }
 
 // Messages returns a page of messages, oldest first: the latest page, or the one before position `before`.
-func (c *Client) Messages(ctx context.Context, feedID, before string, limit int) ([]Message, bool, error) {
+// In a topic group (`topic`) the page is the thread roots, each with its reply count.
+func (c *Client) Messages(ctx context.Context, feedID, before string, limit int, topic bool) ([]Message, bool, error) {
+	path := "/conversations/" + url.PathEscape(feedID) + "/messages"
+	if topic {
+		path = "/conversations/" + url.PathEscape(feedID) + "/threads"
+	}
+	return c.page(ctx, path, before, limit)
+}
+
+// Thread returns the replies in one message's thread, oldest first.
+func (c *Client) Thread(ctx context.Context, messageID, before string, limit int) ([]Message, bool, error) {
+	return c.page(ctx, "/messages/"+url.PathEscape(messageID)+"/thread", before, limit)
+}
+
+func (c *Client) page(ctx context.Context, path, before string, limit int) ([]Message, bool, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 40
 	}
@@ -334,7 +350,7 @@ func (c *Client) Messages(ctx context.Context, feedID, before string, limit int)
 		Items    []rawMessage `json:"items"`
 		HasOlder bool         `json:"hasOlder"`
 	}
-	if err := c.do(ctx, "GET", "/conversations/"+url.PathEscape(feedID)+"/messages", q, nil, &res); err != nil {
+	if err := c.do(ctx, "GET", path, q, nil, &res); err != nil {
 		return nil, false, err
 	}
 	out := make([]Message, 0, len(res.Items))

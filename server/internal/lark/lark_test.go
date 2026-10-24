@@ -23,7 +23,10 @@ func TestConversationsAndMessages(t *testing.T) {
 					"preview": map[string]any{"displayAt": "2026-10-24T15:07:41.916Z", "isMine": false,
 						"digest": map[string]any{"elements": []any{map[string]any{"content": "hello  ", "kind": "text"}, map[string]any{"content": "world", "kind": "text"}}}}},
 				map[string]any{"feedId": "2", "name": "Hidden", "isHidden": true},
+				map[string]any{"feedId": "3", "name": "Topics", "chatMode": "topic"},
 			}})
+		case "/agent/v1/conversations/3/threads":
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{"id": "t1", "position": "5", "threadReplyCount": 4}}})
 		case "/agent/v1/conversations/1/messages":
 			if r.URL.Query().Get("tail") != "1" {
 				t.Errorf("latest page should use tail")
@@ -41,12 +44,19 @@ func TestConversationsAndMessages(t *testing.T) {
 	defer srv.Close()
 	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
 	convs, next, err := c.Conversations(context.Background(), "", 0)
-	if err != nil || len(convs) != 1 || next != "c2" || convs[0].Preview != "hello world" || !convs[0].AtMe || convs[0].UpdatedAt.IsZero() {
+	if len(convs) == 2 && !convs[1].IsTopic {
+		t.Fatalf("topic group not detected: %+v", convs[1])
+	}
+	if err != nil || len(convs) != 2 || next != "c2" || convs[0].Preview != "hello world" || !convs[0].AtMe || convs[0].UpdatedAt.IsZero() {
 		t.Fatalf("convs = %+v next=%q err=%v", convs, next, err)
 	}
-	msgs, older, err := c.Messages(context.Background(), "1", "", 0)
+	msgs, older, err := c.Messages(context.Background(), "1", "", 0, false)
 	if err != nil || len(msgs) != 1 || !older || msgs[0].Text != "hi" {
 		t.Fatalf("msgs = %+v %v %v", msgs, older, err)
+	}
+	threads, _, err := c.Messages(context.Background(), "3", "", 0, true)
+	if err != nil || len(threads) != 1 || threads[0].ThreadReplyCount != 4 {
+		t.Fatalf("threads = %+v %v", threads, err)
 	}
 	m := msgs[0]
 	if m.SenderAvatar != "/api/v1/lark/media/av1" || !strings.Contains(string(m.Parts), `"/api/v1/lark/media/img1"`) {

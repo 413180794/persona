@@ -20,7 +20,15 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"conversations": convs, "next_cursor": next})
 	})
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
-		msgs, older, err := h.lark.Messages(r.Context(), r.PathValue("id"), r.URL.Query().Get("before"), atoi(r.URL.Query().Get("limit")))
+		msgs, older, err := h.lark.Messages(r.Context(), r.PathValue("id"), r.URL.Query().Get("before"), atoi(r.URL.Query().Get("limit")), r.URL.Query().Get("topic") == "1")
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"messages": msgs, "has_older": older})
+	})
+	api.HandleFunc("GET /api/v1/lark/messages/{id}/thread", func(w http.ResponseWriter, r *http.Request) {
+		msgs, older, err := h.lark.Thread(r.Context(), r.PathValue("id"), r.URL.Query().Get("before"), atoi(r.URL.Query().Get("limit")))
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
