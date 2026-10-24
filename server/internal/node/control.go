@@ -212,7 +212,7 @@ func lastLines(s string, n int) string {
 func (n *Node) sessionFor(id string, a herdr.Agent) *proto.Session {
 	s := &proto.Session{
 		SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
-		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(),
+		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(), // just started
 	}
 	_ = n.refreshHerdr(context.Background())
 	n.placeIn(s, a)

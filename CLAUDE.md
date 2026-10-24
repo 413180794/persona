@@ -19,6 +19,8 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 - 服务端状态全部在 example-machine 的 Postgres 容器 `jarvis-postgres`（`docs/server.md`），不要再往 `~/.jarvis/` 写 JSON 状态文件。
 - 分工：设计、UI、交互、协议、核心链路由 leader（当前 Opus）实现；其余可以派出去的活在 herdr 当前 workspace 新开 tab，
   **用 `ccc` 启动（Opus 5.5）**，leader 派发和验收。（2026-10-24 用户要求：之前用的 `cc_ds` 不再用于派活。）
+- **所有按钮的文字都不能换行**：按钮标签一律单行（`.lineLimit(1)`，空间紧时 `.minimumScaleFactor` 或缩短文案 / 改成图标），
+  按键栏这类横排按钮用图标或短词，放不下就收进菜单 / 浮层，不能挤成两行。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ## 目录
@@ -68,6 +70,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 - hub 已部署在 example-machine（:18660），example-machine / example-machine / example-machine 在线，mac-home 隧道未装。
 - 端到端跑通：手机新建会话、提问、计划审批、手机工具（`docs/testing.md`）。邮件模块上线，还没加账号。
 - App Store Connect App ID 1234567890（Jarvis Herd），APNs 已开（`docs/release.md`）。待办：真机验证。
+- 2026-10-25「邮件」tab 重构为「信息」：飞书（lark-connector）+ 邮件；助手改为无头 claude -p。
 - 2026-10-24 服务端状态迁到 example-machine Postgres 容器 `jarvis-postgres`；新增「对话」tab（Jarvis 助手），TestFlight 202610242210。
 
 ## 经验
@@ -84,4 +87,8 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 - 开了 HealthKit entitlement 就必须有 `NSHealthUpdateUsageDescription`（哪怕只读），否则上传报 90683。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，
   hook / MCP 全部静默失效（hook 连不上就放行给 TUI）。已 `SetUnlinkOnClose(false)` 并每 15 秒自检重建。
+- 会话的「最近编辑时间」要用最后一条真实对话（user / assistant / 工具）的时间：Claude Code 会往闲置会话追加 recap、ai-title、
+  mode 等行，文件 mtime 会被刷新；找不到 transcript 的会话时间留空，不要用 now 兜底（会一直显示「刚刚」）。
+- Claude 工作中输入的消息（电脑或手机）会被「中途吸收」，transcript 里存成 `attachment/queued_command`（commandMode=prompt、
+  origin.kind=human）而不是 user 消息，解析器要单独处理，否则手机上看不到。
 - 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器。

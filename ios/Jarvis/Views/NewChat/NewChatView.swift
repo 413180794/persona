@@ -129,6 +129,7 @@ struct NewChatView: View {
                     HStack(spacing: 8) {
                         if starting { ProgressView().tint(.white) }
                         Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(.headline)
+                            .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity, minHeight: 30)
                 }

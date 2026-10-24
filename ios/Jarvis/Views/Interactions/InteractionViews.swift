@@ -317,22 +317,22 @@ struct PlanForm: View {
                     Button("取消") { withAnimation { rejecting = false } }.buttonStyle(.glass)
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: false, feedback: feedback)) }
-                    } label: { Text("打回修改").frame(maxWidth: .infinity) }
+                    } label: { Text("打回修改").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                         .buttonStyle(.glassProminent)
                 }
             } else {
                 Button {
                     Task { await model.resolve(interaction, Resolution(approve: true, mode: "bypassPermissions")) }
                 } label: {
-                    Label("批准并自动执行", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label("批准并自动执行", systemImage: "play.fill").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 HStack {
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: true, mode: "acceptEdits")) }
-                    } label: { Text("自动接受编辑").frame(maxWidth: .infinity) }
-                    Button { withAnimation { rejecting = true } } label: { Text("打回").frame(maxWidth: .infinity) }
+                    } label: { Text("自动接受编辑").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
+                    Button { withAnimation { rejecting = true } } label: { Text("打回").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                 }
                 .buttonStyle(.glass)
             }
@@ -368,17 +368,17 @@ struct PermissionForm: View {
                 .textSelection(.enabled)
             HStack {
                 Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
-                    Text("拒绝").frame(maxWidth: .infinity)
+                    Text("拒绝").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
                 Button { Task { await model.resolve(interaction, Resolution(allow: true)) } } label: {
-                    Text("允许").frame(maxWidth: .infinity)
+                    Text("允许").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
             }
             .controlSize(.large)
             if interaction.sessionID != "" {
-                Button("本会话内总是允许 \(interaction.toolName ?? "")") {
+                Button("本会话总是允许") {
                     Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
                 }
                 .font(.footnote)
@@ -419,7 +419,7 @@ struct ScreenForm: View {
                     }
                 }
             }
-            KeyPad { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
+            TerminalKeyBar { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
             HStack {
                 TextField("输入文字发送到终端", text: $text)
                     .textFieldStyle(.plain)
@@ -432,33 +432,6 @@ struct ScreenForm: View {
                 } label: { Image(systemName: "return") }
                     .buttonStyle(.glassProminent)
                     .disabled(text.isEmpty)
-            }
-        }
-    }
-}
-
-/// Common terminal keys for TUI dialogs.
-struct KeyPad: View {
-    var send: ([String]) -> Void
-    private let keys: [(label: String, symbol: String?, keys: [String])] = [
-        ("Esc", nil, ["esc"]), ("", "arrow.up", ["up"]), ("", "arrow.down", ["down"]),
-        ("Tab", nil, ["tab"]), ("⇧Tab", nil, ["shift+tab"]), ("^C", nil, ["ctrl+c"]), ("", "return", ["enter"]),
-    ]
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(keys.enumerated()), id: \.offset) { _, k in
-                Button {
-                    Haptics.tap()
-                    send(k.keys)
-                } label: {
-                    Group {
-                        if let s = k.symbol { Image(systemName: s) } else { Text(k.label) }
-                    }
-                    .font(.footnote.weight(.semibold).monospaced())
-                    .frame(maxWidth: .infinity, minHeight: 34)
-                }
-                .buttonStyle(.glass)
             }
         }
     }

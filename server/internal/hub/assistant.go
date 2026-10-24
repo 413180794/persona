@@ -92,6 +92,10 @@ const assistantPrompt = `# Jarvis 助手
   ` + "`provider-*`" + ` / ` + "`example-cli`" + `（代码库、日志、内部搜索等）。
 - **iPhone**：MCP 工具 ` + "`phone_*`" + `（通讯录、日历、提醒事项、位置、健康、照片、设备信息、剪贴板、本地通知）。
   需要 Jarvis App 在前台；写操作会在手机上让他确认。调用失败说「手机不在线」时，告诉他打开 App 再试。
+- **飞书消息（lark-connector）**：本机 lark-connector 的 agent 接口，token 在容器环境变量里：
+  ` + "`T=$(docker inspect lark-connector-yunpeng --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^lark-connector_AGENT_TOKEN=//p')`" + `，
+  然后 ` + "`curl -H \"Authorization: Bearer $T\" http://127.0.0.1:8095/agent/v1/conversations?limit=50`" + `（会话列表，含未读和 @我）、
+  ` + "`.../conversations/<feedId>/messages?tail=1&limit=50`" + `（最新消息）、` + "`GET /agent/v1`" + `（全部路由）。发消息前先确认。不要打印 token。
 - **邮件**：MCP 工具 ` + "`mail_*`" + `（他添加的所有邮箱：列账号、搜索、读信、发信；发信前会在手机上确认）。
 - **网络**：可以联网搜索、抓网页。
 

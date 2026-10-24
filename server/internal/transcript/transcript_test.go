@@ -410,3 +410,28 @@ func TestFirstUserFromContentBlocks(t *testing.T) {
 		t.Fatalf("first user = %q", m.FirstUser)
 	}
 }
+
+func TestQueuedInputShowsAsUserText(t *testing.T) {
+	var m Meta
+	items := ParseLine(1, []byte(`{"type":"attachment","uuid":"a","attachment":{"type":"queued_command","prompt":"顺便修一下这个","commandMode":"prompt","origin":{"kind":"human"}}}`), &m)
+	if len(items) != 1 || items[0].Role != "user" || items[0].Kind != proto.KindText || items[0].Text != "顺便修一下这个" {
+		t.Fatalf("items = %+v", items)
+	}
+	// Notifications the harness queues are not user input.
+	if got := ParseLine(2, []byte(`{"type":"attachment","uuid":"b","attachment":{"type":"queued_command","prompt":"x","commandMode":"task-notification"}}`), &m); len(got) != 0 {
+		t.Fatalf("task notification shown: %+v", got)
+	}
+	if got := ParseLine(3, []byte(`{"type":"attachment","uuid":"c","attachment":{"type":"environment"}}`), &m); len(got) != 0 {
+		t.Fatalf("other attachment shown: %+v", got)
+	}
+}
+
+func TestLastActivityIgnoresSystemLines(t *testing.T) {
+	var m Meta
+	ParseLine(1, []byte(`{"type":"assistant","uuid":"a","timestamp":"2026-10-20T10:00:00Z","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}`), &m)
+	ParseLine(2, []byte(`{"type":"system","subtype":"away_summary","uuid":"s","timestamp":"2026-10-24T10:00:00Z","content":"recap"}`), &m)
+	ParseLine(3, []byte(`{"type":"ai-title","aiTitle":"t","timestamp":"2026-10-24T11:00:00Z"}`), &m)
+	if got := m.LastActivity.Format("2006-01-02"); got != "2026-10-20" {
+		t.Fatalf("last activity = %s", got)
+	}
+}

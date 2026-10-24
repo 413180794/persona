@@ -152,7 +152,7 @@ struct ChatView: View {
             if style == .dev { SiblingStrip(current: key) { next in switchTo(next) } }
         }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
-        .sheet(isPresented: $showTerminal) { TerminalSheet(key: key) }
+        .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
         #if DEBUG
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
@@ -172,6 +172,9 @@ struct ChatView: View {
             model.subscribe(key)
             model.visibleSession = key
             model.markSeen(key)
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            #endif
         }
         .onDisappear {
             model.unsubscribe(key)
@@ -384,7 +387,7 @@ extension UIImage {
     }
 }
 
-/// Live terminal mirror of the herdr pane with a key pad, for anything the chat view cannot express.
+/// Full-screen live terminal of the herdr pane, for anything the chat cannot express.
 struct TerminalSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -395,23 +398,26 @@ struct TerminalSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 10) {
-                TerminalText(text: text.isEmpty ? model.chat(key).screen : text, maxLines: 200)
-                KeyPad { keys in Task { await model.keys(key, keys); await poll() } }
-                HStack {
-                    TextField("发送文字（不回车）", text: $input)
+                TerminalText(text: text.isEmpty ? model.chat(key).screen : text, maxLines: 400)
+                TerminalKeyBar { keys in Task { await model.keys(key, keys); await poll() } }
+                HStack(spacing: 8) {
+                    TextField("发送文字到终端", text: $input)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         .padding(10)
                         .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 12, style: .continuous))
-                    Button {
-                        let t = input
-                        input = ""
-                        Task { await model.keys(key, [], text: t); await poll() }
-                    } label: { Image(systemName: "paperplane.fill") }
-                        .buttonStyle(.glassProminent)
-                        .disabled(input.isEmpty)
+                        .onSubmit(sendInput)
+                    Button(action: sendInput) {
+                        Image(systemName: "return").frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .disabled(input.isEmpty)
+                    .accessibilityLabel("发送并回车")
                 }
             }
-            .padding()
-            .navigationTitle("终端")
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            .navigationTitle(model.session(key)?.slotLabel.map { "终端 · \($0)" } ?? "终端")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .task {
@@ -421,10 +427,16 @@ struct TerminalSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+    }
+
+    private func sendInput() {
+        let t = input
+        guard !t.isEmpty else { return }
+        input = ""
+        Task { await model.keys(key, ["enter"], text: t); await poll() }
     }
 
     private func poll() async {
-        if let s = try? await model.api?.screen(key, lines: 120) { text = s.text }
+        if let s = try? await model.api?.screen(key, lines: 200) { text = s.text }
     }
 }

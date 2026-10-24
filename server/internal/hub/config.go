@@ -12,6 +12,7 @@ import (
 	"github.com/mdp/qrterminal/v3"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/lark"
 )
 
 type MachineConfig struct {
@@ -32,7 +33,9 @@ type Config struct {
 	// DatabaseURL points at the Postgres container (scripts/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the cc_ds gateway on example-machine).
-	AI       ai.Config       `json:"ai"`
+	AI ai.Config `json:"ai"`
+	// Lark points at the user's lark-connector agent API (Feishu messages in the 信息 tab).
+	Lark     lark.Config     `json:"lark"`
 	Machines []MachineConfig `json:"machines"`
 
 	dir string

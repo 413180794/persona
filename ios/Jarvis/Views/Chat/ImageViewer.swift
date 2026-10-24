@@ -59,7 +59,7 @@ struct ImageViewer: View {
             Spacer()
             HStack(spacing: 12) {
                 Button { Task { await save() } } label: {
-                    Label(saving ? "保存中…" : "保存到相册", systemImage: "square.and.arrow.down")
+                    Label(saving ? "保存中…" : "保存到相册", systemImage: "square.and.arrow.down").lineLimit(1)
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 6)
                 }

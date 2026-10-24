@@ -356,7 +356,7 @@ func (n *Node) assistantSessions() []proto.Session {
 				s.Title, s.Model, s.LastText = m.title, m.model, snippet(m.lastText)
 				untitled(&s, m)
 				if !p.busy {
-					s.UpdatedAt = st.ModTime().UTC()
+					s.UpdatedAt = lastUsed(m, st)
 				}
 			}
 		}

@@ -16,14 +16,13 @@ struct RootView: View {
                         ChatsView()
                     }
                     .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }.count)
-                    Tab("邮件", systemImage: "envelope", value: AppTab.mail) {
-                        MailView()
+                    Tab("信息", systemImage: "tray.full", value: AppTab.mail) {
+                        InboxView()
                     }
                     Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
                         SettingsView()
                     }
                 }
-                .tabBarMinimizeBehavior(.onScrollDown)
             } else {
                 WelcomeView()
             }

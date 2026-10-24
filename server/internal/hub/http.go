@@ -93,6 +93,7 @@ func (h *Hub) routes() http.Handler {
 	})
 	h.assistantRoutes(api)
 	h.aiRoutes(api)
+	h.larkRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())

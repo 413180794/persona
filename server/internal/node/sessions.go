@@ -107,6 +107,7 @@ type quickMeta struct {
 	mtime    time.Time
 	title    string
 	first    string
+	activity time.Time // last real exchange; zero when unknown
 	cwd      string
 	model    string
 	lastText string
@@ -161,14 +162,14 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 			if len(line) == 0 {
 				continue
 			}
-			// Skip big tool results quickly; we only need titles, cwd, model and assistant text.
-			if bytes.Contains(line, []byte(`"type":"user"`)) {
+			// Skip big tool results quickly; small user lines still count as activity.
+			if bytes.Contains(line, []byte(`"type":"user"`)) && len(line) > 8<<10 {
 				continue
 			}
 			transcript.ParseLine(0, line, &tm)
 		}
 	}
-	m.title, m.cwd, m.model, m.lastText, m.first = tm.Title, tm.Cwd, tm.Model, tm.LastText, first
+	m.title, m.cwd, m.model, m.lastText, m.first, m.activity = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity
 	return m
 }
 
@@ -238,7 +239,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	for id, a := range agents {
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
-			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(),
+			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title,
 		}
 		n.placeIn(&s, a)
 		if p := n.transcriptPath(id); p != "" {
@@ -251,7 +252,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					s.Title = ""
 					untitled(&s, m)
 				}
-				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), st.ModTime().UTC()
+				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), lastUsed(m, st)
 			}
 		}
 		n.decorate(&s)
@@ -330,12 +331,21 @@ func (n *Node) scanOffline() []proto.Session {
 		n.mu.Unlock()
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
-			LastText: snippet(m.lastText), UpdatedAt: c.st.ModTime().UTC(),
+			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st),
 		}
 		untitled(&s, m)
 		out = append(out, s)
 	}
 	return out
+}
+
+// lastUsed is when the session was last really used: its last exchange, or the file time for transcripts
+// without any (only system lines).
+func lastUsed(m quickMeta, st os.FileInfo) time.Time {
+	if !m.activity.IsZero() {
+		return m.activity.UTC()
+	}
+	return st.ModTime().UTC()
 }
 
 // untitled gives sessions without an AI title (headless ones) their first message as title.
@@ -643,8 +653,8 @@ func (n *Node) recentDirs() []proto.RecentDir {
 		}
 	}
 	for _, a := range n.agents {
-		if a.Cwd != "" {
-			last[a.Cwd] = time.Now()
+		if _, ok := last[a.Cwd]; a.Cwd != "" && !ok {
+			last[a.Cwd] = time.Time{} // running but no transcript yet: listed, oldest
 		}
 	}
 	n.mu.Unlock()

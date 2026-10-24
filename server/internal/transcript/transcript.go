@@ -35,7 +35,15 @@ type entry struct {
 		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
-	AITitle       string          `json:"aiTitle"`
+	AITitle    string `json:"aiTitle"`
+	Attachment *struct {
+		Type        string          `json:"type"`
+		Prompt      json.RawMessage `json:"prompt"`
+		CommandMode string          `json:"commandMode"`
+		Origin      *struct {
+			Kind string `json:"kind"`
+		} `json:"origin"`
+	} `json:"attachment"`
 	Cwd           string          `json:"cwd"`
 	ToolUseResult json.RawMessage `json:"toolUseResult"`
 }
@@ -59,18 +67,31 @@ type block struct {
 
 // Meta is session-level information collected while parsing.
 type Meta struct {
-	FirstUser string // first thing the user typed; titles untitled (headless) sessions
-	Title     string
-	Cwd       string
-	Model     string
-	LastText  string
-	Updated   time.Time
+	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
+	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
+	LastActivity time.Time
+	FirstUser    string // first thing the user typed; titles untitled (headless) sessions
+	Title        string
+	Cwd          string
+	Model        string
+	LastText     string
+	Updated      time.Time
 }
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
 // ParseLine converts one JSONL line (1-based seq) into items, updating meta.
 func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
+	items := parseLine(seq, line, meta)
+	for _, it := range items {
+		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
+			meta.LastActivity = it.TS
+		}
+	}
+	return items
+}
+
+func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	var e entry
 	if err := json.Unmarshal(line, &e); err != nil {
 		return nil
@@ -96,6 +117,32 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		return proto.Item{ID: fmt.Sprintf("%s#%d", id, idx), Seq: seq, TS: e.Timestamp, Role: role, Kind: kind}
 	}
 	switch e.Type {
+	case "attachment":
+		// Input typed while Claude was working is queued, then absorbed into the running turn; it is stored as a
+		// queued_command attachment instead of a user message, so without this it never shows up in the chat.
+		a := e.Attachment
+		if a == nil || a.Type != "queued_command" || (a.CommandMode != "" && a.CommandMode != "prompt") ||
+			(a.Origin != nil && a.Origin.Kind != "human") {
+			return nil
+		}
+		var text string
+		if json.Unmarshal(a.Prompt, &text) != nil {
+			var blocks []block
+			if json.Unmarshal(a.Prompt, &blocks) == nil {
+				var parts []string
+				for _, b := range blocks {
+					if b.Type == "text" {
+						parts = append(parts, b.Text)
+					}
+				}
+				text = strings.Join(parts, "\n")
+			}
+		}
+		items := userText(mk, text)
+		if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
+			meta.FirstUser = items[0].Text
+		}
+		return items
 	case "system":
 		var text string
 		switch e.Subtype {
