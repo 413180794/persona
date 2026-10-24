@@ -1,55 +1,67 @@
 import SwiftUI
 
+/// Agents that share a space (a herdr workspace, or whatever groups agents in another host) on one machine.
+struct SpaceGroup: Identifiable {
+    var id: String // machineID/spaceID
+    var machineID: String
+    var spaceID: String
+    var name: String
+    var index: Int
+    var sessions: [Session] // ordered by slot
+
+    var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
+    var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
+    var isQuiet: Bool { sessions.allSatisfy { $0.state == .idle || $0.state == .unknown } }
+
+    func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
+
+    static func build(_ sessions: [Session]) -> [SpaceGroup] {
+        var groups: [String: SpaceGroup] = [:]
+        for s in sessions where s.state.isLive {
+            let spaceID = s.spaceID ?? "-"
+            let key = "\(s.machineID)/\(spaceID)"
+            if groups[key] == nil {
+                groups[key] = SpaceGroup(id: key, machineID: s.machineID, spaceID: spaceID,
+                                         name: s.spaceName ?? s.folderName, index: s.spaceIndex ?? 0, sessions: [])
+            }
+            groups[key]!.sessions.append(s)
+        }
+        return groups.values.map { g in
+            var g = g
+            g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
+            return g
+        }
+        .sorted { a, b in
+            a.state.priority != b.state.priority ? a.state.priority < b.state.priority : a.updatedAt > b.updatedAt
+        }
+    }
+}
+
+/// 开发: every agent across machines, grouped by space so tabs that work together stay together.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
-    @State private var path: [SessionKey] = []
+    @State private var path = NavigationPath()
     @State private var query = ""
-    @State private var machineFilter: String?
+    @AppStorage("dev.machineFilter") private var machineFilter = ""
     @State private var showNew = false
     @State private var showAllRecent = false
-    @State private var showAllIdle = false
+    @State private var expandedQuiet = Set<String>()
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
-            !s.assistant && (machineFilter == nil || s.machineID == machineFilter) &&
-            (query.isEmpty || s.title.localizedCaseInsensitiveContains(query) || s.cwd.localizedCaseInsensitiveContains(query)
-             || (s.lastText ?? "").localizedCaseInsensitiveContains(query))
-        }
-    }
-
-    private func byTime(_ a: Session, _ b: Session) -> Bool { (a.updatedAt ?? .distantPast) > (b.updatedAt ?? .distantPast) }
-
-    /// Working or waiting for the user.
-    private var active: [Session] {
-        filtered.filter { $0.status.isActive || $0.pendingInteractions > 0 }.sorted { a, b in
-            let pa = priority(a), pb = priority(b)
-            return pa != pb ? pa < pb : byTime(a, b)
-        }
-    }
-
-    /// Finished a turn the user has not looked at yet.
-    private var finished: [Session] {
-        filtered.filter { $0.status == .done && $0.pendingInteractions == 0 }.sorted(by: byTime)
-    }
-
-    private var idle: [Session] {
-        filtered.filter { ($0.status == .idle || $0.status == .unknown) && $0.pendingInteractions == 0 }.sorted(by: byTime)
-    }
-
-    private var recent: [Session] {
-        filtered.filter { !$0.status.isLive }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-    }
-
-    private func priority(_ s: Session) -> Int {
-        if s.pendingInteractions > 0 || s.status == .blocked { return 0 }
-        switch s.status {
-        case .working: return 1
-        case .done: return 2
-        default: return 3
+            !s.assistant && (machineFilter.isEmpty || s.machineID == machineFilter) &&
+            (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
+                .contains { $0.localizedCaseInsensitiveContains(query) })
         }
     }
 
     var body: some View {
+        let groups = SpaceGroup.build(filtered)
+        let active = groups.filter { !$0.isQuiet }
+        let quiet = groups.filter(\.isQuiet)
+        let recent = filtered.filter { !$0.state.isLive }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
+
         NavigationStack(path: $path) {
             List {
                 Section { ConnectionBanner() }
@@ -57,80 +69,86 @@ struct ChatsView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
 
-                if !model.pendingInteractions.isEmpty && query.isEmpty {
+                if !interactions.isEmpty && query.isEmpty {
                     Section {
-                        ForEach(model.pendingInteractions) { ix in
+                        ForEach(interactions) { ix in
                             InteractionPreviewCard(interaction: ix) { path.append(ix.sessionKey) }
                                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }
                     } header: {
-                        SectionHeader(title: "需要你处理", count: model.pendingInteractions.count, tint: Theme.attention)
+                        SectionHeader(title: "需要你处理", count: interactions.count, tint: Theme.needsYou)
                     }
                 }
 
-                if !active.isEmpty {
+                ForEach(active) { g in
                     Section {
-                        ForEach(active) { s in row(s) }
+                        ForEach(g.sessions) { s in slotRow(s) }
                     } header: {
-                        SectionHeader(title: "进行中", count: active.count, tint: Theme.working)
+                        Button { path.append(SpaceRoute(id: g.id)) } label: {
+                            SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
-                if !finished.isEmpty {
+                if !quiet.isEmpty {
                     Section {
-                        ForEach(finished) { s in row(s) }
-                    } header: {
-                        SectionHeader(title: "刚完成", count: finished.count, tint: Theme.done)
-                    }
-                }
-
-                if !idle.isEmpty {
-                    Section {
-                        ForEach(showAllIdle ? idle : Array(idle.prefix(8))) { s in row(s) }
-                        if idle.count > 8 && !showAllIdle {
-                            Button("显示全部 \(idle.count) 个") { withAnimation { showAllIdle = true } }
-                                .font(.subheadline.weight(.medium))
+                        ForEach(quiet) { g in
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
+                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
+                            )) {
+                                ForEach(g.sessions) { s in slotRow(s) }
+                            } label: {
+                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                            }
                         }
                     } header: {
-                        SectionHeader(title: "空闲", count: idle.count, tint: Theme.idle)
+                        SectionHeader(title: "空闲的空间", count: quiet.count, tint: .secondary)
                     }
                 }
 
                 if !recent.isEmpty {
                     Section {
-                        ForEach(showAllRecent ? recent : Array(recent.prefix(12))) { s in row(s) }
-                        if recent.count > 12 && !showAllRecent {
+                        ForEach(showAllRecent ? recent : Array(recent.prefix(10))) { s in
+                            NavigationLink(value: s.key) {
+                                RecentRow(session: s, machine: model.machine(s.machineID), showMachine: machineFilter.isEmpty)
+                            }
+                        }
+                        if recent.count > 10 && !showAllRecent {
                             Button("显示全部 \(recent.count) 个") { withAnimation { showAllRecent = true } }
                                 .font(.subheadline.weight(.medium))
                         }
                     } header: {
-                        SectionHeader(title: "最近", count: nil, tint: .secondary)
+                        SectionHeader(title: "最近（未运行）", count: nil, tint: .secondary)
                     }
                 }
 
-                if model.allSessions.isEmpty {
+                if filtered.isEmpty {
                     Section {
-                        EmptyStateView(symbol: "chevron.left.forwardslash.chevron.right", title: "开始第一个开发会话",
+                        EmptyStateView(symbol: "chevron.left.forwardslash.chevron.right",
+                                       title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
                                        message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
-                                       action: ("新建对话", { showNew = true }))
+                                       action: ("新建会话", { showNew = true }))
                     }
                     .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("开发")
-            .searchable(text: $query, prompt: "搜索对话、目录、内容")
+            .searchable(text: $query, prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { machineMenu }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel("新建对话")
+                        .accessibilityLabel("新建会话")
                 }
             }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
+            .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
                     showNew = false
@@ -139,50 +157,66 @@ struct ChatsView: View {
             }
             .onChange(of: model.openChat, initial: true) { _, key in
                 guard let key else { return }
-                path = [key]
+                path = NavigationPath([key])
                 model.openChat = nil
             }
             .onAppear {
                 if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
+                if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
         }
     }
 
-    private func row(_ s: Session) -> some View {
-        NavigationLink(value: s.key) {
-            SessionRow(session: s, machine: model.machine(s.machineID), showMachine: machineFilter == nil)
-        }
-        .swipeActions(edge: .trailing) {
-            if s.startedByJarvis && s.status.isLive {
-                Button(role: .destructive) { Task { await model.close(s.key) } } label: { Label("关闭", systemImage: "xmark") }
+    private func slotRow(_ s: Session) -> some View {
+        NavigationLink(value: s.key) { SlotRow(session: s) }
+            .swipeActions(edge: .trailing) {
+                if s.startedByJarvis && s.state.isLive {
+                    Button(role: .destructive) { Task { await model.close(s.key) } } label: { Label("关闭", systemImage: "xmark") }
+                }
             }
-        }
-        .swipeActions(edge: .leading) {
-            if s.status.isActive {
-                Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: "stop.fill") }
-                    .tint(Theme.attention)
+            .swipeActions(edge: .leading) {
+                if s.state == .working || s.state == .needsYou {
+                    Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: "stop.fill") }
+                        .tint(Theme.busy)
+                }
+                if s.state == .unread {
+                    Button { model.markSeen(s.key) } label: { Label("标为已看", systemImage: "eye") }
+                        .tint(.gray)
+                }
             }
-        }
-        .contextMenu {
-            Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
-            Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
-        }
+            .contextMenu {
+                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
+                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
+            }
     }
 
+    /// Shows the chosen machine's name in the corner; "全部" keeps the plain filter icon.
     private var machineMenu: some View {
         Menu {
             Picker("机器", selection: $machineFilter) {
-                Label("全部机器", systemImage: "square.grid.2x2").tag(String?.none)
+                Label("全部机器", systemImage: "square.grid.2x2").tag("")
                 ForEach(model.machines) { m in
-                    Label(m.name, systemImage: m.symbol).tag(Optional(m.id))
+                    Label(m.name, systemImage: m.symbol).tag(m.id)
                 }
             }
         } label: {
-            Image(systemName: machineFilter == nil ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+            if let m = model.machine(machineFilter) {
+                HStack(spacing: 5) {
+                    Image(systemName: m.symbol)
+                    Text(m.name).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                }
+                .font(.subheadline.weight(.semibold))
+                .fixedSize()
+            } else {
+                Image(systemName: "line.3.horizontal.decrease")
+            }
         }
-        .accessibilityLabel("按机器筛选")
+        .accessibilityLabel(model.machine(machineFilter).map { "当前机器：\($0.name)" } ?? "按机器筛选")
     }
 }
+
+struct SpaceRoute: Hashable { var id: String }
 
 struct SectionHeader: View {
     var title: String
@@ -204,6 +238,136 @@ struct SectionHeader: View {
     }
 }
 
+/// Section header of a space: name, machine and a count per state.
+struct SpaceHeader: View {
+    var group: SpaceGroup
+    var machine: Machine?
+    var showMachine: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(group.state.color)
+            Text(group.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            if showMachine, let machine {
+                Text(machine.name).font(.caption).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            StateCounts(group: group)
+            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+        }
+        .contentShape(.rect)
+    }
+}
+
+struct StateCounts: View {
+    var group: SpaceGroup
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach([AgentState.needsYou, .working, .unread], id: \.self) { st in
+                let n = group.count(st)
+                if n > 0 {
+                    HStack(spacing: 3) {
+                        Circle().fill(st.color).frame(width: 6, height: 6)
+                        Text("\(n)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(st.color)
+                    }
+                }
+            }
+            let idle = group.count(.idle) + group.count(.unknown)
+            if idle > 0 {
+                Text("\(idle) 空闲").font(.caption2).foregroundStyle(.secondary).textCase(nil)
+            }
+        }
+    }
+}
+
+/// One agent inside a space: tab label, title, state and the latest line.
+struct SlotRow: View {
+    var session: Session
+
+    var body: some View {
+        let tint = session.state == .idle || session.state == .unknown ? Color.secondary : session.state.color
+        HStack(alignment: .top, spacing: 10) {
+            StatusDot(state: session.state, size: 9).padding(.top, 6)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let slot = session.slotLabel {
+                        Text(slot)
+                            .font(.caption.weight(.semibold).monospaced())
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1.5)
+                            .background(tint.opacity(0.12), in: .capsule)
+                    }
+                    Text(session.displayTitle)
+                        .font(.body.weight(session.state == .unread ? .bold : .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                HStack(spacing: 6) {
+                    if session.state != .idle { StatusLabel(state: session.state) }
+                    if let m = Fmt.model(session.model) { Text(m).font(.caption).foregroundStyle(.tertiary).lineLimit(1) }
+                }
+                if let last = session.lastText, !last.isEmpty {
+                    Text(Fmt.plain(last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+/// A space where every agent is idle: one compact line, expandable.
+struct QuietSpaceRow: View {
+    var group: SpaceGroup
+    var machine: Machine?
+    var showMachine: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name).font(.body.weight(.medium)).lineLimit(1)
+                Text([showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
+                      group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            Text(Fmt.relative(group.updatedAt)).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A session that is no longer running (resumable by sending a message).
+struct RecentRow: View {
+    var session: Session
+    var machine: Machine?
+    var showMachine: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            SessionAvatar(machine: machine, state: .offline, size: 36)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(session.displayTitle).font(.body.weight(.medium)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(Fmt.relative(session.updatedAt)).font(.caption).foregroundStyle(.secondary)
+                }
+                Text([session.folderName, showMachine ? machine?.name : nil].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let last = session.lastText, !last.isEmpty {
+                    Text(Fmt.plain(last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+    }
+}
+
+/// Used by the machine detail page.
 struct SessionRow: View {
     var session: Session
     var machine: Machine?
@@ -211,40 +375,8 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            SessionAvatar(machine: machine, status: session.pendingInteractions > 0 ? .blocked : session.status)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(session.title.isEmpty ? session.folderName : session.title)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 6)
-                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        Text(Fmt.relative(session.updatedAt, now: ctx.date))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                HStack(spacing: 6) {
-                    if session.status.isLive || session.pendingInteractions > 0 {
-                        StatusLabel(status: session.status, pending: session.pendingInteractions)
-                    }
-                    Text(session.folderName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    if showMachine, let machine {
-                        Text("· " + machine.name).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                if let last = session.lastText, !last.isEmpty {
-                    Text(Fmt.plain(last))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
+            SessionAvatar(machine: machine, state: session.state)
+            SlotRow(session: session)
         }
-        .padding(.vertical, 4)
     }
 }

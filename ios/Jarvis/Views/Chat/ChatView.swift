@@ -10,11 +10,18 @@ enum ChatStyle {
 
 struct ChatView: View {
     @Environment(AppModel.self) private var model
-    let key: SessionKey
+    /// The session on screen; the sibling strip can switch it to another agent in the same space.
+    @State private var key: SessionKey
     var style: ChatStyle = .dev
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var showTerminal = false
+    @State private var file: FileRef?
+
+    init(key: SessionKey, style: ChatStyle = .dev) {
+        _key = State(initialValue: key)
+        self.style = style
+    }
 
     private var store: ChatStore { model.chat(key) }
     private var session: Session? { model.session(key) }
@@ -125,16 +132,38 @@ struct ChatView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if style == .dev { SiblingStrip(current: key) { next in switchTo(next) } }
+        }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .sheet(isPresented: $showTerminal) { TerminalSheet(key: key) }
+        .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        .environment(\.openFile) { path in
+            file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
+        }
         .onAppear {
             model.subscribe(key)
             model.visibleSession = key
+            model.markSeen(key)
         }
         .onDisappear {
             model.unsubscribe(key)
             if model.visibleSession == key { model.visibleSession = nil }
         }
+        .onChange(of: session?.state) { _, st in
+            if st == .unread && model.visibleSession == key { model.markSeen(key) }
+        }
+    }
+
+    private func switchTo(_ next: SessionKey) {
+        guard next != key else { return }
+        Haptics.tap()
+        model.unsubscribe(key)
+        key = next
+        position = ScrollPosition(edge: .bottom)
+        model.subscribe(next)
+        model.visibleSession = next
+        model.markSeen(next)
     }
 
     private var title: String {
@@ -150,8 +179,8 @@ struct ChatView: View {
             return s.status.isActive ? "正在处理…" : (Fmt.model(s.model) ?? "Jarvis")
         }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
-        let pending = model.interactions(for: key).isEmpty ? s.status.label : "等你处理"
-        return [machine, Fmt.model(s.model) ?? s.launcher, pending].compactMap { $0 }.joined(separator: " · ")
+        let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
+        return [machine, place.isEmpty ? nil : place, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool) -> some View {

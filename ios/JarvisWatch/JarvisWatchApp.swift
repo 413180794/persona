@@ -50,11 +50,8 @@ final class WatchModel {
 
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
         let hadNew = interactions.contains { ix in !self.interactions.contains { $0.id == ix.id } }
-        func rank(_ s: Session) -> Int {
-            if s.pendingInteractions > 0 || s.status == .blocked { return 0 }
-            switch s.status { case .working: return 1; case .done: return 2; default: return 3 }
-        }
-        self.sessions = sessions.filter { $0.status.isLive }
+        func rank(_ s: Session) -> Int { s.state.priority }
+        self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }
             .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         self.interactions = interactions
         if !machines.isEmpty { self.machines = machines }
@@ -149,10 +146,13 @@ struct WatchRootView: View {
                         ForEach(model.sessions) { s in
                             NavigationLink { WatchSessionView(session: s) } label: {
                                 HStack(spacing: 8) {
-                                    Circle().fill((s.pendingInteractions > 0 ? SessionStatus.blocked : s.status).color).frame(width: 8, height: 8)
+                                    Circle().fill(s.state.color).frame(width: 8, height: 8)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(s.title.isEmpty ? s.folderName : s.title).font(.footnote.weight(.semibold)).lineLimit(2)
-                                        Text(model.machine(s.machineID)?.name ?? s.machineID).font(.caption2).foregroundStyle(.secondary)
+                                        Text(s.displayTitle).font(.footnote.weight(.semibold)).lineLimit(2)
+                                        Text([s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ").isEmpty
+                                             ? (model.machine(s.machineID)?.name ?? s.machineID)
+                                             : [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › "))
+                                            .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                             }
@@ -286,8 +286,8 @@ struct WatchSessionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    Circle().fill(session.status.color).frame(width: 7, height: 7)
-                    Text(session.status.label).font(.caption2.weight(.semibold)).foregroundStyle(session.status.color)
+                    Circle().fill(session.state.color).frame(width: 7, height: 7)
+                    Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.color)
                 }
                 ForEach(items.suffix(6)) { it in
                     Text(it.text ?? "")
@@ -313,8 +313,11 @@ struct WatchSessionView: View {
                 }
             }
         }
-        .navigationTitle(session.title.isEmpty ? session.folderName : session.title)
-        .task { await load() }
+        .navigationTitle(session.displayTitle)
+        .task {
+            await load()
+            try? await model.api?.post("/api/v1/sessions/\(session.machineID)/\(session.sessionID)/seen")
+        }
     }
 
     private func load() async {

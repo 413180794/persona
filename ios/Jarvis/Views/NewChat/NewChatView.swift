@@ -1,10 +1,19 @@
 import SwiftUI
 
+/// Start a session inside an existing space (a new herdr tab next to the other agents).
+struct SpacePreset {
+    var machineID: String
+    var cwd: String
+    var workspaceID: String
+    var spaceName: String
+}
+
 /// Pick a machine, a project directory and a launcher (model), optionally with a first message.
 struct NewChatView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var initialPrompt = ""
+    var preset: SpacePreset?
     var onStarted: (Session) -> Void
 
     @AppStorage("newChat.machine") private var machineID = ""
@@ -23,6 +32,14 @@ struct NewChatView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let preset {
+                    Section {
+                        Label(preset.spaceName, systemImage: "square.stack.3d.up.fill")
+                        Text(Fmt.path(preset.cwd, home: machine?.home)).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    } header: { Text("加入空间") } footer: {
+                        Text("会在 \(machine?.name ?? "") 的 herdr 这个 workspace 里新开一个标签。")
+                    }
+                } else {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
@@ -68,6 +85,7 @@ struct NewChatView: View {
                         }
                     }
                 } header: { Text("目录") }
+                }
 
                 Section {
                     NavigationLink {
@@ -123,9 +141,9 @@ struct NewChatView: View {
             .task(id: machineID) { await loadMachine() }
             .onAppear {
                 if prompt.isEmpty { prompt = initialPrompt }
-                pickDefaultMachine()
+                if let preset { machineID = preset.machineID; cwd = preset.cwd } else { pickDefaultMachine() }
             }
-            .onChange(of: model.machines) { _, _ in pickDefaultMachine() }
+            .onChange(of: model.machines) { _, _ in if preset == nil { pickDefaultMachine() } }
             .interactiveDismissDisabled(starting)
         }
     }
@@ -176,8 +194,10 @@ struct NewChatView: View {
             let saved = UserDefaults.standard.string(forKey: "launcher.\(machineID)")
             if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
             else if !ls.contains(where: { $0.name == launcher }) { launcher = ls.first?.name ?? "" }
-            let savedDir = UserDefaults.standard.string(forKey: "cwd.\(machineID)")
-            cwd = savedDir ?? recent.first?.path ?? ""
+            if let preset { cwd = preset.cwd } else {
+                let savedDir = UserDefaults.standard.string(forKey: "cwd.\(machineID)")
+                cwd = savedDir ?? recent.first?.path ?? ""
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -190,7 +210,8 @@ struct NewChatView: View {
         defer { starting = false }
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-            let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: p.isEmpty ? nil : p))
+            let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: p.isEmpty ? nil : p,
+                                              workspaceID: preset?.workspaceID))
             UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()

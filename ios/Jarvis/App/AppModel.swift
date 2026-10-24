@@ -239,6 +239,7 @@ final class AppModel {
     private func notifyTransitions(old: [Session], new: [Session]) {
         let before = Dictionary(old.map { ($0.sessionID, $0.status) }, uniquingKeysWith: { a, _ in a })
         for s in new where before[s.sessionID] == .working && (s.status == .idle || s.status == .done) {
+            if visibleSession == s.key { markSeen(s.key) }
             if visibleSession == s.key { Haptics.success() }
         }
     }
@@ -284,6 +285,28 @@ final class AppModel {
             show(error)
             return false
         }
+    }
+
+    /// The user looked at this session: finished work stops being "unread" (docs/agent-states.md).
+    func markSeen(_ key: SessionKey) {
+        if live.state == .connected {
+            live.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
+        } else if let api {
+            Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
+        }
+        // Optimistic: flip the local copy right away.
+        if var list = sessionsByMachine[key.machineID], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }),
+           list[i].state == .unread {
+            list[i].state = .idle
+            sessionsByMachine[key.machineID] = list
+        }
+    }
+
+    /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order.
+    func siblings(of key: SessionKey) -> [Session] {
+        guard let s = session(key), let space = s.spaceKey else { return [] }
+        return allSessions.filter { $0.spaceKey == space && $0.state.isLive }
+            .sorted { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
     }
 
     func interrupt(_ key: SessionKey) async {

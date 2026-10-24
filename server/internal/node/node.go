@@ -221,6 +221,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.unwatch":
 		n.unwatch(p.SessionID)
 		return ok(nil)
+	case "file.read":
+		return n.readFile(p.Path, p.Cwd)
 	case "assistant.prepare":
 		var a struct {
 			Dir      string `json:"dir"`

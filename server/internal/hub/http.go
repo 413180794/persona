@@ -32,6 +32,9 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
+		return map[string]any{"path": r.URL.Query().Get("path"), "cwd": r.URL.Query().Get("cwd")}
+	}))
 	api.HandleFunc("GET /api/v1/sessions", h.listSessions)
 	api.HandleFunc("POST /api/v1/sessions", h.startSession)
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.proxy("session.items", func(r *http.Request) any {

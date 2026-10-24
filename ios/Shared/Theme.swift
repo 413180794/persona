@@ -14,6 +14,10 @@ nonisolated enum Theme {
     static let terminalBackground = Color(light: 0x16171B, dark: 0x0E0F12)
     static let terminalText = Color(light: 0xE6E3DA, dark: 0xE6E3DA)
     static let cardStroke = Color.primary.opacity(0.08)
+    // Agent states (docs/agent-states.md).
+    static let needsYou = Color(light: 0xE5484D, dark: 0xFF6369)
+    static let busy = Color(light: 0xE8890C, dark: 0xFFB224)
+    static let unread = Color(light: 0x30A46C, dark: 0x4CC38A)
 }
 
 extension Color {
@@ -37,6 +41,32 @@ extension UIColor {
     }
 }
 #endif
+
+extension AgentState {
+    var label: String {
+        switch self {
+        case .needsYou: "需要你"
+        case .working: "工作中"
+        case .unread: "完成未看"
+        case .idle: "已看"
+        case .offline: "未运行"
+        case .unknown: "未知"
+        }
+    }
+
+    /// Red needs you, amber works, green finished-unseen, gray seen — same meaning as herdr's sidebar dots.
+    var color: Color {
+        switch self {
+        case .needsYou: Theme.needsYou
+        case .working: Theme.busy
+        case .unread: Theme.unread
+        case .idle, .unknown: Color.secondary.opacity(0.55)
+        case .offline: Color.secondary.opacity(0.3)
+        }
+    }
+
+    var animates: Bool { self == .working || self == .needsYou }
+}
 
 extension SessionStatus {
     var label: String {

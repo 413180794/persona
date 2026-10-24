@@ -290,8 +290,8 @@ struct AssistantHistory: View {
                                     .foregroundStyle(Color.primary)
                                     .lineLimit(1)
                                 Spacer()
-                                if s.status.isActive || s.pendingInteractions > 0 {
-                                    StatusLabel(status: s.status, pending: s.pendingInteractions)
+                                if s.state == .working || s.state == .needsYou || s.state == .unread {
+                                    StatusLabel(state: s.state)
                                 } else {
                                     Text(Fmt.relative(s.updatedAt)).font(.caption).foregroundStyle(.secondary)
                                 }

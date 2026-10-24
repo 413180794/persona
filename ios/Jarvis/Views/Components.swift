@@ -1,54 +1,56 @@
 import SwiftUI
 
-/// Status dot that breathes while Claude works and glows when it needs you.
+/// Agent state dot: breathes while working, pulses red when it needs you, solid green when finished-unseen,
+/// muted gray once seen (docs/agent-states.md).
 struct StatusDot: View {
-    var status: SessionStatus
+    var state: AgentState
     var size: CGFloat = 9
     @State private var pulse = false
 
     var body: some View {
         Circle()
-            .fill(status.color)
+            .fill(state.color)
             .frame(width: size, height: size)
             .overlay {
-                if status.isActive {
+                if state.animates {
                     Circle()
-                        .stroke(status.color.opacity(0.6), lineWidth: 1.5)
+                        .stroke(state.color.opacity(0.6), lineWidth: 1.5)
                         .scaleEffect(pulse ? 2.2 : 1)
                         .opacity(pulse ? 0 : 1)
                 }
             }
             .onAppear { animate() }
-            .onChange(of: status) { _, _ in animate() }
-            .accessibilityLabel(status.label)
+            .onChange(of: state) { _, _ in animate() }
+            .accessibilityLabel(state.label)
     }
 
     private func animate() {
         pulse = false
-        guard status.isActive else { return }
-        withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { pulse = true }
+        guard state.animates else { return }
+        withAnimation(.easeOut(duration: state == .needsYou ? 1.0 : 1.4).repeatForever(autoreverses: false)) { pulse = true }
     }
 }
 
-/// Machine glyph inside a soft tinted squircle; a ring shows the session's state.
+/// Machine glyph inside a soft tinted squircle with the state dot in the corner.
 struct SessionAvatar: View {
     var machine: Machine?
-    var status: SessionStatus
+    var state: AgentState
     var size: CGFloat = 44
 
     var body: some View {
+        let tint: Color = state == .idle || state == .offline || state == .unknown ? .secondary : state.color
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                .fill(status.color.opacity(status == .offline ? 0.08 : 0.14))
+                .fill(tint.opacity(state == .offline ? 0.06 : 0.12))
                 .frame(width: size, height: size)
                 .overlay {
                     Image(systemName: machine?.symbol ?? "terminal")
                         .font(.system(size: size * 0.42, weight: .medium))
-                        .foregroundStyle(status == .offline ? Color.secondary : status.color)
-                        .symbolEffect(.pulse, options: .repeating, isActive: status == .working)
+                        .foregroundStyle(tint)
+                        .symbolEffect(.pulse, options: .repeating, isActive: state == .working)
                 }
-            if status != .offline {
-                StatusDot(status: status, size: size * 0.24)
+            if state != .offline {
+                StatusDot(state: state, size: size * 0.24)
                     .padding(2.5)
                     .background(Circle().fill(Color(.systemBackground)))
                     .offset(x: 3, y: 3)
@@ -76,15 +78,14 @@ struct Chip: View {
 }
 
 struct StatusLabel: View {
-    var status: SessionStatus
-    var pending: Int = 0
+    var state: AgentState
 
     var body: some View {
         HStack(spacing: 5) {
-            StatusDot(status: pending > 0 ? .blocked : status, size: 7)
-            Text(pending > 0 ? "等你处理" : status.label)
+            StatusDot(state: state, size: 7)
+            Text(state.label)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle((pending > 0 ? SessionStatus.blocked : status).color)
+                .foregroundStyle(state == .idle ? Color.secondary : state.color)
         }
     }
 }

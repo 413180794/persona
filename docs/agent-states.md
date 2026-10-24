@@ -1,0 +1,48 @@
+# Agent 状态与空间模型
+
+## 统一状态
+
+App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计算）。来源是宿主（目前是 herdr）的状态，加上 Jarvis 自己知道的两件事：
+有没有待处理的交互、用户有没有在 App 里看过。
+
+| 状态 | 含义 | 来自 herdr | Jarvis 补充 | 颜色 |
+| --- | --- | --- | --- | --- |
+| `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
+| `working` 工作中 | 正在跑 | `working` | — | 琥珀，呼吸 |
+| `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
+| `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
+| `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
+| `unknown` 未知 | 宿主认出了 agent 但判断不了状态 | `unknown` | — | 灰 |
+
+排序优先级：需要你 → 工作中 → 完成未看 → 已看 → 未知 → 未运行。
+
+### 「看过」
+
+- herdr 的看过 = 在电脑上聚焦那个 tab（CLI 读取不算）。Jarvis **不会**为了标已看去聚焦 tab（会抢电脑上的焦点），所以手机上看过之后，
+  电脑上 herdr 侧边栏的绿点仍在。
+- App 的看过：打开对话页、在对话页里看着它完成、在列表里左滑「标为已看」、手表打开会话。App 发 WS `{"type":"seen"}`（或
+  `POST /api/v1/sessions/{mid}/{sid}/seen`），hub 存进 Postgres `session_views`。
+- 判定：herdr `done` 且 `seen_at` 早于会话最后更新时间（transcript 的修改时间，即这一轮结束的时间）→ `unread`，否则 `idle`。
+  所以看过之后它又干了一轮，会重新变成完成未看。
+
+## 空间 / 槽位（多 tab 协作）
+
+一个宿主里「一组相关的 agent」抽象为**空间（space）**，组里的每个位置是**槽位（slot）**：
+
+| 字段 | herdr 映射 | 以后接入别的工具 |
+| --- | --- | --- |
+| `space_kind` | `herdr` | 工具名 |
+| `space_id` / `space_name` / `space_index` | workspace id / label / number | 项目、房间、会话组 |
+| `slot_id` / `slot_name` / `slot_index` | tab id / label / number | 角色、窗口、频道 |
+
+node 每秒一次 `herdr api snapshot`（一次拿到 workspace、tab、agent）填这些字段。tab 名是默认数字时 App 显示 `#2`。
+
+App 里的表现：
+
+- **开发列表按空间分组**：有动静的空间（含需要你 / 工作中 / 完成未看）每个一张卡片，头部是空间名、机器、各状态数量，
+  里面按 tab 顺序列每个 agent（tab 名、标题、状态、最新一句）；全是已看的空间收进「空闲的空间」，一行一个、可展开；
+  不在运行的会话在「最近（未运行）」。
+- **对话页顶部的同伴条**：同一空间有多个 agent 时，顶部列出它们（状态点 + tab 名），点一下直接切过去，不用返回列表。
+  副标题是「机器 · 空间 › tab · 状态」。
+- **空间页**：点空间卡片头部进入，网格展示每个 tab 的状态、标题、最新进展、待处理数量；可以「在这个空间开新标签」，
+  会在同一个 herdr workspace 里新建 tab（`session.start` 的 `workspace_id`）。

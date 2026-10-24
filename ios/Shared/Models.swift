@@ -94,6 +94,15 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var model: String?
     var startedByJarvis: Bool
     var assistant: Bool
+    var spaceKind: String?
+    var spaceID: String?
+    var spaceName: String?
+    var spaceIndex: Int?
+    var slotID: String?
+    var slotName: String?
+    var slotIndex: Int?
+    var state: AgentState
+    var seenAt: Date?
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -105,7 +114,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case title, cwd, status, launcher, model
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
-             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant,
+             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
+             spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at",
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -124,10 +135,69 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
+        spaceKind = try c.decodeIfPresent(String.self, forKey: .spaceKind)
+        spaceID = try c.decodeIfPresent(String.self, forKey: .spaceID)
+        spaceName = try c.decodeIfPresent(String.self, forKey: .spaceName)
+        spaceIndex = try c.decodeIfPresent(Int.self, forKey: .spaceIndex)
+        slotID = try c.decodeIfPresent(String.self, forKey: .slotID)
+        slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
+        slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
+        seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
+        state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
     }
+}
+
+extension Session {
+    /// Space this session belongs to, unique across machines (nil when it is not running in a host like herdr).
+    var spaceKey: String? { spaceID.map { "\(machineID)/\($0)" } }
+
+    /// Tab label, or "#n" when the label is just herdr's default number.
+    var slotLabel: String? {
+        guard let name = slotName, !name.isEmpty else { return slotIndex.map { "#\($0)" } }
+        if let i = slotIndex, name == String(i) { return "#\(i)" }
+        return name
+    }
+
+    var displayTitle: String { title.isEmpty || title == "Claude Code" ? folderName : title }
+}
+
+/// Unified agent state (docs/agent-states.md), computed by the hub from herdr status, pending interactions and
+/// whether the result has been seen.
+nonisolated enum AgentState: String, Codable, Sendable, CaseIterable {
+    case needsYou = "needs_you", working, unread, idle, offline, unknown
+
+    init(from decoder: Decoder) throws {
+        self = AgentState(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+    }
+
+    /// Fallback for hubs older than the state field.
+    init(status: SessionStatus) {
+        switch status {
+        case .blocked: self = .needsYou
+        case .working: self = .working
+        case .done: self = .unread
+        case .idle: self = .idle
+        case .offline: self = .offline
+        case .unknown: self = .unknown
+        }
+    }
+
+    /// Lower sorts first: what needs attention comes before what is quiet.
+    var priority: Int {
+        switch self {
+        case .needsYou: 0
+        case .working: 1
+        case .unread: 2
+        case .idle: 3
+        case .unknown: 4
+        case .offline: 5
+        }
+    }
+
+    var isLive: Bool { self != .offline }
 }
 
 nonisolated struct SessionKey: Hashable, Sendable, Codable {

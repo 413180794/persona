@@ -54,10 +54,17 @@ extension MarkdownUI.Theme {
         }
 }
 
+extension EnvironmentValues {
+    /// Opens a path mentioned in the conversation on the session's machine (set by ChatView).
+    @Entry var openFile: ((String) -> Void)? = nil
+}
+
 struct UserBubble: View {
     var item: Item
+    @Environment(\.openFile) private var openFile
 
     var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
         HStack {
             Spacer(minLength: 48)
             Text(item.text ?? "")
@@ -69,18 +76,25 @@ struct UserBubble: View {
                 .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
                 .contextMenu { CopyButton(text: item.text ?? "") }
         }
+            if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 
 struct AssistantText: View {
     var item: Item
+    @Environment(\.openFile) private var openFile
 
     var body: some View {
-        Markdown(item.text ?? "")
-            .markdownTheme(.jarvis)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contextMenu { CopyButton(text: item.text ?? "") }
+        VStack(alignment: .leading, spacing: 6) {
+            Markdown(item.text ?? "")
+                .markdownTheme(.jarvis)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contextMenu { CopyButton(text: item.text ?? "") }
+            if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
+        }
     }
 }
 

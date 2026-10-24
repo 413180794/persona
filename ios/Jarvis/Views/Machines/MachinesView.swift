@@ -31,8 +31,8 @@ struct MachineCard: View {
     var body: some View {
         let sessions = model.sessionsByMachine[machine.id] ?? []
         let live = sessions.filter { $0.status.isLive }
-        let working = live.filter { $0.status == .working }.count
-        let waiting = live.filter { $0.status == .blocked || $0.pendingInteractions > 0 }.count
+        let working = live.filter { $0.state == .working }.count
+        let waiting = live.filter { $0.state == .needsYou }.count
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 ZStack {
@@ -61,9 +61,9 @@ struct MachineCard: View {
                 HStack(spacing: 0) {
                     stat("\(live.count)", "运行中")
                     Divider().frame(height: 28)
-                    stat("\(working)", "工作中", tint: working > 0 ? Theme.working : nil)
+                    stat("\(working)", "工作中", tint: working > 0 ? Theme.busy : nil)
                     Divider().frame(height: 28)
-                    stat("\(waiting)", "等你", tint: waiting > 0 ? Theme.attention : nil)
+                    stat("\(waiting)", "需要你", tint: waiting > 0 ? Theme.needsYou : nil)
                 }
                 HStack(spacing: 6) {
                     if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: "cpu") }

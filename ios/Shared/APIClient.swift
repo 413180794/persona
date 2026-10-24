@@ -109,9 +109,10 @@ nonisolated struct APIClient: Sendable {
         var launcher: String
         var prompt: String?
         var resumeSessionID: String?
+        var workspaceID: String?
         enum CodingKeys: String, CodingKey {
             case cwd, launcher, prompt
-            case machineID = "machine_id", resumeSessionID = "resume_session_id"
+            case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id"
         }
     }
 
