@@ -29,7 +29,7 @@ struct SettingsView: View {
                         Label("手机数据", systemImage: "iphone.gen3")
                     }
                     Button { UIApplication.shared.open(URL(string: UIApplication.openNotificationSettingsURLString)!) } label: {
-                        Label("通知", systemImage: "bell.badge")
+                        Label { Text("通知").foregroundStyle(Color.primary) } icon: { Image(systemName: "bell.badge") }
                     }
                 } footer: {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")

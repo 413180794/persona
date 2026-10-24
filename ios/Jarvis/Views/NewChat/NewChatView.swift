@@ -56,9 +56,13 @@ struct NewChatView: View {
                                 HStack {
                                     Image(systemName: cwd == r.path ? "checkmark.circle.fill" : "clock.arrow.circlepath")
                                         .foregroundStyle(cwd == r.path ? Theme.accent : .secondary)
-                                    Text(r.name).foregroundStyle(.primary)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(r.name).foregroundStyle(Color.primary)
+                                        Text(Fmt.path((r.path as NSString).deletingLastPathComponent, home: machine?.home))
+                                            .font(.caption2).foregroundStyle(Color.secondary).lineLimit(1).truncationMode(.head)
+                                    }
                                     Spacer()
-                                    Text(Fmt.relative(r.lastUsed)).font(.caption).foregroundStyle(.secondary)
+                                    Text(Fmt.relative(r.lastUsed)).font(.caption).foregroundStyle(Color.secondary)
                                 }
                             }
                         }
@@ -119,11 +123,17 @@ struct NewChatView: View {
             .task(id: machineID) { await loadMachine() }
             .onAppear {
                 if prompt.isEmpty { prompt = initialPrompt }
-                if machine == nil || machine?.online == false {
-                    machineID = model.machines.first(where: \.online)?.id ?? model.machines.first?.id ?? ""
-                }
+                pickDefaultMachine()
             }
+            .onChange(of: model.machines) { _, _ in pickDefaultMachine() }
             .interactiveDismissDisabled(starting)
+        }
+    }
+
+    /// Remember the last machine, but fall back to the first online one (machines may arrive after the sheet opens).
+    private func pickDefaultMachine() {
+        if machine == nil || machine?.online == false, let m = model.machines.first(where: \.online) ?? model.machines.first {
+            machineID = m.id
         }
     }
 
