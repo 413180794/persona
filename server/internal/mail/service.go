@@ -108,19 +108,24 @@ func (s *Service) sweep() {
 			return
 		case <-t.C:
 		}
-		now := s.now()
-		s.mu.Lock()
-		var stale []*conn
-		for id, c := range s.conns {
-			if now.Sub(c.lastUsed) > idleTimeout {
-				stale = append(stale, c)
-				delete(s.conns, id)
-			}
+		s.sweepOnce()
+	}
+}
+
+// sweepOnce closes every idle connection.
+func (s *Service) sweepOnce() {
+	now := s.now()
+	s.mu.Lock()
+	var stale []*conn
+	for id, c := range s.conns {
+		if now.Sub(c.lastUsed) > idleTimeout {
+			stale = append(stale, c)
+			delete(s.conns, id)
 		}
-		s.mu.Unlock()
-		for _, c := range stale {
-			c.c.Close()
-		}
+	}
+	s.mu.Unlock()
+	for _, c := range stale {
+		c.c.Close()
 	}
 }
 

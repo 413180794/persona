@@ -81,7 +81,7 @@ func (s *Service) Mailboxes(ctx context.Context, id string) ([]Mailbox, error) {
 			}
 		}
 		// Servers without LIST-STATUS: fall back to one STATUS per mailbox.
-		for i, ld := range needStatus {
+		for _, ld := range needStatus {
 			st, err := c.Status(ld.Mailbox, statusOpts).Wait()
 			if err != nil {
 				continue
@@ -96,7 +96,6 @@ func (s *Service) Mailboxes(ctx context.Context, id string) ([]Mailbox, error) {
 					}
 				}
 			}
-			_ = i
 		}
 		return nil
 	})
@@ -124,9 +123,8 @@ func roleOf(name string, attrs []imap.MailboxAttr) string {
 		case imap.MailboxAttrJunk:
 			return RoleJunk
 		case imap.MailboxAttrAll:
-			// Gmail's "All Mail". Not one of the documented roles, but useful
-			// to the app, which can ignore unknown roles.
-			return "all"
+			// Gmail's "All Mail": not one of the roles the protocol defines.
+			continue
 		}
 	}
 	// Providers that do not set SPECIAL-USE: guess from the name.
@@ -426,11 +424,9 @@ func textFromRaw(raw []byte) string {
 	}
 	// Tolerate truncation and unknown charsets: message.Read still returns a
 	// usable entity for the leading bytes.
-	e, _ := gomessage.New(gomessage.Header{}, bytes.NewReader(raw))
-	if e != nil {
-		if r, _ := gomessage.Read(bytes.NewReader(raw)); r != nil {
-			e = r
-		}
+	e, _ := gomessage.Read(bytes.NewReader(raw))
+	if e == nil {
+		return ""
 	}
 	if mr := e.MultipartReader(); mr != nil {
 		for {
@@ -442,8 +438,7 @@ func textFromRaw(raw []byte) string {
 			if !strings.HasPrefix(mt, "text/") {
 				continue
 			}
-			body := readAllTolerant(p.Body, 8<<10)
-			return renderText(mt, body)
+			return renderText(mt, readAllTolerant(p.Body, 8<<10))
 		}
 		return ""
 	}

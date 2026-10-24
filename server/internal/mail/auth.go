@@ -19,7 +19,7 @@ import (
 	"github.com/emersion/go-sasl"
 )
 
-const googleTokenURL = "https://oauth2.googleapis.com/token"
+var googleTokenURL = "https://oauth2.googleapis.com/token"
 
 // mailWordDecoder decodes RFC 2047 encoded words in IMAP envelope fields with
 // the full charset set registered by go-message/charset.

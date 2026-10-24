@@ -40,6 +40,7 @@ type accountRecord struct {
 	SMTPHost     string `json:"smtp_host"`
 	SMTPPort     int    `json:"smtp_port"`
 	SMTPSecurity string `json:"smtp_security"`
+	Status       string `json:"status,omitempty"`
 
 	// PasswordEnc holds the IMAP/SMTP password, encrypted.
 	PasswordEnc string `json:"password_enc,omitempty"`
@@ -182,7 +183,7 @@ func (s *store) loadLocked() ([]*MailAccount, error) {
 }
 
 func (r accountRecord) account() *MailAccount {
-	return &MailAccount{
+	a := &MailAccount{
 		ID:           r.ID,
 		Name:         r.Name,
 		Email:        r.Email,
@@ -195,7 +196,12 @@ func (r accountRecord) account() *MailAccount {
 		SMTPHost:     r.SMTPHost,
 		SMTPPort:     r.SMTPPort,
 		SMTPSecurity: r.SMTPSecurity,
+		Status:       r.Status,
 	}
+	if a.Status == "" {
+		a.Status = "ok"
+	}
+	return a
 }
 
 // save writes every account atomically with 0600 permissions, encrypting the
@@ -219,6 +225,7 @@ func (s *store) save(accounts []*MailAccount) error {
 			SMTPHost:     a.SMTPHost,
 			SMTPPort:     a.SMTPPort,
 			SMTPSecurity: a.SMTPSecurity,
+			Status:       a.Status,
 		}
 		if a.Password != "" {
 			enc, err := s.encrypt([]byte(a.Password))
