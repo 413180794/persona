@@ -205,7 +205,17 @@ final class AppModel {
         case .hello:
             break
         case .machines(let list):
+            // A machine that just came back: re-subscribe its open chats (their backlog failed while it was down).
+            let wasOffline = Set(machines.filter { !$0.online }.map(\.id))
             machines = list
+            for m in list where m.online && wasOffline.contains(m.id) {
+                for key in subscribed where key.machineID == m.id {
+                    chat(key).error = nil
+                    var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
+                    if chat(key).lastSeq > 0 { msg["since_seq"] = chat(key).lastSeq }
+                    live.send(msg)
+                }
+            }
         case .sessions(let machineID, let list):
             let old = sessionsByMachine[machineID] ?? []
             sessionsByMachine[machineID] = list
@@ -218,6 +228,8 @@ final class AppModel {
             c.screen = text
             c.screenStatus = status
             c.screenUpdatedAt = .now
+        case .delta(let key, let text):
+            chat(key).liveText = text
         case .interaction(let ix):
             let isNew = interactions[ix.id] == nil
             interactions[ix.id] = ix
@@ -275,10 +287,13 @@ final class AppModel {
         }
     }
 
+    /// Launcher chosen in an assistant chat for its next messages (model switch).
+    var assistantLaunchers: [SessionKey: String] = [:]
+
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = []) async -> Bool {
         guard let api else { return false }
         do {
-            try await api.send(key, text: text, images: images)
+            try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key])
             Haptics.tap()
             return true
         } catch {

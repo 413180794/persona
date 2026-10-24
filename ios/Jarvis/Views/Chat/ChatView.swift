@@ -57,6 +57,15 @@ struct ChatView: View {
                     rowView(row, isLatest: index == rows.count - 1)
                         .id(row.id)
                 }
+                if style == .assistant {
+                    let live = store.liveText
+                    let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
+                    if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
+                        StreamingText(text: live).id("live")
+                    } else if status == .working && live.isEmpty {
+                        TypingIndicator(text: "Jarvis 正在思考…").id("typing")
+                    }
+                }
                 if let err = store.error {
                     Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger)
                 }
@@ -76,6 +85,9 @@ struct ChatView: View {
         .onChange(of: rows.last?.id) { _, _ in
             if atBottom { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } }
         }
+        .onChange(of: store.liveText.count / 40) { _, _ in
+            if atBottom { position.scrollTo(edge: .bottom) }
+        }
         .overlay(alignment: .bottomTrailing) {
             if !atBottom {
                 Button {
@@ -92,7 +104,7 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 10) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
-                if status.isActive && model.interactions(for: key).isEmpty {
+                if style == .dev && status.isActive && model.interactions(for: key).isEmpty {
                     LiveActivityBar(store: store, status: status, openTerminal: { showTerminal = true }) {
                         Task { await model.interrupt(key) }
                     }
@@ -110,6 +122,9 @@ struct ChatView: View {
         .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if style == .assistant {
+                ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { showTerminal = true } label: { Label("终端", systemImage: "terminal") }
@@ -188,7 +203,8 @@ struct ChatView: View {
         guard let s = session else { return "" }
         if style == .assistant {
             if !model.interactions(for: key).isEmpty { return "等你确认" }
-            return s.status.isActive ? "正在处理…" : (Fmt.model(s.model) ?? "Jarvis")
+            let launcher = model.assistantLaunchers[key] ?? s.launcher
+            return s.status.isActive ? "正在处理…" : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
         }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
@@ -204,6 +220,7 @@ struct ChatView: View {
         case .tools(let steps):
             if style == .assistant { AssistantToolsRow(steps: steps) } else { ToolGroupView(steps: steps, isLatest: isLatest) }
         case .notice(let i): NoticeRow(item: i)
+        case .recap(let i): RecapCard(item: i)
         case .image(let i):
             if let p = i.image {
                 HStack { if i.role == "user" { Spacer(minLength: 60) }; Base64Image(payload: p).frame(maxWidth: 240) }

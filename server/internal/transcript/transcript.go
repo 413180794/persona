@@ -153,7 +153,11 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				if e.IsMeta {
 					continue
 				}
-				out = append(out, userText(func(_ int, role, kind string) proto.Item { return mk(i, role, kind) }, b.Text)...)
+				items := userText(func(_ int, role, kind string) proto.Item { return mk(i, role, kind) }, b.Text)
+				if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
+					meta.FirstUser = items[0].Text
+				}
+				out = append(out, items...)
 			case "image":
 				if e.IsMeta {
 					continue

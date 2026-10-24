@@ -211,7 +211,7 @@ nonisolated struct ImagePayload: Codable, Hashable, Sendable {
 }
 
 nonisolated enum ItemKind: String, Codable, Sendable {
-    case text, thinking, toolUse = "tool_use", toolResult = "tool_result", notice, image, unknown
+    case text, thinking, toolUse = "tool_use", toolResult = "tool_result", notice, image, recap, unknown
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)

@@ -212,3 +212,46 @@ struct ShimmerDot: View {
         .onAppear { withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { on = true } }
     }
 }
+
+/// Claude Code's "while you were away" recap: a quiet card, not a centered notice pill.
+struct RecapCard: View {
+    var item: Item
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward.circle.fill")
+                Text("离开期间回顾")
+                Spacer()
+                if let ts = item.ts, ts.isMeaningful { Text(Fmt.relative(ts)).foregroundStyle(.secondary) }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Theme.accent)
+            Text(LocalizedStringKey(item.text ?? ""))
+                .font(.callout)
+                .lineSpacing(3)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(14)
+        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 16, style: .continuous))
+        .overlay(alignment: .leading) {
+            UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
+                .fill(Theme.accent.opacity(0.6))
+                .frame(width: 3)
+        }
+        .contextMenu { CopyButton(text: item.text ?? "") }
+    }
+}
+
+/// The assistant's answer while it is still being generated, with a blinking caret.
+struct StreamingText: View {
+    var text: String
+
+    var body: some View {
+        Markdown(text + " ▍")
+            .markdownTheme(.jarvis)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

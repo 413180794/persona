@@ -33,10 +33,11 @@ struct FileRef: Identifiable, Hashable {
     var id: String { machineID + ":" + path }
 }
 
-enum FilePaths {
-    // Absolute (/x/y, ~/x) or relative with a directory and an extension (ios/Jarvis/Foo.swift).
+nonisolated enum FilePaths {
+    // Home-relative (~/x), absolute (/x/y) or relative with a directory and an extension (ios/Jarvis/Foo.swift).
+    // The "~" must stay part of the match: dropping it turned ~/.config/… into /.config/….
     private static let pattern = try! NSRegularExpression(
-        pattern: #"(?<![\w/:.\-])((?:~|/)[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z0-9]{1,8})(?![\w/])"#)
+        pattern: #"(?<![\w/:.\-~])(~(?:/[\w.@+\-]+)+/?|/[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z0-9]{1,8})(?![\w/])"#)
 
     /// File-looking paths in text, in order, without duplicates or URL fragments.
     static func find(in text: String, limit: Int = 6) -> [String] {
@@ -225,7 +226,8 @@ struct CodeText: View {
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     HStack(alignment: .top, spacing: 10) {
                         Text("\(i + 1)").foregroundStyle(.tertiary).frame(width: width, alignment: .trailing)
-                        Text(line.isEmpty ? " " : line).textSelection(.enabled)
+                        // No soft wrapping: long lines scroll sideways like in an editor.
+                        Text(line.isEmpty ? " " : line).fixedSize(horizontal: true, vertical: false).textSelection(.enabled)
                     }
                     .font(.system(size: 12, design: .monospaced))
                     .padding(.vertical, 0.5)

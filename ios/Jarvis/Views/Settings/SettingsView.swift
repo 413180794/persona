@@ -32,6 +32,9 @@ struct SettingsView: View {
                             Label("助手", systemImage: "sparkles")
                         }
                     }
+                    NavigationLink { ClaudeSettingsView() } label: {
+                        Label("Claude Code 设置", systemImage: "slider.horizontal.3")
+                    }
                     NavigationLink { MachinesView() } label: {
                         LabeledContent {
                             Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
@@ -331,6 +334,107 @@ struct QRScanner: UIViewControllerRepresentable {
                     return
                 }
             }
+        }
+    }
+}
+
+/// Claude Code's /config options (a whitelist of ~/.claude/settings.json keys) on each machine.
+struct ClaudeSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage("claudeSettings.machine") private var machineID = "example-machine"
+    @AppStorage("claudeSettings.applyAll") private var applyAll = true
+    @State private var settings: [APIClient.ClaudeSetting] = []
+    @State private var loading = false
+    @State private var error: String?
+    @State private var strings: [String: String] = [:]
+
+    var body: some View {
+        List {
+            Section {
+                Picker("机器", selection: $machineID) {
+                    ForEach(model.machines.filter(\.online)) { m in Text(m.name).tag(m.id) }
+                }
+                Toggle("同时改所有在线机器", isOn: $applyAll)
+            } footer: {
+                Text("改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。")
+            }
+            if let error {
+                Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) }
+            }
+            Section {
+                ForEach(settings) { s in row(s) }
+            }
+        }
+        .navigationTitle("Claude Code 设置")
+        .overlay { if loading && settings.isEmpty { ProgressView() } }
+        .task(id: machineID) { await load() }
+        .refreshable { await load() }
+    }
+
+    @ViewBuilder private func row(_ s: APIClient.ClaudeSetting) -> some View {
+        let value = s.value ?? s.default
+        VStack(alignment: .leading, spacing: 4) {
+            switch s.type {
+            case "bool":
+                Toggle(isOn: Binding(get: { value?.bool ?? false }, set: { v in Task { await set(s.key, .bool(v)) } })) {
+                    title(s)
+                }
+            case "enum":
+                Picker(selection: Binding(get: { value?.string ?? "" }, set: { v in Task { await set(s.key, .string(v)) } })) {
+                    ForEach(s.options ?? [], id: \.self) { Text($0).tag($0) }
+                } label: { title(s) }
+            default:
+                title(s)
+                TextField(s.default?.string.flatMap { $0.isEmpty ? nil : $0 } ?? "未设置",
+                          text: Binding(get: { strings[s.key] ?? value?.string ?? "" }, set: { strings[s.key] = $0 }))
+                    .onSubmit { Task { await set(s.key, .string(strings[s.key] ?? "")) } }
+                    .submitLabel(.done)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func title(_ s: APIClient.ClaudeSetting) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(s.title)
+                if s.value == nil { Text("默认").font(.caption2).foregroundStyle(.tertiary) }
+            }
+            Text(s.detail).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func load() async {
+        guard let api = model.api else { return }
+        if model.machine(machineID)?.online != true, let first = model.machines.first(where: \.online) { machineID = first.id }
+        loading = true
+        defer { loading = false }
+        do {
+            settings = try await api.claudeSettings(machine: machineID)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func set(_ key: String, _ value: JSONValue) async {
+        guard let api = model.api else { return }
+        let targets = applyAll ? model.machines.filter(\.online).map(\.id) : [machineID]
+        var failed: [String] = []
+        for id in targets {
+            do {
+                let list = try await api.setClaudeSetting(machine: id, key: key, value: value)
+                if id == machineID { settings = list }
+            } catch {
+                failed.append("\(model.machine(id)?.name ?? id)：\(error.localizedDescription)")
+            }
+        }
+        if failed.isEmpty {
+            Haptics.success()
+            model.toast = Toast(targets.count > 1 ? "已应用到 \(targets.count) 台机器" : "已保存", style: .success)
+        } else {
+            Haptics.error()
+            error = failed.joined(separator: "\n")
         }
     }
 }

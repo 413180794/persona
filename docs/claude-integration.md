@@ -65,3 +65,15 @@ node 的 `session.start`：
 - spinner 行（`✻ Cogitating… (12s · ↓ 3.2k tokens · esc to interrupt)`）→ 实时状态条；
 - 输入框上方的若干行 → 正在输出的内容预览；
 - 编号选项（`❯ 1. Yes` / `2. No`）→ 对话框按钮。
+
+## 无头助手（「对话」tab）
+
+助手不进 herdr：node 直接起 `zsh -ic '<启动器> "$@"' -p --input-format stream-json --output-format stream-json --verbose
+--include-partial-messages --session-id|--resume <id> --settings … --mcp-config …`（`node/assistant.go`，2026-10-25 实测）：
+
+- 一个进程能通过 stdin 连续多轮（每行一个 `{"type":"user","message":{…}}`，图片直接放 base64 image block）。
+- `stream_event` 里的 `content_block_delta/text_delta` 是逐字输出 → WS `delta`；`result` 表示这轮结束。结构化消息仍从 transcript 读。
+- hooks 照常触发（AskUserQuestion 照样到手机）。
+- 换启动器 = 杀掉进程，用新启动器 `--resume` 接上；空闲 20 分钟的进程会被回收，下次发消息自动 `--resume`。
+- 中断：-p 模式没有 stdin 中断，直接结束进程，下一条消息续上。
+- 无头会话的 transcript 里第一条 user 内容是 block 数组；没有 ai-title 时用第一句话当标题。

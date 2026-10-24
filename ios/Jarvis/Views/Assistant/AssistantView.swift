@@ -8,6 +8,7 @@ struct AssistantView: View {
     @State private var pending: PendingStart?
     @State private var showHistory = false
     @State private var startError: String?
+    @State private var starterLauncher: String?
 
     private var current: SessionKey? { model.assistantCurrent }
 
@@ -18,7 +19,7 @@ struct AssistantView: View {
                     ChatView(key: key, style: .assistant)
                         .id(key)
                 } else {
-                    AssistantHome(pending: pending, error: startError) { text, images in
+                    AssistantHome(pending: pending, error: startError, launcher: $starterLauncher) { text, images in
                         Task { await start(text, images) }
                     }
                 }
@@ -53,7 +54,7 @@ struct AssistantView: View {
         startError = nil
         withAnimation(.snappy) { pending = PendingStart(text: text, imageCount: images.count) }
         do {
-            let s = try await api.startConversation(prompt: text, images: images)
+            let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher)
             Haptics.success()
             withAnimation(.snappy) {
                 model.assistantCurrent = s.key
@@ -80,6 +81,7 @@ struct AssistantHome: View {
     @Environment(AppModel.self) private var model
     var pending: PendingStart?
     var error: String?
+    @Binding var launcher: String?
     var send: (String, [ImagePayload]) -> Void
 
     private let suggestions: [(symbol: String, title: String, prompt: String)] = [
@@ -143,9 +145,12 @@ struct AssistantHome: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            StarterComposer(disabled: pending != nil, send: send)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+            VStack(alignment: .leading, spacing: 8) {
+                StarterModelChip(launcher: $launcher).padding(.leading, 4)
+                StarterComposer(disabled: pending != nil, send: send)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
         .navigationTitle("Jarvis")
         .navigationBarTitleDisplayMode(.inline)
@@ -373,5 +378,63 @@ struct AssistantToolsRow: View {
             if !seen.contains(label) { seen.append(label) }
         }
         return seen.prefix(4).joined(separator: "、")
+    }
+}
+
+/// Switch the model (launcher) of an assistant conversation: the next message restarts claude with --resume.
+struct AssistantModelMenu: View {
+    @Environment(AppModel.self) private var model
+    let key: SessionKey
+    @State private var launchers: [Launcher] = []
+
+    var body: some View {
+        let current = model.assistantLaunchers[key] ?? model.session(key)?.launcher ?? model.assistantConfig?.launcher ?? "ccc"
+        Menu {
+            Section("下一条消息起使用") {
+                ForEach(launchers) { l in
+                    Button {
+                        model.assistantLaunchers[key] = l.name
+                        Haptics.tap()
+                        model.toast = Toast("已切换到 \(l.name)，下一条消息生效", style: .success)
+                    } label: {
+                        if l.name == current { Label(title(l), systemImage: "checkmark") } else { Text(title(l)) }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "cpu")
+                Text(current).font(.caption.monospaced()).lineLimit(1)
+            }
+        }
+        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? key.machineID)) ?? [] }
+    }
+
+    private func title(_ l: Launcher) -> String {
+        [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// Model chip on the assistant home page: which launcher the next new conversation starts with.
+struct StarterModelChip: View {
+    @Environment(AppModel.self) private var model
+    @Binding var launcher: String?
+    @State private var launchers: [Launcher] = []
+
+    var body: some View {
+        let current = launcher ?? model.assistantConfig?.launcher ?? "ccc"
+        Menu {
+            ForEach(launchers) { l in
+                Button {
+                    launcher = l.name
+                    Haptics.tap()
+                } label: {
+                    if l.name == current { Label(l.name, systemImage: "checkmark") } else { Text("\(l.name)  \(Fmt.model(l.model) ?? "")") }
+                }
+            }
+        } label: {
+            Chip(text: current, symbol: "cpu", tint: Theme.accent)
+        }
+        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? "example-machine")) ?? [] }
     }
 }

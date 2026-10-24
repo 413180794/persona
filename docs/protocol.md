@@ -74,6 +74,8 @@
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","conversations":[Session]}` |
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?}`，存 Postgres settings |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
+| POST | `/api/v1/ai/mail-account` | `{"text"}` → `{"account":{…AddAccount},"missing":["password"],"note"}`（cc_ds 网关，hub.json `ai` 可改） |
+| GET / PUT | `/api/v1/machines/{mid}/claude-settings` | 白名单的 Claude Code 设置；PUT `{"key","value"}`（value 为 null 恢复默认） |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
@@ -94,6 +96,7 @@
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推） |
 | `session` | `session`（单个状态变化） |
 | `items` | `machine_id`, `session_id`, `items`（只推给订阅了该会话的客户端） |
+| `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束） |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（订阅中且 agent working/blocked 时约 400ms 一次，内容不变不推） |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id` |

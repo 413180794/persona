@@ -50,3 +50,11 @@ struct ChatStoreTests {
         #expect(JSON.parseDate("0001-01-01T00:00:00Z")?.isMeaningful == false)
     }
 }
+
+struct FilePathTests {
+    @Test func keepsTildeAndFindsPaths() {
+        let text = "cat > ~/.config/systemd/user/jarvisd.service 并读 /tmp/jarvis-tasks/05-image-viewer.md 和 ios/Jarvis/Foo.swift，网址 https://example.com/a/b 不算"
+        let paths = FilePaths.find(in: text)
+        #expect(paths == ["~/.config/systemd/user/jarvisd.service", "/tmp/jarvis-tasks/05-image-viewer.md", "ios/Jarvis/Foo.swift"])
+    }
+}

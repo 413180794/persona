@@ -281,36 +281,42 @@ struct StateCounts: View {
     }
 }
 
-/// One agent inside a space: tab label, title, state and the latest line.
+/// One agent inside a space: one state dot, the tab name and state on the first line, then a two-line title and
+/// the latest line.
 struct SlotRow: View {
     var session: Session
 
     var body: some View {
-        let tint = session.state == .idle || session.state == .unknown ? Color.secondary : session.state.color
+        let quiet = session.state == .idle || session.state == .unknown
+        let tint = quiet ? Color.secondary : session.state.color
         HStack(alignment: .top, spacing: 10) {
-            StatusDot(state: session.state, size: 9).padding(.top, 6)
+            StatusDot(state: session.state, size: 9).padding(.top, 5)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(spacing: 6) {
                     if let slot = session.slotLabel {
                         Text(slot)
                             .font(.caption.weight(.semibold).monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                             .foregroundStyle(tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1.5)
                             .background(tint.opacity(0.12), in: .capsule)
+                            .layoutPriority(1)
                     }
-                    Text(session.displayTitle)
-                        .font(.body.weight(session.state == .unread ? .bold : .semibold))
-                        .lineLimit(1)
+                    if !quiet {
+                        Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1)
+                    }
                     Spacer(minLength: 4)
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary)
+                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
+                    .fixedSize()
                 }
-                HStack(spacing: 6) {
-                    if session.state != .idle { StatusLabel(state: session.state) }
-                    if let m = Fmt.model(session.model) { Text(m).font(.caption).foregroundStyle(.tertiary).lineLimit(1) }
-                }
+                Text(session.displayTitle)
+                    .font(.body.weight(session.state == .unread ? .bold : .semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let last = session.lastText, !last.isEmpty {
                     Text(Fmt.plain(last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }

@@ -7,6 +7,7 @@ nonisolated enum ServerEvent: Sendable {
     case sessions(machineID: String, [Session])
     case items(SessionKey, [Item], backlog: Bool, hasMore: Bool)
     case screen(SessionKey, text: String, status: SessionStatus)
+    case delta(SessionKey, text: String)
     case interaction(Interaction)
     case interactionResolved(String)
     case toolCall(callID: String, name: String, args: JSONValue)
@@ -56,6 +57,9 @@ nonisolated enum ServerEvent: Sendable {
         case "screen":
             guard let key else { return nil }
             return .screen(key, text: e.text ?? "", status: e.status ?? .unknown)
+        case "delta":
+            guard let key else { return nil }
+            return .delta(key, text: e.text ?? "")
         case "interaction": return e.interaction.map { .interaction($0) }
         case "interaction_resolved": return e.id.map { .interactionResolved($0) }
         case "tool_call":

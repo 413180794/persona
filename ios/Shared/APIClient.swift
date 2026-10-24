@@ -126,9 +126,10 @@ nonisolated struct APIClient: Sendable {
         try await get(sp(k) + "/items", query: ["before_seq": beforeSeq.map(String.init) ?? "", "limit": String(limit)])
     }
 
-    struct SendBody: Encodable { var text: String; var images: [ImagePayload]? }
-    func send(_ k: SessionKey, text: String, images: [ImagePayload] = []) async throws {
-        try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images), timeout: 100)
+    struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }
+    /// launcher switches the model of a headless (assistant) conversation from this message on.
+    func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil) async throws {
+        try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher), timeout: 100)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
 
@@ -158,10 +159,30 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
             body: AssistantConfigBody(machineID: machine, launcher: launcher)))
     }
-    struct NewConversation: Encodable { var prompt: String; var images: [ImagePayload]? }
-    func startConversation(prompt: String, images: [ImagePayload] = []) async throws -> Session {
-        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images),
+    struct NewConversation: Encodable { var prompt: String; var images: [ImagePayload]?; var launcher: String? }
+    func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil) async throws -> Session {
+        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images, launcher: launcher),
                        timeout: 110, as: SessionResponse.self).session
+    }
+
+    struct ClaudeSetting: Codable, Identifiable, Sendable {
+        var key: String
+        var title: String
+        var detail: String
+        var type: String
+        var options: [String]?
+        var `default`: JSONValue?
+        var value: JSONValue?
+        var id: String { key }
+    }
+    struct ClaudeSettingsResponse: Decodable { var settings: [ClaudeSetting] }
+    func claudeSettings(machine: String) async throws -> [ClaudeSetting] {
+        try await get("/api/v1/machines/\(machine)/claude-settings", as: ClaudeSettingsResponse.self).settings
+    }
+    struct SetSetting: Encodable { var key: String; var value: JSONValue }
+    func setClaudeSetting(machine: String, key: String, value: JSONValue) async throws -> [ClaudeSetting] {
+        try JSON.decoder.decode(ClaudeSettingsResponse.self, from: try await request("PUT", "/api/v1/machines/\(machine)/claude-settings",
+            body: SetSetting(key: key, value: value))).settings
     }
 
     func interactions() async throws -> [Interaction] {

@@ -21,10 +21,11 @@ nonisolated enum ChatRow: Identifiable, Hashable, Sendable {
     case tools([ToolStep])
     case notice(Item)
     case image(Item)
+    case recap(Item)
 
     var id: String {
         switch self {
-        case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i): i.id
+        case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i), .recap(let i): i.id
         case .tools(let steps): "tools-" + (steps.first?.id ?? "")
         }
     }
@@ -52,6 +53,8 @@ final class ChatStore {
     private(set) var hasMore = false
     private(set) var loadedOnce = false
     var screen: String = ""
+    /// Text of the assistant message being generated (headless sessions stream it token by token).
+    var liveText: String = ""
     var screenStatus: SessionStatus = .unknown
     var screenUpdatedAt: Date?
     var error: String?
@@ -64,6 +67,7 @@ final class ChatStore {
     var lastSeq: Int { items.last?.seq ?? 0 }
 
     func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
+        if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = false
         for it in new where !ids.contains(it.id) {
             ids.insert(it.id)
@@ -125,6 +129,7 @@ final class ChatStore {
                 switch it.kind {
                 case .text: rows.append(it.role == "user" ? .user(it) : .assistant(it))
                 case .notice: rows.append(.notice(it))
+                case .recap: rows.append(.recap(it))
                 case .image: rows.append(.image(it))
                 default: break
                 }

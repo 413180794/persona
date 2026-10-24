@@ -37,11 +37,11 @@ extension APIClient {
         }
     }
     func sendMail(_ m: SendMail) async throws { try await post("/api/v1/mail/send", body: m, timeout: 60) }
-    struct AddAccount: Encodable {
+    struct AddAccount: Codable {
         var name: String
         var email: String
         var provider: String?
-        var auth: String
+        var auth: String?
         var username: String?
         var password: String?
         var imapHost: String?
@@ -59,6 +59,17 @@ extension APIClient {
         try await post("/api/v1/mail/accounts", body: a, timeout: 60, as: AccountResponse.self).account
     }
     func deleteMailAccount(_ id: String) async throws { try await delete("/api/v1/mail/accounts/\(id)") }
+
+    struct MailGuess: Decodable {
+        var account: AddAccount
+        var missing: [String]
+        var note: String?
+    }
+    struct GuessBody: Encodable { var text: String }
+    /// AI reads pasted setup text (an IT email, a provider's help page…) into account settings.
+    func guessMailAccount(_ text: String) async throws -> MailGuess {
+        try await post("/api/v1/ai/mail-account", body: GuessBody(text: text), timeout: 60, as: MailGuess.self)
+    }
 }
 
 struct MailView: View {
@@ -501,10 +512,37 @@ struct AddMailAccountView: View {
     @State private var smtpPort = "465"
     @State private var saving = false
     @State private var error: String?
+    @State private var pasted = ""
+    @State private var guessing = false
+    @State private var aiNote: String?
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TextField("把邮箱信息整段粘贴进来：账号、密码、服务器…", text: $pasted, axis: .vertical)
+                        .lineLimit(3...8)
+                    HStack {
+                        Button {
+                            if let s = UIPasteboard.general.string { pasted = s }
+                            Task { await guess() }
+                        } label: { Label("从剪贴板识别", systemImage: "doc.on.clipboard") }
+                            .buttonStyle(.glass)
+                        Spacer()
+                        Button { Task { await guess() } } label: {
+                            HStack(spacing: 6) {
+                                if guessing { ProgressView().controlSize(.small) }
+                                Text("识别并添加")
+                            }
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(guessing || pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                } header: {
+                    Label("AI 一键添加", systemImage: "sparkles")
+                } footer: {
+                    if let aiNote { Text(aiNote) } else { Text("信息齐全会直接连接并添加；缺什么会填进下面的表单让你补。") }
+                }
                 Picker("类型", selection: $kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
@@ -537,6 +575,40 @@ struct AddMailAccountView: View {
                         .disabled(saving || email.isEmpty || password.isEmpty)
                 }
             }
+        }
+    }
+
+    /// Recognize pasted text; add right away when nothing is missing, otherwise prefill the form.
+    private func guess() async {
+        guard let api = model.api, !pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guessing = true
+        defer { guessing = false }
+        error = nil
+        do {
+            let g = try await api.guessMailAccount(pasted)
+            let a = g.account
+            email = a.email
+            password = a.password ?? ""
+            switch a.provider {
+            case "gmail": kind = .gmail
+            case "feishu": kind = .feishu
+            default:
+                kind = .imap
+                imapHost = a.imapHost ?? ""
+                imapPort = a.imapPort.map(String.init) ?? "993"
+                smtpHost = a.smtpHost ?? ""
+                smtpPort = a.smtpPort.map(String.init) ?? "465"
+            }
+            aiNote = g.note
+            if g.missing.isEmpty {
+                await save()
+            } else {
+                Haptics.attention()
+                aiNote = (g.note.map { $0 + " " } ?? "") + "还缺：" + g.missing.map { ["email": "邮箱", "password": "密码"][$0] ?? $0 }.joined(separator: "、")
+            }
+        } catch {
+            self.error = "识别失败：\(error.localizedDescription)"
+            Haptics.error()
         }
     }
 

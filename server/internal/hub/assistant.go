@@ -158,8 +158,9 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Prompt string        `json:"prompt"`
-			Images []proto.Image `json:"images"`
+			Prompt   string        `json:"prompt"`
+			Images   []proto.Image `json:"images"`
+			Launcher string        `json:"launcher"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -167,7 +168,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
 		defer cancel()
-		s, err := h.startAssistant(ctx, in.Prompt, in.Images)
+		s, err := h.startAssistant(ctx, in.Prompt, in.Images, in.Launcher)
 		if err != nil {
 			callErr(w, err)
 			return
@@ -176,8 +177,11 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	})
 }
 
-func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image) (*proto.Session, error) {
+func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher string) (*proto.Session, error) {
 	cfg := h.assistantConfig(ctx)
+	if launcher != "" {
+		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
+	}
 	m := h.byID[cfg.MachineID]
 	if m == nil {
 		return nil, errors.New("assistant machine is not configured")
