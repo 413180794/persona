@@ -41,5 +41,5 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
-`-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、`-tab machines|mail|settings`、
+`-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`。`scripts/sim.sh` 封装了编译、安装、配对、启动。
