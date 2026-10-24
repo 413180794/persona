@@ -467,3 +467,25 @@ func TestQueueOperations(t *testing.T) {
 		t.Fatalf("queue after popAll = %v", m.Queue)
 	}
 }
+
+func TestDeveloperInfoAndQueueTags(t *testing.T) {
+	var m Meta
+	lines := []string{
+		`{"type":"user","uuid":"u1","timestamp":"2026-10-24T10:00:00Z","gitBranch":"main","version":"2.1.310","message":{"role":"user","content":"hi"}}`,
+		`{"type":"permission-mode","permissionMode":"bypassPermissions"}`,
+		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-24T10:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"thinking","thinking":"x"}],"usage":{"input_tokens":2,"cache_read_input_tokens":1000,"cache_creation_input_tokens":10,"output_tokens":50}}}`,
+		`{"type":"assistant","uuid":"a2","timestamp":"2026-10-24T10:00:06Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":2,"cache_read_input_tokens":1000,"cache_creation_input_tokens":10,"output_tokens":50}}}`,
+		`{"type":"system","subtype":"compact_boundary","uuid":"c"}`,
+		`{"type":"queue-operation","operation":"enqueue","content":"\n<pasted_content id=\"ab\">\n语音输入\n</pasted_content id=\"ab\">"}`,
+	}
+	for i, l := range lines {
+		ParseLine(i+1, []byte(l), &m)
+	}
+	if m.GitBranch != "main" || m.Version != "2.1.310" || m.PermissionMode != "bypassPermissions" ||
+		m.ContextTokens != 1012 || m.OutputTokens != 50 || m.Compactions != 1 || m.Turns != 1 || m.StartedAt.IsZero() {
+		t.Fatalf("meta = %+v", m)
+	}
+	if len(m.Queue) != 1 || m.Queue[0] != "语音输入" {
+		t.Fatalf("queue = %q", m.Queue)
+	}
+}

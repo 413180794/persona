@@ -17,7 +17,16 @@ final class AppModel {
     var toast: Toast?
     var openChat: SessionKey?
     var pendingConfirmation: PhoneConfirmation?
-    var selectedTab: AppTab = .assistant
+    /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
+    var selectedTab: AppTab = .assistant {
+        didSet { UserDefaults.standard.set(selectedTab.rawValue, forKey: "app.tab") }
+    }
+
+    /// The dev chat that was open; saved when a chat opens, cleared when going back to the list.
+    static func rememberChat(_ key: SessionKey?) {
+        if let key { UserDefaults.standard.set("\(key.machineID)/\(key.sessionID)", forKey: "dev.openChat") }
+        else { UserDefaults.standard.removeObject(forKey: "dev.openChat") }
+    }
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
     private(set) var assistantConfig: APIClient.AssistantState?
@@ -39,6 +48,12 @@ final class AppModel {
 
     init() {
         config = Keychain.serverConfig
+        if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
+            selectedTab = tab
+        }
+        if selectedTab == .chats, let v = UserDefaults.standard.string(forKey: "dev.openChat"), let slash = v.firstIndex(of: "/") {
+            openChat = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
+        }
         if let v = UserDefaults.standard.string(forKey: "assistant.current"), let slash = v.firstIndex(of: "/") {
             assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
         }
@@ -397,7 +412,7 @@ final class AppModel {
     }
 }
 
-enum AppTab: Hashable {
+enum AppTab: String, Hashable {
     case assistant, chats, mail, settings
 }
 

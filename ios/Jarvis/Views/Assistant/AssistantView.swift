@@ -260,8 +260,12 @@ struct StarterComposer: View {
         }
         .onChange(of: picks) { _, items in
             Task {
+                guard !items.isEmpty else { return }
                 for item in items {
-                    guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else { continue }
+                    guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
+                        AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+                        continue
+                    }
                     let scaled = img.scaledDown(maxSide: 1600)
                     if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
                         images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))

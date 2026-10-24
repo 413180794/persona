@@ -179,6 +179,9 @@ struct ChatsView: View {
                     path.append(session.key)
                 }
             }
+            .onChange(of: path) { _, p in
+                if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
+            }
             .onChange(of: model.openChat, initial: true) { _, key in
                 guard let key else { return }
                 path = NavigationPath([key])

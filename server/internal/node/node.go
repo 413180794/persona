@@ -268,6 +268,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return map[string]any{"cwd": dir}, nil
+	case "session.info":
+		f, err := n.file(p.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		n.refresh(p.SessionID, f)
+		m := f.Meta()
+		st, _ := n.state.get(p.SessionID)
+		return map[string]any{
+			"session_id": p.SessionID, "transcript_path": f.Path, "cwd": m.Cwd, "model": m.Model, "launcher": st.Launcher,
+			"git_branch": m.GitBranch, "version": m.Version, "permission_mode": m.PermissionMode,
+			"context_tokens": m.ContextTokens, "output_tokens": m.OutputTokens, "compactions": m.Compactions,
+			"turns": m.Turns, "started_at": m.StartedAt, "last_activity": m.LastActivity,
+		}, nil
 	case "session.queue.edit":
 		var a struct {
 			Keep []int `json:"keep"`

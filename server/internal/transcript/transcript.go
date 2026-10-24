@@ -33,11 +33,21 @@ type entry struct {
 	Message          *struct {
 		Role    string          `json:"role"`
 		Model   string          `json:"model"`
+		ID      string          `json:"id"`
 		Content json.RawMessage `json:"content"`
+		Usage   *struct {
+			InputTokens              int `json:"input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+		} `json:"usage"`
 	} `json:"message"`
-	AITitle    string `json:"aiTitle"`
-	Operation  string `json:"operation"`
-	Attachment *struct {
+	AITitle        string `json:"aiTitle"`
+	GitBranch      string `json:"gitBranch"`
+	Version        string `json:"version"`
+	PermissionMode string `json:"permissionMode"`
+	Operation      string `json:"operation"`
+	Attachment     *struct {
 		Type        string          `json:"type"`
 		Prompt      json.RawMessage `json:"prompt"`
 		CommandMode string          `json:"commandMode"`
@@ -68,6 +78,16 @@ type block struct {
 
 // Meta is session-level information collected while parsing.
 type Meta struct {
+	// Developer info for the chat header (all from fields Claude Code writes on each line).
+	GitBranch      string
+	Version        string
+	PermissionMode string
+	ContextTokens  int // input + cache read + cache creation of the latest reply: what the model last saw
+	OutputTokens   int // total generated, counted once per message
+	Compactions    int
+	Turns          int // user prompts
+	StartedAt      time.Time
+	lastMessageID  string
 	// Queue holds input typed while Claude works and not yet taken (queue-operation lines:
 	// enqueue / dequeue / remove / popAll — popAll is "up arrow pulls them back into the input").
 	Queue []string
@@ -91,6 +111,9 @@ var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|
 // ParseLine converts one JSONL line (1-based seq) into items, updating meta.
 func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	items := parseLine(seq, line, meta)
+	if len(items) > 0 && items[0].Role == "user" && items[0].Kind == proto.KindText {
+		meta.Turns++
+	}
 	for _, it := range items {
 		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
 			meta.LastActivity = it.TS
@@ -109,6 +132,28 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	if !e.Timestamp.IsZero() {
 		meta.Updated = e.Timestamp
+	}
+	if e.GitBranch != "" {
+		meta.GitBranch = e.GitBranch
+	}
+	if e.Version != "" {
+		meta.Version = e.Version
+	}
+	if meta.StartedAt.IsZero() && !e.Timestamp.IsZero() {
+		meta.StartedAt = e.Timestamp
+	}
+	switch {
+	case e.Type == "permission-mode" && e.PermissionMode != "":
+		meta.PermissionMode = e.PermissionMode
+	case e.Type == "system" && e.Subtype == "compact_boundary":
+		meta.Compactions++
+	case e.Type == "assistant" && e.Message != nil && e.Message.Usage != nil && !e.IsSidechain:
+		u := e.Message.Usage
+		meta.ContextTokens = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+		if e.Message.ID != meta.lastMessageID { // every content block repeats the message's usage
+			meta.OutputTokens += u.OutputTokens
+			meta.lastMessageID = e.Message.ID
+		}
 	}
 	if e.Type == "queue-operation" {
 		meta.applyQueue(e.Operation, rawString(e.Content))
@@ -285,6 +330,8 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 }
 
 func (m *Meta) applyQueue(op, content string) {
+	// Queued text keeps the <pasted_content> wrapper of long / voice input; show what the user wrote.
+	content = strings.TrimSpace(pastedRe.ReplaceAllString(content, ""))
 	removeOne := func() bool {
 		for i, q := range m.Queue {
 			if q == content {

@@ -18,6 +18,7 @@ struct ChatView: View {
     @State private var showTerminal = false
     @State private var file: FileRef?
     @State private var debugImages: [ImagePayload]?
+    @State private var showInfo = false
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -126,9 +127,38 @@ struct ChatView: View {
         }
         .background(Color(.systemBackground))
         .navigationTitle(title)
-        .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) {
+            if showInfo {
+                DevInfoCard(key: key, session: session)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .toolbar {
+            // A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
+            ToolbarItem(placement: .principal) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(.snappy) { showInfo.toggle() }
+                } label: {
+                    VStack(spacing: 1) {
+                        Text(title).font(.headline).lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text(subtitle).lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .rotationEffect(.degrees(showInfo ? 180 : 0))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: 260)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
+            }
             if style == .assistant {
                 ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
             }
@@ -179,8 +209,10 @@ struct ChatView: View {
             model.subscribe(key)
             model.visibleSession = key
             model.markSeen(key)
+            if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             #endif
         }
         .onDisappear {
@@ -201,6 +233,7 @@ struct ChatView: View {
         model.subscribe(next)
         model.visibleSession = next
         model.markSeen(next)
+        if style == .dev { AppModel.rememberChat(next) }
     }
 
     private var title: String {
@@ -266,6 +299,8 @@ struct Composer: View {
     }
     private var textBinding: Binding<String> { Binding(get: { text }, set: { text = $0 }) }
     @State private var picks: [PhotosPickerItem] = []
+    @State private var showPhotos = false
+    @State private var showCamera = false
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var sending = false
     @FocusState private var focused: Bool
@@ -294,8 +329,10 @@ struct Composer: View {
             }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
-                    PhotosPicker(selection: $picks, maxSelectionCount: 4, matching: .images) {
-                        Label("照片", systemImage: "photo")
+                    // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
+                    Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
                     }
                     Section("快捷指令") {
                         ForEach(SlashCommand.all) { cmd in
@@ -343,7 +380,12 @@ struct Composer: View {
                 }
             }
         }
+        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { img in add(img) }.ignoresSafeArea()
+        }
         .onChange(of: picks) { _, items in
+            guard !items.isEmpty else { return }
             Task { await load(items) }
         }
     }
@@ -362,14 +404,31 @@ struct Composer: View {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        var failed = 0
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else { continue }
-            let scaled = img.scaledDown(maxSide: 1600)
-            if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
-                images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
+            // iCloud-only photos are downloaded here; HEIC and others are re-encoded to JPEG below.
+            guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
+                failed += 1
+                continue
             }
+            add(img)
         }
         picks = []
+        if failed > 0 {
+            model.toast = Toast("有 \(failed) 张照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+        }
+    }
+
+    private func add(_ img: UIImage) {
+        guard images.count < 4 else {
+            model.toast = Toast("一次最多 4 张", style: .error)
+            return
+        }
+        let scaled = img.scaledDown(maxSide: 1600)
+        if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
+            images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
+            Haptics.tap()
+        }
     }
 }
 
@@ -503,6 +562,111 @@ struct QueueStrip: View {
         Task {
             await model.editQueued(key, index: i, delete: delete)
             busy = false
+        }
+    }
+}
+
+/// System camera for "拍照" in the composer.
+struct CameraPicker: UIViewControllerRepresentable {
+    var onImage: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let vc = UIImagePickerController()
+        vc.sourceType = .camera
+        vc.delegate = context.coordinator
+        return vc
+    }
+
+    func updateUIViewController(_ vc: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraPicker
+        init(_ parent: CameraPicker) { self.parent = parent }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let img = info[.originalImage] as? UIImage { parent.onImage(img) }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
+    }
+}
+
+/// Developer facts about a session, shown under the title: model, context in use, git branch, Claude Code version…
+struct DevInfoCard: View {
+    @Environment(AppModel.self) private var model
+    let key: SessionKey
+    var session: Session?
+    @State private var info: APIClient.SessionInfo?
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let info {
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 8) {
+                    row("cpu", "模型", [Fmt.model(info.model) ?? info.model, info.launcher].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    row("gauge.with.dots.needle.33percent", "上下文", Self.tokens(info.contextTokens) + " tokens" + (info.compactions > 0 ? " · 压缩过 \(info.compactions) 次" : ""))
+                    row("arrow.triangle.branch", "分支", info.gitBranch ?? "—")
+                    row("folder", "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home))
+                    row("macbook", "位置", [model.machine(key.machineID)?.name, session?.spaceName, session?.slotLabel].compactMap { $0 }.joined(separator: " › "))
+                    row("text.bubble", "对话", "\(info.turns) 轮 · 共生成 \(Self.tokens(info.outputTokens)) tokens")
+                    row("lock.open", "权限", info.permissionMode ?? "—")
+                    row("shippingbox", "Claude Code", info.version ?? "—")
+                    if let started = info.startedAt, started.isMeaningful {
+                        row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        UIPasteboard.general.string = info.sessionID
+                        Haptics.success()
+                        model.toast = Toast("已拷贝 session id", style: .success)
+                    } label: { Label("拷贝 ID", systemImage: "number").lineLimit(1) }
+                    Button {
+                        UIPasteboard.general.string = "cd \(info.cwd ?? "") && claude --resume \(info.sessionID)"
+                        Haptics.success()
+                        model.toast = Toast("已拷贝恢复命令", style: .success)
+                    } label: { Label("拷贝恢复命令", systemImage: "terminal").lineLimit(1) }
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+            } else if let error {
+                Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+            } else {
+                ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20, style: .continuous))
+        .task(id: key) {
+            do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func row(_ symbol: String, _ label: String, _ value: String) -> some View {
+        GridRow {
+            Label(label, systemImage: symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .gridColumnAlignment(.leading)
+            Text(value.isEmpty ? "—" : value)
+                .font(.caption.monospaced())
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+        }
+    }
+
+    static func tokens(_ n: Int) -> String {
+        switch n {
+        case 1_000_000...: String(format: "%.2fM", Double(n) / 1_000_000)
+        case 1_000...: String(format: "%.1fk", Double(n) / 1_000)
+        default: "\(n)"
         }
     }
 }

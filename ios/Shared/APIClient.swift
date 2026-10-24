@@ -142,6 +142,30 @@ nonisolated struct APIClient: Sendable {
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 
+    struct SessionInfo: Decodable, Sendable {
+        var sessionID: String
+        var transcriptPath: String?
+        var cwd: String?
+        var model: String?
+        var launcher: String?
+        var gitBranch: String?
+        var version: String?
+        var permissionMode: String?
+        var contextTokens: Int
+        var outputTokens: Int
+        var compactions: Int
+        var turns: Int
+        var startedAt: Date?
+        var lastActivity: Date?
+        enum CodingKeys: String, CodingKey {
+            case cwd, model, launcher, version, compactions, turns
+            case sessionID = "session_id", transcriptPath = "transcript_path", gitBranch = "git_branch",
+                 permissionMode = "permission_mode", contextTokens = "context_tokens", outputTokens = "output_tokens",
+                 startedAt = "started_at", lastActivity = "last_activity"
+        }
+    }
+    func sessionInfo(_ k: SessionKey) async throws -> SessionInfo { try await get(sp(k) + "/info") }
+
     struct QueueEdit: Encodable { var keep: [Int] }
     struct QueueResponse: Decodable { var queue: [String] }
     /// Pulls the queued input back out of claude and re-queues the indexes in `keep`; returns what was queued.
