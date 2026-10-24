@@ -37,6 +37,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 | `docs/server.md` | jarvisd 各模式、配置、部署、运维 |
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（应用专用密码 / OAuth XOAUTH2）、凭据存储 |
+| `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/ios.md` | iOS / watchOS App：信息架构、设计语言、手机数据工具 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
@@ -52,6 +53,18 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 
 隧道见 `docs/config.md`。hub 入口 `http://hub.example.com:18660`（手机需在公司网络 / removed）。
 
+## 构建与验证
+
+- 服务端：`cd server && go test ./...`；部署 `./scripts/deploy.sh [example-machine|example-machine|…]`。
+- iOS：`./scripts/sim.sh [-openSession <machine>/<session>]` 编译、装到 iPhone 17 Pro 模拟器、自动配对真实 hub；截图 `xcrun simctl io <udid> screenshot`。
+- 发布：`docs/release.md`。
+
+## 当前状态（2026-10-24）
+
+- hub 已部署在 example-machine（:18660），example-machine / example-machine / example-machine 在线，mac-home 隧道未装。
+- 端到端跑通：手机新建会话、提问、计划审批、手机工具（`docs/testing.md`）。邮件模块上线，还没加账号。
+- 待办：App Store Connect App 记录（需用户登录网页）、APNs key（推送）、TestFlight 首次上传、真机验证。
+
 ## 经验
 
 - herdr 里新开 tab 启动 claude 时，若 cwd 未被信任会先弹「trust this folder」，`agent prompt` 发的文字会被当成选择 → 选了 No 退出。
@@ -60,3 +73,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天�
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。
 - `--settings <file>` 里的 hooks 只在启动时读取，改 matcher 要重启 claude；hook 脚本本身每次执行都重新读。
+- `herdr agent wait` 可能在 herdr 识别出 agent 之前就返回 agent_not_found：启动后要轮询 `agent get`。
+- example-machine 的 herdr 没装 claude integration，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。
+- 这台 Mac 屏幕锁着时 computer-use 拿不到模拟器窗口：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
+- 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器。
