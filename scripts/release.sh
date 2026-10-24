@@ -31,7 +31,7 @@ APP="$ARCHIVE/Products/Applications/Jarvis.app"
 WATCH="$APP/Watch/Jarvis.app"
 # Placeholder purpose strings get the build rejected automatically: stop before uploading.
 python3 scripts/check_bundle_strings.py "$APP"
-[ -d "$WATCH" ] && python3 scripts/check_bundle_strings.py "$WATCH"
+if [ -d "$WATCH" ]; then python3 scripts/check_bundle_strings.py "$WATCH"; fi
 # Release must not contain the DEBUG-only simulator switches (ios/Jarvis/App/JarvisApp.swift).
 if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat)'; then
   echo "DEBUG switches found in the Release binary" >&2; exit 1
