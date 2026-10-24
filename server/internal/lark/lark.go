@@ -30,8 +30,12 @@ type Client struct {
 	cfg  Config
 	http *http.Client
 
-	mu    sync.Mutex
-	token string
+	media *http.Client // no overall timeout: videos stream for minutes
+
+	mu       sync.Mutex
+	token    string
+	emojis   map[string]Emoji
+	emojisAt time.Time
 }
 
 func New(cfg Config) *Client {
@@ -41,7 +45,7 @@ func New(cfg Config) *Client {
 	if cfg.Container == "" {
 		cfg.Container = "lark-connector-yunpeng"
 	}
-	return &Client{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}, token: cfg.Token}
+	return &Client{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}, media: &http.Client{}, token: cfg.Token}
 }
 
 func (c *Client) agentToken(ctx context.Context) (string, error) {
@@ -118,6 +122,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 type Conversation struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Avatar    string    `json:"avatar,omitempty"`
 	IsGroup   bool      `json:"is_group"`
 	Unread    int       `json:"unread"`
 	AtMe      bool      `json:"at_me"`
@@ -130,6 +135,7 @@ type Conversation struct {
 type rawConversation struct {
 	FeedID        string `json:"feedId"`
 	Name          string `json:"name"`
+	AvatarURL     string `json:"avatarUrl"`
 	IsGroup       bool   `json:"isGroup"`
 	UnreadCount   int    `json:"unreadCount"`
 	HasUnreadAtMe bool   `json:"hasUnreadAtMe"`
@@ -149,7 +155,7 @@ type rawConversation struct {
 }
 
 func (r rawConversation) normalize() Conversation {
-	c := Conversation{ID: r.FeedID, Name: r.Name, IsGroup: r.IsGroup, Unread: r.UnreadCount, AtMe: r.HasUnreadAtMe, Muted: r.IsMuted}
+	c := Conversation{ID: r.FeedID, Name: r.Name, Avatar: MediaURL(r.AvatarURL), IsGroup: r.IsGroup, Unread: r.UnreadCount, AtMe: r.HasUnreadAtMe, Muted: r.IsMuted}
 	if r.Preview != nil {
 		var b strings.Builder
 		for _, e := range r.Preview.Digest.Elements {
@@ -208,15 +214,109 @@ func (c *Client) Conversations(ctx context.Context, cursor string, limit int) ([
 }
 
 type Message struct {
-	ID         string    `json:"id"`
-	Position   string    `json:"position"`
-	SenderName string    `json:"sender_name"`
-	IsMine     bool      `json:"is_mine"`
-	Type       string    `json:"type"` // TEXT, POST, IMAGE, CARD, SYSTEM, FILE…
-	Text       string    `json:"text"`
-	CreatedAt  time.Time `json:"created_at"`
-	Recalled   bool      `json:"recalled"`
-	ReplyCount int       `json:"reply_count"`
+	ID               string          `json:"id"`
+	Position         string          `json:"position"`
+	SenderID         string          `json:"sender_id,omitempty"`
+	SenderName       string          `json:"sender_name"`
+	SenderAvatar     string          `json:"sender_avatar,omitempty"`
+	SenderType       string          `json:"sender_type,omitempty"` // user, bot…
+	IsMine           bool            `json:"is_mine"`
+	Type             string          `json:"type"` // TEXT, POST, IMAGE, CARD, SYSTEM, FILE…
+	Text             string          `json:"text"`
+	CreatedAt        time.Time       `json:"created_at"`
+	Recalled         bool            `json:"recalled"`
+	Edited           bool            `json:"edited,omitempty"`
+	ReplyCount       int             `json:"reply_count"`
+	ThreadReplyCount int             `json:"thread_reply_count,omitempty"`
+	Parts            json.RawMessage `json:"parts,omitempty"` // lark-connector MessagePart[], media URLs rewritten to the hub
+	ReplyTo          *ReplyTo        `json:"reply_to,omitempty"`
+	Reactions        []Reaction      `json:"reactions,omitempty"`
+}
+
+// ReplyTo is the message a reply quotes.
+type ReplyTo struct {
+	ID         string          `json:"id"`
+	SenderName string          `json:"sender_name"`
+	Text       string          `json:"text"`
+	Recalled   bool            `json:"recalled,omitempty"`
+	Parts      json.RawMessage `json:"parts,omitempty"`
+}
+
+// Reaction is one emoji under a message; Key resolves through Emojis.
+type Reaction struct {
+	Key   string   `json:"key"`
+	Count int      `json:"count"`
+	Mine  bool     `json:"mine,omitempty"`
+	Users []string `json:"users,omitempty"`
+}
+
+type rawMessage struct {
+	ID               string          `json:"id"`
+	Position         string          `json:"position"`
+	SenderID         string          `json:"senderId"`
+	SenderName       string          `json:"senderName"`
+	SenderAvatarURL  string          `json:"senderAvatarUrl"`
+	SenderType       string          `json:"senderType"`
+	IsMine           bool            `json:"isMine"`
+	MessageTypeName  string          `json:"messageTypeName"`
+	TextPreview      string          `json:"textPreview"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	IsRecalled       bool            `json:"isRecalled"`
+	IsDeleted        bool            `json:"isDeleted"`
+	IsEdited         bool            `json:"isEdited"`
+	ReplyCount       int             `json:"replyCount"`
+	ThreadReplyCount int             `json:"threadReplyCount"`
+	Parts            json.RawMessage `json:"parts"`
+	ReplyTo          *struct {
+		ID          string          `json:"id"`
+		SenderName  string          `json:"senderName"`
+		TextPreview string          `json:"textPreview"`
+		IsRecalled  bool            `json:"isRecalled"`
+		Parts       json.RawMessage `json:"parts"`
+	} `json:"replyTo"`
+	Reactions []struct {
+		Key       string   `json:"key"`
+		Count     int      `json:"count"`
+		IsMine    bool     `json:"isMine"`
+		UserNames []string `json:"userNames"`
+	} `json:"reactions"`
+}
+
+func (m rawMessage) normalize() Message {
+	out := Message{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
+		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
+		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
+		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, Parts: rewriteMedia(m.Parts)}
+	if r := m.ReplyTo; r != nil {
+		out.ReplyTo = &ReplyTo{ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
+	}
+	for _, r := range m.Reactions {
+		if r.Count > 0 {
+			out.Reactions = append(out.Reactions, Reaction{Key: r.Key, Count: r.Count, Mine: r.IsMine, Users: r.UserNames})
+		}
+	}
+	return out
+}
+
+// lark-connector serves media at /api/media/<key> and /api/messages/<id>/media/<key>; the hub proxies both under /api/v1/lark.
+var mediaRewriter = strings.NewReplacer(`"/api/media/`, `"/api/v1/lark/media/`, `"/api/messages/`, `"/api/v1/lark/messages/`)
+
+func rewriteMedia(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	return json.RawMessage(mediaRewriter.Replace(string(raw)))
+}
+
+// MediaURL maps one lark-connector media URL to the hub's proxy; other URLs pass through.
+func MediaURL(u string) string {
+	if s, ok := strings.CutPrefix(u, "/api/media/"); ok {
+		return "/api/v1/lark/media/" + s
+	}
+	if s, ok := strings.CutPrefix(u, "/api/messages/"); ok {
+		return "/api/v1/lark/messages/" + s
+	}
+	return u
 }
 
 // Messages returns a page of messages, oldest first: the latest page, or the one before position `before`.
@@ -231,19 +331,8 @@ func (c *Client) Messages(ctx context.Context, feedID, before string, limit int)
 		q.Set("tail", "1")
 	}
 	var res struct {
-		Items []struct {
-			ID              string    `json:"id"`
-			Position        string    `json:"position"`
-			SenderName      string    `json:"senderName"`
-			IsMine          bool      `json:"isMine"`
-			MessageTypeName string    `json:"messageTypeName"`
-			TextPreview     string    `json:"textPreview"`
-			CreatedAt       time.Time `json:"createdAt"`
-			IsRecalled      bool      `json:"isRecalled"`
-			IsDeleted       bool      `json:"isDeleted"`
-			ReplyCount      int       `json:"replyCount"`
-		} `json:"items"`
-		HasOlder bool `json:"hasOlder"`
+		Items    []rawMessage `json:"items"`
+		HasOlder bool         `json:"hasOlder"`
 	}
 	if err := c.do(ctx, "GET", "/conversations/"+url.PathEscape(feedID)+"/messages", q, nil, &res); err != nil {
 		return nil, false, err
@@ -253,10 +342,100 @@ func (c *Client) Messages(ctx context.Context, feedID, before string, limit int)
 		if m.IsDeleted {
 			continue
 		}
-		out = append(out, Message{ID: m.ID, Position: m.Position, SenderName: m.SenderName, IsMine: m.IsMine,
-			Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, ReplyCount: m.ReplyCount})
+		out = append(out, m.normalize())
 	}
 	return out, res.HasOlder, nil
+}
+
+// Emojis maps every emoji key (lower-cased, skin-tone variants included) to its hub image URL.
+// The catalogue rarely changes, so it is cached for a day.
+func (c *Client) Emojis(ctx context.Context) (map[string]Emoji, error) {
+	c.mu.Lock()
+	if c.emojis != nil && time.Since(c.emojisAt) < 24*time.Hour {
+		e := c.emojis
+		c.mu.Unlock()
+		return e, nil
+	}
+	c.mu.Unlock()
+	var res struct {
+		Items []struct {
+			Key      string   `json:"key"`
+			Label    string   `json:"label"`
+			ImageURL string   `json:"imageUrl"`
+			SkinKeys []string `json:"skinKeys"`
+		} `json:"items"`
+	}
+	if err := c.do(ctx, "GET", "/resources/emojis", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	out := make(map[string]Emoji, len(res.Items)*2)
+	for _, it := range res.Items {
+		if it.ImageURL == "" {
+			continue
+		}
+		e := Emoji{Label: it.Label, URL: MediaURL(it.ImageURL)}
+		for _, k := range it.SkinKeys {
+			if _, ok := out[strings.ToLower(k)]; !ok {
+				out[strings.ToLower(k)] = e
+			}
+		}
+		out[strings.ToLower(it.Key)] = e
+	}
+	c.mu.Lock()
+	c.emojis, c.emojisAt = out, time.Now()
+	c.mu.Unlock()
+	return out, nil
+}
+
+type Emoji struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
+// Media streams one media resource (path below /agent/v1, e.g. "/media/<key>") to w, keeping its type and caching.
+func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, query url.Values) error {
+	tok, err := c.agentToken(ctx)
+	if err != nil {
+		return err
+	}
+	u := strings.TrimRight(c.cfg.BaseURL, "/") + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := c.media.Do(req)
+	if err != nil {
+		return fmt.Errorf("lark: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		if resp.StatusCode == 401 {
+			c.mu.Lock()
+			c.token = ""
+			c.mu.Unlock()
+		}
+		return fmt.Errorf("lark: media HTTP %d", resp.StatusCode)
+	}
+	for _, h := range []string{"Content-Type", "Content-Length", "Cache-Control", "ETag"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	_, err = io.Copy(w, resp.Body)
+	return err
+}
+
+// CardAction presses a callback button (or submits a control) on a card message as the user.
+func (c *Client) CardAction(ctx context.Context, messageID, actionID string, params json.RawMessage) error {
+	var body any = map[string]any{}
+	if len(params) > 0 && string(params) != "null" {
+		body = params
+	}
+	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/card-actions/"+url.PathEscape(actionID), nil, body, nil)
 }
 
 func (c *Client) Send(ctx context.Context, feedID, text string) error {

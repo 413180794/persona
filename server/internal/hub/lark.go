@@ -3,7 +3,9 @@ package hub
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -53,4 +55,38 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	// Images, stickers, avatars, video and files inside messages; the URLs in message parts already point here.
+	api.HandleFunc("GET /api/v1/lark/media/{key}", func(w http.ResponseWriter, r *http.Request) {
+		h.larkMedia(w, r, "/media/"+url.PathEscape(r.PathValue("key")))
+	})
+	api.HandleFunc("GET /api/v1/lark/messages/{id}/media/{key}", func(w http.ResponseWriter, r *http.Request) {
+		h.larkMedia(w, r, "/messages/"+url.PathEscape(r.PathValue("id"))+"/media/"+url.PathEscape(r.PathValue("key")))
+	})
+	api.HandleFunc("GET /api/v1/lark/emojis", func(w http.ResponseWriter, r *http.Request) {
+		emojis, err := h.lark.Emojis(r.Context())
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		writeJSON(w, map[string]any{"emojis": emojis})
+	})
+	api.HandleFunc("POST /api/v1/lark/messages/{id}/card-actions/{action}", func(w http.ResponseWriter, r *http.Request) {
+		params, _ := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+		if err := h.lark.CardAction(r.Context(), r.PathValue("id"), r.PathValue("action"), params); err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+}
+
+func (h *Hub) larkMedia(w http.ResponseWriter, r *http.Request, path string) {
+	q := url.Values{}
+	if size := r.URL.Query().Get("size"); size != "" {
+		q.Set("size", size)
+	}
+	if err := h.lark.Media(r.Context(), w, path, q); err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+	}
 }
