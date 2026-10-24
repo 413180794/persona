@@ -11,7 +11,7 @@ struct ChatsView: View {
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
-            (machineFilter == nil || s.machineID == machineFilter) &&
+            !s.assistant && (machineFilter == nil || s.machineID == machineFilter) &&
             (query.isEmpty || s.title.localizedCaseInsensitiveContains(query) || s.cwd.localizedCaseInsensitiveContains(query)
              || (s.lastText ?? "").localizedCaseInsensitiveContains(query))
         }
@@ -112,7 +112,7 @@ struct ChatsView: View {
 
                 if model.allSessions.isEmpty {
                     Section {
-                        EmptyStateView(symbol: "sparkles", title: "开始第一段对话",
+                        EmptyStateView(symbol: "chevron.left.forwardslash.chevron.right", title: "开始第一个开发会话",
                                        message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
                                        action: ("新建对话", { showNew = true }))
                     }
@@ -120,7 +120,7 @@ struct ChatsView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Jarvis")
+            .navigationTitle("开发")
             .searchable(text: $query, prompt: "搜索对话、目录、内容")
             .refreshable { await model.refresh() }
             .toolbar {

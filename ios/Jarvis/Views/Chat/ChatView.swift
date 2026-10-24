@@ -1,9 +1,17 @@
 import PhotosUI
 import SwiftUI
 
+enum ChatStyle {
+    /// 开发: every step visible, tab bar hidden.
+    case dev
+    /// 对话 (assistant): thoughts hidden, tool runs folded into one line, lives at the root of its tab.
+    case assistant
+}
+
 struct ChatView: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
+    var style: ChatStyle = .dev
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
     @State private var showTerminal = false
@@ -82,7 +90,7 @@ struct ChatView: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                Composer(key: key, status: status)
+                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : nil)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -90,7 +98,7 @@ struct ChatView: View {
             .animation(.snappy, value: model.interactions(for: key).map(\.id))
         }
         .background(Color(.systemBackground))
-        .navigationTitle(session?.title ?? "对话")
+        .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -117,7 +125,7 @@ struct ChatView: View {
                 }
             }
         }
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .sheet(isPresented: $showTerminal) { TerminalSheet(key: key) }
         .onAppear {
             model.subscribe(key)
@@ -129,8 +137,18 @@ struct ChatView: View {
         }
     }
 
+    private var title: String {
+        let t = session?.title ?? ""
+        if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Jarvis" : t }
+        return t.isEmpty ? "对话" : t
+    }
+
     private var subtitle: String {
         guard let s = session else { return "" }
+        if style == .assistant {
+            if !model.interactions(for: key).isEmpty { return "等你确认" }
+            return s.status.isActive ? "正在处理…" : (Fmt.model(s.model) ?? "Jarvis")
+        }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
         let pending = model.interactions(for: key).isEmpty ? s.status.label : "等你处理"
         return [machine, Fmt.model(s.model) ?? s.launcher, pending].compactMap { $0 }.joined(separator: " · ")
@@ -140,8 +158,10 @@ struct ChatView: View {
         switch row {
         case .user(let i): UserBubble(item: i)
         case .assistant(let i): AssistantText(item: i)
-        case .thinking(let i): ThinkingRow(item: i)
-        case .tools(let steps): ToolGroupView(steps: steps, isLatest: isLatest)
+        case .thinking(let i):
+            if style == .dev { ThinkingRow(item: i) }
+        case .tools(let steps):
+            if style == .assistant { AssistantToolsRow(steps: steps) } else { ToolGroupView(steps: steps, isLatest: isLatest) }
         case .notice(let i): NoticeRow(item: i)
         case .image(let i):
             if let p = i.image {
@@ -171,6 +191,7 @@ struct Composer: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
     var status: SessionStatus
+    var placeholder: String?
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
     @State private var images: [(UIImage, ImagePayload)] = []
@@ -217,7 +238,7 @@ struct Composer: View {
                 .buttonStyle(.glass)
                 .clipShape(.circle)
 
-                TextField(status.isActive ? "补充说明（会排队发送）" : "给 Claude 发消息", text: $text, axis: .vertical)
+                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 14)

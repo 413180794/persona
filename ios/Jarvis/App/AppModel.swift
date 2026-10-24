@@ -17,9 +17,17 @@ final class AppModel {
     var toast: Toast?
     var openChat: SessionKey?
     var pendingConfirmation: PhoneConfirmation?
-    var selectedTab: AppTab = .chats
+    var selectedTab: AppTab = .assistant
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
+    private(set) var assistantConfig: APIClient.AssistantState?
+    /// The assistant conversation shown in the 对话 tab (persisted across launches).
+    var assistantCurrent: SessionKey? {
+        didSet {
+            let v = assistantCurrent.map { "\($0.machineID)/\($0.sessionID)" } ?? ""
+            UserDefaults.standard.set(v, forKey: "assistant.current")
+        }
+    }
     var debugShowNewChat = false
 
     @ObservationIgnored private var chats: [SessionKey: ChatStore] = [:]
@@ -31,6 +39,9 @@ final class AppModel {
 
     init() {
         config = Keychain.serverConfig
+        if let v = UserDefaults.standard.string(forKey: "assistant.current"), let slash = v.firstIndex(of: "/") {
+            assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
+        }
         live.onEvent = { [weak self] in self?.handle($0) }
         live.onConnected = { [weak self] in self?.didConnect() }
     }
@@ -82,6 +93,42 @@ final class AppModel {
 
     var pendingInteractions: [Interaction] {
         interactions.values.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+
+    var assistantConversations: [Session] {
+        allSessions.filter(\.assistant).sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+    }
+
+    /// Loads the assistant config; with no remembered conversation, picks up the newest one.
+    func refreshAssistant() async {
+        guard let api else { return }
+        if let st = try? await api.assistant() {
+            assistantConfig = st
+            // Only on the very first launch: after "新对话" the key exists but is empty, and the home page stays.
+            let neverChosen = UserDefaults.standard.object(forKey: "assistant.current") == nil
+            if assistantCurrent == nil, neverChosen, let newest = st.conversations.max(by: { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }) {
+                assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
+            }
+        }
+    }
+
+    func setAssistantLauncher(_ launcher: String) async {
+        guard let api else { return }
+        do {
+            assistantConfig = try await api.setAssistant(launcher: launcher)
+            toast = Toast("新对话将使用 \(launcher)", style: .success)
+        } catch { show(error) }
+    }
+
+    /// Routes a notification / deep link to the right tab.
+    func open(_ key: SessionKey) {
+        if session(key)?.assistant == true {
+            selectedTab = .assistant
+            assistantCurrent = key
+        } else {
+            selectedTab = .chats
+            openChat = key
+        }
     }
 
     func interactions(for key: SessionKey) -> [Interaction] {
@@ -288,7 +335,7 @@ final class AppModel {
 }
 
 enum AppTab: Hashable {
-    case chats, machines, mail, settings
+    case assistant, chats, mail, settings
 }
 
 struct PhoneConfirmation: Identifiable {

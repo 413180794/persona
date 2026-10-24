@@ -41,14 +41,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         let d = UserDefaults.standard
         switch d.string(forKey: "tab") {
-        case "machines": AppModel.shared.selectedTab = .machines
+        case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail
         case "settings": AppModel.shared.selectedTab = .settings
         default: break
         }
         if let open = d.string(forKey: "openSession"), let slash = open.firstIndex(of: "/") {
+            AppModel.shared.selectedTab = .chats
             AppModel.shared.openChat = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
         }
+        if let open = d.string(forKey: "openAssistant"), let slash = open.firstIndex(of: "/") {
+            AppModel.shared.assistantCurrent = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+        }
+        if d.bool(forKey: "newAssistant") { AppModel.shared.assistantCurrent = nil }
         AppModel.shared.debugShowNewChat = d.bool(forKey: "showNewChat")
         let automation = d.string(forKey: "pairURL") != nil
         #else
@@ -78,10 +83,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         guard let machine = info["machine_id"] as? String, let session = info["session_id"] as? String else { return }
-        await MainActor.run {
-            AppModel.shared.selectedTab = .chats
-            AppModel.shared.openChat = SessionKey(machineID: machine, sessionID: session)
-        }
+        await MainActor.run { AppModel.shared.open(SessionKey(machineID: machine, sessionID: session)) }
     }
 }
 

@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-Jarvis：只给自己用的 iPhone + Apple Watch 助手。在手机上用聊天的方式驱动各台电脑上 herdr 里的 Claude Code（实时流式看过程、
+Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访问所有个人和公司数据的 AI 助手（example-machine 上一个专用目录里的 Claude），
+「开发」tab 是在手机上用聊天的方式驱动各台电脑上 herdr 里的 Claude Code（实时流式看过程、
 在手机上回答提问 / 审批计划 / 批准工具），并让 Claude 读写 iPhone 本地数据（通讯录、日历、提醒、照片、健康、位置……）和邮箱
 （Gmail / 任意 IMAP+SMTP）。服务端 `jarvisd`（Go）部署在 example-machine，经 SSH 接入 example-machine / example-machine / mac-home。
 只发 TestFlight（内部测试员 tester@example.com），**不做官网、不上架**。

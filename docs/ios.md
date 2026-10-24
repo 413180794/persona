@@ -7,10 +7,10 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 
 | Tab | 内容 |
 | --- | --- |
-| 对话 | 「需要你处理」卡片（单选题可在列表里一键回答）→ 进行中 → 刚完成 → 空闲（折叠）→ 最近（未运行，可恢复）；搜索、按机器筛选、左滑中断、右滑关闭 |
-| 机器 | 每台机器的在线状态、运行中 / 工作中 / 等你的数量、herdr 和 claude 版本；详情里有会话、启动器、重连 |
+| 对话 | **Jarvis 助手**：example-machine 上 `~/.jarvis/assistant` 里的 Claude（默认启动器 `ccc`，设置里可换），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* / provider-* skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「用了 N 个工具 · 电脑、iPhone…」。左上角历史对话，右上角新对话；首次启动自动接上最近一段 |
+| 开发 | 原来的会话列表（不含助手对话）：「需要你处理」卡片 → 进行中 → 刚完成 → 空闲（折叠）→ 最近；搜索、按机器筛选、左滑中断、右滑关闭 |
 | 邮件 | 合并收件箱 / 单账号，详情（纯文本或 HTML）、回复、写信、「让 Claude 处理」（带上 mail_read 参数新建对话），邮箱管理 |
-| 设置 | 服务器、手机数据开关和授权、通知、重新配对 |
+| 设置 | 助手（启动器 / 模型）、机器（二级页：在线状态、会话数、版本、启动器、重连）、手机数据开关和授权、通知、重新配对 |
 
 对话页：
 
@@ -42,4 +42,4 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、`-tab machines|mail|settings`、
-`-showNewChat YES`。`scripts/sim.sh` 封装了编译、安装、配对、启动。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`。`scripts/sim.sh` 封装了编译、安装、配对、启动。

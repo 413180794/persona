@@ -93,6 +93,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var launcher: String?
     var model: String?
     var startedByJarvis: Bool
+    var assistant: Bool
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -104,7 +105,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case title, cwd, status, launcher, model
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
-             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis",
+             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -122,6 +123,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
+        assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0

@@ -1,11 +1,11 @@
 import SwiftUI
 
+/// Settings › 机器. Lives inside the settings NavigationStack (which registers the String / SessionKey destinations).
 struct MachinesView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 14) {
                     ConnectionBanner()
                     ForEach(model.machines) { m in
@@ -18,12 +18,9 @@ struct MachinesView: View {
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("机器")
-            .refreshable { await model.refresh() }
-            .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
-        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("机器")
+        .refreshable { await model.refresh() }
     }
 }
 

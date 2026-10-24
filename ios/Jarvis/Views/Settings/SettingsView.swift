@@ -25,6 +25,23 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink { AssistantSettingsView() } label: {
+                        LabeledContent {
+                            Text(model.assistantConfig?.launcher ?? "").font(.callout.monospaced())
+                        } label: {
+                            Label("助手", systemImage: "sparkles")
+                        }
+                    }
+                    NavigationLink { MachinesView() } label: {
+                        LabeledContent {
+                            Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
+                        } label: {
+                            Label("机器", systemImage: "macbook.and.iphone")
+                        }
+                    }
+                }
+
+                Section {
                     NavigationLink { PhoneDataView() } label: {
                         Label("手机数据", systemImage: "iphone.gen3")
                     }
@@ -42,14 +59,57 @@ struct SettingsView: View {
 
                 Section("关于") {
                     LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
-                    LabeledContent("机器", value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
                 }
             }
             .navigationTitle("设置")
+            .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
+            .task { await model.refreshAssistant() }
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }
             }
             .sheet(isPresented: $showPair) { PairView() }
+        }
+    }
+}
+
+/// Which launcher (model) new assistant conversations use, and what the assistant can reach.
+struct AssistantSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var launchers: [Launcher] = []
+    @State private var selection = ""
+
+    var body: some View {
+        let machineID = model.assistantConfig?.machineID ?? "example-machine"
+        List {
+            Section {
+                NavigationLink {
+                    LauncherPicker(launchers: launchers, selection: $selection)
+                } label: {
+                    LabeledContent("启动器（模型）") {
+                        Text(selection).font(.callout.monospaced())
+                    }
+                }
+                LabeledContent("运行在", value: model.machine(machineID)?.name ?? machineID)
+                LabeledContent("工作目录", value: "~/.jarvis/assistant")
+            } footer: {
+                Text("每段对话是 \(model.machine(machineID)?.name ?? machineID) 上 herdr 里的一个 Claude，改了只影响新对话。")
+            }
+            Section("能访问") {
+                Label("example-machine、公司 Mac、家里的 Mac（ssh）", systemImage: "macbook.and.iphone")
+                Label("飞书日历、文档、消息、邮件等公司数据", systemImage: "building.2")
+                Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: "iphone")
+                Label("你添加的所有邮箱", systemImage: "envelope")
+            }
+        }
+        .navigationTitle("助手")
+        .task {
+            selection = model.assistantConfig?.launcher ?? "ccc"
+            launchers = (try? await model.launchers(machineID)) ?? []
+        }
+        .onChange(of: selection) { old, new in
+            guard !old.isEmpty, old != new else { return }
+            Task { await model.setAssistantLauncher(new) }
         }
     }
 }

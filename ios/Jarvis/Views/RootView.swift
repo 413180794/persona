@@ -8,13 +8,14 @@ struct RootView: View {
         Group {
             if model.isPaired {
                 TabView(selection: $model.selectedTab) {
-                    Tab("对话", systemImage: "bubble.left.and.text.bubble.right", value: AppTab.chats) {
+                    Tab("对话", systemImage: "sparkles", value: AppTab.assistant) {
+                        AssistantView()
+                    }
+                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
+                    Tab("开发", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
                         ChatsView()
                     }
-                    .badge(model.pendingInteractions.count)
-                    Tab("机器", systemImage: "macbook.and.iphone", value: AppTab.machines) {
-                        MachinesView()
-                    }
+                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }.count)
                     Tab("邮件", systemImage: "envelope", value: AppTab.mail) {
                         MailView()
                     }

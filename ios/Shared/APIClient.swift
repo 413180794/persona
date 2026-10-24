@@ -140,6 +140,29 @@ nonisolated struct APIClient: Sendable {
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 
+    struct AssistantState: Codable, Sendable {
+        var machineID: String
+        var launcher: String
+        var cwd: String
+        var conversations: [Session]
+        enum CodingKeys: String, CodingKey { case launcher, cwd, conversations; case machineID = "machine_id" }
+    }
+    func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
+    struct AssistantConfigBody: Encodable {
+        var machineID: String?
+        var launcher: String?
+        enum CodingKeys: String, CodingKey { case launcher; case machineID = "machine_id" }
+    }
+    func setAssistant(machine: String? = nil, launcher: String? = nil) async throws -> AssistantState {
+        try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
+            body: AssistantConfigBody(machineID: machine, launcher: launcher)))
+    }
+    struct NewConversation: Encodable { var prompt: String; var images: [ImagePayload]? }
+    func startConversation(prompt: String, images: [ImagePayload] = []) async throws -> Session {
+        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images),
+                       timeout: 110, as: SessionResponse.self).session
+    }
+
     func interactions() async throws -> [Interaction] {
         try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions
     }

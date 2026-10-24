@@ -23,7 +23,7 @@
 {"machine_id":"example-machine","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
- "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,
+ "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1}
 
 // Item：transcript 规范化后的一条（一个内容块一条）
@@ -71,6 +71,10 @@
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
 | GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60` | `{"text":"…","status":"working"}` |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（仅 jarvis 启动的会话） |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","conversations":[Session]}` |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?}`，存 Postgres settings |
+| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
+| GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|watch","apns_token"?,"apns_env"?}` |
