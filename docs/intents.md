@@ -102,6 +102,8 @@ Siri 是否可用还取决于真机安装后系统索引，模拟器里只能确
 
 ## 待 leader 处理
 
+- **CLAUDE.md 文档索引**：新加了 `docs/intents.md`，索引表里还没有这一行（本任务不让改 CLAUDE.md），建议补
+  `| docs/intents.md | App Intents：Siri / 快捷指令能做什么、短语规则、选择和错误文案 |`。
 - **project.yml 不用改**：`Jarvis/Intents/` 落在 targets.Jarvis 的 `sources: - path: Jarvis` 下面，XcodeGen 自动收进来；
   AppIntents 的宏和元数据也由 Xcode 自动处理。已实测 `build` 与 `test` 都通过。
 - **发布检查**：`scripts/release.sh` 目前只查 `Info.plist` 的用途文案和 DEBUG 字符串。如果想更稳，可以在归档后断言
