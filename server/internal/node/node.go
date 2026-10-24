@@ -37,6 +37,7 @@ type Node struct {
 	watches  map[string]*watch
 	agents   map[string]herdr.Agent // session id -> live agent
 	panes    map[string]string      // pane id -> session id (learned from hooks)
+	layout   layout                 // workspace / tab names from the last herdr snapshot
 	lastList string                 // serialized last sessions.changed payload
 	metas    map[string]quickMeta   // transcript path -> cached meta
 }
@@ -162,6 +163,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Launcher        string          `json:"launcher"`
 		Prompt          string          `json:"prompt"`
 		ResumeSessionID string          `json:"resume_session_id"`
+		WorkspaceID     string          `json:"workspace_id"`
 		Text            string          `json:"text"`
 		Images          []proto.Image   `json:"images"`
 		Keys            []string        `json:"keys"`
@@ -188,7 +190,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "sessions.list":
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID)
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID)
 		return map[string]any{"session": s}, err
 	case "session.send":
 		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))

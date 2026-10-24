@@ -32,6 +32,7 @@ type Hub struct {
 	interactions map[string]*pending
 	phoneTools   []proto.Tool
 	calls        map[string]chan proto.ToolResult
+	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -58,6 +59,8 @@ type Store interface {
 	NodeSessions(ctx context.Context, machine string) (map[string]db.NodeSession, error)
 	MailAccounts(ctx context.Context) ([]db.MailAccountRow, error)
 	ReplaceMailAccounts(ctx context.Context, rows []db.MailAccountRow) error
+	MarkSeen(ctx context.Context, machine, session string, at time.Time) error
+	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
 }
@@ -89,6 +92,7 @@ func Run(ctx context.Context, version string) error {
 		h.logf("expire stale interactions: %v", err)
 	}
 	h.importLegacy(ctx)
+	h.loadSeen(ctx)
 	h.loadPhoneTools()
 	if NewMail != nil {
 		if h.mail, err = NewMail(cfg.dir, h.store); err != nil {
@@ -144,9 +148,19 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	}
 	h.mu.Unlock()
 	dir := m.assistantCwd()
+	h.mu.Lock()
+	seen := make(map[string]time.Time, len(list))
+	for _, s := range list {
+		if t, ok := h.seen[[2]string{m.cfg.ID, s.SessionID}]; ok {
+			seen[s.SessionID] = t
+		}
+	}
+	h.mu.Unlock()
 	for i := range list {
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i].Cwd, dir)
+		list[i].SeenAt = seen[list[i].SessionID]
+		list[i].State = agentState(list[i], list[i].SeenAt)
 	}
 	return list
 }

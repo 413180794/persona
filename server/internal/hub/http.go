@@ -42,6 +42,10 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/seen", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
+		h.markSeen(m.cfg.ID, r.PathValue("sid"))
+		writeJSON(w, map[string]any{"ok": true})
+	}))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", h.proxy("session.screen", func(r *http.Request) any {
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(r.URL.Query().Get("lines"))}
 	}))
@@ -231,6 +235,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Launcher        string `json:"launcher"`
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
+		WorkspaceID     string `json:"workspace_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -251,6 +256,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res.Session.MachineID = m.cfg.ID
+	res.Session.State = agentState(res.Session, time.Time{})
 	writeJSON(w, res)
 }
 
@@ -446,6 +452,10 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		h.mu.Unlock()
 		if len(msg.Tools) > 0 {
 			h.setPhoneTools(msg.Tools)
+		}
+	case "seen":
+		if h.byID[msg.MachineID] != nil && msg.SessionID != "" {
+			h.markSeen(msg.MachineID, msg.SessionID)
 		}
 	case "tool_result":
 		h.toolResult(msg.CallID, proto.ToolResult{Content: msg.Content, IsError: msg.IsError})

@@ -68,20 +68,43 @@ const (
 	StatusOffline = "offline"
 )
 
+// Unified agent states (docs/agent-states.md).
+const (
+	StateNeedsYou = "needs_you" // waiting for the user: a question, plan, permission or any TUI dialog
+	StateWorking  = "working"
+	StateUnread   = "unread" // finished, result not looked at yet
+	StateIdle     = "idle"   // finished and seen, ready for input
+	StateOffline  = "offline"
+	StateUnknown  = "unknown"
+)
+
 type Session struct {
-	MachineID           string    `json:"machine_id"`
-	SessionID           string    `json:"session_id"`
-	Title               string    `json:"title"`
-	Cwd                 string    `json:"cwd"`
-	Status              string    `json:"status"`
-	PaneID              string    `json:"pane_id,omitempty"`
-	TabID               string    `json:"tab_id,omitempty"`
-	WorkspaceID         string    `json:"workspace_id,omitempty"`
-	AgentName           string    `json:"agent_name,omitempty"`
-	Launcher            string    `json:"launcher,omitempty"`
-	Model               string    `json:"model,omitempty"`
-	StartedByJarvis     bool      `json:"started_by_jarvis"`
-	Assistant           bool      `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
+	MachineID       string `json:"machine_id"`
+	SessionID       string `json:"session_id"`
+	Title           string `json:"title"`
+	Cwd             string `json:"cwd"`
+	Status          string `json:"status"`
+	PaneID          string `json:"pane_id,omitempty"`
+	TabID           string `json:"tab_id,omitempty"`
+	WorkspaceID     string `json:"workspace_id,omitempty"`
+	AgentName       string `json:"agent_name,omitempty"`
+	Launcher        string `json:"launcher,omitempty"`
+	Model           string `json:"model,omitempty"`
+	StartedByJarvis bool   `json:"started_by_jarvis"`
+	Assistant       bool   `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
+	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab
+	// (docs/agent-states.md). Agents sharing a space are shown together as one collaborating group.
+	SpaceKind  string `json:"space_kind,omitempty"` // herdr
+	SpaceID    string `json:"space_id,omitempty"`
+	SpaceName  string `json:"space_name,omitempty"`
+	SpaceIndex int    `json:"space_index,omitempty"`
+	SlotID     string `json:"slot_id,omitempty"`
+	SlotName   string `json:"slot_name,omitempty"`
+	SlotIndex  int    `json:"slot_index,omitempty"`
+	// State is the unified agent state the apps render (needs_you, working, unread, idle, offline, unknown),
+	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
+	State               string    `json:"state"`
+	SeenAt              time.Time `json:"seen_at,omitempty"`
 	UpdatedAt           time.Time `json:"updated_at"`
 	LastText            string    `json:"last_text,omitempty"`
 	PendingInteractions int       `json:"pending_interactions"`

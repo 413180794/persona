@@ -24,7 +24,10 @@ func newUUID() string {
 }
 
 // start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume string) (*proto.Session, error) {
+// start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
+// workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
+// after the directory is reused or created.
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID string) (*proto.Session, error) {
 	if launcher == "" {
 		launcher = "claude"
 	}
@@ -49,11 +52,15 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume string) 
 		}
 	}
 
-	ws, err := n.workspaceFor(ctx, cwd)
-	if err != nil {
-		return nil, err
+	ws := workspaceID
+	if ws == "" {
+		var err error
+		if ws, err = n.workspaceFor(ctx, cwd); err != nil {
+			return nil, err
+		}
 	}
 	var created *herdr.Created
+	var err error
 	if ws == "" {
 		created, err = n.herdr.WorkspaceCreate(ctx, cwd, filepath.Base(cwd))
 	} else {
@@ -207,6 +214,8 @@ func (n *Node) sessionFor(id string, a herdr.Agent) *proto.Session {
 		SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(),
 	}
+	_ = n.refreshHerdr(context.Background())
+	n.placeIn(s, a)
 	n.decorate(s)
 	return s
 }
@@ -242,7 +251,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 				}
 			}
 		}
-		s, err := n.start(ctx, cwd, launcher, "", id)
+		s, err := n.start(ctx, cwd, launcher, "", id, "")
 		if err != nil {
 			return err
 		}

@@ -222,9 +222,7 @@ func (n *Node) file(id string) (*transcript.File, error) {
 // sessionList returns live herdr sessions plus recent offline transcripts.
 func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Session {
 	if refreshAgents {
-		if agents, err := n.herdr.Agents(ctx); err == nil {
-			n.setAgents(agents)
-		}
+		_ = n.refreshHerdr(ctx)
 	}
 	n.mu.Lock()
 	agents := make(map[string]herdr.Agent, len(n.agents))
@@ -240,6 +238,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(),
 		}
+		n.placeIn(&s, a)
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
@@ -349,6 +348,53 @@ func snippet(s string) string {
 
 // setAgents maps live claude agents to session ids: herdr's own report when its claude integration is installed,
 // else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
+// layout remembers workspace and tab names from the last herdr snapshot.
+type layout struct {
+	workspaces map[string]herdr.Workspace
+	tabs       map[string]herdr.Tab
+}
+
+// refreshHerdr takes one snapshot of herdr: agents plus the workspace / tab names shown as space / slot.
+func (n *Node) refreshHerdr(ctx context.Context) error {
+	snap, err := n.herdr.Snapshot(ctx)
+	if err != nil {
+		// Older herdr without `api snapshot`: fall back to the agent list.
+		agents, aerr := n.herdr.Agents(ctx)
+		if aerr != nil {
+			return err
+		}
+		n.setAgents(agents)
+		return nil
+	}
+	l := layout{workspaces: map[string]herdr.Workspace{}, tabs: map[string]herdr.Tab{}}
+	for _, w := range snap.Workspaces {
+		l.workspaces[w.ID] = w
+	}
+	for _, t := range snap.Tabs {
+		l.tabs[t.ID] = t
+	}
+	n.mu.Lock()
+	n.layout = l
+	n.mu.Unlock()
+	n.setAgents(snap.Agents)
+	return nil
+}
+
+// placeIn fills the space / slot fields of a live session.
+func (n *Node) placeIn(s *proto.Session, a herdr.Agent) {
+	n.mu.Lock()
+	w, wok := n.layout.workspaces[a.WorkspaceID]
+	t, tok := n.layout.tabs[a.TabID]
+	n.mu.Unlock()
+	s.SpaceKind, s.SpaceID, s.SlotID = "herdr", a.WorkspaceID, a.TabID
+	if wok {
+		s.SpaceName, s.SpaceIndex = w.Label, w.Number
+	}
+	if tok {
+		s.SlotName, s.SlotIndex = t.Label, t.Number
+	}
+}
+
 func (n *Node) setAgents(agents []herdr.Agent) {
 	m := map[string]herdr.Agent{}
 	var unknown []herdr.Agent
@@ -437,11 +483,9 @@ func (n *Node) pollAgents(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		agents, err := n.herdr.Agents(ctx)
-		if err != nil {
+		if err := n.refreshHerdr(ctx); err != nil {
 			continue
 		}
-		n.setAgents(agents)
 		list := n.sessionList(ctx, false)
 		key := listKey(list)
 		n.mu.Lock()
@@ -458,7 +502,7 @@ func (n *Node) pollAgents(ctx context.Context) {
 func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
-		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%d\n", s.SessionID, s.Status, s.Title, s.PaneID, s.LastText, s.UpdatedAt.Unix()/10)
+		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10)
 	}
 	return b.String()
 }

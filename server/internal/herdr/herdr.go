@@ -109,8 +109,33 @@ func (c *Client) AgentGet(ctx context.Context, target string) (*Agent, error) {
 }
 
 type Workspace struct {
-	ID    string `json:"workspace_id"`
-	Label string `json:"label"`
+	ID     string `json:"workspace_id"`
+	Label  string `json:"label"`
+	Number int    `json:"number"`
+}
+
+type Tab struct {
+	ID          string `json:"tab_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Label       string `json:"label"`
+	Number      int    `json:"number"`
+}
+
+// Snapshot is the whole live layout in one call: workspaces, tabs and agents.
+type Snapshot struct {
+	Workspaces []Workspace `json:"workspaces"`
+	Tabs       []Tab       `json:"tabs"`
+	Agents     []Agent     `json:"agents"`
+}
+
+func (c *Client) Snapshot(ctx context.Context) (*Snapshot, error) {
+	var res struct {
+		Snapshot Snapshot `json:"snapshot"`
+	}
+	if err := c.run(ctx, &res, "api", "snapshot"); err != nil {
+		return nil, err
+	}
+	return &res.Snapshot, nil
 }
 
 func (c *Client) Workspaces(ctx context.Context) ([]Workspace, error) {

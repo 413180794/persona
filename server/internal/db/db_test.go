@@ -130,3 +130,15 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("setting = %+v %v %v", v, ok, err)
 	}
 }
+
+func TestSessionViews(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	_, _ = d.pool.Exec(ctx, `TRUNCATE session_views`)
+	t1 := time.Now().Add(-time.Minute).UTC().Truncate(time.Millisecond)
+	_ = d.MarkSeen(ctx, "example-machine", "s", t1)
+	_ = d.MarkSeen(ctx, "example-machine", "s", t1.Add(-time.Hour)) // older view never moves it back
+	got, err := d.SeenTimes(ctx)
+	if err != nil || !got[[2]string{"example-machine", "s"}].Equal(t1) {
+		t.Fatalf("seen = %v, %v", got, err)
+	}
+}

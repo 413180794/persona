@@ -511,3 +511,27 @@ func textOf(r proto.ToolResult) string {
 	}
 	return b.String()
 }
+
+func TestAgentState(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		s    proto.Session
+		seen time.Time
+		want string
+	}{
+		{proto.Session{Status: proto.StatusBlocked}, time.Time{}, proto.StateNeedsYou},
+		{proto.Session{Status: proto.StatusWorking, PendingInteractions: 1}, time.Time{}, proto.StateNeedsYou},
+		{proto.Session{Status: proto.StatusWorking}, time.Time{}, proto.StateWorking},
+		{proto.Session{Status: proto.StatusDone, UpdatedAt: now}, time.Time{}, proto.StateUnread},
+		{proto.Session{Status: proto.StatusDone, UpdatedAt: now}, now.Add(-time.Minute), proto.StateUnread},
+		{proto.Session{Status: proto.StatusDone, UpdatedAt: now}, now.Add(time.Second), proto.StateIdle},
+		{proto.Session{Status: proto.StatusIdle, UpdatedAt: now}, time.Time{}, proto.StateIdle},
+		{proto.Session{Status: proto.StatusOffline}, time.Time{}, proto.StateOffline},
+		{proto.Session{Status: proto.StatusUnknown}, time.Time{}, proto.StateUnknown},
+	}
+	for i, c := range cases {
+		if got := agentState(c.s, c.seen); got != c.want {
+			t.Errorf("case %d: %s, want %s", i, got, c.want)
+		}
+	}
+}

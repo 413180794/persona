@@ -8,6 +8,11 @@ cd "$(dirname "$0")/../server"
 VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$(date +%Y%m%d%H%M)"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=(example-machine example-machine example-machine mac-home)
+# Macs first, example-machine (hub restart) last: the hub only picks up a new node binary when it reconnects.
+ORDERED=()
+for t in "${TARGETS[@]}"; do [ "$t" != example-machine ] && ORDERED+=("$t"); done
+for t in "${TARGETS[@]}"; do [ "$t" = example-machine ] && ORDERED+=("$t"); done
+TARGETS=("${ORDERED[@]}")
 mkdir -p bin
 LDFLAGS="-s -w -X main.version=$VERSION"
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/jarvisd
