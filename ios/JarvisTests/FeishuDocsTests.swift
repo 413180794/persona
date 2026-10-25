@@ -11,7 +11,7 @@ struct FeishuDocsTests {
     // MARK: Models
 
     @Test func decodesDriveAndDiscoverItems() throws {
-        let page: FeishuDocPage = try decode("""
+        let page: FeishuDocsPage = try decode("""
         {"items":[
           {"id":"f1","token":"f1","kind":"folder","title":"文件夹","url":"https://open.feishu.cn/docx/ExampleDocument
            "updatedAt":"2026-10-21T07:38:48.000Z","supported":true,"sharedFolder":true},
@@ -32,19 +32,19 @@ struct FeishuDocsTests {
     }
 
     @Test func kindsFromTypeAndURL() {
-        #expect(FeishuDocKind(type: 3, url: "") == .sheet)
-        #expect(FeishuDocKind(type: 8, url: "") == .bitable)
-        #expect(FeishuDocKind(type: 12, url: "") == .file)
-        #expect(FeishuDocKind(type: 99, url: "https://a.feishu.cn/base/x") == .bitable)
-        #expect(FeishuDocKind(type: 99, url: "https://a.feishu.cn/drive/folder/x") == .folder)
-        #expect(FeishuDocKind(type: 22, url: "", kind: "folder") == .folder)
-        #expect(FeishuDocKind.from(url: "https://a.larkoffice.com/wiki/abc") == .wiki)
-        #expect(FeishuFileKind.symbol(ext: nil, title: "report.PDF").hue == "red")
-        #expect(FeishuFileKind.symbol(ext: "md", title: "x").symbol == "chevron.left.forwardslash.chevron.right")
+        #expect(FeishuDocsKind(type: 3, url: "") == .sheet)
+        #expect(FeishuDocsKind(type: 8, url: "") == .bitable)
+        #expect(FeishuDocsKind(type: 12, url: "") == .file)
+        #expect(FeishuDocsKind(type: 99, url: "https://a.feishu.cn/base/x") == .bitable)
+        #expect(FeishuDocsKind(type: 99, url: "https://a.feishu.cn/drive/folder/x") == .folder)
+        #expect(FeishuDocsKind(type: 22, url: "", kind: "folder") == .folder)
+        #expect(FeishuDocsKind.from(url: "https://a.larkoffice.com/wiki/abc") == .wiki)
+        #expect(FeishuDocsFileKind.symbol(ext: nil, title: "report.PDF").hue == "red")
+        #expect(FeishuDocsFileKind.symbol(ext: "md", title: "x").symbol == "chevron.left.forwardslash.chevron.right")
     }
 
     @Test func decodesReadTreeAndFlagsBase() throws {
-        let v: FeishuDocView = try decode("""
+        let v: FeishuDocsView = try decode("""
         {"title":"T","url":"u","token":"t","content":{"type":"doc","content":[
           {"type":"heading","attrs":{"id":"doc-block-h1","level":1},"content":[{"type":"text","text":"Intro"}]},
           {"type":"paragraph","attrs":{"id":"doc-block-p"},"content":[{"type":"text","text":"Hi ","marks":[{"type":"bold"}]},
@@ -56,36 +56,36 @@ struct FeishuDocsTests {
         #expect(v.content.children[1].plainText == "Hi Ann")
         #expect(v.authority?.copy == false)
         #expect(!v.isBase && !v.isSpreadsheet)
-        #expect(FeishuDocTree.outline(v.content).first?.title == "Intro")
-        #expect(FeishuDocTree.rowID(for: "doc-block-h1", in: v.content) == "doc-block-h1")
+        #expect(FeishuDocsTree.outline(v.content).first?.title == "Intro")
+        #expect(FeishuDocsTree.rowID(for: "doc-block-h1", in: v.content) == "doc-block-h1")
 
-        let base: FeishuDocView = try decode(#"{"title":"B","url":"u","token":"t","content":{"type":"doc"},"outline":[],"base":{"token":"x"}}"#)
+        let base: FeishuDocsView = try decode(#"{"title":"B","url":"u","token":"t","content":{"type":"doc"},"outline":[],"base":{"token":"x"}}"#)
         #expect(base.isBase)
-        let file: FeishuDocView = try decode(#"{"title":"a.md","url":"u","token":"t","content":{"type":"doc"},"outline":[],"reader":"file","object":{"kind":"file","token":"tok","extension":"md"}}"#)
+        let file: FeishuDocsView = try decode(#"{"title":"a.md","url":"u","token":"t","content":{"type":"doc"},"outline":[],"reader":"file","object":{"kind":"file","token":"tok","extension":"md"}}"#)
         #expect(file.object?.kind == "file" && file.object?.extension == "md")
     }
 
     @Test func decodesWikiTreeUpdatesAndNotices() throws {
-        let tree: FeishuWikiTree = try decode("""
+        let tree: FeishuDocsWikiTree = try decode("""
         {"space":{"id":"1","name":"Team","description":"","kind":"team","starred":false,"homeToken":"h"},
          "wikiBaseUrl":"https://x/wiki/","roots":[{"token":"a","spaceId":"1","title":"A","objType":22,"url":"u","hasChildren":true,"supported":true}],
          "children":{},"path":[]}
         """)
         #expect(tree.roots.first?.hasChildren == true)
-        let ups: FeishuWikiUpdatesPage = try decode("""
+        let ups: FeishuDocsWikiUpdatesPage = try decode("""
         {"updates":[{"token":"k","title":"t","objType":8,"url":"u","supported":true,"editor":{"id":"e","name":"助手","app":true},"updatedAt":1792930657000},
                     {"token":"z","title":"t","objType":22,"url":"u","editor":{"id":"e","name":"n"},"updatedAt":0}],"nextCursor":"c"}
         """)
         #expect(ups.updates[0].editor.app == true)
         #expect(ups.updates[0].updated != nil && ups.updates[1].updated == nil)
-        let notes: FeishuDocNoticePage = try decode("""
+        let notes: FeishuDocsNoticePage = try decode("""
         {"items":[{"id":"1","title":"Doc","url":"u","type":22,"kind":"mention","summary":"A: hi","atMe":true,"unreadCount":2,"updatedAt":"2026-10-25T10:00:00Z"},
                   {"id":"2","title":"D2","type":3,"kind":"weird","summary":"","atMe":false,"unreadCount":0,"updatedAt":"2026-10-20T10:00:00Z","muted":true}]}
         """)
         #expect(notes.items[1].noticeKind == .other)
-        #expect(FeishuDocNoticeFilter.mention.matches(notes.items[0]))
-        #expect(!FeishuDocNoticeFilter.unread.matches(notes.items[1]))
-        #expect(FeishuDocNoticeFilter.all.matches(notes.items[1]))
+        #expect(FeishuDocsNoticeFilter.mention.matches(notes.items[0]))
+        #expect(!FeishuDocsNoticeFilter.unread.matches(notes.items[1]))
+        #expect(FeishuDocsNoticeFilter.all.matches(notes.items[1]))
     }
 
     // MARK: Lists
@@ -95,43 +95,43 @@ struct FeishuDocsTests {
         cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         let now = try #require(JSON.parseDate("2026-10-25T12:00:00+08:00"))
         func d(_ s: String) -> Date { JSON.parseDate(s)! }
-        #expect(FeishuDocBucket.of(d("2026-10-25T00:30:00+08:00"), now: now, calendar: cal) == .today)
-        #expect(FeishuDocBucket.of(d("2026-10-24T23:59:00+08:00"), now: now, calendar: cal) == .yesterday)
-        #expect(FeishuDocBucket.of(d("2026-10-20T09:00:00+08:00"), now: now, calendar: cal) == .week)
-        #expect(FeishuDocBucket.of(d("2026-10-01T09:00:00+08:00"), now: now, calendar: cal) == .month)
-        #expect(FeishuDocBucket.of(d("2025-01-01T09:00:00+08:00"), now: now, calendar: cal) == .earlier)
-        #expect(FeishuDocBucket.of(nil, now: now, calendar: cal) == .earlier)
+        #expect(FeishuDocsBucket.of(d("2026-10-25T00:30:00+08:00"), now: now, calendar: cal) == .today)
+        #expect(FeishuDocsBucket.of(d("2026-10-24T23:59:00+08:00"), now: now, calendar: cal) == .yesterday)
+        #expect(FeishuDocsBucket.of(d("2026-10-20T09:00:00+08:00"), now: now, calendar: cal) == .week)
+        #expect(FeishuDocsBucket.of(d("2026-10-01T09:00:00+08:00"), now: now, calendar: cal) == .month)
+        #expect(FeishuDocsBucket.of(d("2025-01-01T09:00:00+08:00"), now: now, calendar: cal) == .earlier)
+        #expect(FeishuDocsBucket.of(nil, now: now, calendar: cal) == .earlier)
 
         let dates = ["2026-10-25T09:00:00+08:00", "2026-10-01T09:00:00+08:00", "2026-10-25T08:00:00+08:00", "2026-10-24T08:00:00+08:00"]
-        let groups = FeishuDocBucket.group(Array(dates.enumerated()), now: now, calendar: cal) { JSON.parseDate($0.element) }
+        let groups = FeishuDocsBucket.group(Array(dates.enumerated()), now: now, calendar: cal) { JSON.parseDate($0.element) }
         #expect(groups.map(\.bucket) == [.today, .yesterday, .month])
         #expect(groups[0].items.map(\.offset) == [0, 2]) // order kept inside a bucket
     }
 
     @Test func foldersFirstFiltersAndDedup() throws {
-        let page: FeishuDocPage = try decode("""
+        let page: FeishuDocsPage = try decode("""
         {"items":[{"id":"a","title":"a","url":"https://x/docx/a","type":22},{"id":"f","kind":"folder","title":"f","url":"u","type":0},
                   {"id":"s","title":"s","url":"https://x/sheets/s","type":3}]}
         """)
-        #expect(feishuFoldersFirst(page.items).map(\.id) == ["f", "a", "s"])
-        #expect(page.items.filter(FeishuDocFilter.sheet.matches).map(\.id) == ["s"])
-        #expect(page.items.filter(FeishuDocFilter.doc.matches).map(\.id) == ["a"])
-        #expect(feishuAppendUnique(Array(page.items.prefix(2)), page.items).map(\.id) == ["a", "f", "s"])
+        #expect(feishuDocsFoldersFirst(page.items).map(\.id) == ["f", "a", "s"])
+        #expect(page.items.filter(FeishuDocsFilter.sheet.matches).map(\.id) == ["s"])
+        #expect(page.items.filter(FeishuDocsFilter.doc.matches).map(\.id) == ["a"])
+        #expect(feishuDocsAppendUnique(Array(page.items.prefix(2)), page.items).map(\.id) == ["a", "f", "s"])
     }
 
     @Test func wikiRowsFollowExpansion() {
-        func n(_ t: String, kids: Bool = false) -> FeishuWikiNode {
-            FeishuWikiNode(token: t, spaceId: "s", title: t, objType: 22, url: "u", hasChildren: kids)
+        func n(_ t: String, kids: Bool = false) -> FeishuDocsWikiNode {
+            FeishuDocsWikiNode(token: t, spaceId: "s", title: t, objType: 22, url: "u", hasChildren: kids)
         }
         let roots = [n("a", kids: true), n("b", kids: true), n("c")]
         let children = ["a": [n("a1", kids: true), n("a2")], "a1": [n("a1x")], "b": [n("b1")]]
-        #expect(feishuWikiRows(roots: roots, children: children, expanded: []).map(\.id) == ["a", "b", "c"])
-        let rows = feishuWikiRows(roots: roots, children: children, expanded: ["a", "a1"])
+        #expect(feishuDocsWikiRows(roots: roots, children: children, expanded: []).map(\.id) == ["a", "b", "c"])
+        let rows = feishuDocsWikiRows(roots: roots, children: children, expanded: ["a", "a1"])
         #expect(rows.map(\.id) == ["a", "a1", "a1x", "a2", "b", "c"])
         #expect(rows.map(\.depth) == [0, 1, 2, 1, 0, 0])
         #expect(rows[0].expanded && !rows[4].expanded)
         // Expanded but not loaded yet: the row says expanded, nothing below it.
-        #expect(feishuWikiRows(roots: roots, children: [:], expanded: ["b"]).map(\.id) == ["a", "b", "c"])
+        #expect(feishuDocsWikiRows(roots: roots, children: [:], expanded: ["b"]).map(\.id) == ["a", "b", "c"])
         // A shortcut lists its target's children.
         var s = n("sc", kids: true)
         s.target = .init(spaceId: "other", token: "t")
@@ -139,7 +139,7 @@ struct FeishuDocsTests {
     }
 
     @Test func sortsCommentThreads() throws {
-        let c: FeishuDocComments = try decode("""
+        let c: FeishuDocsComments = try decode("""
         {"threads":[
           {"id":"old","whole":false,"resolved":false,"quote":"q","createdAt":"2026-01-01T00:00:00Z","replies":[
             {"id":"r","author":{"name":"A"},"content":[{"kind":"text","text":"x"}],"createdAt":"2026-01-01T00:00:00Z"}]},
@@ -149,7 +149,7 @@ struct FeishuDocsTests {
             {"id":"r3","author":{"name":"C"},"content":[{"kind":"mention","text":"@D"},{"kind":"link","text":" l","href":"https://a"}],"createdAt":"2026-09-01T00:00:00Z"}]}
         ]}
         """)
-        #expect(feishuSortedThreads(c.threads).map(\.id) == ["new", "old", "done"])
+        #expect(feishuDocsSortedThreads(c.threads).map(\.id) == ["new", "old", "done"])
         #expect(c.threads[2].replies[0].text == "@D l")
     }
 
@@ -175,7 +175,7 @@ struct FeishuDocsTests {
 
         - [ ] a
         """
-        let body = FeishuMarkdownExport.prepare(md, title: "智能纪要")
+        let body = FeishuDocsMarkdownExport.prepare(md, title: "智能纪要")
         #expect(!body.chunks.contains { $0.text.contains("[Source]") })
         #expect(!body.chunks.contains { $0.text.contains("# 智能纪要") })
         #expect(body.outline.map(\.title) == ["总结", "待办 - 一"])
@@ -188,40 +188,40 @@ struct FeishuDocsTests {
 
     @Test func splitsLongRunsAtBlockBoundaries() {
         let lines = (0..<10).map { "para \($0)\n" } + ["- item\n", "  continued\n", "| a | b |\n", "| - | - |\n", "| 1 | 2 |\n", "\n", "tail"]
-        let body = FeishuMarkdownExport.prepare(lines.joined(separator: "\n"), maxLines: 4)
+        let body = FeishuDocsMarkdownExport.prepare(lines.joined(separator: "\n"), maxLines: 4)
         #expect(body.chunks.count > 1)
         // A table never splits.
         #expect(body.chunks.contains { $0.text.contains("| a | b |") && $0.text.contains("| 1 | 2 |") })
-        #expect(FeishuMarkdownExport.headingLevel("### x") == 3)
-        #expect(FeishuMarkdownExport.headingLevel("#hashtag") == nil)
-        #expect(FeishuMarkdownExport.unescape(#"a\-b\+c\.d"#) == "a-b+c.d")
-        #expect(FeishuMarkdownExport.stripInline("**粗** [链接](u) `c`") == "粗 链接 c")
-        #expect(FeishuMarkdownExport.rewriteMedia("x https://h:3333/api/documents/media/k y /api/v1/lark/raw/z") == "x /api/v1/lark/raw/documents/media/k y /api/v1/lark/raw/z")
+        #expect(FeishuDocsMarkdownExport.headingLevel("### x") == 3)
+        #expect(FeishuDocsMarkdownExport.headingLevel("#hashtag") == nil)
+        #expect(FeishuDocsMarkdownExport.unescape(#"a\-b\+c\.d"#) == "a-b+c.d")
+        #expect(FeishuDocsMarkdownExport.stripInline("**粗** [链接](u) `c`") == "粗 链接 c")
+        #expect(FeishuDocsMarkdownExport.rewriteMedia("x https://h:3333/api/documents/media/k y /api/v1/lark/raw/z") == "x /api/v1/lark/raw/documents/media/k y /api/v1/lark/raw/z")
     }
 
     // MARK: Tree rendering logic
 
     @Test func numbersOrderedListsAcrossSiblings() {
-        func ol(_ start: Int? = nil, restart: Bool = false) -> FeishuDocNode {
+        func ol(_ start: Int? = nil, restart: Bool = false) -> FeishuDocsNode {
             var a: [String: JSONValue] = ["restart": .bool(restart)]
             if let start { a["start"] = .number(Double(start)) }
-            return FeishuDocNode(type: "orderedList", attrs: a, content: [FeishuDocNode(type: "listItem")])
+            return FeishuDocsNode(type: "orderedList", attrs: a, content: [FeishuDocsNode(type: "listItem")])
         }
-        let p = FeishuDocNode(type: "paragraph")
+        let p = FeishuDocsNode(type: "paragraph")
         let nodes = [ol(), ol(), ol(), p, ol(), ol(5, restart: true), ol()]
-        #expect(FeishuDocTree.orderedNumbers(nodes) == [1, 2, 3, nil, 1, 5, 6])
+        #expect(FeishuDocsTree.orderedNumbers(nodes) == [1, 2, 3, nil, 1, 5, 6])
     }
 
     @Test func laysOutTablesWithSpans() throws {
         // Row 1: A (rowspan 2) | B (colspan 2); Row 2: C | D; Row 3: E (short row).
-        let t: FeishuDocNode = try decode("""
+        let t: FeishuDocsNode = try decode("""
         {"type":"table","content":[
           {"type":"tableRow","content":[{"type":"tableHeader","attrs":{"rowspan":2,"colwidth":[200]}},{"type":"tableHeader","attrs":{"colspan":2,"colwidth":[50,1000]}}]},
           {"type":"tableRow","content":[{"type":"tableCell"},{"type":"tableCell"}]},
           {"type":"tableRow","content":[{"type":"tableCell"}]}
         ]}
         """)
-        let l = FeishuDocTableLayout(t)
+        let l = FeishuDocsTableLayout(t)
         #expect(l.columns == 3)
         #expect(l.rows[0].map(\.cell) == [0, 1])
         #expect(l.rows[0][1].colspan == 2 && l.rows[0][0].header)
@@ -233,15 +233,15 @@ struct FeishuDocsTests {
     }
 
     @Test func parsesCSSColors() throws {
-        let a = try #require(FeishuDocColor.parse("#F54A45"))
+        let a = try #require(FeishuDocsColor.parse("#F54A45"))
         #expect(abs(a.r - 245.0 / 255) < 0.001 && a.a == 1)
-        let b = try #require(FeishuDocColor.parse("rgba(255, 246, 122, 0.8)"))
+        let b = try #require(FeishuDocsColor.parse("rgba(255, 246, 122, 0.8)"))
         #expect(abs(b.a - 0.8) < 0.001 && abs(b.g - 246.0 / 255) < 0.001)
-        #expect(FeishuDocColor.parse("#abc")?.b == 1.0 * 0xcc / 255)
-        #expect(FeishuDocColor.parse("red") == nil)
-        #expect(FeishuDocColor.text("#1f2329") == nil)        // near-black text follows the system
-        #expect(FeishuDocColor.text("rgb(245, 74, 69)") != nil)
-        #expect(FeishuDocColor.background("rgba(0,0,0,0)") == nil)
+        #expect(FeishuDocsColor.parse("#abc")?.b == 1.0 * 0xcc / 255)
+        #expect(FeishuDocsColor.parse("red") == nil)
+        #expect(FeishuDocsColor.text("#1f2329") == nil)        // near-black text follows the system
+        #expect(FeishuDocsColor.text("rgb(245, 74, 69)") != nil)
+        #expect(FeishuDocsColor.background("rgba(0,0,0,0)") == nil)
     }
 
     @Test func errorCodesFromBothShapes() {

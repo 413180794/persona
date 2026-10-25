@@ -7,7 +7,7 @@ extension APIClient {
     /// Like `larkRaw`, but a failure keeps lark-connector's error code (`{"error":{"code":…}}`), which the reader needs to
     /// tell "export forbidden" (→ read the JSON tree) from "format unsupported" (→ open in Feishu). `APIClient.request`
     /// only keeps flat `{"error":"…"}` messages, so this does the GET itself.
-    func larkDocs<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
+    func feishuDocsGet<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         var req = URLRequest(url: url("/api/v1/lark/raw/" + path, query: query), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await session.data(for: req)
@@ -38,7 +38,7 @@ extension Error {
 
 /// A cursor-paged list: first page, pull to refresh, more on reaching the end. Pages are deduplicated by id.
 @MainActor @Observable
-final class FeishuDocPager<Item: Identifiable & Sendable> where Item.ID: Hashable {
+final class FeishuDocsPager<Item: Identifiable & Sendable> where Item.ID: Hashable {
     private(set) var items: [Item] = []
     private(set) var cursor: String?
     private(set) var loaded = false
@@ -69,7 +69,7 @@ final class FeishuDocPager<Item: Identifiable & Sendable> where Item.ID: Hashabl
         do {
             let (page, next) = try await fetch(nil)
             guard gen == generation else { return }
-            items = feishuAppendUnique([], page)
+            items = feishuDocsAppendUnique([], page)
             cursor = next
             error = nil
             loaded = true
@@ -87,7 +87,7 @@ final class FeishuDocPager<Item: Identifiable & Sendable> where Item.ID: Hashabl
         do {
             let (page, next) = try await fetch(cursor)
             guard gen == generation else { return }
-            items = feishuAppendUnique(items, page)
+            items = feishuDocsAppendUnique(items, page)
             // A cursor that does not move would page forever.
             cursor = (next == cursor || page.isEmpty) ? nil : next
         } catch {
@@ -100,9 +100,9 @@ final class FeishuDocPager<Item: Identifiable & Sendable> where Item.ID: Hashabl
 // MARK: - Pieces
 
 /// A document's icon: its custom emoji / image when it has one, else the kind's colored tile.
-struct FeishuDocIconView: View {
-    var kind: FeishuDocKind
-    var icon: FeishuDocIcon?
+struct FeishuDocsIconView: View {
+    var kind: FeishuDocsKind
+    var icon: FeishuDocsIcon?
     var title: String = ""
     var fileExtension: String?
     var size: CGFloat = 36
@@ -118,7 +118,7 @@ struct FeishuDocIconView: View {
                     .frame(width: size, height: size)
                     .clipShape(.rect(cornerRadius: size * 0.24, style: .continuous))
             } else {
-                let file = kind == .file ? FeishuFileKind.symbol(ext: fileExtension, title: title) : nil
+                let file = kind == .file ? FeishuDocsFileKind.symbol(ext: fileExtension, title: title) : nil
                 FeishuAppIcon(symbol: file?.symbol ?? kind.symbol, hue: file?.hue ?? kind.hue, size: size)
             }
         }
@@ -127,21 +127,21 @@ struct FeishuDocIconView: View {
 }
 
 /// One document in a list: icon, title, "owner · time" and the little tags Feishu shows (外部, 快捷方式, 共享文件夹).
-struct FeishuDocRow: View {
-    var item: FeishuDocItem
+struct FeishuDocsRow: View {
+    var item: FeishuDocsItem
     /// Which time the row shows: when I opened it (最近) or when it was edited.
     var showActivity = false
 
     var body: some View {
         HStack(spacing: 12) {
-            FeishuDocIconView(kind: item.docKind, icon: item.icon, title: item.title, fileExtension: item.extension)
+            FeishuDocsIconView(kind: item.docKind, icon: item.icon, title: item.title, fileExtension: item.extension)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text(item.title.isEmpty ? "未命名\(item.docKind.label)" : item.title)
                         .font(.body)
                         .foregroundStyle(item.title.isEmpty ? .secondary : .primary)
                         .lineLimit(1)
-                    if item.external == true { FeishuDocTag(text: "外部", hue: "orange") }
+                    if item.external == true { FeishuDocsTag(text: "外部", hue: "orange") }
                 }
                 HStack(spacing: 4) {
                     if item.shortcut == true { Image(systemName: "arrowshape.turn.up.right.fill").font(.caption2) }
@@ -173,7 +173,7 @@ struct FeishuDocRow: View {
     }
 }
 
-struct FeishuDocTag: View {
+struct FeishuDocsTag: View {
     var text: String
     var hue: String
 
@@ -190,7 +190,7 @@ struct FeishuDocTag: View {
 }
 
 /// A horizontal row of single-line filter chips (Feishu's list tabs).
-struct FeishuDocChips<T: Hashable>: View {
+struct FeishuDocsChips<T: Hashable>: View {
     var options: [T]
     @Binding var selection: T
     var label: (T) -> String
@@ -304,7 +304,7 @@ struct FeishuDocsSectionTitle: View {
     }
 }
 
-enum FeishuDocLinks {
+enum FeishuDocsLinks {
     /// Opens a document in the Feishu app (universal link) or Safari, bypassing the in-app link handler that would
     /// push the native reader again.
     @MainActor static func openInFeishu(_ url: String) {

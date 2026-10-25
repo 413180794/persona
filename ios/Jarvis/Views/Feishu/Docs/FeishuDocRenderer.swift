@@ -8,7 +8,7 @@ import UIKit
 
 // MARK: - Colors
 
-nonisolated enum FeishuDocColor {
+nonisolated enum FeishuDocsColor {
     /// `#rgb`, `#rrggbb[aa]`, `rgb(r, g, b)` or `rgba(r, g, b, a)` → components 0…1.
     static func parse(_ s: String?) -> (r: Double, g: Double, b: Double, a: Double)? {
         guard var t = s?.trimmingCharacters(in: .whitespaces).lowercased(), !t.isEmpty else { return nil }
@@ -59,17 +59,17 @@ private extension UIColor {
 // MARK: - Inline
 
 /// Scheme of the links a user mention carries: `feishu-user://<id>?name=…` (the reader opens the profile card).
-nonisolated let feishuDocUserScheme = "feishu-user"
+nonisolated let feishuDocsUserScheme = "feishu-user"
 
-nonisolated enum FeishuDocInline {
+nonisolated enum FeishuDocsInline {
     /// Text runs, mentions, equations and line breaks of one block as an attributed string (marks become attributes).
-    static func attributed(_ nodes: [FeishuDocNode], monospaced: Bool = false) -> AttributedString {
+    static func attributed(_ nodes: [FeishuDocsNode], monospaced: Bool = false) -> AttributedString {
         var out = AttributedString()
         for n in nodes { out += piece(n, monospaced: monospaced) }
         return out
     }
 
-    static func piece(_ n: FeishuDocNode, monospaced: Bool) -> AttributedString {
+    static func piece(_ n: FeishuDocsNode, monospaced: Bool) -> AttributedString {
         switch n.type {
         case "text":
             var s = AttributedString(n.text ?? "")
@@ -85,7 +85,7 @@ nonisolated enum FeishuDocInline {
             switch kind {
             case "user":
                 s = AttributedString("@" + label)
-                if let id = n.attr("userId"), var c = URLComponents(string: "\(feishuDocUserScheme)://\(id)") {
+                if let id = n.attr("userId"), var c = URLComponents(string: "\(feishuDocsUserScheme)://\(id)") {
                     c.queryItems = [URLQueryItem(name: "name", value: label)]
                     s.link = c.url
                 }
@@ -117,7 +117,7 @@ nonisolated enum FeishuDocInline {
         }
     }
 
-    static func apply(_ marks: [FeishuDocMark], to s: inout AttributedString) {
+    static func apply(_ marks: [FeishuDocsMark], to s: inout AttributedString) {
         var bold = false, italic = false, code = false
         for m in marks {
             switch m.type {
@@ -132,8 +132,8 @@ nonisolated enum FeishuDocInline {
                     s.foregroundColor = LarkColor.blue
                 }
             case "textStyle":
-                if let c = FeishuDocColor.text(m.attrs?["color"]?.string) { s.foregroundColor = c }
-                if let b = FeishuDocColor.background(m.attrs?["backgroundColor"]?.string) { s.backgroundColor = b }
+                if let c = FeishuDocsColor.text(m.attrs?["color"]?.string) { s.foregroundColor = c }
+                if let b = FeishuDocsColor.background(m.attrs?["backgroundColor"]?.string) { s.backgroundColor = b }
             default: break
             }
         }
@@ -152,37 +152,37 @@ nonisolated enum FeishuDocInline {
 // MARK: - Blocks
 
 /// What the blocks around need to know: the gallery's images, whether text may be copied.
-struct FeishuDocRenderContext {
+struct FeishuDocsRenderContext {
     var images: [String] = []
     var selectable = true
     var openImage: (String) -> Void = { _ in }
 }
 
 extension EnvironmentValues {
-    @Entry var feishuDocContext = FeishuDocRenderContext()
+    @Entry var feishuDocsContext = FeishuDocsRenderContext()
 }
 
 /// A stack of blocks (the children of a quote, callout, column, list item, table cell…).
-struct FeishuDocBlocks: View {
-    var nodes: [FeishuDocNode]
+struct FeishuDocsBlocks: View {
+    var nodes: [FeishuDocsNode]
     var spacing: CGFloat = 8
 
     var body: some View {
-        let numbers = FeishuDocTree.orderedNumbers(nodes)
+        let numbers = FeishuDocsTree.orderedNumbers(nodes)
         VStack(alignment: .leading, spacing: spacing) {
             ForEach(Array(nodes.enumerated()), id: \.offset) { i, n in
-                FeishuDocBlock(node: n, number: numbers[i])
+                FeishuDocsBlock(node: n, number: numbers[i])
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-struct FeishuDocBlock: View {
-    var node: FeishuDocNode
+struct FeishuDocsBlock: View {
+    var node: FeishuDocsNode
     /// The number an ordered list item shows (counted across sibling one-item lists).
     var number: Int?
-    @Environment(\.feishuDocContext) private var context
+    @Environment(\.feishuDocsContext) private var context
 
     var body: some View {
         switch node.type {
@@ -193,13 +193,13 @@ struct FeishuDocBlock: View {
         case "bulletList", "orderedList", "taskList":
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(node.children.enumerated()), id: \.offset) { i, item in
-                    FeishuDocListItem(item: item, marker: node.type == "orderedList" ? "\((number ?? 1) + i)." : nil)
+                    FeishuDocsListItem(item: item, marker: node.type == "orderedList" ? "\((number ?? 1) + i)." : nil)
                 }
             }
         case "listItem":
-            FeishuDocListItem(item: node, marker: nil)
+            FeishuDocsListItem(item: node, marker: nil)
         case "blockquote":
-            FeishuDocBlocks(nodes: node.children, spacing: 6)
+            FeishuDocsBlocks(nodes: node.children, spacing: 6)
                 .padding(.leading, 12)
                 .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 3) }
                 .foregroundStyle(.secondary)
@@ -207,12 +207,12 @@ struct FeishuDocBlock: View {
             callout
         case "columns":
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(node.children.enumerated()), id: \.offset) { _, col in FeishuDocBlocks(nodes: col.children) }
+                ForEach(Array(node.children.enumerated()), id: \.offset) { _, col in FeishuDocsBlocks(nodes: col.children) }
             }
         case "column", "synced", "agenda", "agendaContent", "doc", "mindnote", "slideNotes":
-            FeishuDocBlocks(nodes: node.children)
+            FeishuDocsBlocks(nodes: node.children)
         case "agendaItem":
-            FeishuDocBlocks(nodes: node.children)
+            FeishuDocsBlocks(nodes: node.children)
                 .padding(12)
                 .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 12, style: .continuous))
         case "agendaTitle":
@@ -220,11 +220,11 @@ struct FeishuDocBlock: View {
         case "horizontalRule":
             Divider().padding(.vertical, 6)
         case "codeBlock":
-            FeishuDocCodeBlock(node: node)
+            FeishuDocsCodeBlock(node: node)
         case "table":
-            FeishuDocTable(table: node)
+            FeishuDocsTable(table: node)
         case "image":
-            FeishuDocImage(node: node)
+            FeishuDocsImage(node: node)
         case "missingImage":
             placeholder("photo", node.attr("caption").flatMap { $0.isEmpty ? nil : $0 } ?? "图片无法显示")
         case "bookmark":
@@ -232,22 +232,22 @@ struct FeishuDocBlock: View {
         case "embedLink":
             embed
         case "file":
-            FeishuDocFileBlock(node: node)
+            FeishuDocsFileBlock(node: node)
         case "docTask":
             docTask
         case "mermaid", "plantuml":
             VStack(alignment: .leading, spacing: 4) {
                 Text(node.type == "mermaid" ? "Mermaid 图" : "PlantUML 图").font(.caption).foregroundStyle(.secondary)
-                FeishuDocCodeBlock(node: node)
+                FeishuDocsCodeBlock(node: node)
             }
         case "mindnoteItem":
-            FeishuDocListItem(item: node, marker: nil)
+            FeishuDocsListItem(item: node, marker: nil)
         case "mindnoteLabel":
             inline(node.children)
         case "slide":
             VStack(alignment: .leading, spacing: 8) {
                 Text("第 \(Int(node.number("index") ?? 0)) 页").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                FeishuDocBlocks(nodes: node.children)
+                FeishuDocsBlocks(nodes: node.children)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,15 +263,15 @@ struct FeishuDocBlock: View {
             } else if node.children.allSatisfy({ ["text", "mention", "hardBreak", "equation"].contains($0.type) }) {
                 inline(node.children)
             } else {
-                FeishuDocBlocks(nodes: node.children)
+                FeishuDocsBlocks(nodes: node.children)
             }
         }
     }
 
     // MARK: Text
 
-    private func inline(_ nodes: [FeishuDocNode]) -> some View {
-        FeishuDocText(text: FeishuDocInline.attributed(nodes))
+    private func inline(_ nodes: [FeishuDocsNode]) -> some View {
+        FeishuDocsText(text: FeishuDocsInline.attributed(nodes))
     }
 
     @ViewBuilder private var paragraph: some View {
@@ -294,7 +294,7 @@ struct FeishuDocBlock: View {
         case 3: .headline
         default: .subheadline.weight(.semibold)
         }
-        return FeishuDocText(text: FeishuDocInline.attributed(node.children))
+        return FeishuDocsText(text: FeishuDocsInline.attributed(node.children))
             .font(font)
             .frame(maxWidth: .infinity, alignment: alignment)
             .padding(.top, level <= 2 ? 10 : 4)
@@ -317,17 +317,17 @@ struct FeishuDocBlock: View {
         }
     }
 
-    private var background: Color? { FeishuDocColor.background(node.attr("backgroundColor")) }
+    private var background: Color? { FeishuDocsColor.background(node.attr("backgroundColor")) }
 
     // MARK: Containers
 
     private var callout: some View {
-        let tint = FeishuDocColor.background(node.attr("backgroundColor")) ?? LarkColor.hue("blue").opacity(0.08)
-        let stroke = FeishuDocColor.background(node.attr("borderColor")) ?? .clear
+        let tint = FeishuDocsColor.background(node.attr("backgroundColor")) ?? LarkColor.hue("blue").opacity(0.08)
+        let stroke = FeishuDocsColor.background(node.attr("borderColor")) ?? .clear
         return HStack(alignment: .top, spacing: 10) {
             if let e = node.attr("emoji"), !e.isEmpty { Text(e).font(.title3) }
-            FeishuDocBlocks(nodes: node.children, spacing: 6)
-                .foregroundStyle(FeishuDocColor.text(node.attr("color")) ?? .primary)
+            FeishuDocsBlocks(nodes: node.children, spacing: 6)
+                .foregroundStyle(FeishuDocsColor.text(node.attr("color")) ?? .primary)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -337,7 +337,7 @@ struct FeishuDocBlock: View {
 
     private var docTask: some View {
         let done = node.flag("checked")
-        let assignees = node.attr("assignees").flatMap { try? JSON.decoder.decode([FeishuDocPerson].self, from: Data($0.utf8)) } ?? []
+        let assignees = node.attr("assignees").flatMap { try? JSON.decoder.decode([FeishuDocsPerson].self, from: Data($0.utf8)) } ?? []
         return HStack(alignment: .top, spacing: 10) {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(done ? LarkColor.hue("green") : .secondary)
@@ -378,18 +378,18 @@ struct FeishuDocBlock: View {
     }
 
     private func card(symbol: String, hue: String, title: String, subtitle: String?, href: String?) -> some View {
-        FeishuDocLinkCard(symbol: symbol, hue: hue, title: title, subtitle: subtitle, href: href)
+        FeishuDocsLinkCard(symbol: symbol, hue: hue, title: title, subtitle: subtitle, href: href)
     }
 
     private func placeholder(_ symbol: String, _ text: String, href: String? = nil) -> some View {
-        FeishuDocLinkCard(symbol: symbol, hue: "grey", title: text, subtitle: nil, href: href, quiet: true)
+        FeishuDocsLinkCard(symbol: symbol, hue: "grey", title: text, subtitle: nil, href: href, quiet: true)
     }
 }
 
 /// Selectable text when the document allows copying.
-struct FeishuDocText: View {
+struct FeishuDocsText: View {
     var text: AttributedString
-    @Environment(\.feishuDocContext) private var context
+    @Environment(\.feishuDocsContext) private var context
 
     var body: some View {
         let t = Text(text).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
@@ -397,8 +397,8 @@ struct FeishuDocText: View {
     }
 }
 
-struct FeishuDocListItem: View {
-    var item: FeishuDocNode
+struct FeishuDocsListItem: View {
+    var item: FeishuDocsNode
     var marker: String?
 
     var body: some View {
@@ -416,14 +416,14 @@ struct FeishuDocListItem: View {
                 }
             }
             .frame(minWidth: 16, alignment: .trailing)
-            FeishuDocBlocks(nodes: item.children, spacing: 4)
+            FeishuDocsBlocks(nodes: item.children, spacing: 4)
                 .opacity(todo && done ? 0.55 : 1)
         }
     }
 }
 
-struct FeishuDocCodeBlock: View {
-    var node: FeishuDocNode
+struct FeishuDocsCodeBlock: View {
+    var node: FeishuDocsNode
 
     var body: some View {
         let text = node.plainText
@@ -442,11 +442,11 @@ struct FeishuDocCodeBlock: View {
 }
 
 /// A table as a horizontally scrolling grid; columns keep the author's widths, merged cells span.
-struct FeishuDocTable: View {
-    var table: FeishuDocNode
+struct FeishuDocsTable: View {
+    var table: FeishuDocsNode
 
     var body: some View {
-        let layout = FeishuDocTableLayout(table)
+        let layout = FeishuDocsTableLayout(table)
         let rows = table.children.filter { $0.type == "tableRow" }
         ScrollView(.horizontal, showsIndicators: false) {
             // Rows of fixed-width cells; `fixedSize` makes every cell of a row as tall as the tallest one.
@@ -465,12 +465,12 @@ struct FeishuDocTable: View {
         .clipShape(.rect(cornerRadius: 6))
     }
 
-    private func cell(_ node: FeishuDocNode?, slot: FeishuDocTableLayout.Slot, width: Double) -> some View {
+    private func cell(_ node: FeishuDocsNode?, slot: FeishuDocsTableLayout.Slot, width: Double) -> some View {
         let header = slot.header
-        let bg = node.flatMap { FeishuDocColor.background($0.attr("backgroundColor")) } ?? (header ? Color.primary.opacity(0.05) : .clear)
+        let bg = node.flatMap { FeishuDocsColor.background($0.attr("backgroundColor")) } ?? (header ? Color.primary.opacity(0.05) : .clear)
         return Group {
             if let node {
-                FeishuDocBlocks(nodes: node.children, spacing: 4)
+                FeishuDocsBlocks(nodes: node.children, spacing: 4)
                     .font(.subheadline.weight(header ? .semibold : .regular))
             } else {
                 Color.clear.frame(height: 1)
@@ -485,9 +485,9 @@ struct FeishuDocTable: View {
     }
 }
 
-struct FeishuDocImage: View {
-    var node: FeishuDocNode
-    @Environment(\.feishuDocContext) private var context
+struct FeishuDocsImage: View {
+    var node: FeishuDocsNode
+    @Environment(\.feishuDocsContext) private var context
 
     var body: some View {
         let src = node.attr("src") ?? ""
@@ -511,19 +511,19 @@ struct FeishuDocImage: View {
     }
 }
 
-struct FeishuDocFileBlock: View {
-    var node: FeishuDocNode
+struct FeishuDocsFileBlock: View {
+    var node: FeishuDocsNode
     @State private var request: (url: String, name: String)?
 
     var body: some View {
         let name = node.attr("name") ?? "文件"
-        let icon = FeishuFileKind.symbol(ext: node.attr("extension"), title: name)
+        let icon = FeishuDocsFileKind.symbol(ext: node.attr("extension"), title: name)
         let size = node.number("size").flatMap { $0 > 0 ? ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) : nil }
         Button {
             if let token = node.attr("token") {
                 request = ("/api/v1/lark/raw/documents/drive/files/\(token)/download", name)
             } else if let s = node.attr("sourceUrl") {
-                FeishuDocLinks.openInFeishu(s)
+                FeishuDocsLinks.openInFeishu(s)
             }
         } label: {
             HStack(spacing: 12) {
@@ -546,7 +546,7 @@ struct FeishuDocFileBlock: View {
 }
 
 /// A link card (bookmark, embedded sheet / Base / chat, unsupported block with its source).
-struct FeishuDocLinkCard: View {
+struct FeishuDocsLinkCard: View {
     var symbol: String
     var hue: String
     var title: String

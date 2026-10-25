@@ -6,20 +6,20 @@ import Foundation
 
 // MARK: - Lists
 
-nonisolated struct FeishuDocIcon: Codable, Hashable, Sendable {
+nonisolated struct FeishuDocsIcon: Codable, Hashable, Sendable {
     var type: String
     var value: String
 }
 
 /// One row of 最近 / 我的空间 / 共享给我 / 收藏 / 快速访问 / 推荐 (`DocumentListItem` + `DriveSpaceItem` + `DriveDiscoverItem`).
-nonisolated struct FeishuDocItem: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct FeishuDocsItem: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var token: String?
     var kind: String?
     var title: String
     var url: String
     var type: Int
-    var icon: FeishuDocIcon?
+    var icon: FeishuDocsIcon?
     var owner: String?
     var ownerAvatarUrl: String?
     var createdAt: String?
@@ -42,7 +42,7 @@ nonisolated struct FeishuDocItem: Codable, Identifiable, Hashable, Sendable {
     var likes: Int?
     var comments: Int?
 
-    var docKind: FeishuDocKind { FeishuDocKind(type: type, url: url, title: title, kind: kind) }
+    var docKind: FeishuDocsKind { FeishuDocsKind(type: type, url: url, title: title, kind: kind) }
     var isFolder: Bool { docKind == .folder }
     /// The folder token a drive listing takes (`folder=`).
     var folderToken: String { token ?? id }
@@ -51,8 +51,8 @@ nonisolated struct FeishuDocItem: Codable, Identifiable, Hashable, Sendable {
     var edited: Date? { editedAt.flatMap(JSON.parseDate) }
 }
 
-nonisolated struct FeishuDocPage: Decodable, Sendable {
-    var items: [FeishuDocItem]
+nonisolated struct FeishuDocsPage: Decodable, Sendable {
+    var items: [FeishuDocsItem]
     var nextCursor: String?
     var path: [Crumb]?
 
@@ -63,7 +63,7 @@ nonisolated struct FeishuDocPage: Decodable, Sendable {
 }
 
 /// What a document is, for its icon, color and how the reader treats it. Types are Lark explorer object types.
-nonisolated enum FeishuDocKind: String, Sendable {
+nonisolated enum FeishuDocsKind: String, Sendable {
     case folder, doc, sheet, bitable, mindnote, file, slides, wiki, page, whiteboard, other
 
     init(type: Int, url: String, title: String = "", kind: String? = nil) {
@@ -82,7 +82,7 @@ nonisolated enum FeishuDocKind: String, Sendable {
     }
 
     /// From the link alone (`/docx/`, `/sheets/`, `/base/`…); a wiki link does not say what it holds.
-    static func from(url: String) -> FeishuDocKind {
+    static func from(url: String) -> FeishuDocsKind {
         let parts = URL(string: url)?.pathComponents.dropFirst() ?? []
         switch parts.first ?? "" {
         case "docx", "docs", "doc": return .doc
@@ -149,7 +149,7 @@ nonisolated enum FeishuDocKind: String, Sendable {
 }
 
 /// A file's icon from its extension (pdf, zip, image…), as Feishu tells uploaded files apart.
-nonisolated enum FeishuFileKind {
+nonisolated enum FeishuDocsFileKind {
     static func symbol(ext: String?, title: String) -> (symbol: String, hue: String) {
         let e = (ext?.isEmpty == false ? ext! : (title.split(separator: ".").last.map(String.init) ?? "")).lowercased()
         switch e {
@@ -171,7 +171,7 @@ nonisolated enum FeishuFileKind {
 // MARK: - Grouping
 
 /// Time buckets the lists are sectioned into (Feishu's recent list reads top-down by day like this).
-nonisolated enum FeishuDocBucket: Int, CaseIterable, Sendable {
+nonisolated enum FeishuDocsBucket: Int, CaseIterable, Sendable {
     case today, yesterday, week, month, earlier
 
     var title: String {
@@ -184,7 +184,7 @@ nonisolated enum FeishuDocBucket: Int, CaseIterable, Sendable {
         }
     }
 
-    static func of(_ date: Date?, now: Date = .now, calendar: Calendar = .current) -> FeishuDocBucket {
+    static func of(_ date: Date?, now: Date = .now, calendar: Calendar = .current) -> FeishuDocsBucket {
         guard let date else { return .earlier }
         if calendar.isDate(date, inSameDayAs: now) { return .today }
         let startToday = calendar.startOfDay(for: now)
@@ -199,15 +199,15 @@ nonisolated enum FeishuDocBucket: Int, CaseIterable, Sendable {
 
     /// Splits items (already in display order) into non-empty buckets, keeping their order inside each bucket.
     static func group<T>(_ items: [T], now: Date = .now, calendar: Calendar = .current,
-                         date: (T) -> Date?) -> [(bucket: FeishuDocBucket, items: [T])] {
-        var out: [FeishuDocBucket: [T]] = [:]
+                         date: (T) -> Date?) -> [(bucket: FeishuDocsBucket, items: [T])] {
+        var out: [FeishuDocsBucket: [T]] = [:]
         for item in items { out[of(date(item), now: now, calendar: calendar), default: []].append(item) }
         return allCases.compactMap { b in out[b].map { (b, $0) } }
     }
 }
 
 /// How a drive listing is sorted (lark-connector `sort=`), and the client-side type filter of the lists.
-nonisolated enum FeishuDriveSort: String, CaseIterable, Sendable {
+nonisolated enum FeishuDocsDriveSort: String, CaseIterable, Sendable {
     case edited, created, name, owner
 
     var label: String {
@@ -220,7 +220,7 @@ nonisolated enum FeishuDriveSort: String, CaseIterable, Sendable {
     }
 }
 
-nonisolated enum FeishuDocFilter: String, CaseIterable, Sendable {
+nonisolated enum FeishuDocsFilter: String, CaseIterable, Sendable {
     case all, doc, sheet, bitable, mindnote, file, folder
 
     var label: String {
@@ -235,7 +235,7 @@ nonisolated enum FeishuDocFilter: String, CaseIterable, Sendable {
         }
     }
 
-    func matches(_ item: FeishuDocItem) -> Bool {
+    func matches(_ item: FeishuDocsItem) -> Bool {
         switch self {
         case .all: true
         case .doc: [.doc, .wiki, .page, .other].contains(item.docKind)
@@ -249,12 +249,12 @@ nonisolated enum FeishuDocFilter: String, CaseIterable, Sendable {
 }
 
 /// Folders first (as Feishu lists a folder), the rest in the server's order.
-nonisolated func feishuFoldersFirst(_ items: [FeishuDocItem]) -> [FeishuDocItem] {
+nonisolated func feishuDocsFoldersFirst(_ items: [FeishuDocsItem]) -> [FeishuDocsItem] {
     items.filter(\.isFolder) + items.filter { !$0.isFolder }
 }
 
 /// Appends a page to a list, dropping ids already shown (cursor pages can overlap).
-nonisolated func feishuAppendUnique<T: Identifiable>(_ list: [T], _ page: [T]) -> [T] where T.ID: Hashable {
+nonisolated func feishuDocsAppendUnique<T: Identifiable>(_ list: [T], _ page: [T]) -> [T] where T.ID: Hashable {
     var seen = Set(list.map(\.id))
     var out = list
     for item in page where seen.insert(item.id).inserted { out.append(item) }
@@ -263,12 +263,12 @@ nonisolated func feishuAppendUnique<T: Identifiable>(_ list: [T], _ page: [T]) -
 
 // MARK: - Notifications
 
-nonisolated struct FeishuDocNotice: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct FeishuDocsNotice: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var title: String
     var url: String?
     var type: Int
-    var icon: FeishuDocIcon?
+    var icon: FeishuDocsIcon?
     var kind: String
     var summary: String
     var atMe: Bool
@@ -277,16 +277,16 @@ nonisolated struct FeishuDocNotice: Codable, Identifiable, Hashable, Sendable {
     var muted: Bool?
 
     var updated: Date? { JSON.parseDate(updatedAt) }
-    var docKind: FeishuDocKind { FeishuDocKind(type: type, url: url ?? "") }
-    var noticeKind: FeishuDocNoticeKind { FeishuDocNoticeKind(rawValue: kind) ?? .other }
+    var docKind: FeishuDocsKind { FeishuDocsKind(type: type, url: url ?? "") }
+    var noticeKind: FeishuDocsNoticeKind { FeishuDocsNoticeKind(rawValue: kind) ?? .other }
 }
 
-nonisolated struct FeishuDocNoticePage: Decodable, Sendable {
-    var items: [FeishuDocNotice]
+nonisolated struct FeishuDocsNoticePage: Decodable, Sendable {
+    var items: [FeishuDocsNotice]
     var nextCursor: String?
 }
 
-nonisolated enum FeishuDocNoticeKind: String, Sendable {
+nonisolated enum FeishuDocsNoticeKind: String, Sendable {
     case mention, comment, reply, solve, share, reopen, reaction, other
 
     var label: String {
@@ -329,7 +329,7 @@ nonisolated enum FeishuDocNoticeKind: String, Sendable {
 }
 
 /// The filter chips of 文档通知.
-nonisolated enum FeishuDocNoticeFilter: String, CaseIterable, Sendable {
+nonisolated enum FeishuDocsNoticeFilter: String, CaseIterable, Sendable {
     case all, unread, mention, comment, share
 
     var label: String {
@@ -342,7 +342,7 @@ nonisolated enum FeishuDocNoticeFilter: String, CaseIterable, Sendable {
         }
     }
 
-    func matches(_ n: FeishuDocNotice) -> Bool {
+    func matches(_ n: FeishuDocsNotice) -> Bool {
         switch self {
         case .all: true
         case .unread: n.unreadCount > 0
@@ -355,23 +355,23 @@ nonisolated enum FeishuDocNoticeFilter: String, CaseIterable, Sendable {
 
 // MARK: - Wiki
 
-nonisolated struct FeishuWikiSpace: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct FeishuDocsWikiSpace: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var name: String
     var description: String?
-    var icon: FeishuDocIcon?
+    var icon: FeishuDocsIcon?
     var kind: String?
     var starred: Bool?
     var homeToken: String?
     var mine: Bool?
 }
 
-nonisolated struct FeishuWikiSpacePage: Decodable, Sendable {
-    var spaces: [FeishuWikiSpace]
+nonisolated struct FeishuDocsWikiSpacePage: Decodable, Sendable {
+    var spaces: [FeishuDocsWikiSpace]
     var nextCursor: String?
 }
 
-nonisolated struct FeishuWikiNode: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct FeishuDocsWikiNode: Codable, Identifiable, Hashable, Sendable {
     var token: String
     var spaceId: String
     var parentToken: String?
@@ -379,7 +379,7 @@ nonisolated struct FeishuWikiNode: Codable, Identifiable, Hashable, Sendable {
     var objType: Int
     var url: String
     var hasChildren: Bool
-    var icon: FeishuDocIcon?
+    var icon: FeishuDocsIcon?
     var supported: Bool?
     var target: Target?
 
@@ -389,31 +389,31 @@ nonisolated struct FeishuWikiNode: Codable, Identifiable, Hashable, Sendable {
     }
 
     var id: String { token }
-    var docKind: FeishuDocKind { FeishuDocKind(type: objType, url: url, title: title) }
+    var docKind: FeishuDocsKind { FeishuDocsKind(type: objType, url: url, title: title) }
     /// Where this node's children are listed: a shortcut's live with its target.
     var childrenSource: (space: String, node: String) { target.map { ($0.spaceId, $0.token) } ?? (spaceId, token) }
 }
 
-nonisolated struct FeishuWikiChildrenPage: Decodable, Sendable {
-    var nodes: [FeishuWikiNode]
+nonisolated struct FeishuDocsWikiChildrenPage: Decodable, Sendable {
+    var nodes: [FeishuDocsWikiNode]
     var nextCursor: String?
 }
 
-nonisolated struct FeishuWikiTree: Decodable, Sendable {
-    var space: FeishuWikiSpace
+nonisolated struct FeishuDocsWikiTree: Decodable, Sendable {
+    var space: FeishuDocsWikiSpace
     var wikiBaseUrl: String?
-    var roots: [FeishuWikiNode]
-    var children: [String: [FeishuWikiNode]]
+    var roots: [FeishuDocsWikiNode]
+    var children: [String: [FeishuDocsWikiNode]]
     var path: [String]?
     var restricted: Bool?
 }
 
-nonisolated struct FeishuWikiUpdate: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct FeishuDocsWikiUpdate: Codable, Identifiable, Hashable, Sendable {
     var token: String
     var title: String
     var objType: Int
     var url: String
-    var icon: FeishuDocIcon?
+    var icon: FeishuDocsIcon?
     var supported: Bool?
     var editor: Editor
     var updatedAt: Double
@@ -426,17 +426,17 @@ nonisolated struct FeishuWikiUpdate: Codable, Identifiable, Hashable, Sendable {
 
     var id: String { token }
     var updated: Date? { updatedAt > 0 ? Date(timeIntervalSince1970: updatedAt / 1000) : nil }
-    var docKind: FeishuDocKind { FeishuDocKind(type: objType, url: url, title: title) }
+    var docKind: FeishuDocsKind { FeishuDocsKind(type: objType, url: url, title: title) }
 }
 
-nonisolated struct FeishuWikiUpdatesPage: Decodable, Sendable {
-    var updates: [FeishuWikiUpdate]
+nonisolated struct FeishuDocsWikiUpdatesPage: Decodable, Sendable {
+    var updates: [FeishuDocsWikiUpdate]
     var nextCursor: String?
 }
 
 /// One visible row of a knowledge base's tree: the node and how deep it sits.
-nonisolated struct FeishuWikiRow: Identifiable, Hashable, Sendable {
-    var node: FeishuWikiNode
+nonisolated struct FeishuDocsWikiRow: Identifiable, Hashable, Sendable {
+    var node: FeishuDocsWikiNode
     var depth: Int
     var expanded: Bool
     var id: String { node.token }
@@ -444,13 +444,13 @@ nonisolated struct FeishuWikiRow: Identifiable, Hashable, Sendable {
 
 /// The rows a tree shows: roots, then each expanded node's loaded children beneath it, depth first.
 /// A node whose children have not arrived yet still shows as expanded (its row draws a spinner).
-nonisolated func feishuWikiRows(roots: [FeishuWikiNode], children: [String: [FeishuWikiNode]], expanded: Set<String>) -> [FeishuWikiRow] {
-    var out: [FeishuWikiRow] = []
+nonisolated func feishuDocsWikiRows(roots: [FeishuDocsWikiNode], children: [String: [FeishuDocsWikiNode]], expanded: Set<String>) -> [FeishuDocsWikiRow] {
+    var out: [FeishuDocsWikiRow] = []
     var seen = Set<String>()
-    func walk(_ nodes: [FeishuWikiNode], depth: Int) {
+    func walk(_ nodes: [FeishuDocsWikiNode], depth: Int) {
         for n in nodes where seen.insert(n.token).inserted {
             let open = n.hasChildren && expanded.contains(n.token)
-            out.append(FeishuWikiRow(node: n, depth: depth, expanded: open))
+            out.append(FeishuDocsWikiRow(node: n, depth: depth, expanded: open))
             if open, let kids = children[n.token] { walk(kids, depth: depth + 1) }
         }
     }
@@ -460,36 +460,36 @@ nonisolated func feishuWikiRows(roots: [FeishuWikiNode], children: [String: [Fei
 
 // MARK: - Reader
 
-nonisolated struct FeishuDocAuthority: Codable, Hashable, Sendable {
+nonisolated struct FeishuDocsAuthority: Codable, Hashable, Sendable {
     var copy: Bool
     var print: Bool
     var export: Bool
 }
 
 /// `documents/read?format=markdown`.
-nonisolated struct FeishuDocMarkdownResponse: Decodable, Sendable {
+nonisolated struct FeishuDocsMarkdownResponse: Decodable, Sendable {
     var type: String
     var token: String
     var title: String
     var url: String
     var permission: String?
-    var authority: FeishuDocAuthority?
+    var authority: FeishuDocsAuthority?
     var markdown: String
     var partial: Bool?
 }
 
 /// One node of the ProseMirror-style tree `documents/read?format=json` returns.
-nonisolated struct FeishuDocNode: Codable, Hashable, Sendable {
+nonisolated struct FeishuDocsNode: Codable, Hashable, Sendable {
     var type: String
     var attrs: [String: JSONValue]?
-    var content: [FeishuDocNode]?
-    var marks: [FeishuDocMark]?
+    var content: [FeishuDocsNode]?
+    var marks: [FeishuDocsMark]?
     var text: String?
 
     func attr(_ key: String) -> String? { attrs?[key]?.string }
     func number(_ key: String) -> Double? { attrs?[key]?.double }
     func flag(_ key: String) -> Bool { attrs?[key]?.bool ?? (attrs?[key]?.string == "true") }
-    var children: [FeishuDocNode] { content ?? [] }
+    var children: [FeishuDocsNode] { content ?? [] }
     var blockID: String? { attr("id") }
 
     /// All text below this node, mentions by their label.
@@ -502,24 +502,24 @@ nonisolated struct FeishuDocNode: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct FeishuDocMark: Codable, Hashable, Sendable {
+nonisolated struct FeishuDocsMark: Codable, Hashable, Sendable {
     var type: String
     var attrs: [String: JSONValue]?
 }
 
 /// `documents/read?format=json`: the tree plus what the reader needs around it. `base` / `spreadsheet` are only
 /// checked for presence (the Base viewer is out of scope; sheets read as Markdown when export is allowed).
-nonisolated struct FeishuDocView: Decodable, Sendable {
+nonisolated struct FeishuDocsView: Decodable, Sendable {
     var title: String
     var url: String
     var token: String
-    var content: FeishuDocNode
-    var outline: [FeishuDocOutlineItem]
-    var owner: FeishuDocPerson?
+    var content: FeishuDocsNode
+    var outline: [FeishuDocsOutlineItem]
+    var owner: FeishuDocsPerson?
     var createdAt: String?
     var updatedAt: String?
     var permission: String?
-    var authority: FeishuDocAuthority?
+    var authority: FeishuDocsAuthority?
     var reader: String?
     var object: Object?
     var partial: Bool?
@@ -543,13 +543,13 @@ nonisolated struct FeishuDocView: Decodable, Sendable {
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
         token = try c.decodeIfPresent(String.self, forKey: .token) ?? ""
-        content = try c.decodeIfPresent(FeishuDocNode.self, forKey: .content) ?? FeishuDocNode(type: "doc")
-        outline = try c.decodeIfPresent([FeishuDocOutlineItem].self, forKey: .outline) ?? []
-        owner = try c.decodeIfPresent(FeishuDocPerson.self, forKey: .owner)
+        content = try c.decodeIfPresent(FeishuDocsNode.self, forKey: .content) ?? FeishuDocsNode(type: "doc")
+        outline = try c.decodeIfPresent([FeishuDocsOutlineItem].self, forKey: .outline) ?? []
+        owner = try c.decodeIfPresent(FeishuDocsPerson.self, forKey: .owner)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
         permission = try c.decodeIfPresent(String.self, forKey: .permission)
-        authority = try c.decodeIfPresent(FeishuDocAuthority.self, forKey: .authority)
+        authority = try c.decodeIfPresent(FeishuDocsAuthority.self, forKey: .authority)
         reader = try c.decodeIfPresent(String.self, forKey: .reader)
         object = try c.decodeIfPresent(Object.self, forKey: .object)
         partial = try c.decodeIfPresent(Bool.self, forKey: .partial)
@@ -558,33 +558,33 @@ nonisolated struct FeishuDocView: Decodable, Sendable {
     }
 }
 
-nonisolated struct FeishuDocOutlineItem: Codable, Hashable, Identifiable, Sendable {
+nonisolated struct FeishuDocsOutlineItem: Codable, Hashable, Identifiable, Sendable {
     var id: String
     var title: String
     var level: Int
 }
 
-nonisolated struct FeishuDocPerson: Codable, Hashable, Sendable {
+nonisolated struct FeishuDocsPerson: Codable, Hashable, Sendable {
     var id: String?
     var name: String
     var avatarUrl: String?
 }
 
 /// `documents/header`: where the document sits and who edited it last.
-nonisolated struct FeishuDocHeader: Decodable, Sendable {
+nonisolated struct FeishuDocsHeader: Decodable, Sendable {
     var token: String?
     var type: Int?
     var inMySpace: Bool?
-    var path: [FeishuDocPage.Crumb]?
-    var icon: FeishuDocIcon?
+    var path: [FeishuDocsPage.Crumb]?
+    var icon: FeishuDocsIcon?
     var editedAt: String?
     var editorName: String?
 }
 
 /// `documents/reader/info`: owner, counts.
-nonisolated struct FeishuDocReaderInfo: Decodable, Sendable {
-    var owner: FeishuDocPerson?
-    var creator: FeishuDocPerson?
+nonisolated struct FeishuDocsReaderInfo: Decodable, Sendable {
+    var owner: FeishuDocsPerson?
+    var creator: FeishuDocsPerson?
     var createdAt: String?
     var updatedAt: String?
     var views: Int?
@@ -595,13 +595,13 @@ nonisolated struct FeishuDocReaderInfo: Decodable, Sendable {
 }
 
 /// `documents/ai-summary`: the cached summary (never generated here).
-nonisolated struct FeishuDocAISummary: Decodable, Sendable {
+nonisolated struct FeishuDocsAISummary: Decodable, Sendable {
     var state: String
     var summary: String
 }
 
 /// `documents/comments`.
-nonisolated struct FeishuDocComments: Decodable, Sendable {
+nonisolated struct FeishuDocsComments: Decodable, Sendable {
     var threads: [Thread]
 
     nonisolated struct Thread: Decodable, Identifiable, Hashable, Sendable {
@@ -617,7 +617,7 @@ nonisolated struct FeishuDocComments: Decodable, Sendable {
 
     nonisolated struct Reply: Decodable, Identifiable, Hashable, Sendable {
         var id: String
-        var author: FeishuDocPerson
+        var author: FeishuDocsPerson
         var content: [Segment]
         var imageCount: Int?
         var createdAt: String?
@@ -641,8 +641,8 @@ nonisolated struct FeishuDocComments: Decodable, Sendable {
 }
 
 /// Open threads first (newest activity first), resolved ones after.
-nonisolated func feishuSortedThreads(_ threads: [FeishuDocComments.Thread]) -> [FeishuDocComments.Thread] {
-    func last(_ t: FeishuDocComments.Thread) -> Date {
+nonisolated func feishuDocsSortedThreads(_ threads: [FeishuDocsComments.Thread]) -> [FeishuDocsComments.Thread] {
+    func last(_ t: FeishuDocsComments.Thread) -> Date {
         t.replies.compactMap(\.created).max() ?? t.createdAt.flatMap(JSON.parseDate) ?? .distantPast
     }
     return threads.sorted { a, b in
@@ -654,24 +654,24 @@ nonisolated func feishuSortedThreads(_ threads: [FeishuDocComments.Thread]) -> [
 // MARK: - Markdown preparation
 
 /// The Markdown export cut into sections that render (and scroll to) on their own.
-nonisolated struct FeishuDocMarkdownBody: Sendable, Equatable {
+nonisolated struct FeishuDocsMarkdownBody: Sendable, Equatable {
     nonisolated struct Chunk: Identifiable, Sendable, Equatable {
         var id: String
         var text: String
     }
 
     var chunks: [Chunk]
-    var outline: [FeishuDocOutlineItem]
+    var outline: [FeishuDocsOutlineItem]
     var images: [String]
 }
 
-nonisolated enum FeishuMarkdownExport {
+nonisolated enum FeishuDocsMarkdownExport {
     /// Turns lark-connector's export into what the reader shows:
     /// - drops the leading `# Title` and `[Source](<url>)` lines (the reader draws its own title),
     /// - points media at the hub (`http://<lark-connector>/api/documents/…` → `/api/v1/lark/raw/documents/…`),
     /// - splits at headings outside code fences (and at blank lines in long runs), so one long document is many lazy rows,
     /// - collects the headings (the outline) and every image (the gallery).
-    static func prepare(_ markdown: String, title: String? = nil, maxLines: Int = 60) -> FeishuDocMarkdownBody {
+    static func prepare(_ markdown: String, title: String? = nil, maxLines: Int = 60) -> FeishuDocsMarkdownBody {
         var lines = rewriteMedia(markdown).components(separatedBy: "\n")
         // Leading title and source link.
         while let first = lines.first, first.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeFirst() }
@@ -681,8 +681,8 @@ nonisolated enum FeishuMarkdownExport {
         while let first = lines.first, first.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeFirst() }
         if let first = lines.first, first.hasPrefix("[Source](") { lines.removeFirst() }
 
-        var chunks: [FeishuDocMarkdownBody.Chunk] = []
-        var outline: [FeishuDocOutlineItem] = []
+        var chunks: [FeishuDocsMarkdownBody.Chunk] = []
+        var outline: [FeishuDocsOutlineItem] = []
         var current: [String] = []
         var currentID = "md-0"
         var fence: String?
@@ -720,7 +720,7 @@ nonisolated enum FeishuMarkdownExport {
             current.append(line)
         }
         flush()
-        return FeishuDocMarkdownBody(chunks: chunks, outline: outline, images: images(in: chunks.map(\.text).joined(separator: "\n")))
+        return FeishuDocsMarkdownBody(chunks: chunks, outline: outline, images: images(in: chunks.map(\.text).joined(separator: "\n")))
     }
 
     /// `# ` … `###### ` at the start of a line.
@@ -764,13 +764,13 @@ nonisolated enum FeishuMarkdownExport {
 
 // MARK: - Node tree helpers
 
-nonisolated enum FeishuDocTree {
+nonisolated enum FeishuDocsTree {
     /// Block types the reader can scroll to as rows (top-level children of `doc`).
-    static func blocks(_ doc: FeishuDocNode) -> [FeishuDocNode] { doc.children }
+    static func blocks(_ doc: FeishuDocsNode) -> [FeishuDocsNode] { doc.children }
 
     /// The number each item of an ordered list shows. Every docx list item arrives as its own one-item `orderedList`;
     /// consecutive ones keep counting unless one says `restart` (then it starts at its `start`).
-    static func orderedNumbers(_ siblings: [FeishuDocNode]) -> [Int?] {
+    static func orderedNumbers(_ siblings: [FeishuDocsNode]) -> [Int?] {
         var out: [Int?] = []
         var next: Int?
         for n in siblings {
@@ -784,9 +784,9 @@ nonisolated enum FeishuDocTree {
     }
 
     /// Every image source in document order (the gallery pages through them).
-    static func images(_ node: FeishuDocNode) -> [String] {
+    static func images(_ node: FeishuDocsNode) -> [String] {
         var out: [String] = []
-        func walk(_ n: FeishuDocNode) {
+        func walk(_ n: FeishuDocsNode) {
             if n.type == "image", let src = n.attr("src"), !src.isEmpty { out.append(src) }
             n.children.forEach(walk)
         }
@@ -795,26 +795,26 @@ nonisolated enum FeishuDocTree {
     }
 
     /// The headings as an outline, for trees whose `outline` came back empty.
-    static func outline(_ doc: FeishuDocNode) -> [FeishuDocOutlineItem] {
+    static func outline(_ doc: FeishuDocsNode) -> [FeishuDocsOutlineItem] {
         doc.children.compactMap { n in
             guard n.type == "heading", let id = n.blockID else { return nil }
             let title = n.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return title.isEmpty ? nil : FeishuDocOutlineItem(id: id, title: title, level: Int(n.number("level") ?? 1))
+            return title.isEmpty ? nil : FeishuDocsOutlineItem(id: id, title: title, level: Int(n.number("level") ?? 1))
         }
     }
 
     /// The top-level block an outline entry lives in (headings nested in callouts or columns scroll to their container).
-    static func rowID(for blockID: String, in doc: FeishuDocNode) -> String? {
-        func contains(_ n: FeishuDocNode) -> Bool { n.blockID == blockID || n.children.contains(where: contains) }
+    static func rowID(for blockID: String, in doc: FeishuDocsNode) -> String? {
+        func contains(_ n: FeishuDocsNode) -> Bool { n.blockID == blockID || n.children.contains(where: contains) }
         for (i, n) in doc.children.enumerated() where contains(n) { return rowKey(n, index: i) }
         return nil
     }
 
-    static func rowKey(_ n: FeishuDocNode, index: Int) -> String { n.blockID ?? "row-\(index)" }
+    static func rowKey(_ n: FeishuDocsNode, index: Int) -> String { n.blockID ?? "row-\(index)" }
 }
 
 /// A table laid out on a grid: each row's slots, with spanned-over positions left empty so columns line up.
-nonisolated struct FeishuDocTableLayout: Equatable, Sendable {
+nonisolated struct FeishuDocsTableLayout: Equatable, Sendable {
     nonisolated struct Slot: Equatable, Sendable {
         /// Index of the cell in its row's content, nil for a position covered by a cell above or to the left.
         var cell: Int?
@@ -827,7 +827,7 @@ nonisolated struct FeishuDocTableLayout: Equatable, Sendable {
     var columns: Int
     var widths: [Double]
 
-    init(_ table: FeishuDocNode, defaultWidth: Double = 140, minWidth: Double = 72, maxWidth: Double = 320) {
+    init(_ table: FeishuDocsNode, defaultWidth: Double = 140, minWidth: Double = 72, maxWidth: Double = 320) {
         let tableRows = table.children.filter { $0.type == "tableRow" }
         var covered: [Int: Int] = [:]   // column -> rows still covered by a rowspan from above
         var out: [[Slot]] = []

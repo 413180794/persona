@@ -77,7 +77,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | `FeishuDocsModels.swift` | 线上类型 + 纯逻辑（按天分组、类型筛选、文件夹优先、知识库树展开、Markdown 切块 / 目录、有序列表编号、表格合并单元格布局、错误码），单测在 `JarvisTests/FeishuDocsTests.swift` |
-| `FeishuDocsComponents.swift` | `api.larkDocs`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocPager`、文档图标 / 行 / 筛选条 / 三态 |
+| `FeishuDocsComponents.swift` | `api.feishuDocsGet`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocsPager`、文档图标 / 行 / 筛选条 / 三态 |
 | `FeishuDocs.swift` | 云文档首页（搜索、知识库 / 文档通知入口、快速访问、最近 / 共享给我 / 收藏 / 我的空间 / 推荐）、文件夹页 |
 | `FeishuDocReader.swift` | 阅读器：标题、位置、所有者、更新时间、阅读数、AI 摘要、目录、评论、在飞书中打开；多维表格 / 文件 / 画板页 |
 | `FeishuDocRenderer.swift` | JSON 节点树原生渲染（段落、标题、列表、待办、引用、高亮块、分栏、代码、表格、图片、书签、嵌入、附件、任务…） |
@@ -86,7 +86,7 @@
 - 阅读顺序：`format=markdown` → 403 `DOCUMENT_EXPORT_FORBIDDEN` 或 422 `DOCUMENT_FORMAT_UNSUPPORTED` 时 `format=json`。
   JSON 里带 `base` 是多维表格（不渲染，给「在飞书中打开」）；`object.kind=file` 是云空间文件（「预览文件」走
   `documents/drive/files/:token/download` + Quick Look）；`whiteboard` 显示 `object.image`。`/base/` 链接直接判定，不去读几 MB 的表数据。
-- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `larkDocs` 拿错误码。
+- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `feishuDocsGet` 拿错误码。
 - Markdown 导出的怪处：开头固定是 `# 标题` + `[Source](<url>)`（阅读器自己画标题，要去掉）；图片是**绝对地址**
   `http://<lark-connector>:3333/api/documents/…`，hub 的改写只换 JSON 字符串开头的 `"/api/`，所以客户端把它改成 `/api/v1/lark/raw/documents/…`；
   标题里有 `\-`、`\+` 之类的转义（目录要去转义）；没有 outline，自己按 `#` 行（跳过代码块）切块，每块一个懒加载行，目录按块 id 跳转。
@@ -100,8 +100,6 @@
 - AI 摘要只读缓存（`state=ready` 才显示，`missing` 不触发生成）；文档通知接口在当前账号下返回空列表（已按 contract 实现，显示空状态）。
 - 知识库：`wiki/spaces?scope=recent` 的 `kind` 全是 `other`；树一次只给根，子级 `children?node=` 展开时整层读完（游标循环）；
   快捷方式节点的子级在 `target.spaceId/target.token` 下。
-- 路由坑：工作台把 `feishuOpen` 注入在 NavigationStack 根视图上，`navigationDestination` 推出来的页面**拿不到**（是 nil），
-  `Docs/` 的每个页面外面包了 `feishuDocsRouting()`：为 nil 时用本地 `navigationDestination(item:)` 推，并把它重新注入给子视图。
 - DEBUG 启动参数（按 CLAUDE.md 用 `open…` / `show…` 命名，需加进 release.sh 的检查列表）：`-openFeishuDoc <url>`（云文档页启动后打开该文档）、
   `-openFeishuDocHeading <n>`（跳到第 n 个目录项）、`-showFeishuDocSheet outline|comments`、`-openFeishuWikiSpace <id>`、
   `-openFeishuWikiNode YES`（展开第一个有子页面的节点）、`-showFeishuWikiUpdates YES`；
