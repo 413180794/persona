@@ -20,7 +20,9 @@ node 的 `session.start`：
 ## 会话 id 与 transcript
 
 - mac 装了 herdr 的 claude integration，`agent list` 带 `agent_session.value`（= Claude session id）。**example-machine 没装**，拿不到 id。
-- 兜底顺序：herdr 上报 → 我们 hook 里记下的 `HERDR_PANE_ID`→`session_id`（hook 进程继承 pane 的环境变量）→ 按 cwd 推项目目录
+- 兜底顺序：herdr 上报 → 我们 hook 里记下的 `HERDR_PANE_ID`→`session_id`（hook 进程继承 pane 的环境变量，只有 Jarvis 启动的会话有）
+  → **窗格里 claude 进程的 `~/.claude/sessions/<pid>.json`**（Claude Code 自己维护，含当前 `sessionId`，`/clear` 后会更新；
+  pid 用 `herdr pane process-info --pane <id>` 拿，缓存一分钟）→ 标题匹配 AI 标题 → 按 cwd 推项目目录
   （cwd 里非字母数字都换成 `-`，如 `/Users/me/code/jarvis` → `-Users-me-code-jarvis`）里最新的 `.jsonl`。
 - transcript：`~/.claude/projects/<编码后的 cwd>/<session id>.jsonl`，每个内容块完成就追加一行（thinking、text、tool_use 各自一行，
   tool_result 在下一条 user 行里）。不是逐 token，逐字效果靠屏幕采样。
@@ -97,4 +99,11 @@ node 的 `session.start`：
 - node 在后台任务的增量扫描里一起解析，`Session.loop` 给出提示词、间隔、下次唤醒时间；下次唤醒过了 15 分钟还没新的 ScheduleWakeup，视为循环已随 claude 退出。
 - 停止：外部没法取消已经安排的唤醒，手机「停止循环」是给 Agent 发一条消息，让它调 `ScheduleWakeup(stop)` / `CronDelete`（`AppModel.stopLoop`）。
 - 请求体（api-request 行）里也有这些工具名（工具定义），统计时只看 assistant 的 tool_use。
+
+## 改名（2026-10-25 实测）
+
+- `/rename <名字>`：Claude Code 往 transcript 写 `{"type":"custom-title","customTitle":"<名字>","sessionId":…}`，输入框上方分隔线显示名字，
+  `claude --resume` 列表也用它。解析时 custom-title 优先于 ai-title（之后再来的 ai-title 不覆盖）。
+- herdr：`herdr workspace rename <workspace_id> <label>`、`herdr tab rename <tab_id> <label>`。
+- 手机改名走 hub `…/rename` 接口；空间名是置顶 / 屏蔽的 key，hub 改名时一并迁移。
 

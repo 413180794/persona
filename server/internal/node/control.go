@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -499,4 +500,51 @@ func (n *Node) editQueue(ctx context.Context, id string, keep []int) ([]string, 
 		}
 	}
 	return queue, nil
+}
+
+// renameSpace renames a herdr workspace (what the phone calls a space).
+func (n *Node) renameSpace(ctx context.Context, workspaceID, name string) error {
+	name = strings.TrimSpace(name)
+	if workspaceID == "" || name == "" {
+		return fmt.Errorf("workspace and name are required")
+	}
+	return n.herdr.WorkspaceRename(ctx, workspaceID, name)
+}
+
+// renameSession renames the herdr tab a session runs in and / or the Claude session itself. A live claude gets
+// `/rename <title>` (it records a custom-title, shown in its prompt, /resume and our lists); for one that is not
+// running we append the same custom-title line Claude Code writes.
+func (n *Node) renameSession(ctx context.Context, id string, tab, title *string) error {
+	a, live := n.agent(id)
+	if tab != nil {
+		name := strings.TrimSpace(*tab)
+		if name == "" || !live || a.TabID == "" {
+			return fmt.Errorf("the tab can only be renamed while the session runs in herdr")
+		}
+		if err := n.herdr.TabRename(ctx, a.TabID, name); err != nil {
+			return err
+		}
+	}
+	if title != nil {
+		t := strings.Join(strings.Fields(*title), " ")
+		if t == "" {
+			return fmt.Errorf("empty title")
+		}
+		if live && !n.isAssistantSession(id) {
+			return n.herdr.AgentPrompt(ctx, a.PaneID, "/rename "+t)
+		}
+		p := n.transcriptPath(id)
+		if p == "" {
+			return fmt.Errorf("transcript for session %s not found", id)
+		}
+		line, _ := json.Marshal(map[string]string{"type": "custom-title", "customTitle": t, "sessionId": id})
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = f.Write(append(line, '\n'))
+		return err
+	}
+	return nil
 }

@@ -307,3 +307,20 @@ extension APIClient {
     }
 }
 
+extension APIClient {
+    /// Renames a herdr workspace; the hub carries pins / mutes over to the new name.
+    func renameSpace(machine: String, workspaceID: String, name: String) async throws {
+        try await post("/api/v1/machines/\(machine)/spaces/\(workspaceID)/rename", body: ["name": name])
+    }
+
+    struct RenameBody: Encodable {
+        var tabName: String?
+        var title: String?
+        enum CodingKeys: String, CodingKey { case title; case tabName = "tab_name" }
+    }
+    /// Renames the session's herdr tab and / or the Claude session (`/rename`).
+    func renameSession(_ k: SessionKey, tabName: String?, title: String?) async throws {
+        try await post("/api/v1/sessions/\(k.machineID)/\(k.sessionID)/rename", body: RenameBody(tabName: tabName, title: title))
+    }
+}
+

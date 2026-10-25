@@ -42,6 +42,7 @@ type Node struct {
 	lastList string                    // serialized last sessions.changed payload
 	metas    map[string]quickMeta      // transcript path -> cached meta
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
+	panePIDs map[string]panePID        // pane -> its claude pid (no herdr integration: example-machine)
 }
 
 func New(version string) (*Node, error) {
@@ -64,20 +65,21 @@ func New(version string) (*Node, error) {
 		return nil, err
 	}
 	n := &Node{
-		Version: version,
-		home:    home,
-		dir:     dir,
-		bin:     bin,
-		herdr:   herdr.New(),
-		logger:  log.New(os.Stderr, "node: ", log.LstdFlags|log.Lmsgprefix),
-		files:   map[string]*transcript.File{},
-		paths:   map[string]string{},
-		watches: map[string]*watch{},
-		agents:  map[string]herdr.Agent{},
-		panes:   map[string]string{},
-		procs:   map[string]*assistantProc{},
-		metas:   map[string]quickMeta{},
-		bgScans: map[string]*bgScan{},
+		Version:  version,
+		home:     home,
+		dir:      dir,
+		bin:      bin,
+		herdr:    herdr.New(),
+		logger:   log.New(os.Stderr, "node: ", log.LstdFlags|log.Lmsgprefix),
+		files:    map[string]*transcript.File{},
+		paths:    map[string]string{},
+		watches:  map[string]*watch{},
+		agents:   map[string]herdr.Agent{},
+		panes:    map[string]string{},
+		procs:    map[string]*assistantProc{},
+		metas:    map[string]quickMeta{},
+		bgScans:  map[string]*bgScan{},
+		panePIDs: map[string]panePID{},
 	}
 	n.state = newState()
 	return n, nil
@@ -182,6 +184,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Hash            string          `json:"hash"`
 		Skip            int             `json:"skip"`
 		Turns           int             `json:"turns"`
+		Name            string          `json:"name"`
+		TabName         *string         `json:"tab_name"`
+		Title           *string         `json:"title"`
 		Raw             json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -263,6 +268,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"settings": list}, err
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd)
+	case "space.rename":
+		return ok(n.renameSpace(ctx, p.WorkspaceID, p.Name))
+	case "session.rename":
+		return ok(n.renameSession(ctx, p.SessionID, p.TabName, p.Title))
 	case "fs.list":
 		return n.listDir(p.Path, p.Cwd)
 	case "git.status":

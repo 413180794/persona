@@ -143,5 +143,19 @@ struct TurnTests {
         p = p.togglingMute(session: "example-machine/a", space: "example-machine/app")
         #expect(!p.mutes(session: "example-machine/a", space: "example-machine/app") && p.sessions.isEmpty && p.allowed.isEmpty)
     }
+
+    @Test func noticeAfterARecapJoinsTheWork() {
+        let items = [
+            item(1, .text, role: "user", text: "go"), item(2, .text, text: "done"),
+            item(3, .recap, role: "system", text: "recap"),
+            item(4, .notice, role: "system", text: "Background command \"x\" completed (exit code 0)"),
+            item(5, .text, text: "the command finished"),
+        ]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 3) // turn, recap, a turn holding the notice in its work
+        guard case .turn(let t) = blocks[2] else { Issue.record("turn expected"); return }
+        #expect(t.users.isEmpty && t.process.count == 1)
+        if case .assistant(let a) = t.answer { #expect(a.text == "the command finished") } else { Issue.record("answer") }
+    }
 }
 

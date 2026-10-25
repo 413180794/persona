@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -459,13 +460,72 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 	}
 	n.mu.Unlock()
 	for _, a := range unknown {
-		if id := n.guessSession(a, m); id != "" {
+		// Without herdr's claude integration (example-machine) the pane's claude process says which session it runs; a
+		// guess (title, then newest transcript in the directory) is only the last resort — six agents in one repo
+		// got each other's tab names that way.
+		id := n.sessionFromProcess(a.PaneID)
+		if _, taken := m[id]; id == "" || taken {
+			id = n.guessSession(a, m)
+		}
+		if id != "" {
 			m[id] = a
 		}
 	}
 	n.mu.Lock()
 	n.agents = m
 	n.mu.Unlock()
+}
+
+// sessionFromProcess reads the session a pane's claude runs from ~/.claude/sessions/<pid>.json, which Claude Code
+// keeps current (a /clear moves it to a new session id). The pane's pid is cached for a minute.
+func (n *Node) sessionFromProcess(pane string) string {
+	n.mu.Lock()
+	c, ok := n.panePIDs[pane]
+	n.mu.Unlock()
+	if !ok || time.Since(c.checked) > time.Minute {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		pids, err := n.herdr.PaneProcesses(ctx, pane)
+		cancel()
+		if err != nil {
+			return ""
+		}
+		c = panePID{checked: time.Now()}
+		for _, pid := range pids {
+			if _, err := os.Stat(n.claudeSessionFile(pid)); err == nil {
+				c.pid = pid
+				break
+			}
+		}
+		n.mu.Lock()
+		n.panePIDs[pane] = c
+		n.mu.Unlock()
+	}
+	if c.pid == 0 {
+		return ""
+	}
+	b, err := os.ReadFile(n.claudeSessionFile(c.pid))
+	if err != nil {
+		n.mu.Lock()
+		delete(n.panePIDs, pane) // claude exited / restarted: look again next time
+		n.mu.Unlock()
+		return ""
+	}
+	var f struct {
+		SessionID string `json:"sessionId"`
+	}
+	if json.Unmarshal(b, &f) != nil || !validID(f.SessionID) {
+		return ""
+	}
+	return f.SessionID
+}
+
+type panePID struct {
+	pid     int
+	checked time.Time
+}
+
+func (n *Node) claudeSessionFile(pid int) string {
+	return filepath.Join(n.home, ".claude", "sessions", strconv.Itoa(pid)+".json")
 }
 
 // bindPane records which session runs in a pane (from start() and from hook events).

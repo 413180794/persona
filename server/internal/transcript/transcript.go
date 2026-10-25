@@ -44,6 +44,7 @@ type entry struct {
 		} `json:"usage"`
 	} `json:"message"`
 	AITitle        string `json:"aiTitle"`
+	CustomTitle    string `json:"customTitle"`
 	GitBranch      string `json:"gitBranch"`
 	Version        string `json:"version"`
 	PermissionMode string `json:"permissionMode"`
@@ -103,6 +104,7 @@ type Meta struct {
 	LastActivity time.Time
 	FirstUser    string // first thing the user typed; titles untitled (headless) sessions
 	Title        string
+	customTitle  bool // Title came from /rename; later ai-titles do not replace it
 	Cwd          string
 	Model        string
 	LastText     string
@@ -172,8 +174,14 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		meta.applyQueue(e.Operation, content)
 		return nil
 	}
+	if e.Type == "custom-title" && e.CustomTitle != "" { // /rename: the user's name beats Claude's generated one
+		meta.Title, meta.customTitle = e.CustomTitle, true
+		return nil
+	}
 	if e.Type == "ai-title" && e.AITitle != "" {
-		meta.Title = e.AITitle
+		if !meta.customTitle {
+			meta.Title = e.AITitle
+		}
 		return nil
 	}
 	if e.IsSidechain {

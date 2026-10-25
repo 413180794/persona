@@ -75,6 +75,30 @@ type Agent struct {
 	Title         string `json:"terminal_title_stripped"`
 }
 
+// PaneProcesses returns the pids of a pane's foreground processes, claude first.
+func (c *Client) PaneProcesses(ctx context.Context, pane string) ([]int, error) {
+	var out struct {
+		ProcessInfo struct {
+			Foreground []struct {
+				PID  int    `json:"pid"`
+				Name string `json:"name"`
+			} `json:"foreground_processes"`
+		} `json:"process_info"`
+	}
+	if err := c.run(ctx, &out, "pane", "process-info", "--pane", pane); err != nil {
+		return nil, err
+	}
+	var claude, other []int
+	for _, p := range out.ProcessInfo.Foreground {
+		if strings.Contains(p.Name, "claude") {
+			claude = append(claude, p.PID)
+		} else {
+			other = append(other, p.PID)
+		}
+	}
+	return append(claude, other...), nil
+}
+
 func (a Agent) SessionID() string {
 	if a.AgentSession != nil && a.AgentSession.Kind == "id" {
 		return a.AgentSession.Value
@@ -166,6 +190,14 @@ func (c *Client) TabCreate(ctx context.Context, workspace, cwd, label string) (*
 	var res Created
 	err := c.run(ctx, &res, "tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label, "--no-focus")
 	return &res, err
+}
+
+func (c *Client) TabRename(ctx context.Context, tab, label string) error {
+	return c.run(ctx, nil, "tab", "rename", tab, label)
+}
+
+func (c *Client) WorkspaceRename(ctx context.Context, workspace, label string) error {
+	return c.run(ctx, nil, "workspace", "rename", workspace, label)
 }
 
 func (c *Client) TabClose(ctx context.Context, tab string) error {

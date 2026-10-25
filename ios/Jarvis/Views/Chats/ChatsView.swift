@@ -46,6 +46,8 @@ struct ChatsView: View {
     @State private var showNew = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
+    @State private var renamingSpace: SpaceGroup?
+    @State private var renamingSession: Session?
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
@@ -184,6 +186,8 @@ struct ChatsView: View {
                 }
             }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
+            .renameSpaceAlert($renamingSpace)
+            .renameSessionAlert($renamingSession)
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
@@ -206,7 +210,7 @@ struct ChatsView: View {
         }
     }
 
-    private func spaceMenu(_ g: SpaceGroup) -> some View { SpaceMenuItems(group: g) }
+    private func spaceMenu(_ g: SpaceGroup) -> some View { SpaceMenuItems(group: g) { renamingSpace = g } }
 
     private func slotRow(_ s: Session) -> some View {
         NavigationLink(value: s.key) { SlotRow(session: s, muted: model.isMuted(s.key)) }
@@ -233,6 +237,7 @@ struct ChatsView: View {
                 Button { model.togglePin(s.key) } label: {
                     Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash" : "pin")
                 }
+                Button { renamingSession = s } label: { Label("重命名…", systemImage: "pencil") }
                 Button { model.toggleMute(s.key) } label: {
                     Label(model.isMuted(s.key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(s.key) ? "bell" : "bell.slash")
                 }
@@ -491,14 +496,74 @@ struct LoopBadge: View {
 struct SpaceMenuItems: View {
     @Environment(AppModel.self) private var model
     var group: SpaceGroup
+    var rename: (() -> Void)? = nil
 
     var body: some View {
+        if let rename, group.spaceID != "-" {
+            Button(action: rename) { Label("重命名空间", systemImage: "pencil") }
+        }
         Button { model.togglePin(group) } label: {
             Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? "pin.slash" : "pin")
         }
         Button { model.toggleMute(group) } label: {
             Label(model.isMuted(group) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(group) ? "bell" : "bell.slash")
         }
+    }
+}
+
+extension View {
+    /// The rename prompt for a space (herdr workspace): one name.
+    func renameSpaceAlert(_ group: Binding<SpaceGroup?>) -> some View { modifier(RenameSpaceAlert(group: group)) }
+    /// The rename prompt for an agent: its herdr tab and its Claude session name.
+    func renameSessionAlert(_ session: Binding<Session?>) -> some View { modifier(RenameSessionAlert(session: session)) }
+}
+
+private struct RenameSpaceAlert: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var group: SpaceGroup?
+    @State private var name = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("重命名空间", isPresented: Binding(get: { group != nil }, set: { if !$0 { group = nil } })) {
+                TextField("空间名", text: $name)
+                Button("取消", role: .cancel) {}
+                Button("保存") {
+                    if let g = group { Task { await model.renameSpace(g, to: name) } }
+                }
+            } message: {
+                Text("同时改 herdr 里这个 workspace 的名字。")
+            }
+            .onChange(of: group?.id) { _, _ in name = group?.name ?? "" }
+    }
+}
+
+private struct RenameSessionAlert: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var session: Session?
+    @State private var tab = ""
+    @State private var title = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert("重命名", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } })) {
+                if session?.paneID != nil { TextField("标签名（herdr tab）", text: $tab) }
+                TextField("会话名", text: $title)
+                Button("取消", role: .cancel) {}
+                Button("保存") {
+                    guard let s = session else { return }
+                    let newTab = s.paneID != nil && tab != (s.slotName ?? "") ? tab : nil
+                    let newTitle = title != s.title ? title : nil
+                    guard newTab != nil || newTitle != nil else { return }
+                    Task { await model.renameSession(s.key, tab: newTab, title: newTitle) }
+                }
+            } message: {
+                Text("标签名同步到 herdr；会话名用 Claude 的 /rename，Mac 上 claude --resume 也看得到。")
+            }
+            .onChange(of: session?.id) { _, _ in
+                tab = session?.slotName ?? ""
+                title = session?.title ?? ""
+            }
     }
 }
 

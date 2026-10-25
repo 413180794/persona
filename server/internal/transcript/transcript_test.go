@@ -583,3 +583,13 @@ func TestLoopFromScheduleWakeup(t *testing.T) {
 		t.Fatalf("stopped loop still there: %+v", meta.Loop)
 	}
 }
+
+func TestCustomTitleBeatsAITitle(t *testing.T) {
+	var m Meta
+	ParseLine(1, []byte(`{"type":"ai-title","aiTitle":"Generated"}`), &m)
+	ParseLine(2, []byte(`{"type":"custom-title","customTitle":"我起的名字"}`), &m)
+	ParseLine(3, []byte(`{"type":"ai-title","aiTitle":"Generated again"}`), &m)
+	if m.Title != "我起的名字" {
+		t.Fatalf("title = %q", m.Title)
+	}
+}

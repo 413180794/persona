@@ -502,6 +502,42 @@ final class AppModel {
         Task { do { try await api?.setMutes(p) } catch { show(error) } }
     }
 
+    // MARK: Renames
+
+    /// Renames a space (herdr workspace) on its machine; shown at once, the hub keeps pins / mutes with it.
+    func renameSpace(_ g: SpaceGroup, to name: String) async {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let api, !name.isEmpty, name != g.name else { return }
+        let oldKey = Self.pinKey(space: g), newKey = "\(g.machineID)/\(name)"
+        edit(machine: g.machineID) { s in if s.spaceID == g.spaceID { s.spaceName = name } }
+        pins.spaces = pins.spaces.map { $0 == oldKey ? newKey : $0 }
+        mutes.spaces = mutes.spaces.map { $0 == oldKey ? newKey : $0 }
+        do { try await api.renameSpace(machine: g.machineID, workspaceID: g.spaceID, name: name) } catch { show(error) }
+        await refresh()
+    }
+
+    /// Renames an agent's herdr tab and / or its Claude session name (nil leaves that one alone).
+    func renameSession(_ k: SessionKey, tab: String?, title: String?) async {
+        guard let api else { return }
+        let tab = tab?.trimmingCharacters(in: .whitespacesAndNewlines), title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        edit(machine: k.machineID) { s in
+            guard s.sessionID == k.sessionID else { return }
+            if let tab, !tab.isEmpty { s.slotName = tab }
+            if let title, !title.isEmpty { s.title = title }
+        }
+        do {
+            try await api.renameSession(k, tabName: tab?.isEmpty == false ? tab : nil, title: title?.isEmpty == false ? title : nil)
+            toast = Toast("已重命名", style: .success)
+        } catch { show(error) }
+        await refresh()
+    }
+
+    private func edit(machine: String, _ change: (inout Session) -> Void) {
+        guard var list = sessionsByMachine[machine] else { return }
+        for i in list.indices { change(&list[i]) }
+        sessionsByMachine[machine] = list
+    }
+
     // MARK: Loops
 
     /// Asks the agent to end its /loop: nothing outside claude can cancel a scheduled wakeup or its cron job,

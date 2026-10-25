@@ -151,7 +151,10 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                 // Inside a turn: "interrupted" closes it visibly; compaction / API errors are part of the process
                 // (auto-compaction happens mid-turn and must not split it).
                 if current == nil {
-                    blocks.append(.row(row))
+                    // e.g. a background command finishing after a recap: part of the (next) work, never its own line.
+                    current = Turn(id: row.id)
+                    current!.process.append(row)
+                    current!.ordered.append(row)
                 } else if (item.text ?? "").contains("中断") {
                     current!.trailing.append(row)
                 } else {

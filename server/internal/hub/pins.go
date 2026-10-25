@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
+	"time"
 )
 
 // Pins are the spaces and agents the user keeps at the top of the 开发 list (saved in Postgres, so a reinstall or
@@ -115,4 +117,53 @@ func (h *Hub) pinRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, p)
 	})
+}
+
+// renameSpace renames a herdr workspace and carries its pins / mutes over (they are keyed by "machine/name").
+func (h *Hub) renameSpace(w http.ResponseWriter, r *http.Request, m *Machine) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Name) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("name is required"))
+		return
+	}
+	wid, name := r.PathValue("wid"), strings.TrimSpace(in.Name)
+	old := ""
+	for _, s := range m.sessionList() {
+		if s.SpaceID == wid && s.SpaceName != "" {
+			old = s.SpaceName
+			break
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	if err := m.call(ctx, "space.rename", map[string]any{"workspace_id": wid, "name": name}, nil); err != nil {
+		callErr(w, err)
+		return
+	}
+	if old != "" && old != name && h.store != nil {
+		from, to := m.cfg.ID+"/"+old, m.cfg.ID+"/"+name
+		for _, key := range []string{"pins", "mutes"} {
+			p := Pins{}
+			if found, err := h.store.Setting(ctx, key, &p); err != nil || !found {
+				continue
+			}
+			changed := false
+			for i, s := range p.Spaces {
+				if s == from {
+					p.Spaces[i], changed = to, true
+				}
+			}
+			if changed {
+				_ = h.store.PutSetting(ctx, key, p)
+				if key == "mutes" {
+					h.mutesMu.Lock()
+					h.mutes = &p
+					h.mutesMu.Unlock()
+				}
+			}
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true, "name": name})
 }

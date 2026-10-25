@@ -37,6 +37,7 @@ struct ChatView: View {
     /// while it is on — a lone jump into rows the lazy stack never laid out lands on an earlier message.
     @State private var followsEnd = true
     @State private var entered = false
+    @State private var renaming: Session?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -94,6 +95,9 @@ struct ChatView: View {
                     if status.isActive {
                         Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
                     }
+                    if style == .dev, let s = session {
+                        Button { renaming = s } label: { Label("重命名…", systemImage: "pencil") }
+                    }
                     if style == .dev {
                         Button { model.toggleMute(key) } label: {
                             Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? "bell" : "bell.slash")
@@ -139,6 +143,7 @@ struct ChatView: View {
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
+        .renameSessionAlert($renaming)
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
         #if DEBUG
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
@@ -1005,6 +1010,7 @@ struct ToolCountRow: View {
     var body: some View {
         let calls = steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } }
         let thoughts = steps.reduce(0) { if case .thought(let i) = $1, i.kind == .thinking { $0 + 1 } else { $0 } }
+        let notices = steps.count - calls - thoughts
         let busy = running && steps.contains { if case .call(let c) = $0 { c.isRunning } else { false } }
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -1013,7 +1019,7 @@ struct ToolCountRow: View {
             } label: {
                 HStack(spacing: 6) {
                     if busy { ProgressView().controlSize(.mini) }
-                    Text(Self.label(calls: calls, thoughts: thoughts, busy: busy))
+                    Text(Self.label(calls: calls, thoughts: thoughts, notices: notices, busy: busy))
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
@@ -1031,11 +1037,13 @@ struct ToolCountRow: View {
         }
     }
 
-    static func label(calls: Int, thoughts: Int, busy: Bool) -> String {
+    static func label(calls: Int, thoughts: Int, notices: Int = 0, busy: Bool) -> String {
         if busy { return "正在调用工具 · 第 \(calls) 个" + (thoughts > 0 ? "，思考 \(thoughts) 次" : "") }
         var parts: [String] = []
         if calls > 0 { parts.append("调用了 \(calls) 个工具") }
         if thoughts > 0 { parts.append("思考 \(thoughts) 次") }
-        return parts.isEmpty ? "过程" : parts.joined(separator: "，")
+        // Only system notices (a background command finished, …): say so rather than an empty "过程".
+        if parts.isEmpty { return notices > 0 ? "后台通知 \(notices) 条" : "过程" }
+        return parts.joined(separator: "，")
     }
 }

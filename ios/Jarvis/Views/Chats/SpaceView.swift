@@ -49,6 +49,7 @@ struct SpaceView: View {
     var spaceKey: String
     @State private var showNew = false
     @State private var started: SessionKey?
+    @State private var renaming: SpaceGroup?
 
     private var sessions: [Session] {
         model.allSessions.filter { $0.spaceKey == spaceKey && $0.state.isLive }
@@ -97,7 +98,7 @@ struct SpaceView: View {
         .toolbar {
             if let g = SpaceGroup.build(sessions).first {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu { SpaceMenuItems(group: g) } label: {
+                    Menu { SpaceMenuItems(group: g) { renaming = g } } label: {
                         Image(systemName: model.isMuted(g) ? "bell.slash" : "ellipsis")
                     }
                     .accessibilityLabel("空间操作")
@@ -113,6 +114,7 @@ struct SpaceView: View {
             }
         }
         .navigationDestination(item: $started) { key in ChatView(key: key) }
+        .renameSpaceAlert($renaming)
     }
 }
 
