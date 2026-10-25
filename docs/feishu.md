@@ -189,8 +189,8 @@
 - **坑：从工作台推入的页面拿不到 `feishuOpen`**（实测为 nil：WorkbenchView 把它设在栈根内容上，`navigationDestination` 推出的页面不继承），
   所以 `feishuChatChrome()` 在拿不到时用本地 `navigationDestination(item:)` 推 `FeishuRouteView`，并重新注入 `feishuOpen` 给子视图。
 - List 的 insetGrouped 行有很大的圆角裁剪：行内放自带圆角描边的卡片会被切角，快捷入口改成一张卡里四个无边框按钮。
-- DEBUG 启动参数：`-chatInfo <feedId>`（在收藏 / 话题页上自动打开该会话的会话信息）、`-chatInfoPage pins|docs|files|media|todos|members`
-  （再打开子页）、`-chatInfoFrom pins|media|docs|files|todos`（会话信息从该区块开始显示，截下半页用）、`-threadOpen <n>`（话题页打开第 n 个话题）。
+- DEBUG 启动参数：`-openChatInfo <feedId>`（在收藏 / 话题页上自动打开该会话的会话信息）、`-openChatInfoPage pins|docs|files|media|todos|members`
+  （再打开子页）、`-openChatInfoFrom pins|media|docs|files|todos`（会话信息从该区块开始显示，截下半页用）、`-openThreadAt <n>`（话题页打开第 n 个话题）。
 
 ### 今日（`Today/`，leader 最后做）
 聚合：今天的日程（`calendar/week`）、待办（`todos`）、审批待办数、未读 @我（`conversations/unread-mentions`）、文档通知、关注话题的新回复。
