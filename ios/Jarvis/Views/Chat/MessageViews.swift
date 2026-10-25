@@ -74,10 +74,12 @@ struct UserBubble: View {
     @Environment(\.loadImage) private var loadImage
 
     var body: some View {
-        let text = item.text ?? ""
+        let parsed = ContextRef.parse(item.text ?? "")
+        let text = parsed.rest
         let shown = Self.display(text)
         let images = Self.imagePaths(text)
         VStack(alignment: .trailing, spacing: 6) {
+            if !parsed.refs.isEmpty { ContextCards(refs: parsed.refs) }
             if !images.isEmpty, let loadImage {
                 AttachedImages(paths: images, load: loadImage)
             }
@@ -192,7 +194,7 @@ struct PendingBubble: View {
                     }
                     .accessibilityLabel("发送失败，重发或删除")
                 }
-                Text(msg.text)
+                Text(ContextRef.parse(msg.text).rest)
                     .font(.body)
                     .foregroundStyle(Theme.userBubbleText)
                     .padding(.horizontal, 14)
@@ -211,7 +213,7 @@ struct MergedUserBubble: View {
     var items: [Item]
 
     var body: some View {
-        let texts = items.map { UserBubble.display($0.text ?? "") }.filter { !$0.isEmpty }
+        let texts = items.map { UserBubble.display(ContextRef.parse($0.text ?? "").rest) }.filter { !$0.isEmpty }
         HStack {
             Spacer(minLength: 48)
             VStack(alignment: .leading, spacing: 9) {
@@ -339,6 +341,7 @@ struct AssistantText: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Markdown(item.text ?? "")
+                .task(id: item.id) { WebViewPool.shared.preload(WebLinks.find(in: item.text ?? "")) } // links open instantly
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
@@ -450,3 +453,15 @@ struct StreamingText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+nonisolated enum WebLinks {
+    private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+    /// The web links in a message, in order.
+    static func find(in text: String) -> [URL] {
+        guard let d = detector else { return [] }
+        return d.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
+            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+    }
+}
+

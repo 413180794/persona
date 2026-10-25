@@ -50,6 +50,7 @@ struct ChatView: View {
 
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
+    @State private var link: LinkTarget?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -192,6 +193,14 @@ struct ChatView: View {
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
         }
         .environment(\.chatImages, store.items.compactMap(\.image))
+        .environment(\.openLink) { url in link = LinkTarget(url: url) }
+        // Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
+        .environment(\.openURL, OpenURLAction { url in
+            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return .systemAction }
+            link = LinkTarget(url: url)
+            return .handled
+        })
+        .sheet(item: $link) { t in LinkSheet(target: t, key: key) }
         .environment(\.attachImage) { [model, key] img in model.composerInbox[key, default: []].append(img) }
         .environment(\.loadImage) { [model, key] path in
             guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
@@ -625,6 +634,9 @@ struct ChatView: View {
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if let u = UserDefaults.standard.string(forKey: "openLinkURL").flatMap(URL.init(string:)) { // `-openLinkURL <url>`
+                Task { try? await Task.sleep(for: .seconds(3)); link = LinkTarget(url: u) }
+            }
             if UserDefaults.standard.bool(forKey: "openFirstImage") {
                 Task {
                     for _ in 0..<30 { // the cached copy drops images; wait for the hub's
@@ -819,10 +831,17 @@ struct Composer: View {
     @State private var editingIndex: Int?
     @FocusState private var focused: Bool
 
-    private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty }
+    private var canSend: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty
+    }
+
+    private var contexts: Binding<[ContextRef]> {
+        Binding(get: { model.composerContexts[key] ?? [] }, set: { model.composerContexts[key] = $0.isEmpty ? nil : $0 })
+    }
 
     var body: some View {
         VStack(spacing: 8) {
+            if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
             if !images.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -936,11 +955,16 @@ struct Composer: View {
 
     private func sendText(_ raw: String) async {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty || !images.isEmpty else { return }
+        let ctx = model.composerContexts[key] ?? []
+        guard !t.isEmpty || !images.isEmpty || !ctx.isEmpty else { return }
+        // Picked page excerpts ride along as <jarvis-context> tags before what was typed.
+        let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
+        let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
         // On screen at once; the request runs in the background (a failure turns the bubble into "重发").
-        model.sendNow(key, text: t.isEmpty ? "请看图片" : t, images: images.map(\.1))
+        model.sendNow(key, text: message, images: images.map(\.1))
         if raw == text { text = "" }
         images = []
+        model.composerContexts[key] = nil
     }
 
     private func load(_ items: [PhotosPickerItem]) async {

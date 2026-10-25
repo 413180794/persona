@@ -538,6 +538,8 @@ final class AppModel {
 
     /// Images handed to a chat's composer from elsewhere (an image edited in the viewer); the composer takes them.
     var composerInbox: [SessionKey: [UIImage]] = [:]
+    /// Page excerpts picked as context for a chat's next message (`<jarvis-context>`).
+    var composerContexts: [SessionKey: [ContextRef]] = [:]
 
     // MARK: Renames
 

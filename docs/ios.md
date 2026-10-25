@@ -21,6 +21,12 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 - 图片：任何图片点开全屏查看器（`ImageViewer.swift`），左右滑浏览整个会话的所有图片（`chatImages`），顶部「n / m」和关闭，点图片或下拉退出；
   双指 / 双击缩放。底部：保存（仅添加权限）、编辑、分享、拷贝。编辑（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，
   作为下一条消息的附件（`AppModel.composerInbox`），补一句话就能发。输入框里待发的图片点一下也能先编辑再发。
+- 链接（`Views/Link/LinkSheet.swift`）：会话里的 http(s) 链接在 App 内的底部卡片打开（Telegram 式）：先升到 60%，上拉全屏、下拉收起，
+  卡片升到 60% 时后面的对话照常可滚动、可输入（`presentationBackgroundInteraction`）。飞书文档 / 知识库走原生阅读器（`FeishuDocReader`），
+  其他网页用 `WebViewPool`：每条回复出现时预加载其中前 3 个链接，最多常驻 6 个 WKWebView（LRU），共用默认的磁盘网站数据（缓存、登录态），
+  请求用 `returnCacheDataElseLoad`，打开时直接拿已加载好的视图。网页里选中文字，系统菜单多「AI 修改」（填修改要求后立即发给 Agent）和
+  「作为上下文」（输入框上方出现上下文标签，随下一条消息发送）；原生飞书文档用标题栏的「作为上下文」带整篇。上下文在消息里是
+  `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，气泡里解析成引用卡片（点开回到那个链接），原始标签不显示。
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间同伴条（开发页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。

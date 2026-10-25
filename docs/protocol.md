@@ -249,3 +249,12 @@ hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，toke
 
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
 （合并转发卡片里嵌套的消息也一并改写）。
+
+## 消息里的标签（客户端解析）
+
+| 标签 | 谁写 | 含义 / 显示 |
+| --- | --- | --- |
+| `<attached_images>` 每行一个路径 `</attached_images>` | hub（手机发图） | 消息附带的图片；气泡上方方形缩略图 |
+| `<jarvis-context kind="context\|edit" title="…" url="…">文字</jarvis-context>` | 手机（链接卡片里选中文字） | 关联上下文 / 要改的内容；气泡上方引用卡片 |
+| `<cross-session-message from-name="…">…</cross-session-message>` | Claude Code（会话间消息） | 左侧「来自 名字」卡片 |
+

@@ -164,5 +164,15 @@ struct TurnTests {
         #expect(!PendingMessage.same("别的话", "看这个"))
         #expect(UserBubble.display("[Image #21]1 多了一个色块") == "1 多了一个色块")
     }
+
+    @Test func contextTagRoundTrips() {
+        let ref = ContextRef(kind: "edit", title: "A \"quoted\" <title>", url: "https://x.y/a?b=1&c=2", text: "选中的 <b>文字</b>")
+        let msg = ref.xml + "\n\n按要求修改上面选中的内容：更短"
+        let parsed = ContextRef.parse(msg)
+        #expect(parsed.refs.count == 1)
+        #expect(parsed.refs[0].kind == "edit" && parsed.refs[0].title == ref.title && parsed.refs[0].url == ref.url && parsed.refs[0].text == ref.text)
+        #expect(parsed.rest == "按要求修改上面选中的内容：更短")
+        #expect(ContextRef.parse("没有标签").refs.isEmpty)
+    }
 }
 
