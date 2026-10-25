@@ -44,7 +44,6 @@ struct ChatsView: View {
     @State private var query = ""
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @State private var showNew = false
-    @State private var showAllRecent = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
 
@@ -59,15 +58,14 @@ struct ChatsView: View {
     var body: some View {
         let groups = SpaceGroup.build(filtered)
         // Pinned spaces lead and never fold away with the quiet ones.
-        // Muted spaces drop to a folded section at the bottom (no notifications, no attention).
-        let muted = groups.filter { model.isMuted($0) }
-        let unmuted = groups.filter { !model.isMuted($0) }
-        let pinnedSpaces = unmuted.filter { model.isPinned($0) }
-        let active = pinnedSpaces + unmuted.filter { !$0.isQuiet && !model.isPinned($0) }
-        let quiet = unmuted.filter { $0.isQuiet && !model.isPinned($0) }
+        // Pinned spaces lead; muted spaces with something running come after the other busy ones, shown quietly;
+        // quiet spaces (muted or not) fold into 空闲的空间.
+        let pinnedSpaces = groups.filter { model.isPinned($0) && !model.isMuted($0) }
+        let active = pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) && !model.isMuted($0) }
+            + groups.filter { !$0.isQuiet && model.isMuted($0) }
+        let quiet = groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
             .sorted { a, b in (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: a.key)) ?? 0) < (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: b.key)) ?? 0) }
-        let recent = filtered.filter { !$0.state.isLive }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
 
         NavigationStack(path: $path) {
@@ -102,9 +100,7 @@ struct ChatsView: View {
                     Section {
                         // Busy (and pinned / looping) agents first; idle ones fold into one row so a big workspace
                         // stays compact.
-                        let stays: (Session) -> Bool = {
-                            !model.isMuted($0.key) && (!$0.isQuiet || model.isPinned($0.key) || $0.loop != nil)
-                        }
+                        let stays: (Session) -> Bool = { !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil }
                         let idle = g.sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
                         ForEach(g.sessions.filter(stays)) { s in slotRow(s) }
@@ -133,7 +129,7 @@ struct ChatsView: View {
                         HStack(spacing: 4) {
                             Button { path.append(SpaceRoute(id: g.id)) } label: {
                                 SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
-                                            pinned: model.isPinned(g))
+                                            pinned: model.isPinned(g), muted: model.isMuted(g))
                             }
                             .buttonStyle(.plain)
                             Menu { spaceMenu(g) } label: {
@@ -162,41 +158,6 @@ struct ChatsView: View {
                         }
                     } header: {
                         SectionHeader(title: "空闲的空间", count: quiet.count, tint: .secondary)
-                    }
-                }
-
-                if !muted.isEmpty {
-                    Section {
-                        ForEach(muted) { g in
-                            DisclosureGroup(isExpanded: Binding(
-                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
-                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
-                            )) {
-                                ForEach(g.sessions) { s in slotRow(s) }
-                            } label: {
-                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
-                                    .opacity(0.6)
-                            }
-                            .contextMenu { spaceMenu(g) }
-                        }
-                    } header: {
-                        SectionHeader(title: "已屏蔽", count: muted.count, tint: .secondary)
-                    }
-                }
-
-                if !recent.isEmpty {
-                    Section {
-                        ForEach(showAllRecent ? recent : Array(recent.prefix(10))) { s in
-                            NavigationLink(value: s.key) {
-                                RecentRow(session: s, machine: model.machine(s.machineID), showMachine: machineFilter.isEmpty)
-                            }
-                        }
-                        if recent.count > 10 && !showAllRecent {
-                            Button("显示全部 \(recent.count) 个") { withAnimation { showAllRecent = true } }
-                                .font(.subheadline.weight(.medium))
-                        }
-                    } header: {
-                        SectionHeader(title: "最近（未运行）", count: nil, tint: .secondary)
                     }
                 }
 
@@ -337,17 +298,20 @@ struct SpaceHeader: View {
     var machine: Machine?
     var showMachine: Bool
     var pinned = false
+    /// Muted with agents running: quieter than the busy spaces, not fainter than the idle ones.
+    var muted = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(group.state.color)
+            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(muted ? Color.secondary : group.state.color)
             Text(group.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
             if pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+            if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
             if showMachine, let machine {
                 Text(machine.name).font(.caption).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
             Spacer(minLength: 4)
-            StateCounts(group: group)
+            StateCounts(group: group).opacity(muted ? 0.6 : 1)
             Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
         }
         .contentShape(.rect)
@@ -424,7 +388,7 @@ struct SlotRow: View {
             }
         }
         .padding(.vertical, 3)
-        .opacity(muted ? 0.55 : 1)
+        .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 }
 
@@ -486,30 +450,6 @@ struct QuietSpaceRow: View {
 }
 
 /// A session that is no longer running (resumable by sending a message).
-struct RecentRow: View {
-    var session: Session
-    var machine: Machine?
-    var showMachine: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            SessionAvatar(machine: machine, state: .offline, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(session.displayTitle).font(.body.weight(.medium)).lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(Fmt.relative(session.updatedAt)).font(.caption).foregroundStyle(.secondary)
-                }
-                Text([session.folderName, showMachine ? machine?.name : nil].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                if let last = session.lastText, !last.isEmpty {
-                    Text(Fmt.plain(last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-        }
-    }
-}
-
 /// Used by the machine detail page.
 struct SessionRow: View {
     var session: Session
