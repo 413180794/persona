@@ -149,6 +149,41 @@
 - 审批：`approvals/counts`、`approvals?tab=todo|done|initiated|cc…&cursor`、`approvals/detail?instanceId`（表单、流程、时间线）。
 - OKR：`okr/people`、`okr/owners/:ownerId/periods`、`okr/:okrId`（目标、KR、进度、得分）。
 
+#### 实现说明（`Work/`）
+
+文件：`FeishuWorkModels.swift`（模型 + 纯逻辑，单测 `JarvisTests/FeishuWorkTests.swift`）、`FeishuWork.swift`（共享组件）、
+`FeishuTasks.swift`、`FeishuApprovals.swift`、`FeishuOKR.swift`。全部只读，不做完成 / 审批 / 评论。
+
+- **任务列表**：`todos?count=` 和 `todos/completed?count=` 没有游标，只有 `count`（上限 200）；「分页」是滚到底时把 count 加 50 重新拉。
+  未完成按 已逾期 / 今天 / 之后 / 无截止时间 分组（有截止的按时间升序，无截止的按创建时间倒序）。搜索 `todos/search?q=&token=`
+  才有真分页（`hasMore` + `nextToken`），命中项多带 `roles`、`taskLists`（清单名）、`parentSummary`。
+- **全天任务的截止日**存成那天的 UTC 零点（`2026-10-09T00:00:00Z`）：要按 UTC 取年月日再放回本地日历，否则 UTC 以西的时区显示成前一天。
+  带时间的任务过了时刻就算逾期，全天任务过了那天才算。
+- **人只有 id**：`assignees / followers / creator` 都是 `{id,isViewer}`，名字和头像用 `users/:id`（完整资料卡，较重）逐个查，
+  `FeishuPeopleCache` 会话内缓存、去重、并发。
+- **没有「取一个任务」的接口**：`todos/:guid/detail` 只有编号、applink、来源、所在清单，没有标题 / 截止 / 负责人。详情页先用列表里见过的
+  （`FeishuTodoStore`），再依次从它所在清单 `task-lists/:guid`、父任务的 `subtasks`、我的未完成 / 已完成（count=200）里找；都找不到就提示并给
+  「在飞书中打开」（applink）。
+- `task-list-nav/sidebar` 在这个账号上只返回一个空分组，清单侧栏改用 `task-lists`（`isOwner` 分「我创建的 / 与我共享」），
+  点进去 `task-lists/:guid`（分组 + 前若干条任务，`truncated` 表示没拉全）。`task-lists/counts` 必须带 `guids=`（1–60 个），否则 400。
+- 评论 `todos/:guid/comments`（`position` 分页，目前只取第一页）、来源消息 `todos/:guid/references`、子任务 `todos/:guid/subtasks`。
+- **审批列表**：`approvals?tab=todo|done|initiated|ccUnread|ccRead&cursor=&q=&locale=zh-CN`，`nextCursor` 分页，`q` 搜标题和表单。
+  界面的「抄送我」是 `ccUnread` / `ccRead` 两个 tab 合成的二级切换。`approvals/counts` 里 `done` / `initiated` 恒为 0（列表实际有数据），
+  只给 待办 / 抄送未读 显示角标。`fields` 第一项常是系统字段 `UserDepartment`，标签常带全角冒号「文章标题：」，展示前去掉。
+- `readable=false` 的是外部系统的审批（Kani、BABI、People…，带 `externalUrl` / `source`）：`approvals/detail` 对它们返回 502
+  `APPROVAL_DETAIL_UNREADABLE`，所以列表里直接用 Safari 打开外链，不进详情页。
+- **审批详情**：`form`（`fieldList` 明细行、`contact` 人、附件、图片、金额、日期区间、关联审批）优先，没有就用 `fields`；
+  流程用 `process`（步骤 × 并列节点），名字为空且没有人的旁支节点要丢掉；`phase=forecast` 的「结束」节点 `at` 是个几百年后的假时间
+  （33297395130），不显示时间。`approvers` 只有名字，头像从 `process` 的同名 operator 里取。
+- **OKR**：`okr/people` 的 `name` 跟账号语言走（英文），显示用 `localeNames.zh`；周期名同理（`periodName` 是英文，用 periods 里的 `localeNames.zh`）。
+  `okr/:okrId` 的 `objectives` 可能为空（这个账号 2024 Q4 之后都是空的），空周期给「查看上一周期」。人员切换：我 / 上级 / 虚线上级 / 下属 / 同级；
+  点对齐的目标会切到对方那个周期。`okr/progress/kr|objective/:id` 是进展记录（`progressRecordCount > 0` 才给入口）。
+- **踩坑：`feishuOpen` 在工作台推入的页面里是 nil**：`WorkbenchView` 把 `.environment(\.feishuOpen)` 挂在栈的根视图上，
+  `navigationDestination` 推出来的页面拿不到。这里用 `FeishuRouteLink` / `.feishuRowLink(_:)`（`NavigationLink(value: FeishuRoute)`，
+  由栈上的 `.feishuRoutes()` 解析）绕开，有 `feishuOpen` 时仍优先用它。
+- DEBUG 启动参数：`-taskGUID <guid>`（打开任务详情）、`-taskScope done|lists`、`-approvalTab todo|done|initiated|cc`、`-approvalID <instanceId>`、
+  `-okrID <okrId>`（我的某个周期，例如有数据的 2024 Q3 `7380825081201295388`）、`-workBottom YES`（详情页停在底部，截下半屏）。
+
 ### 通讯录 / removed / 飞书邮箱（`People/`）
 - 通讯录：`contacts/org` → 根部门；`contacts/departments/:id`（面包屑、负责人、子部门、成员）；`conversations/groups`（我的群组）；
   `contacts/external`；`contacts/bots`；`contacts/closest/people`；`people/:id/report-line`。
