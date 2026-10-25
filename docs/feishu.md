@@ -222,8 +222,7 @@
 - `favorites`：只有 `nextCursor`（最后一个收藏 id）；`kind=merge` 的合并收藏没有 message，只显示来源。老收藏可能没有 `conversationName`，
   单聊（`chatType 1`）用发送者名字兜底。2020 年的图片缩略图已过期，显示破图占位。
 - `threads/feed`：cursor 是 `<rankTimeMs>:<threadId>`，`hasMore` 为 false 时停；只读，不上报已读，点开后只在本地清掉未读角标。
-- **坑：从工作台推入的页面拿不到 `feishuOpen`**（实测为 nil：WorkbenchView 把它设在栈根内容上，`navigationDestination` 推出的页面不继承），
-  所以 `feishuChatChrome()` 在拿不到时用本地 `navigationDestination(item:)` 推 `FeishuRouteView`，并重新注入 `feishuOpen` 给子视图。
+- 资料卡（成员头像、消息卡片发送者）走 `.profile` 路由在当前栈里推入；话题弹层（`LarkThreadView`，自带栈）里仍是 sheet。
 - List 的 insetGrouped 行有很大的圆角裁剪：行内放自带圆角描边的卡片会被切角，快捷入口改成一张卡里四个无边框按钮。
 - DEBUG 启动参数：`-openChatInfo <feedId>`（在收藏 / 话题页上自动打开该会话的会话信息）、`-openChatInfoPage pins|docs|files|media|todos|members`
   （再打开子页）、`-openChatInfoFrom pins|media|docs|files|todos`（会话信息从该区块开始显示，截下半页用）、`-openThreadAt <n>`（话题页打开第 n 个话题）。
