@@ -141,21 +141,11 @@ struct TerminalPanel: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
         } else {
-            let chunks = Self.chunks(text)
-            ScrollView([.vertical, .horizontal]) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    olderControl
-                    ForEach(chunks.indices, id: \.self) { i in
-                        Text(chunks[i])
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(Theme.terminalText)
-                            .fixedSize()
-                    }
-                }
-                .textSelection(.enabled)
-                .padding(10)
+            VStack(alignment: .leading, spacing: 0) {
+                olderControl.padding(.horizontal, 10).padding(.top, 8)
+                // Unwrapped and scrollable both ways; follows the last line unless you scrolled up to read.
+                MonoTextView(text: MonoText.plain(text, color: UIColor(Theme.terminalText)), followsEnd: true)
             }
-            .defaultScrollAnchor(.bottomLeading)
             .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .bottom) {
                 if paused {
@@ -200,13 +190,6 @@ struct TerminalPanel: View {
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(Theme.terminalText.opacity(0.55))
-        .padding(.bottom, 8)
-    }
-
-    /// Long scrollback renders as blocks of lines so the lazy stack only lays out what is on screen.
-    private static func chunks(_ text: String) -> [String] {
-        let all = text.components(separatedBy: "\n")
-        return stride(from: 0, to: all.count, by: 200).map { all[$0..<min($0 + 200, all.count)].joined(separator: "\n") }
     }
 
     private func refresh() async {

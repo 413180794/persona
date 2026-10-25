@@ -111,7 +111,7 @@ struct ChatView: View {
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         .onChange(of: pane) { _, p in
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
-            if p == .chat { position = ScrollPosition(edge: .bottom); atBottom = true }
+            if p == .chat { position = ScrollPosition(id: Self.bottomID, anchor: .bottom); atBottom = true }
         }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
@@ -130,6 +130,10 @@ struct ChatView: View {
         #endif
         .environment(\.openFile) { path in
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
+        }
+        .environment(\.loadImage) { [model, key] path in
+            guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
+            return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
         }
         .onAppear(perform: appeared)
         .onDisappear {
@@ -156,8 +160,7 @@ struct ChatView: View {
                 out += t.users.map { .row($0) }
                 if live || !t.process.isEmpty { out.append(.header(t, live: live, open: open)) }
                 if open {
-                    let work = live ? t.steps : t.process
-                    for r in work { out += Self.stepLines(r, running: live && r.id == t.steps.last?.id) }
+                    out += Self.workLines(live ? t.steps : t.process, live: live)
                     if !live, let a = t.answer { out.append(.row(a)) }
                 } else if let a = t.answer {
                     out.append(.row(a))
@@ -168,22 +171,29 @@ struct ChatView: View {
         return out
     }
 
-    /// One step of the work: narration in gray, each stretch of tool calls as one "调用了 N 个工具" line.
-    private static func stepLines(_ r: ChatRow, running: Bool) -> [ChatLine] {
-        switch r {
-        case .thinking(let i):
-            return (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [.thought(i)]
-        case .tools(let steps):
-            let segments = ToolSegment.split(steps)
-            return segments.map { seg in
-                switch seg.kind {
-                case .thought(let i): .thought(i)
-                case .calls(let calls): .tools(id: seg.id, steps: calls, running: running && seg.id == segments.last?.id)
-                }
-            }
-        default:
-            return [.row(r)]
+    /// The work of a turn: the agent's words in full; everything between them — tool calls and thinking (newer
+    /// Claude Code writes its narration as thinking) — as one line "调用了 3 个工具，思考 2 次" to tap open.
+    private static func workLines(_ rows: [ChatRow], live: Bool) -> [ChatLine] {
+        var out: [ChatLine] = []
+        var run: [ToolStep] = []
+        func flush(last: Bool) {
+            guard let first = run.first else { return }
+            out.append(.tools(id: first.id, steps: run, running: live && last))
+            run = []
         }
+        for r in rows {
+            switch r {
+            case .thinking(let i):
+                if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { run.append(.thought(i)) }
+            case .tools(let steps):
+                run += steps
+            default:
+                flush(last: false)
+                out.append(.row(r))
+            }
+        }
+        flush(last: true)
+        return out
     }
 
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
@@ -195,9 +205,16 @@ struct ChatView: View {
                 Haptics.tap()
                 withAnimation(.snappy) { openTurns[t.id] = !open }
             }
-        case .thought(let i): ThoughtText(text: i.text ?? "")
         case .tools(_, let steps, let running): ToolCountRow(steps: steps, running: running)
         }
+    }
+
+    static let bottomID = "chat-bottom"
+
+    /// Scrolls to the sentinel after the last row by id: SwiftUI lays that row out and positions around it, unlike
+    /// `scrollTo(edge: .bottom)`, which trusts the lazy stack's estimated height and can land in unrendered space.
+    private func scrollToEnd() {
+        position.scrollTo(id: Self.bottomID, anchor: .bottom)
     }
 
     private var liveTurnID: String? {
@@ -261,6 +278,12 @@ struct ChatView: View {
                         .id(line.id)
                         .zIndex(menu.selected != nil && line.rowID == menu.selected ? 1 : 0)
                 }
+                // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
+                let queued = Set((session?.queued ?? []).map(PendingMessage.normalize))
+                ForEach(store.pending.filter { !queued.contains(PendingMessage.normalize($0.text)) }) { msg in
+                    PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
+                        .id(msg.id.uuidString)
+                }
                 if style == .assistant {
                     let live = store.liveText
                     let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
@@ -274,6 +297,7 @@ struct ChatView: View {
                 // (geometry math missed the composer / queue insets and kept the arrow up at the very end).
                 Color.clear
                     .frame(height: 1)
+                    .id(Self.bottomID)
                     .onScrollVisibilityChange(threshold: 0.01) { visible in atBottom = visible }
                 if let err = store.error {
                     Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger)
@@ -293,19 +317,23 @@ struct ChatView: View {
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
 
         .onChange(of: rows.last?.id) { _, _ in
-            if atBottom { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } }
+            if atBottom { withAnimation(.snappy) { scrollToEnd() } }
         }
         // A turn finishing folds its work away (the content gets much shorter) and a new one starts: without a
         // jump the old offset lands in empty space below the content. Your own new message always goes to the end.
-        .onChange(of: liveTurnID) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
-        .onChange(of: lastPromptID) { old, _ in if old != nil { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } } }
+        .onChange(of: liveTurnID) { _, _ in if atBottom { scrollToEnd() } }
+        .onChange(of: lastPromptID) { old, _ in if old != nil { scrollToEnd() } }
+        .onChange(of: store.pending.count) { old, new in if new > old { withAnimation(.snappy) { scrollToEnd() } } }
+        // A message absorbed mid-turn is inserted above the timer, far up: re-anchor on the end so the viewport does
+        // not end up in a stretch the lazy stack never laid out (blank page).
+        .onChange(of: store.items.count) { _, _ in if atBottom { scrollToEnd() } }
         .onChange(of: store.liveText.count / 40) { _, _ in
-            if atBottom { position.scrollTo(edge: .bottom) }
+            if atBottom { scrollToEnd() }
         }
         .overlay(alignment: .bottomTrailing) {
             if !atBottom {
                 Button {
-                    withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
+                    withAnimation(.snappy) { scrollToEnd() }
                 } label: {
                     Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
                 }
@@ -345,6 +373,7 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
+            if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
             if UserDefaults.standard.bool(forKey: "showMenu") { // the long-press bar on the last answer, for screenshots
                 Task {
                     try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 40 : 6))
@@ -405,7 +434,7 @@ struct ChatView: View {
         menu.selected = nil
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
         git = nil
-        position = ScrollPosition(edge: .bottom)
+        position = ScrollPosition(id: Self.bottomID, anchor: .bottom)
         model.subscribe(next)
         model.visibleSession = next
         model.markSeen(next)
@@ -478,7 +507,6 @@ struct Composer: View {
     @State private var showPhotos = false
     @State private var showCamera = false
     @State private var images: [(UIImage, ImagePayload)] = []
-    @State private var sending = false
     @FocusState private var focused: Bool
 
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty }
@@ -535,13 +563,13 @@ struct Composer: View {
                         Task { await sendText(text) }
                     } label: {
                         Group {
-                            if sending { ProgressView().tint(.white) } else { Image(systemName: "arrow.up").font(.body.weight(.bold)) }
+                            Image(systemName: "arrow.up").font(.body.weight(.bold))
                         }
                         .frame(width: 36, height: 36)
                     }
                     .buttonStyle(.glassProminent)
                     .clipShape(.circle)
-                    .disabled(!canSend || sending)
+                    .disabled(!canSend)
                     .keyboardShortcut(.return, modifiers: .command)
                 } else {
                     Button {
@@ -569,14 +597,10 @@ struct Composer: View {
     private func sendText(_ raw: String) async {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty || !images.isEmpty else { return }
-        sending = true
-        let payloads = images.map(\.1)
-        let ok = await model.send(key, text: t.isEmpty ? "请看图片" : t, images: payloads)
-        sending = false
-        if ok {
-            if raw == text { text = "" }
-            images = []
-        }
+        // On screen at once; the request runs in the background (a failure turns the bubble into "重发").
+        model.sendNow(key, text: t.isEmpty ? "请看图片" : t, images: images.map(\.1))
+        if raw == text { text = "" }
+        images = []
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
@@ -818,14 +842,12 @@ struct DevInfoCard: View {
 enum ChatLine: Identifiable {
     case row(ChatRow)
     case header(Turn, live: Bool, open: Bool)
-    case thought(Item)
     case tools(id: String, steps: [ToolStep], running: Bool)
 
     var id: String {
         switch self {
         case .row(let r): r.id
         case .header(let t, _, _): "hdr-" + t.id
-        case .thought(let i): "th-" + i.id
         case .tools(let id, _, _): "tc-" + id
         }
     }
@@ -886,51 +908,7 @@ struct WorkHeader: View {
     }
 }
 
-/// A tool run cut at the narration between calls.
-struct ToolSegment: Identifiable {
-    enum Kind { case calls([ToolStep]), thought(Item) }
-    var id: String
-    var kind: Kind
-
-    static func split(_ steps: [ToolStep]) -> [ToolSegment] {
-        var out: [ToolSegment] = []
-        var calls: [ToolStep] = []
-        func flush() {
-            if let first = calls.first { out.append(ToolSegment(id: first.id, kind: .calls(calls))) }
-            calls = []
-        }
-        for s in steps {
-            switch s {
-            case .call: calls.append(s)
-            case .thought(let i):
-                if (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-                flush()
-                out.append(ToolSegment(id: i.id, kind: .thought(i)))
-            }
-        }
-        flush()
-        return out
-    }
-}
-
-/// What the agent thought / narrated between actions: quieter than its answers.
-struct ThoughtText: View {
-    var text: String
-
-    var body: some View {
-        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Markdown(text)
-                .markdownTextStyle(\.text) { // inside the theme so it wins over the theme's text style
-                    ForegroundColor(.secondary)
-                    FontSize(.em(0.92))
-                }
-                .markdownTheme(.jarvis)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-/// A run of tool calls as one quiet line, "调用了 3 个工具 ›"; tap to see each call.
+/// The work between the agent's words as one quiet line, "调用了 3 个工具，思考 2 次 ›"; tap to see each step.
 struct ToolCountRow: View {
     var steps: [ToolStep]
     var running: Bool
@@ -938,31 +916,38 @@ struct ToolCountRow: View {
 
     var body: some View {
         let calls = steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } }
+        let thoughts = steps.count - calls
         let busy = running && steps.contains { if case .call(let c) = $0 { c.isRunning } else { false } }
-        if calls > 0 {
-            VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    Haptics.tap()
-                    withAnimation(.snappy) { expanded.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        if busy { ProgressView().controlSize(.mini) }
-                        Text(busy ? "正在调用工具 · 第 \(calls) 个" : "调用了 \(calls) 个工具")
-                        Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.semibold))
-                            .rotationEffect(.degrees(expanded ? 90 : 0))
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .contentShape(.rect)
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                Haptics.tap()
+                withAnimation(.snappy) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    if busy { ProgressView().controlSize(.mini) }
+                    Text(Self.label(calls: calls, thoughts: thoughts, busy: busy))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .buttonStyle(.plain)
-                if expanded {
-                    ToolGroupView(steps: steps, isLatest: running)
-                        .transition(.opacity)
-                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            if expanded {
+                ToolGroupView(steps: steps, isLatest: running)
+                    .transition(.opacity)
             }
         }
+    }
+
+    static func label(calls: Int, thoughts: Int, busy: Bool) -> String {
+        if busy { return "正在调用工具 · 第 \(calls) 个" + (thoughts > 0 ? "，思考 \(thoughts) 次" : "") }
+        var parts: [String] = []
+        if calls > 0 { parts.append("调用了 \(calls) 个工具") }
+        if thoughts > 0 { parts.append("思考 \(thoughts) 次") }
+        return parts.joined(separator: "，")
     }
 }

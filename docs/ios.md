@@ -10,7 +10,7 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 | 对话 | **Jarvis 助手**：example-machine 上 `~/.jarvis/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
 右上角随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* / provider-* skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「用了 N 个工具 · 电脑、iPhone…」。左上角历史对话，右上角新对话；首次启动自动接上最近一段 |
 | 开发 | 原来的会话列表（不含助手对话）：「需要你处理」卡片 → 进行中 → 刚完成 → 空闲（折叠）→ 最近；搜索、按机器筛选、左滑中断、右滑关闭 |
-| 信息 | 照飞书手机端「消息」页：顶部置顶栏（头像 + 未读角标，一行 6 个 + 展开）、消息 / 未读 N / 标记 三个视图；左上角「分组」抽屉：消息、已完成、标记、全部标签，最后是邮件。行样式同飞书：头像右上角角标（免打扰灰色、99+）、名字后的外部 / 公开 / 机器人标签、群聊预览带发送者、[有人@我]、免打扰铃铛。消息列表不重复显示置顶会话、不显示已完成；带标签的会话按标签显示规则（读完即隐去，飞书服务端规则）。右滑「完成」，左滑 标为未读 / 置顶 / 免打扰，长按 置顶、标为未读、标记、标签、免打扰、完成。进群从最早一条未读开始（「以下为新消息」分隔线），往下滚加载更新的，只把上过屏的消息上报为已读；「N 条新消息 / 回到最新」「有人@你」跳转。卡片渲染等见下文「飞书消息渲染」；邮件：合并收件箱 / 单账号、详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），「AI 一键添加」邮箱 |
+| 信息 | 照飞书手机端「消息」页：顶部置顶栏（头像 + 未读角标，一行 6 个 + 展开）、消息 / 未读 N / 标记 三个视图；左上角「分组」抽屉：消息、已完成、标记、全部标签，最后是邮件。行样式同飞书：头像右上角角标（免打扰灰色、99+）、名字后的外部 / 公开 / 机器人标签、群聊预览带发送者、[有人@我]、免打扰铃铛。消息列表不重复显示置顶会话、不显示已完成；带标签的会话按标签显示规则（读完即隐去，飞书服务端规则）。右滑「完成」，左滑 标为未读 / 置顶 / 免打扰，长按 置顶、标为未读、标记、标签、免打扰、完成。聊天页同 lark-connector：所有人（包括自己）的消息都在左侧带头像，群聊里连续消息的第一条显示名字，自己的气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡（封面、签名、状态、发消息、部门 / 上级 / 邮箱等，上级可继续点开）；点表情回应切换自己的回应，「☺︎」或长按「表情回复」打开常用 + 全部表情；removed分享链接渲染成卡片，点开看帖子全文、图片和评论。进群从最早一条未读开始（「以下为新消息」分隔线），往下滚加载更新的，只把上过屏的消息上报为已读；「N 条新消息 / 回到最新」「有人@你」跳转。卡片渲染等见下文「飞书消息渲染」；邮件：合并收件箱 / 单账号、详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），「AI 一键添加」邮箱 |
 | 设置 | 助手（默认启动器 / 模型）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、手机数据开关和授权、通知、重新配对 |
 
 对话页：
@@ -25,8 +25,9 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
 - 展示逻辑（助手和开发统一，`ChatBlock.build` + `TurnView`，参照 Codex）：按轮次分组。一轮 = 一条用户消息 + 这一轮里 Claude 工作时吸收的排队消息
   （transcript 的 `queued_command`，`Item.queued`）。用户消息之后是一条细线标题：进行中「正在工作 39 秒」（每秒走，右侧终端按钮），
-  已完成「已工作 5 分 12 秒」，点它展开 / 收起过程。过程里 Claude 的话照常显示，思考 / 工具之间的叙述是灰色小字，工具调用不显示名字和参数，
-  一段连续的调用只是一行「调用了 N 个工具 ›」（正在跑的是「正在调用工具 · 第 N 个」带转圈），点开才看每个调用。
+  已完成「已工作 5 分 12 秒」，点它展开 / 收起过程。过程里只显示 Claude 的正文（text），两段正文之间的工具调用和思考
+  （新版 Claude Code 把工具之间的旁白写成 thinking）合成一行「调用了 3 个工具，思考 2 次 ›」（正在跑的是「正在调用工具 · 第 N 个」带转圈），
+  点开才看每一步。
   已完成的轮次默认收起，只留最后一条回复，消息 1、2、3…连续排在最前；进行中的轮次默认展开，消息按发出的位置穿插。
   轮次中途的上下文压缩 / API 错误归入过程，「已中断」跟在轮次末尾；recap 单独成行。底部不再有 spinner / token 状态条。
   注意：新版 Claude Code 会把工具之间的叙述写成非空的 `thinking` 块，不能当思考直接藏掉。
@@ -36,6 +37,11 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 - 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
+- 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
+  （或进了排队列表）就换成真消息，失败变红可重发 / 删除。不等网络，任何地方发都不卡。
+- 发的图片：hub 把路径用 `<attached_images>` 标签附在消息后面，App 解析出来在文字上方显示方形缩略图（经 file 接口从会话所在机器读，
+  内存缓存），点开全屏查看；气泡里不显示这个标签（旧的「相关图片：…」/「（我从手机发来了图片…）」也兼容）。
+- 等宽文本（文件、diff、终端，`MonoTextView`）：UIScrollView 里放一个按最长行实测宽度、不滚动的 UITextView，不换行，横竖都能滑，能选字。
 - 长按消息（`MessageMenu.swift`）：像微信一样在按下的位置上方弹出深色操作条（复制 / 选择 / 引用 / 分享，自己的消息多一个编辑），
   不再先把消息浮起来；按的位置靠近导航栏时放到下方。点任意处或手指拖动列表关闭（内容流入导致的程序滚动不关）。
   「选择」打开可任意选取的纯文本页；「引用」把消息以 `> ` 引用放到输入框前面；「编辑」把自己的旧消息放回输入框。
@@ -86,7 +92,7 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群）、`-larkFocus <messageId>`（滚到该条消息）、`-inboxDrawer YES`（打开信息页的分组抽屉）；信息页的分组 / 视图可用 `-inbox.group done|flagged|mail|label:<id>:<名字>`、`-inbox.tab 未读` 直接指定（@AppStorage 读启动参数）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-inboxDrawer YES`（打开信息页的分组抽屉）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）；信息页的分组 / 视图可用 `-inbox.group done|flagged|mail|label:<id>:<名字>`、`-inbox.tab 未读` 直接指定（@AppStorage 读启动参数）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。

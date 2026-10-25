@@ -262,7 +262,8 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 		return err
 	}
 	if len(paths) > 0 {
-		text = strings.TrimSpace(text) + "\n\n相关图片：" + strings.Join(paths, "、")
+		// In a tag so it never mixes with what the user typed; the phone shows these as thumbnails.
+		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
 	return n.herdr.AgentPrompt(ctx, pane, text)
 }

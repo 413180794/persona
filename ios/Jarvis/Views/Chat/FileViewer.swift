@@ -133,16 +133,21 @@ struct FileViewer: View {
                     }
                 }
             } else if let text = file.text {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        meta(file)
-                        if isMarkdown(file) && !raw {
+                if isMarkdown(file) && !raw {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            meta(file)
                             Markdown(text).markdownTheme(.jarvis).textSelection(.enabled)
-                        } else {
-                            CodeText(text: text)
                         }
+                        .padding(16)
                     }
-                    .padding(16)
+                } else {
+                    // The code view scrolls both ways by itself (no outer vertical scroll stealing the gesture).
+                    VStack(alignment: .leading, spacing: 10) {
+                        meta(file).padding(.horizontal, 16)
+                        CodeText(text: text).padding(.horizontal, 12)
+                    }
+                    .padding(.top, 12)
                 }
             } else if let data = file.data, let bytes = Data(base64Encoded: data) {
                 if (file.mime ?? "").hasPrefix("image/") {
@@ -215,28 +220,13 @@ struct FileViewer: View {
     }
 }
 
-/// Monospaced text with line numbers, horizontally scrollable, rendered lazily for long files.
+/// Monospaced text with line numbers; no wrapping, scrolls sideways and down like an editor.
 struct CodeText: View {
     var text: String
 
     var body: some View {
-        let lines = text.components(separatedBy: "\n")
-        let width = CGFloat(String(lines.count).count) * 8 + 6
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(i + 1)").foregroundStyle(.tertiary).frame(width: width, alignment: .trailing)
-                        // No soft wrapping: long lines scroll sideways like in an editor.
-                        Text(line.isEmpty ? " " : line).fixedSize(horizontal: true, vertical: false).textSelection(.enabled)
-                    }
-                    .font(.system(size: 12, design: .monospaced))
-                    .padding(.vertical, 0.5)
-                }
-            }
-            .padding(10)
-        }
-        .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+        MonoTextView(text: MonoText.numbered(text))
+            .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
     }
 }
 

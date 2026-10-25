@@ -100,6 +100,7 @@ struct LarkPartsView: View {
         guard !visible.isEmpty else { return false }
         if visible.count == 1, let p = visible.first {
             return ["card", "image", "file", "media"].contains(p.kind) || (p.kind == "emotion" && p.url != nil)
+                || (p.kind == "link" && LarkMoments.postID(p.url) != nil)
         }
         return visible.allSatisfy { $0.kind == "card" }
     }
@@ -217,7 +218,8 @@ nonisolated enum LarkPartRenderer {
     static func isInline(_ p: LarkPart) -> Bool {
         switch p.kind {
         case "text": return !p.metaBool("markdown") && !p.metaBool("system")
-        case "at", "link", "docs", "table": return true
+        case "link": return LarkMoments.postID(p.url) == nil
+        case "at", "docs", "table": return true
         case "emotion": return p.url == nil
         case "interactive": return p.meta("richTag")?.int != 32
         default: return false
@@ -318,6 +320,7 @@ struct LarkBlockPartView: View {
             if (part.metaString("mime") ?? "").hasPrefix("audio/") { LarkVoicePart(part: part) } else { LarkVideoPart(part: part) }
         case "code": LarkCodeBlock(code: part.text ?? "", language: part.metaString("languageName") ?? part.metaString("language"))
         case "card": LarkCardView(part: part)
+        case "link": LarkMomentsCard(part: part)
         case "interactive": Divider()
         case "text":
             if part.metaBool("system") {

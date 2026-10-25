@@ -6,8 +6,9 @@ import UIKit
 /// Feishu's named palette (card text colors, tags, header templates), light / dark.
 nonisolated enum LarkColor {
     static let blue = Color(light: 0x3370FF, dark: 0x4C88FF)
-    static let myBubble = Color(light: 0xD8E6FF, dark: 0x1D3461)
-    static let otherBubble = Color(light: 0xF2F3F5, dark: 0x26272B)
+    /// lark-connector's --message-outgoing / --message-incoming.
+    static let myBubble = Color(light: 0xD1E3FF, dark: 0x133063)
+    static let otherBubble = Color(light: 0xEBECED, dark: 0x262626)
     static let cardBackground = Color(light: 0xFFFFFF, dark: 0x1E1F23)
     static let cardStroke = Color(light: 0xDEE0E3, dark: 0x373A40)
 

@@ -185,6 +185,8 @@ final class ChatStore {
     var screenUpdatedAt: Date?
     var error: String?
     var isLoadingOlder = false
+    /// Messages sent from this phone that the transcript has not shown yet (drawn at the end right away).
+    var pending: [PendingMessage] = []
 
     @ObservationIgnored private var ids = Set<String>()
 
@@ -213,6 +215,10 @@ final class ChatStore {
         if let hasMore, backlog, !loadedOnce || items.count <= new.count { self.hasMore = hasMore }
         if backlog { loadedOnce = true }
         guard changed else { return }
+        if !pending.isEmpty { // the real message arrived: drop the local copy
+            let typed = Set(new.filter { $0.role == "user" && $0.kind == .text }.map { PendingMessage.normalize($0.text ?? "") })
+            pending.removeAll { typed.contains(PendingMessage.normalize($0.text)) }
+        }
         items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
         rows = ChatStore.buildRows(items)
         blocks = ChatBlock.build(rows)
@@ -394,6 +400,24 @@ nonisolated enum ChatCache {
             if seen == turns { return Array(items[i...]) }
         }
         return items
+    }
+}
+
+/// A message on its way: shown at once, the request runs in the background.
+nonisolated struct PendingMessage: Identifiable, Hashable, Sendable {
+    enum State: Hashable, Sendable { case sending, sent, failed }
+    var id = UUID()
+    var text: String
+    var images: [ImagePayload]
+    var state: State = .sending
+
+    /// Comparable form: what the transcript keeps of it (the phone's image note and pasted wrappers removed).
+    static func normalize(_ s: String) -> String {
+        var t = s
+        for pattern in [#"<attached_images>[\s\S]*?</attached_images>"#, #"<[\\/]*pasted_content[^>]*>"#] {
+            t = t.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

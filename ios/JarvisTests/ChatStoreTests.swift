@@ -108,7 +108,15 @@ struct TurnTests {
     @Test func bubbleHidesTheImageNote() {
         #expect(UserBubble.display("看这个\n\n相关图片：/a/1.jpg、/a/2.jpg") == "看这个")
         #expect(UserBubble.display("看这个\n\n（我从手机发来了图片，请用 Read 查看：/a/1.jpg）") == "看这个")
-        #expect(UserBubble.display("相关图片：/a/1.jpg") == "相关图片：/a/1.jpg") // nothing else typed: keep it
+        #expect(UserBubble.display("相关图片：/a/1.jpg").isEmpty) // only photos: thumbnails, no bubble
+        #expect(UserBubble.imagePaths("看这个\n\n相关图片：/a/1.jpg、/a/2.jpg") == ["/a/1.jpg", "/a/2.jpg"])
+        #expect(UserBubble.imagePaths("看\n\n（我从手机发来了图片，请用 Read 查看：/a/1.jpg）") == ["/a/1.jpg"])
+        #expect(UserBubble.imagePaths("没有图片").isEmpty)
+        let tagged = "看这个\n\n<attached_images>\n/a/1.jpg\n/a/2.jpg\n</attached_images>"
+        #expect(UserBubble.display(tagged) == "看这个")
+        #expect(UserBubble.imagePaths(tagged) == ["/a/1.jpg", "/a/2.jpg"])
+        // typed mid-sentence, not the note
+        #expect(UserBubble.display("改成，相关图片：xx 就行") == "改成，相关图片：xx 就行")
     }
 
     @Test func cacheKeepsTheLastTwoExchanges() {

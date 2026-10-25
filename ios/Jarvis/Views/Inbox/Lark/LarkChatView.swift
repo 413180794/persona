@@ -43,6 +43,9 @@ struct LarkChatView: View {
     @State private var reportTask: Task<Void, Never>?
     @State private var atBottom = true
     @State private var mention: String?
+    @State private var person: LarkPersonRef?
+    @State private var debugPick: LarkMessage?
+    @State private var debugPost: String?
 
     private var isTopic: Bool { conversation.isTopic == true }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
@@ -69,7 +72,7 @@ struct LarkChatView: View {
                             Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 10)
                         }
-                        LarkMessageRow(message: m, grouped: Self.continues(m, after: prev))
+                        LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
                             .padding(.top, Self.continues(m, after: prev) ? 3 : 12)
                     }
                     .onAppear { markSeen(m) }
@@ -91,7 +94,14 @@ struct LarkChatView: View {
         .overlay(alignment: .topTrailing) { mentionButton }
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
+        .environment(\.larkOpenProfile, { person = $0 })
+        .environment(\.larkReact, { m, key in react(m, key) })
         .modifier(LarkFileOpener(request: $fileRequest))
+        .sheet(item: $person) { LarkProfileView(person: $0) }
+        .sheet(item: $debugPick) { m in LarkReactionPicker(message: m) { react(m, $0) } }
+        .sheet(isPresented: Binding(get: { debugPost != nil }, set: { if !$0 { debugPost = nil } })) {
+            if let id = debugPost { LarkMomentsPostView(postID: id) }
+        }
         .safeAreaInset(edge: .bottom) { composer }
         .navigationTitle(conversation.name)
         .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
@@ -250,6 +260,11 @@ struct LarkChatView: View {
             #if DEBUG
             // Simulator automation: `-larkFocus <messageId>` scrolls to that message (screenshots of one kind of card).
             if let focus = UserDefaults.standard.string(forKey: "larkFocus") { await scroll(to: focus) }
+            // `-larkProfile <userId>` opens that person's card, `-larkPicker YES` the reaction picker on the last message.
+            if let uid = UserDefaults.standard.string(forKey: "larkProfile") { person = LarkPersonRef(id: uid, name: "", feedID: conversation.id) }
+            if UserDefaults.standard.bool(forKey: "larkPicker"), let last = messages.last(where: { !$0.isSystem }) { debugPick = last }
+            // `-larkMoments <postId>` opens that removed post.
+            if let post = UserDefaults.standard.string(forKey: "larkMoments") { debugPost = post }
             #endif
         } catch {
             self.error = error.shown
@@ -318,6 +333,25 @@ struct LarkChatView: View {
         guard let api = model.api, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
         apply(r)
         if let m = messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
+    }
+
+    // MARK: Reactions
+
+    /// Toggles my reaction at once, then tells Feishu; the next poll brings the server's version (names…).
+    private func react(_ m: LarkMessage, _ key: String) {
+        guard let i = messages.firstIndex(where: { $0.id == m.id }) else { return }
+        let me = messages.last(where: \.isMine)?.senderName ?? "我"
+        let (next, remove) = messages[i].togglingReaction(key, me: me)
+        withAnimation(.snappy) { messages[i] = next }
+        Haptics.tap()
+        Task {
+            do {
+                try await model.api?.larkReact(m.id, key: key, remove: remove)
+            } catch {
+                model.show(error)
+                if let j = messages.firstIndex(where: { $0.id == m.id }) { messages[j] = m }
+            }
+        }
     }
 
     // MARK: Read reporting
@@ -389,13 +423,19 @@ struct LarkNewMessagesDivider: View {
     }
 }
 
-/// One message: avatar and name (others), bubble or bare content, reply quote, reactions, thread count.
+/// One message, laid out like lark-connector (and Feishu desktop): everyone's messages on the left with avatar and,
+/// in group chats, the sender's name on the first of a run; mine in blue. Avatar and name open the profile card.
 struct LarkMessageRow: View {
     var message: LarkMessage
     var grouped: Bool
+    var isGroup = true
+    var feedID: String? = nil
     /// Inside a thread sheet the reply count is not a link to itself.
     var inThread = false
+    @Environment(\.larkOpenProfile) private var openProfile
+    @Environment(\.larkReact) private var react
     @State private var showThread = false
+    @State private var picking = false
 
     var body: some View {
         let m = message
@@ -409,16 +449,20 @@ struct LarkMessageRow: View {
             .padding(.vertical, 4)
         } else {
             HStack(alignment: .top, spacing: 8) {
-                if m.isMine { Spacer(minLength: 44) } else {
-                    Group {
-                        if grouped { Color.clear } else { LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: 34) }
+                Group {
+                    if grouped { Color.clear } else {
+                        LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: 34)
+                            .onTapGesture { showProfile() }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel("\(m.senderName) 的资料")
                     }
-                    .frame(width: 34, height: grouped ? 1 : 34)
                 }
-                VStack(alignment: m.isMine ? .trailing : .leading, spacing: 4) {
-                    if !grouped && !m.isMine {
+                .frame(width: 34, height: grouped ? 1 : 34)
+                VStack(alignment: .leading, spacing: 4) {
+                    if !grouped && isGroup {
                         HStack(spacing: 4) {
-                            Text(m.senderName).font(.caption.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                            Text(m.senderName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .onTapGesture { showProfile() }
                             if m.senderType == "bot" {
                                 Text("机器人").font(.system(size: 9, weight: .semibold)).foregroundStyle(LarkColor.blue)
                                     .padding(.horizontal, 4).padding(.vertical, 1).background(LarkColor.blue.opacity(0.12), in: .rect(cornerRadius: 3))
@@ -428,9 +472,17 @@ struct LarkMessageRow: View {
                     content
                     footer
                 }
-                .frame(maxWidth: .infinity, alignment: m.isMine ? .trailing : .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .sheet(isPresented: $picking) {
+                LarkReactionPicker(message: m) { react?(m, $0) }
             }
         }
+    }
+
+    private func showProfile() {
+        guard let id = message.senderID, !id.isEmpty else { return }
+        openProfile?(LarkPersonRef(id: id, name: message.senderName, avatar: message.senderAvatar, feedID: feedID))
     }
 
     @ViewBuilder private var content: some View {
@@ -439,15 +491,15 @@ struct LarkMessageRow: View {
         if m.recalled {
             Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(.footnote).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 14, style: .continuous))
+                .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8, style: .continuous))
         } else if parts.isEmpty {
             bubble { Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(.system(size: 16)) }
         } else if LarkPartsView.isBare(parts) {
             if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, 4) }
             LarkPartsView(parts: parts)
                 .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
-                .frame(maxWidth: parts.contains { $0.kind == "card" } ? .infinity : nil, alignment: m.isMine ? .trailing : .leading)
-                .contextMenu { copyButton }
+                .frame(maxWidth: parts.contains { $0.kind == "card" || $0.kind == "link" } ? .infinity : nil, alignment: .leading)
+                .contextMenu { menu }
         } else {
             bubble {
                 VStack(alignment: .leading, spacing: 6) {
@@ -462,16 +514,31 @@ struct LarkMessageRow: View {
     private func bubble<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         c()
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(message.isMine ? LarkColor.myBubble : LarkColor.otherBubble, in: .rect(cornerRadius: 14, style: .continuous))
-            .contextMenu { copyButton }
+            .padding(.vertical, 10)
+            .background(message.isMine ? LarkColor.myBubble : LarkColor.otherBubble, in: .rect(cornerRadius: 8, style: .continuous))
+            .contextMenu { menu }
     }
 
-    private var copyButton: some View {
+    /// Long press: a row of quick reactions, more emoji, copy.
+    @ViewBuilder private var menu: some View {
+        if react != nil && !message.recalled {
+            ControlGroup {
+                ForEach(Array(LarkMedia.shared.quickReactions.prefix(4)), id: \.self) { key in
+                    Button { react?(message, key) } label: {
+                        if let img = LarkMedia.shared.emojiImage(key, points: 28) { Image(uiImage: img) } else { Text(LarkMedia.labelFallback(key, text: nil)) }
+                    }
+                }
+            }
+            .controlGroupStyle(.compactMenu)
+            Button { picking = true } label: { Label("表情回复", systemImage: "face.smiling") }
+        }
         Button {
             UIPasteboard.general.string = message.text
             Haptics.success()
         } label: { Label("拷贝", systemImage: "doc.on.doc") }
+        if let id = message.senderID, !id.isEmpty, openProfile != nil {
+            Button { showProfile() } label: { Label("查看 \(message.senderName) 的资料", systemImage: "person.crop.circle") }
+        }
     }
 
     @ViewBuilder private var footer: some View {
@@ -479,9 +546,21 @@ struct LarkMessageRow: View {
         let reactions = m.reactions ?? []
         if !reactions.isEmpty {
             LarkFlowLayout(spacing: 6, lineSpacing: 6) {
-                ForEach(reactions, id: \.key) { r in LarkReactionChip(reaction: r) }
+                ForEach(reactions, id: \.key) { r in
+                    Button { react?(m, r.key) } label: { LarkReactionChip(reaction: r) }
+                        .buttonStyle(.plain)
+                        .disabled(react == nil)
+                }
+                if react != nil {
+                    Button { picking = true } label: {
+                        Image(systemName: "face.smiling").font(.system(size: 14)).foregroundStyle(.secondary)
+                            .frame(width: 32, height: 26).background(Color.primary.opacity(0.05), in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("表情回复")
+                }
             }
-            .frame(maxWidth: 280, alignment: m.isMine ? .trailing : .leading)
+            .frame(maxWidth: 300, alignment: .leading)
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         if replies > 0 || m.edited == true || !LarkChatView.continues(m, after: nil) {
@@ -498,8 +577,35 @@ struct LarkMessageRow: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .lineLimit(1)
-            .sheet(isPresented: $showThread) { LarkThreadView(root: m) }
+            .sheet(isPresented: $showThread) { LarkThreadView(root: m, isGroup: isGroup, feedID: feedID) }
         }
+    }
+}
+
+extension LarkMessage {
+    /// The message with my reaction `key` toggled (lark-connector's optimistic update: remove if mine, else add).
+    func togglingReaction(_ key: String, me: String) -> (LarkMessage, remove: Bool) {
+        var m = self
+        var list = m.reactions ?? []
+        if let i = list.firstIndex(where: { $0.key.lowercased() == key.lowercased() }) {
+            var r = list[i]
+            if r.mine == true {
+                r.count -= 1
+                r.mine = false
+                r.users?.removeAll { $0 == me }
+                if r.count <= 0 { list.remove(at: i) } else { list[i] = r }
+                m.reactions = list
+                return (m, true)
+            }
+            r.count += 1
+            r.mine = true
+            r.users = (r.users ?? []) + [me]
+            list[i] = r
+        } else {
+            list.append(LarkReaction(key: key, count: 1, mine: true, users: [me]))
+        }
+        m.reactions = list
+        return (m, false)
     }
 }
 
@@ -508,6 +614,9 @@ struct LarkThreadView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var root: LarkMessage
+    var isGroup = true
+    var feedID: String? = nil
+    @State private var person: LarkPersonRef?
     @State private var replies: [LarkMessage] = []
     @State private var loading = true
     @State private var error: String?
@@ -517,7 +626,7 @@ struct LarkThreadView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    LarkMessageRow(message: root, grouped: false, inThread: true)
+                    LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
                         Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(.caption.weight(.medium)).foregroundStyle(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
@@ -526,14 +635,22 @@ struct LarkThreadView: View {
                     if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger) }
                     ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
                         let prev = i > 0 ? replies[i - 1] : nil
-                        LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), inThread: true)
+                        LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
                             .padding(.top, LarkChatView.continues(m, after: prev) ? 3 : 12)
                     }
                 }
                 .padding(12)
             }
             .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
+            .environment(\.larkOpenProfile, { person = $0 })
+            .environment(\.larkReact, { m, key in
+                guard let i = replies.firstIndex(where: { $0.id == m.id }) else { return }
+                let (next, remove) = m.togglingReaction(key, me: "我")
+                replies[i] = next
+                Task { do { try await model.api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
+            })
             .modifier(LarkFileOpener(request: $fileRequest))
+            .sheet(item: $person) { LarkProfileView(person: $0) }
             .navigationTitle("话题")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }

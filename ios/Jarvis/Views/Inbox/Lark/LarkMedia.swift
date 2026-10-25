@@ -14,6 +14,10 @@ final class LarkMedia {
     /// Bumped whenever an inline emoji image arrives, so text that drew `[label]` redraws with the picture.
     private(set) var emojiVersion = 0
     private(set) var emojis: [String: APIClient.LarkEmojis.Emoji] = [:]
+    /// The picker's sections (默认表情, 字节范…), keys in order.
+    private(set) var emojiGroups: [APIClient.LarkEmojis.Group] = []
+    /// The user's quick reactions (most used first).
+    private(set) var quickReactions: [String] = ["THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LAUGH", "SURPRISED"]
 
     @ObservationIgnored private let images = NSCache<NSString, UIImage>()
     @ObservationIgnored private var inflight: [String: Task<UIImage?, Never>] = [:]
@@ -108,7 +112,9 @@ final class LarkMedia {
         catalogTask = Task {
             guard let api = AppModel.shared.api, let r = try? await api.larkEmojis() else { catalogTask = nil; return }
             emojis = r.emojis
+            emojiGroups = r.groups ?? []
             emojiVersion += 1
+            if let q = try? await api.larkQuickReactions(), !q.isEmpty { quickReactions = q }
         }
     }
 

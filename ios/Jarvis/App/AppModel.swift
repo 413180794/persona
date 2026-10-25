@@ -339,11 +339,42 @@ final class AppModel {
     /// Launcher chosen in an assistant chat for its next messages (model switch).
     var assistantLaunchers: [SessionKey: String] = [:]
 
-    func send(_ key: SessionKey, text: String, images: [ImagePayload] = []) async -> Bool {
+    /// Puts the message on screen immediately and sends it in the background; a failure marks it for retry.
+    func sendNow(_ key: SessionKey, text: String, images: [ImagePayload] = []) {
+        let msg = PendingMessage(text: text, images: images)
+        chat(key).pending.append(msg)
+        Haptics.tap()
+        deliver(key, msg)
+    }
+
+    func retry(_ key: SessionKey, _ msg: PendingMessage) {
+        guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
+        chat(key).pending[i].state = .sending
+        deliver(key, msg)
+    }
+
+    func discard(_ key: SessionKey, _ msg: PendingMessage) {
+        chat(key).pending.removeAll { $0.id == msg.id }
+    }
+
+    private func deliver(_ key: SessionKey, _ msg: PendingMessage) {
+        Task {
+            let ok = await send(key, text: msg.text, images: msg.images, haptic: false)
+            let store = chat(key)
+            guard let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { return }
+            store.pending[i].state = ok ? .sent : .failed
+            guard ok else { return }
+            // Normally the transcript shows it within a second or two (or it lands in the queue); never linger.
+            try? await Task.sleep(for: .seconds(60))
+            store.pending.removeAll { $0.id == msg.id }
+        }
+    }
+
+    func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
         guard let api else { return false }
         do {
             try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key])
-            Haptics.tap()
+            if haptic { Haptics.tap() }
             return true
         } catch {
             show(error)

@@ -90,9 +90,11 @@ struct InboxView: View {
                 if UserDefaults.standard.bool(forKey: "inboxDrawer") { drawer = true }
                 // Simulator automation: `-lark-connector <feedId>` opens that Feishu chat (as listed, so with its unread state).
                 if path.isEmpty, let id = UserDefaults.standard.string(forKey: "lark-connector") {
-                    let found = (pinned + chats).first { $0.id == id }
-                    path.append(found ?? LarkConversation(id: id, name: UserDefaults.standard.string(forKey: "lark-connectorName") ?? "飞书", isGroup: true,
-                                                          isTopic: UserDefaults.standard.bool(forKey: "lark-connectorTopic")))
+                    var c = (pinned + chats).first { $0.id == id } ?? LarkConversation(id: id, name: UserDefaults.standard.string(forKey: "lark-connectorName") ?? "飞书",
+                                                                                       isGroup: true, isTopic: UserDefaults.standard.bool(forKey: "lark-connectorTopic"))
+                    // `-lark-connectorAt <position>` opens it at that message.
+                    if let at = UserDefaults.standard.string(forKey: "lark-connectorAt") { c.focus = at }
+                    path.append(c)
                 }
                 #endif
                 while !Task.isCancelled {

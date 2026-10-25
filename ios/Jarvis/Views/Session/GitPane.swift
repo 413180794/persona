@@ -374,54 +374,38 @@ struct DiffText: View {
         if lines.isEmpty {
             ContentUnavailableView("没有文本改动", systemImage: "doc.text", description: Text("可能是二进制文件、只改了权限，或者改动已被撤销。"))
         } else {
-            GeometryReader { geo in
-                ScrollView([.vertical, .horizontal]) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(lines) { l in row(l, minWidth: geo.size.width) }
-                        if truncated {
-                            Text("改动太大，只显示了前 512 KB").font(.caption).foregroundStyle(.secondary).padding(12)
-                        }
-                    }
-                    .padding(.vertical, 6)
+            VStack(spacing: 0) {
+                MonoTextView(text: Self.attributed(lines), inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
+                if truncated {
+                    Text("改动太大，只显示了前 512 KB").font(.caption).foregroundStyle(.secondary).padding(8)
                 }
             }
             .background(Theme.codeBackground)
         }
     }
 
-    private func row(_ l: Line, minWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            Text(l.old.map(String.init) ?? "").frame(width: 34, alignment: .trailing)
-            Text(l.new.map(String.init) ?? "").frame(width: 34, alignment: .trailing)
-            Text(marker(l.kind)).frame(width: 16)
-                .foregroundStyle(l.kind == .add ? Theme.idle : l.kind == .del ? Theme.danger : Color.secondary)
-            Text(l.text.isEmpty ? " " : l.text)
-                .foregroundStyle(l.kind == .hunk ? Theme.done : l.kind == .info ? Color.secondary : Color.primary)
-                .fixedSize()
-                .padding(.trailing, 12)
+    /// Gutter (old / new line numbers, +/−) and the line, colored; lines are padded to the longest so the
+    /// added / removed backgrounds run the full width.
+    static func attributed(_ lines: [Line]) -> NSAttributedString {
+        let font = MonoText.font(11)
+        let width = (lines.map(\.text.count).max() ?? 0) + 2
+        let out = NSMutableAttributedString()
+        func num(_ n: Int?) -> String { let s = n.map(String.init) ?? ""; return String(repeating: " ", count: max(0, 5 - s.count)) + s }
+        for (i, l) in lines.enumerated() {
+            let (mark, fg, bg): (String, UIColor, UIColor) = switch l.kind {
+            case .add: ("+", UIColor(Theme.idle), UIColor(Theme.idle).withAlphaComponent(0.13))
+            case .del: ("−", UIColor(Theme.danger), UIColor(Theme.danger).withAlphaComponent(0.12))
+            case .hunk: (" ", UIColor(Theme.done), UIColor(Theme.done).withAlphaComponent(0.08))
+            case .info: (" ", .secondaryLabel, .clear)
+            case .context: (" ", .label, .clear)
+            }
+            let gutter = num(l.old) + num(l.new) + " " + mark + " "
+            out.append(NSAttributedString(string: gutter, attributes: [.font: font, .foregroundColor: UIColor.tertiaryLabel, .backgroundColor: bg]))
+            let body = l.text.padding(toLength: max(width, l.text.count), withPad: " ", startingAt: 0)
+            let color: UIColor = l.kind == .add || l.kind == .del || l.kind == .context ? .label : fg
+            out.append(NSAttributedString(string: body + (i < lines.count - 1 ? "\n" : ""), attributes: [.font: font, .foregroundColor: color, .backgroundColor: bg]))
         }
-        .font(.system(size: 11, design: .monospaced))
-        .foregroundStyle(.tertiary)
-        .padding(.vertical, l.kind == .hunk ? 4 : 0.5)
-        .frame(minWidth: minWidth, alignment: .leading)
-        .background(background(l.kind))
-    }
-
-    private func marker(_ k: Line.Kind) -> String {
-        switch k {
-        case .add: "+"
-        case .del: "−"
-        default: ""
-        }
-    }
-
-    private func background(_ k: Line.Kind) -> Color {
-        switch k {
-        case .add: Theme.idle.opacity(0.13)
-        case .del: Theme.danger.opacity(0.12)
-        case .hunk: Theme.done.opacity(0.08)
-        default: .clear
-        }
+        return out
     }
 
     static func parse(_ diff: String) -> [Line] {

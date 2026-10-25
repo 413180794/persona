@@ -113,4 +113,23 @@ struct LarkRenderTests {
         #expect(LarkFeedAction.pin(true).settings?.pinned == true)
         #expect(LarkFeedAction.unread(true).settings == nil)
     }
+
+    @Test func momentsLinks() {
+        #expect(LarkMoments.postID("https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001&source=share") == "7000000000000000001")
+        #expect(LarkMoments.postID("https://applink.larkoffice.com/client/moments/detail?postId=abc") == nil)
+        #expect(LarkMoments.postID("https://example.com/a?postId=1") == nil)
+        #expect(LarkMoments.postID(nil) == nil)
+    }
+
+    @Test func reactionToggle() {
+        let m = LarkMessage(id: "m", position: "1", senderName: "A", isMine: false, type: "TEXT", text: "", recalled: false, replyCount: 0,
+                            reactions: [LarkReaction(key: "OK", count: 2, mine: true, users: ["我", "B"])])
+        let (a, removeA) = m.togglingReaction("ok", me: "我")
+        #expect(removeA && a.reactions?.first?.count == 1 && a.reactions?.first?.mine == false && a.reactions?.first?.users == ["B"])
+        let (b, removeB) = a.togglingReaction("THUMBSUP", me: "我")
+        #expect(!removeB && b.reactions?.count == 2 && b.reactions?.last?.mine == true)
+        let (c, _) = LarkMessage(id: "m", position: "1", senderName: "A", isMine: false, type: "TEXT", text: "", recalled: false, replyCount: 0,
+                                 reactions: [LarkReaction(key: "OK", count: 1, mine: true, users: ["我"])]).togglingReaction("OK", me: "我")
+        #expect(c.reactions?.isEmpty == true)
+    }
 }

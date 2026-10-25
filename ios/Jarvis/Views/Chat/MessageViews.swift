@@ -59,38 +59,183 @@ extension EnvironmentValues {
     @Entry var openFile: ((String) -> Void)? = nil
 }
 
+extension EnvironmentValues {
+    /// Loads an image file on the session's machine (photos sent from the phone are saved there; set by ChatView).
+    @Entry var loadImage: ((String) async -> ImagePayload?)? = nil
+}
+
 struct UserBubble: View {
     var item: Item
     @Environment(\.openFile) private var openFile
+    @Environment(\.loadImage) private var loadImage
 
     var body: some View {
+        let text = item.text ?? ""
+        let shown = Self.display(text)
+        let images = Self.imagePaths(text)
         VStack(alignment: .trailing, spacing: 6) {
-        HStack {
-            Spacer(minLength: 48)
-            Text(Self.display(item.text ?? ""))
-                .font(.body)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
-                .messageLongPress(id: item.id)
-        }
-            if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
+            if !images.isEmpty, let loadImage {
+                AttachedImages(paths: images, load: loadImage)
+            }
+            if !shown.isEmpty {
+                HStack {
+                    Spacer(minLength: 48)
+                    Text(shown)
+                        .font(.body)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
+                        .messageLongPress(id: item.id)
+                }
+            }
+            if let openFile { FileChips(paths: FilePaths.find(in: text).filter { !images.contains($0) }, open: openFile) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .messageActionBar(id: item.id, text: item.text ?? "", isUser: true)
+        .messageActionBar(id: item.id, text: shown, isUser: true)
     }
 }
 
 extension UserBubble {
-    /// The note the phone appends for attached images ("相关图片：…", earlier "（我从手机发来了图片…）") shows as image
-    /// chips under the bubble; the bubble keeps just what was typed.
+    /// `<attached_images>` (current), and the plain-text notes older builds appended (own last line / old wording).
+    private static let notePatterns = [#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#,
+                                       #"(?:\A|\n)\s*相关图片：[^\n]*\z"#, #"\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*\z"#]
+
+    /// What was typed: the note the phone appends for attached photos becomes thumbnails above the bubble instead.
     static func display(_ text: String) -> String {
         var t = text
-        for pattern in [#"\n*相关图片：[^\n]*$"#, #"\n*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*$"#] {
-            if let r = t.range(of: pattern, options: .regularExpression) { t.removeSubrange(r) }
+        for pattern in notePatterns {
+            while let r = t.range(of: pattern, options: .regularExpression) { t.replaceSubrange(r, with: "\n") }
         }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? text : t
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The photo paths listed in that note.
+    static func imagePaths(_ text: String) -> [String] {
+        for pattern in notePatterns {
+            guard let r = text.range(of: pattern, options: .regularExpression) else { continue }
+            var note = String(text[r])
+            for token in ["<attached_images>", "</attached_images>", "相关图片：", "（我从手机发来了图片，请用 Read 查看：", "）"] {
+                note = note.replacingOccurrences(of: token, with: "\n")
+            }
+            return note.components(separatedBy: CharacterSet(charactersIn: "\n、"))
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("/") || $0.hasPrefix("~") }
+        }
+        return []
+    }
+}
+
+/// A message just sent from this phone, before the transcript has it: drawn like a sent bubble right away, with a
+/// quiet clock while the request runs and a red "重发" when it failed.
+struct PendingBubble: View {
+    var msg: PendingMessage
+    var retry: () -> Void
+    var discard: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if !msg.images.isEmpty {
+                HStack(spacing: 6) {
+                    Spacer(minLength: 48)
+                    ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
+                        Color.primary.opacity(0.06)
+                            .frame(width: msg.images.count == 1 ? 120 : 76, height: msg.images.count == 1 ? 120 : 76)
+                            .overlay { if let img = AttachedImageCache.image(p) { Image(uiImage: img).resizable().scaledToFill() } }
+                            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            }
+            HStack(alignment: .bottom, spacing: 8) {
+                Spacer(minLength: 40)
+                switch msg.state {
+                case .sending: Image(systemName: "clock").font(.caption2).foregroundStyle(.tertiary)
+                case .sent: EmptyView()
+                case .failed:
+                    Menu {
+                        Button(action: retry) { Label("重发", systemImage: "arrow.clockwise") }
+                        Button(role: .destructive, action: discard) { Label("删除", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "exclamationmark.circle.fill").font(.body).foregroundStyle(Theme.danger)
+                    }
+                    .accessibilityLabel("发送失败，重发或删除")
+                }
+                Text(msg.text)
+                    .font(.body)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
+                    .opacity(msg.state == .failed ? 0.6 : 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+/// Photos sent with a message: a row of square thumbnails above the text; tap one to view them full screen.
+struct AttachedImages: View {
+    var paths: [String]
+    var load: (String) async -> ImagePayload?
+    @State private var loaded: [String: ImagePayload] = [:]
+    @State private var viewer: Int?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer(minLength: 48)
+            ForEach(Array(paths.enumerated()), id: \.element) { i, path in
+                Button { if loaded[path] != nil { viewer = i } } label: { thumb(path) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("图片 \(i + 1)")
+            }
+        }
+        .task(id: paths) {
+            for path in paths where loaded[path] == nil {
+                var payload = AttachedImageCache.get(path)
+                if payload == nil { payload = await load(path) }
+                if let payload {
+                    AttachedImageCache.put(path, payload)
+                    loaded[path] = payload
+                }
+            }
+        }
+        .fullScreenCover(isPresented: Binding(get: { viewer != nil }, set: { if !$0 { viewer = nil } })) {
+            let images = paths.compactMap { loaded[$0] }
+            if let i = viewer, !images.isEmpty { ImageViewer(images: images, index: min(i, images.count - 1)) }
+        }
+    }
+
+    private func thumb(_ path: String) -> some View {
+        let side: CGFloat = paths.count == 1 ? 120 : 76
+        return Color.primary.opacity(0.06)
+            .frame(width: side, height: side)
+            .overlay { // the square sets the size; the photo fills and is cropped to it
+                if let p = loaded[path], let img = AttachedImageCache.image(p) {
+                    Image(uiImage: img).resizable().scaledToFill()
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .contentShape(.rect)
+    }
+}
+
+/// Decoded thumbnails survive scrolling a lazy list (rows are rebuilt when they come back on screen).
+enum AttachedImageCache {
+    private static var payloads: [String: ImagePayload] = [:]
+    private static var images: [String: UIImage] = [:]
+
+    static func get(_ path: String) -> ImagePayload? { payloads[path] }
+    static func put(_ path: String, _ p: ImagePayload) { payloads[path] = p }
+    static func image(_ p: ImagePayload) -> UIImage? {
+        let key = String(p.data.prefix(64)) + String(p.data.count)
+        if let img = images[key] { return img }
+        guard let data = Data(base64Encoded: p.data), let img = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 360, height: 360)) else { return nil }
+        images[key] = img
+        return img
     }
 }
 

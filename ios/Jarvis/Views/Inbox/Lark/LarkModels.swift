@@ -192,7 +192,9 @@ extension APIClient {
     }
     struct LarkEmojis: Decodable {
         struct Emoji: Decodable { var label: String; var url: String }
+        struct Group: Decodable, Hashable { var title: String; var keys: [String] }
         var emojis: [String: Emoji]
+        var groups: [Group]?
     }
     struct LarkFlags: Decodable {
         var conversations: [LarkConversation]
@@ -262,4 +264,115 @@ extension APIClient {
     func larkCardAction(message: String, action: String) async throws {
         try await post("/api/v1/lark/messages/\(message)/card-actions/\(action)")
     }
+
+    // MARK: People, reactions, link previews, removed
+
+    func larkProfile(_ userID: String, feedID: String? = nil) async throws -> LarkProfile {
+        try await get("/api/v1/lark/users/\(userID)", query: ["feed_id": feedID ?? ""])
+    }
+    /// The 1:1 chat with a user (created when there is none yet).
+    func larkDirectChat(_ userID: String) async throws -> String {
+        struct R: Decodable { var feed_id: String }
+        return try await post("/api/v1/lark/users/\(userID)/chat", as: R.self).feed_id
+    }
+    struct LarkReact: Encodable { var key: String; var remove: Bool }
+    func larkReact(_ messageID: String, key: String, remove: Bool) async throws {
+        try await post("/api/v1/lark/messages/\(messageID)/reactions", body: LarkReact(key: key, remove: remove))
+    }
+    func larkQuickReactions() async throws -> [String] {
+        struct R: Decodable { var keys: [String] }
+        return try await get("/api/v1/lark/reactions/quick", as: R.self).keys
+    }
+    func larkURLPreview(message: String, url: String) async throws -> LarkURLPreview {
+        try await get("/api/v1/lark/messages/\(message)/url-preview", query: ["url": url])
+    }
+    func larkMomentsPost(_ id: String) async throws -> LarkMomentsPost { try await get("/api/v1/lark/moments/posts/\(id)") }
+    func larkMomentsComments(_ id: String) async throws -> [LarkMomentsComment] {
+        struct R: Decodable { var comments: [LarkMomentsComment] }
+        return try await get("/api/v1/lark/moments/posts/\(id)/comments", as: R.self).comments
+    }
+}
+
+/// A person's profile card (lark-connector `UserProfileDetail`, the fields the card shows).
+nonisolated struct LarkProfile: Decodable, Sendable {
+    struct Field: Decodable, Hashable, Sendable {
+        var key: String
+        var label: String?
+        var type: Int?
+        var value: JSONValue?
+        var url: String?
+    }
+    struct Action: Decodable, Hashable, Sendable {
+        var key: String
+        var label: String?
+        var enabled: Bool?
+    }
+    struct Status: Decodable, Sendable { var title: String? }
+    struct WorkStatus: Decodable, Sendable { var status: Int? }
+    struct Relation: Decodable, Sendable {
+        var external: Bool?
+        var tenantName: String?
+        var memo: String?
+    }
+    var displayName: String?
+    var enName: String?
+    var alias: String?
+    var anotherName: String?
+    var groupNickname: String?
+    var avatarUrl: String?
+    var coverUrl: String?
+    var description: String?
+    var medalName: String?
+    var timezone: String?
+    var userType: String?
+    var customStatus: Status?
+    var workStatus: WorkStatus?
+    var relation: Relation?
+    var fields: [Field]?
+    var actions: [Action]?
+}
+
+/// The card Feishu shows under a link (a removed post: author, excerpt, counts).
+nonisolated struct LarkURLPreview: Decodable, Sendable {
+    struct Card: Decodable, Sendable {
+        var author: String?
+        var avatarUrl: String?
+        var body: String?
+        var footer: String?
+        var subtitle: String?
+    }
+    var title: String?
+    var host: String?
+    var url: String?
+    var card: Card?
+}
+
+/// One removed post.
+nonisolated struct LarkMomentsPost: Decodable, Sendable {
+    struct Segment: Decodable, Sendable { var kind: String?; var text: String?; var key: String?; var emojiKey: String? }
+    struct Content: Decodable, Sendable { var text: String?; var segments: [Segment]? }
+    struct Image: Decodable, Hashable, Sendable { var url: String?; var width: Double?; var height: Double? }
+    struct ReactionGroup: Decodable, Hashable, Sendable { var type: String; var count: Int; var selfInvolved: Bool? }
+    var id: String
+    var userName: String?
+    var userId: String?
+    var userAvatarUrl: String?
+    var content: Content?
+    var images: [Image]?
+    var reactionGroups: [ReactionGroup]?
+    var reactionCount: Int?
+    var commentCount: Int?
+    var createTime: Double?
+    var categoryNames: [String]?
+}
+
+nonisolated struct LarkMomentsComment: Decodable, Identifiable, Sendable {
+    var id: String
+    var userName: String?
+    var userId: String?
+    var userAvatarUrl: String?
+    var content: LarkMomentsPost.Content?
+    var createTime: Double?
+    var reactionCount: Int?
+    var isHot: Bool?
 }
