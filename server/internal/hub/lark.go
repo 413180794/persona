@@ -145,12 +145,12 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	// Read-only window onto the rest of lark-connector's agent API (search, docs, calendar, minutes, tasks, contacts…):
 	// /api/v1/lark/raw/<path> = /agent/v1/<path>.
 	api.HandleFunc("GET /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "GET", "/"+r.PathValue("path"), r.URL.Query(), nil); err != nil {
+		if err := h.lark.Raw(r.Context(), w, "GET", rawPath(r), r.URL.Query(), nil); err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 		}
 	})
 	api.HandleFunc("POST /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "POST", "/"+r.PathValue("path"), r.URL.Query(), io.LimitReader(r.Body, 1<<20)); err != nil {
+		if err := h.lark.Raw(r.Context(), w, "POST", rawPath(r), r.URL.Query(), io.LimitReader(r.Body, 1<<20)); err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 		}
 	})
@@ -214,6 +214,12 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// rawPath is the lark-connector path behind /api/v1/lark/raw, still percent-encoded: ids with "/" (mail threads) must
+// reach lark-connector as %2F, not as two path segments.
+func rawPath(r *http.Request) string {
+	return strings.TrimPrefix(r.URL.EscapedPath(), "/api/v1/lark/raw")
 }
 
 // larkRaw writes lark-connector's own JSON (already rewritten to hub media URLs) or the error.

@@ -240,10 +240,13 @@ func TestProfileReactionsAndMoments(t *testing.T) {
 
 func TestRawProxy(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method + " " + r.URL.Path {
+		switch r.Method + " " + r.URL.EscapedPath() {
 		case "GET /agent/v1/documents/recent":
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_, _ = w.Write([]byte(`{"items":[{"a":"/api/media/k","b":"/api/documents/media/x","c":"/api/messages/1/media/k"}]}`))
+		case "GET /agent/v1/mail/threads/a%2Fb":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "GET /agent/v1/minutes/t/media":
 			w.Header().Set("Content-Type", "audio/mp4")
 			_, _ = w.Write([]byte("mp4"))
@@ -264,6 +267,10 @@ func TestRawProxy(t *testing.T) {
 	}
 	if got := rec.Body.String(); got != `{"items":[{"a":"/api/v1/lark/media/k","b":"/api/v1/lark/raw/documents/media/x","c":"/api/v1/lark/messages/1/media/k"}]}` {
 		t.Fatalf("rewritten = %s", got)
+	}
+	rec = httptest.NewRecorder()
+	if err := c.Raw(ctx, rec, "GET", "/mail/threads/a%2Fb", nil, nil); err != nil || rec.Body.String() != `{"ok":true}` {
+		t.Fatalf("encoded path = %q %v", rec.Body.String(), err)
 	}
 	rec = httptest.NewRecorder()
 	if err := c.Raw(ctx, rec, "GET", "/minutes/t/media", nil, nil); err != nil || rec.Body.String() != "mp4" || rec.Header().Get("Content-Type") != "audio/mp4" {

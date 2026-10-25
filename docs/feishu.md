@@ -145,6 +145,19 @@
 - insights 的 `aiSummary.todos` 只是「我的待办」；`minutes.access` 常为 `denied`（别人录的会），此时不显示妙记章节。
 - 参会人头像是 CDN 完整 URL；`kind=room` 的是会议室设备。DEBUG：`-meetingID <historyId>`（从会议列表直接推详情）。
 
+#### 实现说明（妙记）
+
+- `FeishuMinutes.swift`：列表 `minutes?scope=all|owned|shared&cursor`（`cursor` 为空即最后一页），搜索走 `minutes/search?q&cursor`
+  （条目带 `snippet`）；详情 `minutes/:token` 与 `minutes/:token/transcript` 并发取。`access` 为 denied / unavailable 时给空态 +「在飞书中打开」。
+- 详情：播放器、总结（关键词点一下 = 在文字记录里搜它）、章节、待办（文本末尾的「@某人」拆成负责人）、文字记录
+  （按说话人分段、本地搜索高亮、播放时高亮当前段并跟随滚动，点段落 / 章节 / 待办时间跳到那里播放）。
+- **播放**：hub 的 raw 代理不转发 `Range`，`minutes/:token/media` 永远 200 整个文件（97MB 的 71 分钟视频），AVPlayer 拒播。
+  客户端用 `MinutesMediaLoader`（`AVAssetResourceLoaderDelegate` + 自定义 scheme）：一次 GET 边下边写临时文件，按 AVPlayer 的
+  范围请求从已下载部分回数据；飞书 mp4 索引在前，几秒就能开播，往后拖要等下载到那里。服务端转发 Range 后可直接流式（leader 待办）。
+- 只在点「播放」后才开始下载；离开页面停止并删临时文件。
+- DEBUG：`-minutesToken <token>`（从妙记列表直接推详情）、`-minutesTab 总结|章节|待办|文字记录`、`-minutesPlay YES`（自动播放）、
+  `-minutesSearch <词>`；日历 `-calendarNow <ISO 时间>`（假装现在是那一刻，看「正在进行 / 下一个」横幅和现在线）。
+
 ### 任务 / 审批 / OKR（`Work/`）
 - 任务：`todos?count`（我的未完成）、`todos/completed`、`todos/search?q`、`todos/:guid/detail`、`/subtasks`、`/comments`、`task-list-nav/sidebar`。
 - 审批：`approvals/counts`、`approvals?tab=todo|done|initiated|cc…&cursor`、`approvals/detail?instanceId`（表单、流程、时间线）。

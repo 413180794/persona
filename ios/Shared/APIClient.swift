@@ -25,6 +25,20 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var status: Int
     var message: String
     var errorDescription: String? { message }
+
+    /// The hub's `{"error":"…"}`, or lark-connector's `{"error":{"code","message"}}` passed through the read-only proxy.
+    static func message(in data: Data) -> String? {
+        if let flat = (try? JSON.decoder.decode([String: String].self, from: data))?["error"] { return flat }
+        guard let obj = try? JSON.decoder.decode(JSONValue.self, from: data), let err = obj["error"] else { return nil }
+        let message = err["message"]?.string
+        let code = err["code"]?.string
+        switch (message, code) {
+        case let (m?, c?): return "\(m)（\(c)）"
+        case let (m?, nil): return m
+        case let (nil, c?): return c
+        default: return nil
+        }
+    }
 }
 
 /// REST client for the hub. All endpoints return JSON objects; errors are `{"error": "..."}`.
@@ -51,8 +65,7 @@ nonisolated struct APIClient: Sendable {
         let (data, resp) = try await session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            let msg = (try? JSON.decoder.decode([String: String].self, from: data))?["error"]
-            throw APIError(status: status, message: msg ?? HTTPURLResponse.localizedString(forStatusCode: status))
+            throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
         }
         return data
     }
