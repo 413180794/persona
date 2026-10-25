@@ -60,6 +60,10 @@ extension EnvironmentValues {
 }
 
 extension EnvironmentValues {
+    /// Every image in the conversation, in order: the viewer pages through all of them (set by ChatView).
+    @Entry var chatImages: [ImagePayload] = []
+    /// Puts an (edited) image into this chat's composer as an attachment for the next message (set by ChatView).
+    @Entry var attachImage: ((UIImage) -> Void)? = nil
     /// Loads an image file on the session's machine (photos sent from the phone are saved there; set by ChatView).
     @Entry var loadImage: ((String) async -> ImagePayload?)? = nil
 }
@@ -233,6 +237,8 @@ struct MergedUserBubble: View {
 
 /// Photos that came with one of your messages (from the transcript): square thumbnails on your side, tap to view.
 struct SentPhotos: View {
+    @Environment(\.chatImages) private var chatImages
+    @Environment(\.attachImage) private var attachImage
     var images: [ImagePayload]
     @State private var viewer: Int?
 
@@ -254,13 +260,15 @@ struct SentPhotos: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .fullScreenCover(isPresented: Binding(get: { viewer != nil }, set: { if !$0 { viewer = nil } })) {
-            if let i = viewer { ImageViewer(images: images, index: min(i, images.count - 1)) }
+            if let i = viewer { ImageViewer(images: images, index: min(i, images.count - 1), conversation: chatImages, attach: attachImage) }
         }
     }
 }
 
 /// Photos sent with a message: a row of square thumbnails above the text; tap one to view them full screen.
 struct AttachedImages: View {
+    @Environment(\.chatImages) private var chatImages
+    @Environment(\.attachImage) private var attachImage
     var paths: [String]
     var load: (String) async -> ImagePayload?
     @State private var loaded: [String: ImagePayload] = [:]
@@ -287,7 +295,7 @@ struct AttachedImages: View {
         }
         .fullScreenCover(isPresented: Binding(get: { viewer != nil }, set: { if !$0 { viewer = nil } })) {
             let images = paths.compactMap { loaded[$0] }
-            if let i = viewer, !images.isEmpty { ImageViewer(images: images, index: min(i, images.count - 1)) }
+            if let i = viewer, !images.isEmpty { ImageViewer(images: images, index: min(i, images.count - 1), conversation: chatImages, attach: attachImage) }
         }
     }
 

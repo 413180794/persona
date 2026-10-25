@@ -372,6 +372,8 @@ struct TodoList: View {
 
 /// Thumbnail of an image in a conversation; tap opens the full-screen viewer (paging through `gallery`).
 struct Base64Image: View {
+    @Environment(\.chatImages) private var chatImages
+    @Environment(\.attachImage) private var attachImage
     var payload: ImagePayload
     var gallery: [ImagePayload] = []
     var index = 0
@@ -396,7 +398,8 @@ struct Base64Image: View {
             }
         }
         .fullScreenCover(isPresented: $showViewer) {
-            ImageViewer(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index)
+            ImageViewer(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index,
+                        conversation: chatImages, attach: attachImage)
                 .navigationTransition(.zoom(sourceID: "image", in: zoom))
         }
         .task(id: payload.data.count) {

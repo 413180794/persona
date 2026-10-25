@@ -534,6 +534,11 @@ final class AppModel {
         Task { do { try await api?.setMutes(p) } catch { show(error) } }
     }
 
+    // MARK: Attachments
+
+    /// Images handed to a chat's composer from elsewhere (an image edited in the viewer); the composer takes them.
+    var composerInbox: [SessionKey: [UIImage]] = [:]
+
     // MARK: Renames
 
     /// Renames a space (herdr workspace) on its machine; shown at once, the hub keeps pins / mutes with it.

@@ -18,8 +18,9 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 
 - 消息：用户气泡（珊瑚色）、助手 markdown（无气泡，阅读优先）、思考（折叠一行）、工具步骤组（>2 步折叠成「N 个步骤 · 运行 5 · 读取 3」，
   永远露出最后一步）、待办清单（TodoWrite 直接渲染）、Edit 的红绿 diff、Bash 命令和输出、图片。
-- 图片：缩略图点开全屏查看器（`ImageViewer.swift`，UIScrollView 缩放：双指 / 双击放大、拖动、1x 时下拉关闭；同一工具结果里多张图左右翻页；
-  保存到相册（仅添加权限）、分享、拷贝）。
+- 图片：任何图片点开全屏查看器（`ImageViewer.swift`），左右滑浏览整个会话的所有图片（`chatImages`），顶部「n / m」和关闭，点图片或下拉退出；
+  双指 / 双击缩放。底部：保存（仅添加权限）、编辑、分享、拷贝。编辑（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，
+  作为下一条消息的附件（`AppModel.composerInbox`），补一句话就能发。输入框里待发的图片点一下也能先编辑再发。
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间同伴条（开发页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。

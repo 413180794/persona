@@ -181,12 +181,18 @@ struct ChatView: View {
             if !imgs.isEmpty { debugImages = imgs }
         }
         .fullScreenCover(isPresented: Binding(get: { debugImages != nil }, set: { if !$0 { debugImages = [] } })) {
-            if let imgs = debugImages, !imgs.isEmpty { ImageViewer(images: imgs, index: 0) }
+            if let imgs = debugImages, !imgs.isEmpty {
+                ImageViewer(images: imgs, index: imgs.count - 1, conversation: imgs) { img in
+                    model.composerInbox[key, default: []].append(img)
+                }
+            }
         }
         #endif
         .environment(\.openFile) { path in
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
         }
+        .environment(\.chatImages, store.items.compactMap(\.image))
+        .environment(\.attachImage) { [model, key] img in model.composerInbox[key, default: []].append(img) }
         .environment(\.loadImage) { [model, key] path in
             guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
             return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
@@ -560,9 +566,11 @@ struct ChatView: View {
                         .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(shownKey) } }
                 }
             }
-            .padding(.horizontal, 16)
             .scrollTargetLayout()
         }
+        // Side margins as scroll content margins, not padding: jumping to a row aligns its leading edge with the
+        // margin instead of the screen edge (padding shifted the page 16pt sideways after landing on a row).
+        .contentMargins(.horizontal, 16, for: .scrollContent)
         .onScrollTargetVisibilityChange(idType: String.self) { ids in visibleLines = ids }
         .flippedBack() // the scroll view itself upside down; every row above is flipped back
         // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
@@ -617,6 +625,15 @@ struct ChatView: View {
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "openFirstImage") {
+                Task {
+                    for _ in 0..<30 { // the cached copy drops images; wait for the hub's
+                        try? await Task.sleep(for: .seconds(1))
+                        let imgs = model.chat(key).items.compactMap(\.image)
+                        if !imgs.isEmpty, debugImages == nil { debugImages = imgs; break }
+                    }
+                }
+            }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
@@ -799,6 +816,7 @@ struct Composer: View {
     @State private var showPhotos = false
     @State private var showCamera = false
     @State private var images: [(UIImage, ImagePayload)] = []
+    @State private var editingIndex: Int?
     @FocusState private var focused: Bool
 
     private var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty }
@@ -811,6 +829,12 @@ struct Composer: View {
                         ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
                             Image(uiImage: pair.0).resizable().scaledToFill().frame(width: 56, height: 56)
                                 .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                                .overlay(alignment: .bottomLeading) {
+                                    Image(systemName: "pencil.tip.crop.circle.fill").font(.caption).foregroundStyle(.white)
+                                        .shadow(radius: 2).padding(3)
+                                }
+                                .onTapGesture { editingIndex = idx } // mark it up before sending
+                                .accessibilityLabel("图片 \(idx + 1)，点按编辑")
                                 .overlay(alignment: .topTrailing) {
                                     Button { images.remove(at: idx) } label: {
                                         Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
@@ -891,6 +915,22 @@ struct Composer: View {
         .onChange(of: picks) { _, items in
             guard !items.isEmpty else { return }
             Task { await load(items) }
+        }
+        .onChange(of: model.composerInbox[key]?.count ?? 0, initial: true) { _, n in
+            guard n > 0, let incoming = model.composerInbox[key] else { return }
+            model.composerInbox[key] = nil
+            for img in incoming { add(img) }
+            focused = true
+        }
+        .fullScreenCover(item: Binding(get: { editingIndex.map(EditIndex.init) }, set: { if $0 == nil { editingIndex = nil } })) { e in
+            if images.indices.contains(e.id) {
+                ImageEditor(image: images[e.id].0) { edited in
+                    let scaled = edited.scaledDown(maxSide: 1600)
+                    if let jpeg = scaled.jpegData(compressionQuality: 0.75), images.indices.contains(e.id) {
+                        images[e.id] = (scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString()))
+                    }
+                }
+            }
         }
     }
 
@@ -1307,3 +1347,6 @@ struct WorkLine: View {
         return "\(s / 3600) 小时 \(s % 3600 / 60) 分"
     }
 }
+
+private struct EditIndex: Identifiable { var id: Int }
+

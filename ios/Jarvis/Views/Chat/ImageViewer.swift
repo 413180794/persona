@@ -2,15 +2,32 @@ import Photos
 import SwiftUI
 import UIKit
 
-/// Full-screen viewer for images in a conversation: pinch / double-tap zoom, pan, swipe down to close,
-/// page through the images of one message, save to Photos, share, copy.
+/// Full-screen viewer for the images of a conversation: swipe through all of them, pinch / double-tap zoom, tap or
+/// pull down to close; n / m on top; save, edit (box + pen, then into the composer for the next message), share and
+/// copy at the bottom.
 struct ImageViewer: View {
     var images: [ImagePayload]
     @State var index: Int
+    /// Where an edited image goes (the chat's composer); nil hides 编辑.
+    var attach: ((UIImage) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var decoded: [Int: UIImage] = [:]
     @State private var chrome = true
     @State private var saving = false
+    @State private var editing: UIImage?
+
+    /// Opens at `tapped` within the whole conversation when it is there, else within `local`.
+    init(images local: [ImagePayload], index: Int, conversation: [ImagePayload] = [], attach: ((UIImage) -> Void)? = nil) {
+        let tapped = local.indices.contains(index) ? local[index] : nil
+        if let tapped, let at = conversation.firstIndex(where: { $0.data == tapped.data }) {
+            images = conversation
+            _index = State(initialValue: at)
+        } else {
+            images = local
+            _index = State(initialValue: index)
+        }
+        self.attach = attach
+    }
 
     var body: some View {
         ZStack {
@@ -19,20 +36,32 @@ struct ImageViewer: View {
                 ForEach(images.indices, id: \.self) { i in
                     Group {
                         if let img = decoded[i] {
-                            ZoomableImage(image: img, onTap: { withAnimation(.easeInOut(duration: 0.2)) { chrome.toggle() } },
-                                          onPullDown: { dismiss() })
+                            ZoomableImage(image: img, onTap: { dismiss() }, onPullDown: { dismiss() })
                         } else {
                             ProgressView().tint(.white)
                         }
                     }
                     .tag(i)
-                    .task { await decode(i) }
+                    .task {
+                        await decode(i)
+                        #if DEBUG
+                        if i == index, attach != nil, UserDefaults.standard.bool(forKey: "openEditor") { editing = decoded[i] }
+                        #endif
+                    }
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
 
             if chrome { overlay.transition(.opacity) }
+        }
+        .fullScreenCover(item: Binding(get: { editing.map(EditTarget.init) }, set: { if $0 == nil { editing = nil } })) { t in
+            ImageEditor(image: t.image, doneTitle: "加到输入框") { edited in
+                attach?(edited)
+                Haptics.success()
+                AppModel.shared.toast = Toast("已加到输入框，补一句话就能发", style: .success)
+                dismiss()
+            }
         }
         .statusBarHidden(!chrome)
         .persistentSystemOverlays(chrome ? .automatic : .hidden)
@@ -59,12 +88,18 @@ struct ImageViewer: View {
             Spacer()
             HStack(spacing: 12) {
                 Button { Task { await save() } } label: {
-                    Label(saving ? "保存中…" : "保存到相册", systemImage: "square.and.arrow.down").lineLimit(1)
+                    Label(saving ? "保存中" : "保存", systemImage: "square.and.arrow.down").lineLimit(1).fixedSize()
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 6)
                 }
                 .themedButton(prominent: true)
                 .disabled(saving || decoded[index] == nil)
+                if attach != nil, let img = decoded[index] {
+                    Button { editing = img } label: {
+                        Label("编辑", systemImage: "pencil.tip.crop.circle").lineLimit(1).fixedSize().font(.subheadline.weight(.semibold))
+                    }
+                    .themedButton()
+                }
                 if let img = decoded[index] {
                     ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
                         Image(systemName: "square.and.arrow.up").frame(width: 24)
@@ -232,3 +267,9 @@ nonisolated enum ZoomMath {
         CGSize(width: max(0, (bounds.width - content.width) / 2), height: max(0, (bounds.height - content.height) / 2))
     }
 }
+
+private struct EditTarget: Identifiable {
+    var image: UIImage
+    var id: ObjectIdentifier { ObjectIdentifier(image) }
+}
+
