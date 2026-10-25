@@ -32,6 +32,11 @@ struct ChatView: View {
     /// The user dragged the list at least once: only then does reaching the top load older pages (a lazy stack may
     /// lay out the top row while settling at the bottom, which used to chain-load history on entry).
     @State private var userScrolled = false
+    /// Stick to the latest message: on while you are at the end, off as soon as you drag the list (reading history is
+    /// never interrupted), on again when you come back to the end, tap ↓ or send. Jumps and their retries only run
+    /// while it is on — a lone jump into rows the lazy stack never laid out lands on an earlier message.
+    @State private var followsEnd = true
+    @State private var entered = false
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -127,6 +132,7 @@ struct ChatView: View {
                 position = ScrollPosition(id: Self.bottomID, anchor: .bottom)
                 atBottom = false
                 settled = false
+                followsEnd = true
                 settleAtEnd()
             }
         }
@@ -245,12 +251,12 @@ struct ChatView: View {
             position.scrollTo(edge: .bottom) // a far jump by estimate first; the id jumps below land it exactly
             await Task.yield()
             scrollToEnd()
-            // Lazy stacks estimate unrendered rows; a jump can land in space nothing was laid out for (blank page).
-            // Until the bottom sentinel has actually been on screen — and as long as the user leaves the list alone —
-            // keep re-anchoring on it.
+            // Lazy stacks estimate unrendered rows; a jump can land on an earlier message or in space nothing was laid
+            // out for (blank page). Until the bottom sentinel is really on screen, keep re-anchoring on it — unless the
+            // user took the list meanwhile.
             for delay in [150, 400, 800, 1500] {
                 try? await Task.sleep(for: .milliseconds(delay))
-                guard !userScrolled else { break }
+                guard followsEnd else { break }
                 if atBottom && delay >= 400 { break }
                 scrollToEnd()
             }
@@ -262,11 +268,12 @@ struct ChatView: View {
     /// out could stop short), then land on the sentinel and retry until it is really on screen.
     private func jumpToEnd() {
         Haptics.tap()
+        followsEnd = true
         withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
         Task { @MainActor in
-            for delay in [120, 300, 650] {
+            for delay in [120, 300, 650, 1200] {
                 try? await Task.sleep(for: .milliseconds(delay))
-                if atBottom { break }
+                guard followsEnd, !atBottom else { break }
                 scrollToEnd()
             }
         }
@@ -353,7 +360,10 @@ struct ChatView: View {
                 Color.clear
                     .frame(height: 1)
                     .id(Self.bottomID)
-                    .onScrollVisibilityChange(threshold: 0.01) { visible in atBottom = visible }
+                    .onScrollVisibilityChange(threshold: 0.01) { visible in
+                        atBottom = visible
+                        if visible { followsEnd = true } // back at the end: follow new messages again
+                    }
                 if let err = store.error {
                     Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger)
                 }
@@ -371,29 +381,23 @@ struct ChatView: View {
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
                 userScrolled = true
+                followsEnd = false // the user has the list; nothing moves it until they return to the end
+            } else if phase == .idle, userScrolled, atBottom {
+                followsEnd = true
             }
         }
         .environment(menu)
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
 
-        .onChange(of: rows.last?.id) { _, _ in
-            if atBottom { withAnimation(.snappy) { scrollToEnd() } }
-        }
-        // A turn finishing folds its work away (the content gets much shorter) and a new one starts: without a
-        // jump the old offset lands in empty space below the content. Your own new message always goes to the end.
-        .onChange(of: liveTurnID) { _, _ in if atBottom { settleAtEnd() } }
-        .onChange(of: lastPromptID) { old, _ in if old != nil { settleAtEnd() } }
-        .onChange(of: store.pending.count) { old, new in if new > old { withAnimation(.snappy) { scrollToEnd() } } }
-        // A message absorbed mid-turn is inserted above the timer, far up: re-anchor on the end so the viewport does
-        // not end up in a stretch the lazy stack never laid out (blank page).
-        .onChange(of: store.items.count) { old, _ in
-            // The first data (no cache: an empty page suddenly gets a hundred rows) and later batches: the jump has to
-            // happen after the lazy stack laid the new rows out, or it lands in empty space (blank page).
-            if atBottom || old == 0 { settleAtEnd() }
-        }
-        .onChange(of: store.liveText.count / 40) { _, _ in
-            if atBottom { scrollToEnd() }
-        }
+        // New content while following the end: re-anchor after it is laid out (a turn folding away, a message
+        // absorbed above the timer, the first data on an empty page all move far content around).
+        .onChange(of: rows.last?.id) { _, _ in if followsEnd { settleAtEnd() } }
+        .onChange(of: liveTurnID) { _, _ in if followsEnd { settleAtEnd() } }
+        .onChange(of: store.items.count) { _, _ in if followsEnd { settleAtEnd() } }
+        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd() } }
+        // Your own message always brings you to the end.
+        .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; settleAtEnd() } }
+        .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; settleAtEnd() } }
         .overlay(alignment: .bottomTrailing) {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
@@ -430,7 +434,10 @@ struct ChatView: View {
 
     private func appeared() {
             bindMenu()
-            settleAtEnd() // cached rows painted on entry
+            if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
+                entered = true
+                settleAtEnd()
+            }
             model.subscribe(key)
             model.visibleSession = key
             model.markSeen(key)
@@ -507,6 +514,9 @@ struct ChatView: View {
         key = next
         userScrolled = false
         settled = false
+        followsEnd = true
+        atBottom = false
+        settleAtEnd()
         bindMenu()
         menu.selected = nil
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
