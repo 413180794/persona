@@ -1,0 +1,347 @@
+package node
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Read-only git views for the phone's Git tab: status, history, diffs. Everything runs `git -C <cwd>` with a timeout.
+
+const maxDiffBytes = 512 << 10
+
+type GitCommit struct {
+	Hash    string    `json:"hash"`
+	Short   string    `json:"short"`
+	Subject string    `json:"subject"`
+	Body    string    `json:"body,omitempty"`
+	Author  string    `json:"author"`
+	Date    time.Time `json:"date"`
+	Refs    string    `json:"refs,omitempty"`
+}
+
+type GitFile struct {
+	Path     string `json:"path"`
+	OrigPath string `json:"orig_path,omitempty"` // renames
+	// Index / Worktree are the porcelain status letters (M A D R C U ? or "."), e.g. "M." staged, ".M" unstaged.
+	Index    string `json:"index"`
+	Worktree string `json:"worktree"`
+	Added    int    `json:"added"`
+	Deleted  int    `json:"deleted"`
+	Binary   bool   `json:"binary,omitempty"`
+}
+
+type GitStatus struct {
+	IsRepo   bool        `json:"is_repo"`
+	Root     string      `json:"root,omitempty"`
+	Branch   string      `json:"branch,omitempty"` // empty when detached
+	Head     *GitCommit  `json:"head,omitempty"`
+	Upstream string      `json:"upstream,omitempty"`
+	Ahead    int         `json:"ahead"`
+	Behind   int         `json:"behind"`
+	Files    []GitFile   `json:"files"`
+	Stashes  int         `json:"stashes"`
+	Commits  []GitCommit `json:"commits"`
+}
+
+type GitShow struct {
+	Commit    GitCommit `json:"commit"`
+	Files     []GitFile `json:"files"`
+	Diff      string    `json:"diff"`
+	Truncated bool      `json:"truncated"`
+}
+
+func git(ctx context.Context, dir string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, "-c", "core.quotepath=off", "--no-pager"}, args...)...)
+	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C") // never take index.lock away from the user's git
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return out.String(), fmt.Errorf("git %s: %s", args[0], msg)
+	}
+	return out.String(), nil
+}
+
+func (n *Node) gitDir(cwd string) (string, error) {
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		return "", fmt.Errorf("empty cwd")
+	}
+	if cwd == "~" || strings.HasPrefix(cwd, "~/") {
+		cwd = filepath.Join(n.home, strings.TrimPrefix(cwd, "~"))
+	}
+	if strings.Contains(cwd, "/Library/Mobile Documents") {
+		return "", fmt.Errorf("iCloud Drive is not readable remotely")
+	}
+	return filepath.Clean(cwd), nil
+}
+
+// logFormat separates fields with \x1f and records with \x1e.
+const logFormat = "--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI%x1f%D%x1f%b%x1e"
+
+func parseLog(out string) []GitCommit {
+	var list []GitCommit
+	for _, rec := range strings.Split(out, "\x1e") {
+		rec = strings.TrimLeft(rec, "\n")
+		f := strings.Split(rec, "\x1f")
+		if len(f) < 7 {
+			continue
+		}
+		t, _ := time.Parse(time.RFC3339, f[4])
+		list = append(list, GitCommit{Hash: f[0], Short: f[1], Subject: f[2], Author: f[3], Date: t, Refs: f[5],
+			Body: strings.TrimSpace(f[6])})
+	}
+	return list
+}
+
+func (n *Node) gitStatus(ctx context.Context, cwd string) (*GitStatus, error) {
+	dir, err := n.gitDir(cwd)
+	if err != nil {
+		return nil, err
+	}
+	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return &GitStatus{IsRepo: false, Files: []GitFile{}, Commits: []GitCommit{}}, nil
+	}
+	st := &GitStatus{IsRepo: true, Root: strings.TrimSpace(root), Files: []GitFile{}, Commits: []GitCommit{}}
+	out, err := git(ctx, st.Root, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all")
+	if err != nil {
+		return nil, err
+	}
+	st.Files = parseStatusV2(out, st)
+	// Line counts for the change list: unstaged and staged numstat merged per path.
+	counts := map[string][2]int{}
+	binary := map[string]bool{}
+	for _, args := range [][]string{{"diff", "--numstat", "-z"}, {"diff", "--cached", "--numstat", "-z"}} {
+		if o, err := git(ctx, st.Root, args...); err == nil {
+			for path, c := range parseNumstat(o) {
+				if c[0] < 0 {
+					binary[path] = true
+					continue
+				}
+				prev := counts[path]
+				counts[path] = [2]int{prev[0] + c[0], prev[1] + c[1]}
+			}
+		}
+	}
+	for i := range st.Files {
+		c := counts[st.Files[i].Path]
+		st.Files[i].Added, st.Files[i].Deleted, st.Files[i].Binary = c[0], c[1], binary[st.Files[i].Path]
+	}
+	if o, err := git(ctx, st.Root, "stash", "list"); err == nil && strings.TrimSpace(o) != "" {
+		st.Stashes = strings.Count(strings.TrimSpace(o), "\n") + 1
+	}
+	if o, err := git(ctx, st.Root, "log", "-n", "30", logFormat); err == nil {
+		st.Commits = parseLog(o)
+		if len(st.Commits) > 0 {
+			h := st.Commits[0]
+			st.Head = &h
+		}
+	}
+	return st, nil
+}
+
+// parseStatusV2 reads `git status --porcelain=v2 --branch -z`.
+func parseStatusV2(out string, st *GitStatus) []GitFile {
+	files := []GitFile{}
+	recs := strings.Split(out, "\x00")
+	for i := 0; i < len(recs); i++ {
+		r := recs[i]
+		switch {
+		case strings.HasPrefix(r, "# branch.head "):
+			if b := strings.TrimPrefix(r, "# branch.head "); b != "(detached)" {
+				st.Branch = b
+			}
+		case strings.HasPrefix(r, "# branch.upstream "):
+			st.Upstream = strings.TrimPrefix(r, "# branch.upstream ")
+		case strings.HasPrefix(r, "# branch.ab "):
+			for _, f := range strings.Fields(strings.TrimPrefix(r, "# branch.ab ")) {
+				v, _ := strconv.Atoi(f[1:])
+				if f[0] == '+' {
+					st.Ahead = v
+				} else {
+					st.Behind = v
+				}
+			}
+		case strings.HasPrefix(r, "1 "): // ordinary: 1 XY sub mH mI mW hH hI path
+			f := strings.SplitN(r, " ", 9)
+			if len(f) == 9 {
+				files = append(files, GitFile{Path: f[8], Index: f[1][:1], Worktree: f[1][1:]})
+			}
+		case strings.HasPrefix(r, "2 "): // renamed / copied: 2 XY sub mH mI mW hH hI Xscore path, then origPath
+			f := strings.SplitN(r, " ", 10)
+			if len(f) == 10 {
+				g := GitFile{Path: f[9], Index: f[1][:1], Worktree: f[1][1:]}
+				if i+1 < len(recs) {
+					g.OrigPath = recs[i+1]
+					i++
+				}
+				files = append(files, g)
+			}
+		case strings.HasPrefix(r, "u "): // unmerged: u XY sub m1 m2 m3 mW h1 h2 h3 path
+			f := strings.SplitN(r, " ", 11)
+			if len(f) == 11 {
+				files = append(files, GitFile{Path: f[10], Index: "U", Worktree: "U"})
+			}
+		case strings.HasPrefix(r, "? "):
+			files = append(files, GitFile{Path: r[2:], Index: "?", Worktree: "?"})
+		}
+	}
+	return files
+}
+
+// parseNumstat reads `git diff --numstat -z`; binary files get -1.
+func parseNumstat(out string) map[string][2]int {
+	res := map[string][2]int{}
+	recs := strings.Split(out, "\x00")
+	for i := 0; i < len(recs); i++ {
+		f := strings.SplitN(recs[i], "\t", 3)
+		if len(f) != 3 {
+			continue
+		}
+		path := f[2]
+		if path == "" && i+2 < len(recs) { // rename: "a\td\t" then old, new
+			path = recs[i+2]
+			i += 2
+		}
+		a, errA := strconv.Atoi(f[0])
+		d, errD := strconv.Atoi(f[1])
+		if errA != nil || errD != nil {
+			res[path] = [2]int{-1, -1}
+			continue
+		}
+		res[path] = [2]int{a, d}
+	}
+	return res
+}
+
+// gitDiff returns the working-tree (or staged) diff of one file; untracked files diff against /dev/null.
+func (n *Node) gitDiff(ctx context.Context, cwd, path string, staged bool) (map[string]any, error) {
+	dir, err := n.gitDir(cwd)
+	if err != nil {
+		return nil, err
+	}
+	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, fmt.Errorf("not a git repository")
+	}
+	root = strings.TrimSpace(root)
+	var out string
+	if staged {
+		out, err = git(ctx, root, "diff", "--cached", "--no-color", "--", path)
+	} else {
+		out, err = git(ctx, root, "diff", "--no-color", "--", path)
+		if err == nil && strings.TrimSpace(out) == "" {
+			if o, _ := git(ctx, root, "ls-files", "--others", "--exclude-standard", "--", path); strings.TrimSpace(o) != "" {
+				// --no-index exits 1 when files differ; the output is still the diff.
+				out, _ = git(ctx, root, "diff", "--no-color", "--no-index", "--", "/dev/null", path)
+				err = nil
+			}
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	truncated := len(out) > maxDiffBytes
+	if truncated {
+		out = out[:maxDiffBytes]
+	}
+	return map[string]any{"path": path, "diff": out, "truncated": truncated}, nil
+}
+
+func (n *Node) gitShow(ctx context.Context, cwd, hash string) (*GitShow, error) {
+	dir, err := n.gitDir(cwd)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(hash, "-") || strings.TrimSpace(hash) == "" {
+		return nil, fmt.Errorf("bad commit")
+	}
+	o, err := git(ctx, dir, "log", "-n", "1", logFormat, hash)
+	if err != nil {
+		return nil, err
+	}
+	cs := parseLog(o)
+	if len(cs) == 0 {
+		return nil, fmt.Errorf("commit %s not found", hash)
+	}
+	res := &GitShow{Commit: cs[0], Files: []GitFile{}}
+	if o, err := git(ctx, dir, "show", "--numstat", "-z", "--format=", hash); err == nil {
+		for path, c := range parseNumstat(o) {
+			f := GitFile{Path: path, Index: "M", Worktree: "."}
+			if c[0] < 0 {
+				f.Binary = true
+			} else {
+				f.Added, f.Deleted = c[0], c[1]
+			}
+			res.Files = append(res.Files, f)
+		}
+	}
+	if o, err := git(ctx, dir, "show", "--name-status", "-z", "--format=", hash); err == nil {
+		kinds := map[string]string{}
+		recs := strings.Split(o, "\x00")
+		for i := 0; i+1 < len(recs); i += 2 {
+			k := recs[i]
+			if k == "" {
+				i--
+				continue
+			}
+			p := recs[i+1]
+			if (k[0] == 'R' || k[0] == 'C') && i+2 < len(recs) {
+				p = recs[i+2]
+				i++
+			}
+			kinds[p] = k[:1]
+		}
+		for i := range res.Files {
+			if k, ok := kinds[res.Files[i].Path]; ok {
+				res.Files[i].Index = k
+			}
+		}
+	}
+	sortFiles(res.Files)
+	diff, err := git(ctx, dir, "show", "--no-color", "--format=", hash)
+	if err == nil {
+		res.Truncated = len(diff) > maxDiffBytes
+		if res.Truncated {
+			diff = diff[:maxDiffBytes]
+		}
+		res.Diff = diff
+	}
+	return res, nil
+}
+
+func (n *Node) gitLog(ctx context.Context, cwd string, skip, limit int) ([]GitCommit, error) {
+	dir, err := n.gitDir(cwd)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	o, err := git(ctx, dir, "log", "-n", strconv.Itoa(limit), "--skip", strconv.Itoa(max(skip, 0)), logFormat)
+	if err != nil {
+		return nil, err
+	}
+	list := parseLog(o)
+	if list == nil {
+		list = []GitCommit{}
+	}
+	return list, nil
+}
+
+func sortFiles(fs []GitFile) {
+	sort.Slice(fs, func(i, j int) bool { return fs[i].Path < fs[j].Path })
+}

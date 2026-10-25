@@ -91,6 +91,9 @@ type Meta struct {
 	// Queue holds input typed while Claude works and not yet taken (queue-operation lines:
 	// enqueue / dequeue / remove / popAll — popAll is "up arrow pulls them back into the input").
 	Queue []string
+	// Background holds background shells / agents that have not reported back (see trackBackground).
+	Background []proto.BackgroundTask
+	bgPending  map[string]proto.BackgroundTask // tool_use_id → started, waiting for the tool result with its id
 	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
 	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
 	LastActivity time.Time
@@ -156,7 +159,13 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 	}
 	if e.Type == "queue-operation" {
-		meta.applyQueue(e.Operation, rawString(e.Content))
+		content := rawString(e.Content)
+		if strings.Contains(content, "<task-notification>") {
+			// A background task reporting back is queued like input, but it is not something the user typed.
+			meta.taskFinished(content)
+			return nil
+		}
+		meta.applyQueue(e.Operation, content)
 		return nil
 	}
 	if e.Type == "ai-title" && e.AITitle != "" {
@@ -178,8 +187,11 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		// Input typed while Claude was working is queued, then absorbed into the running turn; it is stored as a
 		// queued_command attachment instead of a user message, so without this it never shows up in the chat.
 		a := e.Attachment
-		if a == nil || a.Type != "queued_command" || (a.CommandMode != "" && a.CommandMode != "prompt") ||
-			(a.Origin != nil && a.Origin.Kind != "human") {
+		if a == nil || a.Type != "queued_command" {
+			return nil
+		}
+		notification := a.CommandMode == "task-notification"
+		if !notification && ((a.CommandMode != "" && a.CommandMode != "prompt") || (a.Origin != nil && a.Origin.Kind != "human")) {
 			return nil
 		}
 		var text string
@@ -194,6 +206,13 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				}
 				text = strings.Join(parts, "\n")
 			}
+		}
+		if strings.Contains(text, "<task-notification>") {
+			meta.taskFinished(text)
+			return userText(mk, text) // a "background task finished" notice
+		}
+		if notification {
+			return nil // other harness notifications are not user input
 		}
 		items := userText(mk, text)
 		for i := range items {
@@ -240,6 +259,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		var s string
 		if json.Unmarshal(e.Message.Content, &s) == nil {
+			if strings.Contains(s, "<task-notification>") {
+				meta.taskFinished(s)
+			}
 			if e.IsMeta {
 				return nil
 			}
@@ -257,6 +279,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		for i, b := range blocks {
 			switch b.Type {
 			case "text":
+				if strings.Contains(b.Text, "<task-notification>") {
+					meta.taskFinished(b.Text)
+				}
 				if e.IsMeta {
 					continue
 				}
@@ -276,6 +301,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				}
 			case "tool_result":
 				text, imgs := toolResultContent(b.Content)
+				meta.backgroundStarted(b.ToolUseID, text, b.IsError, e.Timestamp)
 				it := mk(i, "user", proto.KindToolResult)
 				it.ToolUseID = b.ToolUseID
 				it.IsError = b.IsError
@@ -325,11 +351,100 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				it.ToolName = b.Name
 				it.ToolInput = clipJSON(b.Input)
 				out = append(out, it)
+				meta.trackBackground(b.ID, b.Name, b.Input, e.Timestamp)
 			}
 		}
 		return out
 	}
 	return nil
+}
+
+// Background tasks: Bash with run_in_background and subagents launched async answer with a task id right away
+// ("Command running in background with ID: b85polnoj. Output is being written to: …" / "Async agent launched …
+// agentId: …") and report back later with a <task-notification> carrying the same id. TaskStop / KillShell end them too.
+var (
+	bgIDRe     = regexp.MustCompile(`(?:running in background with ID|agentId):\s*([A-Za-z0-9_-]+)`)
+	bgMovedRe  = regexp.MustCompile(`moved to the background \(ID: ([A-Za-z0-9_-]+)\)`) // a foreground command that timed out
+	bgOutputRe = regexp.MustCompile(`Output is being written to:\s*(\S+?)\.?(?:\s|$)`)
+)
+
+func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts time.Time) {
+	var in struct {
+		Command     string `json:"command"`
+		Description string `json:"description"`
+		Background  bool   `json:"run_in_background"`
+		TaskID      string `json:"task_id"`
+		ShellID     string `json:"shell_id"`
+	}
+	_ = json.Unmarshal(raw, &in)
+	switch name {
+	case "Bash":
+		if !in.Background {
+			return
+		}
+		m.pend(toolUseID, proto.BackgroundTask{Kind: "shell", Command: in.Command, Description: in.Description, StartedAt: ts})
+	case "Agent", "Task":
+		// Whether it went to the background shows in the result ("Async agent launched").
+		m.pend(toolUseID, proto.BackgroundTask{Kind: "agent", Description: in.Description, StartedAt: ts})
+	case "TaskStop", "KillShell", "KillBash":
+		m.removeBackground(in.TaskID + in.ShellID)
+	}
+}
+
+func (m *Meta) pend(toolUseID string, t proto.BackgroundTask) {
+	if m.bgPending == nil {
+		m.bgPending = map[string]proto.BackgroundTask{}
+	}
+	m.bgPending[toolUseID] = t
+}
+
+func (m *Meta) backgroundStarted(toolUseID, result string, isError bool, ts time.Time) {
+	t, ok := m.bgPending[toolUseID]
+	if !ok {
+		if mv := bgMovedRe.FindStringSubmatch(result); mv != nil && !isError {
+			m.removeBackground(mv[1])
+			m.Background = append(m.Background, proto.BackgroundTask{ID: mv[1], Kind: "shell", Description: "超时转到后台的命令",
+				OutputFile: outputFile(result), StartedAt: ts})
+		}
+		return
+	}
+	delete(m.bgPending, toolUseID)
+	match := bgIDRe.FindStringSubmatch(result)
+	if isError || match == nil {
+		return // ran in the foreground after all, or failed to start
+	}
+	t.ID = match[1]
+	t.OutputFile = outputFile(result)
+	if t.StartedAt.IsZero() {
+		t.StartedAt = ts
+	}
+	m.removeBackground(t.ID)
+	m.Background = append(m.Background, t)
+}
+
+func outputFile(result string) string {
+	if o := bgOutputRe.FindStringSubmatch(result); o != nil {
+		return o[1]
+	}
+	return ""
+}
+
+func (m *Meta) taskFinished(notification string) {
+	if id := firstTag(notification, "task-id"); id != "" {
+		m.removeBackground(id)
+	}
+}
+
+func (m *Meta) removeBackground(id string) {
+	if id == "" {
+		return
+	}
+	for i, t := range m.Background {
+		if t.ID == id {
+			m.Background = append(m.Background[:i:i], m.Background[i+1:]...)
+			return
+		}
+	}
 }
 
 func (m *Meta) applyQueue(op, content string) {

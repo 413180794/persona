@@ -32,7 +32,17 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
   实现照 TUI：↑ 把全部排队消息拉回输入框（transcript 记 popAll），清空输入框后把保留的重新排队（`POST …/queue {"keep":[…]}`）。
 - 开发列表：忙碌的空间里只显示需要你 / 工作中 / 完成未看的 agent，空闲的折成一行「还有 N 个空闲」，点开展开。
 - 「回到底部」箭头：用列表末尾的哨兵视图判断是否在底部（滚到底就隐藏）。
-- 终端：全屏；按键栏只有 ctrl（粘滞，作用于下一个键）、esc、tab 和一个游戏手柄图标，点开浮出方向键 + 回车十字键盘；终端交互面板用同一套按键栏。
+- 会话页选项卡（开发会话，`Views/Session/`）：导航栏下一排「对话 · 终端 · Git · 文件」，Git 只在仓库里出现（角标是改动数），
+  文件在知道目录时出现；助手对话没有选项卡。
+  - 终端（`TerminalPanel`）：任何状态都能看（不只是工作中）。每秒读最后 200 行（`source=recent`）；顶部「加载更早的输出」每次多读 1000 行
+    滚动缓冲，直到返回的行数少于请求（「已到最前面」，最多 20000 行），翻历史时暂停实时刷新，底部「回到最新」恢复。长输出按 200 行一块懒渲染。
+    按键栏只有 ctrl（粘滞，作用于下一个键）、esc、tab 和一个游戏手柄图标，点开浮出方向键 + 回车十字键盘；实时状态条上的终端图标打开同一个面板的全屏版。
+  - Git（`GitPane`）：分支、上游 ↑↓、暂存数；改动列表（状态字母、+/− 行数、已暂存 / 部分暂存），点开看 diff（新旧行号、红绿底、不换行横滑，
+    同时有暂存和未暂存时可切换）；提交历史（分页加载更早），点开看提交说明和每个文件的 diff。全部只读。
+  - 文件（`FilesPane`）：从会话目录开始逐级进入，面包屑跳回任意一级；目录在前，显示大小和修改时间、Git 改动标记（目录里有改动显示圆点）；
+    隐藏文件默认不显示（菜单里切换）；点文件用文件查看器打开。
+- 后台任务：Claude 用 `run_in_background` 跑的命令 / 子代理还没回报时，输入框上方显示「N 个后台任务」（轮次结束后也在），展开看描述、命令和已运行时间，
+  点一条打开它的输出文件。
 - 底部 tab 栏常驻，不随滚动收起。
 - 实时状态条：claude 工作时显示 spinner 行（「Cogitating… 12s · ↓3.2k」），点开看输出预览；右侧进终端。
 - 交互面板：贴在输入框上方。提问（多题切换、单选 / 多选 / 自己写，单题单选点一下就提交）、计划（markdown 预览 + 全屏、批准并自动执行 /
@@ -55,6 +65,8 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 - 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
 - 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和 agent 完成推送：会话从 working 变成 done / idle，4 秒后仍未恢复工作就推「✅ 标题」，
   副标题「机器 · 空间 › 标签」，正文是最后一条回复。前台且正在看该会话时不弹。模拟器自动化（`-pairURL`）不申请通知权限、不注册成手机。
+  点通知打开对应会话：`UNUserNotificationCenterDelegate` 用 completion handler 版本，切回主队列处理再回调（async 版本在后台执行器上返回，
+  UIKit 在非主线程收到完成回调，点通知冷启动会崩）。
 - 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」
   （sendMessage 请求，iPhone 回复配对）；iPhone 设置里有「同步到 Apple Watch」。
 - 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
@@ -63,9 +75,10 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群）、`-larkFocus <messageId>`（滚到该条消息）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群）、`-larkFocus <messageId>`（滚到该条消息）、`-inboxDrawer YES`（打开信息页的分组抽屉）；信息页的分组 / 视图可用 `-inbox.group done|flagged|mail|label:<id>:<名字>`、`-inbox.tab 未读` 直接指定（@AppStorage 读启动参数）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
-`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。
+`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理。
 
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
 

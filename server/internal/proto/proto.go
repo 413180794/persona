@@ -106,10 +106,13 @@ type Session struct {
 	State  string    `json:"state"`
 	SeenAt time.Time `json:"seen_at,omitempty"`
 	// Queued is input typed while the agent works, waiting to be taken (shown above the composer, not in the chat).
-	Queued              []string  `json:"queued,omitempty"`
-	UpdatedAt           time.Time `json:"updated_at"`
-	LastText            string    `json:"last_text,omitempty"`
-	PendingInteractions int       `json:"pending_interactions"`
+	Queued []string `json:"queued,omitempty"`
+	// Background lists commands / agents Claude started in the background that have not reported back yet
+	// (the TUI's "2 shells still running").
+	Background          []BackgroundTask `json:"background,omitempty"`
+	UpdatedAt           time.Time        `json:"updated_at"`
+	LastText            string           `json:"last_text,omitempty"`
+	PendingInteractions int              `json:"pending_interactions"`
 }
 
 // Item kinds.
@@ -217,4 +220,14 @@ type ToolResult struct {
 
 func TextResult(text string, isErr bool) ToolResult {
 	return ToolResult{Content: []Content{{Type: "text", Text: text}}, IsError: isErr}
+}
+
+// BackgroundTask is a Bash command or subagent Claude runs in the background (run_in_background).
+type BackgroundTask struct {
+	ID          string    `json:"id"`   // task id from the tool result (e.g. "b85polnoj")
+	Kind        string    `json:"kind"` // "shell" | "agent"
+	Description string    `json:"description,omitempty"`
+	Command     string    `json:"command,omitempty"`
+	OutputFile  string    `json:"output_file,omitempty"`
+	StartedAt   time.Time `json:"started_at"`
 }

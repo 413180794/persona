@@ -109,6 +109,7 @@ type quickMeta struct {
 	first    string
 	activity time.Time // last real exchange; zero when unknown
 	queue    []string
+	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
 	cwd      string
 	model    string
 	lastText string
@@ -126,6 +127,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 		return m
 	}
 	m = readQuickMeta(path, st)
+	m.bg = n.backgroundTasks(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -257,6 +259,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}
+				s.Background = m.bg // background shells keep running after the turn ends
 			}
 		}
 		n.decorate(&s)
@@ -542,6 +545,9 @@ func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
 		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued)
+		for _, t := range s.Background {
+			b.WriteString(t.ID + ",")
+		}
 	}
 	return b.String()
 }
@@ -674,4 +680,71 @@ func (n *Node) recentDirs() []proto.RecentDir {
 		out = out[:15]
 	}
 	return out
+}
+
+// bgScan follows one transcript for background tasks. The quick meta only reads the tail, which in a long turn full
+// of screenshots (base64 lines of a megabyte) holds just the last few items; this reads the whole file once and then
+// only what was appended, parsing just the lines that can start or finish a background task.
+type bgScan struct {
+	mu   sync.Mutex
+	off  int64
+	meta transcript.Meta
+}
+
+var bgMarkers = [][]byte{[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
+	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`)}
+
+func (n *Node) backgroundTasks(path string) []proto.BackgroundTask {
+	n.mu.Lock()
+	sc := n.bgScans[path]
+	if sc == nil {
+		sc = &bgScan{}
+		n.bgScans[path] = sc
+	}
+	n.mu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	if st.Size() < sc.off { // rewritten
+		sc.off, sc.meta = 0, transcript.Meta{}
+	}
+	if st.Size() > sc.off {
+		buf := make([]byte, st.Size()-sc.off)
+		nr, _ := f.ReadAt(buf, sc.off)
+		buf = buf[:nr]
+		end := bytes.LastIndexByte(buf, '\n')
+		if end >= 0 {
+			for _, line := range bytes.Split(buf[:end], []byte("\n")) {
+				if len(line) > 64<<10 || !containsAny(line, bgMarkers) { // api-request blobs repeat everything; skip them
+					continue
+				}
+				transcript.ParseLine(0, line, &sc.meta)
+			}
+			sc.off += int64(end + 1)
+		}
+	}
+	var out []proto.BackgroundTask
+	for _, t := range sc.meta.Background {
+		if time.Since(t.StartedAt) < 24*time.Hour { // older ones are surely gone (claude restarted)
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func containsAny(b []byte, subs [][]byte) bool {
+	for _, s := range subs {
+		if bytes.Contains(b, s) {
+			return true
+		}
+	}
+	return false
 }

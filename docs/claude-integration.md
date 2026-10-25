@@ -77,3 +77,15 @@ node 的 `session.start`：
 - 换启动器 = 杀掉进程，用新启动器 `--resume` 接上；空闲 20 分钟的进程会被回收，下次发消息自动 `--resume`。
 - 中断：-p 模式没有 stdin 中断，直接结束进程，下一条消息续上。
 - 无头会话的 transcript 里第一条 user 内容是 block 数组；没有 ai-title 时用第一句话当标题。
+
+## 后台任务（`transcript.go` 的 trackBackground，2026-10-25 实测）
+
+- 开始：`Bash` 带 `run_in_background:true`，tool_result 是 `Command running in background with ID: <id>. Output is being written to: <path>.`；
+  子代理（`Agent`）异步启动时结果是 `Async agent launched … agentId: <id>`；前台命令超时会变成 `…moved to the background (ID: <id>)`。
+- 结束：`<task-notification><task-id>…</task-id><status>completed|failed|killed</status><summary>…</summary></task-notification>`，
+  可能出现在 queue-operation（enqueue，**不是用户输入，不能进排队列表**）、`queued_command` 附件（commandMode=task-notification，中途吸收）
+  或空闲时的 user 消息里；`TaskStop` / `KillShell` 也算结束。完成通知在对话里显示成一行提示（summary）。
+- 会话列表的快速元信息只读 transcript 尾部 384 KB，长轮次里几张截图（每张一行 base64，上 MB）就把开始那行挤出去了。所以 node 对每个
+  transcript 单独做增量扫描（`bgScan`：第一次读全文件，之后只读新增部分，只解析含相关关键字、小于 64 KB 的行），结果放进
+  `Session.background`。超过 24 小时的视为已经没了（claude 重启后台任务就没了）。
+

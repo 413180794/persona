@@ -41,6 +41,7 @@ type Node struct {
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
 	lastList string                    // serialized last sessions.changed payload
 	metas    map[string]quickMeta      // transcript path -> cached meta
+	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
 }
 
 func New(version string) (*Node, error) {
@@ -76,6 +77,7 @@ func New(version string) (*Node, error) {
 		panes:   map[string]string{},
 		procs:   map[string]*assistantProc{},
 		metas:   map[string]quickMeta{},
+		bgScans: map[string]*bgScan{},
 	}
 	n.state = newState()
 	return n, nil
@@ -175,6 +177,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		AfterSeq        *int            `json:"after_seq"`
 		Limit           int             `json:"limit"`
 		SinceSeq        int             `json:"since_seq"`
+		Source          string          `json:"source"`
+		Staged          bool            `json:"staged"`
+		Hash            string          `json:"hash"`
+		Skip            int             `json:"skip"`
 		Raw             json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -212,7 +218,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return ok(n.keys(ctx, p.SessionID, []string{"esc"}, ""))
 	case "session.screen":
-		text, status, err := n.screen(ctx, p.SessionID, p.Lines)
+		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source)
 		return map[string]any{"text": text, "status": status}, err
 	case "session.items":
 		f, err := n.file(p.SessionID)
@@ -252,6 +258,17 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"settings": list}, err
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd)
+	case "fs.list":
+		return n.listDir(p.Path, p.Cwd)
+	case "git.status":
+		return n.gitStatus(ctx, p.Cwd)
+	case "git.diff":
+		return n.gitDiff(ctx, p.Cwd, p.Path, p.Staged)
+	case "git.show":
+		return n.gitShow(ctx, p.Cwd, p.Hash)
+	case "git.log":
+		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
+		return map[string]any{"commits": list}, err
 	case "assistant.prepare":
 		var a struct {
 			Dir      string `json:"dir"`

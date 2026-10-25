@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -99,4 +101,62 @@ func trimPartialRune(b []byte) []byte {
 		b = b[:len(b)-1]
 	}
 	return b
+}
+
+// DirEntry is one row of the phone's file tree.
+type DirEntry struct {
+	Name    string    `json:"name"`
+	Dir     bool      `json:"dir"`
+	Symlink bool      `json:"symlink,omitempty"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"mtime"`
+}
+
+const maxDirEntries = 2000
+
+// listDir lists a directory for the file tree: directories first, then files, each by name (case-insensitive).
+func (n *Node) listDir(path, cwd string) (map[string]any, error) {
+	path = strings.TrimSpace(path)
+	switch {
+	case path == "":
+		path = cwd
+	case path == "~" || strings.HasPrefix(path, "~/"):
+		path = filepath.Join(n.home, strings.TrimPrefix(path, "~"))
+	case !filepath.IsAbs(path) && cwd != "":
+		path = filepath.Join(cwd, path)
+	}
+	if path == "" {
+		return nil, fmt.Errorf("empty path")
+	}
+	path = filepath.Clean(path)
+	if strings.Contains(path, "/Library/Mobile Documents") {
+		return nil, fmt.Errorf("iCloud Drive files are not readable remotely")
+	}
+	ents, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]DirEntry, 0, min(len(ents), maxDirEntries))
+	for _, e := range ents {
+		if len(list) >= maxDirEntries {
+			break
+		}
+		d := DirEntry{Name: e.Name(), Dir: e.IsDir(), Symlink: e.Type()&os.ModeSymlink != 0}
+		if info, err := e.Info(); err == nil {
+			d.Size, d.ModTime = info.Size(), info.ModTime()
+		}
+		if d.Symlink { // follow links so linked directories open like directories
+			if st, err := os.Stat(filepath.Join(path, d.Name)); err == nil {
+				d.Dir = st.IsDir()
+			}
+		}
+		list = append(list, d)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Dir != list[j].Dir {
+			return list[i].Dir
+		}
+		return strings.ToLower(list[i].Name) < strings.ToLower(list[j].Name)
+	})
+	return map[string]any{"path": path, "entries": list, "truncated": len(ents) > maxDirEntries}, nil
 }

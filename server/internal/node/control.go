@@ -317,12 +317,17 @@ func (n *Node) keys(ctx context.Context, id string, keys []string, text string) 
 	return nil
 }
 
-func (n *Node) screen(ctx context.Context, id string, lines int) (string, string, error) {
+// screen reads the session's terminal. source "visible" is the screen; "recent" also reaches back into the pane's
+// scrollback (the phone pages it: ask for more lines until fewer come back than were asked for).
+func (n *Node) screen(ctx context.Context, id string, lines int, source string) (string, string, error) {
 	if n.isAssistantSession(id) {
 		return "", proto.StatusIdle, nil // headless: no terminal; live text arrives as session.delta
 	}
-	if lines <= 0 || lines > 400 {
-		lines = 60
+	if source != "recent" {
+		source = "visible"
+	}
+	if limit := map[string]int{"visible": 400, "recent": 20000}[source]; lines <= 0 || lines > limit {
+		lines = min(max(lines, 60), limit)
 	}
 	a, ok := n.agent(id)
 	if !ok {
@@ -331,7 +336,7 @@ func (n *Node) screen(ctx context.Context, id string, lines int) (string, string
 		}
 		a, _ = n.agent(id)
 	}
-	text, err := n.herdr.PaneRead(ctx, a.PaneID, "visible", lines)
+	text, err := n.herdr.PaneRead(ctx, a.PaneID, source, lines)
 	return text, a.AgentStatus, err
 }
 

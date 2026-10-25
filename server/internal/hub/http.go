@@ -35,6 +35,23 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path"), "cwd": r.URL.Query().Get("cwd")}
 	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/fs", h.proxy("fs.list", func(r *http.Request) any {
+		return map[string]any{"path": r.URL.Query().Get("path"), "cwd": r.URL.Query().Get("cwd")}
+	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/status", h.proxy("git.status", func(r *http.Request) any {
+		return map[string]any{"cwd": r.URL.Query().Get("cwd")}
+	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/diff", h.proxy("git.diff", func(r *http.Request) any {
+		q := r.URL.Query()
+		return map[string]any{"cwd": q.Get("cwd"), "path": q.Get("path"), "staged": q.Get("staged") == "1"}
+	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/show", h.proxy("git.show", func(r *http.Request) any {
+		return map[string]any{"cwd": r.URL.Query().Get("cwd"), "hash": r.URL.Query().Get("hash")}
+	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/git/log", h.proxy("git.log", func(r *http.Request) any {
+		q := r.URL.Query()
+		return map[string]any{"cwd": q.Get("cwd"), "skip": atoi(q.Get("skip")), "limit": atoi(q.Get("limit"))}
+	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", nil))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-settings", h.proxyBody("claude.settings.set"))
 	api.HandleFunc("GET /api/v1/sessions", h.listSessions)
@@ -56,7 +73,8 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	}))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", h.proxy("session.screen", func(r *http.Request) any {
-		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(r.URL.Query().Get("lines"))}
+		q := r.URL.Query()
+		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source")}
 	}))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"interactions": h.pendingInteractions()})

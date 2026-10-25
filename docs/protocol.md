@@ -24,7 +24,10 @@
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
- "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1}
+ "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1,
+ "queued":["工作中输入、还没被取走的消息"],
+ "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
+                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}]}
 
 // Item：transcript 规范化后的一条（一个内容块一条）
 {"id":"<entry uuid>#<block idx>","seq":123,            // seq = transcript 行号，单调递增，用于增量和分页
@@ -69,7 +72,12 @@
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?}`；会话 offline 时先用原启动器 `--resume` 拉起 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60` | `{"text":"…","status":"working"}` |
+| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了） |
+| GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
+| GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
+| GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
+| GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
+| GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（仅 jarvis 启动的会话） |
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","conversations":[Session]}` |
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?}`，存 Postgres settings |
@@ -131,7 +139,8 @@ hub → node 请求：
 | `session.send` | `{session_id, text, images?}` |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |
-| `session.screen` | `{session_id, lines}` → `{text, status}` |
+| `session.screen` | `{session_id, lines, source}` → `{text, status}` |
+| `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
 | `session.items` | `{session_id, before_seq, limit}` → `{items, has_more}` |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 推 `session.items` / `session.screen` 事件 |
 | `session.close` | `{session_id}` |

@@ -489,3 +489,46 @@ func TestDeveloperInfoAndQueueTags(t *testing.T) {
 		t.Fatalf("queue = %q", m.Queue)
 	}
 }
+
+func TestBackgroundTasks(t *testing.T) {
+	meta := &Meta{}
+	lines := []string{
+		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-25T07:40:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"./scripts/release.sh","description":"Upload to TestFlight","run_in_background":true}}]}}`,
+		`{"type":"user","uuid":"u1","timestamp":"2026-10-25T07:40:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"Command running in background with ID: b85polnoj. Output is being written to: /tmp/tasks/b85polnoj.output. You will be notified when it completes"}]}}`,
+		`{"type":"assistant","uuid":"a2","timestamp":"2026-10-25T07:40:02Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Agent","input":{"description":"Survey code","prompt":"x"}}]}}`,
+		`{"type":"user","uuid":"u2","timestamp":"2026-10-25T07:40:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"Async agent launched successfully.\nagentId: a3497dfa0fb026376 (internal ID)"}]}}`,
+		`{"type":"assistant","uuid":"a3","timestamp":"2026-10-25T07:40:04Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu3","name":"Bash","input":{"command":"ls"}}]}}`,
+		`{"type":"user","uuid":"u3","timestamp":"2026-10-25T07:40:05Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":"a b"}]}}`,
+	}
+	for i, l := range lines {
+		ParseLine(i+1, []byte(l), meta)
+	}
+	if len(meta.Background) != 2 {
+		t.Fatalf("want 2 running, got %+v", meta.Background)
+	}
+	sh := meta.Background[0]
+	if sh.ID != "b85polnoj" || sh.Kind != "shell" || sh.Command != "./scripts/release.sh" || sh.OutputFile != "/tmp/tasks/b85polnoj.output" {
+		t.Fatalf("shell task: %+v", sh)
+	}
+	if meta.Background[1].ID != "a3497dfa0fb026376" || meta.Background[1].Kind != "agent" {
+		t.Fatalf("agent task: %+v", meta.Background[1])
+	}
+
+	// Finishing: queued as a notification (never shows in the input queue), absorbed as an attachment → a notice.
+	note := "<task-notification>\n<task-id>b85polnoj</task-id>\n<status>completed</status>\n<summary>Background command \"Upload\" completed (exit code 0)</summary>\n</task-notification>"
+	q, _ := json.Marshal(map[string]any{"type": "queue-operation", "operation": "enqueue", "content": note})
+	ParseLine(7, q, meta)
+	if len(meta.Queue) != 0 || len(meta.Background) != 1 {
+		t.Fatalf("queue %v background %+v", meta.Queue, meta.Background)
+	}
+	att, _ := json.Marshal(map[string]any{"type": "attachment", "uuid": "x", "attachment": map[string]any{
+		"type": "queued_command", "prompt": "<task-notification>\n<task-id>a3497dfa0fb026376</task-id>\n<summary>Agent done</summary>\n</task-notification>",
+		"commandMode": "task-notification", "origin": map[string]any{"kind": "task-notification"}}})
+	it := only(t, ParseLine(8, att, meta))
+	if it.Kind != proto.KindNotice || it.Text != "Agent done" || it.Queued {
+		t.Fatalf("notice: %+v", it)
+	}
+	if len(meta.Background) != 0 {
+		t.Fatalf("still running: %+v", meta.Background)
+	}
+}

@@ -19,6 +19,8 @@ struct ChatView: View {
     @State private var file: FileRef?
     @State private var debugImages: [ImagePayload]?
     @State private var showInfo = false
+    @State private var pane: SessionPane = .chat
+    @State private var git: GitStatus?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -30,6 +32,135 @@ struct ChatView: View {
     private var status: SessionStatus { session?.status ?? .unknown }
 
     var body: some View {
+        paneContent
+        .background(Color(.systemBackground))
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .top) {
+            if showInfo {
+                DevInfoCard(key: key, session: session)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .toolbar {
+            // A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
+            ToolbarItem(placement: .principal) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(.snappy) { showInfo.toggle() }
+                } label: {
+                    VStack(spacing: 1) {
+                        Text(title).font(.headline).lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text(subtitle).lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .rotationEffect(.degrees(showInfo ? 180 : 0))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: 260)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
+            }
+            if style == .assistant {
+                ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if style == .dev {
+                        Button { withAnimation(.snappy) { pane = .terminal } } label: { Label("终端", systemImage: "terminal") }
+                    }
+                    if status.isActive {
+                        Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
+                    }
+                    Divider()
+                    if let s = session {
+                        Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
+                            Label("拷贝恢复命令", systemImage: "doc.on.doc")
+                        }
+                        Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
+                        if s.startedByJarvis && s.status.isLive {
+                            Button(role: .destructive) { Task { await model.close(key) } } label: {
+                                Label("退出 Claude 并关闭标签页", systemImage: "xmark.circle")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if style == .dev {
+                VStack(spacing: 0) {
+                    SiblingStrip(current: key) { next in switchTo(next) }
+                    SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
+                }
+                .background(.bar)
+            }
+        }
+        .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
+        .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
+        .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
+        .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        #if DEBUG
+        // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
+        .onChange(of: store.rows.count) { _, _ in
+            guard UserDefaults.standard.bool(forKey: "openFirstImage"), debugImages == nil else { return }
+            let imgs = store.items.compactMap(\.image)
+            if !imgs.isEmpty { debugImages = imgs }
+        }
+        .fullScreenCover(isPresented: Binding(get: { debugImages != nil }, set: { if !$0 { debugImages = [] } })) {
+            if let imgs = debugImages, !imgs.isEmpty { ImageViewer(images: imgs, index: 0) }
+        }
+        #endif
+        .environment(\.openFile) { path in
+            file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
+        }
+        .onAppear(perform: appeared)
+        .onDisappear {
+            model.unsubscribe(key)
+            if model.visibleSession == key { model.visibleSession = nil }
+        }
+        .onChange(of: session?.state) { _, st in
+            if st == .unread && model.visibleSession == key { model.markSeen(key) }
+        }
+    }
+
+    @ViewBuilder private var paneContent: some View {
+        switch pane {
+        case .chat: chatPane
+        case .terminal: TerminalPanel(key: key).padding(.horizontal, 12).padding(.bottom, 8)
+        case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git)
+        case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git)
+        }
+    }
+
+    /// Git only for repositories, files only when we know the directory; the assistant has neither.
+    private var panes: [SessionPane] {
+        var p: [SessionPane] = [.chat, .terminal]
+        if git?.isRepo == true { p.append(.git) }
+        if !(session?.cwd ?? "").isEmpty { p.append(.files) }
+        return p
+    }
+
+    private var paneBadges: [SessionPane: String] {
+        guard let n = git?.files.count, n > 0 else { return [:] }
+        return [.git: n > 99 ? "99+" : String(n)]
+    }
+
+    private func loadGit() async {
+        guard style == .dev, let cwd = session?.cwd, !cwd.isEmpty, let api = model.api else { return }
+        if let s = try? await api.gitStatus(machine: key.machineID, cwd: cwd) { git = s }
+    }
+
+    @ViewBuilder private var chatPane: some View {
         let store = store
         let rows = store.rows
         ScrollView {
@@ -123,6 +254,11 @@ struct ChatView: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                if let bg = session?.background, !bg.isEmpty, style == .dev {
+                    BackgroundTasksStrip(tasks: bg) { t in
+                        if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
+                    }
+                }
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
@@ -132,94 +268,6 @@ struct ChatView: View {
             .padding(.bottom, 8)
             .animation(.snappy, value: status)
             .animation(.snappy, value: model.interactions(for: key).map(\.id))
-        }
-        .background(Color(.systemBackground))
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .overlay(alignment: .top) {
-            if showInfo {
-                DevInfoCard(key: key, session: session)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .toolbar {
-            // A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
-            ToolbarItem(placement: .principal) {
-                Button {
-                    Haptics.tap()
-                    withAnimation(.snappy) { showInfo.toggle() }
-                } label: {
-                    VStack(spacing: 1) {
-                        Text(title).font(.headline).lineLimit(1)
-                        HStack(spacing: 3) {
-                            Text(subtitle).lineLimit(1)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                                .rotationEffect(.degrees(showInfo ? 180 : 0))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: 260)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
-            }
-            if style == .assistant {
-                ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button { showTerminal = true } label: { Label("终端", systemImage: "terminal") }
-                    if status.isActive {
-                        Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
-                    }
-                    Divider()
-                    if let s = session {
-                        Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
-                            Label("拷贝恢复命令", systemImage: "doc.on.doc")
-                        }
-                        Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
-                        if s.startedByJarvis && s.status.isLive {
-                            Button(role: .destructive) { Task { await model.close(key) } } label: {
-                                Label("退出 Claude 并关闭标签页", systemImage: "xmark.circle")
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if style == .dev { SiblingStrip(current: key) { next in switchTo(next) } }
-        }
-        .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
-        .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
-        .sheet(item: $file) { ref in FileViewer(ref: ref) }
-        #if DEBUG
-        // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
-        .onChange(of: store.rows.count) { _, _ in
-            guard UserDefaults.standard.bool(forKey: "openFirstImage"), debugImages == nil else { return }
-            let imgs = store.items.compactMap(\.image)
-            if !imgs.isEmpty { debugImages = imgs }
-        }
-        .fullScreenCover(isPresented: Binding(get: { debugImages != nil }, set: { if !$0 { debugImages = [] } })) {
-            if let imgs = debugImages, !imgs.isEmpty { ImageViewer(images: imgs, index: 0) }
-        }
-        #endif
-        .environment(\.openFile) { path in
-            file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
-        }
-        .onAppear(perform: appeared)
-        .onDisappear {
-            model.unsubscribe(key)
-            if model.visibleSession == key { model.visibleSession = nil }
-        }
-        .onChange(of: session?.state) { _, st in
-            if st == .unread && model.visibleSession == key { model.markSeen(key) }
         }
     }
 
@@ -231,6 +279,7 @@ struct ChatView: View {
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
+            if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if UserDefaults.standard.bool(forKey: "loadAll") {
                 Task {
                     try? await Task.sleep(for: .seconds(3))
@@ -265,6 +314,8 @@ struct ChatView: View {
         Haptics.tap()
         model.unsubscribe(key)
         key = next
+        if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
+        git = nil
         position = ScrollPosition(edge: .bottom)
         model.subscribe(next)
         model.visibleSession = next
@@ -498,52 +549,16 @@ struct TerminalSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let key: SessionKey
-    @State private var text = ""
-    @State private var input = ""
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 10) {
-                TerminalText(text: text.isEmpty ? model.chat(key).screen : text, maxLines: 400)
-                TerminalKeyBar { keys in Task { await model.keys(key, keys); await poll() } }
-                HStack(spacing: 8) {
-                    TextField("发送文字到终端", text: $input)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(10)
-                        .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 12, style: .continuous))
-                        .onSubmit(sendInput)
-                    Button(action: sendInput) {
-                        Image(systemName: "return").frame(width: 24, height: 24)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(input.isEmpty)
-                    .accessibilityLabel("发送并回车")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-            .navigationTitle(model.session(key)?.slotLabel.map { "终端 · \($0)" } ?? "终端")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-            .task {
-                while !Task.isCancelled {
-                    await poll()
-                    try? await Task.sleep(for: .seconds(1))
-                }
-            }
+            TerminalPanel(key: key)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .navigationTitle(model.session(key)?.slotLabel.map { "终端 · \($0)" } ?? "终端")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
-    }
-
-    private func sendInput() {
-        let t = input
-        guard !t.isEmpty else { return }
-        input = ""
-        Task { await model.keys(key, ["enter"], text: t); await poll() }
-    }
-
-    private func poll() async {
-        if let s = try? await model.api?.screen(key, lines: 200) { text = s.text }
     }
 }
 

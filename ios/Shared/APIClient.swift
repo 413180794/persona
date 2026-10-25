@@ -137,8 +137,9 @@ nonisolated struct APIClient: Sendable {
     func keys(_ k: SessionKey, keys: [String], text: String = "") async throws {
         try await post(sp(k) + "/keys", body: KeysBody(keys: keys, text: text))
     }
-    func screen(_ k: SessionKey, lines: Int = 60) async throws -> ScreenResponse {
-        try await get(sp(k) + "/screen", query: ["lines": String(lines)])
+    /// `recent` also reaches back into the pane's scrollback (page by asking for more lines).
+    func screen(_ k: SessionKey, lines: Int = 60, recent: Bool = false) async throws -> ScreenResponse {
+        try await get(sp(k) + "/screen", query: ["lines": String(lines), "source": recent ? "recent" : "visible"])
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 

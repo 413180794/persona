@@ -104,6 +104,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var state: AgentState
     var seenAt: Date?
     var queued: [String]?
+    /// Shells / subagents Claude left running in the background.
+    var background: [BackgroundTask]?
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -117,7 +119,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -145,10 +147,33 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
+        background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
+    }
+}
+
+/// A Bash command or subagent running in the background (`run_in_background`), until it reports back.
+nonisolated struct BackgroundTask: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var kind: String // "shell" | "agent"
+    var description: String?
+    var command: String?
+    var outputFile: String?
+    var startedAt: Date?
+
+    var isAgent: Bool { kind == "agent" }
+    /// What to call it in one line: the description Claude gave, else the command.
+    var title: String {
+        if let d = description, !d.isEmpty { return d }
+        return command?.components(separatedBy: "\n").first ?? (isAgent ? "子代理" : "后台命令")
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, description, command
+        case outputFile = "output_file", startedAt = "started_at"
     }
 }
 
