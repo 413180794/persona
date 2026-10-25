@@ -398,24 +398,15 @@ struct LarkImagePart: View {
     }
 }
 
-/// A sticker at its own aspect ratio inside a 120 pt box (no blank band under wide ones).
 struct LarkSticker: View {
     var part: LarkPart
-    @State private var image: UIImage?
 
     var body: some View {
         if let url = part.url {
-            Group {
-                if let image {
-                    let r = min(120 / max(image.size.width, 1), 120 / max(image.size.height, 1))
-                    Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
-                        .frame(width: image.size.width * r, height: image.size.height * r)
-                } else {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)).frame(width: 80, height: 80)
-                }
-            }
-            .accessibilityLabel(part.text ?? "贴纸")
-            .task(id: url) { image = await LarkMedia.shared.image(url, maxPixel: 400) }
+            LarkRemoteImage(url: url, maxPixel: 400, contentMode: .fit)
+                .frame(maxWidth: 120, maxHeight: 120)
+                .frame(width: 120, height: 120)
+                .accessibilityLabel(part.text ?? "贴纸")
         }
     }
 }

@@ -46,7 +46,7 @@
 
 接口怪异行为：
 - **高亮区间是 UTF-16 偏移**（JS 字符串下标），`[start, end)`；可能为空数组（群组常见），此时客户端按查询词自己匹配。
-  消息 snippet 里有 markdown（`## `、反引号、`**`），去掉标记时要同步平移区间（`FeishuSearchHighlight.plain`），直接 `Fmt.plain` 会高亮错位。
+  消息 snippet 里有 markdown（`## `、反引号、`**`），去掉标记时要同步平移区间（`FeishuHighlight.plain`），直接 `Fmt.plain` 会高亮错位。
   snippet 可能自带 `...` 前缀。
 - **消息命中的 `position` 可能是 -3**：话题里的回复不在主聊天流里。点开时先 `GET messages/:id`（拿 `feedId`、`chatType` 1 单聊 / 2 群 / 3 话题群、
   `threadId`），position 为负就再取 `messages/:threadId` 用话题根的位置定位。`search/page` 的消息命中没有发送者头像。
@@ -57,6 +57,9 @@
 - 应用命中多数只有 `lark://` / `sslocal://` 入口，只有装了飞书 App 才打得开；服务台没有可用入口，只展示。
 - 邮件结果没有现成路由，搜索自带阅读页：`mail/messages/:id`（纯文本 body，可能截断）+ `/html`（完整 HTML，newsletter 是固定宽度表格，
   注入样式压到屏宽）。
+- `feishuOpen` 设在 NavigationStack 根视图上，**传不到被推入的页面**（工作台 › 搜索里它是 nil）。搜索页自己兜底：没有 `feishuOpen` 时
+  用 `navigationDestination(item:)` 推，并给推出的页面注入下一层的 opener（`FeishuSearchPushedRoute`）。根治要在 `WorkbenchView` /
+  其他宿主把 `.environment(\.feishuOpen)` 挂到 NavigationStack 外层。
 - DEBUG 启动参数（名字按 CLAUDE.md 规则用 `open…` 前缀，需加进 release.sh 的检查列表）：`-openSearch <q>`、`-openSearchTab <key>`
   （all / messages / docs / contacts / groups / calendar / email / apps / helpdesk / minutes / tasks；会话内 chat / chatDocs / chatImages…）、
   `-openSearchFeed <feedId>`（会话内搜索）、`-openSearchFilter sender|chat|owner|time`（打开筛选面板）、`-openSearchFirst YES`（结果加载后点开第一条）。
@@ -74,7 +77,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | `FeishuDocsModels.swift` | 线上类型 + 纯逻辑（按天分组、类型筛选、文件夹优先、知识库树展开、Markdown 切块 / 目录、有序列表编号、表格合并单元格布局、错误码），单测在 `JarvisTests/FeishuDocsTests.swift` |
-| `FeishuDocsComponents.swift` | `api.feishuDocsGet`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocsPager`、文档图标 / 行 / 筛选条 / 三态 |
+| `FeishuDocsComponents.swift` | `api.larkDocs`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocPager`、文档图标 / 行 / 筛选条 / 三态 |
 | `FeishuDocs.swift` | 云文档首页（搜索、知识库 / 文档通知入口、快速访问、最近 / 共享给我 / 收藏 / 我的空间 / 推荐）、文件夹页 |
 | `FeishuDocReader.swift` | 阅读器：标题、位置、所有者、更新时间、阅读数、AI 摘要、目录、评论、在飞书中打开；多维表格 / 文件 / 画板页 |
 | `FeishuDocRenderer.swift` | JSON 节点树原生渲染（段落、标题、列表、待办、引用、高亮块、分栏、代码、表格、图片、书签、嵌入、附件、任务…） |
@@ -83,7 +86,7 @@
 - 阅读顺序：`format=markdown` → 403 `DOCUMENT_EXPORT_FORBIDDEN` 或 422 `DOCUMENT_FORMAT_UNSUPPORTED` 时 `format=json`。
   JSON 里带 `base` 是多维表格（不渲染，给「在飞书中打开」）；`object.kind=file` 是云空间文件（「预览文件」走
   `documents/drive/files/:token/download` + Quick Look）；`whiteboard` 显示 `object.image`。`/base/` 链接直接判定，不去读几 MB 的表数据。
-- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `feishuDocsGet` 拿错误码。
+- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `larkDocs` 拿错误码。
 - Markdown 导出的怪处：开头固定是 `# 标题` + `[Source](<url>)`（阅读器自己画标题，要去掉）；图片是**绝对地址**
   `http://<lark-connector>:3333/api/documents/…`，hub 的改写只换 JSON 字符串开头的 `"/api/`，所以客户端把它改成 `/api/v1/lark/raw/documents/…`；
   标题里有 `\-`、`\+` 之类的转义（目录要去转义）；没有 outline，自己按 `#` 行（跳过代码块）切块，每块一个懒加载行，目录按块 id 跳转。
@@ -97,6 +100,8 @@
 - AI 摘要只读缓存（`state=ready` 才显示，`missing` 不触发生成）；文档通知接口在当前账号下返回空列表（已按 contract 实现，显示空状态）。
 - 知识库：`wiki/spaces?scope=recent` 的 `kind` 全是 `other`；树一次只给根，子级 `children?node=` 展开时整层读完（游标循环）；
   快捷方式节点的子级在 `target.spaceId/target.token` 下。
+- 路由坑：工作台把 `feishuOpen` 注入在 NavigationStack 根视图上，`navigationDestination` 推出来的页面**拿不到**（是 nil），
+  `Docs/` 的每个页面外面包了 `feishuDocsRouting()`：为 nil 时用本地 `navigationDestination(item:)` 推，并把它重新注入给子视图。
 - DEBUG 启动参数（按 CLAUDE.md 用 `open…` / `show…` 命名，需加进 release.sh 的检查列表）：`-openFeishuDoc <url>`（云文档页启动后打开该文档）、
   `-openFeishuDocHeading <n>`（跳到第 n 个目录项）、`-showFeishuDocSheet outline|comments`、`-openFeishuWikiSpace <id>`、
   `-openFeishuWikiNode YES`（展开第一个有子页面的节点）、`-showFeishuWikiUpdates YES`；
@@ -156,9 +161,9 @@
 - **全天任务的截止日**存成那天的 UTC 零点（`2026-10-09T00:00:00Z`）：要按 UTC 取年月日再放回本地日历，否则 UTC 以西的时区显示成前一天。
   带时间的任务过了时刻就算逾期，全天任务过了那天才算。
 - **人只有 id**：`assignees / followers / creator` 都是 `{id,isViewer}`，名字和头像用 `users/:id`（完整资料卡，较重）逐个查，
-  `FeishuPeopleCache` 会话内缓存、去重、并发。
+  `FeishuWorkPeopleCache` 会话内缓存、去重、并发。
 - **没有「取一个任务」的接口**：`todos/:guid/detail` 只有编号、applink、来源、所在清单，没有标题 / 截止 / 负责人。详情页先用列表里见过的
-  （`FeishuTodoStore`），再依次从它所在清单 `task-lists/:guid`、父任务的 `subtasks`、我的未完成 / 已完成（count=200）里找；都找不到就提示并给
+  （`FeishuWorkTodoStore`），再依次从它所在清单 `task-lists/:guid`、父任务的 `subtasks`、我的未完成 / 已完成（count=200）里找；都找不到就提示并给
   「在飞书中打开」（applink）。
 - `task-list-nav/sidebar` 在这个账号上只返回一个空分组，清单侧栏改用 `task-lists`（`isOwner` 分「我创建的 / 与我共享」），
   点进去 `task-lists/:guid`（分组 + 前若干条任务，`truncated` 表示没拉全）。`task-lists/counts` 必须带 `guids=`（1–60 个），否则 400。
@@ -174,42 +179,18 @@
 - **OKR**：`okr/people` 的 `name` 跟账号语言走（英文），显示用 `localeNames.zh`；周期名同理（`periodName` 是英文，用 periods 里的 `localeNames.zh`）。
   `okr/:okrId` 的 `objectives` 可能为空（这个账号 2024 Q4 之后都是空的），空周期给「查看上一周期」。人员切换：我 / 上级 / 虚线上级 / 下属 / 同级；
   点对齐的目标会切到对方那个周期。`okr/progress/kr|objective/:id` 是进展记录（`progressRecordCount > 0` 才给入口）。
-- **踩坑：`feishuOpen` 在工作台推入的页面里是 nil**：`WorkbenchView` 把 `.environment(\.feishuOpen)` 挂在栈的根视图上，
-  `navigationDestination` 推出来的页面拿不到。这里用 `FeishuRouteLink` / `.feishuRowLink(_:)`（`NavigationLink(value: FeishuRoute)`，
-  由栈上的 `.feishuRoutes()` 解析）绕开，有 `feishuOpen` 时仍优先用它。
-- DEBUG 启动参数：`-taskGUID <guid>`（打开任务详情）、`-taskScope done|lists`、`-approvalTab todo|done|initiated|cc`、`-approvalID <instanceId>`、
-  `-okrID <okrId>`（我的某个周期，例如有数据的 2024 Q3 `7380825081201295388`）、`-workBottom YES`（详情页停在底部，截下半屏）。
+- **踩坑（已修）**：`feishuOpen` 曾挂在栈的根视图上，`navigationDestination` 推出来的页面拿不到（是 nil，点什么都没反应）；
+  leader 在 800d822 改成挂在 NavigationStack 本身。新页面验证跳转时先确认 `feishuOpen` 不为 nil。
+- **命名**：这个目录新增的类型和扩展成员一律 `FeishuWork…` / `feishuWork…` 前缀（曾和 Chat 的 `FeishuPageFooter`、`FeishuTodoRow` 撞名，master 编译失败）。
+- DEBUG 启动参数（配合 `-tab workbench -openWorkbench tasks|approvals|okr`）：`-openTask <guid>`（打开任务详情）、`-openTaskScope done|lists`、
+  `-openApprovalTab todo|done|initiated|cc`、`-openApproval <instanceId>`、`-openOKR <okrId>`（我的某个周期，例如有数据的 2024 Q3
+  `7380825081201295388`）、`-showWorkBottom YES`（详情页停在底部，截下半屏）。都在 `#if DEBUG` 里；release.sh 的检查列表要 leader 补上。
 
 ### 通讯录 / removed / 飞书邮箱（`People/`）
 - 通讯录：`contacts/org` → 根部门；`contacts/departments/:id`（面包屑、负责人、子部门、成员）；`conversations/groups`（我的群组）；
   `contacts/external`；`contacts/bots`；`contacts/closest/people`；`people/:id/report-line`。
 - removed：`moments/tabs`、`moments/feed?tabId=&pageToken`、`moments/notifications`、`moments/badge`、`moments/broadcasts`；帖子用已有的 `LarkMomentsPostView`。
 - 飞书邮箱：`mail/labels`、`mail/threads?label=INBOX&cursor…`（label 必填）、`mail/threads/:threadId`、`mail/messages/:id(/html)`、`mail/search?q`。
-
-**实现说明**（`FeishuContacts.swift` / `FeishuMoments.swift` / `FeishuMail.swift`，模型和纯逻辑在 `FeishuPeopleModels.swift`，测试 `JarvisTests/FeishuPeopleTests.swift`）：
-- 页面：通讯录首页（我的群组 / 外部联系人 / 机器人入口、组织架构、常联系的人、顶部搜索走 `search/people?q=`）、部门页、我的群组（我加入的 /
-  我管理的，`kind=join|manage`，cursor 分页）、外部联系人（按姓名 A–Z 拼音分组 / 按公司分组）、机器人（offset 分页）；removed（推荐 / 关注 /
-  板块 Tab、置顶广播、帖子卡片、铃铛 → 通知：评论和@ / 回应）；飞书邮箱（标题菜单切换文件夹带未读数、会话列表、搜索、会话详情 HTML、附件）。
-- 人推 `.profile`（内嵌版资料卡），帖子弹 `LarkMomentsPostView`（sheet，它自带 NavigationStack），群推 `.chat`，部门推 `.department`。
-- 类型一律 `FeishuPeople` 前缀（路由用的 4 个占位 struct 除外）。
-- DEBUG 启动参数：`-openPeople dept|groups|external|bots|profile`（通讯录）、`notifications|post`（removed）、`thread`（邮箱，打开第一封）；
-  `-openMomentsTab <tabId>`、`-openMailLabel <labelId>`、`-openPeopleQuery <文字>`（填通讯录 / 邮件搜索框）。
-- 组织架构：`contacts/org` 只返回自己所在的部门（`hasChildren:false`），父部门 `contacts/departments/<parentId>` 返回 400
-  （`PULL_DEPARTMENT_STRUCTURE`，租户可见性策略），面包屑为空；部门名把隐藏的上级折进了名字（`pathNames`），界面显示最后一级 +「Org / Team / …」。
-  成员分页 `count` + `offset`，`hasMore`；`memberCount` 含已冻结 / 离职的人，比能拿到的成员多。
-- 外部联系人：`total`（62）比实际可见的人多，`offset=46/50/60` 返回的全是第一页里已有的人，第一页就是全部可见联系人；首页显示实际人数。
-- 机器人：`offset` 必填（不带返回 400），每页 100，`nextOffset` 继续。常联系的人：`offset` / `next`。
-- removed：`moments/tabs` 只有「推荐」（type 1）和板块（type 2），没有「关注」：`tabId=following` 是 lark-connector 的约定，本租户关注功能关闭，
-  始终返回空（显示空态）。`moments/feed` 首页带置顶（`isPinned`），推荐流每次刷新内容都不同。匿名帖子用 `anonymousNickname` / `anonymousAvatarUrl`。
-  通知 `category=message|reaction`，kind：comment / reply / atInPost / atInComment / postReaction / commentReaction / follower；GET 不会标记已读。
-- 邮箱 id 是 base64（含 `+` `/` `=`）：**hub 会把路径里的 `%2F` 解码成 `/` 再转发**，lark-connector 404。iOS 端只编码一次
-  （`FeishuPeopleMailLogic.segment`），`URL.appending(path:)` 会再把 `%` 编码一次，到 lark-connector 时正好还是 `%2F`。
-- 本账号的收件箱 / 重要 / 其他都是空的（邮件被规则分到自定义文件夹），所以记住上次选的文件夹（`@AppStorage("feishuMailLabel")`）。
-  标签页分页：`cursor{messageId,timestamp}` 两半一起回传为 `cursorMessage` + `cursorTimestamp`；搜索分页：`next{offset,session}`。
-- 邮件 HTML（`mail/messages/:id/html`）：默认挡掉外部图片（`blockedImages`），`external=true` 时图片地址是
-  `/api/mail/assets/external?url=…&sig=…`——这个路由只在 lark-connector 的 `/api` 下，**hub 的 raw 代理只转 `/agent/v1`，加载不了**；
-  iOS 在用户点「显示图片」后把它改回原始地址（`url=` 参数）由手机直接加载。内嵌图片（`/api/mail/assets/inline/…`）同样走不通，目前显示不出来。
-  深色模式把整页反色（图片再反回来），页面底色设成 `#e3e3e1` 反色后正好是卡片色；页面脚本禁用，宽表格按屏宽缩放。
 
 ### 会话信息 / 收藏 / 话题（`Chat/`）
 - 会话信息：群公告 `conversations/:feedId/settings`（`announcement` 或 `announcementDoc`）；Pin `conversations/:feedId/pins`、`top-pins`；
@@ -242,7 +223,8 @@
 - `favorites`：只有 `nextCursor`（最后一个收藏 id）；`kind=merge` 的合并收藏没有 message，只显示来源。老收藏可能没有 `conversationName`，
   单聊（`chatType 1`）用发送者名字兜底。2020 年的图片缩略图已过期，显示破图占位。
 - `threads/feed`：cursor 是 `<rankTimeMs>:<threadId>`，`hasMore` 为 false 时停；只读，不上报已读，点开后只在本地清掉未读角标。
-- 资料卡（成员头像、消息卡片发送者）走 `.profile` 路由在当前栈里推入；话题弹层（`LarkThreadView`，自带栈）里仍是 sheet。
+- **坑：从工作台推入的页面拿不到 `feishuOpen`**（实测为 nil：WorkbenchView 把它设在栈根内容上，`navigationDestination` 推出的页面不继承），
+  所以 `feishuChatChrome()` 在拿不到时用本地 `navigationDestination(item:)` 推 `FeishuRouteView`，并重新注入 `feishuOpen` 给子视图。
 - List 的 insetGrouped 行有很大的圆角裁剪：行内放自带圆角描边的卡片会被切角，快捷入口改成一张卡里四个无边框按钮。
 - DEBUG 启动参数：`-openChatInfo <feedId>`（在收藏 / 话题页上自动打开该会话的会话信息）、`-openChatInfoPage pins|docs|files|media|todos|members`
   （再打开子页）、`-openChatInfoFrom pins|media|docs|files|todos`（会话信息从该区块开始显示，截下半页用）、`-openThreadAt <n>`（话题页打开第 n 个话题）。
