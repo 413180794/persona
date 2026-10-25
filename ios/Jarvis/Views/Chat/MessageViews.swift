@@ -202,6 +202,62 @@ struct PendingBubble: View {
     }
 }
 
+/// Several messages of a finished turn as one input: one bubble, the messages separated by short light rules.
+struct MergedUserBubble: View {
+    var items: [Item]
+
+    var body: some View {
+        let texts = items.map { UserBubble.display($0.text ?? "") }.filter { !$0.isEmpty }
+        HStack {
+            Spacer(minLength: 48)
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
+                    if n > 0 {
+                        Capsule().fill(Theme.userBubbleText.opacity(0.22)).frame(width: 36, height: 1.5)
+                    }
+                    Text(t).font(.body).foregroundStyle(Theme.userBubbleText)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+            .messageLongPress(id: items.first?.id ?? "")
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .messageActionBar(id: items.first?.id ?? "", text: texts.joined(separator: "\n\n"), isUser: true)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(texts.count) 条消息：" + texts.joined(separator: "；"))
+    }
+}
+
+/// Photos that came with one of your messages (from the transcript): square thumbnails on your side, tap to view.
+struct SentPhotos: View {
+    var images: [ImagePayload]
+    @State private var viewer: Int?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer(minLength: 48)
+            ForEach(Array(images.enumerated()), id: \.offset) { i, p in
+                let side: CGFloat = images.count == 1 ? 140 : 84
+                Button { viewer = i } label: {
+                    Color.primary.opacity(0.06)
+                        .frame(width: side, height: side)
+                        .overlay { if let img = AttachedImageCache.image(p) { Image(uiImage: img).resizable().scaledToFill() } }
+                        .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("图片 \(i + 1)，点按查看大图")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .fullScreenCover(isPresented: Binding(get: { viewer != nil }, set: { if !$0 { viewer = nil } })) {
+            if let i = viewer { ImageViewer(images: images, index: min(i, images.count - 1)) }
+        }
+    }
+}
+
 /// Photos sent with a message: a row of square thumbnails above the text; tap one to view them full screen.
 struct AttachedImages: View {
     var paths: [String]

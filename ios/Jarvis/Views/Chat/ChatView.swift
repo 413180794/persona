@@ -40,6 +40,15 @@ struct ChatView: View {
     /// while it is on — a lone jump into rows the lazy stack never laid out lands on an earlier message.
     @State private var followsEnd = true
     @State private var entered = false
+    /// Where to land on entry, once the lines are there: the start of the latest answer (finished, unread) or where
+    /// you left off (finished, read).
+    @State private var entry: Entry?
+    /// Lines on screen (for remembering where you were).
+    @State private var visibleLines: [String] = []
+
+    private enum Entry: Equatable { case latestAnswer, line(String) }
+
+    private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
@@ -184,6 +193,7 @@ struct ChatView: View {
         }
         .onAppear(perform: appeared)
         .onDisappear {
+            rememberReadPosition()
             if viewing != nil { model.unsubscribe(shownKey) }
             model.unsubscribe(key)
             if model.visibleSession == key { model.visibleSession = nil }
@@ -204,21 +214,36 @@ struct ChatView: View {
                 out.append(.row(r))
             case .turn(let t):
                 let segments = Self.segments(t.ordered)
+                let groupID = "wt-" + t.id
+                let messages = segments.compactMap(\.user)
+                // A finished turn that took several messages reads as one exchange: the messages in one bubble,
+                // one work line for everything, the final answer. Opening the work line splits it back up.
+                if t.id != liveID && messages.count > 1 {
+                    if !openWork.contains(groupID) {
+                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
+                        let photos = segments.flatMap { Self.photos($0.rows) }
+                        if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
+                        let answer = t.ordered.lastIndex { if case .assistant = $0 { true } else { false } }
+                        let rest = t.ordered.enumerated().filter { n, r in
+                            if case .user = r { return false }
+                            return n != answer
+                        }.map(\.element)
+                        out.append(.work(id: groupID, items: Self.workItems(rest), live: false, start: t.startedAt, end: t.endedAt))
+                        if let answer { out.append(.row(t.ordered[answer])) }
+                        out += t.trailing.map { .row($0) }
+                        continue
+                    }
+                    out.append(.splitHeader(id: groupID, count: messages.count))
+                }
                 for (k, seg) in segments.enumerated() {
                     let live = t.id == liveID && k == segments.count - 1
                     if let u = seg.user { out.append(.row(u)) }
+                    // Photos sent with the message (Claude inlines a pasted image path as an image block) sit under
+                    // it, not in the agent's work.
+                    let photos = Self.photos(seg.rows)
+                    if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
                     let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
-                    var items: [WorkItem] = []
-                    for (n, r) in seg.rows.enumerated() where n != last {
-                        switch r {
-                        case .thinking(let i):
-                            if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.step(.thought(i))) }
-                        case .tools(let steps): items += steps.map { .step($0) }
-                        case .notice(let i): items.append(.step(.thought(i)))
-                        case .assistant(let i): items.append(.text(i))
-                        default: break
-                        }
-                    }
+                    let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
                     if !items.isEmpty || live {
                         let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
                         out.append(.work(id: id, items: items, live: live,
@@ -230,6 +255,29 @@ struct ChatView: View {
             }
         }
         return out
+    }
+
+    private static func photos(_ rows: [ChatRow]) -> [Item] {
+        rows.compactMap { r -> Item? in
+            if case .image(let i) = r, i.role == "user", i.toolUseID == nil, i.image != nil { return i }
+            return nil
+        }
+    }
+
+    /// What a work line folds from these rows: tools, thoughts, notices and the agent's words.
+    private static func workItems(_ rows: [ChatRow]) -> [WorkItem] {
+        var items: [WorkItem] = []
+        for r in rows {
+            switch r {
+            case .thinking(let i):
+                if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.step(.thought(i))) }
+            case .tools(let steps): items += steps.map { .step($0) }
+            case .notice(let i): items.append(.step(.thought(i)))
+            case .assistant(let i): items.append(.text(i))
+            default: break
+            }
+        }
+        return items
     }
 
     /// A turn cut at each message: (message, what came after it until the next one).
@@ -255,6 +303,25 @@ struct ChatView: View {
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line {
         case .row(let r): rowView(r, isLatest: false, live: true)
+        case .userImages(_, let items): SentPhotos(images: items.compactMap(\.image))
+        case .mergedUsers(_, let rows):
+            MergedUserBubble(items: rows.compactMap { if case .user(let i) = $0 { i } else { nil } })
+        case .splitHeader(let id, let count):
+            Button {
+                Haptics.tap()
+                withAnimation(.snappy) { _ = openWork.remove(id) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.split.1x2").font(.caption)
+                    Text("已按 \(count) 条消息拆开 · 收起").lineLimit(1).fixedSize()
+                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
         case .work(let id, let items, let live, let start, let end):
             WorkLine(items: items, live: live, start: start, end: end, open: openWork.contains(id) != Self.debugOpenAll,
                      openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
@@ -269,6 +336,41 @@ struct ChatView: View {
 
     /// Scrolls to the sentinel after the last row by id: SwiftUI lays that row out and positions around it, unlike
     /// `scrollTo(edge: .bottom)`, which trusts the lazy stack's estimated height and can land in unrendered space.
+    /// Lands on the entry target once its line exists (the cache or the first page may not hold it yet).
+    private func landEntry(_ lines: [ChatLine]) {
+        guard let target = entry, !lines.isEmpty else { return }
+        var id: String?
+        switch target {
+        case .latestAnswer:
+            // The line right after the last input: the start of what the agent did and said for it.
+            if let i = lines.lastIndex(where: \.isInput), i + 1 < lines.count { id = lines[i + 1].id }
+        case .line(let saved):
+            if lines.contains(where: { $0.id == saved }) { id = saved }
+        }
+        guard let id else { return }
+        entry = nil
+        followsEnd = false
+        Task { @MainActor in
+            await Task.yield()
+            // Flipped: anchoring at the scroll view's bottom is the top of the screen — the line starts the page.
+            position.scrollTo(id: id, anchor: .bottomLeading)
+            try? await Task.sleep(for: .milliseconds(300))
+            position.scrollTo(id: id, anchor: .bottomLeading)
+        }
+    }
+
+    /// Remembers the top line on screen when leaving (nothing when at the newest: open at the newest again).
+    private func rememberReadPosition() {
+        guard viewing == nil else { return }
+        if atBottom || visibleLines.isEmpty {
+            UserDefaults.standard.removeObject(forKey: readKey)
+            return
+        }
+        let order = chatLines(store.blocks).map(\.id)
+        let top = visibleLines.min { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+        UserDefaults.standard.set(top, forKey: readKey)
+    }
+
     /// The newest message is at offset 0 of the flipped list: an exact jump, no estimate involved.
     private func scrollToEnd(animated: Bool = false) {
         if animated { withAnimation(.snappy) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
@@ -278,7 +380,7 @@ struct ChatView: View {
     private func settleAtEnd() {
         Task { @MainActor in
             await Task.yield()
-            scrollToEnd()
+            if entry == nil && followsEnd { scrollToEnd() }
             try? await Task.sleep(for: .milliseconds(400))
             settled = true
         }
@@ -459,7 +561,9 @@ struct ChatView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .scrollTargetLayout()
         }
+        .onScrollTargetVisibilityChange(idType: String.self) { ids in visibleLines = ids }
         .flippedBack() // the scroll view itself upside down; every row above is flipped back
         // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
         // (Content top = the composer side on screen, content bottom = the navigation side.)
@@ -487,6 +591,7 @@ struct ChatView: View {
             frozenAt = follows ? nil : chatLines(Self.debugTrim(store.blocks)).last?.id
         }
         .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd() } }
@@ -499,6 +604,11 @@ struct ChatView: View {
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
                 entered = true
+                if style == .dev, session?.state == .unread {
+                    entry = .latestAnswer // finished, not seen: read the latest answer from its start
+                } else if style == .dev, let saved = UserDefaults.standard.string(forKey: readKey) {
+                    entry = .line(saved) // where you left off
+                }
                 settleAtEnd()
             }
             model.subscribe(key)
@@ -596,6 +706,7 @@ struct ChatView: View {
     private func switchTo(_ next: SessionKey) {
         guard next != key else { return }
         Haptics.tap()
+        rememberReadPosition()
         if viewing != nil { model.unsubscribe(shownKey); viewing = nil }
         model.unsubscribe(key)
         key = next
@@ -1035,18 +1146,39 @@ struct DevInfoCard: View {
 enum ChatLine: Identifiable {
     case row(ChatRow)
     case work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?)
+    /// The photos a message was sent with.
+    case userImages(id: String, items: [Item])
+    /// A finished turn's messages in one bubble (folded).
+    case mergedUsers(id: String, rows: [ChatRow])
+    /// A finished multi-message turn unfolded: "N 条消息 · 收起".
+    case splitHeader(id: String, count: Int)
 
     var id: String {
         switch self {
         case .row(let r): r.id
         case .work(let id, _, _, _, _): id
+        case .userImages(let id, _): id
+        case .mergedUsers(let id, _): id
+        case .splitHeader(let id, _): id + "-h"
         }
     }
 
     /// Whether the message whose action bar is open is drawn by this line (it is lifted above its neighbours).
     func holds(_ id: String?) -> Bool {
-        if let id, case .row(let r) = self { return r.id == id }
-        return false
+        guard let id else { return false }
+        switch self {
+        case .row(let r): return r.id == id
+        case .mergedUsers(_, let rows): return rows.first?.id == id
+        default: return false
+        }
+    }
+
+    /// One of your messages (where an exchange starts).
+    var isInput: Bool {
+        switch self {
+        case .row(.user), .mergedUsers: true
+        default: false
+        }
     }
 }
 
