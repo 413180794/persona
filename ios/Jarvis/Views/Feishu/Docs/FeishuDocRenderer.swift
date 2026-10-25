@@ -386,14 +386,25 @@ struct FeishuDocsBlock: View {
     }
 }
 
-/// Selectable text when the document allows copying.
+/// Selectable text when the document allows copying. Inside the chat's link sheet (`docPick` set) a long press
+/// offers AI 修改 / 作为上下文 for the paragraph instead (SwiftUI's selection menu takes no custom items).
 struct FeishuDocsText: View {
     var text: AttributedString
     @Environment(\.feishuDocsContext) private var context
+    @Environment(\.docPick) private var docPick
+    @State private var selecting = false
 
     var body: some View {
         let t = Text(text).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-        if context.selectable { t.textSelection(.enabled) } else { t }
+        if let docPick, context.selectable {
+            let plain = String(text.characters)
+            t.contextMenu { DocPickMenu(text: plain, pick: docPick, selecting: $selecting) }
+                .sheet(isPresented: $selecting) { PickTextSheet(text: plain, pick: docPick) }
+        } else if context.selectable {
+            t.textSelection(.enabled)
+        } else {
+            t
+        }
     }
 }
 

@@ -54,6 +54,9 @@ struct LinkTarget: Identifiable, Hashable {
 extension EnvironmentValues {
     /// Opens a link in the in-app sheet (set by ChatView).
     @Entry var openLink: ((URL) -> Void)? = nil
+    /// Inside the link sheet: hands picked text to the agent (text, "edit" | "context"). Native document views
+    /// (the Feishu reader) show AI 修改 / 作为上下文 on long press when it is set.
+    @Entry var docPick: ((String, String) -> Void)? = nil
 }
 
 /// The sheet's content: header (title, host, actions) over the page.
@@ -77,6 +80,7 @@ struct LinkSheet: View {
                     FeishuDocReader(url: target.url.absoluteString, title: nil)
                         .toolbar(.hidden, for: .navigationBar)
                         .feishuRoutes()
+                        .environment(\.docPick) { text, kind in pick(text, kind: kind) }
                 }
             } else {
                 PooledWebView(url: target.url, title: $title) { selected, kind in pick(selected, kind: kind) }
@@ -300,3 +304,77 @@ struct ContextChips: View {
         }
     }
 }
+
+// MARK: - Picking text in native views
+
+/// What a long press on a paragraph offers inside the link sheet (SwiftUI's own selection menu cannot take items).
+struct DocPickMenu: View {
+    var text: String
+    var pick: (String, String) -> Void
+    @Binding var selecting: Bool
+
+    var body: some View {
+        Button { pick(text, "edit") } label: { Label("AI 修改这段", systemImage: "sparkles") }
+        Button { pick(text, "context") } label: { Label("这段作为上下文", systemImage: "text.badge.plus") }
+        Button { selecting = true } label: { Label("选择文字…", systemImage: "selection.pin.in.out") }
+        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: "doc.on.doc") }
+    }
+}
+
+/// The paragraph in a text view where any span can be selected; its selection menu has AI 修改 and 作为上下文.
+struct PickTextSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var text: String
+    var pick: (String, String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            PickTextView(text: text) { t, kind in
+                dismiss()
+                pick(t, kind)
+            }
+            .navigationTitle("选择文字")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+struct PickTextView: UIViewRepresentable {
+    var text: String
+    var pick: (String, String) -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let v = UITextView()
+        v.isEditable = false
+        v.isSelectable = true
+        v.font = .preferredFont(forTextStyle: .body)
+        v.adjustsFontForContentSizeCategory = true
+        v.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 24, right: 12)
+        v.backgroundColor = .clear
+        v.delegate = context.coordinator
+        v.text = text
+        return v
+    }
+
+    func updateUIView(_ v: UITextView, context: Context) { context.coordinator.pick = pick }
+
+    func makeCoordinator() -> Coordinator { Coordinator(pick: pick) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var pick: (String, String) -> Void
+        init(pick: @escaping (String, String) -> Void) { self.pick = pick }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            let selected = (textView.text as NSString).substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !selected.isEmpty else { return UIMenu(children: suggestedActions) }
+            let ours = UIMenu(options: .displayInline, children: [
+                UIAction(title: "AI 修改", image: UIImage(systemName: "sparkles")) { [weak self] _ in self?.pick(selected, "edit") },
+                UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pick(selected, "context") },
+            ])
+            return UIMenu(children: [ours] + suggestedActions)
+        }
+    }
+}
+
