@@ -49,6 +49,8 @@ App                         hub                                Google
 
 - 授权范围：`https://mail.google.com/`（IMAP / SMTP 唯一能用的 scope）+ `openid email`（拿邮箱地址）。
   `access_type=offline` + `prompt=select_account consent`：每次都给 refresh token，也能换账号。
+- state 不存内存：PKCE verifier 和创建时间用 `secret.key` 加密（AES-GCM）后整个放进 state，hub 在用户停留在 Google 页面期间重启 / 重新部署也不影响
+  （2026-10-25 实测踩过：别的 agent 连着部署了三次，内存里的 state 全丢，回调报「start again」）。同一个 state 在进程内只能用一次。
 - 客户端类型是 **iOS**：没有 client secret，回调用反向 client ID 的自定义 scheme（Google 对 Android / Chrome 应用停了自定义 scheme，iOS 仍然支持）。
   换 token 时只带 `client_id` + `code_verifier`，所以换 token 可以放在 hub 上做，refresh token 不经过手机。
   ASWebAuthenticationSession 拦截回调 scheme，不需要在 Info.plist 里注册 URL scheme，client ID 换了 App 也不用重新发版。
@@ -61,16 +63,26 @@ App                         hub                                Google
 
 ### 一次性配置：Google Cloud OAuth 客户端
 
-第三方客户端用的是自己通过了 Google 审核的客户端；Jarvis 只给自己用，建一个自己的就行：
+开源邮件客户端（Thunderbird、K-9、FairEmail、Mailspring、GNOME Online Accounts）都是项目方注册好客户端、写死在源码里，
+并通过了 Google 对受限 scope 的验证；Thunderbird 源码里明确写着「别复制这些值，自己注册一个」。Jarvis 只给自己用，建一个自己的就行。
+
+**现状（2026-10-25 已建好）**：个人账号 me@gmail.com 下的项目 `jarvis-mail-000000`（Jarvis Mail），
+同意屏幕「Jarvis」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Jarvis」），
+iOS 客户端「Jarvis iOS」：`1234-abcd.apps.googleusercontent.com`，已写进 example-machine `hub.json`。
+发布成正式版要求品牌页有首页、隐私政策、服务条款链接，且域名在「已获授权的网域」里，所以建了 `jarvis.chirpet.com`（仓库 `site/`）。
+
+步骤（重建时参考）：
 
 1. <https://console.cloud.google.com/projectcreate> 建项目（如 `jarvis-mail`）。
 2. 「Google Auth Platform」→ 品牌：应用名 `Jarvis`，用户类型选「外部」。
 3. 「数据访问」里添加 scope `https://mail.google.com/`（受限 scope）。
-4. 「目标对象」里**发布应用（In production）**。停在 Testing 时 refresh token 7 天就过期；发布后不过期。
+4. 「品牌塑造」填首页 / 隐私政策 / 服务条款（`https://jarvis.chirpet.com/`、`/privacy/`、`/terms/`），已获授权的网域加 `chirpet.com`。
+   不填这些，「目标对象」里的「发布应用」按钮是灰的，页面也不提示缺什么。
+5. 「目标对象」里**发布应用（In production）**。停在 Testing 时 refresh token 7 天就过期；发布后不过期。
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
-5. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID `com.chirpet.jarvis`，得到
+6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID `com.chirpet.jarvis`、团队 ID `ABCDE12345`，得到
    `<数字>-<串>.apps.googleusercontent.com`。
-6. 写进 example-machine `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh example-machine`）。
+7. 写进 example-machine `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh example-machine`）。
    iOS 客户端的 client ID 是公开信息，不算密钥。
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。

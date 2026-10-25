@@ -1,0 +1,8 @@
+{
+  "name": "jarvis-site",
+  "compatibility_date": "2026-10-01",
+  "account_id": "2de3432934ff3b7c3cb742a2f09635a1",
+  "assets": { "directory": "public", "html_handling": "auto-trailing-slash", "not_found_handling": "404-page" },
+  "routes": [{ "pattern": "jarvis.chirpet.com", "custom_domain": true }],
+  "workers_dev": false
+}

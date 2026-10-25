@@ -212,3 +212,27 @@ func TestGoogleOAuthHTTP(t *testing.T) {
 		t.Fatalf("finish = %d %v", code, body)
 	}
 }
+
+func TestGoogleOAuthSurvivesRestart(t *testing.T) {
+	s, recs := newOAuthService(t)
+	var challenge string
+	fakeGoogle(t, &challenge, "rt")
+	state, ch := startFlow(t, s)
+	challenge = ch
+
+	// The hub restarts (redeploy) while the user is on Google's pages.
+	s2, err := New(s.dir, recs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	s2.SetGoogleClientID(testClientID)
+	s2.verify = s.verify
+	if _, err := s2.FinishGoogleOAuth(context.Background(), OAuthFinishRequest{State: state, Code: "the-code"}); err != nil {
+		t.Fatalf("finish after restart: %v", err)
+	}
+	// A forged or tampered state is rejected.
+	if _, err := s2.FinishGoogleOAuth(context.Background(), OAuthFinishRequest{State: state[:len(state)-2] + "AA", Code: "the-code"}); err == nil {
+		t.Fatal("tampered state accepted")
+	}
+}

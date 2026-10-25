@@ -45,8 +45,8 @@ type Service struct {
 	imapDial func(a *MailAccount) (*imapclient.Client, error)
 	// googleClientID is the iOS OAuth client used for "Sign in with Google" (hub.json google.client_id).
 	googleClientID string
-	pending        map[string]*oauthPending // OAuth flows in flight, by state
-	access         map[string]*accessCache  // access tokens, by refresh token
+	usedStates     map[string]time.Time    // OAuth states already finished, against replays
+	access         map[string]*accessCache // access tokens, by refresh token
 	// verify replaces the IMAP + SMTP login check of new accounts in tests.
 	verify func(ctx context.Context, a *MailAccount) error
 	// refreshAccess replaces the Google token endpoint in tests.
@@ -68,14 +68,14 @@ func New(dataDir string, recs Records) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		dir:     dataDir,
-		store:   st,
-		accts:   make(map[string]*MailAccount),
-		conns:   make(map[string]*conn),
-		pending: make(map[string]*oauthPending),
-		access:  make(map[string]*accessCache),
-		stop:    make(chan struct{}),
-		now:     time.Now,
+		dir:        dataDir,
+		store:      st,
+		accts:      make(map[string]*MailAccount),
+		conns:      make(map[string]*conn),
+		usedStates: make(map[string]time.Time),
+		access:     make(map[string]*accessCache),
+		stop:       make(chan struct{}),
+		now:        time.Now,
 	}
 	accounts, err := st.load()
 	if err != nil {

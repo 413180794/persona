@@ -56,10 +56,43 @@ type OAuthFinishRequest struct {
 	Error string `json:"error,omitempty"`
 }
 
-// oauthPending is an authorization in flight, keyed by state.
-type oauthPending struct {
-	verifier string
-	created  time.Time
+// oauthState is what the state parameter carries, sealed with the store key: the flow survives a
+// hub restart (or a redeploy) while the user is on Google's pages.
+type oauthState struct {
+	Verifier string `json:"v"`
+	Created  int64  `json:"t"`
+}
+
+func (s *Service) sealState(st oauthState) (string, error) {
+	plain, err := json.Marshal(st)
+	if err != nil {
+		return "", err
+	}
+	enc, err := s.store.encrypt(plain)
+	if err != nil {
+		return "", err
+	}
+	raw, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func (s *Service) openState(state string) (*oauthState, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(state)
+	if err != nil {
+		return nil, err
+	}
+	plain, err := s.store.decrypt(base64.StdEncoding.EncodeToString(raw))
+	if err != nil {
+		return nil, err
+	}
+	var st oauthState
+	if err := json.Unmarshal(plain, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
 }
 
 // accessCache holds one refresh token's current access token.
@@ -92,7 +125,11 @@ func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
 	if s.googleClientID == "" {
 		return nil, errors.New("Google sign-in is not configured: set google.client_id in hub.json (docs/mail.md)")
 	}
-	state, verifier := randomURLSafe(24), randomURLSafe(48)
+	verifier := randomURLSafe(48)
+	state, err := s.sealState(oauthState{Verifier: verifier, Created: s.now().Unix()})
+	if err != nil {
+		return nil, err
+	}
 	sum := sha256.Sum256([]byte(verifier))
 	scheme, redirect := googleRedirectURI(s.googleClientID)
 	q := url.Values{
@@ -111,27 +148,28 @@ func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
 		q.Set("login_hint", hint)
 	}
 
-	s.mu.Lock()
-	now := s.now()
-	for k, p := range s.pending {
-		if now.Sub(p.created) > oauthPendingTTL {
-			delete(s.pending, k)
-		}
-	}
-	s.pending[state] = &oauthPending{verifier: verifier, created: now}
-	s.mu.Unlock()
-
 	return &OAuthStart{AuthURL: googleAuthURL + "?" + q.Encode(), CallbackScheme: scheme, State: state}, nil
 }
 
 // FinishGoogleOAuth exchanges the authorization code, verifies IMAP and SMTP access and saves
 // the account. Signing in again with an existing Gmail account replaces its credentials.
 func (s *Service) FinishGoogleOAuth(ctx context.Context, req OAuthFinishRequest) (*MailAccount, error) {
+	st, err := s.openState(req.State)
+	if err != nil || s.now().Sub(time.Unix(st.Created, 0)) > oauthPendingTTL {
+		return nil, errors.New("invalid or expired sign-in, start again")
+	}
+	// Each state is good for one attempt (remembered in memory; Google's codes are single use anyway).
 	s.mu.Lock()
-	p := s.pending[req.State]
-	delete(s.pending, req.State)
+	now := s.now()
+	for k, at := range s.usedStates {
+		if now.Sub(at) > oauthPendingTTL {
+			delete(s.usedStates, k)
+		}
+	}
+	_, used := s.usedStates[req.State]
+	s.usedStates[req.State] = now
 	s.mu.Unlock()
-	if p == nil || s.now().Sub(p.created) > oauthPendingTTL {
+	if used {
 		return nil, errors.New("invalid or expired sign-in, start again")
 	}
 	if req.Error != "" {
@@ -145,7 +183,7 @@ func (s *Service) FinishGoogleOAuth(ctx context.Context, req OAuthFinishRequest)
 	tr, err := s.googleToken(ctx, url.Values{
 		"client_id":     {s.googleClientID},
 		"code":          {req.Code},
-		"code_verifier": {p.verifier},
+		"code_verifier": {st.Verifier},
 		"redirect_uri":  {redirect},
 		"grant_type":    {"authorization_code"},
 	})

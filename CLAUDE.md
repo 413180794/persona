@@ -31,6 +31,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 | `ios/` | XcodeGen 工程：iOS App `Jarvis`、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`） |
 | `docs/` | 设计文档，索引见下 |
+| `site/` | `jarvis.chirpet.com`：只有首页 + 隐私政策 + 服务条款（noindex），Google OAuth 同意屏幕发布正式版必须有；不是官网。部署 `cd site && ~/code/chyroc/chirpet.com/scripts/wrangler.sh deploy` |
 
 ## 文档索引
 
