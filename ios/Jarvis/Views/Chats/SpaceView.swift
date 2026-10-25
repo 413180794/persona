@@ -94,6 +94,16 @@ struct SpaceView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(first?.spaceName ?? "空间")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            if let g = SpaceGroup.build(sessions).first {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu { SpaceMenuItems(group: g) } label: {
+                        Image(systemName: model.isMuted(g) ? "bell.slash" : "ellipsis")
+                    }
+                    .accessibilityLabel("空间操作")
+                }
+            }
+        }
         .sheet(isPresented: $showNew) {
             if let first, let ws = first.spaceID {
                 NewChatView(preset: SpacePreset(machineID: first.machineID, cwd: first.cwd, workspaceID: ws, spaceName: first.spaceName ?? "")) { s in

@@ -129,12 +129,22 @@ struct ChatsView: View {
                             }
                         }
                     } header: {
-                        Button { path.append(SpaceRoute(id: g.id)) } label: {
-                            SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
-                                        pinned: model.isPinned(g))
+                        // A visible ⋯ for pin / mute: long press on a list section header does not reach a context menu.
+                        HStack(spacing: 4) {
+                            Button { path.append(SpaceRoute(id: g.id)) } label: {
+                                SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
+                                            pinned: model.isPinned(g))
+                            }
+                            .buttonStyle(.plain)
+                            Menu { spaceMenu(g) } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 32, height: 28)
+                                    .contentShape(.rect)
+                            }
+                            .accessibilityLabel("\(g.name) 的更多操作")
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu { spaceMenu(g) }
                     }
                 }
 
@@ -235,14 +245,7 @@ struct ChatsView: View {
         }
     }
 
-    @ViewBuilder private func spaceMenu(_ g: SpaceGroup) -> some View {
-        Button { model.togglePin(g) } label: {
-            Label(model.isPinned(g) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(g) ? "pin.slash" : "pin")
-        }
-        Button { model.toggleMute(g) } label: {
-            Label(model.isMuted(g) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(g) ? "bell" : "bell.slash")
-        }
-    }
+    private func spaceMenu(_ g: SpaceGroup) -> some View { SpaceMenuItems(group: g) }
 
     private func slotRow(_ s: Session) -> some View {
         NavigationLink(value: s.key) { SlotRow(session: s, muted: model.isMuted(s.key)) }
@@ -541,6 +544,21 @@ struct LoopBadge: View {
     private var label: String {
         if let next = loop.nextAt, next > .now { return "下次 " + next.formatted(date: .omitted, time: .shortened) }
         return loop.cadence ?? "循环"
+    }
+}
+
+/// Pin / mute a space: the ⋯ on its header in 开发, the menu of its page, the long press on a folded row.
+struct SpaceMenuItems: View {
+    @Environment(AppModel.self) private var model
+    var group: SpaceGroup
+
+    var body: some View {
+        Button { model.togglePin(group) } label: {
+            Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? "pin.slash" : "pin")
+        }
+        Button { model.toggleMute(group) } label: {
+            Label(model.isMuted(group) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(group) ? "bell" : "bell.slash")
+        }
     }
 }
 
