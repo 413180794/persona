@@ -146,6 +146,7 @@ struct MailView: View {
             }
         }
         .listStyle(.plain)
+        .themedPage()
         .searchable(text: $query, prompt: "搜索邮件")
         .onSubmit(of: .search) { Task { await reload() } }
         .refreshable { await reload() }
@@ -527,7 +528,7 @@ struct AddMailAccountView: View {
                             if let s = UIPasteboard.general.string { pasted = s }
                             Task { await guess() }
                         } label: { Label("从剪贴板识别", systemImage: "doc.on.clipboard") }
-                            .buttonStyle(.glass)
+                            .themedButton()
                         Spacer()
                         Button { Task { await guess() } } label: {
                             HStack(spacing: 6) {
@@ -535,7 +536,7 @@ struct AddMailAccountView: View {
                                 Text("识别并添加")
                             }
                         }
-                        .buttonStyle(.glassProminent)
+                        .themedButton(prominent: true)
                         .disabled(guessing || pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 } header: {

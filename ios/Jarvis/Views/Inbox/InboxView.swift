@@ -118,6 +118,7 @@ struct InboxView: View {
                 if tab == .all && query.isEmpty && !pinned.isEmpty {
                     LarkPinnedStrip(pinned: pinned) { path.append($0) }
                         .listRowInsets(EdgeInsets())
+                        .themedRow()
                         .listRowSeparator(.hidden)
                 }
                 Picker("视图", selection: $tab) {
@@ -127,6 +128,7 @@ struct InboxView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .themedRow()
                 .listRowSeparator(.hidden)
             }
             if let larkError {
@@ -138,6 +140,7 @@ struct InboxView: View {
                     .background { NavigationLink(value: c) { EmptyView() }.opacity(0) }
                     .modifier(LarkFeedRowActions(conversation: c, perform: perform, editLabels: { editingLabels = $0 }))
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+                    .themedRow()
                     .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
             }
             if showsFlags {
@@ -148,6 +151,7 @@ struct InboxView: View {
                                 .opacity(0)
                         }
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+                    .themedRow()
                 }
             }
             if cursor != nil && !showsFlags && query.isEmpty {
@@ -160,6 +164,7 @@ struct InboxView: View {
             }
         }
         .listStyle(.plain)
+        .themedPage()
         .refreshable { await reload(quiet: true) }
         .overlay { if loading && rows.isEmpty { ProgressView() } }
     }
@@ -191,6 +196,7 @@ struct InboxView: View {
             }
         }
         .listStyle(.plain)
+        .themedPage()
         .refreshable { await reloadMail() }
         .task { if mails.isEmpty { await reloadMail() } }
     }
@@ -206,7 +212,7 @@ struct InboxView: View {
                 LarkGroupsDrawer(group: groupBinding, labels: labels, unread: unreadTotal, close: closeDrawer)
                     .frame(width: 300)
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .background(Theme.pageBackground.ignoresSafeArea())
                     .transition(.move(edge: .leading))
                     .gesture(DragGesture().onEnded { if $0.translation.width < -60 { closeDrawer() } })
             }

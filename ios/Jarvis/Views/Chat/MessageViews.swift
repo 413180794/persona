@@ -82,10 +82,10 @@ struct UserBubble: View {
                     Spacer(minLength: 48)
                     Text(shown)
                         .font(.body)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.userBubbleText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
+                        .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
                         .messageLongPress(id: item.id)
                 }
             }
@@ -162,10 +162,10 @@ struct PendingBubble: View {
                 }
                 Text(msg.text)
                     .font(.body)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.userBubbleText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
+                    .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
                     .opacity(msg.state == .failed ? 0.6 : 1)
             }
         }

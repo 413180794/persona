@@ -25,7 +25,7 @@ struct TerminalKeyBar: View {
                     .font(.title3)
                     .frame(width: 48, height: 40)
             }
-            .buttonStyle(.glass)
+            .themedButton()
             .tint(pad ? Theme.accent : nil)
             .accessibilityLabel("方向键")
         }
@@ -49,7 +49,7 @@ struct TerminalKeyBar: View {
                 .fixedSize()
                 .frame(minWidth: 44, minHeight: 40)
         }
-        .buttonStyle(.glass)
+        .themedButton()
         .tint(active ? Theme.accent : nil)
         .overlay(Capsule().stroke(active ? Theme.accent : .clear, lineWidth: 1.5))
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -86,7 +86,7 @@ struct DirectionPad: View {
             }
         }
         .padding(10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
+        .surface(in: .rect(cornerRadius: 28, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
     }
 
@@ -94,10 +94,10 @@ struct DirectionPad: View {
         let label = Image(systemName: symbol).font(.title3.weight(.semibold)).frame(width: size, height: size)
         if prominent {
             Button { Haptics.tap(); press(key) } label: { label }
-                .buttonStyle(.glassProminent).clipShape(.circle).accessibilityLabel(key)
+                .themedButton(prominent: true).clipShape(.circle).accessibilityLabel(key)
         } else {
             Button { Haptics.tap(); press(key) } label: { label }
-                .buttonStyle(.glass).clipShape(.circle).accessibilityLabel(key)
+                .themedButton().clipShape(.circle).accessibilityLabel(key)
         }
     }
 }

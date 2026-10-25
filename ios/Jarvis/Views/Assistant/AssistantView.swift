@@ -238,13 +238,13 @@ struct StarterComposer: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: 4, matching: .images) {
                     Image(systemName: "photo").font(.body.weight(.semibold)).frame(width: 36, height: 36)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
                 TextField("问 Jarvis…", text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20, style: .continuous))
+                    .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
                 Button {
                     let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     send(t.isEmpty ? "请看图片" : t, images.map(\.1))
@@ -253,7 +253,7 @@ struct StarterComposer: View {
                 } label: {
                     Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
                 .clipShape(.circle)
                 .disabled(!canSend)
             }

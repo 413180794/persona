@@ -71,8 +71,22 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 
 ## 设计语言
 
-- 主色 Claude 珊瑚 `#D4683F`（深色 `#E8835C`）；状态色：工作中珊瑚、等你琥珀、空闲绿、刚完成蓝、未运行灰（`Shared/Theme.swift`）。
-- iOS 26 Liquid Glass：工具栏、交互面板、输入框、提示条用 `glassEffect`；按钮 `.glass` / `.glassProminent`。
+- 界面风格（设置 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
+
+  | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |
+  | --- | --- | --- | --- | --- |
+  | 液态玻璃 | 系统蓝 `#007AFF` | Liquid Glass | 蓝底白字 | 系统 |
+  | Claude | 珊瑚 `#D4683F` | Liquid Glass | 珊瑚底白字 | 系统 |
+  | 黏土 | 薰衣草紫 `#7A5AF8` | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24 | 淡紫渐变白字 | 淡紫 `#EFEAF7` |
+  | Island | 青绿 `#0E9F8E` | 白色悬浮卡片 + 大而柔的阴影，圆角 26 | 墨黑底白字（深色反过来） | 雾青 `#E6F1EF` |
+  | 飞书 | 飞书蓝 `#3370FF` | 白卡片 + 发丝描边、无阴影，圆角 10，按钮 bordered | 浅蓝 `#D1E3FF` 黑字 | 浅灰 `#F5F6F7` |
+
+  `Theme` 的颜色按当前风格取值（`Theme.accent(style)` 可取任意风格，设置里的预览卡用它）；面板用 `.surface(tint:interactive:in:)`、
+  按钮用 `.themedButton(prominent:)`、列表页面 `.themedPage()`、plain 列表的行 `.themedRow()`，不要直接写 `glassEffect` / `.glass`。
+  切换风格时 RootView 以风格为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
+  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡、卡片底和描边）跟着风格走，卡片内容的飞书具名色板不变。
+  调试：`-ui.style glass|claude|clay|island|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关）。
+- 状态色不随风格变：等你红、工作中跟主色、完成未看绿、刚完成蓝、未运行灰。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
 - 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/make_icon.py`，含 dark / tinted）。
 

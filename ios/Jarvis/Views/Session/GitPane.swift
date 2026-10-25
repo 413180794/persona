@@ -30,6 +30,7 @@ struct GitPane: View {
             }
         }
         .listStyle(.insetGrouped)
+        .themedPage()
         .refreshable { await load() }
         .task(id: cwd) { await load() }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, cwd: cwd, target: t) }
@@ -344,6 +345,7 @@ struct GitCommitSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .themedPage()
             .navigationTitle(commit.short)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }

@@ -5,12 +5,19 @@ import UIKit
 
 /// Feishu's named palette (card text colors, tags, header templates), light / dark.
 nonisolated enum LarkColor {
-    static let blue = Color(light: 0x3370FF, dark: 0x4C88FF)
-    /// lark-connector's --message-outgoing / --message-incoming.
-    static let myBubble = Color(light: 0xD1E3FF, dark: 0x133063)
-    static let otherBubble = Color(light: 0xEBECED, dark: 0x262626)
-    static let cardBackground = Color(light: 0xFFFFFF, dark: 0x1E1F23)
-    static let cardStroke = Color(light: 0xDEE0E3, dark: 0x373A40)
+    /// Chrome color (links, selection, the "new messages" line): Feishu blue in the 飞书 style, else the style's accent.
+    /// Card content keeps Feishu's own palette (`text(_:)` / `hue(_:)`).
+    static var blue: Color { AppStyle.current == .lark ? Color(light: 0x3370FF, dark: 0x4C88FF) : Theme.accent }
+    /// lark-connector's --message-outgoing / --message-incoming, tinted with the style's accent elsewhere.
+    static var myBubble: Color { AppStyle.current == .lark ? Color(light: 0xD1E3FF, dark: 0x133063) : Theme.accent.opacity(0.16) }
+    static var otherBubble: Color {
+        switch AppStyle.current {
+        case .lark, .glass, .claude: Color(light: 0xEBECED, dark: 0x262626)
+        default: Theme.card
+        }
+    }
+    static var cardBackground: Color { AppStyle.current == .lark ? Color(light: 0xFFFFFF, dark: 0x1E1F23) : Theme.card }
+    static var cardStroke: Color { AppStyle.current == .lark ? Color(light: 0xDEE0E3, dark: 0x373A40) : Theme.cardStroke }
 
     private static let named: [String: (UInt32, UInt32)] = [
         "blue": (0x3370FF, 0x4C88FF), "wathet": (0x049FD7, 0x26B5E8), "turquoise": (0x04B49C, 0x23C4AE),

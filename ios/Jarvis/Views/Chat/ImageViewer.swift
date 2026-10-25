@@ -44,7 +44,7 @@ struct ImageViewer: View {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
                 .accessibilityLabel("关闭")
                 Spacer()
@@ -53,7 +53,7 @@ struct ImageViewer: View {
                         .font(.subheadline.weight(.semibold).monospacedDigit())
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .glassEffect(.regular, in: .capsule)
+                        .surface(in: .capsule)
                 }
             }
             Spacer()
@@ -63,20 +63,20 @@ struct ImageViewer: View {
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 6)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
                 .disabled(saving || decoded[index] == nil)
                 if let img = decoded[index] {
                     ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
                         Image(systemName: "square.and.arrow.up").frame(width: 24)
                     }
-                    .buttonStyle(.glass)
+                    .themedButton()
                     .accessibilityLabel("分享")
                     Button {
                         UIPasteboard.general.image = img
                         Haptics.success()
                         AppModel.shared.toast = Toast("已拷贝图片", style: .success)
                     } label: { Image(systemName: "doc.on.doc").frame(width: 24) }
-                        .buttonStyle(.glass)
+                        .themedButton()
                         .accessibilityLabel("拷贝")
                 }
             }

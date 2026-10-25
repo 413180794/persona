@@ -36,6 +36,7 @@ struct FilesPane: View {
                 }
             }
             .listStyle(.plain)
+            .themedPage()
             .refreshable { await load() }
         }
         .task(id: path) { await load() }
@@ -51,7 +52,7 @@ struct FilesPane: View {
                 } label: {
                     Image(systemName: "chevron.left").font(.footnote.weight(.semibold)).frame(width: 30, height: 30)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
                 .accessibilityLabel("上一级")
             }
@@ -74,7 +75,7 @@ struct FilesPane: View {
             } label: {
                 Image(systemName: "ellipsis").font(.footnote.weight(.semibold)).frame(width: 30, height: 30)
             }
-            .buttonStyle(.glass)
+            .themedButton()
             .clipShape(.circle)
         }
         .padding(.horizontal, 16)

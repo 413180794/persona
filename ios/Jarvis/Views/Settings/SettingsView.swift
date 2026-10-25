@@ -25,6 +25,15 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    StylePicker()
+                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+                } header: {
+                    Text("界面风格")
+                } footer: {
+                    Text("整个 App 一起换，包括信息里的飞书页面。")
+                }
+
+                Section {
                     NavigationLink { AssistantSettingsView() } label: {
                         LabeledContent {
                             Text(model.assistantConfig?.launcher ?? "").font(.callout.monospaced())
@@ -79,6 +88,7 @@ struct SettingsView: View {
                     LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 }
             }
+            .themedPage()
             .navigationTitle("设置")
             .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
@@ -233,7 +243,7 @@ struct WelcomeView: View {
             Button { showPair = true } label: {
                 Label("连接 hub", systemImage: "qrcode.viewfinder").font(.headline).frame(maxWidth: .infinity, minHeight: 32)
             }
-            .buttonStyle(.glassProminent)
+            .themedButton(prominent: true)
             .controlSize(.large)
             .padding(.horizontal, 24)
             Text("在 example-machine 上运行 `jarvisd hub pair` 显示二维码")
@@ -453,3 +463,66 @@ struct ClaudeSettingsView: View {
         }
     }
 }
+
+/// Five looks side by side, each drawn as a tiny screen in its own colors; tap to switch the whole app.
+struct StylePicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(AppStyle.allCases) { s in
+                    Button {
+                        guard s != model.style else { return }
+                        Haptics.success()
+                        withAnimation(.snappy) { model.style = s }
+                    } label: {
+                        StyleCard(style: s, selected: s == model.style)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(s.title)，\(s.subtitle)")
+                    .accessibilityAddTraits(s == model.style ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+private struct StyleCard: View {
+    var style: AppStyle
+    var selected: Bool
+
+    var body: some View {
+        let page = Theme.pageBackground(style), card = Theme.card(style), accent = Theme.accent(style)
+        let bubble = Theme.userBubble(style), corner = style.corner * 0.45
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
+                VStack(alignment: .leading, spacing: 6) {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
+                        .frame(height: 16)
+                        .shadow(color: style == .island || style == .clay ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
+                    HStack { Spacer(); Capsule().fill(bubble).frame(width: 40, height: 12) }
+                    Capsule().fill(Color.secondary.opacity(0.25)).frame(width: 46, height: 8)
+                    HStack(spacing: 4) {
+                        Circle().fill(accent).frame(width: 10, height: 10)
+                        Capsule().fill(accent.opacity(0.35)).frame(height: 8)
+                    }
+                }
+                .padding(10)
+            }
+            .frame(width: 92, height: 120)
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
+            VStack(spacing: 1) {
+                HStack(spacing: 3) {
+                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(accent) }
+                    Text(style.title).font(.footnote.weight(.semibold)).lineLimit(1)
+                }
+                Text(style.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .frame(width: 96)
+    }
+}
+

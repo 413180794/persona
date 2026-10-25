@@ -133,7 +133,7 @@ struct NewChatView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 30)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
                 .controlSize(.large)
                 .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
                 .padding(.horizontal, 20)

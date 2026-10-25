@@ -109,7 +109,7 @@ struct EmptyStateView: View {
                 .multilineTextAlignment(.center)
             if let action {
                 Button(action.title, action: action.run)
-                    .buttonStyle(.glassProminent)
+                    .themedButton(prominent: true)
                     .padding(.top, 4)
             }
         }

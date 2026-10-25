@@ -181,6 +181,7 @@ struct ChatsView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .themedPage()
             .navigationTitle("开发")
             .searchable(text: $query, prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }

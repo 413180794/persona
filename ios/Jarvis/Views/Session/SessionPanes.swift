@@ -118,7 +118,7 @@ struct TerminalPanel: View {
                 Button(action: sendInput) {
                     Image(systemName: "return").frame(width: 24, height: 24)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
                 .disabled(input.isEmpty)
                 .accessibilityLabel("发送并回车")
             }
@@ -156,7 +156,7 @@ struct TerminalPanel: View {
                     } label: {
                         Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(.footnote.weight(.semibold))
                     }
-                    .buttonStyle(.glass)
+                    .themedButton()
                     .padding(10)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -266,7 +266,7 @@ struct BackgroundTasksStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular.tint(Theme.busy.opacity(0.06)), in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(tint: Theme.busy.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
     }
 
     private func row(_ t: BackgroundTask) -> some View {
@@ -344,7 +344,7 @@ struct LoopStrip: View {
                 Button { confirming = true } label: {
                     Text("停止循环").font(.footnote.weight(.semibold)).lineLimit(1)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .tint(Theme.danger)
             }
             .contentShape(.rect)
@@ -358,7 +358,7 @@ struct LoopStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular.tint(Theme.done.opacity(0.06)), in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(tint: Theme.done.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
         .confirmationDialog("停止这个循环？", isPresented: $confirming, titleVisibility: .visible) {
             Button("停止循环", role: .destructive, action: stop)
         } message: {

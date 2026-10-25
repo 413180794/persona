@@ -37,7 +37,7 @@ struct ChatView: View {
 
     var body: some View {
         paneContent
-        .background(Color(.systemBackground))
+        .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) {
@@ -337,7 +337,7 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
                 .padding(16)
                 .transition(.scale.combined(with: .opacity))
@@ -552,7 +552,7 @@ struct Composer: View {
                         .font(.body.weight(.semibold))
                         .frame(width: 36, height: 36)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
 
                 TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding, axis: .vertical)
@@ -560,7 +560,7 @@ struct Composer: View {
                     .focused($focused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20, style: .continuous))
+                    .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
 
                 if canSend || !status.isActive {
                     Button {
@@ -571,7 +571,7 @@ struct Composer: View {
                         }
                         .frame(width: 36, height: 36)
                     }
-                    .buttonStyle(.glassProminent)
+                    .themedButton(prominent: true)
                     .clipShape(.circle)
                     .disabled(!canSend)
                     .keyboardShortcut(.return, modifiers: .command)
@@ -581,7 +581,7 @@ struct Composer: View {
                     } label: {
                         Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
                     }
-                    .buttonStyle(.glassProminent)
+                    .themedButton(prominent: true)
                     .tint(Theme.danger)
                     .clipShape(.circle)
                     .accessibilityLabel("中断")
@@ -721,7 +721,7 @@ struct QueueStrip: View {
             }
         }
         .padding(10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+        .surface(in: .rect(cornerRadius: 18, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -799,7 +799,7 @@ struct DevInfoCard: View {
                         model.toast = Toast("已拷贝恢复命令", style: .success)
                     } label: { Label("拷贝恢复命令", systemImage: "terminal").lineLimit(1) }
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 .controlSize(.small)
             } else if let error {
                 Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
@@ -809,7 +809,7 @@ struct DevInfoCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(in: .rect(cornerRadius: 20, style: .continuous))
         .task(id: key) {
             do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
         }

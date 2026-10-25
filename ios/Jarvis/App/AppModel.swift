@@ -424,6 +424,16 @@ final class AppModel {
         return list
     }
 
+    // MARK: Style
+
+    /// The app's look (设置 › 界面风格); RootView rebuilds everything when it changes.
+    var style: AppStyle = AppStyle.current {
+        didSet {
+            AppStyle.current = style
+            UserDefaults.standard.set(style.rawValue, forKey: "ui.style")
+        }
+    }
+
     // MARK: Pins
 
     /// Pinned spaces / agents (saved on the hub; cached here so the list orders right before it answers).

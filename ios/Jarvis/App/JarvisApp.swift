@@ -12,7 +12,6 @@ struct JarvisApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .tint(Theme.accent)
                 .onOpenURL { url in
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {

@@ -27,6 +27,10 @@ struct RootView: View {
                 WelcomeView()
             }
         }
+        // A new style rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
+        .id(model.style)
+        .tint(Theme.accent)
+        .fontDesign(model.style.fontDesign)
         .overlay(alignment: .top) { ToastOverlay() }
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
@@ -55,7 +59,7 @@ struct ToastOverlay: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .glassEffect(.regular, in: .capsule)
+                .surface(in: .capsule)
                 .padding(.horizontal, 24)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .onTapGesture { model.toast = nil }

@@ -231,13 +231,13 @@ struct LarkImageGallery: View {
                 VStack {
                     HStack {
                         Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
-                            .buttonStyle(.glass)
+                            .themedButton()
                             .clipShape(.circle)
                             .accessibilityLabel("关闭")
                         Spacer()
                         if urls.count > 1 {
                             Text("\(index + 1) / \(urls.count)").font(.subheadline.weight(.semibold).monospacedDigit())
-                                .padding(.horizontal, 12).padding(.vertical, 7).glassEffect(.regular, in: .capsule)
+                                .padding(.horizontal, 12).padding(.vertical, 7).surface(in: .capsule)
                         }
                     }
                     Spacer()
@@ -246,13 +246,13 @@ struct LarkImageGallery: View {
                             ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
                                 Label("分享", systemImage: "square.and.arrow.up").lineLimit(1).font(.subheadline.weight(.semibold))
                             }
-                            .buttonStyle(.glassProminent)
+                            .themedButton(prominent: true)
                             Button {
                                 UIPasteboard.general.image = img
                                 Haptics.success()
                                 AppModel.shared.toast = Toast("已拷贝图片", style: .success)
                             } label: { Image(systemName: "doc.on.doc").frame(width: 24) }
-                                .buttonStyle(.glass)
+                                .themedButton()
                                 .accessibilityLabel("拷贝")
                         }
                         .controlSize(.large)
@@ -282,7 +282,7 @@ struct LarkPlayerView: View {
                 ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
-                .buttonStyle(.glass)
+                .themedButton()
                 .clipShape(.circle)
                 .padding(16)
                 .accessibilityLabel("关闭")
@@ -310,7 +310,7 @@ struct LarkFileOpener: ViewModifier {
             .quickLookPreview($local)
             .overlay {
                 if loading {
-                    ProgressView("下载中…").padding(20).glassEffect(.regular, in: .rect(cornerRadius: 16))
+                    ProgressView("下载中…").padding(20).surface(in: .rect(cornerRadius: 16))
                 }
             }
             .onChange(of: request?.url) {

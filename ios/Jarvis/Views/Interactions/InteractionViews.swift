@@ -75,9 +75,9 @@ struct InteractionPreviewCard: View {
         case .permission:
             HStack {
                 Button("允许") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
-                    .buttonStyle(.glassProminent)
+                    .themedButton(prominent: true)
                 Button("拒绝") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
-                    .buttonStyle(.glass)
+                    .themedButton()
             }
             .controlSize(.small)
         default:
@@ -95,7 +95,7 @@ struct FlowButtons: View {
             HStack(spacing: 8) {
                 ForEach(labels, id: \.self) { label in
                     Button(label) { action(label) }
-                        .buttonStyle(.glass)
+                        .themedButton()
                         .controlSize(.small)
                 }
             }
@@ -155,7 +155,7 @@ struct InteractionPanel: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 24, style: .continuous))
+        .surface(in: .rect(cornerRadius: 24, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -219,7 +219,7 @@ struct QuestionForm: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.glassProminent)
+            .themedButton(prominent: true)
             .controlSize(.large)
             .disabled(!canAdvance || sending)
         }
@@ -304,7 +304,7 @@ struct PlanForm: View {
             .scrollBounceBehavior(.basedOnSize)
             .overlay(alignment: .bottomTrailing) {
                 Button { showFull = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                    .buttonStyle(.glass)
+                    .themedButton()
                     .controlSize(.small)
                     .padding(4)
             }
@@ -314,11 +314,11 @@ struct PlanForm: View {
                     .padding(12)
                     .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
                 HStack {
-                    Button("取消") { withAnimation { rejecting = false } }.buttonStyle(.glass)
+                    Button("取消") { withAnimation { rejecting = false } }.themedButton()
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: false, feedback: feedback)) }
                     } label: { Text("打回修改").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
-                        .buttonStyle(.glassProminent)
+                        .themedButton(prominent: true)
                 }
             } else {
                 Button {
@@ -326,7 +326,7 @@ struct PlanForm: View {
                 } label: {
                     Label("批准并自动执行", systemImage: "play.fill").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
                 .controlSize(.large)
                 HStack {
                     Button {
@@ -334,7 +334,7 @@ struct PlanForm: View {
                     } label: { Text("自动接受编辑").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                     Button { withAnimation { rejecting = true } } label: { Text("打回").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                 }
-                .buttonStyle(.glass)
+                .themedButton()
             }
         }
         .sheet(isPresented: $showFull) {
@@ -370,11 +370,11 @@ struct PermissionForm: View {
                 Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
                     Text("拒绝").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
+                .themedButton()
                 Button { Task { await model.resolve(interaction, Resolution(allow: true)) } } label: {
                     Text("允许").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
+                .themedButton(prominent: true)
             }
             .controlSize(.large)
             if interaction.sessionID != "" {
@@ -430,7 +430,7 @@ struct ScreenForm: View {
                     text = ""
                     Task { await model.resolve(interaction, Resolution(keys: ["enter"], text: t)) }
                 } label: { Image(systemName: "return") }
-                    .buttonStyle(.glassProminent)
+                    .themedButton(prominent: true)
                     .disabled(text.isEmpty)
             }
         }

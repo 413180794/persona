@@ -103,6 +103,7 @@ struct LarkChatView: View {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
         }
         .safeAreaInset(edge: .bottom) { composer }
+        .themedPage()
         .navigationTitle(conversation.name)
         .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
         .navigationBarTitleDisplayMode(.inline)
@@ -129,12 +130,12 @@ struct LarkChatView: View {
                 .lineLimit(1...5)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20, style: .continuous))
+                .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
             Button { Task { await send() } } label: {
                 Group { if sending { ProgressView().tint(.white) } else { Image(systemName: "arrow.up").font(.body.weight(.bold)) } }
                     .frame(width: 36, height: 36)
             }
-            .buttonStyle(.glassProminent)
+            .themedButton(prominent: true)
             .clipShape(.circle)
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("发送")
@@ -163,7 +164,7 @@ struct LarkChatView: View {
                 .foregroundStyle(LarkColor.blue)
                 .padding(.horizontal, n > 0 ? 12 : 0)
                 .frame(minWidth: 38, minHeight: 38)
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 14)
@@ -179,7 +180,7 @@ struct LarkChatView: View {
                 Label("有人@你", systemImage: "at").font(.system(size: 13, weight: .medium)).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
                     .padding(.horizontal, 12).frame(minHeight: 34)
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 14)
