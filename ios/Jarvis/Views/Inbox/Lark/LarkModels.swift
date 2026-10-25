@@ -9,16 +9,71 @@ nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
     var isGroup: Bool
     var isTopic: Bool?
     var unread: Int
+    var markedUnread: Bool?
     var atMe: Bool
+    var atAll: Bool?
     var muted: Bool
+    var pinned: Bool?
+    var flagged: Bool?
+    var done: Bool?
+    var tags: [String]?
     var preview: String
+    var previewSender: String?
     var isMine: Bool
     var updatedAt: Date?
+    var readPosition: String?
+    var mentionPosition: String?
+    /// Client only: open the chat at this message (a flagged message) instead of the first unread.
+    var focus: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, avatar, unread, muted, preview
-        case isGroup = "is_group", isTopic = "is_topic", atMe = "at_me", isMine = "is_mine", updatedAt = "updated_at"
+        case id, name, avatar, unread, muted, pinned, flagged, done, tags, preview
+        case isGroup = "is_group", isTopic = "is_topic", markedUnread = "marked_unread", atMe = "at_me", atAll = "at_all"
+        case previewSender = "preview_sender", isMine = "is_mine", updatedAt = "updated_at"
+        case readPosition = "read_position", mentionPosition = "mention_position"
     }
+
+    init(id: String, name: String, avatar: String? = nil, isGroup: Bool, isTopic: Bool? = nil, unread: Int = 0, atMe: Bool = false,
+         muted: Bool = false, preview: String = "", isMine: Bool = false, focus: String? = nil) {
+        self.id = id
+        self.name = name
+        self.avatar = avatar
+        self.isGroup = isGroup
+        self.isTopic = isTopic
+        self.unread = unread
+        self.atMe = atMe
+        self.muted = muted
+        self.preview = preview
+        self.isMine = isMine
+        self.focus = focus
+    }
+
+    /// The number on the avatar: unread messages, or 1 for a chat marked unread.
+    var badge: Int { unread > 0 ? unread : (markedUnread == true ? 1 : 0) }
+    var isPinned: Bool { pinned == true }
+    var isFlagged: Bool { flagged == true }
+    var isDone: Bool { done == true }
+}
+
+/// A flagged message in 标记, with the chat it belongs to.
+nonisolated struct LarkFlaggedMessage: Codable, Identifiable, Hashable, Sendable {
+    var feedID: String
+    var chatName: String
+    var chatAvatar: String?
+    var flaggedAt: Date?
+    var message: LarkMessage
+    var id: String { message.id }
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case feedID = "feed_id", chatName = "chat_name", chatAvatar = "chat_avatar", flaggedAt = "flagged_at"
+    }
+}
+
+nonisolated struct LarkLabel: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var count: Int?
 }
 
 /// One element of a message as lark-connector projects it (`MessagePart`): text runs, mentions, links, images,
@@ -88,6 +143,9 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var edited: Bool?
     var replyCount: Int
     var threadReplyCount: Int?
+    var badgeCount: Int?
+    var atMe: Bool?
+    var isRead: Bool?
     var parts: [LarkPart]?
     var replyTo: LarkReplyTo?
     var reactions: [LarkReaction]?
@@ -97,6 +155,7 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
         case senderID = "sender_id", senderName = "sender_name", senderAvatar = "sender_avatar", senderType = "sender_type"
         case isMine = "is_mine", createdAt = "created_at", replyCount = "reply_count"
         case threadReplyCount = "thread_reply_count", replyTo = "reply_to"
+        case badgeCount = "badge_count", atMe = "at_me", isRead = "is_read"
     }
 
     var isSystem: Bool { type == "SYSTEM" || (parts?.first?.metaBool("system") ?? false) }
@@ -123,18 +182,72 @@ extension APIClient {
     struct LarkMessages: Decodable {
         var messages: [LarkMessage]
         var hasOlder: Bool
-        enum CodingKeys: String, CodingKey { case messages; case hasOlder = "has_older" }
+        var hasNewer: Bool?
+        var olderCursor: String?
+        var newerCursor: String?
+        enum CodingKeys: String, CodingKey {
+            case messages
+            case hasOlder = "has_older", hasNewer = "has_newer", olderCursor = "older_cursor", newerCursor = "newer_cursor"
+        }
     }
     struct LarkEmojis: Decodable {
         struct Emoji: Decodable { var label: String; var url: String }
         var emojis: [String: Emoji]
     }
-    func larkConversations(cursor: String? = nil) async throws -> LarkConversations {
-        try await get("/api/v1/lark/conversations", query: ["cursor": cursor ?? "", "limit": "60"])
+    struct LarkFlags: Decodable {
+        var conversations: [LarkConversation]
+        var messages: [LarkFlaggedMessage]
     }
-    /// A page of a chat, or of a topic group's threads (`topic`).
-    func larkMessages(_ id: String, before: String? = nil, topic: Bool = false) async throws -> LarkMessages {
-        try await get("/api/v1/lark/conversations/\(id)/messages", query: ["before": before ?? "", "limit": "40", "topic": topic ? "1" : ""])
+    struct LarkChatLabels: Decodable {
+        var labelIDs: [String]
+        var labels: [LarkLabel]
+        enum CodingKeys: String, CodingKey { case labels; case labelIDs = "label_ids" }
+    }
+    /// What to change on a chat: 已完成, 置顶, 标记, 免打扰, labels. Nil fields stay as they are.
+    struct LarkSettings: Encodable {
+        var done: Bool?
+        var pinned: Bool?
+        var flagged: Bool?
+        var muted: Bool?
+        var labelIDs: [String]?
+        enum CodingKeys: String, CodingKey { case done, pinned, flagged, muted; case labelIDs = "label_ids" }
+    }
+    struct LarkReadReport: Encodable {
+        var position: String
+        var badgeCount: Int?
+        var messageIDs: [String]?
+        enum CodingKeys: String, CodingKey { case position; case badgeCount = "badge_count", messageIDs = "message_ids" }
+    }
+
+    /// One page of a feed scope: `chats` (消息), `unread`, `done` (已完成), `label:<id>`.
+    func larkConversations(scope: String = "chats", cursor: String? = nil) async throws -> LarkConversations {
+        try await get("/api/v1/lark/conversations", query: ["scope": scope, "cursor": cursor ?? "", "limit": "60"])
+    }
+    func larkPinned() async throws -> [LarkConversation] {
+        try await get("/api/v1/lark/pinned", as: LarkConversations.self).conversations
+    }
+    func larkLabels() async throws -> [LarkLabel] {
+        struct R: Decodable { var labels: [LarkLabel] }
+        return try await get("/api/v1/lark/labels", as: R.self).labels
+    }
+    func larkUnreadCount() async throws -> Int {
+        struct R: Decodable { var count: Int }
+        return try await get("/api/v1/lark/unread-count", as: R.self).count
+    }
+    func larkFlags() async throws -> LarkFlags { try await get("/api/v1/lark/flags") }
+    func larkChatLabels(_ id: String) async throws -> LarkChatLabels { try await get("/api/v1/lark/conversations/\(id)/labels") }
+    func larkUpdate(_ id: String, _ settings: LarkSettings) async throws {
+        try await post("/api/v1/lark/conversations/\(id)/settings", body: settings)
+    }
+    struct LarkUnread: Encodable { var unread: Bool }
+    func larkSetUnread(_ id: String, unread: Bool) async throws {
+        try await post("/api/v1/lark/conversations/\(id)/unread", body: LarkUnread(unread: unread))
+    }
+    /// A page of a chat: the latest (no cursor), older than `before`, newer than `after`, or around `around`;
+    /// a topic group's threads with `topic`.
+    func larkMessages(_ id: String, before: String? = nil, after: String? = nil, around: String? = nil, topic: Bool = false) async throws -> LarkMessages {
+        try await get("/api/v1/lark/conversations/\(id)/messages",
+                      query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
     }
     /// Replies in one message's thread.
     func larkThread(_ messageID: String, before: String? = nil) async throws -> LarkMessages {
@@ -142,8 +255,8 @@ extension APIClient {
     }
     struct LarkText: Encodable { var text: String }
     func larkSend(_ id: String, text: String) async throws { try await post("/api/v1/lark/conversations/\(id)/messages", body: LarkText(text: text)) }
-    struct LarkRead: Encodable { var position: String }
-    func larkRead(_ id: String, position: String) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: LarkRead(position: position)) }
+    /// Reports what the reader has seen (never sent just for opening a chat).
+    func larkRead(_ id: String, _ report: LarkReadReport) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: report) }
     func larkEmojis() async throws -> LarkEmojis { try await get("/api/v1/lark/emojis") }
     /// Presses a callback button on a card, as the user.
     func larkCardAction(message: String, action: String) async throws {

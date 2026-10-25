@@ -70,15 +70,15 @@ struct UserBubble: View {
             Text(item.text ?? "")
                 .font(.body)
                 .foregroundStyle(.white)
-                .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
-                .contextMenu { CopyButton(text: item.text ?? "") }
+                .messageLongPress(id: item.id)
         }
             if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .messageActionBar(id: item.id, text: item.text ?? "", isUser: true)
     }
 }
 
@@ -90,11 +90,12 @@ struct AssistantText: View {
         VStack(alignment: .leading, spacing: 6) {
             Markdown(item.text ?? "")
                 .markdownTheme(.jarvis)
-                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .contextMenu { CopyButton(text: item.text ?? "") }
+                .contentShape(.rect)
+                .messageLongPress(id: item.id)
             if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
         }
+        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false)
     }
 }
 
@@ -154,62 +155,6 @@ struct NoticeRow: View {
             .padding(.vertical, 5)
             .background(Color.primary.opacity(0.05), in: .capsule)
             .frame(maxWidth: .infinity)
-    }
-}
-
-/// Live "what is Claude doing right now" strip, fed by the terminal screen sampled every 400ms.
-struct LiveActivityBar: View {
-    var store: ChatStore
-    var status: SessionStatus
-    var openTerminal: () -> Void
-    var interrupt: () -> Void
-    @State private var expanded = false
-
-    var body: some View {
-        let lines = store.livePreview
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                ShimmerDot()
-                Text(store.spinnerLine ?? "Claude 正在工作…")
-                    .font(.footnote.weight(.medium))
-                    .contentTransition(.numericText())
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Button(action: openTerminal) { Image(systemName: "terminal") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("打开终端")
-
-            }
-            if expanded && !lines.isEmpty {
-                Text(lines.joined(separator: "\n"))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .glassEffect(.regular.tint(Theme.working.opacity(0.08)), in: .rect(cornerRadius: 20, style: .continuous))
-        .contentShape(.rect)
-        .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
-        .animation(.snappy, value: store.spinnerLine)
-    }
-}
-
-struct ShimmerDot: View {
-    @State private var on = false
-    var body: some View {
-        ZStack {
-            Circle().fill(Theme.working.opacity(0.25)).frame(width: 18, height: 18).scaleEffect(on ? 1.2 : 0.7)
-            Image(systemName: "sparkle")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Theme.working)
-                .rotationEffect(.degrees(on ? 180 : 0))
-        }
-        .onAppear { withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { on = true } }
     }
 }
 

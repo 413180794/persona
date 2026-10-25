@@ -31,6 +31,21 @@ nonisolated enum ChatRow: Identifiable, Hashable, Sendable {
     }
 }
 
+nonisolated extension ChatRow {
+    var firstTS: Date? {
+        switch self {
+        case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i), .recap(let i): i.ts
+        case .tools(let steps): steps.lazy.compactMap(\.firstTS).first
+        }
+    }
+    var lastTS: Date? {
+        switch self {
+        case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i), .recap(let i): i.ts
+        case .tools(let steps): steps.reversed().lazy.compactMap(\.lastTS).first
+        }
+    }
+}
+
 /// A step inside a run of tool activity: a call, or a thought between calls.
 nonisolated enum ToolStep: Identifiable, Hashable, Sendable {
     case call(ToolCall)
@@ -40,6 +55,18 @@ nonisolated enum ToolStep: Identifiable, Hashable, Sendable {
         switch self {
         case .call(let c): c.id
         case .thought(let i): i.id
+        }
+    }
+    var firstTS: Date? {
+        switch self {
+        case .call(let c): c.use.ts
+        case .thought(let i): i.ts
+        }
+    }
+    var lastTS: Date? {
+        switch self {
+        case .call(let c): c.result?.ts ?? c.use.ts
+        case .thought(let i): i.ts
         }
     }
 }
@@ -52,6 +79,14 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     var process: [ChatRow] = []
     var answer: ChatRow?
     var trailing: [ChatRow] = [] // notices that belong to the turn (e.g. "interrupted")
+    /// Everything the agent did in arrival order, answer included.
+    var steps: [ChatRow] = []
+    /// Messages and steps in arrival order (how the running turn is shown: input sent mid-turn stays where it was sent).
+    var ordered: [ChatRow] = []
+
+    /// From the first message to the last thing the agent did ("已工作 5 分 12 秒").
+    var startedAt: Date? { (users + steps).lazy.compactMap(\.firstTS).first }
+    var endedAt: Date? { (steps + trailing).reversed().lazy.compactMap(\.lastTS).first }
 
     var toolCount: Int {
         process.reduce(0) { n, r in
@@ -91,6 +126,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             guard var t = current else { return }
             // The answer is the last thing the assistant said; everything before it is process.
             // (Steps after the final words, rare trailing tool calls, stay in the process.)
+            t.steps = t.process
             if let i = t.process.lastIndex(where: { if case .assistant = $0 { true } else { false } }) {
                 t.answer = t.process.remove(at: i)
             }
@@ -103,9 +139,10 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             case .user(let item):
                 if item.queued == true, current != nil {
                     current!.users.append(row) // queued input joins the turn it was sent during
+                    current!.ordered.append(row)
                 } else {
                     close()
-                    current = Turn(id: row.id, users: [row])
+                    current = Turn(id: row.id, users: [row], ordered: [row])
                 }
             case .recap:
                 close()
@@ -119,10 +156,12 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                     current!.trailing.append(row)
                 } else {
                     current!.process.append(row)
+                    current!.ordered.append(row)
                 }
             default:
                 if current == nil { current = Turn(id: row.id) }
                 current!.process.append(row)
+                current!.ordered.append(row)
             }
         }
         close()

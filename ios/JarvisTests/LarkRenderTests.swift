@@ -83,4 +83,34 @@ struct LarkRenderTests {
         #expect(larkThumbEdge(points: 34) == 120)
         #expect(larkThumbEdge(points: 400) == nil)
     }
+
+    @Test func positionsCompareAsNumbers() {
+        #expect(LarkPosition.less("99", "100"))
+        #expect(!LarkPosition.less("100", "99"))
+        #expect(!LarkPosition.less("7", "7"))
+        #expect(LarkPosition.less("-3", "0"))
+        #expect(LarkPosition.less("-10", "-3"))
+        #expect(LarkPosition.next("68307") == "68308")
+    }
+
+    @Test func groupKeysRoundTrip() {
+        for g: LarkGroup in [.messages, .done, .flagged, .mail, .label(id: "7", name: "Oncall")] {
+            #expect(LarkGroup(key: g.key) == g)
+        }
+        #expect(LarkGroup(key: "garbage") == .messages)
+    }
+
+    @Test func feedActionsApplyLocally() {
+        var c = LarkConversation(id: "1", name: "A", isGroup: true, unread: 3)
+        #expect(c.badge == 3)
+        LarkFeedAction.unread(false).apply(to: &c)
+        #expect(c.badge == 0)
+        LarkFeedAction.unread(true).apply(to: &c)
+        #expect(c.badge == 1)
+        LarkFeedAction.pin(true).apply(to: &c)
+        LarkFeedAction.done(true).apply(to: &c)
+        #expect(c.isPinned && c.isDone)
+        #expect(LarkFeedAction.pin(true).settings?.pinned == true)
+        #expect(LarkFeedAction.unread(true).settings == nil)
+    }
 }

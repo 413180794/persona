@@ -10,8 +10,7 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 | 对话 | **Jarvis 助手**：example-machine 上 `~/.jarvis/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
 右上角随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* / provider-* skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「用了 N 个工具 · 电脑、iPhone…」。左上角历史对话，右上角新对话；首次启动自动接上最近一段 |
 | 开发 | 原来的会话列表（不含助手对话）：「需要你处理」卡片 → 进行中 → 刚完成 → 空闲（折叠）→ 最近；搜索、按机器筛选、左滑中断、右滑关闭 |
-| 信息 | 飞书会话（经 example-machine 上的 lark-connector agent 接口，`/api/v1/lark/*`）和邮件按时间合并；顶部 全部 / 飞书 / 邮件，左上角只看未读；
-飞书会话照 lark-connector 的渲染器还原：富文本、图片、贴纸、表情、文件、视频 / 语音、代码、卡片（含告警卡的列、表格、折叠面板、按钮回调）、合并转发、群名片、回复引用、表情回应（详见下文「飞书消息渲染」）；加载更早、直接回复、打开即标已读、「让 Jarvis 总结」交给助手。邮箱管理和写邮件在右上角菜单。添加邮箱支持「AI 一键添加」：粘贴一段邮箱信息（或从剪贴板识别），hub 用 cc_ds 的 API 识别，齐全就直接连接添加，缺什么就填进表单；合并收件箱 / 单账号，详情（纯文本或 HTML）、回复、写信、「让 Claude 处理」（带上 mail_read 参数新建对话），邮箱管理 |
+| 信息 | 照飞书手机端「消息」页：顶部置顶栏（头像 + 未读角标，一行 6 个 + 展开）、消息 / 未读 N / 标记 三个视图；左上角「分组」抽屉：消息、已完成、标记、全部标签，最后是邮件。行样式同飞书：头像右上角角标（免打扰灰色、99+）、名字后的外部 / 公开 / 机器人标签、群聊预览带发送者、[有人@我]、免打扰铃铛。消息列表不重复显示置顶会话、不显示已完成；带标签的会话按标签显示规则（读完即隐去，飞书服务端规则）。右滑「完成」，左滑 标为未读 / 置顶 / 免打扰，长按 置顶、标为未读、标记、标签、免打扰、完成。进群从最早一条未读开始（「以下为新消息」分隔线），往下滚加载更新的，只把上过屏的消息上报为已读；「N 条新消息 / 回到最新」「有人@你」跳转。卡片渲染等见下文「飞书消息渲染」；邮件：合并收件箱 / 单账号、详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），「AI 一键添加」邮箱 |
 | 设置 | 助手（默认启动器 / 模型）、Claude Code 设置（各机器 `~/.claude/settings.json` 的白名单项：离开回顾 recap、思考强度、总是思考、回复语言等，可一键应用到所有机器）、机器（二级页：在线状态、会话数、版本、启动器、重连）、手机数据开关和授权、通知、重新配对 |
 
 对话页：
@@ -24,10 +23,17 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间同伴条（开发页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
-- 展示逻辑（助手和开发统一，`ChatBlock.build`）：按轮次分组。一轮 = 一条用户消息 + 这一轮里 Claude 工作时吸收的排队消息
-  （transcript 的 `queued_command`，`Item.queued`）。已完成的轮次显示成：用户消息 1、2、3…连续排在最前 → 一行折叠的
-  「过程 · 用了 N 个工具 · 思考 M 段 · 中间回复 K 条」（点开看全部步骤）→ 最后一条回复。轮次中途的上下文压缩 / API 错误归入过程，
-  「已中断」跟在轮次末尾；recap 单独成行。正在进行的那一轮（agent 工作中的最后一轮）按到达顺序完整显示每一步。
+- 展示逻辑（助手和开发统一，`ChatBlock.build` + `TurnView`，参照 Codex）：按轮次分组。一轮 = 一条用户消息 + 这一轮里 Claude 工作时吸收的排队消息
+  （transcript 的 `queued_command`，`Item.queued`）。用户消息之后是一条细线标题：进行中「正在工作 39 秒」（每秒走，右侧终端按钮），
+  已完成「已工作 5 分 12 秒」，点它展开 / 收起过程。过程里 Claude 的话照常显示，思考 / 工具之间的叙述是灰色小字，工具调用不显示名字和参数，
+  一段连续的调用只是一行「调用了 N 个工具 ›」（正在跑的是「正在调用工具 · 第 N 个」带转圈），点开才看每个调用。
+  已完成的轮次默认收起，只留最后一条回复，消息 1、2、3…连续排在最前；进行中的轮次默认展开，消息按发出的位置穿插。
+  轮次中途的上下文压缩 / API 错误归入过程，「已中断」跟在轮次末尾；recap 单独成行。底部不再有 spinner / token 状态条。
+  注意：新版 Claude Code 会把工具之间的叙述写成非空的 `thinking` 块，不能当思考直接藏掉。
+- 历史：滑到最上面自动加载更早的一页（顶部转圈，`task(id: 第一行)` 在加载完后若仍可见会继续加载），没有「加载更早」按钮。
+- 长按消息（`MessageMenu.swift`）：像微信一样在按下的位置上方弹出深色操作条（复制 / 选择 / 引用 / 分享，自己的消息多一个编辑），
+  不再先把消息浮起来；按的位置靠近导航栏时放到下方。点任意处或手指拖动列表关闭（内容流入导致的程序滚动不关）。
+  「选择」打开可任意选取的纯文本页；「引用」把消息以 `> ` 引用放到输入框前面；「编辑」把自己的旧消息放回输入框。
 - 排队消息：Claude 工作中发的消息不进对话记录，显示在输入框上方的「排队中」列表；每条可「撤回编辑」（回到输入框）、拷贝、删除。
   实现照 TUI：↑ 把全部排队消息拉回输入框（transcript 记 popAll），清空输入框后把保留的重新排队（`POST …/queue {"keep":[…]}`）。
 - 开发列表：忙碌的空间里只显示需要你 / 工作中 / 完成未看的 agent，空闲的折成一行「还有 N 个空闲」，点开展开。
@@ -78,7 +84,7 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群）、`-larkFocus <messageId>`（滚到该条消息）、`-inboxDrawer YES`（打开信息页的分组抽屉）；信息页的分组 / 视图可用 `-inbox.group done|flagged|mail|label:<id>:<名字>`、`-inbox.tab 未读` 直接指定（@AppStorage 读启动参数）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理。
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。
 
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
 

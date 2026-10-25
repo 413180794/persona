@@ -1,3 +1,4 @@
+import MarkdownUI
 import PhotosUI
 import SwiftUI
 
@@ -21,6 +22,7 @@ struct ChatView: View {
     @State private var showInfo = false
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
+    @State private var menu = MessageMenu()
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -166,19 +168,12 @@ struct ChatView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 if store.hasMore {
-                    Button {
-                        Task { await model.loadOlder(key) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if store.isLoadingOlder { ProgressView().controlSize(.mini) }
-                            Text("加载更早的消息")
-                        }
-                        .font(.caption.weight(.medium))
+                    // Reaching the top loads the page before it; runs again whenever older rows were prepended.
+                    ProgressView()
+                        .controlSize(.small)
                         .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
+                        .padding(.vertical, 6)
+                        .task(id: rows.first?.id) { await model.loadOlder(key) }
                 }
                 if !store.loadedOnce && rows.isEmpty {
                     ChatSkeleton()
@@ -191,14 +186,19 @@ struct ChatView: View {
                 let liveTurn: Turn? = { if status.isActive, case .turn(let t) = blocks.last { return t } else { return nil } }()
                 ForEach(liveTurn == nil ? blocks : Array(blocks.dropLast())) { block in
                     switch block {
-                    case .row(let row): rowView(row, isLatest: false, live: false).id(row.id)
-                    case .turn(let turn): TurnView(turn: turn, style: style) { row in rowView(row, isLatest: false, live: true) }.id(block.id)
+                    case .row(let row): rowView(row, isLatest: false, live: false).id(row.id).zIndex(holdsMenu(block) ? 1 : 0)
+                    case .turn(let turn):
+                        TurnView(turn: turn, style: style, live: false) { row in rowView(row, isLatest: false, live: true) }
+                            .id(block.id)
+                            .zIndex(holdsMenu(block) ? 1 : 0)
                     }
                 }
-                if let liveTurn, let start = rows.firstIndex(where: { $0.id == liveTurn.id }) {
-                    ForEach(Array(rows[start...].enumerated()), id: \.element.id) { offset, row in
-                        rowView(row, isLatest: start + offset == rows.count - 1, live: true).id(row.id)
+                if let liveTurn {
+                    TurnView(turn: liveTurn, style: style, live: true, openTerminal: style == .dev ? { showTerminal = true } : nil) { row in
+                        rowView(row, isLatest: false, live: true)
                     }
+                    .id("live-" + liveTurn.id)
+                    .zIndex(holdsMenu(.turn(liveTurn)) ? 1 : 0)
                 }
                 if style == .assistant {
                     let live = store.liveText
@@ -225,6 +225,11 @@ struct ChatView: View {
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
         .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
+        // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
+        .onScrollPhaseChange { _, phase in if phase == .tracking || phase == .interacting { menu.dismiss() } }
+        .environment(menu)
+        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
 
         .onChange(of: rows.last?.id) { _, _ in
             if atBottom { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } }
@@ -248,12 +253,6 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 10) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
-                if style == .dev && status.isActive && model.interactions(for: key).isEmpty {
-                    LiveActivityBar(store: store, status: status, openTerminal: { showTerminal = true }) {
-                        Task { await model.interrupt(key) }
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
                 if let bg = session?.background, !bg.isEmpty, style == .dev {
                     BackgroundTasksStrip(tasks: bg) { t in
                         if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
@@ -272,6 +271,7 @@ struct ChatView: View {
     }
 
     private func appeared() {
+            bindMenu()
             model.subscribe(key)
             model.visibleSession = key
             model.markSeen(key)
@@ -280,6 +280,18 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
+            if UserDefaults.standard.bool(forKey: "showMenu") { // the long-press bar on the last answer, for screenshots
+                Task {
+                    try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 40 : 6))
+                    let from = UserDefaults.standard.integer(forKey: "fromSeq")
+                    let answers = model.chat(key).blocks.compactMap { b -> ChatRow? in if case .turn(let t) = b { t.answer } else { nil } }
+                    let last = from > 0
+                        ? answers.first { if case .assistant(let i) = $0 { i.seq > from } else { false } }
+                        : answers.last
+                    menu.anchor = CGPoint(x: 160, y: 30)
+                    menu.selected = last?.id
+                }
+            }
             if UserDefaults.standard.bool(forKey: "loadAll") {
                 Task {
                     try? await Task.sleep(for: .seconds(3))
@@ -309,11 +321,32 @@ struct ChatView: View {
         return blocks
     }
 
+    /// 引用 puts the message as a quote in front of the draft; 编辑 replaces the draft with your old message.
+    private func bindMenu() {
+        menu.quote = { [model, key] text in
+            let quoted = text.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n")
+            let draft = model.drafts[key] ?? ""
+            model.drafts[key] = quoted + "\n\n" + draft
+        }
+        menu.edit = { [model, key] text in model.drafts[key] = text }
+    }
+
+    /// The block holding the message whose action bar is open draws above its neighbours.
+    private func holdsMenu(_ block: ChatBlock) -> Bool {
+        guard let sel = menu.selected else { return false }
+        switch block {
+        case .row(let r): return r.id == sel
+        case .turn(let t): return (t.users + t.steps + t.trailing).contains { $0.id == sel }
+        }
+    }
+
     private func switchTo(_ next: SessionKey) {
         guard next != key else { return }
         Haptics.tap()
         model.unsubscribe(key)
         key = next
+        bindMenu()
+        menu.selected = nil
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
         git = nil
         position = ScrollPosition(edge: .bottom)
@@ -723,54 +756,192 @@ struct DevInfoCard: View {
 }
 
 /// A finished exchange: messages, the folded process, the answer.
+/// One exchange. The user's messages first (queued ones gathered), then a thin "正在工作 39 秒 / 已工作 5 分" line,
+/// then what the agent did: its words in full, tool runs only as "调用了 N 个工具" (tap for details), thoughts hidden.
+/// A finished turn folds the work away under that line and keeps just the answer; the running turn shows it all.
 struct TurnView<Row: View>: View {
     let turn: Turn
     var style: ChatStyle
+    var live: Bool
+    var openTerminal: (() -> Void)? = nil
     @ViewBuilder var row: (ChatRow) -> Row
-    @State private var open = false
+    @State private var open: Bool? // nil: the default (open while live, folded when finished)
 
     var body: some View {
+        let isOpen = open ?? live
+        // Running: the opening message(s), the header, then everything in arrival order. Finished: all messages first.
+        let lead = live ? Array(turn.ordered.prefix { if case .user = $0 { true } else { false } }) : turn.users
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(turn.users) { u in row(u) }
-            if !turn.process.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Button {
-                        Haptics.tap()
-                        withAnimation(.snappy) { open.toggle() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "list.bullet.indent")
-                            Text(summary).lineLimit(1)
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).rotationEffect(.degrees(open ? 90 : 0))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.primary.opacity(0.04), in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                    if open {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(turn.process) { r in row(r) }
-                        }
-                        .padding(.leading, 10)
-                        .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 2) }
-                        .transition(.opacity)
-                    }
+            ForEach(lead) { u in row(u) }
+            if live || !turn.process.isEmpty {
+                WorkHeader(live: live, start: turn.startedAt, end: turn.endedAt, open: isOpen, openTerminal: openTerminal) {
+                    Haptics.tap()
+                    withAnimation(.snappy) { open = !isOpen }
                 }
             }
-            if let answer = turn.answer { row(answer) }
+            if live {
+                if isOpen {
+                    ForEach(turn.ordered.dropFirst(lead.count)) { r in step(r) }
+                } else if let a = turn.answer {
+                    row(a)
+                }
+            } else {
+                if isOpen {
+                    ForEach(turn.process) { r in step(r) }
+                }
+                if let a = turn.answer { row(a) }
+            }
             ForEach(turn.trailing) { r in row(r) }
         }
     }
 
-    private var summary: String {
-        var parts: [String] = []
-        if turn.toolCount > 0 { parts.append("用了 \(turn.toolCount) 个工具") }
-        if turn.thoughtCount > 0 { parts.append("思考 \(turn.thoughtCount) 段") }
-        if turn.interimCount > 0 { parts.append("中间回复 \(turn.interimCount) 条") }
-        return "过程 · " + (parts.isEmpty ? "\(turn.process.count) 步" : parts.joined(separator: " · "))
+    @ViewBuilder private func step(_ r: ChatRow) -> some View {
+        switch r {
+        case .thinking(let i): ThoughtText(text: i.text ?? "")
+        case .tools(let steps):
+            // Narration between calls stays readable; each stretch of calls is one "调用了 N 个工具" line.
+            let segments = ToolSegment.split(steps)
+            let running = live && r.id == turn.steps.last?.id
+            ForEach(segments) { seg in
+                switch seg.kind {
+                case .thought(let i): ThoughtText(text: i.text ?? "")
+                case .calls(let calls): ToolCountRow(steps: calls, running: running && seg.id == segments.last?.id)
+                }
+            }
+        default: row(r)
+        }
+    }
+}
+
+/// "正在工作 39 秒 ——— ⌄" (ticking) or "已工作 5 分 12 秒 ——— ⌄"; tapping folds / unfolds the work.
+struct WorkHeader: View {
+    var live: Bool
+    var start: Date?
+    var end: Date?
+    var open: Bool
+    var openTerminal: (() -> Void)?
+    var toggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: toggle) {
+                HStack(spacing: 8) {
+                    if live {
+                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                            Text("正在工作 " + Self.duration(from: start, to: ctx.date))
+                        }
+                        .foregroundStyle(Theme.working)
+                    } else {
+                        Text(start != nil && end != nil ? "已工作 " + Self.duration(from: start, to: end ?? .now) : "已完成")
+                    }
+                    Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 0.5)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .rotationEffect(.degrees(open ? 0 : -90))
+                }
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? "收起过程" : "展开过程")
+            if live, let openTerminal {
+                Button(action: openTerminal) {
+                    Image(systemName: "terminal").font(.footnote).foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("打开终端")
+            }
+        }
+    }
+
+    static func duration(from start: Date?, to end: Date) -> String {
+        guard let start else { return "" }
+        let s = max(0, Int(end.timeIntervalSince(start)))
+        if s < 60 { return "\(s) 秒" }
+        if s < 3600 { return s % 60 == 0 ? "\(s / 60) 分" : "\(s / 60) 分 \(s % 60) 秒" }
+        return "\(s / 3600) 小时 \(s % 3600 / 60) 分"
+    }
+}
+
+/// A tool run cut at the narration between calls.
+struct ToolSegment: Identifiable {
+    enum Kind { case calls([ToolStep]), thought(Item) }
+    var id: String
+    var kind: Kind
+
+    static func split(_ steps: [ToolStep]) -> [ToolSegment] {
+        var out: [ToolSegment] = []
+        var calls: [ToolStep] = []
+        func flush() {
+            if let first = calls.first { out.append(ToolSegment(id: first.id, kind: .calls(calls))) }
+            calls = []
+        }
+        for s in steps {
+            switch s {
+            case .call: calls.append(s)
+            case .thought(let i):
+                if (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+                flush()
+                out.append(ToolSegment(id: i.id, kind: .thought(i)))
+            }
+        }
+        flush()
+        return out
+    }
+}
+
+/// What the agent thought / narrated between actions: quieter than its answers.
+struct ThoughtText: View {
+    var text: String
+
+    var body: some View {
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Markdown(text)
+                .markdownTextStyle(\.text) { // inside the theme so it wins over the theme's text style
+                    ForegroundColor(.secondary)
+                    FontSize(.em(0.92))
+                }
+                .markdownTheme(.jarvis)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// A run of tool calls as one quiet line, "调用了 3 个工具 ›"; tap to see each call.
+struct ToolCountRow: View {
+    var steps: [ToolStep]
+    var running: Bool
+    @State private var expanded = false
+
+    var body: some View {
+        let calls = steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } }
+        let busy = running && steps.contains { if case .call(let c) = $0 { c.isRunning } else { false } }
+        if calls > 0 {
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(.snappy) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if busy { ProgressView().controlSize(.mini) }
+                        Text(busy ? "正在调用工具 · 第 \(calls) 个" : "调用了 \(calls) 个工具")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                if expanded {
+                    ToolGroupView(steps: steps, isLatest: running)
+                        .transition(.opacity)
+                }
+            }
+        }
     }
 }

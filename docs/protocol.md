@@ -203,11 +203,18 @@ hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，toke
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/lark/conversations?cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}` |
-| GET | `/api/v1/lark/conversations/{id}/messages?before=&limit=&topic=` | `{"messages":[LarkMessage],"has_older"}`，旧→新；`topic=1` 时取话题群的话题列表（每条是话题首帖） |
+| GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
+| GET | `/api/v1/lark/pinned` | 全部置顶会话（读 inbox + done 两个 scope 的头部合并，按置顶顺序） |
+| GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
+| GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
+| GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |
+| GET | `/api/v1/lark/conversations/{id}/labels` | `{"label_ids":[…],"labels":[{"id","name"}]}`（这个会话在哪些标签里 / 可选标签） |
+| POST | `/api/v1/lark/conversations/{id}/settings` | `{"done"?,"pinned"?,"flagged"?,"muted"?,"label_ids"?}` → lark-connector `PATCH settings`（isArchived / isShortcut / isFlagged / isMuted / labelIds，labelIds 是全量） |
+| POST | `/api/v1/lark/conversations/{id}/unread` | `{"unread":true}` 标为未读 / `false` 清除未读 |
+| GET | `/api/v1/lark/conversations/{id}/messages?before=&after=&around=&limit=&topic=` | `{"messages":[LarkMessage],"has_older","has_newer","older_cursor","newer_cursor"}`，旧→新；不带游标 = 最新一页；`around=<读到的位置+1>` 从第一条未读打开；`topic=1` 时取话题群的话题列表（只能往前翻） |
 | GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上 |
 | POST | `/api/v1/lark/conversations/{id}/messages` | `{"text"}` 以本人身份发送 |
-| POST | `/api/v1/lark/conversations/{id}/read` | `{"position"}` 标已读 |
+| POST | `/api/v1/lark/conversations/{id}/read` | `{"position","badge_count"?,"message_ids"?}`：上报看到的消息（最高位置、该条的 badge_count、其间别人发的未读消息 id），只在消息真正上屏后发 |
 | GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
 | GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |
 | GET | `/api/v1/lark/emojis` | `{"emojis":{"<小写 key>":{"label","url"}}}`，含肤色变体 key；hub 缓存一天 |
@@ -215,11 +222,13 @@ hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，toke
 
 ```jsonc
 // LarkConversation
-{"id":"<feedId>","name","avatar":"/api/v1/lark/media/…","is_group","is_topic","unread","at_me","muted","preview","is_mine","updated_at"}
+{"id":"<feedId>","name","avatar":"/api/v1/lark/media/…","is_group","is_topic","unread","marked_unread","at_me","at_all","muted",
+ "pinned","flagged","done","tags":["外部"|"公开"|"会议"|"机器人"|"AI"…],"preview","preview_sender","is_mine","updated_at",
+ "read_position","mention_position"}
 // LarkMessage
 {"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
  "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"纯文本预览","created_at",
- "recalled","edited","reply_count","thread_reply_count",
+ "recalled","edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
  "parts":[MessagePart],                       // lark-connector 原样（见下），媒体 URL 已改写到 /api/v1/lark/
  "reply_to":{"id","sender_name","text","recalled","parts"},
  "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["张三","李四"]}]}

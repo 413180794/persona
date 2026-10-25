@@ -2,114 +2,73 @@ import SwiftUI
 
 // MARK: - 信息
 
-enum InboxSource: String, CaseIterable, Identifiable {
-    case all = "全部", lark = "飞书", mail = "邮件"
-    var id: String { rawValue }
-}
-
-enum InboxEntry: Identifiable {
-    case lark(LarkConversation)
-    case mail(MailSummary)
-
-    var id: String {
-        switch self {
-        case .lark(let c): "lark/" + c.id
-        case .mail(let m): "mail/" + m.id
-        }
-    }
-
-    var date: Date {
-        switch self {
-        case .lark(let c): c.updatedAt ?? .distantPast
-        case .mail(let m): m.date ?? .distantPast
-        }
-    }
-
-    var isUnread: Bool {
-        switch self {
-        case .lark(let c): c.unread > 0 && !c.muted || c.atMe
-        case .mail(let m): !m.seen
-        }
-    }
-}
-
-/// Feishu chats (through lark-connector on example-machine) and e-mail in one place.
+/// Feishu's 消息 page (through lark-connector on example-machine): pinned chats across the top, 消息 / 未读 / 标记 tabs,
+/// a 分组 drawer with 已完成, 标记 and every label, Feishu's swipe and long-press actions; e-mail is one more group.
 struct InboxView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("inbox.source") private var source: InboxSource = .all
-    @AppStorage("inbox.unreadOnly") private var unreadOnly = false
-    @State private var lark: [LarkConversation] = []
-    @State private var larkCursor: String?
+    @AppStorage("inbox.group") private var groupKey = "messages"
+    @AppStorage("inbox.tab") private var tab: LarkTab = .all
+    @State private var chats: [LarkConversation] = []
+    @State private var cursor: String?
+    @State private var pinned: [LarkConversation] = []
+    @State private var labels: [LarkLabel] = []
+    @State private var unreadTotal = 0
+    @State private var flaggedChats: [LarkConversation] = []
+    @State private var flaggedMessages: [LarkFlaggedMessage] = []
     @State private var larkError: String?
     @State private var mails: [MailSummary] = []
     @State private var mailError: String?
     @State private var accounts: [MailAccount] = []
     @State private var loading = false
+    @State private var loadedKey = ""
     @State private var query = ""
+    @State private var drawer = false
     @State private var showAccounts = false
     @State private var composing: ComposeDraft?
+    @State private var editingLabels: LarkConversation?
     @State private var path = NavigationPath()
 
-    private var entries: [InboxEntry] {
-        var out: [InboxEntry] = []
-        if source != .mail { out += lark.map { .lark($0) } }
-        if source != .lark { out += mails.map { .mail($0) } }
-        return out
-            .filter { !unreadOnly || $0.isUnread }
-            .filter { e in
-                guard !query.isEmpty else { return true }
-                switch e {
-                case .lark(let c): return c.name.localizedCaseInsensitiveContains(query) || c.preview.localizedCaseInsensitiveContains(query)
-                case .mail(let m): return [m.subject ?? "", m.from?.display ?? "", m.snippet ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
-                }
-            }
-            .sorted { $0.date > $1.date }
+    private var group: LarkGroup { LarkGroup(key: groupKey) }
+    private var groupBinding: Binding<LarkGroup> { Binding(get: { group }, set: { groupKey = $0.key }) }
+    /// What the list currently shows; a change reloads it.
+    private var listKey: String { group == .messages ? "messages/\(tab.rawValue)" : group.key }
+    private var showsFlags: Bool { group == .flagged || (group == .messages && tab == .flagged) }
+
+    private var scope: String {
+        switch group {
+        case .done: "done"
+        case .label(let id, _): "label:" + id
+        default: tab == .unread ? "unread" : "chats"
+        }
+    }
+
+    private func matches(_ c: LarkConversation) -> Bool {
+        query.isEmpty || c.name.localizedCaseInsensitiveContains(query) || c.preview.localizedCaseInsensitiveContains(query)
+    }
+
+    /// The rows under the tabs. In 消息 the pinned chats sit in the strip above, so the list leaves them out.
+    private var rows: [LarkConversation] {
+        if showsFlags { return flaggedChats.filter(matches) }
+        var list = chats
+        if group == .messages && tab == .unread { list = list.filter { $0.badge > 0 && !$0.muted && !$0.isDone } }
+        if group == .messages && tab == .all {
+            if query.isEmpty { list.removeAll { $0.isPinned } } else { list += pinned.filter { p in !list.contains { $0.id == p.id } } }
+        }
+        return list.filter(matches)
     }
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                Section {
-                    Picker("来源", selection: $source) {
-                        ForEach(InboxSource.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                }
-                if let larkError, source != .mail {
-                    Label("飞书：\(larkError)", systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
-                }
-                if let mailError, source != .lark {
-                    Label("邮件：\(mailError)", systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
-                }
-                ForEach(entries) { e in
-                    switch e {
-                    case .lark(let c):
-                        NavigationLink(value: c) { LarkRow(conversation: c) }
-                    case .mail(let m):
-                        NavigationLink(value: m) { MailRow(message: m, showAccount: accounts.count > 1, accounts: accounts) }
-                    }
-                }
-                if source != .mail, larkCursor != nil, !unreadOnly, query.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).task { await loadMoreLark() }
-                }
-                if entries.isEmpty && !loading {
-                    EmptyStateView(symbol: "tray", title: unreadOnly ? "没有未读" : "没有信息",
-                                   message: accounts.isEmpty && source != .lark ? "在右上角菜单添加邮箱。" : "下拉刷新试试。")
-                        .listRowBackground(Color.clear)
-                }
+            Group {
+                if group == .mail { mailList } else { larkList }
             }
-            .listStyle(.plain)
-            .navigationTitle("信息")
-            .searchable(text: $query, prompt: "搜索会话、发件人、内容")
-            .refreshable { await reload() }
+            .navigationTitle(group.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: group == .mail ? "搜索发件人、主题、内容" : "搜索会话")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { withAnimation { unreadOnly.toggle() } } label: {
-                        Image(systemName: unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                    }
-                    .accessibilityLabel(unreadOnly ? "显示全部" : "只看未读")
+                    Button { withAnimation(.snappy(duration: 0.28)) { drawer = true } } label: { Image(systemName: "line.3.horizontal") }
+                        .accessibilityLabel("分组")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -121,40 +80,223 @@ struct InboxView: View {
             }
             .navigationDestination(for: LarkConversation.self) { c in LarkChatView(conversation: c) }
             .navigationDestination(for: MailSummary.self) { m in MailDetailView(summary: m, accounts: accounts) }
-            .sheet(isPresented: $showAccounts, onDismiss: { Task { await reload() } }) { MailAccountsView() }
+            .sheet(isPresented: $showAccounts, onDismiss: { Task { await reloadMail() } }) { MailAccountsView() }
             .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
-            .task {
+            .sheet(item: $editingLabels) { c in LarkLabelPicker(conversation: c) { Task { await reload(quiet: true) } } }
+            .task(id: listKey) {
+                if loadedKey != listKey { chats = []; cursor = nil }
+                await reload(quiet: false)
                 #if DEBUG
-                // Simulator automation: `-lark-connector <feedId>` opens that Feishu chat.
+                if UserDefaults.standard.bool(forKey: "inboxDrawer") { drawer = true }
+                // Simulator automation: `-lark-connector <feedId>` opens that Feishu chat (as listed, so with its unread state).
                 if path.isEmpty, let id = UserDefaults.standard.string(forKey: "lark-connector") {
-                    path.append(LarkConversation(id: id, name: UserDefaults.standard.string(forKey: "lark-connectorName") ?? "飞书", isGroup: true,
-                                                 isTopic: UserDefaults.standard.bool(forKey: "lark-connectorTopic"), unread: 0, atMe: false, muted: false, preview: "", isMine: false))
+                    let found = (pinned + chats).first { $0.id == id }
+                    path.append(found ?? LarkConversation(id: id, name: UserDefaults.standard.string(forKey: "lark-connectorName") ?? "飞书", isGroup: true,
+                                                          isTopic: UserDefaults.standard.bool(forKey: "lark-connectorTopic")))
                 }
                 #endif
-                await reload()
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(30))
+                    if path.isEmpty { await reload(quiet: true) }
+                }
             }
+            .onChange(of: path.count) { old, new in
+                // Back from a chat: its unread count and place in the list have changed.
+                if new < old { Task { await reload(quiet: true) } }
+            }
+        }
+        .overlay { drawerOverlay }
+    }
+
+    // MARK: Lists
+
+    private var larkList: some View {
+        List {
+            if group == .messages {
+                if tab == .all && query.isEmpty && !pinned.isEmpty {
+                    LarkPinnedStrip(pinned: pinned) { path.append($0) }
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                }
+                Picker("视图", selection: $tab) {
+                    ForEach(LarkTab.allCases) { t in
+                        Text(t == .unread && unreadTotal > 0 ? "未读 \(unreadTotal)" : t.rawValue).tag(t)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowSeparator(.hidden)
+            }
+            if let larkError {
+                Label(larkError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+            }
+            ForEach(rows) { c in
+                // Feishu rows have no disclosure chevron: the link sits invisibly behind the row.
+                LarkFeedRow(conversation: c)
+                    .background { NavigationLink(value: c) { EmptyView() }.opacity(0) }
+                    .modifier(LarkFeedRowActions(conversation: c, perform: perform, editLabels: { editingLabels = $0 }))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
+            }
+            if showsFlags {
+                ForEach(flaggedMessages.filter { query.isEmpty || $0.chatName.localizedCaseInsensitiveContains(query) || $0.message.text.localizedCaseInsensitiveContains(query) }) { f in
+                    LarkFlaggedMessageRow(item: f)
+                        .background {
+                            NavigationLink(value: LarkConversation(id: f.feedID, name: f.chatName, avatar: f.chatAvatar, isGroup: true, focus: f.message.position)) { EmptyView() }
+                                .opacity(0)
+                        }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+                }
+            }
+            if cursor != nil && !showsFlags && query.isEmpty {
+                ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden).task { await loadMore() }
+            }
+            if rows.isEmpty && (!showsFlags || flaggedMessages.isEmpty) && !loading && larkError == nil {
+                EmptyStateView(symbol: emptySymbol, title: emptyTitle, message: query.isEmpty ? "下拉刷新试试。" : "换个关键词试试。")
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .refreshable { await reload(quiet: true) }
+        .overlay { if loading && rows.isEmpty { ProgressView() } }
+    }
+
+    private var emptyTitle: String {
+        if showsFlags { return "没有标记" }
+        switch group {
+        case .done: return "没有已完成的会话"
+        case .label: return "这个标签下没有会话"
+        default: return tab == .unread ? "没有未读" : "没有消息"
         }
     }
 
-    private func reload() async {
-        guard let api = model.api else { return }
-        loading = true
+    private var emptySymbol: String {
+        if showsFlags { return "flag" }
+        return group == .done ? "checkmark.circle" : (tab == .unread ? "checkmark.seal" : "tray")
+    }
+
+    private var mailList: some View {
+        let list = mails.filter { m in query.isEmpty || [m.subject ?? "", m.from?.display ?? "", m.snippet ?? ""].contains { $0.localizedCaseInsensitiveContains(query) } }
+        return List {
+            if let mailError { Label(mailError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+            ForEach(list) { m in
+                NavigationLink(value: m) { MailRow(message: m, showAccount: accounts.count > 1, accounts: accounts) }
+            }
+            if list.isEmpty && !loading {
+                EmptyStateView(symbol: "envelope", title: "没有邮件", message: accounts.isEmpty ? "在右上角菜单添加邮箱。" : "下拉刷新试试。")
+                    .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .refreshable { await reloadMail() }
+        .task { if mails.isEmpty { await reloadMail() } }
+    }
+
+    // MARK: Drawer
+
+    @ViewBuilder private var drawerOverlay: some View {
+        if drawer {
+            ZStack(alignment: .leading) {
+                Color.black.opacity(0.32).ignoresSafeArea()
+                    .onTapGesture { closeDrawer() }
+                    .transition(.opacity)
+                LarkGroupsDrawer(group: groupBinding, labels: labels, unread: unreadTotal, close: closeDrawer)
+                    .frame(width: 300)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .background(Color(.systemBackground).ignoresSafeArea())
+                    .transition(.move(edge: .leading))
+                    .gesture(DragGesture().onEnded { if $0.translation.width < -60 { closeDrawer() } })
+            }
+            .zIndex(1)
+        }
+    }
+
+    private func closeDrawer() { withAnimation(.snappy(duration: 0.25)) { drawer = false } }
+
+    // MARK: Loading
+
+    private func reload(quiet: Bool) async {
+        guard let api = model.api, group != .mail else { return }
+        let key = listKey
+        if !quiet { loading = true }
         defer { loading = false }
-        async let l = api.larkConversations()
+        async let labelsTask = api.larkLabels()
+        async let unreadTask = api.larkUnreadCount()
+        async let pinnedTask = group == .messages ? api.larkPinned() : []
+        do {
+            if showsFlags {
+                let f = try await api.larkFlags()
+                flaggedChats = f.conversations
+                flaggedMessages = f.messages
+                cursor = nil
+            } else {
+                let r = try await api.larkConversations(scope: scope)
+                guard key == listKey else { return }
+                if quiet && loadedKey == key && chats.count > r.conversations.count {
+                    // A quiet refresh keeps the pages already scrolled through below the first.
+                    let fresh = Set(r.conversations.map(\.id))
+                    chats = r.conversations + chats.dropFirst(r.conversations.count).filter { !fresh.contains($0.id) }
+                } else {
+                    chats = r.conversations
+                    cursor = r.nextCursor
+                }
+            }
+            loadedKey = key
+            larkError = nil
+        } catch {
+            if !(error is CancellationError) { larkError = error.localizedDescription }
+        }
+        if let p = try? await pinnedTask, group == .messages { pinned = p }
+        if let l = try? await labelsTask { labels = l }
+        if let n = try? await unreadTask { unreadTotal = n }
+    }
+
+    private func loadMore() async {
+        guard let api = model.api, let c = cursor else { return }
+        guard let r = try? await api.larkConversations(scope: scope, cursor: c) else { cursor = nil; return }
+        chats += r.conversations.filter { n in !chats.contains { $0.id == n.id } }
+        cursor = r.nextCursor
+    }
+
+    private func reloadMail() async {
+        guard let api = model.api else { return }
         async let m = api.mailMessages(account: nil)
         async let a = api.mailAccounts()
-        do { let r = try await l; lark = r.conversations; larkCursor = r.nextCursor; larkError = nil } catch { larkError = error.localizedDescription }
         do { mails = try await m.messages; mailError = nil } catch { mailError = error.localizedDescription }
         accounts = (try? await a) ?? accounts
     }
 
-    private func loadMoreLark() async {
-        guard let api = model.api, let cursor = larkCursor else { return }
-        if let r = try? await api.larkConversations(cursor: cursor) {
-            lark += r.conversations.filter { c in !lark.contains { $0.id == c.id } }
-            larkCursor = r.nextCursor
-        } else {
-            larkCursor = nil
+    /// Applies a chat action at once, then asks lark-connector; a failure reloads the true state.
+    private func perform(_ c: LarkConversation, _ action: LarkFeedAction) {
+        withAnimation(.snappy) {
+            for i in chats.indices where chats[i].id == c.id { action.apply(to: &chats[i]) }
+            for i in pinned.indices where pinned[i].id == c.id { action.apply(to: &pinned[i]) }
+            for i in flaggedChats.indices where flaggedChats[i].id == c.id { action.apply(to: &flaggedChats[i]) }
+            switch action {
+            case .done(let v):
+                // 完成 moves the chat out of 消息 / a label into 已完成, and back.
+                if (group == .done) != v { chats.removeAll { $0.id == c.id } }
+            case .pin(let v):
+                if v, var p = chats.first(where: { $0.id == c.id }) { p.pinned = true; pinned.insert(p, at: 0) }
+                if !v { pinned.removeAll { $0.id == c.id } }
+            case .flag(false):
+                if showsFlags { flaggedChats.removeAll { $0.id == c.id } }
+            default: break
+            }
+        }
+        Haptics.tap()
+        Task {
+            guard let api = model.api else { return }
+            do {
+                if case .unread(let v) = action { try await api.larkSetUnread(c.id, unread: v) }
+                else if let s = action.settings { try await api.larkUpdate(c.id, s) }
+                AppModel.shared.toast = Toast(action.done, style: .success)
+                await reload(quiet: true)
+            } catch {
+                model.show(error)
+                await reload(quiet: true)
+            }
         }
     }
 }
@@ -177,48 +319,5 @@ struct LarkAvatar: View {
                     Text(String(name.prefix(1))).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white)
                 }
             }
-    }
-}
-
-struct LarkRow: View {
-    var conversation: LarkConversation
-
-    var body: some View {
-        let c = conversation
-        HStack(alignment: .top, spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                LarkAvatarImage(name: c.name, url: c.avatar, isGroup: c.isGroup, size: 44)
-                Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color(hex: 0x3370FF))
-                    .background(Circle().fill(Color(.systemBackground)))
-                    .offset(x: 3, y: 3)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(c.name).font(.body.weight(c.unread > 0 && !c.muted ? .semibold : .regular)).lineLimit(1)
-                    if c.muted { Image(systemName: "bell.slash").font(.caption2).foregroundStyle(.tertiary) }
-                    Spacer(minLength: 6)
-                    Text(Fmt.relative(c.updatedAt)).font(.caption).foregroundStyle(.secondary).fixedSize()
-                }
-                HStack(alignment: .top) {
-                    (c.atMe ? Text("[有人@我] ").foregroundStyle(Theme.needsYou) : Text(""))
-                        + Text(c.isMine ? "我：" + c.preview : c.preview).foregroundStyle(.secondary)
-                    Spacer(minLength: 6)
-                    if c.unread > 0 {
-                        Text(c.unread > 99 ? "99+" : "\(c.unread)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(c.muted ? Color.secondary.opacity(0.5) : Theme.needsYou, in: .capsule)
-                            .fixedSize()
-                    }
-                }
-                .font(.subheadline)
-                .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 3)
     }
 }

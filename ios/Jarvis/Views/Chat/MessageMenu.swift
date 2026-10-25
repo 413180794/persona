@@ -1,0 +1,192 @@
+import SwiftUI
+import UIKit
+
+/// WeChat-style message actions: long-press a message and a dark bar with 复制 / 选择 / 引用 / 分享 (and 编辑 for your
+/// own messages) appears right where you pressed — no lifted preview first. Tapping anywhere or scrolling closes it.
+@Observable
+final class MessageMenu {
+    var selected: String?
+    /// Where the press landed, in the pressed view's coordinates.
+    var anchor: CGPoint = .zero
+    /// Text shown in the "select text" sheet.
+    var selecting: SelectableText?
+    @ObservationIgnored var quote: ((String) -> Void)?
+    @ObservationIgnored var edit: ((String) -> Void)?
+
+    func dismiss() {
+        if selected != nil { withAnimation(.easeOut(duration: 0.15)) { selected = nil } }
+    }
+}
+
+struct SelectableText: Identifiable {
+    var text: String
+    var id: String { text }
+}
+
+/// UIKit long press: SwiftUI's own gesture does not say where the finger is.
+struct LongPressAt: UIGestureRecognizerRepresentable {
+    var action: (CGPoint) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let g = UILongPressGestureRecognizer()
+        g.minimumPressDuration = 0.35
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        if recognizer.state == .began { action(context.converter.localLocation) }
+    }
+}
+
+extension View {
+    /// The pressable part of a message (the bubble / the text).
+    func messageLongPress(id: String) -> some View { modifier(MessageLongPress(id: id)) }
+    /// The whole row of a message: hosts the action bar above the press point and lifts the row above its neighbours.
+    func messageActionBar(id: String, text: String, isUser: Bool) -> some View {
+        modifier(MessageActionBarHost(id: id, text: text, isUser: isUser))
+    }
+}
+
+private struct MessageLongPress: ViewModifier {
+    @Environment(MessageMenu.self) private var menu: MessageMenu?
+    let id: String
+
+    func body(content: Content) -> some View {
+        if let menu {
+            content
+                .gesture(LongPressAt { p in
+                    Haptics.tap()
+                    menu.anchor = p
+                    withAnimation(.snappy(duration: 0.2)) { menu.selected = id }
+                })
+                .opacity(menu.selected == id ? 0.75 : 1)
+        } else {
+            content
+        }
+    }
+}
+
+private struct MessageActionBarHost: ViewModifier {
+    @Environment(MessageMenu.self) private var menu: MessageMenu?
+    let id: String
+    let text: String
+    let isUser: Bool
+
+    func body(content: Content) -> some View {
+        if let menu {
+            content
+                .overlay(alignment: .topLeading) {
+                    if menu.selected == id {
+                        GeometryReader { geo in
+                            let frame = geo.frame(in: .global)
+                            let screen = UIScreen.main.bounds.width // the bar may stick out of a narrow bubble
+                            let width = MessageActionBar.width(isUser: isUser)
+                            let x = min(max(frame.minX + menu.anchor.x, width / 2 + 8), screen - width / 2 - 8) - frame.minX
+                            // Above the finger; below it when that would go under the navigation bar.
+                            let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
+                            let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)
+                            MessageActionBar(text: text, isUser: isUser, menu: menu)
+                                .position(x: x, y: y)
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        }
+                    }
+                }
+                .zIndex(menu.selected == id ? 1 : 0)
+        } else {
+            content.contextMenu { CopyButton(text: text) }
+        }
+    }
+}
+
+struct MessageActionBar: View {
+    var text: String
+    var isUser: Bool
+    var menu: MessageMenu
+
+    static let height: CGFloat = 62
+    static let item: CGFloat = 58
+    static func width(isUser: Bool) -> CGFloat { item * (isUser ? 5 : 4) + 12 }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            action("复制", "doc.on.doc") {
+                UIPasteboard.general.string = text
+                Haptics.success()
+            }
+            action("选择", "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
+            action("引用", "quote.opening") { menu.quote?(text) }
+            ShareLink(item: text) { label("分享", "square.and.arrow.up") }
+                .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
+            if isUser {
+                action("编辑", "pencil") { menu.edit?(text) }
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(height: Self.height)
+        .background(Color(white: 0.17), in: .rect(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func action(_ title: String, _ symbol: String, perform: @escaping () -> Void) -> some View {
+        Button {
+            perform()
+            menu.dismiss()
+        } label: { label(title, symbol) }
+        .buttonStyle(.plain)
+    }
+
+    private func label(_ title: String, _ symbol: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 17, weight: .medium))
+            Text(title).font(.caption2).lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .frame(width: Self.item, height: Self.height)
+        .contentShape(.rect)
+    }
+}
+
+/// The message in a plain text view where any part of it can be selected and copied ("选择").
+struct SelectableTextSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var text: String
+
+    var body: some View {
+        NavigationStack {
+            SelectableTextView(text: text)
+                .navigationTitle("选择文本")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            UIPasteboard.general.string = text
+                            Haptics.success()
+                            dismiss()
+                        } label: { Text("全部拷贝").lineLimit(1) }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+struct SelectableTextView: UIViewRepresentable {
+    var text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let v = UITextView()
+        v.isEditable = false
+        v.isSelectable = true
+        v.font = .preferredFont(forTextStyle: .body)
+        v.adjustsFontForContentSizeCategory = true
+        v.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 24, right: 12)
+        v.backgroundColor = .clear
+        return v
+    }
+
+    func updateUIView(_ v: UITextView, context: Context) {
+        if v.text != text { v.text = text }
+    }
+}

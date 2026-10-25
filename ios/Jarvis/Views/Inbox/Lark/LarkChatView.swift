@@ -1,18 +1,52 @@
 import SwiftUI
 
-/// One Feishu chat: latest messages rendered like Feishu (rich text, pictures, cards…), older on demand,
-/// reply, and hand it to Jarvis.
+/// Message positions are decimal strings that can outgrow Int64 in theory; compare them as numbers.
+nonisolated enum LarkPosition {
+    static func less(_ a: String, _ b: String) -> Bool {
+        let x = a.trimmingCharacters(in: .whitespaces), y = b.trimmingCharacters(in: .whitespaces)
+        let nx = x.hasPrefix("-"), ny = y.hasPrefix("-")
+        if nx != ny { return nx }
+        let ax = nx ? String(x.dropFirst()) : x, ay = ny ? String(y.dropFirst()) : y
+        let r = ax.count != ay.count ? ax.count < ay.count : ax < ay
+        return nx ? !r && ax != ay : r
+    }
+
+    static func next(_ p: String) -> String {
+        if let n = Int64(p) { return String(n + 1) }
+        return p
+    }
+}
+
+/// One Feishu chat, opened like Feishu: at the oldest unread message under a 以下为新消息 line (or at the latest
+/// when all is read), newer pages as you scroll down, read state reported only for what was on screen,
+/// 回到最新 / 有人@你 jumps.
 struct LarkChatView: View {
     @Environment(AppModel.self) private var model
     var conversation: LarkConversation
     @State private var messages: [LarkMessage] = []
     @State private var hasOlder = false
+    @State private var hasNewer = false
+    @State private var olderCursor: String?
+    @State private var newerCursor: String?
     @State private var loadingOlder = false
+    @State private var loadingNewer = false
     @State private var error: String?
     @State private var text = ""
     @State private var sending = false
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var fileRequest: (url: String, name: String)?
+    /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
+    @State private var anchor: String?
+    /// Highest position already reported as read.
+    @State private var readCursor: String?
+    @State private var seen = Set<String>()
+    @State private var reportTask: Task<Void, Never>?
+    @State private var atBottom = true
+    @State private var mention: String?
+
+    private var isTopic: Bool { conversation.isTopic == true }
+    /// Opens at a message (first unread / a flagged message) rather than at the bottom.
+    private var opensAtMessage: Bool { conversation.focus != nil || (!isTopic && conversation.unread > 0) }
 
     var body: some View {
         ScrollView {
@@ -29,25 +63,38 @@ struct LarkChatView: View {
                 if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger).padding(.bottom, 8) }
                 ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
                     let prev = i > 0 ? messages[i - 1] : nil
-                    if Self.startsDay(m, after: prev) {
-                        Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    VStack(alignment: .leading, spacing: 0) {
+                        if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
+                        if Self.startsDay(m, after: prev) {
+                            Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        }
+                        LarkMessageRow(message: m, grouped: Self.continues(m, after: prev))
+                            .padding(.top, Self.continues(m, after: prev) ? 3 : 12)
                     }
-                    LarkMessageRow(message: m, grouped: Self.continues(m, after: prev))
-                        .padding(.top, Self.continues(m, after: prev) ? 3 : 12)
+                    .onAppear { markSeen(m) }
+                }
+                if hasNewer {
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 44)
+                        .onAppear { Task { await loadNewer() } }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
         }
         .scrollPosition($position)
-        .defaultScrollAnchor(Self.debugTop ? .top : .bottom)
+        .defaultScrollAnchor(Self.debugTop || opensAtMessage ? .top : .bottom)
+        .onScrollGeometryChange(for: Bool.self) { g in
+            g.contentOffset.y + g.containerSize.height >= g.contentSize.height - g.contentInsets.bottom - 80
+        } action: { _, v in atBottom = v }
+        .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
+        .overlay(alignment: .topTrailing) { mentionButton }
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .modifier(LarkFileOpener(request: $fileRequest))
         .safeAreaInset(edge: .bottom) { composer }
         .navigationTitle(conversation.name)
-        .navigationSubtitle(conversation.isTopic == true ? "飞书话题群" : "飞书")
+        .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
@@ -63,6 +110,7 @@ struct LarkChatView: View {
                 await refreshLatest()
             }
         }
+        .onDisappear { flushRead() }
     }
 
     private var composer: some View {
@@ -83,6 +131,56 @@ struct LarkChatView: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
+    }
+
+    // MARK: Jumps
+
+    /// Unread messages from others that have not been on screen yet.
+    private var unseenNew: Int {
+        guard let anchor else { return 0 }
+        let seenUnread = messages.filter { !$0.isMine && !$0.isSystem && seen.contains($0.position) && LarkPosition.less(anchor, $0.position) }.count
+        return max(0, conversation.unread - seenUnread)
+    }
+
+    @ViewBuilder private var jumpToLatestButton: some View {
+        if hasNewer || !atBottom {
+            let n = unseenNew
+            Button { Task { await jumpToLatest() } } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold))
+                    if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(.system(size: 13, weight: .medium)).lineLimit(1) }
+                }
+                .foregroundStyle(LarkColor.blue)
+                .padding(.horizontal, n > 0 ? 12 : 0)
+                .frame(minWidth: 38, minHeight: 38)
+                .glassEffect(.regular.interactive(), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 14)
+            .padding(.bottom, 8)
+            .accessibilityLabel(n > 0 ? "\(n) 条新消息，回到最新" : "回到最新")
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder private var mentionButton: some View {
+        if let mention, !seen.contains(mention) {
+            Button { Task { await jump(to: mention) } } label: {
+                Label("有人@你", systemImage: "at").font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    .foregroundStyle(LarkColor.hue("red"))
+                    .padding(.horizontal, 12).frame(minHeight: 34)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 14)
+            .padding(.top, 8)
+        }
+    }
+
+    private func isFirstUnread(_ m: LarkMessage, after prev: LarkMessage?) -> Bool {
+        guard let anchor, LarkPosition.less(anchor, m.position) else { return false }
+        guard let prev else { return true }
+        return !LarkPosition.less(anchor, prev.position)
     }
 
     #if DEBUG
@@ -115,46 +213,138 @@ struct LarkChatView: View {
         return d.formatted(.dateTime.year().month().day()) + " " + time
     }
 
+    // MARK: Loading
+
+    private func apply(_ r: APIClient.LarkMessages) {
+        messages = r.messages
+        hasOlder = r.hasOlder
+        hasNewer = r.hasNewer ?? false
+        olderCursor = r.olderCursor ?? r.messages.first?.position
+        newerCursor = r.newerCursor ?? r.messages.last?.position
+    }
+
     private func load() async {
         guard let api = model.api else { return }
         do {
-            let r = try await api.larkMessages(conversation.id, topic: conversation.isTopic == true)
-            messages = r.messages
-            hasOlder = r.hasOlder
+            if let focus = conversation.focus {
+                apply(try await api.larkMessages(conversation.id, around: focus))
+                readCursor = messages.last?.position
+                if let m = messages.first(where: { $0.position == focus }) { await scroll(to: m.id) }
+            } else if opensAtMessage {
+                // Feishu opens an unread chat at its read position: the page around the first unread message.
+                let read = conversation.readPosition ?? "0"
+                anchor = read
+                readCursor = read
+                if let p = conversation.mentionPosition, LarkPosition.less(read, p) { mention = p }
+                apply(try await api.larkMessages(conversation.id, around: LarkPosition.next(read)))
+                if let first = messages.first(where: { LarkPosition.less(read, $0.position) }) {
+                    await scroll(to: first.id)
+                } else {
+                    position.scrollTo(edge: .bottom)
+                }
+            } else {
+                apply(try await api.larkMessages(conversation.id, topic: isTopic))
+                readCursor = messages.last?.position
+            }
             error = nil
-            if let last = messages.last { try? await api.larkRead(conversation.id, position: last.position) }
             #if DEBUG
             // Simulator automation: `-larkFocus <messageId>` scrolls to that message (screenshots of one kind of card).
-            if let focus = UserDefaults.standard.string(forKey: "larkFocus") {
-                try? await Task.sleep(for: .milliseconds(600))
-                position.scrollTo(id: focus, anchor: .top)
-            }
+            if let focus = UserDefaults.standard.string(forKey: "larkFocus") { await scroll(to: focus) }
             #endif
         } catch {
             self.error = error.localizedDescription
         }
     }
 
+    /// Scrolls once the rows exist (the lazy stack lays them out after the data lands).
+    private func scroll(to id: String) async {
+        try? await Task.sleep(for: .milliseconds(80))
+        position.scrollTo(id: id, anchor: .top)
+        try? await Task.sleep(for: .milliseconds(250))
+        position.scrollTo(id: id, anchor: .top)
+    }
+
+    /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
     private func refreshLatest() async {
-        guard let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: conversation.isTopic == true) else { return }
-        // Cards update in place (alert status, votes…): replace the ones we already show.
+        guard !hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
         let byID = Dictionary(r.messages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let updated = messages.map { byID[$0.id] ?? $0 }
-        let fresh = r.messages.filter { m in !messages.contains { $0.id == m.id } }
+        let fresh = r.messages.filter { m in !messages.contains { $0.id == m.id } && (messages.last.map { LarkPosition.less($0.position, m.position) } ?? true) }
         if updated != messages { messages = updated }
         guard !fresh.isEmpty else { return }
+        let follow = atBottom
         withAnimation(.snappy) { messages += fresh }
-        position.scrollTo(edge: .bottom)
-        if let last = messages.last { try? await api.larkRead(conversation.id, position: last.position) }
+        newerCursor = messages.last?.position
+        if follow { position.scrollTo(edge: .bottom) }
     }
 
     private func loadOlder() async {
-        guard let api = model.api, let first = messages.first, !loadingOlder else { return }
+        guard let api = model.api, let cursor = olderCursor ?? messages.first?.position, !loadingOlder else { return }
         loadingOlder = true
         defer { loadingOlder = false }
-        guard let r = try? await api.larkMessages(conversation.id, before: first.position, topic: conversation.isTopic == true) else { return }
-        messages = r.messages.filter { m in !messages.contains { $0.id == m.id } } + messages
+        guard let r = try? await api.larkMessages(conversation.id, before: cursor, topic: isTopic) else { return }
+        let have = Set(messages.map(\.id))
+        messages = r.messages.filter { !have.contains($0.id) } + messages
         hasOlder = r.hasOlder
+        olderCursor = r.olderCursor ?? r.messages.first?.position
+    }
+
+    private func loadNewer() async {
+        guard let api = model.api, let cursor = newerCursor ?? messages.last?.position, !loadingNewer, hasNewer else { return }
+        loadingNewer = true
+        defer { loadingNewer = false }
+        guard let r = try? await api.larkMessages(conversation.id, after: cursor) else { return }
+        let have = Set(messages.map(\.id))
+        messages += r.messages.filter { !have.contains($0.id) }
+        hasNewer = r.hasNewer ?? false
+        newerCursor = r.newerCursor ?? r.messages.last?.position ?? cursor
+    }
+
+    /// 回到最新: the latest page; the new-messages line goes away.
+    private func jumpToLatest() async {
+        if hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
+            apply(r)
+            anchor = nil
+        }
+        withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
+    }
+
+    /// 有人@你: to the mention, loading the page around it if needed.
+    private func jump(to target: String) async {
+        if let m = messages.first(where: { $0.position == target }) {
+            withAnimation(.snappy) { position.scrollTo(id: m.id, anchor: .top) }
+            return
+        }
+        guard let api = model.api, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
+        apply(r)
+        if let m = messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
+    }
+
+    // MARK: Read reporting
+
+    /// A message reached the screen: once rows stop arriving, report everything up to the newest one seen.
+    private func markSeen(_ m: LarkMessage) {
+        guard !seen.contains(m.position) else { return }
+        seen.insert(m.position)
+        guard !isTopic else { return }
+        reportTask?.cancel()
+        reportTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            flushRead()
+        }
+    }
+
+    private func flushRead() {
+        guard !isTopic, let api = model.api else { return }
+        let cursor = readCursor ?? "0"
+        let newer = messages.filter { seen.contains($0.position) && LarkPosition.less(cursor, $0.position) }
+        guard let top = newer.max(by: { LarkPosition.less($0.position, $1.position) }) else { return }
+        let ids = messages.filter { m in !m.isMine && m.isRead != true && !m.isSystem && LarkPosition.less(cursor, m.position) && !LarkPosition.less(top.position, m.position) }.map(\.id)
+        readCursor = top.position
+        let report = APIClient.LarkReadReport(position: top.position, badgeCount: top.badgeCount, messageIDs: ids.isEmpty ? nil : ids)
+        let feed = conversation.id
+        Task { try? await api.larkRead(feed, report) }
     }
 
     private func send() async {
@@ -167,7 +357,7 @@ struct LarkChatView: View {
             text = ""
             Haptics.success()
             try? await Task.sleep(for: .milliseconds(800))
-            await refreshLatest()
+            if hasNewer { await jumpToLatest() } else { await refreshLatest(); position.scrollTo(edge: .bottom) }
         } catch {
             model.show(error)
         }
@@ -183,6 +373,19 @@ struct LarkChatView: View {
         } catch {
             model.show(error)
         }
+    }
+}
+
+/// Feishu's 以下为新消息 line above the first unread message.
+struct LarkNewMessagesDivider: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
+            Text("以下为新消息").font(.caption.weight(.medium)).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
+            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
+        }
+        .padding(.vertical, 10)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
