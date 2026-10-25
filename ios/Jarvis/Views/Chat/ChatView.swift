@@ -27,8 +27,11 @@ struct ChatView: View {
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
     @State private var menu = MessageMenu()
-    /// Turns the user folded / unfolded (default: running ones open, finished ones folded).
-    @State private var openTurns: [String: Bool] = [:]
+    /// Work lines the user tapped open (by line id; kept here so lazy rows coming back keep their state).
+    @State private var openWork: Set<String> = []
+    /// While you read history, lines newer than this one wait (inserting at the newest end of the flipped list would
+    /// push what you read); history loaded at the far end still shows. Cleared when you are back at the newest.
+    @State private var frozenAt: String?
     /// The user dragged the list at least once: only then does reaching the top load older pages (a lazy stack may
     /// lay out the top row while settling at the bottom, which used to chain-load history on entry).
     @State private var userScrolled = false
@@ -173,7 +176,8 @@ struct ChatView: View {
         }
     }
 
-    /// The chat as a flat list of lines (see `ChatLine`).
+    /// The chat as a flat list of lines (see `ChatLine`): every message of a turn opens its own exchange — the
+    /// message, one work line for what the agent did after it, and the agent's last words before the next message.
     private func chatLines(_ blocks: [ChatBlock]) -> [ChatLine] {
         let liveID = liveTurnID
         var out: [ChatLine] = []
@@ -182,36 +186,28 @@ struct ChatView: View {
             case .row(let r):
                 out.append(.row(r))
             case .turn(let t):
-                let live = t.id == liveID
-                let open = openTurns[t.id] ?? live
-                // Messages sent before the agent did anything open the turn; the timer line follows them.
-                let lead = Array(t.ordered.prefix { if case .user = $0 { true } else { false } })
-                if live {
-                    // Running: one to one, in arrival order — each message with what the agent did after it.
-                    out += lead.map { .row($0) }
-                    out.append(.header(t, live: true, open: open))
-                    if open {
-                        out += Self.workLines(Array(t.ordered.dropFirst(lead.count)), live: true)
-                    } else if let a = t.answer {
-                        out.append(.row(a))
+                let segments = Self.segments(t.ordered)
+                for (k, seg) in segments.enumerated() {
+                    let live = t.id == liveID && k == segments.count - 1
+                    if let u = seg.user { out.append(.row(u)) }
+                    let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
+                    var items: [WorkItem] = []
+                    for (n, r) in seg.rows.enumerated() where n != last {
+                        switch r {
+                        case .thinking(let i):
+                            if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.step(.thought(i))) }
+                        case .tools(let steps): items += steps.map { .step($0) }
+                        case .notice(let i): items.append(.step(.thought(i)))
+                        case .assistant(let i): items.append(.text(i))
+                        default: break
+                        }
                     }
-                } else if open {
-                    // Finished and unfolded: the first message carries the others folded in (they reappear below,
-                    // each before what the agent did for it), then the whole exchange in order.
-                    if t.users.count > 1, let first = t.users.first {
-                        out.append(.leadUser(first, more: t.users.count - 1))
-                        out.append(.header(t, live: false, open: true))
-                        out += Self.workLines(t.ordered.filter { $0.id != first.id }, live: false)
-                    } else {
-                        out += t.users.map { .row($0) }
-                        out.append(.header(t, live: false, open: true))
-                        out += Self.workLines(Array(t.ordered.filter { r in !t.users.contains { $0.id == r.id } }), live: false)
+                    if !items.isEmpty || live {
+                        let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
+                        out.append(.work(id: id, items: items, live: live,
+                                         start: seg.user?.firstTS ?? seg.rows.first?.firstTS ?? t.startedAt, end: seg.rows.last?.lastTS))
                     }
-                } else {
-                    // Finished and folded: the messages as one group on the right, the timer line, the answer.
-                    if t.users.count > 1 { out.append(.userGroup(t)) } else { out += t.users.map { .row($0) } }
-                    if !t.process.isEmpty { out.append(.header(t, live: false, open: false)) }
-                    if let a = t.answer { out.append(.row(a)) }
+                    if let last { out.append(.row(seg.rows[last])) }
                 }
                 out += t.trailing.map { .row($0) }
             }
@@ -219,59 +215,38 @@ struct ChatView: View {
         return out
     }
 
-    /// The work of a turn: the agent's words in full; everything between them — tool calls and thinking (newer
-    /// Claude Code writes its narration as thinking) — as one line "调用了 3 个工具，思考 2 次" to tap open.
-    private static func workLines(_ rows: [ChatRow], live: Bool) -> [ChatLine] {
-        var out: [ChatLine] = []
-        var run: [ToolStep] = []
-        func flush(last: Bool) {
-            guard let first = run.first else { return }
-            out.append(.tools(id: first.id, steps: run, running: live && last))
-            run = []
-        }
-        for r in rows {
-            switch r {
-            case .thinking(let i):
-                if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { run.append(.thought(i)) }
-            case .tools(let steps):
-                run += steps
-            case .notice(let i):
-                // "Background command … completed", compaction, API errors: part of the work, not the conversation.
-                run.append(.thought(i))
-            default:
-                flush(last: false)
-                out.append(.row(r))
+    /// A turn cut at each message: (message, what came after it until the next one).
+    private static func segments(_ ordered: [ChatRow]) -> [(user: ChatRow?, rows: [ChatRow])] {
+        var out: [(user: ChatRow?, rows: [ChatRow])] = []
+        var user: ChatRow?
+        var rows: [ChatRow] = []
+        var started = false
+        for r in ordered {
+            if case .user = r {
+                if started { out.append((user, rows)) }
+                user = r
+                rows = []
+            } else {
+                rows.append(r)
             }
+            started = true
         }
-        flush(last: true)
+        if started { out.append((user, rows)) }
         return out
     }
 
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line {
         case .row(let r): rowView(r, isLatest: false, live: true)
-        case .header(let t, let live, let open):
-            WorkHeader(live: live, start: t.startedAt, end: t.endedAt, open: open,
-                       openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
+        case .work(let id, let items, let live, let start, let end):
+            WorkLine(items: items, live: live, start: start, end: end, open: openWork.contains(id) != Self.debugOpenAll,
+                     openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
                 Haptics.tap()
-                withAnimation(.snappy) { openTurns[t.id] = !open }
-            }
-        case .tools(_, let steps, let running): ToolCountRow(steps: steps, running: running)
-        case .userGroup(let t): UserGroup(rows: t.users)
-        case .leadUser(let r, let more):
-            if case .user(let i) = r {
-                VStack(alignment: .trailing, spacing: 4) {
-                    UserBubble(item: i)
-                    Label("还有 \(more) 条，按顺序在下面", systemImage: "arrow.turn.left.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                withAnimation(.snappy) { if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) } }
             }
         }
     }
+
 
     static let bottomID = "chat-bottom"
 
@@ -377,7 +352,8 @@ struct ChatView: View {
     private func chatScroll(insets: EdgeInsets) -> some View {
         let store = store
         let rows = store.rows
-        let lines = chatLines(Self.debugTrim(store.blocks))
+        var lines = chatLines(Self.debugTrim(store.blocks))
+        if let frozenAt, let i = lines.firstIndex(where: { $0.id == frozenAt }) { lines = Array(lines[...i]) }
         let queued = Set((session?.queued ?? []).map(PendingMessage.normalize))
         let pending = store.pending.filter { !queued.contains(PendingMessage.normalize($0.text)) }
         return ScrollView {
@@ -442,8 +418,6 @@ struct ChatView: View {
         // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
         .scrollEdgeEffectHidden(true, for: .all)
         .scrollPosition($position)
-        // New rows arrive at the newest end: keep the distance from the far end so what you read stays put.
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
@@ -459,6 +433,9 @@ struct ChatView: View {
         .environment(menu)
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         // New content while following: back to offset 0 (exact; nothing to estimate).
+        .onChange(of: followsEnd) { _, follows in
+            frozenAt = follows ? nil : chatLines(Self.debugTrim(store.blocks)).last?.id
+        }
         .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd() } }
@@ -483,6 +460,14 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
+            if UserDefaults.standard.bool(forKey: "showOldest") { // the start of what is loaded (with -fromSeq: that turn's top)
+                Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    userScrolled = true
+                    followsEnd = false
+                    position.scrollTo(edge: .bottom)
+                }
+            }
             if UserDefaults.standard.bool(forKey: "jumpEnd") { // what tapping the ↓ arrow does, from the top
                 Task {
                     try? await Task.sleep(for: .seconds(6))
@@ -509,10 +494,19 @@ struct ChatView: View {
                     try? await Task.sleep(for: .seconds(3))
                     while model.chat(key).hasMore { await model.loadOlder(key) }
                     try? await Task.sleep(for: .seconds(1))
-                    position.scrollTo(edge: .bottom) // the oldest end of the flipped list
+                    if UserDefaults.standard.integer(forKey: "fromSeq") == 0 { position.scrollTo(edge: .bottom) } // oldest end
                 }
             }
             #endif
+    }
+
+    /// Simulator automation: `-openWork YES` shows every work line unfolded (screenshots of the expanded state).
+    private static var debugOpenAll: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "openWork")
+        #else
+        false
+        #endif
     }
 
     /// Simulator automation: `-fromSeq N` renders from the turn holding the user message with that seq
@@ -524,7 +518,7 @@ struct ChatView: View {
             if case .turn(let t) = b { return t.users.contains { if case .user(let u) = $0 { u.seq == seq } else { false } } }
             return false
         }) {
-            var out = Array(blocks[i...])
+            var out = Array(blocks[i..<min(i + 1, blocks.count)]) // near the newest end: no long scroll to reach it
             // `-dropUsers YES`: hide that turn's messages so its process row and answer fit one screenshot.
             if UserDefaults.standard.bool(forKey: "dropUsers"), case .turn(var t) = out[0] { t.users = []; out[0] = .turn(t) }
             return out
@@ -963,40 +957,46 @@ struct DevInfoCard: View {
 /// One line of the chat. A turn renders as: its messages (queued ones gathered), a thin "正在工作 39 秒 / 已工作 5 分"
 /// line that folds the work, then — when open — the agent's words, narration in gray and each stretch of tool calls
 /// as "调用了 N 个工具"; finished turns are folded and keep just the answer. Lines are separate lazy rows on purpose.
+/// One line of the chat. A turn reads as exchanges: each message, one quiet work line for what the agent did after
+/// it ("调用了 3 个工具，思考 1 次 · 1 分 20 秒 ›", tap to see every step), then the agent's last words before the
+/// next message. Running and finished turns look the same; the running exchange's work line ticks. Lines are
+/// separate lazy rows on purpose (a running turn can have hundreds of steps).
 enum ChatLine: Identifiable {
     case row(ChatRow)
-    case header(Turn, live: Bool, open: Bool)
-    case tools(id: String, steps: [ToolStep], running: Bool)
-    /// A finished turn's messages, folded: separate bubbles drawn as one group.
-    case userGroup(Turn)
-    /// A finished turn unfolded: its first message, with how many more follow below in order.
-    case leadUser(ChatRow, more: Int)
+    case work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?)
 
     var id: String {
         switch self {
         case .row(let r): r.id
-        case .header(let t, _, _): "hdr-" + t.id
-        case .tools(let id, _, _): "tc-" + id
-        case .userGroup(let t): "ug-" + t.id
-        case .leadUser(let r, _): r.id
+        case .work(let id, _, _, _, _): id
         }
     }
 
     /// Whether the message whose action bar is open is drawn by this line (it is lifted above its neighbours).
     func holds(_ id: String?) -> Bool {
-        guard let id else { return false }
-        switch self {
-        case .row(let r), .leadUser(let r, _): return r.id == id
-        case .userGroup(let t): return t.users.contains { $0.id == id }
-        default: return false
-        }
+        if let id, case .row(let r) = self { return r.id == id }
+        return false
     }
-
-    /// The message row it is (for lifting the one whose action bar is open).
 }
 
-/// "正在工作 39 秒 ——— ⌄" (ticking) or "已工作 5 分 12 秒 ——— ⌄"; tapping folds / unfolds the work.
-struct WorkHeader: View {
+/// What a work line folds: tool calls, thoughts, system notices and the agent's words before its last ones.
+enum WorkItem: Identifiable {
+    case step(ToolStep)
+    case text(Item)
+
+    var id: String {
+        switch self {
+        case .step(let s): s.id
+        case .text(let i): "t-" + i.id
+        }
+    }
+}
+
+/// The quiet line under a message: what the agent did for it. Finished: "调用了 3 个工具，思考 1 次 · 1 分 20 秒 ›";
+/// running: a spinner and "正在工作 39 秒 · 调用了 2 个工具" (ticking) with the terminal at the end. Tap to list every
+/// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
+struct WorkLine: View {
+    var items: [WorkItem]
     var live: Bool
     var start: Date?
     var end: Date?
@@ -1005,38 +1005,83 @@ struct WorkHeader: View {
     var toggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: toggle) {
-                HStack(spacing: 8) {
-                    // The words keep their full width; only the hairline gives way ("正在工作 13 分 3…" was cut).
-                    if live {
-                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            Text("正在工作 " + Self.duration(from: start, to: ctx.date)).fixedSize()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Button(action: toggle) {
+                    HStack(spacing: 6) {
+                        if live { ProgressView().controlSize(.mini) }
+                        // Whole words, never cut: the full summary, or a shorter one when the row is narrow.
+                        if live {
+                            TimelineView(.periodic(from: .now, by: 1)) { ctx in summary(now: ctx.date) }
+                                .foregroundStyle(Theme.working)
+                        } else {
+                            summary(now: end ?? .now)
                         }
-                        .foregroundStyle(Theme.working)
-                    } else {
-                        Text(start != nil && end != nil ? "已工作 " + Self.duration(from: start, to: end ?? .now) : "已完成").fixedSize()
+                        if !items.isEmpty {
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .rotationEffect(.degrees(open ? 90 : 0))
+                        }
                     }
-                    Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 0.5)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .rotationEffect(.degrees(open ? 0 : -90))
-                }
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(open ? "收起过程" : "展开过程")
-            if live, let openTerminal {
-                Button(action: openTerminal) {
-                    Image(systemName: "terminal").font(.footnote).foregroundStyle(.secondary)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("打开终端")
+                .disabled(items.isEmpty)
+                .accessibilityLabel(open ? "收起过程" : "展开过程")
+                Spacer(minLength: 0)
+                if let openTerminal {
+                    Button(action: openTerminal) { Image(systemName: "terminal").font(.footnote).foregroundStyle(.secondary) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("打开终端")
+                }
+            }
+            if open && !items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(items) { item in
+                        switch item {
+                        case .step(.call(let c)): ToolCallRow(call: c, autoExpand: false)
+                        case .step(.thought(let t)):
+                            if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
+                        case .text(let i): AssistantText(item: i)
+                        }
+                    }
+                }
+                .padding(.leading, 12)
+                .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.2)).frame(width: 2) }
+                .transition(.opacity)
             }
         }
+    }
+
+    private func summary(now: Date) -> some View {
+        ViewThatFits(in: .horizontal) {
+            Text(label(now: now, short: false)).fixedSize()
+            Text(label(now: now, short: true)).fixedSize()
+        }
+    }
+
+    private func label(now: Date, short: Bool) -> String {
+        var calls = 0, thoughts = 0, notices = 0, texts = 0
+        for item in items {
+            switch item {
+            case .step(.call): calls += 1
+            case .step(.thought(let t)): if t.kind == .notice { notices += 1 } else { thoughts += 1 }
+            case .text: texts += 1
+            }
+        }
+        var parts: [String] = []
+        if calls > 0 { parts.append("\(calls) 个工具") }
+        if !short {
+            if thoughts > 0 { parts.append("思考 \(thoughts)") }
+            if texts > 0 { parts.append("回复 \(texts)") }
+        }
+        if parts.isEmpty && notices > 0 { parts.append("后台通知 \(notices) 条") }
+        let took = Self.duration(from: start, to: now)
+        if live { parts.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { parts.append(took) }
+        return parts.isEmpty ? "已完成" : parts.joined(separator: " · ")
     }
 
     static func duration(from start: Date?, to end: Date) -> String {
@@ -1045,52 +1090,5 @@ struct WorkHeader: View {
         if s < 60 { return "\(s) 秒" }
         if s < 3600 { return s % 60 == 0 ? "\(s / 60) 分" : "\(s / 60) 分 \(s % 60) 秒" }
         return "\(s / 3600) 小时 \(s % 3600 / 60) 分"
-    }
-}
-
-/// The work between the agent's words as one quiet line, "调用了 3 个工具，思考 2 次 ›"; tap to see each step.
-struct ToolCountRow: View {
-    var steps: [ToolStep]
-    var running: Bool
-    @State private var expanded = false
-
-    var body: some View {
-        let calls = steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } }
-        let thoughts = steps.reduce(0) { if case .thought(let i) = $1, i.kind == .thinking { $0 + 1 } else { $0 } }
-        let notices = steps.count - calls - thoughts
-        let busy = running && steps.contains { if case .call(let c) = $0 { c.isRunning } else { false } }
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                Haptics.tap()
-                withAnimation(.snappy) { expanded.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    if busy { ProgressView().controlSize(.mini) }
-                    Text(Self.label(calls: calls, thoughts: thoughts, notices: notices, busy: busy)).fixedSize()
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            if expanded {
-                ToolGroupView(steps: steps, isLatest: running, flat: true) // one tap shows every step
-                    .transition(.opacity)
-            }
-        }
-    }
-
-    static func label(calls: Int, thoughts: Int, notices: Int = 0, busy: Bool) -> String {
-        if busy { return "正在调用工具 · 第 \(calls) 个" + (thoughts > 0 ? "，思考 \(thoughts) 次" : "") }
-        var parts: [String] = []
-        if calls > 0 { parts.append("调用了 \(calls) 个工具") }
-        if thoughts > 0 { parts.append("思考 \(thoughts) 次") }
-        // Only system notices (a background command finished, …): say so rather than an empty "过程".
-        if parts.isEmpty { return notices > 0 ? "后台通知 \(notices) 条" : "过程" }
-        return parts.joined(separator: "，")
     }
 }
