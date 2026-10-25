@@ -232,7 +232,7 @@ func (s *Service) googleToken(ctx context.Context, form url.Values) (*tokenRespo
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := httpClient.Do(req)
+	resp, err := s.googleHTTP.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("oauth: token request: %w", err)
 	}
@@ -390,7 +390,7 @@ func (s *Service) gmailAPI(ctx context.Context, a *MailAccount, method, path str
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := s.googleHTTP.Do(req)
 	if err != nil {
 		return fmt.Errorf("gmail api: %w", err)
 	}

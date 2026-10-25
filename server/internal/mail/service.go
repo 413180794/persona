@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +48,8 @@ type Service struct {
 	// googleClientID is the iOS OAuth client used for "Sign in with Google" (hub.json google.client_id).
 	googleClientID string
 	usedStates     map[string]time.Time    // OAuth states already finished, against replays
+	googleProxy    *url.URL                // hub.json google.proxy for Gmail traffic (proxy.go), nil = direct
+	googleHTTP     *http.Client            // talks to Google's OAuth and Gmail API endpoints
 	access         map[string]*accessCache // access tokens, by refresh token
 	// verify replaces the IMAP + SMTP login check of new accounts in tests.
 	verify func(ctx context.Context, a *MailAccount) error
@@ -73,6 +77,7 @@ func New(dataDir string, recs Records) (*Service, error) {
 		accts:      make(map[string]*MailAccount),
 		conns:      make(map[string]*conn),
 		usedStates: make(map[string]time.Time),
+		googleHTTP: httpClient,
 		access:     make(map[string]*accessCache),
 		stop:       make(chan struct{}),
 		now:        time.Now,
@@ -419,7 +424,7 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	}
 	ch := make(chan result, 1)
 	go func() {
-		c, err := dialAndLogin(a, token)
+		c, err := dialAndLogin(a, token, s.proxyFor(a))
 		ch <- result{c, err}
 	}()
 	select {
@@ -435,24 +440,32 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	}
 }
 
-func dialAndLogin(a *MailAccount, token string) (*imapclient.Client, error) {
+func dialAndLogin(a *MailAccount, token string, proxy *url.URL) (*imapclient.Client, error) {
 	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
 	opts := &imapclient.Options{
 		TLSConfig:   &tls.Config{ServerName: a.IMAPHost},
 		WordDecoder: mailWordDecoder(),
-		Dialer:      &netDialer,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), networkTimeout)
+	defer cancel()
 	var (
-		c   *imapclient.Client
-		err error
+		c    *imapclient.Client
+		conn net.Conn
+		err  error
 	)
 	switch imapSecurity(a) {
 	case "tls":
-		c, err = imapclient.DialTLS(addr, opts)
+		if conn, err = dialTLS(ctx, proxy, addr, a.IMAPHost); err == nil {
+			c = imapclient.New(conn, opts)
+		}
 	case "starttls":
-		c, err = imapclient.DialStartTLS(addr, opts)
+		if conn, err = dialTCP(ctx, proxy, addr); err == nil {
+			c, err = imapclient.NewStartTLS(conn, opts)
+		}
 	default:
-		c, err = imapclient.DialInsecure(addr, opts)
+		if conn, err = dialTCP(ctx, proxy, addr); err == nil {
+			c = imapclient.New(conn, opts)
+		}
 	}
 	if err != nil {
 		return nil, err

@@ -6,14 +6,14 @@ import SwiftUI
 // AI summary, the outline, comments and 在飞书中打开. Base / whiteboard / file links get their own page.
 
 /// What a document read produced.
-enum FeishuDocContent {
-    case markdown(FeishuDocMarkdownBody, title: String, copy: Bool)
-    case tree(FeishuDocView)
-    case unsupported(FeishuDocUnsupported)
+enum FeishuDocsContent {
+    case markdown(FeishuDocsMarkdownBody, title: String, copy: Bool)
+    case tree(FeishuDocsView)
+    case unsupported(FeishuDocsUnsupported)
 }
 
-struct FeishuDocUnsupported {
-    var kind: FeishuDocKind
+struct FeishuDocsUnsupported {
+    var kind: FeishuDocsKind
     var title: String
     var message: String
     /// A drive file that downloads into Quick Look.
@@ -23,21 +23,21 @@ struct FeishuDocUnsupported {
 }
 
 @MainActor @Observable
-final class FeishuDocReaderModel {
-    var content: FeishuDocContent?
+final class FeishuDocsReaderModel {
+    var content: FeishuDocsContent?
     var error: String?
-    var header: FeishuDocHeader?
-    var info: FeishuDocReaderInfo?
-    var summary: FeishuDocAISummary?
+    var header: FeishuDocsHeader?
+    var info: FeishuDocsReaderInfo?
+    var summary: FeishuDocsAISummary?
     var loading = false
 
     func load(url: String, title: String?) async {
         guard let api = AppModel.shared.api else { error = "还没有连接 hub"; return }
         loading = true
         defer { loading = false }
-        async let header: FeishuDocHeader? = try? api.larkDocs("documents/header", query: ["url": url])
-        async let info: FeishuDocReaderInfo? = try? api.larkDocs("documents/reader/info", query: ["url": url])
-        async let summary: FeishuDocAISummary? = try? api.larkDocs("documents/ai-summary", query: ["url": url])
+        async let header: FeishuDocsHeader? = try? api.feishuDocsGet("documents/header", query: ["url": url])
+        async let info: FeishuDocsReaderInfo? = try? api.feishuDocsGet("documents/reader/info", query: ["url": url])
+        async let summary: FeishuDocsAISummary? = try? api.feishuDocsGet("documents/ai-summary", query: ["url": url])
         do {
             content = try await Self.read(api, url: url, title: title)
             error = nil
@@ -50,22 +50,22 @@ final class FeishuDocReaderModel {
     }
 
     /// Markdown when the owner allows export, else the JSON tree; what neither can show becomes `.unsupported`.
-    static func read(_ api: APIClient, url: String, title: String?) async throws -> FeishuDocContent {
-        let kind = FeishuDocKind.from(url: url)
+    static func read(_ api: APIClient, url: String, title: String?) async throws -> FeishuDocsContent {
+        let kind = FeishuDocsKind.from(url: url)
         if kind == .bitable {
             return .unsupported(.init(kind: .bitable, title: title ?? "多维表格", message: "多维表格暂不支持在 Jarvis 中查看", file: nil, image: nil))
         }
         if kind != .file && kind != .whiteboard {
             do {
-                let md: FeishuDocMarkdownResponse = try await api.larkDocs("documents/read", query: ["url": url, "format": "markdown"])
-                return .markdown(FeishuMarkdownExport.prepare(md.markdown, title: md.title), title: md.title, copy: md.authority?.copy ?? true)
+                let md: FeishuDocsMarkdownResponse = try await api.feishuDocsGet("documents/read", query: ["url": url, "format": "markdown"])
+                return .markdown(FeishuDocsMarkdownExport.prepare(md.markdown, title: md.title), title: md.title, copy: md.authority?.copy ?? true)
             } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_EXPORT_FORBIDDEN" || e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
                 // Fall through to the tree.
             }
         }
-        let view: FeishuDocView
+        let view: FeishuDocsView
         do {
-            view = try await api.larkDocs("documents/read", query: ["url": url, "format": "json"])
+            view = try await api.feishuDocsGet("documents/read", query: ["url": url, "format": "json"])
         } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
             return .unsupported(.init(kind: kind, title: title ?? kind.label, message: "这种内容暂不支持在 Jarvis 中查看", file: nil, image: nil))
         }
@@ -94,20 +94,13 @@ struct FeishuDocReader: View {
     var url: String
     var title: String?
 
-    var body: some View { FeishuDocReaderContent(url: url, title: title).feishuDocsRouting() }
-}
-
-private struct FeishuDocReaderContent: View {
-    var url: String
-    var title: String?
-
     @Environment(\.feishuOpen) private var open
-    @State private var model = FeishuDocReaderModel()
+    @State private var model = FeishuDocsReaderModel()
     @State private var showTitle = false
     @State private var showOutline = false
     @State private var showComments = false
     @State private var summaryExpanded = false
-    @State private var gallery: FeishuDocGallery?
+    @State private var gallery: FeishuDocsGallery?
     @State private var jump: String?
 
     var body: some View {
@@ -119,11 +112,17 @@ private struct FeishuDocReaderContent: View {
                         titleBlock
                         summaryCard
                         ForEach(body.chunks) { chunk in
-                            Markdown(chunk.text)
-                                .markdownTheme(.feishuDoc)
-                                .markdownImageProvider(FeishuDocImageProvider(open: { openImage($0, in: body.images) }))
-                                .modifier(FeishuDocSelectable(enabled: copyAllowed))
-                                .id(chunk.id)
+                            if let table = chunk.table {
+                                FeishuDocsMarkdownTableView(table: table)
+                                    .padding(.vertical, 4)
+                                    .id(chunk.id)
+                            } else {
+                                Markdown(chunk.text)
+                                    .markdownTheme(.feishuDocs)
+                                    .markdownImageProvider(FeishuDocsImageProvider(open: { openImage($0, in: body.images) }))
+                                    .modifier(FeishuDocsSelectable(enabled: copyAllowed))
+                                    .id(chunk.id)
+                            }
                         }
                         footer
                     case .tree(let view):
@@ -132,16 +131,16 @@ private struct FeishuDocReaderContent: View {
                         treeRows(view)
                         footer
                     case .unsupported(let u):
-                        FeishuDocUnsupportedView(info: u, url: url)
+                        FeishuDocsUnsupportedView(info: u, url: url)
                     case nil:
                         if let e = model.error {
                             EmptyStateView(symbol: "doc.questionmark", title: "打不开这篇文档", message: e,
                                            action: ("重试", { Task { await model.load(url: url, title: title) } }))
                                 .padding(.top, 60)
-                            Button("在飞书中打开") { FeishuDocLinks.openInFeishu(url) }
+                            Button("在飞书中打开") { FeishuDocsLinks.openInFeishu(url) }
                                 .lineLimit(1).frame(maxWidth: .infinity)
                         } else {
-                            FeishuDocSkeleton(title: title)
+                            FeishuDocsSkeleton(title: title)
                         }
                     }
                 }
@@ -179,16 +178,16 @@ private struct FeishuDocReaderContent: View {
             #endif
         }
         .environment(\.openURL, OpenURLAction { link in handle(link) })
-        .environment(\.feishuDocContext, FeishuDocRenderContext(images: images, selectable: copyAllowed, openImage: { openImage($0, in: images) }))
+        .environment(\.feishuDocsContext, FeishuDocsRenderContext(images: images, selectable: copyAllowed, openImage: { openImage($0, in: images) }))
         .sheet(isPresented: $showOutline) {
-            FeishuDocOutlineSheet(items: outline) { item in
+            FeishuDocsOutlineSheet(items: outline) { item in
                 showOutline = false
                 jump = rowID(for: item)
             }
             .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showComments) {
-            NavigationStack { FeishuDocCommentsView(url: url, title: docTitle) }
+            NavigationStack { FeishuDocsCommentsView(url: url, title: docTitle) }
                 .presentationDetents([.large])
         }
         .fullScreenCover(item: $gallery) { g in LarkImageGallery(urls: g.urls, index: g.index) }
@@ -211,7 +210,7 @@ private struct FeishuDocReaderContent: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let icon = model.header?.icon, icon.type == "emoji" { Text(icon.value).font(.title) }
                 Text(docTitle).font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-                    .modifier(FeishuDocSelectable(enabled: copyAllowed))
+                    .modifier(FeishuDocsSelectable(enabled: copyAllowed))
             }
             HStack(spacing: 8) {
                 if let owner = model.info?.owner ?? treeOwner {
@@ -243,7 +242,7 @@ private struct FeishuDocReaderContent: View {
         return names.isEmpty ? nil : names.joined(separator: " / ")
     }
 
-    private var treeOwner: FeishuDocPerson? { if case .tree(let v) = model.content { v.owner } else { nil } }
+    private var treeOwner: FeishuDocsPerson? { if case .tree(let v) = model.content { v.owner } else { nil } }
 
     private var editedLine: String? {
         let when = model.header?.editedAt.flatMap(JSON.parseDate) ?? model.info?.updatedAt.flatMap(JSON.parseDate)
@@ -275,7 +274,7 @@ private struct FeishuDocReaderContent: View {
                         .font(.footnote).lineLimit(1)
                 }
                 Markdown(s.summary)
-                    .markdownTheme(.feishuDocSmall)
+                    .markdownTheme(.feishuDocsSmall)
                     .frame(maxHeight: summaryExpanded ? nil : 96, alignment: .top)
                     .clipped()
                     .mask(alignment: .top) {
@@ -302,7 +301,7 @@ private struct FeishuDocReaderContent: View {
                     }
                     .themedButton()
                 }
-                Button { FeishuDocLinks.openInFeishu(url) } label: {
+                Button { FeishuDocsLinks.openInFeishu(url) } label: {
                     Label("在飞书中打开", systemImage: "arrow.up.forward.app").lineLimit(1)
                 }
                 .themedButton()
@@ -316,12 +315,12 @@ private struct FeishuDocReaderContent: View {
 
     // MARK: Tree
 
-    @ViewBuilder private func treeRows(_ view: FeishuDocView) -> some View {
+    @ViewBuilder private func treeRows(_ view: FeishuDocsView) -> some View {
         let blocks = view.content.children
-        let numbers = FeishuDocTree.orderedNumbers(blocks)
+        let numbers = FeishuDocsTree.orderedNumbers(blocks)
         ForEach(Array(blocks.enumerated()), id: \.offset) { i, node in
-            FeishuDocBlock(node: node, number: numbers[i])
-                .id(FeishuDocTree.rowKey(node, index: i))
+            FeishuDocsBlock(node: node, number: numbers[i])
+                .id(FeishuDocsTree.rowKey(node, index: i))
         }
         if view.partial == true {
             Label("文档较长，只显示了前面的部分", systemImage: "ellipsis.circle").font(.footnote).foregroundStyle(.secondary)
@@ -330,19 +329,19 @@ private struct FeishuDocReaderContent: View {
 
     // MARK: Outline, images, links
 
-    private var outline: [FeishuDocOutlineItem] {
+    private var outline: [FeishuDocsOutlineItem] {
         switch model.content {
         case .markdown(let b, _, _): b.outline
-        case .tree(let v): v.outline.isEmpty ? FeishuDocTree.outline(v.content) : v.outline
+        case .tree(let v): v.outline.isEmpty ? FeishuDocsTree.outline(v.content) : v.outline
         default: []
         }
     }
 
-    private func rowID(for item: FeishuDocOutlineItem) -> String? {
+    private func rowID(for item: FeishuDocsOutlineItem) -> String? {
         switch model.content {
         case .markdown: item.id
-        case .tree(let v): FeishuDocTree.rowID(for: item.id.replacingOccurrences(of: "doc-block-", with: ""), in: v.content)
-            ?? FeishuDocTree.rowID(for: item.id, in: v.content)
+        case .tree(let v): FeishuDocsTree.rowID(for: item.id.replacingOccurrences(of: "doc-block-", with: ""), in: v.content)
+            ?? FeishuDocsTree.rowID(for: item.id, in: v.content)
         default: nil
         }
     }
@@ -350,7 +349,7 @@ private struct FeishuDocReaderContent: View {
     private var images: [String] {
         switch model.content {
         case .markdown(let b, _, _): b.images
-        case .tree(let v): FeishuDocTree.images(v.content)
+        case .tree(let v): FeishuDocsTree.images(v.content)
         default: []
         }
     }
@@ -365,12 +364,12 @@ private struct FeishuDocReaderContent: View {
 
     private func openImage(_ src: String, in list: [String]) {
         let all = list.isEmpty ? [src] : list
-        gallery = FeishuDocGallery(urls: all, index: all.firstIndex(of: src) ?? 0)
+        gallery = FeishuDocsGallery(urls: all, index: all.firstIndex(of: src) ?? 0)
     }
 
     /// Mentions open the profile card, Feishu doc links the native reader, the rest the system.
     private func handle(_ link: URL) -> OpenURLAction.Result {
-        if link.scheme == feishuDocUserScheme, let id = link.host() {
+        if link.scheme == feishuDocsUserScheme, let id = link.host() {
             let name = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "name" }?.value ?? ""
             open?(.profile(LarkPersonRef(id: id, name: name)))
             return .handled
@@ -407,7 +406,7 @@ private struct FeishuDocReaderContent: View {
                 .accessibilityLabel("评论")
             }
             Menu {
-                FeishuDocLinkMenu(url: url)
+                FeishuDocsLinkMenu(url: url)
                 Divider()
                 Button { Task { await model.load(url: url, title: title) } } label: { Label("刷新", systemImage: "arrow.clockwise") }
             } label: { Image(systemName: "ellipsis") }
@@ -416,13 +415,13 @@ private struct FeishuDocReaderContent: View {
     }
 }
 
-struct FeishuDocGallery: Identifiable {
+struct FeishuDocsGallery: Identifiable {
     var urls: [String]
     var index: Int
     var id: String { urls.joined() + "#\(index)" }
 }
 
-private struct FeishuDocSelectable: ViewModifier {
+private struct FeishuDocsSelectable: ViewModifier {
     var enabled: Bool
     func body(content: Content) -> some View {
         if enabled { content.textSelection(.enabled) } else { content }
@@ -430,7 +429,7 @@ private struct FeishuDocSelectable: ViewModifier {
 }
 
 /// Markdown images through the hub, tappable into the gallery.
-struct FeishuDocImageProvider: ImageProvider {
+struct FeishuDocsImageProvider: ImageProvider {
     var open: (String) -> Void
 
     func makeImage(url: URL?) -> some View {
@@ -447,7 +446,7 @@ struct FeishuDocImageProvider: ImageProvider {
 
 extension MarkdownUI.Theme {
     /// Long-form reading: the app's Markdown theme with document headings and Feishu-blue links.
-    @MainActor static var feishuDoc: MarkdownUI.Theme {
+    @MainActor static var feishuDocs: MarkdownUI.Theme {
         MarkdownUI.Theme.jarvis
             .link { ForegroundColor(LarkColor.blue) }
             .heading1 { config in
@@ -464,7 +463,7 @@ extension MarkdownUI.Theme {
             }
     }
 
-    @MainActor static var feishuDocSmall: MarkdownUI.Theme {
+    @MainActor static var feishuDocsSmall: MarkdownUI.Theme {
         MarkdownUI.Theme.jarvis
             .text { FontSize(15) }
             .paragraph { config in config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6) }
@@ -472,7 +471,7 @@ extension MarkdownUI.Theme {
 }
 
 /// Grey bars in the shape of a document while it loads.
-struct FeishuDocSkeleton: View {
+struct FeishuDocsSkeleton: View {
     var title: String?
 
     var body: some View {
@@ -498,16 +497,16 @@ struct FeishuDocSkeleton: View {
 }
 
 /// Bases, whiteboards and files: what it is, a preview when there is one, and 在飞书中打开.
-struct FeishuDocUnsupportedView: View {
-    var info: FeishuDocUnsupported
+struct FeishuDocsUnsupportedView: View {
+    var info: FeishuDocsUnsupported
     var url: String
     @State private var request: (url: String, name: String)?
-    @State private var gallery: FeishuDocGallery?
+    @State private var gallery: FeishuDocsGallery?
 
     var body: some View {
         VStack(spacing: 16) {
             if let image = info.image {
-                Button { gallery = FeishuDocGallery(urls: [image], index: 0) } label: {
+                Button { gallery = FeishuDocsGallery(urls: [image], index: 0) } label: {
                     LarkRemoteImage(url: image, maxPixel: 2000, contentMode: .fit)
                         .frame(maxWidth: .infinity, minHeight: 200)
                         .clipShape(.rect(cornerRadius: 12, style: .continuous))
@@ -516,7 +515,7 @@ struct FeishuDocUnsupportedView: View {
                 .buttonStyle(.plain)
                 Text(info.title).font(.headline).multilineTextAlignment(.center)
             } else {
-                let file = info.kind == .file ? FeishuFileKind.symbol(ext: info.file?.ext, title: info.title) : nil
+                let file = info.kind == .file ? FeishuDocsFileKind.symbol(ext: info.file?.ext, title: info.title) : nil
                 FeishuAppIcon(symbol: file?.symbol ?? info.kind.symbol, hue: file?.hue ?? info.kind.hue, size: 72)
                     .padding(.top, 48)
                 Text(info.title).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
@@ -531,7 +530,7 @@ struct FeishuDocUnsupportedView: View {
                     }
                     .themedButton(prominent: true)
                 }
-                Button { FeishuDocLinks.openInFeishu(url) } label: {
+                Button { FeishuDocsLinks.openInFeishu(url) } label: {
                     Label("在飞书中打开", systemImage: "arrow.up.forward.app").lineLimit(1).frame(minWidth: 180)
                 }
                 .themedButton(prominent: info.file == nil)
@@ -545,9 +544,9 @@ struct FeishuDocUnsupportedView: View {
 }
 
 /// The outline: headings indented by level; picking one scrolls the reader there.
-struct FeishuDocOutlineSheet: View {
-    var items: [FeishuDocOutlineItem]
-    var pick: (FeishuDocOutlineItem) -> Void
+struct FeishuDocsOutlineSheet: View {
+    var items: [FeishuDocsOutlineItem]
+    var pick: (FeishuDocsOutlineItem) -> Void
 
     var body: some View {
         let top = items.map(\.level).min() ?? 1
@@ -574,12 +573,12 @@ struct FeishuDocOutlineSheet: View {
 // MARK: - Comments
 
 /// Every comment thread of a document: the quoted text and its replies; open threads first, resolved ones on their own tab.
-struct FeishuDocCommentsView: View {
+struct FeishuDocsCommentsView: View {
     var url: String
     var title: String
     @Environment(\.dismiss) private var dismiss
     @Environment(\.feishuOpen) private var open
-    @State private var threads: [FeishuDocComments.Thread]?
+    @State private var threads: [FeishuDocsComments.Thread]?
     @State private var error: String?
     @State private var resolved = false
 
@@ -600,7 +599,7 @@ struct FeishuDocCommentsView: View {
                                    message: resolved ? "解决后的评论会收在这里" : "在飞书里对文档发表的评论会出现在这里")
                         .padding(.top, 40)
                 } else {
-                    ForEach(shown) { FeishuDocThreadCard(thread: $0) }
+                    ForEach(shown) { FeishuDocsThreadCard(thread: $0) }
                 }
             }
             .padding(16)
@@ -625,8 +624,8 @@ struct FeishuDocCommentsView: View {
     private func load() async {
         guard let api = AppModel.shared.api else { return }
         do {
-            let c: FeishuDocComments = try await api.larkDocs("documents/comments", query: ["url": url])
-            threads = feishuSortedThreads(c.threads)
+            let c: FeishuDocsComments = try await api.feishuDocsGet("documents/comments", query: ["url": url])
+            threads = feishuDocsSortedThreads(c.threads)
             error = nil
         } catch {
             if let m = error.feishuDocsMessage { self.error = m }
@@ -634,8 +633,8 @@ struct FeishuDocCommentsView: View {
     }
 }
 
-struct FeishuDocThreadCard: View {
-    var thread: FeishuDocComments.Thread
+struct FeishuDocsThreadCard: View {
+    var thread: FeishuDocsComments.Thread
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -651,8 +650,8 @@ struct FeishuDocThreadCard: View {
                         .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: 3) }
                 }
                 Spacer(minLength: 0)
-                if thread.resolved { FeishuDocTag(text: "已解决", hue: "green") }
-                if thread.visibility != nil { FeishuDocTag(text: "部分可见", hue: "grey") }
+                if thread.resolved { FeishuDocsTag(text: "已解决", hue: "green") }
+                if thread.visibility != nil { FeishuDocsTag(text: "部分可见", hue: "grey") }
             }
             ForEach(thread.replies) { r in
                 HStack(alignment: .top, spacing: 8) {
@@ -689,7 +688,7 @@ struct FeishuDocThreadCard: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
     }
 
-    private func replyText(_ r: FeishuDocComments.Reply) -> AttributedString {
+    private func replyText(_ r: FeishuDocsComments.Reply) -> AttributedString {
         var out = AttributedString()
         for seg in r.content {
             var s = AttributedString(seg.text)

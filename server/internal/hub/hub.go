@@ -50,7 +50,7 @@ type Mail interface {
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).
-var NewMail func(dataDir string, store Store, googleClientID string) (Mail, error)
+var NewMail func(dataDir string, store Store, google GoogleConfig) (Mail, error)
 
 // Store is the hub's persistence (internal/db on Postgres).
 type Store interface {
@@ -102,7 +102,7 @@ func Run(ctx context.Context, version string) error {
 	h.loadSeen(ctx)
 	h.loadPhoneTools()
 	if NewMail != nil {
-		if h.mail, err = NewMail(cfg.dir, h.store, cfg.Google.ClientID); err != nil {
+		if h.mail, err = NewMail(cfg.dir, h.store, cfg.Google); err != nil {
 			h.logf("mail disabled: %v", err)
 		}
 	}

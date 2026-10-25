@@ -25,9 +25,12 @@ type MachineConfig struct {
 	RemoteBin string `json:"remote_bin,omitempty"`
 }
 
-// GoogleConfig is a Google Cloud OAuth client of type iOS. It has no secret: the client ID is public.
+// GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy
+// Gmail traffic takes (example-machine reaches few of Google's IPv4 addresses; docs/mail.md).
 type GoogleConfig struct {
 	ClientID string `json:"client_id"`
+	// Proxy is an http:// proxy for Gmail IMAP / SMTP and Google's OAuth / Gmail API, e.g. a local proxy on the hub's machine.
+	Proxy string `json:"proxy,omitempty"`
 }
 
 type Config struct {

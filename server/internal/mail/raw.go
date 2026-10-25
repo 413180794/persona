@@ -72,17 +72,16 @@ type rawConn struct {
 
 func (s *Service) rawDial(ctx context.Context, a *MailAccount) (*rawConn, error) {
 	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
-	d := &net.Dialer{Timeout: networkTimeout}
+	proxy := s.proxyFor(a)
 	var (
 		c   net.Conn
 		err error
 	)
 	switch imapSecurity(a) {
 	case "tls":
-		td := &tls.Dialer{NetDialer: d, Config: &tls.Config{ServerName: a.IMAPHost}}
-		c, err = td.DialContext(ctx, "tcp", addr)
+		c, err = dialTLS(ctx, proxy, addr, a.IMAPHost)
 	case "starttls":
-		c, err = d.DialContext(ctx, "tcp", addr)
+		c, err = dialTCP(ctx, proxy, addr)
 		if err == nil {
 			rc := &rawConn{conn: c, r: bufio.NewReader(c)}
 			if _, err = rc.command(ctx, "STARTTLS"); err != nil {
@@ -97,7 +96,7 @@ func (s *Service) rawDial(ctx context.Context, a *MailAccount) (*rawConn, error)
 			return &rawConn{conn: tc, r: bufio.NewReader(tc)}, nil
 		}
 	default:
-		c, err = d.DialContext(ctx, "tcp", addr)
+		c, err = dialTCP(ctx, proxy, addr)
 	}
 	if err != nil {
 		return nil, err

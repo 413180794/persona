@@ -57,6 +57,10 @@ App                         hub                                Google
 - id_token 是 hub 直接从 Google token 接口（TLS）拿到的，按 OIDC 规范不用再验签，只读 `email` / `email_verified`。
 - 凭据：`{client_id, refresh_token}` 用 AES-GCM 加密后存 `mail_accounts.oauth_enc`；access token 只在内存里缓存，过期前 1 分钟刷新。
 - 收信：IMAP `AUTHENTICATE XOAUTH2`，Gmail 搜索的临时连接同样走 XOAUTH2。
+- **Gmail 流量走代理**：example-machine 只连得上 Google 的少数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 多数时候解析到 173.194.x.x，
+  443 / 993 / 465 / 587 全部超时；HTTPS 能通只是因为走了 IPv6）。`hub.json` 的 `google.proxy`（`http://[user:pass@]host:port`）
+  让 Gmail 账号的 IMAP / SMTP（HTTP CONNECT 隧道）、Google 换 token、Gmail API 全部经代理出去；其他服务商照旧直连。
+  hub 机器上用本地代理（`http://127.0.0.1:<端口>`）。
 - **发信走 Gmail API**（`POST gmail.googleapis.com/gmail/v1/users/me/messages/send`，raw MIME），不走 SMTP：
   example-machine 连不上 `smtp.gmail.com`（465 / 587 都超时，2026-10-25 实测），HTTPS 到 Google 正常；`https://mail.google.com/` 授权同样覆盖 Gmail API
   （项目里已启用 Gmail API）。密送靠在 raw 前面加 `Bcc:` 头，Gmail 投递后会去掉；发出的信 Gmail 自己归进「已发送」。

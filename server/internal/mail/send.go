@@ -198,20 +198,7 @@ func (s *Service) smtpSend(ctx context.Context, a *MailAccount, from string, rcp
 	}
 	ch := make(chan dialResult, 1)
 	go func() {
-		var (
-			c   *smtp.Client
-			err error
-		)
-		switch security {
-		case "tls":
-			c, err = smtp.DialTLS(addr, tlsConfig)
-		case "starttls":
-			c, err = smtp.DialStartTLS(addr, tlsConfig)
-		case "none":
-			c, err = smtp.Dial(addr)
-		default:
-			err = fmt.Errorf("mail: unknown smtp security %q", security)
-		}
+		c, err := dialSMTP(ctx, s.proxyFor(a), addr, security, tlsConfig)
 		ch <- dialResult{c, err}
 	}()
 	var client *smtp.Client
@@ -303,16 +290,7 @@ func (s *Service) checkSMTP(ctx context.Context, a *MailAccount) error {
 		client *smtp.Client
 		err    error
 	)
-	switch security {
-	case "tls":
-		client, err = smtp.DialTLS(addr, tlsConfig)
-	case "starttls":
-		client, err = smtp.DialStartTLS(addr, tlsConfig)
-	case "none":
-		client, err = smtp.Dial(addr)
-	default:
-		return fmt.Errorf("unknown smtp security %q", security)
-	}
+	client, err = dialSMTP(ctx, s.proxyFor(a), addr, security, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", addr, err)
 	}

@@ -77,7 +77,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | `FeishuDocsModels.swift` | 线上类型 + 纯逻辑（按天分组、类型筛选、文件夹优先、知识库树展开、Markdown 切块 / 目录、有序列表编号、表格合并单元格布局、错误码），单测在 `JarvisTests/FeishuDocsTests.swift` |
-| `FeishuDocsComponents.swift` | `api.larkDocs`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocPager`、文档图标 / 行 / 筛选条 / 三态 |
+| `FeishuDocsComponents.swift` | `api.feishuDocsGet`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocsPager`、文档图标 / 行 / 筛选条 / 三态 |
 | `FeishuDocs.swift` | 云文档首页（搜索、知识库 / 文档通知入口、快速访问、最近 / 共享给我 / 收藏 / 我的空间 / 推荐）、文件夹页 |
 | `FeishuDocReader.swift` | 阅读器：标题、位置、所有者、更新时间、阅读数、AI 摘要、目录、评论、在飞书中打开；多维表格 / 文件 / 画板页 |
 | `FeishuDocRenderer.swift` | JSON 节点树原生渲染（段落、标题、列表、待办、引用、高亮块、分栏、代码、表格、图片、书签、嵌入、附件、任务…） |
@@ -86,13 +86,19 @@
 - 阅读顺序：`format=markdown` → 403 `DOCUMENT_EXPORT_FORBIDDEN` 或 422 `DOCUMENT_FORMAT_UNSUPPORTED` 时 `format=json`。
   JSON 里带 `base` 是多维表格（不渲染，给「在飞书中打开」）；`object.kind=file` 是云空间文件（「预览文件」走
   `documents/drive/files/:token/download` + Quick Look）；`whiteboard` 显示 `object.image`。`/base/` 链接直接判定，不去读几 MB 的表数据。
-- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `larkDocs` 拿错误码。
+- `APIError` 现在会把 lark-connector 的 `{"error":{"code","message"}}` 拼成一句话，但阅读器要按错误码分支（导出被禁 → 读 JSON 树，
+  格式不支持 → 「在飞书中打开」），所以 `Docs/` 仍用自己的 `feishuDocsGet`，失败时抛带 `code` 的 `FeishuDocsFailure`。
 - Markdown 导出的怪处：开头固定是 `# 标题` + `[Source](<url>)`（阅读器自己画标题，要去掉）；图片是**绝对地址**
   `http://<lark-connector>:3333/api/documents/…`，hub 的改写只换 JSON 字符串开头的 `"/api/`，所以客户端把它改成 `/api/v1/lark/raw/documents/…`；
   标题里有 `\-`、`\+` 之类的转义（目录要去转义）；没有 outline，自己按 `#` 行（跳过代码块）切块，每块一个懒加载行，目录按块 id 跳转。
 - JSON 树的怪处：docx 的每个列表项都是**单独一个** `bulletList` / `orderedList`（只有一个 `listItem`），有序编号要跨兄弟节点连续数，
   `restart` 时从 `start` 重来；`outline` 的 id 带 `doc-block-` 前缀，和 heading 的 `attrs.id` 一致；文字颜色是 CSS（`#hex` / `rgba()`），
   深色模式下近黑色文字改用系统前景色、背景色降不透明度；表格 `colwidth` 是像素，夹在 72…320，`rowspan` 占位要自己补空格子。
+- 表格（JSON 树和 Markdown 导出共用 `FeishuDocsTableGrid`）：列的「自然宽度」= 作者的 `colwidth`，没有就按单元格文字估算
+  （中文约 15pt / 字，其他约 8pt）。总宽放得下就用自然宽度；放不下但每列都能有 88pt 时铺满可用宽度、文字换行（窄列保持原宽，
+  宽列平分剩下的）；列太多才横向滚动（每列 88…280pt），有更多内容的一侧显示渐隐。MarkdownUI 的表格不会换行也不会适配屏宽，
+  所以 Markdown 里**顶格**的表格被单独切成一块、解析成单元格后用同一套网格画（缩进在列表里的表格仍交给 MarkdownUI）；
+  飞书导出的无表头表格是一行全空的表头，解析时去掉。
 - `authority.copy=false` 时正文不可选择（尊重作者的禁止复制）。
 - `documents/drive?view=` 必填；`pinned`（快速访问）不分页；`discover` 的 `updatedAt` 是空串（`JSON.decoder` 会解成 1970，时间字段一律存字符串再解析）；
   最近列表里 type 113 是 `/page/` 链接（飞书页面），按链接认类型。文件夹：`documents/drive?view=mine|shared&folder=<token>`，返回 `path` 面包屑。
@@ -100,11 +106,9 @@
 - AI 摘要只读缓存（`state=ready` 才显示，`missing` 不触发生成）；文档通知接口在当前账号下返回空列表（已按 contract 实现，显示空状态）。
 - 知识库：`wiki/spaces?scope=recent` 的 `kind` 全是 `other`；树一次只给根，子级 `children?node=` 展开时整层读完（游标循环）；
   快捷方式节点的子级在 `target.spaceId/target.token` 下。
-- 路由坑：工作台把 `feishuOpen` 注入在 NavigationStack 根视图上，`navigationDestination` 推出来的页面**拿不到**（是 nil），
-  `Docs/` 的每个页面外面包了 `feishuDocsRouting()`：为 nil 时用本地 `navigationDestination(item:)` 推，并把它重新注入给子视图。
 - DEBUG 启动参数（按 CLAUDE.md 用 `open…` / `show…` 命名，需加进 release.sh 的检查列表）：`-openFeishuDoc <url>`（云文档页启动后打开该文档）、
   `-openFeishuDocHeading <n>`（跳到第 n 个目录项）、`-showFeishuDocSheet outline|comments`、`-openFeishuWikiSpace <id>`、
-  `-openFeishuWikiNode YES`（展开第一个有子页面的节点）、`-showFeishuWikiUpdates YES`；
+  `-openFeishuWikiNode YES`（展开第一个有子页面的节点）、`-showFeishuWikiUpdates YES`、`-showFeishuDocTableEnd YES`（宽表初始滚到最右）；
   列表页签是 `@AppStorage`（不是 DEBUG 开关）：`-feishu.docs.tab recent|shared|starred|mine|discover`、`-feishu.wiki.scope all|recent|starred`。
 
 ### 日历 / 会议 / 妙记（`Calendar/`）
