@@ -165,6 +165,10 @@ func (s *Service) Send(ctx context.Context, req SendRequest) error {
 		if err := s.sendMail(ctx, a, a.Email, rcpts, raw); err != nil {
 			return err
 		}
+	} else if a.Auth == AuthOAuth2 {
+		if err := s.gmailAPISend(ctx, a, req.Bcc, raw); err != nil {
+			return err
+		}
 	} else if err := s.smtpSend(ctx, a, a.Email, rcpts, raw); err != nil {
 		return err
 	}

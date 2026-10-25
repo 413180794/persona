@@ -9,6 +9,8 @@ struct MonoTextView: UIViewRepresentable {
     /// Keep the same distance from the end when the text changes (a live terminal follows its last line).
     var followsEnd = false
     var inset = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+    /// Called while the user scrolls near the top (load the page before; the view keeps its place when it arrives).
+    var onNearTop: (() -> Void)? = nil
 
     func makeUIView(context: Context) -> MonoScrollView {
         let v = MonoScrollView()
@@ -17,11 +19,13 @@ struct MonoTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ v: MonoScrollView, context: Context) {
+        v.onNearTop = onNearTop
         v.set(text, followsEnd: followsEnd)
     }
 }
 
-final class MonoScrollView: UIScrollView {
+final class MonoScrollView: UIScrollView, UIScrollViewDelegate {
+    var onNearTop: (() -> Void)?
     private let textView = UITextView()
     private var measured: CGSize = .zero
     private var first = true
@@ -41,6 +45,11 @@ final class MonoScrollView: UIScrollView {
         textView.textContainer.lineBreakMode = .byClipping
         textView.textContainer.widthTracksTextView = true
         addSubview(textView)
+        delegate = self
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if (isDragging || isDecelerating), contentOffset.y < 600 { onNearTop?() }
     }
 
     required init?(coder: NSCoder) { fatalError() }

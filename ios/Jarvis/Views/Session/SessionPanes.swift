@@ -84,15 +84,17 @@ private struct PaneSegment: View {
 
 // MARK: - Terminal
 
-/// The session's terminal at any time (not only while Claude works). Shows the latest screen live; "加载更早"
-/// reaches back into the pane's scrollback page by page until its very first line, pausing the live refresh
-/// while you read history.
+/// The session's terminal at any time (not only while Claude works). The latest 200 lines refresh live; scrolling up
+/// loads the 200 before them, again and again, back to the start of what herdr keeps (about 1000 lines — older output
+/// lives in the chat). Each page is found by the lines it must end before, so output arriving meanwhile shifts
+/// nothing; reading history pauses the live refresh, 回到最新 resumes it.
 struct TerminalPanel: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
-    @State private var text = ""
-    @State private var lines = TerminalPanel.liveLines
-    @State private var atTop = false
+    @State private var tail = ""
+    @State private var older: [String] = []
+    @State private var hasOlder = true
+    @State private var atLimit = false
     @State private var paused = false
     @State private var loading = false
     @State private var loaded = false
@@ -100,9 +102,9 @@ struct TerminalPanel: View {
     @State private var error: String?
     @State private var input = ""
 
-    static let liveLines = 200
-    static let page = 1000
-    static let maxLines = 20000
+    static let page = 200
+
+    private var text: String { older.isEmpty ? tail : older.joined(separator: "\n") + "\n" + tail }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -124,7 +126,15 @@ struct TerminalPanel: View {
             }
         }
         .task(id: key) {
-            text = ""; lines = Self.liveLines; atTop = false; paused = false; loaded = false
+            tail = ""; older = []; hasOlder = true; atLimit = false; paused = false; loaded = false
+            #if DEBUG
+            // `-terminalPages N`: load N pages of history after the first refresh (what scrolling up does).
+            let pages = UserDefaults.standard.integer(forKey: "terminalPages")
+            if pages > 0 {
+                await refresh()
+                for _ in 0..<pages { await loadOlder() }
+            }
+            #endif
             while !Task.isCancelled {
                 if !paused { await refresh() }
                 try? await Task.sleep(for: .seconds(1))
@@ -133,7 +143,7 @@ struct TerminalPanel: View {
     }
 
     @ViewBuilder private var screen: some View {
-        if offline && text.isEmpty {
+        if offline && tail.isEmpty {
             ContentUnavailableView("没有终端", systemImage: "terminal",
                                    description: Text("这个会话没有在 herdr 里运行，恢复会话后就能看到终端。"))
                 .frame(maxHeight: .infinity)
@@ -142,16 +152,19 @@ struct TerminalPanel: View {
                 .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                olderControl.padding(.horizontal, 10).padding(.top, 8)
-                // Unwrapped and scrollable both ways; follows the last line unless you scrolled up to read.
-                MonoTextView(text: MonoText.plain(text, color: UIColor(Theme.terminalText)), followsEnd: true)
+                historyStatus.padding(.horizontal, 10).padding(.top, 8)
+                // Unwrapped and scrollable both ways; keeps its distance from the end, so pages added on top and
+                // output added below never move what you read.
+                MonoTextView(text: MonoText.plain(text, color: UIColor(Theme.terminalText)), followsEnd: true) {
+                    Task { await loadOlder() }
+                }
             }
             .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .bottom) {
                 if paused {
                     Button {
                         Haptics.tap()
-                        lines = Self.liveLines; atTop = false; paused = false
+                        older = []; hasOlder = true; atLimit = false; paused = false
                         Task { await refresh() }
                     } label: {
                         Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(.footnote.weight(.semibold))
@@ -171,21 +184,16 @@ struct TerminalPanel: View {
         }
     }
 
-    @ViewBuilder private var olderControl: some View {
+    @ViewBuilder private var historyStatus: some View {
         Group {
-            if atTop {
+            if loading {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Theme.terminalText); Text("加载更早的输出…").lineLimit(1) }
+            } else if atLimit {
+                Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.8)
+            } else if !hasOlder {
                 Text("— 已到最前面 —")
             } else {
-                Button {
-                    Task { await loadOlder() }
-                } label: {
-                    HStack(spacing: 6) {
-                        if loading { ProgressView().controlSize(.mini).tint(Theme.terminalText) }
-                        Text("加载更早的输出").lineLimit(1)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(loading)
+                Text("上滑加载更早的输出").lineLimit(1)
             }
         }
         .font(.caption.weight(.medium))
@@ -195,28 +203,37 @@ struct TerminalPanel: View {
     private func refresh() async {
         guard let api = model.api else { return }
         do {
-            let r = try await api.screen(key, lines: lines, recent: true)
+            let r = try await api.screen(key, lines: Self.page, recent: true)
             error = nil
             offline = r.status == .offline
-            if r.text != text { text = r.text }
-            if Self.lineCount(r.text) < lines { atTop = true }
+            if r.text != tail { tail = r.text }
+            if Self.lines(r.text).count < Self.page - 1 { hasOlder = false }
         } catch {
             if !loaded { self.error = error.shown }
         }
         loaded = true
     }
 
+    /// The page before the first lines on screen.
     private func loadOlder() async {
-        Haptics.tap()
-        paused = true
+        guard !loading, hasOlder, loaded, let api = model.api else { return }
         loading = true
-        lines = min(lines + Self.page, Self.maxLines)
-        await refresh()
-        if lines >= Self.maxLines { atTop = true }
-        loading = false
+        paused = true // the tail must stay put while pages are placed above it
+        defer { loading = false }
+        let anchor = Array(Self.lines(text).prefix(3))
+        do {
+            let r = try await api.screen(key, before: anchor, lines: Self.page)
+            if !r.text.isEmpty { older = Self.lines(r.text) + older }
+            hasOlder = r.hasMore
+            atLimit = r.atLimit
+        } catch {
+            self.error = error.shown
+        }
     }
 
-    private static func lineCount(_ s: String) -> Int { s.reduce(into: 1) { n, c in if c == "\n" { n += 1 } } }
+    private static func lines(_ s: String) -> [String] {
+        s.isEmpty ? [] : s.trimmingCharacters(in: CharacterSet(charactersIn: "\n")).components(separatedBy: "\n")
+    }
 
     private func sendInput() {
         let t = input

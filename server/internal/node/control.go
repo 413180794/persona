@@ -548,3 +548,58 @@ func (n *Node) renameSession(ctx context.Context, id string, tab, title *string)
 	}
 	return nil
 }
+
+// herdr keeps about 1000 lines per pane readable (pane read caps there whatever --lines asks); older output is only
+// in Claude's transcript.
+const herdrScrollbackLines = 1000
+
+// screenBefore returns up to `lines` lines of the pane's scrollback right before the anchor (the first lines the phone
+// already shows). Located by content, not by offset from the end, so output arriving meanwhile shifts nothing.
+func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lines int) (map[string]any, error) {
+	if lines <= 0 || lines > 500 {
+		lines = 200
+	}
+	a, ok := n.agent(id)
+	if !ok {
+		if _, err := n.paneFor(ctx, id); err != nil {
+			return nil, err
+		}
+		a, _ = n.agent(id)
+	}
+	text, err := n.herdr.PaneRead(ctx, a.PaneID, "recent", herdrScrollbackLines)
+	if err != nil {
+		return nil, err
+	}
+	all := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	at := findBlock(all, anchor)
+	if at < 0 { // the anchor scrolled out of the kept window: nothing older can be placed before it
+		return map[string]any{"text": "", "has_more": false, "at_limit": len(all) >= herdrScrollbackLines-20}, nil
+	}
+	start := max(at-lines, 0)
+	return map[string]any{
+		"text":     strings.Join(all[start:at], "\n"),
+		"has_more": start > 0,
+		// The start of what herdr keeps: older output was dropped (long panes) or never existed (short ones).
+		"at_limit": start == 0 && len(all) >= herdrScrollbackLines-20,
+	}, nil
+}
+
+// findBlock returns where the lines of block start in all (the last match), -1 if they do not appear.
+func findBlock(all, block []string) int {
+	if len(block) == 0 {
+		return len(all)
+	}
+	for i := len(all) - len(block); i >= 0; i-- {
+		match := true
+		for j, b := range block {
+			if strings.TrimRight(all[i+j], " ") != strings.TrimRight(b, " ") {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}

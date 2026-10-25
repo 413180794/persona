@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	netmail "net/mail"
 	"net/url"
 	"strings"
 	"sync"
@@ -361,4 +363,85 @@ func (c *xoauth2Client) Next(challenge []byte) ([]byte, error) {
 
 func newXOAUTH2Client(user, token string) sasl.Client {
 	return &xoauth2Client{user: user, token: token}
+}
+
+// gmailAPIBase is the Gmail API. OAuth Gmail accounts send through it rather than SMTP: example-machine (the hub) cannot
+// reach smtp.gmail.com on 465 or 587, while HTTPS to Google works, and https://mail.google.com/ covers both.
+var gmailAPIBase = "https://gmail.googleapis.com"
+
+func (s *Service) gmailAPI(ctx context.Context, a *MailAccount, method, path string, body any, out any) error {
+	token, err := s.oauthToken(ctx, a)
+	if err != nil {
+		return err
+	}
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, gmailAPIBase+path, rd)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("gmail api: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("gmail api: %w", err)
+	}
+	if resp.StatusCode/100 != 2 {
+		var e struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		msg := strings.TrimSpace(string(data))
+		if json.Unmarshal(data, &e) == nil && e.Error.Message != "" {
+			msg = e.Error.Message
+		}
+		return fmt.Errorf("gmail api: HTTP %d: %s", resp.StatusCode, msg)
+	}
+	if out != nil {
+		return json.Unmarshal(data, out)
+	}
+	return nil
+}
+
+// gmailAPICheck stands in for the SMTP check of OAuth Gmail accounts: the token works for the Gmail API
+// and belongs to the account's address.
+func (s *Service) gmailAPICheck(ctx context.Context, a *MailAccount) error {
+	var p struct {
+		EmailAddress string `json:"emailAddress"`
+	}
+	if err := s.gmailAPI(ctx, a, http.MethodGet, "/gmail/v1/users/me/profile", nil, &p); err != nil {
+		return err
+	}
+	if !strings.EqualFold(p.EmailAddress, a.Email) {
+		return fmt.Errorf("gmail api: token belongs to %s, not %s", p.EmailAddress, a.Email)
+	}
+	return nil
+}
+
+// gmailAPISend sends a rendered message. Gmail delivers to the Bcc header and strips it, and files the message
+// in Sent itself.
+func (s *Service) gmailAPISend(ctx context.Context, a *MailAccount, bcc []Address, raw []byte) error {
+	if len(bcc) > 0 {
+		list := make([]string, 0, len(bcc))
+		for _, b := range bcc {
+			list = append(list, (&netmail.Address{Name: b.Name, Address: strings.TrimSpace(b.Email)}).String())
+		}
+		raw = append([]byte("Bcc: "+strings.Join(list, ", ")+"\r\n"), raw...)
+	}
+	body := map[string]string{"raw": base64.RawURLEncoding.EncodeToString(raw)}
+	return s.gmailAPI(ctx, a, http.MethodPost, "/gmail/v1/users/me/messages/send", body, nil)
 }

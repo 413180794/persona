@@ -203,6 +203,31 @@
 - removed：`moments/tabs`、`moments/feed?tabId=&pageToken`、`moments/notifications`、`moments/badge`、`moments/broadcasts`；帖子用已有的 `LarkMomentsPostView`。
 - 飞书邮箱：`mail/labels`、`mail/threads?label=INBOX&cursor…`（label 必填）、`mail/threads/:threadId`、`mail/messages/:id(/html)`、`mail/search?q`。
 
+**实现说明**（`FeishuContacts.swift` / `FeishuMoments.swift` / `FeishuMail.swift`，模型和纯逻辑在 `FeishuPeopleModels.swift`，测试 `JarvisTests/FeishuPeopleTests.swift`）：
+- 页面：通讯录首页（我的群组 / 外部联系人 / 机器人入口、组织架构、常联系的人、顶部搜索走 `search/people?q=`）、部门页、我的群组（我加入的 /
+  我管理的，`kind=join|manage`，cursor 分页）、外部联系人（按姓名 A–Z 拼音分组 / 按公司分组）、机器人（offset 分页）；removed（推荐 / 关注 /
+  板块 Tab、置顶广播、帖子卡片、铃铛 → 通知：评论和@ / 回应）；飞书邮箱（标题菜单切换文件夹带未读数、会话列表、搜索、会话详情 HTML、附件）。
+- 人推 `.profile`（内嵌版资料卡），帖子弹 `LarkMomentsPostView`（sheet，它自带 NavigationStack），群推 `.chat`，部门推 `.department`。
+- 类型一律 `FeishuPeople` 前缀（路由用的 4 个占位 struct 除外）。
+- DEBUG 启动参数：`-openPeople dept|groups|external|bots|profile`（通讯录）、`notifications|post`（removed）、`thread`（邮箱，打开第一封）；
+  `-openMomentsTab <tabId>`、`-openMailLabel <labelId>`、`-openPeopleQuery <文字>`（填通讯录 / 邮件搜索框）。
+- 组织架构：`contacts/org` 只返回自己所在的部门（`hasChildren:false`），父部门 `contacts/departments/<parentId>` 返回 400
+  （`PULL_DEPARTMENT_STRUCTURE`，租户可见性策略），面包屑为空；部门名把隐藏的上级折进了名字（`pathNames`），界面显示最后一级 +「Org / Team / …」。
+  成员分页 `count` + `offset`，`hasMore`；`memberCount` 含已冻结 / 离职的人，比能拿到的成员多。
+- 外部联系人：`total`（62）比实际可见的人多，`offset=46/50/60` 返回的全是第一页里已有的人，第一页就是全部可见联系人；首页显示实际人数。
+- 机器人：`offset` 必填（不带返回 400），每页 100，`nextOffset` 继续。常联系的人：`offset` / `next`。
+- removed：`moments/tabs` 只有「推荐」（type 1）和板块（type 2），没有「关注」：`tabId=following` 是 lark-connector 的约定，本租户关注功能关闭，
+  始终返回空（显示空态）。`moments/feed` 首页带置顶（`isPinned`），推荐流每次刷新内容都不同。匿名帖子用 `anonymousNickname` / `anonymousAvatarUrl`。
+  通知 `category=message|reaction`，kind：comment / reply / atInPost / atInComment / postReaction / commentReaction / follower；GET 不会标记已读。
+- 邮箱 id 是 base64（含 `+` `/` `=`）：**hub 会把路径里的 `%2F` 解码成 `/` 再转发**，lark-connector 404。iOS 端只编码一次
+  （`FeishuPeopleMailLogic.segment`），`URL.appending(path:)` 会再把 `%` 编码一次，到 lark-connector 时正好还是 `%2F`。
+- 本账号的收件箱 / 重要 / 其他都是空的（邮件被规则分到自定义文件夹），所以记住上次选的文件夹（`@AppStorage("feishuMailLabel")`）。
+  标签页分页：`cursor{messageId,timestamp}` 两半一起回传为 `cursorMessage` + `cursorTimestamp`；搜索分页：`next{offset,session}`。
+- 邮件 HTML（`mail/messages/:id/html`）：默认挡掉外部图片（`blockedImages`），`external=true` 时图片地址是
+  `/api/mail/assets/external?url=…&sig=…`——这个路由只在 lark-connector 的 `/api` 下，**hub 的 raw 代理只转 `/agent/v1`，加载不了**；
+  iOS 在用户点「显示图片」后把它改回原始地址（`url=` 参数）由手机直接加载。内嵌图片（`/api/mail/assets/inline/…`）同样走不通，目前显示不出来。
+  深色模式把整页反色（图片再反回来），页面底色设成 `#e3e3e1` 反色后正好是卡片色；页面脚本禁用，宽表格按屏宽缩放。
+
 ### 会话信息 / 收藏 / 话题（`Chat/`）
 - 会话信息：群公告 `conversations/:feedId/settings`（`announcement` 或 `announcementDoc`）；Pin `conversations/:feedId/pins`、`top-pins`；
   资源 `conversations/:feedId/resources?kind=docs|files|media&cursor`；群待办 `conversations/:feedId/todos`；群妙记 `conversations/:feedId/meeting-minutes`；

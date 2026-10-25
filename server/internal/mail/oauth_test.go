@@ -236,3 +236,52 @@ func TestGoogleOAuthSurvivesRestart(t *testing.T) {
 		t.Fatal("tampered state accepted")
 	}
 }
+
+func TestGmailAPISendAndCheck(t *testing.T) {
+	s, _ := newOAuthService(t)
+	s.refreshAccess = func(*OAuthCreds) (string, error) { return "tok", nil }
+	var sent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			w.WriteHeader(401)
+			w.Write([]byte(`{"error":{"message":"bad token"}}`))
+			return
+		}
+		switch r.URL.Path {
+		case "/gmail/v1/users/me/profile":
+			w.Write([]byte(`{"emailAddress":"Me@gmail.com"}`))
+		case "/gmail/v1/users/me/messages/send":
+			var body struct{ Raw string }
+			json.NewDecoder(r.Body).Decode(&body)
+			b, _ := base64.RawURLEncoding.DecodeString(body.Raw)
+			sent = string(b)
+			w.Write([]byte(`{"id":"1"}`))
+		}
+	}))
+	defer srv.Close()
+	old := gmailAPIBase
+	gmailAPIBase = srv.URL
+	defer func() { gmailAPIBase = old }()
+
+	a := &MailAccount{ID: "acc_g", Email: "me@gmail.com", Username: "me@gmail.com", Provider: ProviderGmail, Auth: AuthOAuth2,
+		OAuth: &OAuthCreds{ClientID: testClientID, RefreshToken: "r"}}
+	if err := s.gmailAPICheck(context.Background(), a); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	s.mu.Lock()
+	s.accts[a.ID] = a
+	s.mu.Unlock()
+	err := s.Send(context.Background(), SendRequest{AccountID: a.ID, To: []Address{{Email: "you@example.com"}},
+		Bcc: []Address{{Name: "Hidden", Email: "bcc@example.com"}}, Subject: "hi", Text: "hello"})
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if !strings.HasPrefix(sent, "Bcc: \"Hidden\" <bcc@example.com>\r\n") || !strings.Contains(sent, "you@example.com") {
+		t.Fatalf("raw = %q", sent)
+	}
+
+	a.Email = "other@gmail.com"
+	if err := s.gmailAPICheck(context.Background(), a); err == nil {
+		t.Fatal("profile of another address accepted")
+	}
+}

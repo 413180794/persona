@@ -297,6 +297,10 @@ func (s *Service) testAccount(ctx context.Context, a *MailAccount) error {
 	}
 	c.Close()
 
+	if a.Auth == AuthOAuth2 {
+		// Sent through the Gmail API, not SMTP (gmailAPIBase).
+		return s.gmailAPICheck(ctx, a)
+	}
 	if err := s.checkSMTP(ctx, a); err != nil {
 		return fmt.Errorf("smtp: %w", err)
 	}

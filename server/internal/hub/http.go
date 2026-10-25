@@ -75,6 +75,7 @@ func (h *Hub) routes() http.Handler {
 		h.markSeen(m.cfg.ID, r.PathValue("sid"))
 		writeJSON(w, map[string]any{"ok": true})
 	}))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/screen/before", h.proxyBody("session.screen.before"))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", h.proxy("session.screen", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source")}

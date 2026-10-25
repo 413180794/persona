@@ -43,7 +43,7 @@ App                         hub                                Google
  │ POST oauth/google/finish {state, code}                         │
  │──────────────────────────▶│ code + verifier 换 token ────────▶│
  │                           │◀── refresh_token, access_token, id_token
- │                           │ id_token 取邮箱，XOAUTH2 登 IMAP + SMTP 验证，加密保存
+ │                           │ id_token 取邮箱，XOAUTH2 登 IMAP + Gmail API 验证，加密保存
  │◀── {account} ─────────────│                                   │
 ```
 
@@ -56,7 +56,11 @@ App                         hub                                Google
   ASWebAuthenticationSession 拦截回调 scheme，不需要在 Info.plist 里注册 URL scheme，client ID 换了 App 也不用重新发版。
 - id_token 是 hub 直接从 Google token 接口（TLS）拿到的，按 OIDC 规范不用再验签，只读 `email` / `email_verified`。
 - 凭据：`{client_id, refresh_token}` 用 AES-GCM 加密后存 `mail_accounts.oauth_enc`；access token 只在内存里缓存，过期前 1 分钟刷新。
-- IMAP `AUTHENTICATE XOAUTH2`、SMTP `AUTH XOAUTH2`、Gmail 搜索的临时连接同样走 XOAUTH2。
+- 收信：IMAP `AUTHENTICATE XOAUTH2`，Gmail 搜索的临时连接同样走 XOAUTH2。
+- **发信走 Gmail API**（`POST gmail.googleapis.com/gmail/v1/users/me/messages/send`，raw MIME），不走 SMTP：
+  example-machine 连不上 `smtp.gmail.com`（465 / 587 都超时，2026-10-25 实测），HTTPS 到 Google 正常；`https://mail.google.com/` 授权同样覆盖 Gmail API
+  （项目里已启用 Gmail API）。密送靠在 raw 前面加 `Bcc:` 头，Gmail 投递后会去掉；发出的信 Gmail 自己归进「已发送」。
+  添加账号时的检查也从 SMTP 换成 Gmail API 的 `users/me/profile`（并核对邮箱地址一致）。
 - refresh token 失效（用户撤销授权、改了 Google 密码、半年没用）时报「Google authorization expired or was revoked」：
   在 App 里再点一次「使用 Google 账号登录」选同一个账号，会原地更新凭据（账号 ID 不变）。
 - 以前用应用专用密码加的 Gmail 账号继续能用（服务端仍支持 `auth:"password"`），只是 App 里不再提供这个入口。

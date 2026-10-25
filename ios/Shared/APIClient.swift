@@ -157,6 +157,14 @@ nonisolated struct APIClient: Sendable {
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 
+    struct ScreenBefore: Decodable { var text: String; var hasMore: Bool; var atLimit: Bool
+        enum CodingKeys: String, CodingKey { case text; case hasMore = "has_more", atLimit = "at_limit" } }
+    private struct ScreenBeforeBody: Encodable { var anchor: [String]; var lines: Int }
+    /// The pane's scrollback just before `anchor` (the first lines already shown), at most `lines` lines.
+    func screen(_ k: SessionKey, before anchor: [String], lines: Int = 200) async throws -> ScreenBefore {
+        try await post(sp(k) + "/screen/before", body: ScreenBeforeBody(anchor: anchor, lines: lines), as: ScreenBefore.self)
+    }
+
     struct SessionInfo: Decodable, Sendable {
         var sessionID: String
         var transcriptPath: String?
