@@ -60,9 +60,9 @@
 - `feishuOpen` 设在 NavigationStack 根视图上，**传不到被推入的页面**（工作台 › 搜索里它是 nil）。搜索页自己兜底：没有 `feishuOpen` 时
   用 `navigationDestination(item:)` 推，并给推出的页面注入下一层的 opener（`FeishuSearchPushedRoute`）。根治要在 `WorkbenchView` /
   其他宿主把 `.environment(\.feishuOpen)` 挂到 NavigationStack 外层。
-- DEBUG 启动参数：`-searchQuery <q>`、`-searchTab <key>`（all / messages / docs / contacts / groups / calendar / email / apps / helpdesk /
-  minutes / tasks；会话内 chat / chatDocs / chatImages…）、`-searchFeed <feedId>`（会话内搜索）、`-searchFilter sender|chat|owner|time`
-  （打开筛选面板）、`-searchOpenFirst YES`（结果加载后点开第一条）。
+- DEBUG 启动参数（名字按 CLAUDE.md 规则用 `open…` 前缀，需加进 release.sh 的检查列表）：`-openSearch <q>`、`-openSearchTab <key>`
+  （all / messages / docs / contacts / groups / calendar / email / apps / helpdesk / minutes / tasks；会话内 chat / chatDocs / chatImages…）、
+  `-openSearchFeed <feedId>`（会话内搜索）、`-openSearchFilter sender|chat|owner|time`（打开筛选面板）、`-openSearchFirst YES`（结果加载后点开第一条）。
 
 ### 云文档 / 知识库 / 文档通知（`Docs/`）
 - 列表：`documents/recent?cursor`；`documents/drive?view=mine|shared|starred|pinned`（view 必填）；`documents/drive/discover`。
