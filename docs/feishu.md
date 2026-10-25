@@ -46,7 +46,7 @@
 
 接口怪异行为：
 - **高亮区间是 UTF-16 偏移**（JS 字符串下标），`[start, end)`；可能为空数组（群组常见），此时客户端按查询词自己匹配。
-  消息 snippet 里有 markdown（`## `、反引号、`**`），去掉标记时要同步平移区间（`FeishuHighlight.plain`），直接 `Fmt.plain` 会高亮错位。
+  消息 snippet 里有 markdown（`## `、反引号、`**`），去掉标记时要同步平移区间（`FeishuSearchHighlight.plain`），直接 `Fmt.plain` 会高亮错位。
   snippet 可能自带 `...` 前缀。
 - **消息命中的 `position` 可能是 -3**：话题里的回复不在主聊天流里。点开时先 `GET messages/:id`（拿 `feedId`、`chatType` 1 单聊 / 2 群 / 3 话题群、
   `threadId`），position 为负就再取 `messages/:threadId` 用话题根的位置定位。`search/page` 的消息命中没有发送者头像。
@@ -57,9 +57,6 @@
 - 应用命中多数只有 `lark://` / `sslocal://` 入口，只有装了飞书 App 才打得开；服务台没有可用入口，只展示。
 - 邮件结果没有现成路由，搜索自带阅读页：`mail/messages/:id`（纯文本 body，可能截断）+ `/html`（完整 HTML，newsletter 是固定宽度表格，
   注入样式压到屏宽）。
-- `feishuOpen` 设在 NavigationStack 根视图上，**传不到被推入的页面**（工作台 › 搜索里它是 nil）。搜索页自己兜底：没有 `feishuOpen` 时
-  用 `navigationDestination(item:)` 推，并给推出的页面注入下一层的 opener（`FeishuSearchPushedRoute`）。根治要在 `WorkbenchView` /
-  其他宿主把 `.environment(\.feishuOpen)` 挂到 NavigationStack 外层。
 - DEBUG 启动参数（名字按 CLAUDE.md 规则用 `open…` 前缀，需加进 release.sh 的检查列表）：`-openSearch <q>`、`-openSearchTab <key>`
   （all / messages / docs / contacts / groups / calendar / email / apps / helpdesk / minutes / tasks；会话内 chat / chatDocs / chatImages…）、
   `-openSearchFeed <feedId>`（会话内搜索）、`-openSearchFilter sender|chat|owner|time`（打开筛选面板）、`-openSearchFirst YES`（结果加载后点开第一条）。
