@@ -58,7 +58,7 @@ final class FeishuDocReaderModel {
         if kind != .file && kind != .whiteboard {
             do {
                 let md: FeishuDocMarkdownResponse = try await api.larkDocs("documents/read", query: ["url": url, "format": "markdown"])
-                return .markdown(FeishuDocMarkdown.prepare(md.markdown, title: md.title), title: md.title, copy: md.authority?.copy ?? true)
+                return .markdown(FeishuMarkdownExport.prepare(md.markdown, title: md.title), title: md.title, copy: md.authority?.copy ?? true)
             } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_EXPORT_FORBIDDEN" || e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
                 // Fall through to the tree.
             }
@@ -165,13 +165,13 @@ private struct FeishuDocReaderContent: View {
         .task {
             if model.content == nil { await model.load(url: url, title: title) }
             #if DEBUG
-            // Simulator automation: `-feishuDocJump <n>` scrolls to the n-th outline entry, `-feishuDocSheet outline|comments` opens a sheet.
-            let n = UserDefaults.standard.integer(forKey: "feishuDocJump")
+            // Simulator automation: `-openFeishuDocHeading <n>` scrolls to the n-th outline entry, `-showFeishuDocSheet outline|comments` opens a sheet.
+            let n = UserDefaults.standard.integer(forKey: "openFeishuDocHeading")
             if n > 0, n <= outline.count {
                 try? await Task.sleep(for: .milliseconds(500))
                 jump = rowID(for: outline[n - 1])
             }
-            switch UserDefaults.standard.string(forKey: "feishuDocSheet") {
+            switch UserDefaults.standard.string(forKey: "showFeishuDocSheet") {
             case "outline": showOutline = true
             case "comments": showComments = true
             default: break

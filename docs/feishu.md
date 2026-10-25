@@ -102,9 +102,10 @@
   快捷方式节点的子级在 `target.spaceId/target.token` 下。
 - 路由坑：工作台把 `feishuOpen` 注入在 NavigationStack 根视图上，`navigationDestination` 推出来的页面**拿不到**（是 nil），
   `Docs/` 的每个页面外面包了 `feishuDocsRouting()`：为 nil 时用本地 `navigationDestination(item:)` 推，并把它重新注入给子视图。
-- DEBUG 启动参数：`-feishuDocURL <url>`（云文档页启动后打开该文档）、`-feishuDocJump <n>`（跳到第 n 个目录项）、
-  `-feishuDocSheet outline|comments`、`-feishuWikiSpace <id>`、`-feishuWikiExpand YES`、`-feishuWikiTab updates`；
-  列表页签用 `@AppStorage`：`-feishu.docs.tab recent|shared|starred|mine|discover`、`-feishu.wiki.scope all|recent|starred`。
+- DEBUG 启动参数（按 CLAUDE.md 用 `open…` / `show…` 命名，需加进 release.sh 的检查列表）：`-openFeishuDoc <url>`（云文档页启动后打开该文档）、
+  `-openFeishuDocHeading <n>`（跳到第 n 个目录项）、`-showFeishuDocSheet outline|comments`、`-openFeishuWikiSpace <id>`、
+  `-openFeishuWikiNode YES`（展开第一个有子页面的节点）、`-showFeishuWikiUpdates YES`；
+  列表页签是 `@AppStorage`（不是 DEBUG 开关）：`-feishu.docs.tab recent|shared|starred|mine|discover`、`-feishu.wiki.scope all|recent|starred`。
 
 ### 日历 / 会议 / 妙记（`Calendar/`）
 - 日程：`calendar/week?start&end`（ISO，≤62 天）→ `{calendars,events[{id,title,startAt,endAt,allDay,selfAttendeeStatus,calendarId}]}`；

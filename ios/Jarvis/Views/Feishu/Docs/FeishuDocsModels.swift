@@ -665,7 +665,7 @@ nonisolated struct FeishuDocMarkdownBody: Sendable, Equatable {
     var images: [String]
 }
 
-nonisolated enum FeishuDocMarkdown {
+nonisolated enum FeishuMarkdownExport {
     /// Turns lark-connector's export into what the reader shows:
     /// - drops the leading `# Title` and `[Source](<url>)` lines (the reader draws its own title),
     /// - points media at the hub (`http://<lark-connector>/api/documents/…` → `/api/v1/lark/raw/documents/…`),

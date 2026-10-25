@@ -175,7 +175,7 @@ struct FeishuDocsTests {
 
         - [ ] a
         """
-        let body = FeishuDocMarkdown.prepare(md, title: "智能纪要")
+        let body = FeishuMarkdownExport.prepare(md, title: "智能纪要")
         #expect(!body.chunks.contains { $0.text.contains("[Source]") })
         #expect(!body.chunks.contains { $0.text.contains("# 智能纪要") })
         #expect(body.outline.map(\.title) == ["总结", "待办 - 一"])
@@ -188,15 +188,15 @@ struct FeishuDocsTests {
 
     @Test func splitsLongRunsAtBlockBoundaries() {
         let lines = (0..<10).map { "para \($0)\n" } + ["- item\n", "  continued\n", "| a | b |\n", "| - | - |\n", "| 1 | 2 |\n", "\n", "tail"]
-        let body = FeishuDocMarkdown.prepare(lines.joined(separator: "\n"), maxLines: 4)
+        let body = FeishuMarkdownExport.prepare(lines.joined(separator: "\n"), maxLines: 4)
         #expect(body.chunks.count > 1)
         // A table never splits.
         #expect(body.chunks.contains { $0.text.contains("| a | b |") && $0.text.contains("| 1 | 2 |") })
-        #expect(FeishuDocMarkdown.headingLevel("### x") == 3)
-        #expect(FeishuDocMarkdown.headingLevel("#hashtag") == nil)
-        #expect(FeishuDocMarkdown.unescape(#"a\-b\+c\.d"#) == "a-b+c.d")
-        #expect(FeishuDocMarkdown.stripInline("**粗** [链接](u) `c`") == "粗 链接 c")
-        #expect(FeishuDocMarkdown.rewriteMedia("x https://h:3333/api/documents/media/k y /api/v1/lark/raw/z") == "x /api/v1/lark/raw/documents/media/k y /api/v1/lark/raw/z")
+        #expect(FeishuMarkdownExport.headingLevel("### x") == 3)
+        #expect(FeishuMarkdownExport.headingLevel("#hashtag") == nil)
+        #expect(FeishuMarkdownExport.unescape(#"a\-b\+c\.d"#) == "a-b+c.d")
+        #expect(FeishuMarkdownExport.stripInline("**粗** [链接](u) `c`") == "粗 链接 c")
+        #expect(FeishuMarkdownExport.rewriteMedia("x https://h:3333/api/documents/media/k y /api/v1/lark/raw/z") == "x /api/v1/lark/raw/documents/media/k y /api/v1/lark/raw/z")
     }
 
     // MARK: Tree rendering logic
