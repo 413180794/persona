@@ -15,7 +15,7 @@ struct RootView: View {
                     Tab("开发", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
                         ChatsView()
                     }
-                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }.count)
+                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count)
                     Tab("信息", systemImage: "tray.full", value: AppTab.mail) {
                         InboxView()
                     }

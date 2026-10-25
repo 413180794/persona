@@ -59,9 +59,12 @@ struct ChatsView: View {
     var body: some View {
         let groups = SpaceGroup.build(filtered)
         // Pinned spaces lead and never fold away with the quiet ones.
-        let pinnedSpaces = groups.filter { model.isPinned($0) }
-        let active = pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) }
-        let quiet = groups.filter { $0.isQuiet && !model.isPinned($0) }
+        // Muted spaces drop to a folded section at the bottom (no notifications, no attention).
+        let muted = groups.filter { model.isMuted($0) }
+        let unmuted = groups.filter { !model.isMuted($0) }
+        let pinnedSpaces = unmuted.filter { model.isPinned($0) }
+        let active = pinnedSpaces + unmuted.filter { !$0.isQuiet && !model.isPinned($0) }
+        let quiet = unmuted.filter { $0.isQuiet && !model.isPinned($0) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
             .sorted { a, b in (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: a.key)) ?? 0) < (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: b.key)) ?? 0) }
         let recent = filtered.filter { !$0.state.isLive }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
@@ -99,7 +102,9 @@ struct ChatsView: View {
                     Section {
                         // Busy (and pinned / looping) agents first; idle ones fold into one row so a big workspace
                         // stays compact.
-                        let stays: (Session) -> Bool = { !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil }
+                        let stays: (Session) -> Bool = {
+                            !model.isMuted($0.key) && (!$0.isQuiet || model.isPinned($0.key) || $0.loop != nil)
+                        }
                         let idle = g.sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
                         ForEach(g.sessions.filter(stays)) { s in slotRow(s) }
@@ -129,11 +134,7 @@ struct ChatsView: View {
                                         pinned: model.isPinned(g))
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button { model.togglePin(g) } label: {
-                                Label(model.isPinned(g) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(g) ? "pin.slash" : "pin")
-                            }
-                        }
+                        .contextMenu { spaceMenu(g) }
                     }
                 }
 
@@ -151,6 +152,25 @@ struct ChatsView: View {
                         }
                     } header: {
                         SectionHeader(title: "空闲的空间", count: quiet.count, tint: .secondary)
+                    }
+                }
+
+                if !muted.isEmpty {
+                    Section {
+                        ForEach(muted) { g in
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
+                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
+                            )) {
+                                ForEach(g.sessions) { s in slotRow(s) }
+                            } label: {
+                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                                    .opacity(0.6)
+                            }
+                            .contextMenu { spaceMenu(g) }
+                        }
+                    } header: {
+                        SectionHeader(title: "已屏蔽", count: muted.count, tint: .secondary)
                     }
                 }
 
@@ -215,8 +235,17 @@ struct ChatsView: View {
         }
     }
 
+    @ViewBuilder private func spaceMenu(_ g: SpaceGroup) -> some View {
+        Button { model.togglePin(g) } label: {
+            Label(model.isPinned(g) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(g) ? "pin.slash" : "pin")
+        }
+        Button { model.toggleMute(g) } label: {
+            Label(model.isMuted(g) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(g) ? "bell" : "bell.slash")
+        }
+    }
+
     private func slotRow(_ s: Session) -> some View {
-        NavigationLink(value: s.key) { SlotRow(session: s) }
+        NavigationLink(value: s.key) { SlotRow(session: s, muted: model.isMuted(s.key)) }
             .swipeActions(edge: .trailing) {
                 if s.startedByJarvis && s.state.isLive {
                     Button(role: .destructive) { Task { await model.close(s.key) } } label: { Label("关闭", systemImage: "xmark") }
@@ -239,6 +268,9 @@ struct ChatsView: View {
             .contextMenu {
                 Button { model.togglePin(s.key) } label: {
                     Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash" : "pin")
+                }
+                Button { model.toggleMute(s.key) } label: {
+                    Label(model.isMutedItself(s.key) ? "取消屏蔽通知" : "屏蔽通知", systemImage: model.isMutedItself(s.key) ? "bell" : "bell.slash")
                 }
                 if s.loop != nil {
                     Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: "stop.circle") }
@@ -345,9 +377,11 @@ struct StateCounts: View {
 /// the latest line.
 struct SlotRow: View {
     var session: Session
+    /// Muted (itself or its space): gray, no state color, a bell-slash — it should not catch the eye.
+    var muted = false
 
     var body: some View {
-        let quiet = session.state == .idle || session.state == .unknown
+        let quiet = muted || session.state == .idle || session.state == .unknown
         let tint = quiet ? Color.secondary : session.state.color
         HStack(alignment: .top, spacing: 10) {
             StatusDot(state: session.state, size: 9).padding(.top, 5)
@@ -367,7 +401,10 @@ struct SlotRow: View {
                     if !quiet {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1)
                     }
-                    if let loop = session.loop { LoopBadge(loop: loop) }
+                    if let loop = session.loop { LoopBadge(loop: loop).opacity(muted ? 0.6 : 1) }
+                    if muted {
+                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
+                    }
                     Spacer(minLength: 4)
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -384,6 +421,7 @@ struct SlotRow: View {
             }
         }
         .padding(.vertical, 3)
+        .opacity(muted ? 0.55 : 1)
     }
 }
 

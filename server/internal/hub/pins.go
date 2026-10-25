@@ -1,9 +1,11 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 )
 
 // Pins are the spaces and agents the user keeps at the top of the 开发 list (saved in Postgres, so a reinstall or
@@ -14,7 +16,67 @@ type Pins struct {
 	Sessions []string `json:"sessions"`
 }
 
+// Mutes use the same shape: muted spaces / agents get no push notifications (finished, needs you) and the phone
+// shows them quietly. Same keys as pins.
+
+func (h *Hub) loadMutes(ctx context.Context) Pins {
+	h.mutesMu.Lock()
+	defer h.mutesMu.Unlock()
+	if h.mutes == nil {
+		p := Pins{Spaces: []string{}, Sessions: []string{}}
+		if h.store != nil {
+			if _, err := h.store.Setting(ctx, "mutes", &p); err != nil {
+				return p // try again next time
+			}
+		}
+		h.mutes = &p
+	}
+	return *h.mutes
+}
+
+// muted reports whether pushes about this session are off (the agent or its space is muted).
+func (h *Hub) muted(machineID, sessionID string) bool {
+	p := h.loadMutes(context.Background())
+	if slices.Contains(p.Sessions, machineID+"/"+sessionID) {
+		return true
+	}
+	if m := h.byID[machineID]; m != nil {
+		if s, ok := m.session(sessionID); ok && s.SpaceName != "" {
+			return slices.Contains(p.Spaces, machineID+"/"+s.SpaceName)
+		}
+	}
+	return false
+}
+
 func (h *Hub) pinRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/mutes", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, h.loadMutes(r.Context()))
+	})
+	api.HandleFunc("PUT /api/v1/mutes", func(w http.ResponseWriter, r *http.Request) {
+		var p Pins
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if h.store == nil {
+			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
+			return
+		}
+		if p.Spaces == nil {
+			p.Spaces = []string{}
+		}
+		if p.Sessions == nil {
+			p.Sessions = []string{}
+		}
+		if err := h.store.PutSetting(r.Context(), "mutes", p); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		h.mutesMu.Lock()
+		h.mutes = &p
+		h.mutesMu.Unlock()
+		writeJSON(w, p)
+	})
 	api.HandleFunc("GET /api/v1/pins", func(w http.ResponseWriter, r *http.Request) {
 		p := Pins{Spaces: []string{}, Sessions: []string{}}
 		if h.store != nil {

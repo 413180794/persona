@@ -266,6 +266,12 @@ nonisolated struct Pins: Codable, Hashable, Sendable {
 
 extension APIClient {
     func pins() async throws -> Pins { try await get("/api/v1/pins") }
+    /// Muted spaces / agents: no push notifications, shown quietly (same shape as pins).
+    func mutes() async throws -> Pins { try await get("/api/v1/mutes") }
+    @discardableResult
+    func setMutes(_ p: Pins) async throws -> Pins {
+        try JSON.decoder.decode(Pins.self, from: try await request("PUT", "/api/v1/mutes", body: p))
+    }
     @discardableResult
     func setPins(_ p: Pins) async throws -> Pins {
         try JSON.decoder.decode(Pins.self, from: try await request("PUT", "/api/v1/pins", body: p))

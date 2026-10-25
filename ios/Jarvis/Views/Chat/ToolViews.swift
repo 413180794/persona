@@ -121,7 +121,8 @@ struct ToolGroupView: View {
                 ForEach(steps) { step in
                     switch step {
                     case .call(let c): ToolCallRow(call: c, autoExpand: false)
-                    case .thought(let t): ThinkingRow(item: t, compact: true)
+                    case .thought(let t):
+                        if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
                     }
                 }
                 if calls.count > 2 {

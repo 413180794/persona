@@ -467,6 +467,37 @@ final class AppModel {
 
     func loadPins() async {
         if let p = try? await api?.pins() { pins = p }
+        if let m = try? await api?.mutes() { mutes = m }
+    }
+
+    // MARK: Mutes
+
+    /// Muted spaces / agents: the hub sends no notifications about them and the list shows them quietly.
+    var mutes: Pins = {
+        guard let data = UserDefaults.standard.data(forKey: "dev.mutes"), let p = try? JSON.decoder.decode(Pins.self, from: data) else { return Pins() }
+        return p
+    }() {
+        didSet { if let data = try? JSON.encoder.encode(mutes) { UserDefaults.standard.set(data, forKey: "dev.mutes") } }
+    }
+
+    func isMuted(_ g: SpaceGroup) -> Bool { mutes.spaces.contains(Self.pinKey(space: g)) }
+    /// The agent itself or its space is muted.
+    func isMuted(_ k: SessionKey) -> Bool {
+        if mutes.sessions.contains(Self.pinKey(session: k)) { return true }
+        guard let space = session(k)?.spaceName else { return false }
+        return mutes.spaces.contains("\(k.machineID)/\(space)")
+    }
+    func isMutedItself(_ k: SessionKey) -> Bool { mutes.sessions.contains(Self.pinKey(session: k)) }
+
+    func toggleMute(_ g: SpaceGroup) { updateMutes { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
+    func toggleMute(_ k: SessionKey) { updateMutes { p in Self.toggle(&p.sessions, Self.pinKey(session: k)) } }
+
+    private func updateMutes(_ change: (inout Pins) -> Void) {
+        Haptics.tap()
+        var p = mutes
+        change(&p)
+        withAnimation(.snappy) { mutes = p }
+        Task { do { try await api?.setMutes(p) } catch { show(error) } }
     }
 
     // MARK: Loops

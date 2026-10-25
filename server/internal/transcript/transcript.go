@@ -381,12 +381,12 @@ func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts t
 		TaskID      string `json:"task_id"`
 		ShellID     string `json:"shell_id"`
 		// ScheduleWakeup / CronCreate (the /loop skill)
-		Delay  float64 `json:"delaySeconds"`
-		Prompt string  `json:"prompt"`
-		Reason string  `json:"reason"`
-		Stop   bool    `json:"stop"`
-		Cron      string `json:"cron"`
-		Recurring *bool  `json:"recurring"`
+		Delay     float64 `json:"delaySeconds"`
+		Prompt    string  `json:"prompt"`
+		Reason    string  `json:"reason"`
+		Stop      bool    `json:"stop"`
+		Cron      string  `json:"cron"`
+		Recurring *bool   `json:"recurring"`
 	}
 	_ = json.Unmarshal(raw, &in)
 	switch name {

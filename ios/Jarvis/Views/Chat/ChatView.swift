@@ -15,7 +15,11 @@ struct ChatView: View {
     @State private var key: SessionKey
     var style: ChatStyle = .dev
     @State private var position = ScrollPosition(edge: .bottom)
-    @State private var atBottom = true
+    /// The bottom sentinel is on screen. Starts false: if the first jump lands in unrendered space the arrow is the
+    /// way out, and `settleAtEnd` retries until the sentinel has been seen.
+    @State private var atBottom = false
+    /// Hide the arrow for the first moment on entry (it would flash while the list settles at the end).
+    @State private var settled = false
     @State private var showTerminal = false
     @State private var file: FileRef?
     @State private var debugImages: [ImagePayload]?
@@ -25,6 +29,9 @@ struct ChatView: View {
     @State private var menu = MessageMenu()
     /// Turns the user folded / unfolded (default: running ones open, finished ones folded).
     @State private var openTurns: [String: Bool] = [:]
+    /// The user dragged the list at least once: only then does reaching the top load older pages (a lazy stack may
+    /// lay out the top row while settling at the bottom, which used to chain-load history on entry).
+    @State private var userScrolled = false
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -82,6 +89,11 @@ struct ChatView: View {
                     if status.isActive {
                         Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
                     }
+                    if style == .dev {
+                        Button { model.toggleMute(key) } label: {
+                            Label(model.isMutedItself(key) ? "取消屏蔽通知" : "屏蔽通知", systemImage: model.isMutedItself(key) ? "bell" : "bell.slash")
+                        }
+                    }
                     Divider()
                     if let s = session {
                         Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
@@ -111,7 +123,12 @@ struct ChatView: View {
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         .onChange(of: pane) { _, p in
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
-            if p == .chat { position = ScrollPosition(id: Self.bottomID, anchor: .bottom); atBottom = true }
+            if p == .chat {
+                position = ScrollPosition(id: Self.bottomID, anchor: .bottom)
+                atBottom = false
+                settled = false
+                settleAtEnd()
+            }
         }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
@@ -187,6 +204,9 @@ struct ChatView: View {
                 if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { run.append(.thought(i)) }
             case .tools(let steps):
                 run += steps
+            case .notice(let i):
+                // "Background command … completed", compaction, API errors: part of the work, not the conversation.
+                run.append(.thought(i))
             default:
                 flush(last: false)
                 out.append(.row(r))
@@ -215,6 +235,41 @@ struct ChatView: View {
     /// `scrollTo(edge: .bottom)`, which trusts the lazy stack's estimated height and can land in unrendered space.
     private func scrollToEnd() {
         position.scrollTo(id: Self.bottomID, anchor: .bottom)
+    }
+
+    /// Scrolls to the end once the rows that just changed have been laid out, then again after they settled
+    /// (markdown and images size themselves a moment later).
+    private func settleAtEnd() {
+        Task { @MainActor in
+            await Task.yield()
+            position.scrollTo(edge: .bottom) // a far jump by estimate first; the id jumps below land it exactly
+            await Task.yield()
+            scrollToEnd()
+            // Lazy stacks estimate unrendered rows; a jump can land in space nothing was laid out for (blank page).
+            // Until the bottom sentinel has actually been on screen — and as long as the user leaves the list alone —
+            // keep re-anchoring on it.
+            for delay in [150, 400, 800, 1500] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !userScrolled else { break }
+                if atBottom && delay >= 400 { break }
+                scrollToEnd()
+            }
+            settled = true
+        }
+    }
+
+    /// The arrow: a jump by the bottom edge (works from far away, where an id jump into rows the lazy stack never laid
+    /// out could stop short), then land on the sentinel and retry until it is really on screen.
+    private func jumpToEnd() {
+        Haptics.tap()
+        withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
+        Task { @MainActor in
+            for delay in [120, 300, 650] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                if atBottom { break }
+                scrollToEnd()
+            }
+        }
     }
 
     private var liveTurnID: String? {
@@ -262,7 +317,7 @@ struct ChatView: View {
                         .controlSize(.small)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .task(id: rows.first?.id) { await model.loadOlder(key) }
+                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(key) } }
                 }
                 if !store.loadedOnce && rows.isEmpty {
                     ChatSkeleton()
@@ -312,7 +367,12 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollPhaseChange { _, phase in if phase == .tracking || phase == .interacting { menu.dismiss() } }
+        .onScrollPhaseChange { _, phase in
+            if phase == .tracking || phase == .interacting {
+                menu.dismiss()
+                userScrolled = true
+            }
+        }
         .environment(menu)
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
 
@@ -321,20 +381,22 @@ struct ChatView: View {
         }
         // A turn finishing folds its work away (the content gets much shorter) and a new one starts: without a
         // jump the old offset lands in empty space below the content. Your own new message always goes to the end.
-        .onChange(of: liveTurnID) { _, _ in if atBottom { scrollToEnd() } }
-        .onChange(of: lastPromptID) { old, _ in if old != nil { scrollToEnd() } }
+        .onChange(of: liveTurnID) { _, _ in if atBottom { settleAtEnd() } }
+        .onChange(of: lastPromptID) { old, _ in if old != nil { settleAtEnd() } }
         .onChange(of: store.pending.count) { old, new in if new > old { withAnimation(.snappy) { scrollToEnd() } } }
         // A message absorbed mid-turn is inserted above the timer, far up: re-anchor on the end so the viewport does
         // not end up in a stretch the lazy stack never laid out (blank page).
-        .onChange(of: store.items.count) { _, _ in if atBottom { scrollToEnd() } }
+        .onChange(of: store.items.count) { old, _ in
+            // The first data (no cache: an empty page suddenly gets a hundred rows) and later batches: the jump has to
+            // happen after the lazy stack laid the new rows out, or it lands in empty space (blank page).
+            if atBottom || old == 0 { settleAtEnd() }
+        }
         .onChange(of: store.liveText.count / 40) { _, _ in
             if atBottom { scrollToEnd() }
         }
         .overlay(alignment: .bottomTrailing) {
-            if !atBottom {
-                Button {
-                    withAnimation(.snappy) { scrollToEnd() }
-                } label: {
+            if !atBottom && settled {
+                Button(action: jumpToEnd) {
                     Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
                 }
                 .themedButton()
@@ -368,6 +430,7 @@ struct ChatView: View {
 
     private func appeared() {
             bindMenu()
+            settleAtEnd() // cached rows painted on entry
             model.subscribe(key)
             model.visibleSession = key
             model.markSeen(key)
@@ -377,6 +440,15 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
+            if UserDefaults.standard.bool(forKey: "jumpEnd") { // what tapping the ↓ arrow does, from the top
+                Task {
+                    try? await Task.sleep(for: .seconds(6))
+                    userScrolled = true
+                    position.scrollTo(edge: .top)
+                    try? await Task.sleep(for: .seconds(4))
+                    jumpToEnd()
+                }
+            }
             if UserDefaults.standard.bool(forKey: "showMenu") { // the long-press bar on the last answer, for screenshots
                 Task {
                     try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 40 : 6))
@@ -433,6 +505,8 @@ struct ChatView: View {
         Haptics.tap()
         model.unsubscribe(key)
         key = next
+        userScrolled = false
+        settled = false
         bindMenu()
         menu.selected = nil
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
@@ -920,7 +994,7 @@ struct ToolCountRow: View {
 
     var body: some View {
         let calls = steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } }
-        let thoughts = steps.count - calls
+        let thoughts = steps.reduce(0) { if case .thought(let i) = $1, i.kind == .thinking { $0 + 1 } else { $0 } }
         let busy = running && steps.contains { if case .call(let c) = $0 { c.isRunning } else { false } }
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -952,6 +1026,6 @@ struct ToolCountRow: View {
         var parts: [String] = []
         if calls > 0 { parts.append("调用了 \(calls) 个工具") }
         if thoughts > 0 { parts.append("思考 \(thoughts) 次") }
-        return parts.joined(separator: "，")
+        return parts.isEmpty ? "过程" : parts.joined(separator: "，")
     }
 }

@@ -409,7 +409,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 func (m *Machine) notifyFinished(id string) {
 	time.Sleep(4 * time.Second)
 	s, ok := m.session(id)
-	if !ok || (s.Status != proto.StatusDone && s.Status != proto.StatusIdle) {
+	if !ok || (s.Status != proto.StatusDone && s.Status != proto.StatusIdle) || m.hub.muted(m.cfg.ID, id) {
 		return
 	}
 	title := s.Title

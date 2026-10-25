@@ -31,6 +31,9 @@ type Hub struct {
 	ai       *ai.Client
 	lark     *lark.Client
 
+	mutesMu sync.Mutex
+	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
+
 	mu           sync.Mutex
 	clients      map[*client]struct{}
 	interactions map[string]*pending
@@ -266,7 +269,9 @@ func (h *Hub) announce(ix proto.Interaction) {
 	if m := h.byID[ix.MachineID]; m != nil {
 		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})
 	}
-	h.push.notifyInteraction(ix, h.machineName(ix.MachineID))
+	if !h.muted(ix.MachineID, ix.SessionID) {
+		h.push.notifyInteraction(ix, h.machineName(ix.MachineID))
+	}
 }
 
 func (h *Hub) machineName(id string) string {
