@@ -192,7 +192,7 @@ struct ChatsView: View {
                         .accessibilityLabel("新建会话")
                 }
             }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .renameSpaceAlert($renamingSpace)
             .renameSessionAlert($renamingSession)
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }

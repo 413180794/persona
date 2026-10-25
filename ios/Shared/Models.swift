@@ -277,9 +277,10 @@ nonisolated enum AgentState: String, Codable, Sendable, CaseIterable {
     /// Lower sorts first: what needs attention comes before what is quiet.
     var priority: Int {
         switch self {
+        // Finished-unseen comes before working: it is waiting for you, a working agent is not (yet).
         case .needsYou: 0
-        case .working: 1
-        case .unread: 2
+        case .unread: 1
+        case .working: 2
         case .idle: 3
         case .unknown: 4
         case .offline: 5
