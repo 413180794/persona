@@ -119,8 +119,7 @@
 #### 实现说明（日历）
 
 - 文件：`FeishuCalModels.swift`（线上类型 + 纯逻辑，单测 `JarvisTests/FeishuCalendarTests.swift`）、`FeishuCalShared.swift`（卡片、三态、DEBUG 直达）、
-  `FeishuCalendar.swift`（日历首页）、`FeishuEventDetail.swift`（日程详情）、`FeishuMeetings.swift`、`FeishuMinutes.swift`、
-  `FeishuCalMediaLoader.swift`（妙记播放）。类型和扩展成员一律 `FeishuCal` / `feishuCal` 前缀。
+  `FeishuCalendar.swift`（日历首页）、`FeishuEventDetail.swift`（日程详情）、`FeishuMeetings.swift`、`FeishuMinutes.swift`。类型和扩展成员一律 `FeishuCal` / `feishuCal` 前缀。
 - `calendar/week` 的 `start` / `end` 用 UTC（`…Z`）：带 `+08:00` 时 `+` 在查询串里被当成空格，直接 400。按周（周一起）取、按周缓存，
   预取前后一周（周条的圆点立刻有）。
 - 重复日程的实例 id 是 `<sourceId>:<开始秒>`，`calendar/event/<实例id>` 回 400 `WEB_MGET_EVENTS_WITH_IDS`：详情一律用 sourceId 取，
@@ -149,11 +148,10 @@
   （条目带 `snippet`）；详情 `minutes/:token` 与 `minutes/:token/transcript` 并发取。`access` 为 denied / unavailable 时给空态 +「在飞书中打开」。
 - 详情：播放器、总结（关键词点一下 = 在文字记录里搜它）、章节、待办（文本末尾的「@某人」拆成负责人）、文字记录
   （按说话人分段、本地搜索高亮、播放时高亮当前段并跟随滚动，点段落 / 章节 / 待办时间跳到那里播放）。
-- **播放**：hub 的 raw 代理不转发 `Range`，`minutes/:token/media` 永远 200 整个文件（97MB 的 71 分钟视频），AVPlayer 拒播。
-  客户端用 `FeishuCalMediaLoader`（`AVAssetResourceLoaderDelegate` + 自定义 scheme）：一次 GET 边下边写临时文件，按 AVPlayer 的
-  范围请求从已下载部分回数据；飞书 mp4 索引在前，几秒就能开播，往后拖要等下载到那里。服务端转发 Range 后可直接流式（leader 待办）。
-- 只在点「播放」后才开始下载；离开页面停止并删临时文件。
-- DEBUG：`-openMinutes <token>`（从妙记列表直接推详情）、`-showMinutesTab 总结|章节|待办|文字记录`、`-showMinutesPlaying YES`（自动播放）、
+- **播放**：hub 的 raw 代理转发 `Range`（206 + `Content-Range`），`AVURLAsset` 带 `Authorization` 头直接流式播放、拖动即播
+  （同 `LarkPlayerView`）。早先代理不转发 Range 时 AVPlayer 直接拒播（`minutes/:token/media` 永远 200 整个文件）。
+- 只在点「播放」后才开始请求媒体；离开页面停止播放。
+- DEBUG：`-openMinutes <token>`（从妙记列表直接推详情）、`-showMinutesTab 总结|章节|待办|文字记录`、`-showMinutesPlaying YES|<秒>`（自动播放 / 从第几秒播，验证拖动）、
   `-showMinutesSearch <词>`；日历 `-showCalendarNow <ISO 时间>`（假装现在是那一刻，看「正在进行 / 下一个」横幅和现在线）。
 
 ### 任务 / 审批 / OKR（`Work/`）
