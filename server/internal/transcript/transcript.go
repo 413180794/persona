@@ -105,10 +105,12 @@ type Meta struct {
 	FirstUser    string // first thing the user typed; titles untitled (headless) sessions
 	Title        string
 	customTitle  bool // Title came from /rename; later ai-titles do not replace it
-	Cwd          string
-	Model        string
-	LastText     string
-	Updated      time.Time
+	// Sidechain keeps isSidechain lines: a subagent's own transcript is all sidechain.
+	Sidechain bool
+	Cwd       string
+	Model     string
+	LastText  string
+	Updated   time.Time
 }
 
 // pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
@@ -184,7 +186,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		return nil
 	}
-	if e.IsSidechain {
+	if e.IsSidechain && !meta.Sidechain {
 		return nil
 	}
 	mk := func(idx int, role, kind string) proto.Item {
@@ -693,6 +695,9 @@ type File struct {
 }
 
 func NewFile(path string) *File { return &File{Path: path} }
+
+// NewSubagentFile reads a subagent's transcript (<session>/subagents/agent-<id>.jsonl, every line a sidechain).
+func NewSubagentFile(path string) *File { return &File{Path: path, meta: Meta{Sidechain: true}} }
 
 // Refresh reads newly appended complete lines and returns the new items.
 func (f *File) Refresh() ([]proto.Item, error) {

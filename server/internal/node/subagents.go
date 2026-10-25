@@ -1,0 +1,135 @@
+package node
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/transcript"
+)
+
+// Subagents: Claude Code keeps each agent a session launches in <transcript dir>/<session>/subagents/
+// agent-<id>.jsonl (all lines isSidechain) with agent-<id>.meta.json beside it ({agentType, description, toolUseId,
+// requestShape, finished}). The phone reads one like a session whose id is "<session>@<agent id>".
+
+const subagentSep = "@"
+
+func splitSubagent(id string) (parent, agent string, ok bool) {
+	parent, agent, ok = strings.Cut(id, subagentSep)
+	return parent, agent, ok && validID(parent) && agent != "" && !strings.ContainsAny(agent, "/.\\")
+}
+
+func (n *Node) subagentDir(parent string) string {
+	p := n.transcriptPath(parent)
+	if p == "" {
+		return ""
+	}
+	return filepath.Join(strings.TrimSuffix(p, ".jsonl"), "subagents")
+}
+
+// subagentFile opens "<parent>@<agent>" as a transcript.
+func (n *Node) subagentFile(id string) (*transcript.File, error) {
+	parent, agent, ok := splitSubagent(id)
+	if !ok {
+		return nil, fmt.Errorf("bad subagent id %q", id)
+	}
+	dir := n.subagentDir(parent)
+	if dir == "" {
+		return nil, fmt.Errorf("transcript for session %s not found", parent)
+	}
+	p := filepath.Join(dir, "agent-"+agent+".jsonl")
+	if _, err := os.Stat(p); err != nil {
+		return nil, fmt.Errorf("subagent %s not found", agent)
+	}
+	return transcript.NewSubagentFile(p), nil
+}
+
+type subagentMeta struct {
+	AgentType    string `json:"agentType"`
+	Description  string `json:"description"`
+	ToolUseID    string `json:"toolUseId"`
+	RequestShape string `json:"requestShape"`
+	Finished     bool   `json:"finished"`
+}
+
+// subagents lists a session's subagents, newest first; finished ones older than a day are left out.
+func (n *Node) subagents(parent string) []proto.Subagent {
+	dir := n.subagentDir(parent)
+	if dir == "" {
+		return nil
+	}
+	metas, _ := filepath.Glob(filepath.Join(dir, "agent-*.meta.json"))
+	var out []proto.Subagent
+	for _, mp := range metas {
+		id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(mp), "agent-"), ".meta.json")
+		b, err := os.ReadFile(mp)
+		if err != nil {
+			continue
+		}
+		var m subagentMeta
+		if json.Unmarshal(b, &m) != nil {
+			continue
+		}
+		jp := filepath.Join(dir, "agent-"+id+".jsonl")
+		st, err := os.Stat(jp)
+		if err != nil {
+			continue
+		}
+		// A subagent whose file has not moved for 20 minutes is not running any more (its claude went away).
+		running := !m.Finished && time.Since(st.ModTime()) < 20*time.Minute
+		if !running && time.Since(st.ModTime()) > 24*time.Hour {
+			continue
+		}
+		started, last := subagentEdges(jp)
+		out = append(out, proto.Subagent{
+			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
+			ToolUseID: m.ToolUseID, Running: running, Background: m.RequestShape == "background",
+			StartedAt: started, UpdatedAt: st.ModTime(), LastText: snippet(last),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Running != out[j].Running {
+			return out[i].Running
+		}
+		return out[i].StartedAt.After(out[j].StartedAt)
+	})
+	return out
+}
+
+// subagentEdges reads the first timestamp and the latest assistant text of a subagent transcript.
+func subagentEdges(path string) (time.Time, string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return time.Time{}, ""
+	}
+	defer f.Close()
+	var started time.Time
+	r := bufio.NewReaderSize(f, 64<<10)
+	if line, err := r.ReadBytes('\n'); err == nil || len(line) > 0 {
+		var e struct {
+			Timestamp time.Time `json:"timestamp"`
+		}
+		_ = json.Unmarshal(line, &e)
+		started = e.Timestamp
+	}
+	st, _ := f.Stat()
+	const tail = 96 << 10
+	off := max(st.Size()-tail, 0)
+	buf := make([]byte, st.Size()-off)
+	if _, err := f.ReadAt(buf, off); err != nil && len(buf) == 0 {
+		return started, ""
+	}
+	meta := transcript.Meta{Sidechain: true}
+	for _, line := range strings.Split(string(buf), "\n") {
+		if strings.Contains(line, `"assistant"`) {
+			transcript.ParseLine(0, []byte(line), &meta)
+		}
+	}
+	return started, meta.LastText
+}

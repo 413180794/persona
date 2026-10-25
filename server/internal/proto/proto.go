@@ -110,6 +110,8 @@ type Session struct {
 	// Background lists commands / agents Claude started in the background that have not reported back yet
 	// (the TUI's "2 shells still running").
 	Background []BackgroundTask `json:"background,omitempty"`
+	// Subagents the agent launched (Agent / Task tool); each one's transcript is the session "<id>@<agent id>".
+	Subagents []Subagent `json:"subagents,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
 	Loop                *LoopInfo `json:"loop,omitempty"`
 	UpdatedAt           time.Time `json:"updated_at"`
@@ -244,4 +246,18 @@ type LoopInfo struct {
 	NextAt          time.Time `json:"next_at,omitempty"`
 	Cron            string    `json:"cron,omitempty"`
 	Ticks           int       `json:"ticks,omitempty"` // wakeups scheduled so far
+}
+
+// Subagent is an agent the session launched (the Agent tool), with its own transcript.
+type Subagent struct {
+	ID          string    `json:"id"`         // agent id (agent-<id>.jsonl)
+	SessionID   string    `json:"session_id"` // "<parent>@<id>": readable like any session
+	Type        string    `json:"type,omitempty"`
+	Description string    `json:"description,omitempty"`
+	ToolUseID   string    `json:"tool_use_id,omitempty"`
+	Running     bool      `json:"running"`
+	Background  bool      `json:"background,omitempty"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	LastText    string    `json:"last_text,omitempty"`
 }

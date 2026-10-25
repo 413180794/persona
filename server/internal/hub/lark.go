@@ -142,6 +142,18 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/lark/messages/{id}/media/{key}", func(w http.ResponseWriter, r *http.Request) {
 		h.larkMedia(w, r, "/messages/"+url.PathEscape(r.PathValue("id"))+"/media/"+url.PathEscape(r.PathValue("key")))
 	})
+	// Read-only window onto the rest of lark-connector's agent API (search, docs, calendar, minutes, tasks, contacts…):
+	// /api/v1/lark/raw/<path> = /agent/v1/<path>.
+	api.HandleFunc("GET /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := h.lark.Raw(r.Context(), w, "GET", "/"+r.PathValue("path"), r.URL.Query(), nil); err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+		}
+	})
+	api.HandleFunc("POST /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := h.lark.Raw(r.Context(), w, "POST", "/"+r.PathValue("path"), r.URL.Query(), io.LimitReader(r.Body, 1<<20)); err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+		}
+	})
 	api.HandleFunc("GET /api/v1/lark/emojis", func(w http.ResponseWriter, r *http.Request) {
 		emojis, groups, err := h.lark.Emojis(r.Context())
 		if err != nil {

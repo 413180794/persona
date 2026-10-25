@@ -107,3 +107,10 @@ node 的 `session.start`：
 - herdr：`herdr workspace rename <workspace_id> <label>`、`herdr tab rename <tab_id> <label>`。
 - 手机改名走 hub `…/rename` 接口；空间名是置顶 / 屏蔽的 key，hub 改名时一并迁移。
 
+## 子 Agent（2026-10-25 实测，2.1.310）
+
+- 文件：`~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl`（每行 `isSidechain:true`、带 `agentId`，格式同主 transcript）
+  + `agent-<id>.meta.json`：`{agentType, description, toolUseId, requestShape:"background"|…, finished}`。
+- node：会话 id `<session>@<agent id>` 打开子 Agent 的文件（`transcript.NewSubagentFile`，保留 sidechain 行），所以 items / watch / 分页全复用；
+  `Session.subagents` 列出子 Agent（未 finished 且 20 分钟内有写入算运行中；完成超过一天的不列）。后台任务列表里不再放 agent，只剩 shell。
+

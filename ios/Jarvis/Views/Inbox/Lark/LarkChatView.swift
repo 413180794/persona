@@ -44,6 +44,7 @@ struct LarkChatView: View {
     @State private var atBottom = true
     @State private var mention: String?
     @State private var person: LarkPersonRef?
+    @Environment(\.feishuOpen) private var feishuOpen
     @State private var debugPick: LarkMessage?
     @State private var debugPost: String?
 
@@ -111,6 +112,15 @@ struct LarkChatView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await askJarvis() } } label: { Label("让 Jarvis 总结", systemImage: "sparkles") }
+            }
+            if let open = feishuOpen {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { open(.search(query: nil, feedID: conversation.id)) } label: { Label("搜索聊天记录", systemImage: "magnifyingglass") }
+                        Button { open(.chatInfo(conversation)) } label: { Label("会话信息", systemImage: "info.circle") }
+                    } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("更多")
+                }
             }
         }
         .task {

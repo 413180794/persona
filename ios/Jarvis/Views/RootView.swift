@@ -19,6 +19,9 @@ struct RootView: View {
                     Tab("信息", systemImage: "tray.full", value: AppTab.mail) {
                         InboxView()
                     }
+                    Tab("工作台", systemImage: "square.grid.2x2", value: AppTab.workbench) {
+                        WorkbenchView()
+                    }
                     Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
                         SettingsView()
                     }

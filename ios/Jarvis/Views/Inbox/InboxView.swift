@@ -71,6 +71,10 @@ struct InboxView: View {
                         .accessibilityLabel("分组")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button { path.append(FeishuRoute.search(query: nil, feedID: nil)) } label: { Image(systemName: "magnifyingglass") }
+                        .accessibilityLabel("搜索")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: "square.and.pencil") }
                             .disabled(accounts.isEmpty)
@@ -79,6 +83,7 @@ struct InboxView: View {
                 }
             }
             .navigationDestination(for: LarkConversation.self) { c in LarkChatView(conversation: c) }
+            .feishuRoutes()
             .navigationDestination(for: MailSummary.self) { m in MailDetailView(summary: m, accounts: accounts) }
             .sheet(isPresented: $showAccounts, onDismiss: { Task { await reloadMail() } }) { MailAccountsView() }
             .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
@@ -108,6 +113,8 @@ struct InboxView: View {
                 if new < old { Task { await reload(quiet: true) } }
             }
         }
+        .environment(\.feishuOpen) { path.append($0) }
+        .feishuHandlesLinks { path.append($0) }
         .overlay { drawerOverlay }
     }
 

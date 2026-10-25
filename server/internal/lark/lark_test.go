@@ -3,6 +3,7 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -234,5 +235,48 @@ func TestProfileReactionsAndMoments(t *testing.T) {
 	post, err := c.MomentsPost(ctx, "p1")
 	if err != nil || !strings.Contains(string(post), "/api/v1/lark/media/i1") {
 		t.Fatalf("post = %s %v", post, err)
+	}
+}
+
+func TestRawProxy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /agent/v1/documents/recent":
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = w.Write([]byte(`{"items":[{"a":"/api/media/k","b":"/api/documents/media/x","c":"/api/messages/1/media/k"}]}`))
+		case "GET /agent/v1/minutes/t/media":
+			w.Header().Set("Content-Type", "audio/mp4")
+			_, _ = w.Write([]byte("mp4"))
+		case "POST /agent/v1/search/page":
+			b, _ := io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(b)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	ctx := context.Background()
+	rec := httptest.NewRecorder()
+	if err := c.Raw(ctx, rec, "GET", "/documents/recent", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.Body.String(); got != `{"items":[{"a":"/api/v1/lark/media/k","b":"/api/v1/lark/raw/documents/media/x","c":"/api/v1/lark/messages/1/media/k"}]}` {
+		t.Fatalf("rewritten = %s", got)
+	}
+	rec = httptest.NewRecorder()
+	if err := c.Raw(ctx, rec, "GET", "/minutes/t/media", nil, nil); err != nil || rec.Body.String() != "mp4" || rec.Header().Get("Content-Type") != "audio/mp4" {
+		t.Fatalf("binary = %q %v", rec.Body.String(), err)
+	}
+	rec = httptest.NewRecorder()
+	if err := c.Raw(ctx, rec, "POST", "/search/page", nil, strings.NewReader(`{"tab":"messages"}`)); err != nil || rec.Body.String() != `{"tab":"messages"}` {
+		t.Fatalf("search page = %q %v", rec.Body.String(), err)
+	}
+	for _, bad := range []struct{ method, path string }{{"POST", "/conversations"}, {"DELETE", "/flags"}, {"GET", "/conversations/1/qr-code"},
+		{"GET", "/links/open"}, {"GET", "/maintenance/export"}, {"GET", "/../x"}} {
+		if err := c.Raw(ctx, httptest.NewRecorder(), bad.method, bad.path, nil, nil); err == nil {
+			t.Errorf("%s %s should be refused", bad.method, bad.path)
+		}
 	}
 }

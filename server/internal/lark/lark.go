@@ -496,6 +496,82 @@ type Read struct {
 	MessageIDs []string `json:"message_ids,omitempty"`
 }
 
+// rawRewriter points every lark-connector /api/... path in a JSON body at the hub's read-only proxy.
+var rawRewriter = strings.NewReplacer(`"/api/media/`, `"/api/v1/lark/media/`, `"/api/messages/`, `"/api/v1/lark/messages/`, `"/api/`, `"/api/v1/lark/raw/`)
+
+// Read-only POST routes (lark-connector's READ_ONLY_POST_ROUTES subset the app needs): they only POST because the body is large.
+var rawPostAllowed = map[string]bool{"/search/page": true, "/search/mention-history": true}
+
+// GETs that act as the user or hand out credentials (lark-connector's NOT_READ_ONLY_GET_ROUTES).
+func rawGetDenied(path string) bool {
+	return strings.HasSuffix(path, "/qr-code") || strings.HasPrefix(path, "/links/open") || strings.HasPrefix(path, "/maintenance/")
+}
+
+// Raw forwards one read-only request to lark-connector's agent API (path below /agent/v1) and writes the answer:
+// JSON with its media / API paths pointing at the hub, anything else streamed as is.
+func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path string, query url.Values, body io.Reader) error {
+	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
+		return errors.New("lark: bad path")
+	}
+	switch method {
+	case "GET":
+		if rawGetDenied(path) {
+			return errors.New("lark: " + path + " is not read-only")
+		}
+	case "POST":
+		if !rawPostAllowed[path] {
+			return errors.New("lark: POST " + path + " is not allowed")
+		}
+	default:
+		return errors.New("lark: only reads are allowed")
+	}
+	tok, err := c.agentToken(ctx)
+	if err != nil {
+		return err
+	}
+	u := strings.TrimRight(c.cfg.BaseURL, "/") + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.media.Do(req)
+	if err != nil {
+		return fmt.Errorf("lark: %w", err)
+	}
+	defer resp.Body.Close()
+	ct := resp.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "application/json") {
+		raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode == 401 {
+			c.mu.Lock()
+			c.token = ""
+			c.mu.Unlock()
+		}
+		w.Header().Set("Content-Type", ct)
+		w.WriteHeader(resp.StatusCode)
+		_, err = w.Write([]byte(rawRewriter.Replace(string(raw))))
+		return err
+	}
+	for _, h := range []string{"Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "ETag"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, err = io.Copy(w, resp.Body)
+	return err
+}
+
 // MarkRead advances the chat's read position.
 func (c *Client) MarkRead(ctx context.Context, feedID string, r Read) error {
 	body := map[string]any{"maxPosition": r.Position}

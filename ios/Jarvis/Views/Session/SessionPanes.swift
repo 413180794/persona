@@ -395,3 +395,87 @@ struct LoopTickRow: View {
     }
 }
 
+
+// MARK: - Subagents
+
+extension EnvironmentValues {
+    /// Opens the subagent launched by an Agent tool call (by its tool_use id; set by ChatView).
+    @Entry var openSubagent: ((String) -> Void)? = nil
+}
+
+/// The agents in this conversation, under the tabs: 主 Agent and each subagent it launched (spinning while it
+/// runs, a check when done). Tap one to read its conversation in the same chat UI.
+struct AgentStrip: View {
+    var agents: [Subagent]
+    var viewing: String?
+    var select: (Subagent?) -> Void
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    chip(title: "主 Agent", symbol: "person.fill", running: false, done: false, on: viewing == nil) { select(nil) }
+                        .id("main")
+                    ForEach(agents) { a in
+                        chip(title: a.title, symbol: nil, running: a.running, done: !a.running, on: viewing == a.id) { select(a) }
+                            .id(a.id)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
+            // The one being read stays in sight (it may be far along a long row).
+            .onChange(of: viewing, initial: true) { _, id in withAnimation(.snappy) { proxy.scrollTo(id ?? "main", anchor: .center) } }
+        }
+    }
+
+    private func chip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if running {
+                    ProgressView().controlSize(.mini)
+                } else if done {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.idle)
+                } else if let symbol {
+                    Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+                }
+                Text(title).lineLimit(1).frame(maxWidth: 160)
+            }
+            .font(.caption.weight(on ? .semibold : .medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(on ? Theme.accent.opacity(0.15) : Color.primary.opacity(0.05), in: .capsule)
+            .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.45) : .clear, lineWidth: 1))
+            .foregroundStyle(on ? Theme.accent : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title + (running ? "，运行中" : done ? "，已完成" : ""))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// In place of the composer while a subagent is shown: what it is and the way back.
+struct SubagentFooter: View {
+    var agent: Subagent
+    var back: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: agent.running ? "person.2.wave.2" : "person.2")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("子 Agent · " + (agent.type ?? "Agent")).font(.footnote.weight(.semibold)).lineLimit(1)
+                Text(agent.running ? "运行中，只读" : "已完成，只读").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Button(action: back) {
+                Label("回到主 Agent", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).lineLimit(1)
+            }
+            .themedButton()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .surface(in: .rect(cornerRadius: 20, style: .continuous))
+    }
+}

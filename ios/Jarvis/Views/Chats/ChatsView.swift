@@ -12,7 +12,9 @@ struct SpaceGroup: Identifiable {
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
     /// Nothing going on: every agent quiet and none with background commands still running.
-    var isQuiet: Bool { sessions.allSatisfy { $0.isQuiet && ($0.background ?? []).isEmpty } }
+    var isQuiet: Bool {
+        sessions.allSatisfy { $0.isQuiet && ($0.background ?? []).isEmpty && !($0.subagents ?? []).contains(where: \.running) }
+    }
 
     func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
 
@@ -106,6 +108,7 @@ struct ChatsView: View {
                         // stays compact.
                         let stays: (Session) -> Bool = {
                             !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil || !($0.background ?? []).isEmpty
+                                || ($0.subagents ?? []).contains(where: \.running)
                         }
                         let idle = g.sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
@@ -385,8 +388,14 @@ struct SlotRow: View {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
                     if let loop = session.loop { LoopBadge(loop: loop).fixedSize().opacity(muted ? 0.6 : 1) }
-                    if let bg = session.background, !bg.isEmpty, session.state != .working, session.state != .needsYou {
-                        BackgroundBadge(count: bg.count).fixedSize().opacity(muted ? 0.6 : 1)
+                    if session.state != .working, session.state != .needsYou {
+                        if let bg = session.background, !bg.isEmpty {
+                            BackgroundBadge(count: bg.count).fixedSize().opacity(muted ? 0.6 : 1)
+                        }
+                        let agents = (session.subagents ?? []).filter(\.running).count
+                        if agents > 0 {
+                            BackgroundBadge(count: agents, label: "子 Agent", symbol: "person.2.fill").fixedSize().opacity(muted ? 0.6 : 1)
+                        }
                     }
                     if muted {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
@@ -585,13 +594,15 @@ private struct RenameSessionAlert: ViewModifier {
 /// really finished yet, so it should not look like the agents that are.
 struct BackgroundBadge: View {
     var count: Int
+    var label = "后台"
+    var symbol = "gearshape.2.fill"
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: "gearshape.2.fill")
+            Image(systemName: symbol)
                 .font(.system(size: 10, weight: .bold))
-                .symbolEffect(.rotate, options: .repeat(.periodic(delay: 1.5)))
-            Text("后台 \(count)").lineLimit(1)
+                .symbolEffect(.pulse, options: .repeat(.continuous))
+            Text("\(label) \(count)").lineLimit(1)
         }
         .font(.caption.weight(.semibold))
         .foregroundStyle(Theme.busy)

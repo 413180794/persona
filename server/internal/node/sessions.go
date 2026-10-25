@@ -212,11 +212,18 @@ func (n *Node) file(id string) (*transcript.File, error) {
 	if f != nil {
 		return f, nil
 	}
-	p := n.transcriptPath(id)
-	if p == "" {
-		return nil, fmt.Errorf("transcript for session %s not found", id)
+	if _, _, sub := splitSubagent(id); sub {
+		var err error
+		if f, err = n.subagentFile(id); err != nil {
+			return nil, err
+		}
+	} else {
+		p := n.transcriptPath(id)
+		if p == "" {
+			return nil, fmt.Errorf("transcript for session %s not found", id)
+		}
+		f = transcript.NewFile(p)
 	}
-	f = transcript.NewFile(p)
 	n.mu.Lock()
 	if existing := n.files[id]; existing != nil {
 		f = existing
@@ -261,8 +268,15 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}
-				s.Background = m.bg // background shells keep running after the turn ends
+				// Background shells keep running after the turn ends; background subagents are listed as subagents.
+				s.Background = nil
+				for _, t := range m.bg {
+					if t.Kind != "agent" {
+						s.Background = append(s.Background, t)
+					}
+				}
 				s.Loop = m.loop
+				s.Subagents = n.subagents(id)
 			}
 		}
 		n.decorate(&s)
@@ -612,6 +626,9 @@ func listKey(list []proto.Session) string {
 		}
 		if s.Loop != nil {
 			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
+		}
+		for _, a := range s.Subagents {
+			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
 		}
 	}
 	return b.String()

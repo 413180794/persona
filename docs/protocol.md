@@ -26,6 +26,8 @@
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1,
  "queued":["工作中输入、还没被取走的消息"],
+ "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
+                "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
  "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
                 "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}]}

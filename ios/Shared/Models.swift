@@ -108,6 +108,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var background: [BackgroundTask]?
     /// The /loop driving this agent (it wakes itself up on a schedule).
     var loop: LoopInfo?
+    /// Agents it launched (the Agent tool); each reads like a session ("<id>@<agent id>").
+    var subagents: [Subagent]?
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -121,7 +123,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop, subagents,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -151,10 +153,33 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
+        subagents = try c.decodeIfPresent([Subagent].self, forKey: .subagents)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
+    }
+}
+
+/// An agent a session launched (the Agent tool), with its own transcript under the session id "<parent>@<id>".
+nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var sessionID: String
+    var type: String?
+    var description: String?
+    var toolUseID: String?
+    var running: Bool
+    var background: Bool?
+    var startedAt: Date?
+    var updatedAt: Date?
+    var lastText: String?
+
+    var title: String { (description?.isEmpty == false ? description : nil) ?? type ?? "子 Agent" }
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, description, running, background
+        case sessionID = "session_id", toolUseID = "tool_use_id", startedAt = "started_at", updatedAt = "updated_at",
+             lastText = "last_text"
     }
 }
 

@@ -47,9 +47,19 @@ struct ChatView: View {
         self.style = style
     }
 
-    private var store: ChatStore { model.chat(key) }
+    /// A subagent of this session being looked at instead of the main agent (read-only, same message UI).
+    @State private var viewing: Subagent?
+
+    /// What the chat shows: the main agent, or the subagent picked in the agent strip.
+    private var shownKey: SessionKey { viewing.map { SessionKey(machineID: key.machineID, sessionID: $0.sessionID) } ?? key }
+    private var store: ChatStore { model.chat(shownKey) }
     private var session: Session? { model.session(key) }
-    private var status: SessionStatus { session?.status ?? .unknown }
+    /// The latest state of the subagent being viewed (the list refreshes with the session).
+    private var viewedAgent: Subagent? { viewing.flatMap { v in session?.subagents?.first { $0.id == v.id } ?? v } }
+    private var status: SessionStatus {
+        if let a = viewedAgent { return a.running ? .working : .idle }
+        return session?.status ?? .unknown
+    }
 
     var body: some View {
         paneContent
@@ -128,6 +138,9 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     SiblingStrip(current: key) { next in switchTo(next) }
                     SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
+                    if pane == .chat, let agents = session?.subagents, !agents.isEmpty {
+                        AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
+                    }
                 }
                 .background(.bar)
             }
@@ -168,6 +181,7 @@ struct ChatView: View {
         }
         .onAppear(perform: appeared)
         .onDisappear {
+            if viewing != nil { model.unsubscribe(shownKey) }
             model.unsubscribe(key)
             if model.visibleSession == key { model.visibleSession = nil }
         }
@@ -327,6 +341,20 @@ struct ChatView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let a = viewedAgent {
+                SubagentFooter(agent: a) { view(nil) }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            } else {
+                mainFooter
+            }
+        }
+        .environment(\.openSubagent) { toolUseID in
+            if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
+        }
+    }
+
+    private var mainFooter: some View {
             VStack(spacing: 10) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
                 if let loop = session?.loop, style == .dev {
@@ -346,7 +374,18 @@ struct ChatView: View {
             .padding(.bottom, 8)
             .animation(.snappy, value: status)
             .animation(.snappy, value: model.interactions(for: key).map(\.id))
-        }
+    }
+
+    /// Switches the chat to a subagent (nil: back to the main agent); its transcript streams like a session's.
+    private func view(_ agent: Subagent?) {
+        guard agent?.id != viewing?.id else { return }
+        Haptics.tap()
+        if viewing != nil { model.unsubscribe(shownKey) }
+        withAnimation(.snappy) { viewing = agent }
+        if agent != nil { model.subscribe(shownKey) }
+        followsEnd = true
+        frozenAt = nil
+        scrollToEnd()
     }
 
     private func chatScroll(insets: EdgeInsets) -> some View {
@@ -403,7 +442,7 @@ struct ChatView: View {
                         .controlSize(.small)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(key) } }
+                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(shownKey) } }
                 }
             }
             .padding(.horizontal, 16)
@@ -460,6 +499,12 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
+            if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    if let a = session?.subagents?.first(where: { $0.id == id }) { view(a) }
+                }
+            }
             if UserDefaults.standard.bool(forKey: "showOldest") { // the start of what is loaded (with -fromSeq: that turn's top)
                 Task {
                     try? await Task.sleep(for: .seconds(5))
@@ -540,6 +585,7 @@ struct ChatView: View {
     private func switchTo(_ next: SessionKey) {
         guard next != key else { return }
         Haptics.tap()
+        if viewing != nil { model.unsubscribe(shownKey); viewing = nil }
         model.unsubscribe(key)
         key = next
         userScrolled = false
@@ -996,6 +1042,7 @@ enum WorkItem: Identifiable {
 /// running: a spinner and "正在工作 39 秒 · 调用了 2 个工具" (ticking) with the terminal at the end. Tap to list every
 /// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
 struct WorkLine: View {
+    @Environment(\.openSubagent) private var openSubagent
     var items: [WorkItem]
     var live: Bool
     var start: Date?
@@ -1042,7 +1089,18 @@ struct WorkLine: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(items) { item in
                         switch item {
-                        case .step(.call(let c)): ToolCallRow(call: c, autoExpand: false)
+                        case .step(.call(let c)):
+                            VStack(alignment: .leading, spacing: 4) {
+                                ToolCallRow(call: c, autoExpand: false)
+                                if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
+                                    Button { open(id) } label: {
+                                        Label("查看子 Agent", systemImage: "arrow.up.right").font(.caption.weight(.semibold)).lineLimit(1)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Theme.accent)
+                                    .padding(.leading, 12)
+                                }
+                            }
                         case .step(.thought(let t)):
                             if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
                         case .text(let i): AssistantText(item: i)
