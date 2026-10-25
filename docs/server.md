@@ -51,7 +51,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 | 文件 | 内容 |
 | --- | --- |
-| `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines` |
+| `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端，`docs/mail.md`） |
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；没有就关闭推送 |
 

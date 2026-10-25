@@ -1,7 +1,7 @@
 # 邮件
 
 `server/internal/mail`：让 Claude 和 App 都能收发用户的邮箱。走标准 IMAP + SMTP，不依赖任何第三方中转服务；
-Gmail 额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后存在 hub 的 `dataDir`（默认 `~/.jarvis`）里。
+Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后存在 hub 的 `dataDir`（默认 `~/.jarvis`）里。
 
 ## 能力
 
@@ -23,21 +23,57 @@ Gmail 额外支持用 Gmail 搜索语法（`X-GM-RAW`）检索。凭据加密后
 HTTP 路由、JSON 字段与 `docs/protocol.md` 的「邮件 API」一节严格一致；密码永远不出现在响应里
 （`json:"-"` + 独立存储文件）。
 
-## Gmail 接入方式
+## Gmail 接入方式：使用 Google 账号登录（OAuth2 + XOAUTH2）
 
-Gmail 现在**不接受**账号密码直接登录（会报 `Application-specific password required`），只能用应用专用密码。
-（2026-10-24 用户要求移除了 OAuth2 / XOAUTH2 接入，只保留应用专用密码。）
+Google 已经不让第三方客户端用 Google 账号密码登录 Gmail（帮助中心「将 Gmail 添加到其他电子邮件客户端」：改用
+「使用 Google 账号登录」）。所以 Gmail 跟 Apple Mail、Thunderbird、Spark 这类客户端一样走 OAuth：
+App 里点「使用 Google 账号登录」→ 系统浏览器打开 Google 选账号、授权 → 回到 App → 账号添加好，不用填任何密码。
+（2026-10-24 曾经移除过 OAuth：当时的做法要用户自己建 Google Cloud 客户端、手工换 refresh token；
+2026-10-25 用户要求改回点按钮跳 Google 授权的方式，应用专用密码入口从 App 里去掉了。）
 
-### 应用专用密码
+### 流程
 
-1. 账号必须开启两步验证：<https://myaccount.google.com/security> →「两步验证」。没开的话下面入口不存在。
-2. 打开 <https://myaccount.google.com/apppasswords>，新建一个应用专用密码（名称随便填，比如 `Jarvis`）。
-3. 复制生成的 16 位密码——**只在弹窗里出现一次**，关掉就看不到了。
-4. 在 Jarvis 里新增账号：邮箱 `you@gmail.com`，认证方式 `password`，密码填这 16 位（去掉空格也行）。
+```
+App                         hub                                Google
+ │ POST oauth/google/start   │                                   │
+ │──────────────────────────▶│ 生成 state + PKCE verifier（内存，15 分钟）
+ │◀── auth_url, scheme ──────│                                   │
+ │ ASWebAuthenticationSession 打开 auth_url ────────────────────▶│ 选账号、同意
+ │◀──────────── com.googleusercontent.apps.<id>:/oauth2redirect?code&state
+ │ POST oauth/google/finish {state, code}                         │
+ │──────────────────────────▶│ code + verifier 换 token ────────▶│
+ │                           │◀── refresh_token, access_token, id_token
+ │                           │ id_token 取邮箱，XOAUTH2 登 IMAP + SMTP 验证，加密保存
+ │◀── {account} ─────────────│                                   │
+```
 
-服务端会自动套用 Gmail 预设：`imap.gmail.com:993` TLS、`smtp.gmail.com:465` TLS。
+- 授权范围：`https://mail.google.com/`（IMAP / SMTP 唯一能用的 scope）+ `openid email`（拿邮箱地址）。
+  `access_type=offline` + `prompt=select_account consent`：每次都给 refresh token，也能换账号。
+- 客户端类型是 **iOS**：没有 client secret，回调用反向 client ID 的自定义 scheme（Google 对 Android / Chrome 应用停了自定义 scheme，iOS 仍然支持）。
+  换 token 时只带 `client_id` + `code_verifier`，所以换 token 可以放在 hub 上做，refresh token 不经过手机。
+  ASWebAuthenticationSession 拦截回调 scheme，不需要在 Info.plist 里注册 URL scheme，client ID 换了 App 也不用重新发版。
+- id_token 是 hub 直接从 Google token 接口（TLS）拿到的，按 OIDC 规范不用再验签，只读 `email` / `email_verified`。
+- 凭据：`{client_id, refresh_token}` 用 AES-GCM 加密后存 `mail_accounts.oauth_enc`；access token 只在内存里缓存，过期前 1 分钟刷新。
+- IMAP `AUTHENTICATE XOAUTH2`、SMTP `AUTH XOAUTH2`、Gmail 搜索的临时连接同样走 XOAUTH2。
+- refresh token 失效（用户撤销授权、改了 Google 密码、半年没用）时报「Google authorization expired or was revoked」：
+  在 App 里再点一次「使用 Google 账号登录」选同一个账号，会原地更新凭据（账号 ID 不变）。
+- 以前用应用专用密码加的 Gmail 账号继续能用（服务端仍支持 `auth:"password"`），只是 App 里不再提供这个入口。
 
-补充：如果 `imap.gmail.com` 登录时报 `IMAP access is disabled`，去 Gmail 网页版「设置 → 转发和 POP/IMAP」启用 IMAP。
+### 一次性配置：Google Cloud OAuth 客户端
+
+第三方客户端用的是自己通过了 Google 审核的客户端；Jarvis 只给自己用，建一个自己的就行：
+
+1. <https://console.cloud.google.com/projectcreate> 建项目（如 `jarvis-mail`）。
+2. 「Google Auth Platform」→ 品牌：应用名 `Jarvis`，用户类型选「外部」。
+3. 「数据访问」里添加 scope `https://mail.google.com/`（受限 scope）。
+4. 「目标对象」里**发布应用（In production）**。停在 Testing 时 refresh token 7 天就过期；发布后不过期。
+   未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
+5. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID `com.chirpet.jarvis`，得到
+   `<数字>-<串>.apps.googleusercontent.com`。
+6. 写进 example-machine `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh example-machine`）。
+   iOS 客户端的 client ID 是公开信息，不算密钥。
+
+没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。
 
 ## 飞书邮箱
 
@@ -75,7 +111,7 @@ SMTP 不给时按端口推断（465 = TLS，587/25 = STARTTLS，其余 TLS）。
 | 文件 | 权限 | 内容 |
 | --- | --- | --- |
 | `<dataDir>/secret.key` | 0600 | 32 字节随机主密钥，首次启动时创建，绝不进数据库、不返回给客户端 |
-| Postgres `mail_accounts` 表 | — | 主机、端口、显示名等非敏感字段（jsonb）；`password_enc` 为密文（`oauth_enc` 列是 OAuth 移除前留下的，不再写入） |
+| Postgres `mail_accounts` 表 | — | 主机、端口、显示名等非敏感字段（jsonb）；`password_enc`（密码）、`oauth_enc`（Gmail 的 client_id + refresh token）为密文 |
 
 - 算法 AES-256-GCM，随机 12 字节 nonce 拼在密文前面，整体 base64。
 - 每次保存都用新 nonce 重新加密（同一份明文不会产生同一段密文）。

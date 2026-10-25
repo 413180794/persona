@@ -86,6 +86,10 @@ struct InboxView: View {
             .feishuRoutes()
             .navigationDestination(for: MailSummary.self) { m in MailDetailView(summary: m, accounts: accounts) }
             .sheet(isPresented: $showAccounts, onDismiss: { Task { await reloadMail() } }) { MailAccountsView() }
+            #if DEBUG
+            // `-addMail YES`: open 管理邮箱 › 添加邮箱 for screenshots.
+            .onAppear { if UserDefaults.standard.bool(forKey: "addMail") { showAccounts = true } }
+            #endif
             .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
             .sheet(item: $editingLabels) { c in LarkLabelPicker(conversation: c) { Task { await reload(quiet: true) } } }
             .task(id: listKey) {

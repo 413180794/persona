@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 import WebKit
 
@@ -57,6 +58,21 @@ extension APIClient {
     struct AccountResponse: Decodable { var account: MailAccount }
     func addMailAccount(_ a: AddAccount) async throws -> MailAccount {
         try await post("/api/v1/mail/accounts", body: a, timeout: 60, as: AccountResponse.self).account
+    }
+    struct GoogleStart: Decodable {
+        var authURL: URL
+        var callbackScheme: String
+        var state: String
+        enum CodingKeys: String, CodingKey { case authURL = "auth_url", callbackScheme = "callback_scheme", state }
+    }
+    struct GoogleFinish: Encodable { var state: String; var code: String?; var error: String? }
+    /// Begins Gmail's "Sign in with Google": the hub builds the consent URL (PKCE) for the app to open.
+    func googleSignInStart() async throws -> GoogleStart {
+        try await post("/api/v1/mail/oauth/google/start", as: GoogleStart.self)
+    }
+    /// Hands the callback's code to the hub, which exchanges it, checks IMAP / SMTP and saves the account.
+    func googleSignInFinish(_ f: GoogleFinish) async throws -> MailAccount {
+        try await post("/api/v1/mail/oauth/google/finish", body: f, timeout: 60, as: AccountResponse.self).account
     }
     func deleteMailAccount(_ id: String) async throws { try await delete("/api/v1/mail/accounts/\(id)") }
 
@@ -472,7 +488,7 @@ struct MailAccountsView: View {
                                 .font(.title2).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading) {
                                 Text(a.email).font(.body.weight(.medium))
-                                Text(a.status == "error" ? (a.error ?? "错误") : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
+                                Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? "Gmail · Google 账号登录" : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
                                     .font(.caption).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
@@ -494,6 +510,9 @@ struct MailAccountsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddMailAccountView() }
             .task { await load() }
+            #if DEBUG
+            .onAppear { if UserDefaults.standard.bool(forKey: "addMail") { adding = true } }
+            #endif
         }
     }
 
@@ -503,6 +522,7 @@ struct MailAccountsView: View {
 struct AddMailAccountView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.webAuthenticationSession) private var webAuth
     enum Kind: String, CaseIterable, Identifiable { case gmail = "Gmail", feishu = "飞书", imap = "其他 IMAP"; var id: String { rawValue } }
     @State private var kind: Kind = .gmail
     @State private var email = ""
@@ -547,14 +567,33 @@ struct AddMailAccountView: View {
                 Picker("类型", selection: $kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
-                Section {
-                    TextField("邮箱地址", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField(kind == .gmail ? "应用专用密码（16 位）" : "密码 / 授权码", text: $password)
-                } footer: {
-                    switch kind {
-                    case .gmail: Text("Google 账号开启两步验证后，在 myaccount.google.com/apppasswords 生成应用专用密码。")
-                    case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
-                    case .imap: Text("QQ / 163 / Outlook / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。")
+                if kind == .gmail {
+                    Section {
+                        Button { Task { await signInWithGoogle() } } label: {
+                            HStack(spacing: 8) {
+                                if saving { ProgressView().controlSize(.small) } else { Image(systemName: "g.circle.fill") }
+                                Text(saving ? "正在连接 Gmail…" : "使用 Google 账号登录").lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .themedButton(prominent: true)
+                        .controlSize(.large)
+                        .disabled(saving)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                    } footer: {
+                        Text("跳到 Google 选择账号并授权 Jarvis 收发邮件，不需要密码。授权随时可以在 Google 账号的「第三方应用和服务」里撤销；授权失效时再登录一次即可恢复。")
+                    }
+                } else {
+                    Section {
+                        TextField("邮箱地址", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        SecureField("密码 / 授权码", text: $password)
+                    } footer: {
+                        switch kind {
+                        case .gmail: EmptyView()
+                        case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
+                        case .imap: Text("QQ / 163 / Outlook / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。")
+                        }
                     }
                 }
                 if kind == .imap {
@@ -571,9 +610,11 @@ struct AddMailAccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
-                        .disabled(saving || email.isEmpty || password.isEmpty)
+                if kind != .gmail {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
+                            .disabled(saving || email.isEmpty || password.isEmpty)
+                    }
                 }
             }
         }
@@ -601,7 +642,11 @@ struct AddMailAccountView: View {
                 smtpPort = a.smtpPort.map(String.init) ?? "465"
             }
             aiNote = g.note
-            if g.missing.isEmpty {
+            if kind == .gmail {
+                // Gmail no longer takes passwords from third-party clients.
+                Haptics.attention()
+                aiNote = "Gmail 不再支持用密码登录第三方客户端，点「使用 Google 账号登录」授权。"
+            } else if g.missing.isEmpty {
                 await save()
             } else {
                 Haptics.attention()
@@ -613,6 +658,29 @@ struct AddMailAccountView: View {
         }
     }
 
+    /// Gmail: Google's consent page in the system browser, then the hub swaps the code for a refresh token.
+    private func signInWithGoogle() async {
+        guard let api = model.api else { return }
+        saving = true
+        defer { saving = false }
+        error = nil
+        do {
+            let start = try await api.googleSignInStart()
+            let callback = try await webAuth.authenticate(using: start.authURL, callback: .customScheme(start.callbackScheme),
+                                                          preferredBrowserSession: .shared, additionalHeaderFields: [:])
+            let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let value = { (name: String) in items.first(where: { $0.name == name })?.value }
+            if value("error") == "access_denied" { return }
+            _ = try await api.googleSignInFinish(.init(state: value("state") ?? start.state, code: value("code"), error: value("error")))
+            Haptics.success()
+            dismiss()
+        } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
+            return
+        } catch {
+            if let shown = error.shown { self.error = shown; Haptics.error() }
+        }
+    }
+
     private func save() async {
         guard let api = model.api else { return }
         saving = true
@@ -620,8 +688,7 @@ struct AddMailAccountView: View {
         var req = APIClient.AddAccount(name: email, email: email, auth: "password")
         switch kind {
         case .gmail:
-            req.provider = "gmail"
-            req.password = password.replacingOccurrences(of: " ", with: "")
+            return
         case .feishu:
             req.provider = "feishu"
             req.password = password

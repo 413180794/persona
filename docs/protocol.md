@@ -182,7 +182,9 @@ node → hub 请求：
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/mail/accounts` | `{"accounts":[MailAccount]}`（不含密码） |
-| POST | `/api/v1/mail/accounts` | 新增：测试连接成功才保存 → `{"account"}` |
+| POST | `/api/v1/mail/accounts` | 新增（密码 / 授权码）：测试连接成功才保存 → `{"account"}`；`auth:"oauth2"` 一律 400 |
+| POST | `/api/v1/mail/oauth/google/start` | Gmail「使用 Google 账号登录」：`{"login_hint"?}` → `{"auth_url","callback_scheme","state"}`；App 用 ASWebAuthenticationSession 打开 `auth_url`，等 `callback_scheme` 回调；hub 未配置 `google.client_id` 时 400 |
+| POST | `/api/v1/mail/oauth/google/finish` | 回调 URL 里的 `{"state","code"}`（或 `{"state","error"}`）→ hub 换 refresh token、验证 IMAP + SMTP 后保存 → `{"account"}`；同一邮箱再登录一次 = 更新凭据（ID 不变）；state 一次性、15 分钟过期 |
 | DELETE | `/api/v1/mail/accounts/{aid}` | |
 | POST | `/api/v1/mail/accounts/{aid}/test` | `{"ok":true}` / `{"error"}` |
 | GET | `/api/v1/mail/accounts/{aid}/mailboxes` | `{"mailboxes":[{"name","role","unseen","total"}]}`，role ∈ inbox/sent/drafts/trash/archive/junk/"" |
@@ -193,7 +195,7 @@ node → hub 请求：
 
 ```jsonc
 // MailAccount
-{"id":"acc_…","name":"Gmail","email":"x@gmail.com","provider":"gmail|feishu|imap","auth":"password",
+{"id":"acc_…","name":"Gmail","email":"x@gmail.com","provider":"gmail|feishu|imap","auth":"password|oauth2",
  "username":"…","imap_host":"imap.gmail.com","imap_port":993,"smtp_host":"smtp.gmail.com","smtp_port":465,
  "smtp_security":"tls|starttls","status":"ok|error","error":""}
 // 新增时额外字段：password。provider 为 feishu 时服务器固定为 imap/smtp.larkoffice.com（993 / 465，SSL）

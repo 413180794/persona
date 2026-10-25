@@ -25,6 +25,11 @@ type MachineConfig struct {
 	RemoteBin string `json:"remote_bin,omitempty"`
 }
 
+// GoogleConfig is a Google Cloud OAuth client of type iOS. It has no secret: the client ID is public.
+type GoogleConfig struct {
+	ClientID string `json:"client_id"`
+}
+
 type Config struct {
 	Listen             string `json:"listen"`
 	Token              string `json:"token"`
@@ -35,7 +40,9 @@ type Config struct {
 	// AI configures the Messages API used for in-app AI helpers (defaults to the cc_ds gateway on example-machine).
 	AI ai.Config `json:"ai"`
 	// Lark points at the user's lark-connector agent API (Feishu messages in the 信息 tab).
-	Lark     lark.Config     `json:"lark"`
+	Lark lark.Config `json:"lark"`
+	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
+	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`
 
 	dir string

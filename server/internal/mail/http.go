@@ -16,6 +16,8 @@ func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/mail/accounts", s.handleListAccounts)
 	mux.HandleFunc("POST /api/v1/mail/accounts", s.handleAddAccount)
+	mux.HandleFunc("POST /api/v1/mail/oauth/google/start", s.handleGoogleStart)
+	mux.HandleFunc("POST /api/v1/mail/oauth/google/finish", s.handleGoogleFinish)
 	mux.HandleFunc("DELETE /api/v1/mail/accounts/{aid}", s.handleDeleteAccount)
 	mux.HandleFunc("POST /api/v1/mail/accounts/{aid}/test", s.handleTestAccount)
 	mux.HandleFunc("GET /api/v1/mail/accounts/{aid}/mailboxes", s.handleMailboxes)
@@ -102,6 +104,9 @@ func statusFor(err error) int {
 	case strings.Contains(msg, "is required"),
 		strings.Contains(msg, "invalid"),
 		strings.Contains(msg, "unknown mail provider"),
+		strings.Contains(msg, "not configured"),
+		strings.Contains(msg, "start again"),
+		strings.Contains(msg, "not granted"),
 		strings.Contains(msg, "no recipients"):
 		return http.StatusBadRequest
 	case errors.Is(err, context.DeadlineExceeded):
@@ -140,6 +145,34 @@ func (s *Service) handleAddAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	account, err := s.AddAccount(req)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"account": account})
+}
+
+func (s *Service) handleGoogleStart(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		LoginHint string `json:"login_hint"`
+	}
+	if r.ContentLength != 0 && !decodeBody(w, r, &req) {
+		return
+	}
+	start, err := s.StartGoogleOAuth(req.LoginHint)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, start)
+}
+
+func (s *Service) handleGoogleFinish(w http.ResponseWriter, r *http.Request) {
+	var req OAuthFinishRequest
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	account, err := s.FinishGoogleOAuth(r.Context(), req)
 	if err != nil {
 		s.fail(w, err)
 		return

@@ -30,7 +30,7 @@ smtp_host, smtp_port, smtp_security, missing, note.
   *.larkoffice.com / *.feishu.cn / *.larksuite.com; otherwise "imap".
 - smtp_security: "tls" for implicit SSL (usually 465), "starttls" for 587.
 - Leave a key empty / 0 when the text does not say it; never invent passwords or servers.
-- For Gmail the password is the 16-character app password (strip spaces).
+- Gmail signs in with Google in the app (no password): set provider "gmail" and do not list password as missing.
 - missing: list of keys that are required but absent (email, password; and imap_host / smtp_host when provider is
   "imap" and the domain is not a well-known provider).
 - note: one short sentence in Chinese for the user, e.g. what was found or what to fill in.`

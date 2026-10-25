@@ -1,0 +1,326 @@
+package mail
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/emersion/go-sasl"
+)
+
+// Gmail "Sign in with Google": the app opens Google's consent page in the system browser
+// (ASWebAuthenticationSession), Google redirects to the reversed client ID scheme of an
+// iOS OAuth client, and the hub exchanges the code (PKCE, no client secret) for a refresh
+// token. IMAP and SMTP then authenticate with SASL XOAUTH2. See docs/mail.md.
+
+const (
+	AuthOAuth2 = "oauth2"
+
+	googleScopes    = "https://mail.google.com/ openid email"
+	oauthPendingTTL = 15 * time.Minute
+)
+
+var (
+	googleAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
+	googleTokenURL = "https://oauth2.googleapis.com/token"
+	httpClient     = &http.Client{Timeout: networkTimeout}
+)
+
+// OAuthCreds is the long-lived credential of an OAuth account, stored encrypted.
+type OAuthCreds struct {
+	ClientID     string `json:"client_id"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// OAuthStart is the POST /api/v1/mail/oauth/google/start response.
+type OAuthStart struct {
+	AuthURL        string `json:"auth_url"`
+	CallbackScheme string `json:"callback_scheme"`
+	State          string `json:"state"`
+}
+
+// OAuthFinishRequest is the POST /api/v1/mail/oauth/google/finish body: the callback URL's query.
+type OAuthFinishRequest struct {
+	State string `json:"state"`
+	Code  string `json:"code"`
+	Error string `json:"error,omitempty"`
+}
+
+// oauthPending is an authorization in flight, keyed by state.
+type oauthPending struct {
+	verifier string
+	created  time.Time
+}
+
+// accessCache holds one refresh token's current access token.
+type accessCache struct {
+	mu      sync.Mutex
+	token   string
+	expires time.Time
+}
+
+// googleRedirectURI is the redirect of an iOS OAuth client: its reversed client ID as the scheme.
+func googleRedirectURI(clientID string) (scheme, uri string) {
+	parts := strings.Split(clientID, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	scheme = strings.Join(parts, ".")
+	return scheme, scheme + ":/oauth2redirect"
+}
+
+func randomURLSafe(n int) string {
+	b := make([]byte, n)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// StartGoogleOAuth begins a "Sign in with Google" flow. loginHint preselects an account.
+func (s *Service) StartGoogleOAuth(loginHint string) (*OAuthStart, error) {
+	if s.googleClientID == "" {
+		return nil, errors.New("Google sign-in is not configured: set google.client_id in hub.json (docs/mail.md)")
+	}
+	state, verifier := randomURLSafe(24), randomURLSafe(48)
+	sum := sha256.Sum256([]byte(verifier))
+	scheme, redirect := googleRedirectURI(s.googleClientID)
+	q := url.Values{
+		"client_id":             {s.googleClientID},
+		"redirect_uri":          {redirect},
+		"response_type":         {"code"},
+		"scope":                 {googleScopes},
+		"state":                 {state},
+		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
+		"code_challenge_method": {"S256"},
+		// offline + consent: always hand out a refresh token, also when re-authorizing.
+		"access_type": {"offline"},
+		"prompt":      {"select_account consent"},
+	}
+	if hint := normalizeEmail(loginHint); hint != "" {
+		q.Set("login_hint", hint)
+	}
+
+	s.mu.Lock()
+	now := s.now()
+	for k, p := range s.pending {
+		if now.Sub(p.created) > oauthPendingTTL {
+			delete(s.pending, k)
+		}
+	}
+	s.pending[state] = &oauthPending{verifier: verifier, created: now}
+	s.mu.Unlock()
+
+	return &OAuthStart{AuthURL: googleAuthURL + "?" + q.Encode(), CallbackScheme: scheme, State: state}, nil
+}
+
+// FinishGoogleOAuth exchanges the authorization code, verifies IMAP and SMTP access and saves
+// the account. Signing in again with an existing Gmail account replaces its credentials.
+func (s *Service) FinishGoogleOAuth(ctx context.Context, req OAuthFinishRequest) (*MailAccount, error) {
+	s.mu.Lock()
+	p := s.pending[req.State]
+	delete(s.pending, req.State)
+	s.mu.Unlock()
+	if p == nil || s.now().Sub(p.created) > oauthPendingTTL {
+		return nil, errors.New("invalid or expired sign-in, start again")
+	}
+	if req.Error != "" {
+		return nil, fmt.Errorf("Google sign-in failed: %s", req.Error)
+	}
+	if req.Code == "" {
+		return nil, errors.New("code is required")
+	}
+
+	_, redirect := googleRedirectURI(s.googleClientID)
+	tr, err := s.googleToken(ctx, url.Values{
+		"client_id":     {s.googleClientID},
+		"code":          {req.Code},
+		"code_verifier": {p.verifier},
+		"redirect_uri":  {redirect},
+		"grant_type":    {"authorization_code"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tr.RefreshToken == "" {
+		return nil, errors.New("Google returned no refresh token, sign in again")
+	}
+	if !strings.Contains(" "+tr.Scope+" ", " https://mail.google.com/ ") {
+		return nil, errors.New("Gmail access was not granted: tick the mail permission on Google's consent page")
+	}
+	email, err := idTokenEmail(tr.IDToken)
+	if err != nil {
+		return nil, err
+	}
+
+	a, err := buildAccount(AddAccountRequest{Email: email, Provider: ProviderGmail, Auth: AuthOAuth2})
+	if err != nil {
+		return nil, err
+	}
+	a.OAuth = &OAuthCreds{ClientID: s.googleClientID, RefreshToken: tr.RefreshToken}
+	s.storeAccess(a.OAuth, tr.AccessToken, tr.ExpiresIn)
+	if err := s.testAccount(ctx, a); err != nil {
+		return nil, err
+	}
+	return s.upsertAccount(a)
+}
+
+// tokenResponse is the subset of Google's token endpoint reply we use.
+type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	Scope        string `json:"scope"`
+	IDToken      string `json:"id_token"`
+	Error        string `json:"error"`
+	ErrorDesc    string `json:"error_description"`
+}
+
+func (s *Service) googleToken(ctx context.Context, form url.Values) (*tokenResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, googleTokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("oauth: token request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("oauth: read token response: %w", err)
+	}
+	var tr tokenResponse
+	if err := json.Unmarshal(body, &tr); err != nil {
+		return nil, fmt.Errorf("oauth: parse token response (HTTP %d): %w", resp.StatusCode, err)
+	}
+	if resp.StatusCode != http.StatusOK || tr.AccessToken == "" {
+		if tr.Error == "invalid_grant" && form.Get("grant_type") == "refresh_token" {
+			return nil, errors.New("Google authorization expired or was revoked: sign in with Google again")
+		}
+		msg := tr.Error
+		if tr.ErrorDesc != "" {
+			msg += ": " + tr.ErrorDesc
+		}
+		if msg == "" {
+			msg = strings.TrimSpace(string(body))
+		}
+		return nil, fmt.Errorf("oauth: token endpoint returned HTTP %d: %s", resp.StatusCode, msg)
+	}
+	return &tr, nil
+}
+
+// idTokenEmail reads the verified email from an ID token. The token came straight from Google's
+// token endpoint over TLS, so its signature does not need checking (OpenID Connect Core 3.1.3.7).
+func idTokenEmail(idToken string) (string, error) {
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return "", errors.New("oauth: Google returned no ID token")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("oauth: decode ID token: %w", err)
+	}
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("oauth: parse ID token: %w", err)
+	}
+	if claims.Email == "" || !claims.EmailVerified {
+		return "", errors.New("oauth: Google account has no verified email")
+	}
+	return normalizeEmail(claims.Email), nil
+}
+
+func (s *Service) accessEntry(creds *OAuthCreds) *accessCache {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.access[creds.RefreshToken]
+	if c == nil {
+		c = &accessCache{}
+		s.access[creds.RefreshToken] = c
+	}
+	return c
+}
+
+func (s *Service) storeAccess(creds *OAuthCreds, token string, expiresIn int) {
+	if expiresIn <= 0 {
+		expiresIn = 3600
+	}
+	c := s.accessEntry(creds)
+	c.mu.Lock()
+	c.token, c.expires = token, s.now().Add(time.Duration(expiresIn)*time.Second)
+	c.mu.Unlock()
+}
+
+// accessToken returns a valid access token, refreshing it when it expires within a minute.
+func (s *Service) accessToken(ctx context.Context, creds *OAuthCreds) (string, error) {
+	if creds == nil || creds.RefreshToken == "" {
+		return "", errors.New("mail: oauth2 account without credentials")
+	}
+	if s.refreshAccess != nil {
+		return s.refreshAccess(creds)
+	}
+	c := s.accessEntry(creds)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.token != "" && s.now().Add(time.Minute).Before(c.expires) {
+		return c.token, nil
+	}
+	tr, err := s.googleToken(ctx, url.Values{
+		"client_id":     {creds.ClientID},
+		"refresh_token": {creds.RefreshToken},
+		"grant_type":    {"refresh_token"},
+	})
+	if err != nil {
+		return "", err
+	}
+	expiresIn := tr.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 3600
+	}
+	c.token, c.expires = tr.AccessToken, s.now().Add(time.Duration(expiresIn)*time.Second)
+	return c.token, nil
+}
+
+// xoauth2Payload is the SASL XOAUTH2 initial response: "user=<email>^Aauth=Bearer <token>^A^A".
+func xoauth2Payload(user, token string) []byte {
+	return []byte("user=" + user + "\x01auth=Bearer " + token + "\x01\x01")
+}
+
+// xoauth2Client implements SASL XOAUTH2 for IMAP AUTHENTICATE and SMTP AUTH.
+type xoauth2Client struct {
+	user, token string
+	done        bool
+}
+
+func (c *xoauth2Client) Start() (string, []byte, error) {
+	return "XOAUTH2", xoauth2Payload(c.user, c.token), nil
+}
+
+// Next answers the server's error challenge (a JSON status) with an empty response, which makes
+// the server finish with a normal NO / 535 carrying the reason.
+func (c *xoauth2Client) Next(challenge []byte) ([]byte, error) {
+	if c.done {
+		return nil, errors.New("mail: XOAUTH2 server sent too many challenges")
+	}
+	c.done = true
+	return []byte{}, nil
+}
+
+func newXOAUTH2Client(user, token string) sasl.Client {
+	return &xoauth2Client{user: user, token: token}
+}

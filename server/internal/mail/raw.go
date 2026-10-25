@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +29,11 @@ func (s *Service) gmailSearch(ctx context.Context, a *MailAccount, mailbox, quer
 	}
 	defer raw.close()
 
-	if err := raw.login(ctx, a); err != nil {
+	token, err := s.oauthToken(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	if err := raw.login(ctx, a, token); err != nil {
 		return nil, err
 	}
 	if _, err := raw.command(ctx, "SELECT "+quoteIMAP(mailbox)); err != nil {
@@ -151,7 +156,11 @@ func (rc *rawConn) command(ctx context.Context, cmd string) ([]string, error) {
 	}
 }
 
-func (rc *rawConn) login(ctx context.Context, a *MailAccount) error {
+func (rc *rawConn) login(ctx context.Context, a *MailAccount, token string) error {
+	if a.Auth == AuthOAuth2 {
+		_, err := rc.command(ctx, "AUTHENTICATE XOAUTH2 "+base64.StdEncoding.EncodeToString(xoauth2Payload(a.Username, token)))
+		return err
+	}
 	_, err := rc.command(ctx, "LOGIN "+quoteIMAP(a.Username)+" "+quoteIMAP(a.Password))
 	return err
 }

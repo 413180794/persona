@@ -43,6 +43,14 @@ type Service struct {
 	now func() time.Time
 	// imapDial and smtpDial are swappable in tests; nil means the real network.
 	imapDial func(a *MailAccount) (*imapclient.Client, error)
+	// googleClientID is the iOS OAuth client used for "Sign in with Google" (hub.json google.client_id).
+	googleClientID string
+	pending        map[string]*oauthPending // OAuth flows in flight, by state
+	access         map[string]*accessCache  // access tokens, by refresh token
+	// verify replaces the IMAP + SMTP login check of new accounts in tests.
+	verify func(ctx context.Context, a *MailAccount) error
+	// refreshAccess replaces the Google token endpoint in tests.
+	refreshAccess func(*OAuthCreds) (string, error)
 	// sendMail delivers a rendered message over SMTP; nil uses the real network.
 	sendMail func(ctx context.Context, a *MailAccount, from string, to []string, raw []byte) error
 }
@@ -60,12 +68,14 @@ func New(dataDir string, recs Records) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{
-		dir:   dataDir,
-		store: st,
-		accts: make(map[string]*MailAccount),
-		conns: make(map[string]*conn),
-		stop:  make(chan struct{}),
-		now:   time.Now,
+		dir:     dataDir,
+		store:   st,
+		accts:   make(map[string]*MailAccount),
+		conns:   make(map[string]*conn),
+		pending: make(map[string]*oauthPending),
+		access:  make(map[string]*accessCache),
+		stop:    make(chan struct{}),
+		now:     time.Now,
 	}
 	accounts, err := st.load()
 	if err != nil {
@@ -78,6 +88,9 @@ func New(dataDir string, recs Records) (*Service, error) {
 	go s.sweep()
 	return s, nil
 }
+
+// SetGoogleClientID enables "Sign in with Google" for Gmail with an iOS OAuth client ID.
+func (s *Service) SetGoogleClientID(id string) { s.googleClientID = strings.TrimSpace(id) }
 
 // Close closes every cached connection and stops the idle sweeper.
 func (s *Service) Close() error {
@@ -161,12 +174,15 @@ func (s *Service) account(id string) (*MailAccount, error) {
 // public returns a copy without secrets.
 func (a *MailAccount) public() *MailAccount {
 	cp := *a
-	cp.Password = ""
+	cp.Password, cp.OAuth = "", nil
 	return &cp
 }
 
 // AddAccount validates the account (by testing the connections) and saves it.
 func (s *Service) AddAccount(req AddAccountRequest) (*MailAccount, error) {
+	if req.Auth == AuthOAuth2 {
+		return nil, errors.New("invalid auth \"oauth2\": use Sign in with Google")
+	}
 	a, err := buildAccount(req)
 	if err != nil {
 		return nil, err
@@ -189,6 +205,42 @@ func (s *Service) AddAccount(req AddAccountRequest) (*MailAccount, error) {
 	if err := s.store.save(accounts); err != nil {
 		s.mu.Lock()
 		delete(s.accts, a.ID)
+		s.mu.Unlock()
+		return nil, err
+	}
+	return a.public(), nil
+}
+
+// upsertAccount saves a verified account; an existing account with the same address keeps its ID
+// and name but takes the new credentials (signing in with Google again repairs a revoked token).
+func (s *Service) upsertAccount(a *MailAccount) (*MailAccount, error) {
+	s.mu.Lock()
+	var prev *MailAccount
+	for _, existing := range s.accts {
+		if strings.EqualFold(existing.Email, a.Email) {
+			prev = existing
+			break
+		}
+	}
+	if prev != nil {
+		a.ID, a.Name = prev.ID, prev.Name
+	}
+	s.accts[a.ID] = a
+	c := s.conns[a.ID]
+	delete(s.conns, a.ID)
+	accounts := s.snapshotLocked()
+	s.mu.Unlock()
+	if c != nil {
+		c.c.Close()
+	}
+
+	if err := s.store.save(accounts); err != nil {
+		s.mu.Lock()
+		if prev != nil {
+			s.accts[a.ID] = prev
+		} else {
+			delete(s.accts, a.ID)
+		}
 		s.mu.Unlock()
 		return nil, err
 	}
@@ -233,6 +285,9 @@ func (s *Service) TestAccount(id string) error {
 }
 
 func (s *Service) testAccount(ctx context.Context, a *MailAccount) error {
+	if s.verify != nil {
+		return s.verify(ctx, a)
+	}
 	ctx, cancel := context.WithTimeout(ctx, networkTimeout*2)
 	defer cancel()
 
@@ -318,6 +373,10 @@ func buildAccount(req AddAccountRequest) (*MailAccount, error) {
 		if a.Password == "" {
 			return nil, errors.New("password is required")
 		}
+	case AuthOAuth2:
+		if a.Provider != ProviderGmail {
+			return nil, errors.New("invalid auth \"oauth2\": only Gmail signs in with Google")
+		}
 	default:
 		return nil, fmt.Errorf("invalid auth %q", a.Auth)
 	}
@@ -346,13 +405,17 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	if s.imapDial != nil {
 		return s.imapDial(a)
 	}
+	token, err := s.oauthToken(ctx, a)
+	if err != nil {
+		return nil, err
+	}
 	type result struct {
 		c   *imapclient.Client
 		err error
 	}
 	ch := make(chan result, 1)
 	go func() {
-		c, err := dialAndLogin(a)
+		c, err := dialAndLogin(a, token)
 		ch <- result{c, err}
 	}()
 	select {
@@ -368,7 +431,7 @@ func (s *Service) dialIMAP(ctx context.Context, a *MailAccount) (*imapclient.Cli
 	}
 }
 
-func dialAndLogin(a *MailAccount) (*imapclient.Client, error) {
+func dialAndLogin(a *MailAccount, token string) (*imapclient.Client, error) {
 	addr := fmt.Sprintf("%s:%d", a.IMAPHost, a.IMAPPort)
 	opts := &imapclient.Options{
 		TLSConfig:   &tls.Config{ServerName: a.IMAPHost},
@@ -396,7 +459,7 @@ func dialAndLogin(a *MailAccount) (*imapclient.Client, error) {
 	if c.Caps().Has(imap.CapID) {
 		sendClientID(c)
 	}
-	if err := loginIMAP(c, a); err != nil {
+	if err := loginIMAP(c, a, token); err != nil {
 		c.Close()
 		return nil, err
 	}

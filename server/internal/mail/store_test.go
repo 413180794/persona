@@ -166,7 +166,7 @@ func TestBuildAccountValidation(t *testing.T) {
 		{"missing email", AddAccountRequest{Password: "p"}, "email is required"},
 		{"unknown domain", AddAccountRequest{Email: "me@nowhere.example", Password: "p"}, "unknown mail provider"},
 		{"password auth without password", AddAccountRequest{Email: "me@gmail.com", Auth: AuthPassword}, "password is required"},
-		{"unsupported auth", AddAccountRequest{Email: "me@gmail.com", Auth: "oauth2", Password: "x"}, "invalid auth"},
+		{"oauth2 outside Gmail", AddAccountRequest{Email: "me@qq.com", Auth: AuthOAuth2}, "invalid auth"},
 		{"bad auth", AddAccountRequest{Email: "me@gmail.com", Auth: "carrier-pigeon", Password: "p"}, "invalid auth"},
 	}
 	for _, tc := range cases {

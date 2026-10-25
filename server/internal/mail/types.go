@@ -13,6 +13,7 @@ type Address struct {
 // Authentication methods.
 const (
 	AuthPassword = "password"
+	// AuthOAuth2 (oauth.go) is Gmail's "Sign in with Google"; it cannot be added with POST /accounts.
 )
 
 // Providers.
@@ -38,7 +39,7 @@ type MailAccount struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Provider string `json:"provider"` // gmail | imap
-	Auth     string `json:"auth"`     // password
+	Auth     string `json:"auth"`     // password | oauth2
 	Username string `json:"username"`
 
 	IMAPHost string `json:"imap_host"`
@@ -56,7 +57,8 @@ type MailAccount struct {
 	Error  string `json:"error"`
 
 	// Secrets. Never marshalled into API responses.
-	Password string `json:"-"`
+	Password string      `json:"-"`
+	OAuth    *OAuthCreds `json:"-"`
 }
 
 // AddAccountRequest is the POST /api/v1/mail/accounts body. Fields that the
