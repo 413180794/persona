@@ -38,6 +38,40 @@
 - 知识库：`wiki/spaces?scope=all|starred|recent`、`wiki/spaces/:id/tree`、`/children?node`、`/updates`。
 - 通知：`documents/notifications?cursor` → `{items[{title,url,kind:mention|comment|reply|solve|share|reopen|reaction,summary,atMe,unreadCount,updatedAt}]}`。
 
+#### 实现说明（`Docs/`）
+
+| 文件 | 内容 |
+| --- | --- |
+| `FeishuDocsModels.swift` | 线上类型 + 纯逻辑（按天分组、类型筛选、文件夹优先、知识库树展开、Markdown 切块 / 目录、有序列表编号、表格合并单元格布局、错误码），单测在 `JarvisTests/FeishuDocsTests.swift` |
+| `FeishuDocsComponents.swift` | `api.larkDocs`（保留 lark-connector 错误码的 GET）、游标分页 `FeishuDocPager`、文档图标 / 行 / 筛选条 / 三态 |
+| `FeishuDocs.swift` | 云文档首页（搜索、知识库 / 文档通知入口、快速访问、最近 / 共享给我 / 收藏 / 我的空间 / 推荐）、文件夹页 |
+| `FeishuDocReader.swift` | 阅读器：标题、位置、所有者、更新时间、阅读数、AI 摘要、目录、评论、在飞书中打开；多维表格 / 文件 / 画板页 |
+| `FeishuDocRenderer.swift` | JSON 节点树原生渲染（段落、标题、列表、待办、引用、高亮块、分栏、代码、表格、图片、书签、嵌入、附件、任务…） |
+| `FeishuWiki.swift` / `FeishuDocNotifications.swift` | 知识库首页 / 空间（目录树、最近更新）、文档通知 |
+
+- 阅读顺序：`format=markdown` → 403 `DOCUMENT_EXPORT_FORBIDDEN` 或 422 `DOCUMENT_FORMAT_UNSUPPORTED` 时 `format=json`。
+  JSON 里带 `base` 是多维表格（不渲染，给「在飞书中打开」）；`object.kind=file` 是云空间文件（「预览文件」走
+  `documents/drive/files/:token/download` + Quick Look）；`whiteboard` 显示 `object.image`。`/base/` 链接直接判定，不去读几 MB 的表数据。
+- hub 的 `APIClient.request` 只认 `{"error":"…"}`，lark-connector 的错误是 `{"error":{"code":…}}`，所以 `Docs/` 用自己的 `larkDocs` 拿错误码。
+- Markdown 导出的怪处：开头固定是 `# 标题` + `[Source](<url>)`（阅读器自己画标题，要去掉）；图片是**绝对地址**
+  `http://<lark-connector>:3333/api/documents/…`，hub 的改写只换 JSON 字符串开头的 `"/api/`，所以客户端把它改成 `/api/v1/lark/raw/documents/…`；
+  标题里有 `\-`、`\+` 之类的转义（目录要去转义）；没有 outline，自己按 `#` 行（跳过代码块）切块，每块一个懒加载行，目录按块 id 跳转。
+- JSON 树的怪处：docx 的每个列表项都是**单独一个** `bulletList` / `orderedList`（只有一个 `listItem`），有序编号要跨兄弟节点连续数，
+  `restart` 时从 `start` 重来；`outline` 的 id 带 `doc-block-` 前缀，和 heading 的 `attrs.id` 一致；文字颜色是 CSS（`#hex` / `rgba()`），
+  深色模式下近黑色文字改用系统前景色、背景色降不透明度；表格 `colwidth` 是像素，夹在 72…320，`rowspan` 占位要自己补空格子。
+- `authority.copy=false` 时正文不可选择（尊重作者的禁止复制）。
+- `documents/drive?view=` 必填；`pinned`（快速访问）不分页；`discover` 的 `updatedAt` 是空串（`JSON.decoder` 会解成 1970，时间字段一律存字符串再解析）；
+  最近列表里 type 113 是 `/page/` 链接（飞书页面），按链接认类型。文件夹：`documents/drive?view=mine|shared&folder=<token>`，返回 `path` 面包屑。
+- 评论 `documents/comments` 的 `reader/info.comments` 数的是回复总数，线程数更少；回复里的图片只给 token，只显示「N 张图片」。
+- AI 摘要只读缓存（`state=ready` 才显示，`missing` 不触发生成）；文档通知接口在当前账号下返回空列表（已按 contract 实现，显示空状态）。
+- 知识库：`wiki/spaces?scope=recent` 的 `kind` 全是 `other`；树一次只给根，子级 `children?node=` 展开时整层读完（游标循环）；
+  快捷方式节点的子级在 `target.spaceId/target.token` 下。
+- 路由坑：工作台把 `feishuOpen` 注入在 NavigationStack 根视图上，`navigationDestination` 推出来的页面**拿不到**（是 nil），
+  `Docs/` 的每个页面外面包了 `feishuDocsRouting()`：为 nil 时用本地 `navigationDestination(item:)` 推，并把它重新注入给子视图。
+- DEBUG 启动参数：`-feishuDocURL <url>`（云文档页启动后打开该文档）、`-feishuDocJump <n>`（跳到第 n 个目录项）、
+  `-feishuDocSheet outline|comments`、`-feishuWikiSpace <id>`、`-feishuWikiExpand YES`、`-feishuWikiTab updates`；
+  列表页签用 `@AppStorage`：`-feishu.docs.tab recent|shared|starred|mine|discover`、`-feishu.wiki.scope all|recent|starred`。
+
 ### 日历 / 会议 / 妙记（`Calendar/`）
 - 日程：`calendar/week?start&end`（ISO，≤62 天）→ `{calendars,events[{id,title,startAt,endAt,allDay,selfAttendeeStatus,calendarId}]}`；
   详情 `calendar/event/:id`（参会人 + 回复状态 1 待定 / 2 接受 / 3 暂定 / 4 拒绝、category 2 = 会议室、`attendeeSummary`、`meetingUrl`、
