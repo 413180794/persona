@@ -17,7 +17,7 @@
   `LarkPartsView` / `LarkMessageRow`（消息渲染）、`LarkProfileView`、`LarkImageGallery`、`LarkPlayerView`、`LarkFileOpener`、
   `MarkdownUI` 的 `.larkMessage` 主题、`FeishuLoader`、`FeishuTime`。
 - **约定**：每个领域一个目录 `ios/Jarvis/Views/Feishu/<Area>/`，占位 struct 名字不变（路由靠它们）；界面中文；按钮单行；
-  深色 / 浅色都截图；DEBUG 启动参数 `-tab workbench -workbench <screen>` 直达页面（`FeishuScreen` 的 rawValue）。
+  深色 / 浅色都截图；DEBUG 启动参数 `-tab workbench -openWorkbench <screen>` 直达页面（`FeishuScreen` 的 rawValue）。
 
 ## 领域与接口（全部已在 example-machine 实测）
 
