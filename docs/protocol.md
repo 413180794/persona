@@ -187,3 +187,37 @@ node → hub 请求：
 // MailMessage = MailSummary + {"cc":[…],"text":"…","html":"…","attachments":[{"filename","mime","size"}],
 //                               "in_reply_to","references":[…]}
 ```
+
+## 飞书 API（lark-connector）
+
+hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/lark/conversations?cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}` |
+| GET | `/api/v1/lark/conversations/{id}/messages?before=&limit=&topic=` | `{"messages":[LarkMessage],"has_older"}`，旧→新；`topic=1` 时取话题群的话题列表（每条是话题首帖） |
+| GET | `/api/v1/lark/messages/{id}/thread?before=&limit=` | 话题 / 回复串里的消息，格式同上 |
+| POST | `/api/v1/lark/conversations/{id}/messages` | `{"text"}` 以本人身份发送 |
+| POST | `/api/v1/lark/conversations/{id}/read` | `{"position"}` 标已读 |
+| GET | `/api/v1/lark/media/{key}?size=` | 图片 / 贴纸 / 头像 / 视频 / 文件原样转发（`size` 为 24 的倍数、≤624 时返回缩略图） |
+| GET | `/api/v1/lark/messages/{id}/media/{key}` | 消息作用域的媒体（同上） |
+| GET | `/api/v1/lark/emojis` | `{"emojis":{"<小写 key>":{"label","url"}}}`，含肤色变体 key；hub 缓存一天 |
+| POST | `/api/v1/lark/messages/{id}/card-actions/{actionId}` | 以本人身份按下卡片回调按钮（body 原样转给 lark-connector） |
+
+```jsonc
+// LarkConversation
+{"id":"<feedId>","name","avatar":"/api/v1/lark/media/…","is_group","is_topic","unread","at_me","muted","preview","is_mine","updated_at"}
+// LarkMessage
+{"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
+ "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"纯文本预览","created_at",
+ "recalled","edited","reply_count","thread_reply_count",
+ "parts":[MessagePart],                       // lark-connector 原样（见下），媒体 URL 已改写到 /api/v1/lark/
+ "reply_to":{"id","sender_name","text","recalled","parts"},
+ "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["张三","李四"]}]}
+// MessagePart（lark-connector 的 MessagePart，不改字段名）
+{"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
+ "text","url","refId","metadata":{…}}   // 卡片的整棵元素树在 metadata.body / header；富文本块祖先在 metadata.blocks
+```
+
+媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
+（合并转发卡片里嵌套的消息也一并改写）。

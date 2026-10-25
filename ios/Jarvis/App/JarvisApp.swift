@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.selectedTab = .chats
             AppModel.shared.openChat = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
         }
+        if d.string(forKey: "lark-connector") != nil { AppModel.shared.selectedTab = .mail }
         if let open = d.string(forKey: "openAssistant"), let slash = open.firstIndex(of: "/") {
             AppModel.shared.assistantCurrent = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
         }

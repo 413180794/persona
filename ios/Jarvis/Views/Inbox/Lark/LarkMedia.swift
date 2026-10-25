@@ -1,0 +1,320 @@
+import AVKit
+import CryptoKit
+import ImageIO
+import QuickLook
+import SwiftUI
+import UIKit
+
+/// Loads Feishu media through the hub (`/api/v1/lark/media/...`, bearer auth) or straight from a CDN URL.
+/// Media keys never change content, so decoded images live in memory and the raw bytes on disk.
+@MainActor @Observable
+final class LarkMedia {
+    static let shared = LarkMedia()
+
+    /// Bumped whenever an inline emoji image arrives, so text that drew `[label]` redraws with the picture.
+    private(set) var emojiVersion = 0
+    private(set) var emojis: [String: APIClient.LarkEmojis.Emoji] = [:]
+
+    @ObservationIgnored private let images = NSCache<NSString, UIImage>()
+    @ObservationIgnored private var inflight: [String: Task<UIImage?, Never>] = [:]
+    @ObservationIgnored private var emojiImages: [String: UIImage] = [:]
+    @ObservationIgnored private var emojiLoading = Set<String>()
+    @ObservationIgnored private var catalogTask: Task<Void, Never>?
+    @ObservationIgnored private let dir: URL = {
+        let d = URL.cachesDirectory.appending(path: "lark-media", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    private init() { images.totalCostLimit = 120 << 20 }
+
+    // MARK: Bytes
+
+    /// Raw bytes of a media URL (hub-relative or absolute), from disk when seen before.
+    func data(_ url: String, size: Int? = nil) async throws -> Data {
+        let key = cacheKey(url, size: size)
+        let file = dir.appending(path: key)
+        if let d = try? Data(contentsOf: file) { return d }
+        let d: Data
+        if url.hasPrefix("http://") || url.hasPrefix("https://") {
+            guard let u = URL(string: url) else { throw URLError(.badURL) }
+            let (body, resp) = try await URLSession.shared.data(from: u)
+            guard ((resp as? HTTPURLResponse)?.statusCode ?? 200) < 400 else { throw URLError(.badServerResponse) }
+            d = body
+        } else {
+            guard let api = AppModel.shared.api else { throw URLError(.userAuthenticationRequired) }
+            var path = url
+            var query: [String: String] = [:]
+            if let q = url.firstIndex(of: "?") {
+                path = String(url[..<q])
+                for item in URLComponents(string: url)?.queryItems ?? [] { query[item.name] = item.value ?? "" }
+            }
+            if let size { query["size"] = String(size) }
+            d = try await api.request("GET", path, query: query, timeout: 120)
+        }
+        try? d.write(to: file, options: .atomic)
+        return d
+    }
+
+    /// A local file for QuickLook / AVPlayer, named after the original.
+    func file(_ url: String, name: String) async throws -> URL {
+        let d = try await data(url)
+        let folder = URL.temporaryDirectory.appending(path: "lark-" + cacheKey(url, size: nil), directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let safe = name.replacingOccurrences(of: "/", with: "_")
+        let f = folder.appending(path: safe.isEmpty ? "file" : safe)
+        if !FileManager.default.fileExists(atPath: f.path) { try d.write(to: f) }
+        return f
+    }
+
+    // MARK: Images
+
+    func cached(_ url: String, size: Int? = nil) -> UIImage? { images.object(forKey: cacheKey(url, size: size) as NSString) }
+
+    /// Decoded image, downsampled to `maxPixel` on its long edge (thumbnails are fetched at `size` when the hub can).
+    func image(_ url: String, size: Int? = nil, maxPixel: CGFloat = 1600) async -> UIImage? {
+        let key = cacheKey(url, size: size)
+        if let img = images.object(forKey: key as NSString) { return img }
+        if let t = inflight[key] { return await t.value }
+        let t = Task<UIImage?, Never> {
+            guard let d = try? await self.data(url, size: size) else { return nil }
+            return await Task.detached(priority: .userInitiated) { Self.decode(d, maxPixel: maxPixel) }.value
+        }
+        inflight[key] = t
+        let img = await t.value
+        inflight[key] = nil
+        if let img { images.setObject(img, forKey: key as NSString, cost: Int(img.size.width * img.size.height * img.scale * img.scale * 4)) }
+        return img
+    }
+
+    nonisolated static func decode(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return UIImage(data: data) }
+        let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                                     kCGImageSourceThumbnailMaxPixelSize: maxPixel, kCGImageSourceShouldCacheImmediately: true]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return UIImage(data: data) }
+        return UIImage(cgImage: cg)
+    }
+
+    private func cacheKey(_ url: String, size: Int?) -> String {
+        let digest = SHA256.hash(data: Data((url + "#" + String(size ?? 0)).utf8))
+        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: Emoji
+
+    /// Loads the emoji catalogue once (key → image URL), so reactions and inline emoji can be drawn.
+    func loadEmojiCatalog() {
+        guard catalogTask == nil else { return }
+        catalogTask = Task {
+            guard let api = AppModel.shared.api, let r = try? await api.larkEmojis() else { catalogTask = nil; return }
+            emojis = r.emojis
+            emojiVersion += 1
+        }
+    }
+
+    func emoji(_ key: String) -> APIClient.LarkEmojis.Emoji? { emojis[key.lowercased()] }
+
+    /// An emoji drawn at `points` for inline text, or nil while it loads (a redraw follows via `emojiVersion`).
+    func emojiImage(_ key: String, points: CGFloat) -> UIImage? {
+        let k = key.lowercased() + "@" + String(Int(points))
+        if let img = emojiImages[k] { return img }
+        guard let url = emoji(key)?.url, !emojiLoading.contains(k) else { return nil }
+        emojiLoading.insert(k)
+        Task {
+            if let img = await image(url, maxPixel: 96) {
+                emojiImages[k] = Self.fitted(img, points: points)
+                emojiVersion += 1
+            }
+        }
+        return nil
+    }
+
+    /// Redraws an image at a fixed point size so `Text(Image(uiImage:))` lays it out like a glyph.
+    static func fitted(_ img: UIImage, points: CGFloat) -> UIImage {
+        let size = CGSize(width: points, height: points)
+        let ratio = min(points / max(img.size.width, 1), points / max(img.size.height, 1))
+        let draw = CGSize(width: img.size.width * ratio, height: img.size.height * ratio)
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            img.draw(in: CGRect(x: (points - draw.width) / 2, y: (points - draw.height) / 2, width: draw.width, height: draw.height))
+        }
+    }
+}
+
+/// An image from Feishu with a quiet placeholder while it loads and a broken-image mark when it fails.
+struct LarkRemoteImage: View {
+    var url: String
+    var size: Int? = nil
+    var maxPixel: CGFloat = 1600
+    var contentMode: ContentMode = .fill
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
+            } else if failed {
+                Rectangle().fill(Color.primary.opacity(0.05))
+                    .overlay { Image(systemName: "photo.badge.exclamationmark").font(.title3).foregroundStyle(.tertiary) }
+            } else {
+                Rectangle().fill(Color.primary.opacity(0.05)).overlay { ProgressView().controlSize(.small) }
+            }
+        }
+        .task(id: url) {
+            if let img = LarkMedia.shared.cached(url, size: size) { image = img; return }
+            image = await LarkMedia.shared.image(url, size: size, maxPixel: maxPixel)
+            failed = image == nil
+        }
+    }
+}
+
+/// Hub thumbnails come in steps of 24 px up to 624 (lark-connector's `MEDIA_THUMBNAIL_EDGES`); larger is the original.
+nonisolated func larkThumbEdge(points: CGFloat) -> Int? {
+    let edge = Int((points * 3 / 24).rounded(.up)) * 24
+    return edge > 0 && edge <= 624 ? edge : nil
+}
+
+/// Person or chat avatar: the real picture when there is one, otherwise the colored initial.
+struct LarkAvatarImage: View {
+    var name: String
+    var url: String?
+    var isGroup = false
+    var size: CGFloat = 36
+
+    var body: some View {
+        if let url, !url.isEmpty {
+            LarkRemoteImage(url: url, size: url.hasPrefix("/") ? larkThumbEdge(points: size) : nil, maxPixel: size * 3)
+                .frame(width: size, height: size)
+                .clipShape(.circle)
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.06)))
+        } else {
+            LarkAvatar(name: name, isGroup: isGroup, size: size)
+        }
+    }
+}
+
+// MARK: - Viewers
+
+/// One or more Feishu images full screen: zoom, swipe, save, share.
+struct LarkImageGallery: View {
+    var urls: [String]
+    @State var index: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var loaded: [Int: UIImage] = [:]
+    @State private var chrome = true
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            TabView(selection: $index) {
+                ForEach(urls.indices, id: \.self) { i in
+                    Group {
+                        if let img = loaded[i] {
+                            ZoomableImage(image: img, onTap: { withAnimation(.easeInOut(duration: 0.2)) { chrome.toggle() } }, onPullDown: { dismiss() })
+                        } else {
+                            ProgressView().tint(.white)
+                        }
+                    }
+                    .tag(i)
+                    .task { if loaded[i] == nil { loaded[i] = await LarkMedia.shared.image(urls[i], maxPixel: 4096) } }
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea()
+            if chrome {
+                VStack {
+                    HStack {
+                        Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
+                            .buttonStyle(.glass)
+                            .clipShape(.circle)
+                            .accessibilityLabel("关闭")
+                        Spacer()
+                        if urls.count > 1 {
+                            Text("\(index + 1) / \(urls.count)").font(.subheadline.weight(.semibold).monospacedDigit())
+                                .padding(.horizontal, 12).padding(.vertical, 7).glassEffect(.regular, in: .capsule)
+                        }
+                    }
+                    Spacer()
+                    if let img = loaded[index] {
+                        HStack(spacing: 12) {
+                            ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
+                                Label("分享", systemImage: "square.and.arrow.up").lineLimit(1).font(.subheadline.weight(.semibold))
+                            }
+                            .buttonStyle(.glassProminent)
+                            Button {
+                                UIPasteboard.general.image = img
+                                Haptics.success()
+                                AppModel.shared.toast = Toast("已拷贝图片", style: .success)
+                            } label: { Image(systemName: "doc.on.doc").frame(width: 24) }
+                                .buttonStyle(.glass)
+                                .accessibilityLabel("拷贝")
+                        }
+                        .controlSize(.large)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .transition(.opacity)
+            }
+        }
+        .statusBarHidden(!chrome)
+    }
+}
+
+/// Plays a Feishu video or voice message through the hub (the bearer header rides on the asset request).
+struct LarkPlayerView: View {
+    var url: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()
+            if let player {
+                VideoPlayer(player: player).ignoresSafeArea()
+            } else {
+                ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
+                .buttonStyle(.glass)
+                .clipShape(.circle)
+                .padding(16)
+                .accessibilityLabel("关闭")
+        }
+        .task {
+            guard let cfg = AppModel.shared.config else { return }
+            let full = url.hasPrefix("/") ? cfg.url.appending(path: url) : (URL(string: url) ?? cfg.url)
+            let asset = AVURLAsset(url: full, options: ["AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "Bearer \(cfg.token)"]])
+            let p = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+            player = p
+            p.play()
+        }
+        .onDisappear { player?.pause() }
+    }
+}
+
+/// Downloads a Feishu file and opens it in Quick Look (which also offers share / save to Files).
+struct LarkFileOpener: ViewModifier {
+    @Binding var request: (url: String, name: String)?
+    @State private var local: URL?
+    @State private var loading = false
+
+    func body(content: Content) -> some View {
+        content
+            .quickLookPreview($local)
+            .overlay {
+                if loading {
+                    ProgressView("下载中…").padding(20).glassEffect(.regular, in: .rect(cornerRadius: 16))
+                }
+            }
+            .onChange(of: request?.url) {
+                guard let r = request else { return }
+                request = nil
+                loading = true
+                Task {
+                    defer { loading = false }
+                    do { local = try await LarkMedia.shared.file(r.url, name: r.name) } catch { AppModel.shared.show(error) }
+                }
+            }
+    }
+}

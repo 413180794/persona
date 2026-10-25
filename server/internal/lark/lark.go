@@ -118,103 +118,6 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	return json.Unmarshal(raw, out)
 }
 
-// Conversation is a chat or group as the app lists it.
-type Conversation struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Avatar    string    `json:"avatar,omitempty"`
-	IsGroup   bool      `json:"is_group"`
-	IsTopic   bool      `json:"is_topic,omitempty"` // topic group: the chat is a list of threads
-	Unread    int       `json:"unread"`
-	AtMe      bool      `json:"at_me"`
-	Muted     bool      `json:"muted"`
-	Preview   string    `json:"preview"`
-	IsMine    bool      `json:"is_mine"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type rawConversation struct {
-	FeedID        string `json:"feedId"`
-	Name          string `json:"name"`
-	AvatarURL     string `json:"avatarUrl"`
-	IsGroup       bool   `json:"isGroup"`
-	ChatMode      string `json:"chatMode"`
-	UnreadCount   int    `json:"unreadCount"`
-	HasUnreadAtMe bool   `json:"hasUnreadAtMe"`
-	IsMuted       bool   `json:"isMuted"`
-	IsHidden      bool   `json:"isHidden"`
-	UpdatedAtMs   any    `json:"updatedAtMs"`
-	Preview       *struct {
-		DisplayAt string `json:"displayAt"`
-		IsMine    bool   `json:"isMine"`
-		Digest    struct {
-			Elements []struct {
-				Content string `json:"content"`
-				Kind    string `json:"kind"`
-			} `json:"elements"`
-		} `json:"digest"`
-	} `json:"preview"`
-}
-
-func (r rawConversation) normalize() Conversation {
-	c := Conversation{ID: r.FeedID, Name: r.Name, Avatar: MediaURL(r.AvatarURL), IsGroup: r.IsGroup, IsTopic: r.ChatMode == "topic", Unread: r.UnreadCount, AtMe: r.HasUnreadAtMe, Muted: r.IsMuted}
-	if r.Preview != nil {
-		var b strings.Builder
-		for _, e := range r.Preview.Digest.Elements {
-			b.WriteString(e.Content)
-		}
-		c.Preview = strings.Join(strings.Fields(b.String()), " ")
-		c.IsMine = r.Preview.IsMine
-		if t, err := time.Parse(time.RFC3339Nano, r.Preview.DisplayAt); err == nil {
-			c.UpdatedAt = t
-		}
-	}
-	if c.UpdatedAt.IsZero() {
-		var ms int64
-		switch v := r.UpdatedAtMs.(type) {
-		case float64:
-			ms = int64(v)
-		case string:
-			ms, _ = strconv.ParseInt(v, 10, 64)
-		}
-		if ms > 0 {
-			c.UpdatedAt = time.UnixMilli(ms).UTC()
-		}
-	}
-	return c
-}
-
-// Conversations returns the most recent chats (lark-connector's feed order), skipping hidden ones.
-func (c *Client) Conversations(ctx context.Context, cursor string, limit int) ([]Conversation, string, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	q := url.Values{"limit": {strconv.Itoa(limit)}}
-	if cursor != "" {
-		q.Set("cursor", cursor)
-	}
-	var res struct {
-		Items      []rawConversation `json:"items"`
-		NextCursor string            `json:"nextCursor"`
-		HasMore    bool              `json:"hasMore"`
-	}
-	if err := c.do(ctx, "GET", "/conversations", q, nil, &res); err != nil {
-		return nil, "", err
-	}
-	out := make([]Conversation, 0, len(res.Items))
-	for _, r := range res.Items {
-		if r.IsHidden {
-			continue
-		}
-		out = append(out, r.normalize())
-	}
-	next := ""
-	if res.HasMore {
-		next = res.NextCursor
-	}
-	return out, next, nil
-}
-
 type Message struct {
 	ID               string          `json:"id"`
 	Position         string          `json:"position"`
@@ -230,6 +133,9 @@ type Message struct {
 	Edited           bool            `json:"edited,omitempty"`
 	ReplyCount       int             `json:"reply_count"`
 	ThreadReplyCount int             `json:"thread_reply_count,omitempty"`
+	BadgeCount       *int            `json:"badge_count,omitempty"` // for read reports
+	AtMe             bool            `json:"at_me,omitempty"`       // mentions me or @all
+	IsRead           bool            `json:"is_read,omitempty"`
 	Parts            json.RawMessage `json:"parts,omitempty"` // lark-connector MessagePart[], media URLs rewritten to the hub
 	ReplyTo          *ReplyTo        `json:"reply_to,omitempty"`
 	Reactions        []Reaction      `json:"reactions,omitempty"`
@@ -268,6 +174,10 @@ type rawMessage struct {
 	IsEdited         bool            `json:"isEdited"`
 	ReplyCount       int             `json:"replyCount"`
 	ThreadReplyCount int             `json:"threadReplyCount"`
+	BadgeCount       *int            `json:"badgeCount"`
+	IsAtMe           bool            `json:"isAtMe"`
+	IsAtAll          bool            `json:"isAtAll"`
+	IsRead           bool            `json:"isRead"`
 	Parts            json.RawMessage `json:"parts"`
 	ReplyTo          *struct {
 		ID          string          `json:"id"`
@@ -288,7 +198,8 @@ func (m rawMessage) normalize() Message {
 	out := Message{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
-		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, Parts: rewriteMedia(m.Parts)}
+		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,
+		IsRead: m.IsRead, Parts: rewriteMedia(m.Parts)}
 	if r := m.ReplyTo; r != nil {
 		out.ReplyTo = &ReplyTo{ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
 	}
@@ -321,46 +232,77 @@ func MediaURL(u string) string {
 	return u
 }
 
-// Messages returns a page of messages, oldest first: the latest page, or the one before position `before`.
-// In a topic group (`topic`) the page is the thread roots, each with its reply count.
-func (c *Client) Messages(ctx context.Context, feedID, before string, limit int, topic bool) ([]Message, bool, error) {
-	path := "/conversations/" + url.PathEscape(feedID) + "/messages"
+// Window picks which page of a chat to read. Zero value: the latest page.
+type Window struct {
+	Before string // older than this position
+	After  string // newer than this position
+	Around string // centred on this position (opening a chat at its first unread message)
+}
+
+// Page is a slice of a chat, oldest first, with the cursors to read further either way.
+type Page struct {
+	Messages    []Message `json:"messages"`
+	HasOlder    bool      `json:"has_older"`
+	HasNewer    bool      `json:"has_newer"`
+	OlderCursor string    `json:"older_cursor,omitempty"`
+	NewerCursor string    `json:"newer_cursor,omitempty"`
+}
+
+// Messages returns a page of a chat. In a topic group (`topic`) the page is the thread roots, each with its
+// reply count; topic pages only page backwards.
+func (c *Client) Messages(ctx context.Context, feedID string, w Window, limit int, topic bool) (Page, error) {
 	if topic {
-		path = "/conversations/" + url.PathEscape(feedID) + "/threads"
+		return c.page(ctx, "/conversations/"+url.PathEscape(feedID)+"/threads", Window{Before: w.Before}, limit)
 	}
-	return c.page(ctx, path, before, limit)
+	return c.page(ctx, "/conversations/"+url.PathEscape(feedID)+"/messages", w, limit)
 }
 
 // Thread returns the replies in one message's thread, oldest first.
-func (c *Client) Thread(ctx context.Context, messageID, before string, limit int) ([]Message, bool, error) {
-	return c.page(ctx, "/messages/"+url.PathEscape(messageID)+"/thread", before, limit)
+func (c *Client) Thread(ctx context.Context, messageID, before string, limit int) (Page, error) {
+	return c.page(ctx, "/messages/"+url.PathEscape(messageID)+"/thread", Window{Before: before}, limit)
 }
 
-func (c *Client) page(ctx context.Context, path, before string, limit int) ([]Message, bool, error) {
+func (c *Client) page(ctx context.Context, path string, w Window, limit int) (Page, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 40
 	}
 	q := url.Values{"limit": {strconv.Itoa(limit)}}
-	if before != "" {
-		q.Set("beforePosition", before)
-	} else {
+	switch {
+	case w.Before != "":
+		q.Set("beforePosition", w.Before)
+	case w.After != "":
+		q.Set("afterPosition", w.After)
+	case w.Around != "":
+		q.Set("aroundPosition", w.Around)
+	default:
+		// Without tail lark-connector opens an unread chat at its read position; the app asks for that explicitly.
 		q.Set("tail", "1")
 	}
 	var res struct {
-		Items    []rawMessage `json:"items"`
-		HasOlder bool         `json:"hasOlder"`
+		Items           []rawMessage `json:"items"`
+		HasOlder        bool         `json:"hasOlder"`
+		HasNewer        bool         `json:"hasNewer"`
+		NextOlderCursor string       `json:"nextOlderCursor"`
+		NextNewerCursor string       `json:"nextNewerCursor"`
 	}
 	if err := c.do(ctx, "GET", path, q, nil, &res); err != nil {
-		return nil, false, err
+		return Page{}, err
 	}
-	out := make([]Message, 0, len(res.Items))
+	p := Page{Messages: make([]Message, 0, len(res.Items)), HasOlder: res.HasOlder, HasNewer: res.HasNewer,
+		OlderCursor: res.NextOlderCursor, NewerCursor: res.NextNewerCursor}
 	for _, m := range res.Items {
 		if m.IsDeleted {
 			continue
 		}
-		out = append(out, m.normalize())
+		p.Messages = append(p.Messages, m.normalize())
 	}
-	return out, res.HasOlder, nil
+	if p.OlderCursor == "" && len(res.Items) > 0 {
+		p.OlderCursor = res.Items[0].Position
+	}
+	if p.NewerCursor == "" && len(res.Items) > 0 {
+		p.NewerCursor = res.Items[len(res.Items)-1].Position
+	}
+	return p, nil
 }
 
 // Emojis maps every emoji key (lower-cased, skin-tone variants included) to its hub image URL.
@@ -463,8 +405,22 @@ func (c *Client) Send(ctx context.Context, feedID, text string) error {
 		map[string]any{"text": text, "clientId": clientID}, nil)
 }
 
-// MarkRead marks everything up to position as read.
-func (c *Client) MarkRead(ctx context.Context, feedID, position string) error {
-	return c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/read-position", nil,
-		map[string]any{"maxPosition": position}, nil)
+// Read is what the reader has actually seen: everything up to Position, plus the unread messages from
+// others among them (lark-connector's read report).
+type Read struct {
+	Position   string   `json:"position"`
+	BadgeCount *int     `json:"badge_count,omitempty"`
+	MessageIDs []string `json:"message_ids,omitempty"`
+}
+
+// MarkRead advances the chat's read position.
+func (c *Client) MarkRead(ctx context.Context, feedID string, r Read) error {
+	body := map[string]any{"maxPosition": r.Position}
+	if r.BadgeCount != nil {
+		body["maxPositionBadgeCount"] = *r.BadgeCount
+	}
+	if len(r.MessageIDs) > 0 {
+		body["messageIds"] = r.MessageIDs
+	}
+	return c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/read-position", nil, body, nil)
 }
