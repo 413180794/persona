@@ -149,6 +149,8 @@ type Item struct {
 	IsError   bool            `json:"is_error,omitempty"`
 	Image     *Image          `json:"image,omitempty"`
 	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
+	// From names the Claude session that sent this message (cross-session messaging), not the user.
+	From string `json:"from,omitempty"`
 }
 
 // Interaction kinds.

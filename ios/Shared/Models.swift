@@ -322,9 +322,11 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var image: ImagePayload?
     /// User input typed while the agent worked and absorbed mid-turn.
     var queued: Bool?
+    /// Sent by another Claude session (cross-session messaging), not typed by the user: its name.
+    var from: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued
+        case id, seq, ts, role, kind, text, image, queued, from
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error"
     }
 }

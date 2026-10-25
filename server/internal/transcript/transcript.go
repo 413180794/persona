@@ -55,6 +55,8 @@ type entry struct {
 		CommandMode string          `json:"commandMode"`
 		Origin      *struct {
 			Kind string `json:"kind"`
+			Name string `json:"name"` // kind "peer": the Claude session that sent it
+			Body string `json:"body"`
 		} `json:"origin"`
 	} `json:"attachment"`
 	Cwd           string          `json:"cwd"`
@@ -205,6 +207,23 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			return nil
 		}
 		notification := a.CommandMode == "task-notification"
+		if a.Origin != nil && a.Origin.Kind == "peer" { // another Claude session's message, absorbed mid-turn
+			var prompt string
+			_ = json.Unmarshal(a.Prompt, &prompt)
+			from, body, ok := CrossSession(prompt)
+			if !ok {
+				from, body = a.Origin.Name, strings.TrimSpace(a.Origin.Body)
+			}
+			if a.Origin.Name != "" {
+				from = a.Origin.Name
+			}
+			if body == "" {
+				return nil
+			}
+			it := mk(0, "user", proto.KindText)
+			it.Text, it.From, it.Queued = clip(body), from, true
+			return []proto.Item{it}
+		}
 		if !notification && ((a.CommandMode != "" && a.CommandMode != "prompt") || (a.Origin != nil && a.Origin.Kind != "human")) {
 			return nil
 		}
@@ -518,6 +537,9 @@ func (m *Meta) removeBackground(id string) {
 func (m *Meta) applyQueue(op, content string) {
 	// Queued text keeps the <pasted_content> wrapper of long / voice input; show what the user wrote.
 	content = strings.TrimSpace(pastedRe.ReplaceAllString(content, ""))
+	if from, body, ok := CrossSession(content); ok {
+		content = "【来自 " + from + "】" + body
+	}
 	removeOne := func() bool {
 		for i, q := range m.Queue {
 			if q == content {
@@ -547,10 +569,33 @@ func (m *Meta) applyQueue(op, content string) {
 	}
 }
 
+// A message another Claude session sent this one ("Another Claude session sent a message:" + the tagged body + an
+// English note on how to treat it).
+var crossRe = regexp.MustCompile(`(?s)<cross-session-message([^>]*)>\s*(.*?)\s*</cross-session-message>`)
+var crossNameRe = regexp.MustCompile(`from-name="([^"]*)"`)
+
+// CrossSession returns the sender and body of a cross-session message, ok false for anything else.
+func CrossSession(s string) (from, body string, ok bool) {
+	m := crossRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", "", false
+	}
+	from = "另一个会话"
+	if n := crossNameRe.FindStringSubmatch(m[1]); n != nil && n[1] != "" {
+		from = n[1]
+	}
+	return from, strings.TrimSpace(m[2]), true
+}
+
 func userText(mk func(int, string, string) proto.Item, s string) []proto.Item {
 	trimmed := strings.TrimSpace(pastedRe.ReplaceAllString(s, ""))
 	if trimmed == "" {
 		return nil
+	}
+	if from, body, ok := CrossSession(trimmed); ok {
+		it := mk(0, "user", proto.KindText)
+		it.Text, it.From = clip(body), from
+		return []proto.Item{it}
 	}
 	if strings.HasPrefix(trimmed, "<command-name>") || strings.HasPrefix(trimmed, "<command-message>") {
 		name := firstTag(trimmed, "command-name")

@@ -424,8 +424,12 @@ struct AgentStrip: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 6)
             }
-            // The one being read stays in sight (it may be far along a long row).
-            .onChange(of: viewing, initial: true) { _, id in withAnimation(.snappy) { proxy.scrollTo(id ?? "main", anchor: .center) } }
+            // The one being read stays in sight — only when it changes, and only along the row (an initial scrollTo
+            // also scrolled the page around it and shifted the whole header).
+            .onChange(of: viewing) { _, id in
+                guard let id else { return }
+                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .trailing) }
+            }
         }
     }
 

@@ -126,6 +126,32 @@ extension UserBubble {
     }
 }
 
+/// A message another Claude session sent this one: on the left like the agent's side, in a quiet card that names
+/// the sender — it was not typed by you.
+struct PeerMessage: View {
+    var item: Item
+    var from: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("来自 \(from)", systemImage: "arrow.left.arrow.right.circle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(item.text ?? "")
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+        .padding(.trailing, 32)
+        .messageLongPress(id: item.id)
+        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false)
+    }
+}
+
 /// A message just sent from this phone, before the transcript has it: drawn like a sent bubble right away, with a
 /// quiet clock while the request runs and a red "重发" when it failed.
 struct PendingBubble: View {

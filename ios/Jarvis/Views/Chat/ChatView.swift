@@ -326,10 +326,33 @@ struct ChatView: View {
     /// lazy stack never has to estimate its way to the bottom (that is what left pages blank). Older pages load at the
     /// far end and never push what you are reading.
     @ViewBuilder private var chatPane: some View {
-        GeometryReader { geo in
-            chatScroll(insets: geo.safeAreaInsets)
+        // The list above, the composer below — stacked, not overlaid: with the keyboard up the whole page gets
+        // shorter and the newest message (offset 0 of the flipped list) stays right above the composer.
+        VStack(spacing: 0) {
+            // A hairline above the list: a scroll view touching the top safe area extends under it and adds its
+            // inset — at the wrong end once flipped. Not touching it, the list gets no safe area at all (the
+            // composer below keeps it off the bottom and the keyboard).
+            Color.clear.frame(height: 1)
+            chatScroll()
+                .overlay(alignment: .bottomTrailing) { jumpArrow }
+            footer
         }
-        .overlay(alignment: .bottomTrailing) {
+        .environment(\.openSubagent) { toolUseID in
+            if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
+        }
+    }
+
+    @ViewBuilder private var footer: some View {
+        if let a = viewedAgent {
+            SubagentFooter(agent: a) { view(nil) }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        } else {
+            mainFooter.padding(.top, 8)
+        }
+    }
+
+    @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
                     Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
@@ -339,19 +362,6 @@ struct ChatView: View {
                 .padding(16)
                 .transition(.scale.combined(with: .opacity))
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let a = viewedAgent {
-                SubagentFooter(agent: a) { view(nil) }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-            } else {
-                mainFooter
-            }
-        }
-        .environment(\.openSubagent) { toolUseID in
-            if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
-        }
     }
 
     private var mainFooter: some View {
@@ -388,7 +398,7 @@ struct ChatView: View {
         scrollToEnd()
     }
 
-    private func chatScroll(insets: EdgeInsets) -> some View {
+    private func chatScroll() -> some View {
         let store = store
         let rows = store.rows
         var lines = chatLines(Self.debugTrim(store.blocks))
@@ -450,9 +460,7 @@ struct ChatView: View {
         .flippedBack() // the scroll view itself upside down; every row above is flipped back
         // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
         // (Content top = the composer side on screen, content bottom = the navigation side.)
-        .ignoresSafeArea(.container, edges: .vertical)
-        .contentMargins(.top, insets.bottom + 12, for: .scrollContent)
-        .contentMargins(.bottom, insets.top + 8, for: .scrollContent)
+        .contentMargins(.vertical, 10, for: .scrollContent)
         .scrollIndicators(.hidden)
         // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
         .scrollEdgeEffectHidden(true, for: .all)
@@ -625,7 +633,13 @@ struct ChatView: View {
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
         switch row {
         case .user(let i):
-            if (i.text ?? "").hasPrefix("/loop") { LoopTickRow(item: i) } else { UserBubble(item: i) }
+            if (i.text ?? "").hasPrefix("/loop") {
+                LoopTickRow(item: i)
+            } else if let from = i.from {
+                PeerMessage(item: i, from: from)
+            } else {
+                UserBubble(item: i)
+            }
         case .assistant(let i): AssistantText(item: i)
         case .thinking(let i):
             if style == .dev && live { ThinkingRow(item: i) }
@@ -718,6 +732,14 @@ struct Composer: View {
                 TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
+                    #if DEBUG
+                    .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
+                        if UserDefaults.standard.bool(forKey: "focusComposer") {
+                            try? await Task.sleep(for: .seconds(6))
+                            focused = true
+                        }
+                    }
+                    #endif
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))

@@ -593,3 +593,28 @@ func TestCustomTitleBeatsAITitle(t *testing.T) {
 		t.Fatalf("title = %q", m.Title)
 	}
 }
+
+func TestCrossSessionMessage(t *testing.T) {
+	msg := "Another Claude session sent a message:\n<cross-session-message from=\"uds:/run/x.sock\" from-name=\"ark-d1\" from-mode=\"bypass\">\n存量查完了，开始实现 B。\n</cross-session-message>\n\nThis came from another Claude session — not typed by your user."
+	line, _ := json.Marshal(map[string]any{"type": "user", "uuid": "u", "message": map[string]any{"role": "user", "content": msg}})
+	it := only(t, ParseLine(1, line, &Meta{}))
+	if it.From != "ark-d1" || it.Text != "存量查完了，开始实现 B。" || it.Role != "user" {
+		t.Fatalf("item: %+v", it)
+	}
+	var m Meta
+	m.applyQueue("enqueue", msg)
+	if len(m.Queue) != 1 || m.Queue[0] != "【来自 ark-d1】存量查完了，开始实现 B。" {
+		t.Fatalf("queue: %q", m.Queue)
+	}
+}
+
+func TestPeerMessageAbsorbedMidTurn(t *testing.T) {
+	att, _ := json.Marshal(map[string]any{"type": "attachment", "uuid": "p", "attachment": map[string]any{
+		"type": "queued_command", "commandMode": "prompt",
+		"prompt": "<cross-session-message from=\"uds:/x\" from-name=\"ark-d1\">\nB 已推。\n</cross-session-message>",
+		"origin": map[string]any{"kind": "peer", "name": "ark-d1", "body": "B 已推。"}}})
+	it := only(t, ParseLine(1, att, &Meta{}))
+	if it.From != "ark-d1" || it.Text != "B 已推。" || !it.Queued {
+		t.Fatalf("item: %+v", it)
+	}
+}
