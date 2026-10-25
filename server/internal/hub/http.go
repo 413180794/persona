@@ -115,6 +115,7 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"interactions": recs})
 	})
 	h.assistantRoutes(api)
+	h.pinRoutes(api)
 	h.aiRoutes(api)
 	h.larkRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)

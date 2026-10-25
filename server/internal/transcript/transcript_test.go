@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -557,5 +558,28 @@ func TestPageTurnsStartsAtAPrompt(t *testing.T) {
 	older, more := f.PageTurns(items[0].Seq, 2, 2000)
 	if more || len(older) != 6 || older[0].Text != "question 1" {
 		t.Fatalf("older page: more=%v n=%d", more, len(older))
+	}
+}
+
+func TestLoopFromScheduleWakeup(t *testing.T) {
+	meta := &Meta{}
+	lines := []string{
+		`{"type":"assistant","uuid":"a1","timestamp":"2026-10-25T03:26:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w1","name":"ScheduleWakeup","input":{"delaySeconds":1800,"prompt":"/loop 监控 stg","reason":"30 分钟兜底"}}]}}`,
+		`{"type":"user","uuid":"u1","timestamp":"2026-10-25T03:26:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"Next wakeup scheduled for 11:57:00 (in 1859s). If you owe the user a status update"}]}}`,
+	}
+	for i, l := range lines {
+		ParseLine(i+1, []byte(l), meta)
+	}
+	l := meta.Loop
+	if l == nil || l.Kind != "wakeup" || l.Prompt != "/loop 监控 stg" || l.IntervalSeconds != 1800 || l.Ticks != 1 {
+		t.Fatalf("loop: %+v", l)
+	}
+	if want := time.Date(2026, 10, 25, 3, 26, 1, 0, time.UTC).Add(1859 * time.Second); !l.NextAt.Equal(want) {
+		t.Fatalf("next at %v, want %v", l.NextAt, want)
+	}
+	stop := `{"type":"assistant","uuid":"a2","timestamp":"2026-10-25T04:00:00Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"w2","name":"ScheduleWakeup","input":{"stop":true}}]}}`
+	ParseLine(3, []byte(stop), meta)
+	if meta.Loop != nil {
+		t.Fatalf("stopped loop still there: %+v", meta.Loop)
 	}
 }

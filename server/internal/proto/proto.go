@@ -109,10 +109,12 @@ type Session struct {
 	Queued []string `json:"queued,omitempty"`
 	// Background lists commands / agents Claude started in the background that have not reported back yet
 	// (the TUI's "2 shells still running").
-	Background          []BackgroundTask `json:"background,omitempty"`
-	UpdatedAt           time.Time        `json:"updated_at"`
-	LastText            string           `json:"last_text,omitempty"`
-	PendingInteractions int              `json:"pending_interactions"`
+	Background []BackgroundTask `json:"background,omitempty"`
+	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
+	Loop                *LoopInfo `json:"loop,omitempty"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	LastText            string    `json:"last_text,omitempty"`
+	PendingInteractions int       `json:"pending_interactions"`
 }
 
 // Item kinds.
@@ -230,4 +232,16 @@ type BackgroundTask struct {
 	Command     string    `json:"command,omitempty"`
 	OutputFile  string    `json:"output_file,omitempty"`
 	StartedAt   time.Time `json:"started_at"`
+}
+
+// LoopInfo describes a /loop: Claude re-runs Prompt on its own, either by scheduling its next wakeup each tick
+// (ScheduleWakeup, kind "wakeup") or with a cron job (CronCreate, kind "cron").
+type LoopInfo struct {
+	Kind            string    `json:"kind"`
+	Prompt          string    `json:"prompt,omitempty"`
+	Reason          string    `json:"reason,omitempty"`
+	IntervalSeconds int       `json:"interval_seconds,omitempty"`
+	NextAt          time.Time `json:"next_at,omitempty"`
+	Cron            string    `json:"cron,omitempty"`
+	Ticks           int       `json:"ticks,omitempty"` // wakeups scheduled so far
 }

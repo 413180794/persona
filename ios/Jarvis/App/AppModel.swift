@@ -424,8 +424,53 @@ final class AppModel {
         return list
     }
 
+    // MARK: Pins
+
+    /// Pinned spaces / agents (saved on the hub; cached here so the list orders right before it answers).
+    var pins: Pins = {
+        guard let data = UserDefaults.standard.data(forKey: "dev.pins"), let p = try? JSON.decoder.decode(Pins.self, from: data) else { return Pins() }
+        return p
+    }() {
+        didSet { if let data = try? JSON.encoder.encode(pins) { UserDefaults.standard.set(data, forKey: "dev.pins") } }
+    }
+
+    static func pinKey(space g: SpaceGroup) -> String { "\(g.machineID)/\(g.name)" }
+    static func pinKey(session k: SessionKey) -> String { "\(k.machineID)/\(k.sessionID)" }
+
+    func isPinned(_ g: SpaceGroup) -> Bool { pins.spaces.contains(Self.pinKey(space: g)) }
+    func isPinned(_ k: SessionKey) -> Bool { pins.sessions.contains(Self.pinKey(session: k)) }
+
+    func togglePin(_ g: SpaceGroup) { updatePins { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
+    func togglePin(_ k: SessionKey) { updatePins { p in Self.toggle(&p.sessions, Self.pinKey(session: k)) } }
+
+    private static func toggle(_ list: inout [String], _ key: String) {
+        if let i = list.firstIndex(of: key) { list.remove(at: i) } else { list.insert(key, at: 0) }
+    }
+
+    private func updatePins(_ change: (inout Pins) -> Void) {
+        Haptics.tap()
+        var p = pins
+        change(&p)
+        withAnimation(.snappy) { pins = p } // optimistic; the hub keeps the truth
+        Task { do { try await api?.setPins(p) } catch { show(error) } }
+    }
+
+    func loadPins() async {
+        if let p = try? await api?.pins() { pins = p }
+    }
+
+    // MARK: Loops
+
+    /// Asks the agent to end its /loop: nothing outside claude can cancel a scheduled wakeup or its cron job,
+    /// so the agent is told to (it wakes up for the message and stops scheduling).
+    func stopLoop(_ key: SessionKey) {
+        sendNow(key, text: "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），"
+            + "不要再安排下一次唤醒，回复一句「循环已停止」即可。")
+    }
+
     func refresh() async {
         guard let api else { return }
+        Task { await loadPins() }
         do {
             async let m = api.machines()
             async let s = api.sessions()

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -94,6 +95,9 @@ type Meta struct {
 	// Background holds background shells / agents that have not reported back (see trackBackground).
 	Background []proto.BackgroundTask
 	bgPending  map[string]proto.BackgroundTask // tool_use_id → started, waiting for the tool result with its id
+	// Loop is the /loop this session runs, if any (see trackBackground).
+	Loop        *proto.LoopInfo
+	loopPending map[string]proto.LoopInfo
 	// LastActivity is the time of the last real exchange (user input, assistant output, tool calls). Claude Code
 	// also appends recaps, titles and mode lines to idle sessions, so the file mtime is not "last used".
 	LastActivity time.Time
@@ -364,6 +368,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 // agentId: …") and report back later with a <task-notification> carrying the same id. TaskStop / KillShell end them too.
 var (
 	bgIDRe     = regexp.MustCompile(`(?:running in background with ID|agentId):\s*([A-Za-z0-9_-]+)`)
+	wakeInRe   = regexp.MustCompile(`Next wakeup scheduled for [^(]*\(in (\d+)s\)`)
 	bgMovedRe  = regexp.MustCompile(`moved to the background \(ID: ([A-Za-z0-9_-]+)\)`) // a foreground command that timed out
 	bgOutputRe = regexp.MustCompile(`Output is being written to:\s*(\S+?)\.?(?:\s|$)`)
 )
@@ -375,9 +380,35 @@ func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts t
 		Background  bool   `json:"run_in_background"`
 		TaskID      string `json:"task_id"`
 		ShellID     string `json:"shell_id"`
+		// ScheduleWakeup / CronCreate (the /loop skill)
+		Delay  float64 `json:"delaySeconds"`
+		Prompt string  `json:"prompt"`
+		Reason string  `json:"reason"`
+		Stop   bool    `json:"stop"`
+		Cron      string `json:"cron"`
+		Recurring *bool  `json:"recurring"`
 	}
 	_ = json.Unmarshal(raw, &in)
 	switch name {
+	case "ScheduleWakeup":
+		if in.Stop {
+			m.Loop = nil
+			return
+		}
+		if m.loopPending == nil {
+			m.loopPending = map[string]proto.LoopInfo{}
+		}
+		m.loopPending[toolUseID] = proto.LoopInfo{Kind: "wakeup", Prompt: in.Prompt, Reason: in.Reason,
+			IntervalSeconds: int(in.Delay), NextAt: ts.Add(time.Duration(in.Delay) * time.Second)}
+	case "CronCreate":
+		if (in.Recurring != nil && !*in.Recurring) || onceCron(in.Cron) {
+			return // a one-off reminder, not a loop
+		}
+		m.Loop = &proto.LoopInfo{Kind: "cron", Prompt: in.Prompt, Cron: in.Cron}
+	case "CronDelete":
+		if m.Loop != nil && m.Loop.Kind == "cron" {
+			m.Loop = nil
+		}
 	case "Bash":
 		if !in.Background {
 			return
@@ -391,6 +422,17 @@ func (m *Meta) trackBackground(toolUseID, name string, raw json.RawMessage, ts t
 	}
 }
 
+// onceCron reports a cron expression pinned to one date ("33 17 21 10 *": day of month and month both fixed).
+func onceCron(expr string) bool {
+	f := strings.Fields(expr)
+	if len(f) < 5 {
+		return false
+	}
+	_, errDay := strconv.Atoi(f[2])
+	_, errMonth := strconv.Atoi(f[3])
+	return errDay == nil && errMonth == nil
+}
+
 func (m *Meta) pend(toolUseID string, t proto.BackgroundTask) {
 	if m.bgPending == nil {
 		m.bgPending = map[string]proto.BackgroundTask{}
@@ -399,6 +441,22 @@ func (m *Meta) pend(toolUseID string, t proto.BackgroundTask) {
 }
 
 func (m *Meta) backgroundStarted(toolUseID, result string, isError bool, ts time.Time) {
+	if l, ok := m.loopPending[toolUseID]; ok {
+		delete(m.loopPending, toolUseID)
+		if !isError {
+			if mm := wakeInRe.FindStringSubmatch(result); mm != nil { // "Next wakeup scheduled for 11:57:00 (in 1859s)"
+				if n, err := strconv.Atoi(mm[1]); err == nil {
+					l.NextAt = ts.Add(time.Duration(n) * time.Second)
+				}
+			}
+			if m.Loop != nil && m.Loop.Kind == "wakeup" {
+				l.Ticks = m.Loop.Ticks
+			}
+			l.Ticks++
+			m.Loop = &l
+		}
+		return
+	}
 	t, ok := m.bgPending[toolUseID]
 	if !ok {
 		if mv := bgMovedRe.FindStringSubmatch(result); mv != nil && !isError {

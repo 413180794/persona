@@ -58,8 +58,12 @@ struct ChatsView: View {
 
     var body: some View {
         let groups = SpaceGroup.build(filtered)
-        let active = groups.filter { !$0.isQuiet }
-        let quiet = groups.filter(\.isQuiet)
+        // Pinned spaces lead and never fold away with the quiet ones.
+        let pinnedSpaces = groups.filter { model.isPinned($0) }
+        let active = pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) }
+        let quiet = groups.filter { $0.isQuiet && !model.isPinned($0) }
+        let pinnedAgents = filtered.filter { model.isPinned($0.key) }
+            .sorted { a, b in (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: a.key)) ?? 0) < (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: b.key)) ?? 0) }
         let recent = filtered.filter { !$0.state.isLive }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
 
@@ -83,12 +87,22 @@ struct ChatsView: View {
                     }
                 }
 
+                if !pinnedAgents.isEmpty {
+                    Section {
+                        ForEach(pinnedAgents) { s in slotRow(s) }
+                    } header: {
+                        SectionHeader(title: "置顶", count: nil, tint: Theme.accent)
+                    }
+                }
+
                 ForEach(active) { g in
                     Section {
-                        // Busy agents first; idle ones fold into one row so a big workspace stays compact.
-                        let idle = g.sessions.filter(\.isQuiet)
+                        // Busy (and pinned / looping) agents first; idle ones fold into one row so a big workspace
+                        // stays compact.
+                        let stays: (Session) -> Bool = { !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil }
+                        let idle = g.sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
-                        ForEach(g.sessions.filter { !$0.isQuiet }) { s in slotRow(s) }
+                        ForEach(g.sessions.filter(stays)) { s in slotRow(s) }
                         if !idle.isEmpty {
                             if showIdle {
                                 ForEach(idle) { s in slotRow(s) }
@@ -111,9 +125,15 @@ struct ChatsView: View {
                         }
                     } header: {
                         Button { path.append(SpaceRoute(id: g.id)) } label: {
-                            SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                            SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
+                                        pinned: model.isPinned(g))
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button { model.togglePin(g) } label: {
+                                Label(model.isPinned(g) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(g) ? "pin.slash" : "pin")
+                            }
+                        }
                     }
                 }
 
@@ -202,6 +222,10 @@ struct ChatsView: View {
                 }
             }
             .swipeActions(edge: .leading) {
+                Button { model.togglePin(s.key) } label: {
+                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : "pin.fill")
+                }
+                .tint(Theme.accent)
                 if s.state == .working || s.state == .needsYou {
                     Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: "stop.fill") }
                         .tint(Theme.busy)
@@ -212,6 +236,12 @@ struct ChatsView: View {
                 }
             }
             .contextMenu {
+                Button { model.togglePin(s.key) } label: {
+                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash" : "pin")
+                }
+                if s.loop != nil {
+                    Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: "stop.circle") }
+                }
                 Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
                 Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
             }
@@ -270,11 +300,13 @@ struct SpaceHeader: View {
     var group: SpaceGroup
     var machine: Machine?
     var showMachine: Bool
+    var pinned = false
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "square.stack.3d.up.fill").foregroundStyle(group.state.color)
             Text(group.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            if pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
             if showMachine, let machine {
                 Text(machine.name).font(.caption).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
@@ -334,6 +366,7 @@ struct SlotRow: View {
                     if !quiet {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1)
                     }
+                    if let loop = session.loop { LoopBadge(loop: loop) }
                     Spacer(minLength: 4)
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -448,3 +481,27 @@ struct SessionRow: View {
         }
     }
 }
+
+/// "⟳ 每 30 分钟 · 下次 11:57" on an agent driven by /loop.
+struct LoopBadge: View {
+    var loop: LoopInfo
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
+            Text(label).lineLimit(1)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Theme.done)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1.5)
+        .background(Theme.done.opacity(0.12), in: .capsule)
+        .accessibilityLabel("循环中，" + label)
+    }
+
+    private var label: String {
+        if let next = loop.nextAt, next > .now { return "下次 " + next.formatted(date: .omitted, time: .shortened) }
+        return loop.cadence ?? "循环"
+    }
+}
+

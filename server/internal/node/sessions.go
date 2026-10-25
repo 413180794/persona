@@ -109,6 +109,7 @@ type quickMeta struct {
 	first    string
 	activity time.Time // last real exchange; zero when unknown
 	queue    []string
+	loop     *proto.LoopInfo
 	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
 	cwd      string
 	model    string
@@ -127,7 +128,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 		return m
 	}
 	m = readQuickMeta(path, st)
-	m.bg = n.backgroundTasks(path)
+	m.bg, m.loop = n.backgroundTasks(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -260,6 +261,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}
 				s.Background = m.bg // background shells keep running after the turn ends
+				s.Loop = m.loop
 			}
 		}
 		n.decorate(&s)
@@ -548,6 +550,9 @@ func listKey(list []proto.Session) string {
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}
+		if s.Loop != nil {
+			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
+		}
 	}
 	return b.String()
 }
@@ -691,10 +696,11 @@ type bgScan struct {
 	meta transcript.Meta
 }
 
-var bgMarkers = [][]byte{[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
+var bgMarkers = [][]byte{[]byte("ScheduleWakeup"), []byte("Next wakeup scheduled"), []byte("CronCreate"), []byte("CronDelete"),
+	[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
 	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`)}
 
-func (n *Node) backgroundTasks(path string) []proto.BackgroundTask {
+func (n *Node) backgroundTasks(path string) ([]proto.BackgroundTask, *proto.LoopInfo) {
 	n.mu.Lock()
 	sc := n.bgScans[path]
 	if sc == nil {
@@ -706,12 +712,12 @@ func (n *Node) backgroundTasks(path string) []proto.BackgroundTask {
 	defer sc.mu.Unlock()
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	if st.Size() < sc.off { // rewritten
 		sc.off, sc.meta = 0, transcript.Meta{}
@@ -737,7 +743,15 @@ func (n *Node) backgroundTasks(path string) []proto.BackgroundTask {
 			out = append(out, t)
 		}
 	}
-	return out
+	var loop *proto.LoopInfo
+	if l := sc.meta.Loop; l != nil {
+		// A wakeup loop whose next tick is long overdue died with its claude; cron jobs live until deleted.
+		if l.Kind == "cron" || l.NextAt.IsZero() || time.Since(l.NextAt) < 15*time.Minute {
+			c := *l
+			loop = &c
+		}
+	}
+	return out, loop
 }
 
 func containsAny(b []byte, subs [][]byte) bool {

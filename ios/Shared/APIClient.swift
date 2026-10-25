@@ -257,3 +257,18 @@ extension Error {
     /// The message to show, or nil for a cancellation.
     nonisolated var shown: String? { isCancellation ? nil : localizedDescription }
 }
+
+/// Spaces ("machine/space name") and agents ("machine/session") kept at the top of 开发.
+nonisolated struct Pins: Codable, Hashable, Sendable {
+    var spaces: [String] = []
+    var sessions: [String] = []
+}
+
+extension APIClient {
+    func pins() async throws -> Pins { try await get("/api/v1/pins") }
+    @discardableResult
+    func setPins(_ p: Pins) async throws -> Pins {
+        try JSON.decoder.decode(Pins.self, from: try await request("PUT", "/api/v1/pins", body: p))
+    }
+}
+

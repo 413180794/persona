@@ -346,6 +346,9 @@ struct ChatView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 10) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
+                if let loop = session?.loop, style == .dev {
+                    LoopStrip(loop: loop) { model.stopLoop(key) }
+                }
                 if let bg = session?.background, !bg.isEmpty, style == .dev {
                     BackgroundTasksStrip(tasks: bg) { t in
                         if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
@@ -461,7 +464,8 @@ struct ChatView: View {
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
         switch row {
-        case .user(let i): UserBubble(item: i)
+        case .user(let i):
+            if (i.text ?? "").hasPrefix("/loop") { LoopTickRow(item: i) } else { UserBubble(item: i) }
         case .assistant(let i): AssistantText(item: i)
         case .thinking(let i):
             if style == .dev && live { ThinkingRow(item: i) }

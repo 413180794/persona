@@ -106,6 +106,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var queued: [String]?
     /// Shells / subagents Claude left running in the background.
     var background: [BackgroundTask]?
+    /// The /loop driving this agent (it wakes itself up on a schedule).
+    var loop: LoopInfo?
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -119,7 +121,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
     }
 
@@ -148,10 +150,42 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
+        loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
+    }
+}
+
+/// A /loop: Claude re-runs a prompt on its own, scheduling each next wakeup (kind "wakeup") or by cron ("cron").
+nonisolated struct LoopInfo: Codable, Hashable, Sendable {
+    var kind: String
+    var prompt: String?
+    var reason: String?
+    var intervalSeconds: Int?
+    var nextAt: Date?
+    var cron: String?
+    var ticks: Int?
+
+    /// The task, without the "/loop" command word.
+    var task: String {
+        let p = (prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return p.hasPrefix("/loop") ? String(p.dropFirst(5)).trimmingCharacters(in: .whitespaces) : p
+    }
+
+    /// "每 30 分钟" / "按 cron 33 17 * * *".
+    var cadence: String? {
+        if kind == "cron", let cron { return "按计划 \(cron)" }
+        guard let s = intervalSeconds, s > 0 else { return nil }
+        if s < 120 { return "每 \(s) 秒" }
+        if s < 7200 { return "每 \(s / 60) 分钟" }
+        return "每 \(s / 3600) 小时"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, prompt, reason, cron, ticks
+        case intervalSeconds = "interval_seconds", nextAt = "next_at"
     }
 }
 

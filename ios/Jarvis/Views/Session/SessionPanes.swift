@@ -313,3 +313,85 @@ struct BackgroundTasksStrip: View {
         return "\(s / 3600) 时 \(s % 3600 / 60) 分"
     }
 }
+
+// MARK: - Loops
+
+/// The /loop driving this agent: what it repeats, how often, when it wakes next — and a way to stop it.
+struct LoopStrip: View {
+    var loop: LoopInfo
+    var stop: () -> Void
+    @State private var expanded = false
+    @State private var confirming = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.done)
+                    .symbolEffect(.rotate, options: .repeat(.periodic(delay: 2)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(.footnote.weight(.semibold)).lineLimit(1)
+                    if let next = loop.nextAt {
+                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                            Text(next > ctx.date ? "下次唤醒 \(next.formatted(date: .omitted, time: .shortened))（\(Self.until(next, now: ctx.date))）"
+                                                 : "正在执行这一轮")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 4)
+                Button { confirming = true } label: {
+                    Text("停止循环").font(.footnote.weight(.semibold)).lineLimit(1)
+                }
+                .buttonStyle(.glass)
+                .tint(Theme.danger)
+            }
+            .contentShape(.rect)
+            .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
+            if expanded {
+                Text(loop.task).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
+                if let r = loop.reason, !r.isEmpty {
+                    Label(r, systemImage: "text.bubble").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.tint(Theme.done.opacity(0.06)), in: .rect(cornerRadius: 20, style: .continuous))
+        .confirmationDialog("停止这个循环？", isPresented: $confirming, titleVisibility: .visible) {
+            Button("停止循环", role: .destructive, action: stop)
+        } message: {
+            Text("会给 Agent 发一条消息，让它不再安排下一次唤醒。正在执行的这一轮会先做完。")
+        }
+    }
+}
+
+extension LoopStrip {
+    /// "还有 4 分钟" / "还有 1 小时 5 分".
+    static func until(_ date: Date, now: Date) -> String {
+        let m = max(1, Int(ceil(date.timeIntervalSince(now) / 60)))
+        return m < 60 ? "还有 \(m) 分钟" : "还有 \(m / 60) 小时" + (m % 60 > 0 ? " \(m % 60) 分" : "")
+    }
+}
+
+/// A wakeup of a /loop (the transcript records each as the "/loop …" prompt again): one quiet line, not a bubble.
+struct LoopTickRow: View {
+    var item: Item
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
+            Text("循环唤醒").fontWeight(.semibold)
+            if let ts = item.ts { Text(ts.formatted(date: .omitted, time: .shortened)) }
+            Text(String((item.text ?? "").dropFirst(5)).trimmingCharacters(in: .whitespaces)).lineLimit(1).foregroundStyle(.tertiary)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.04), in: .capsule)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
