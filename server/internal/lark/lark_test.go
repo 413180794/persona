@@ -102,10 +102,10 @@ func TestEmojisAndMedia(t *testing.T) {
 		t.Fatalf("emojis = %+v %v", emojis, err)
 	}
 	rec := httptest.NewRecorder()
-	if err := c.Media(context.Background(), rec, "/media/k1", url.Values{"size": {"120"}}); err != nil || rec.Body.String() != "png" || rec.Header().Get("Content-Type") != "image/png" {
+	if err := c.Media(context.Background(), rec, "/media/k1", url.Values{"size": {"120"}}, nil); err != nil || rec.Body.String() != "png" || rec.Header().Get("Content-Type") != "image/png" {
 		t.Fatalf("media = %q %v", rec.Body.String(), err)
 	}
-	if err := c.Media(context.Background(), httptest.NewRecorder(), "/media/missing", nil); err == nil {
+	if err := c.Media(context.Background(), httptest.NewRecorder(), "/media/missing", nil, nil); err == nil {
 		t.Fatal("missing media should fail")
 	}
 }
@@ -249,6 +249,12 @@ func TestRawProxy(t *testing.T) {
 			_, _ = w.Write([]byte(`{"ok":true}`))
 		case "GET /agent/v1/minutes/t/media":
 			w.Header().Set("Content-Type", "audio/mp4")
+			if r.Header.Get("Range") == "bytes=0-1" {
+				w.Header().Set("Content-Range", "bytes 0-1/3")
+				w.WriteHeader(http.StatusPartialContent)
+				_, _ = w.Write([]byte("mp"))
+				return
+			}
 			_, _ = w.Write([]byte("mp4"))
 		case "POST /agent/v1/search/page":
 			b, _ := io.ReadAll(r.Body)
@@ -262,27 +268,31 @@ func TestRawProxy(t *testing.T) {
 	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
 	ctx := context.Background()
 	rec := httptest.NewRecorder()
-	if err := c.Raw(ctx, rec, "GET", "/documents/recent", nil, nil); err != nil {
+	if err := c.Raw(ctx, rec, "GET", "/documents/recent", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := rec.Body.String(); got != `{"items":[{"a":"/api/v1/lark/media/k","b":"/api/v1/lark/raw/documents/media/x","c":"/api/v1/lark/messages/1/media/k"}]}` {
 		t.Fatalf("rewritten = %s", got)
 	}
 	rec = httptest.NewRecorder()
-	if err := c.Raw(ctx, rec, "GET", "/mail/threads/a%2Fb", nil, nil); err != nil || rec.Body.String() != `{"ok":true}` {
+	if err := c.Raw(ctx, rec, "GET", "/mail/threads/a%2Fb", nil, nil, nil); err != nil || rec.Body.String() != `{"ok":true}` {
 		t.Fatalf("encoded path = %q %v", rec.Body.String(), err)
 	}
 	rec = httptest.NewRecorder()
-	if err := c.Raw(ctx, rec, "GET", "/minutes/t/media", nil, nil); err != nil || rec.Body.String() != "mp4" || rec.Header().Get("Content-Type") != "audio/mp4" {
+	if err := c.Raw(ctx, rec, "GET", "/minutes/t/media", nil, nil, nil); err != nil || rec.Body.String() != "mp4" || rec.Header().Get("Content-Type") != "audio/mp4" {
 		t.Fatalf("binary = %q %v", rec.Body.String(), err)
 	}
 	rec = httptest.NewRecorder()
-	if err := c.Raw(ctx, rec, "POST", "/search/page", nil, strings.NewReader(`{"tab":"messages"}`)); err != nil || rec.Body.String() != `{"tab":"messages"}` {
+	if err := c.Raw(ctx, rec, "GET", "/minutes/t/media", nil, nil, http.Header{"Range": {"bytes=0-1"}}); err != nil || rec.Code != 206 || rec.Body.String() != "mp" || rec.Header().Get("Content-Range") != "bytes 0-1/3" {
+		t.Fatalf("range = %d %q %v", rec.Code, rec.Body.String(), err)
+	}
+	rec = httptest.NewRecorder()
+	if err := c.Raw(ctx, rec, "POST", "/search/page", nil, strings.NewReader(`{"tab":"messages"}`), nil); err != nil || rec.Body.String() != `{"tab":"messages"}` {
 		t.Fatalf("search page = %q %v", rec.Body.String(), err)
 	}
 	for _, bad := range []struct{ method, path string }{{"POST", "/conversations"}, {"DELETE", "/flags"}, {"GET", "/conversations/1/qr-code"},
 		{"GET", "/links/open"}, {"GET", "/maintenance/export"}, {"GET", "/../x"}} {
-		if err := c.Raw(ctx, httptest.NewRecorder(), bad.method, bad.path, nil, nil); err == nil {
+		if err := c.Raw(ctx, httptest.NewRecorder(), bad.method, bad.path, nil, nil, nil); err == nil {
 			t.Errorf("%s %s should be refused", bad.method, bad.path)
 		}
 	}

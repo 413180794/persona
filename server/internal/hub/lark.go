@@ -145,12 +145,12 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	// Read-only window onto the rest of lark-connector's agent API (search, docs, calendar, minutes, tasks, contacts…):
 	// /api/v1/lark/raw/<path> = /agent/v1/<path>.
 	api.HandleFunc("GET /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "GET", rawPath(r), r.URL.Query(), nil); err != nil {
+		if err := h.lark.Raw(r.Context(), w, "GET", rawPath(r), r.URL.Query(), nil, r.Header); err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 		}
 	})
 	api.HandleFunc("POST /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "POST", rawPath(r), r.URL.Query(), io.LimitReader(r.Body, 1<<20)); err != nil {
+		if err := h.lark.Raw(r.Context(), w, "POST", rawPath(r), r.URL.Query(), io.LimitReader(r.Body, 1<<20), r.Header); err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 		}
 	})
@@ -239,7 +239,7 @@ func (h *Hub) larkMedia(w http.ResponseWriter, r *http.Request, path string) {
 	if size := r.URL.Query().Get("size"); size != "" {
 		q.Set("size", size)
 	}
-	if err := h.lark.Media(r.Context(), w, path, q); err != nil {
+	if err := h.lark.Media(r.Context(), w, path, q, r.Header); err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 	}
 }

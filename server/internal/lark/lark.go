@@ -434,7 +434,7 @@ func (c *Client) MomentsComments(ctx context.Context, postID string) (json.RawMe
 }
 
 // Media streams one media resource (path below /agent/v1, e.g. "/media/<key>") to w, keeping its type and caching.
-func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, query url.Values) error {
+func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, query url.Values, inbound http.Header) error {
 	tok, err := c.agentToken(ctx)
 	if err != nil {
 		return err
@@ -448,6 +448,7 @@ func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, 
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
+	copyRangeHeaders(req, inbound)
 	resp, err := c.media.Do(req)
 	if err != nil {
 		return fmt.Errorf("lark: %w", err)
@@ -461,13 +462,27 @@ func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, 
 		}
 		return fmt.Errorf("lark: media HTTP %d", resp.StatusCode)
 	}
-	for _, h := range []string{"Content-Type", "Content-Length", "Cache-Control", "ETag"} {
+	for _, h := range mediaHeaders {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
 	}
+	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	return err
+}
+
+// Headers a media answer keeps, so players can seek (206 + Content-Range) and caches can validate.
+var mediaHeaders = []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Cache-Control", "ETag", "Last-Modified"}
+
+// copyRangeHeaders forwards a player's byte-range request (AVPlayer asks for small ranges and refuses a whole
+// 100 MB file when it wanted the first two bytes).
+func copyRangeHeaders(out *http.Request, in http.Header) {
+	for _, h := range []string{"Range", "If-Range", "If-None-Match", "If-Modified-Since"} {
+		if v := in.Get(h); v != "" {
+			out.Header.Set(h, v)
+		}
+	}
 }
 
 // CardAction presses a callback button (or submits a control) on a card message as the user.
@@ -509,7 +524,7 @@ func rawGetDenied(path string) bool {
 
 // Raw forwards one read-only request to lark-connector's agent API (path below /agent/v1) and writes the answer:
 // JSON with its media / API paths pointing at the hub, anything else streamed as is.
-func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path string, query url.Values, body io.Reader) error {
+func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path string, query url.Values, body io.Reader, inbound http.Header) error {
 	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
 		return errors.New("lark: bad path")
 	}
@@ -541,6 +556,7 @@ func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path st
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	copyRangeHeaders(req, inbound)
 	resp, err := c.media.Do(req)
 	if err != nil {
 		return fmt.Errorf("lark: %w", err)
@@ -562,7 +578,7 @@ func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path st
 		_, err = w.Write([]byte(rawRewriter.Replace(string(raw))))
 		return err
 	}
-	for _, h := range []string{"Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "ETag"} {
+	for _, h := range mediaHeaders {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
