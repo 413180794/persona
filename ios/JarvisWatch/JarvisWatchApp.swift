@@ -69,7 +69,7 @@ final class WatchModel {
             apply(sessions: ss, interactions: ii, machines: mm)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 
@@ -87,7 +87,7 @@ final class WatchModel {
             interactions.removeAll { $0.id == ix.id }
             WKInterfaceDevice.current().play(.success)
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
             WKInterfaceDevice.current().play(.failure)
         }
     }
@@ -98,7 +98,7 @@ final class WatchModel {
             try await api.send(key, text: text)
             WKInterfaceDevice.current().play(.success)
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
             WKInterfaceDevice.current().play(.failure)
         }
     }
@@ -317,7 +317,7 @@ struct WatchSessionView: View {
     }
 
     private func load() async {
-        guard let api = model.api, let res = try? await api.items(session.key, beforeSeq: nil, limit: 40) else { return }
+        guard let api = model.api, let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
         items = res.items.filter { $0.kind == .text }
     }
 }

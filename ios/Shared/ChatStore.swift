@@ -188,7 +188,17 @@ final class ChatStore {
 
     @ObservationIgnored private var ids = Set<String>()
 
-    init(key: SessionKey) { self.key = key }
+    init(key: SessionKey) {
+        self.key = key
+        // Paint the last exchanges from the disk cache right away; the server's backlog merges in after.
+        if let cached = ChatCache.load(key), !cached.items.isEmpty {
+            items = cached.items
+            ids = Set(cached.items.map(\.id))
+            hasMore = cached.hasMore
+            rows = ChatStore.buildRows(items)
+            blocks = ChatBlock.build(rows)
+        }
+    }
 
     var lastSeq: Int { items.last?.seq ?? 0 }
 
@@ -206,6 +216,22 @@ final class ChatStore {
         items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
         rows = ChatStore.buildRows(items)
         blocks = ChatBlock.build(rows)
+        scheduleSave()
+    }
+
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    /// Writes the last two exchanges to the disk cache, a moment after the latest change.
+    private func scheduleSave() {
+        saveTask?.cancel()
+        let key = key
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            let tail = ChatCache.tail(self.items, turns: 2)
+            let more = self.hasMore || tail.count < self.items.count
+            Task.detached(priority: .utility) { ChatCache.save(key, items: tail, hasMore: more) }
+        }
     }
 
     func prepend(_ older: [Item], hasMore: Bool) {
@@ -328,3 +354,46 @@ nonisolated enum ScreenParser {
         return out
     }
 }
+
+/// On-disk copy of each conversation's last exchanges (Caches/chats), so opening or switching to a chat never
+/// shows a blank page while the hub catches up.
+nonisolated enum ChatCache {
+    private struct Entry: Codable { var items: [Item]; var hasMore: Bool }
+    private static let maxBytes = 6 << 20
+
+    private static func url(_ key: SessionKey) -> URL? {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let safe = "\(key.machineID)_\(key.sessionID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
+        return base.appending(path: "chats").appending(path: String(safe) + ".json")
+    }
+
+    static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool)? {
+        guard let url = url(key), let data = try? Data(contentsOf: url),
+              let e = try? JSON.decoder.decode(Entry.self, from: data) else { return nil }
+        return (e.items, e.hasMore)
+    }
+
+    static func save(_ key: SessionKey, items: [Item], hasMore: Bool) {
+        guard let url = url(key), !items.isEmpty else { return }
+        var entry = Entry(items: items, hasMore: hasMore)
+        guard var data = try? JSON.encoder.encode(entry) else { return }
+        if data.count > maxBytes { // screenshots make turns huge: keep the words, drop the pictures
+            entry.items = items.filter { $0.kind != .image }
+            guard let slim = try? JSON.encoder.encode(entry) else { return }
+            data = slim
+        }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Items from the start of the `turns`-th last user prompt on.
+    static func tail(_ items: [Item], turns: Int) -> [Item] {
+        var seen = 0
+        for i in items.indices.reversed() where items[i].role == "user" && items[i].kind == .text && items[i].queued != true {
+            seen += 1
+            if seen == turns { return Array(items[i...]) }
+        }
+        return items
+    }
+}
+

@@ -185,7 +185,7 @@ final class AppModel {
             let res = try await api.items(key, beforeSeq: nil)
             chat(key).merge(res.items, backlog: true, hasMore: res.hasMore)
         } catch {
-            chat(key).error = error.localizedDescription
+            chat(key).error = error.shown
         }
     }
 
@@ -410,6 +410,7 @@ final class AppModel {
     }
 
     func show(_ error: Error) {
+        guard !error.isCancellation else { return } // leaving a screen cancels its loads: not an error
         toast = Toast(error.localizedDescription, style: .error)
         Haptics.error()
     }

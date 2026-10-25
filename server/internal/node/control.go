@@ -262,7 +262,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 		return err
 	}
 	if len(paths) > 0 {
-		text = strings.TrimSpace(text) + "\n\n（我从手机发来了图片，请用 Read 查看：" + strings.Join(paths, "、") + "）"
+		text = strings.TrimSpace(text) + "\n\n相关图片：" + strings.Join(paths, "、")
 	}
 	return n.herdr.AgentPrompt(ctx, pane, text)
 }

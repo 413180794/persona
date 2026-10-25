@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -530,5 +531,31 @@ func TestBackgroundTasks(t *testing.T) {
 	}
 	if len(meta.Background) != 0 {
 		t.Fatalf("still running: %+v", meta.Background)
+	}
+}
+
+func TestPageTurnsStartsAtAPrompt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	var b strings.Builder
+	for turn := 1; turn <= 3; turn++ {
+		fmt.Fprintf(&b, `{"type":"user","uuid":"u%d","message":{"role":"user","content":"question %d"}}`+"\n", turn, turn)
+		for k := 0; k < 5; k++ {
+			fmt.Fprintf(&b, `{"type":"assistant","uuid":"a%d%d","message":{"role":"assistant","content":[{"type":"text","text":"step %d"}]}}`+"\n", turn, k, k)
+		}
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := NewFile(path)
+	if _, err := f.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	items, more := f.PageTurns(0, 2, 2000)
+	if !more || len(items) != 12 || items[0].Text != "question 2" {
+		t.Fatalf("last two turns: more=%v n=%d first=%q", more, len(items), items[0].Text)
+	}
+	older, more := f.PageTurns(items[0].Seq, 2, 2000)
+	if more || len(older) != 6 || older[0].Text != "question 1" {
+		t.Fatalf("older page: more=%v n=%d", more, len(older))
 	}
 }

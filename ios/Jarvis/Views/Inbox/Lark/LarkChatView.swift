@@ -252,7 +252,7 @@ struct LarkChatView: View {
             if let focus = UserDefaults.standard.string(forKey: "larkFocus") { await scroll(to: focus) }
             #endif
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 
@@ -540,7 +540,7 @@ struct LarkThreadView: View {
             .task {
                 defer { loading = false }
                 guard let api = model.api else { return }
-                do { replies = try await api.larkThread(root.id).messages.filter { $0.id != root.id } } catch { self.error = error.localizedDescription }
+                do { replies = try await api.larkThread(root.id).messages.filter { $0.id != root.id } } catch { self.error = error.shown }
             }
         }
     }

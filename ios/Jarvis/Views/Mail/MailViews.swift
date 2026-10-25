@@ -167,7 +167,7 @@ struct MailView: View {
             hasMore = r.hasMore && account != nil
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 
@@ -302,7 +302,7 @@ struct MailDetailView: View {
                 message = try await api.mailMessage(account: summary.accountID, uid: summary.uid, mailbox: summary.mailbox)
                 if !summary.seen { try? await api.mailFlags(account: summary.accountID, uid: summary.uid, .init(mailbox: summary.mailbox, seen: true)) }
             } catch {
-                self.error = error.localizedDescription
+                self.error = error.shown
             }
         }
     }
@@ -450,7 +450,7 @@ struct ComposeView: View {
             model.toast = Toast("已发送", style: .success)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 }
@@ -607,7 +607,7 @@ struct AddMailAccountView: View {
                 aiNote = (g.note.map { $0 + " " } ?? "") + "还缺：" + g.missing.map { ["email": "邮箱", "password": "密码"][$0] ?? $0 }.joined(separator: "、")
             }
         } catch {
-            self.error = "识别失败：\(error.localizedDescription)"
+            if !error.isCancellation { self.error = "识别失败：\(error.localizedDescription)" }
             Haptics.error()
         }
     }
@@ -635,7 +635,7 @@ struct AddMailAccountView: View {
             Haptics.success()
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 }

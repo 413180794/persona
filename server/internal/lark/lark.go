@@ -32,10 +32,11 @@ type Client struct {
 
 	media *http.Client // no overall timeout: videos stream for minutes
 
-	mu       sync.Mutex
-	token    string
-	emojis   map[string]Emoji
-	emojisAt time.Time
+	mu          sync.Mutex
+	token       string
+	emojis      map[string]Emoji
+	emojiGroups []EmojiGroup
+	emojisAt    time.Time
 }
 
 func New(cfg Config) *Client {
@@ -307,16 +308,18 @@ func (c *Client) page(ctx context.Context, path string, w Window, limit int) (Pa
 
 // Emojis maps every emoji key (lower-cased, skin-tone variants included) to its hub image URL.
 // The catalogue rarely changes, so it is cached for a day.
-func (c *Client) Emojis(ctx context.Context) (map[string]Emoji, error) {
+// Groups are the picker's sections (默认表情, 字节范…) with their keys in order.
+func (c *Client) Emojis(ctx context.Context) (map[string]Emoji, []EmojiGroup, error) {
 	c.mu.Lock()
 	if c.emojis != nil && time.Since(c.emojisAt) < 24*time.Hour {
-		e := c.emojis
+		e, g := c.emojis, c.emojiGroups
 		c.mu.Unlock()
-		return e, nil
+		return e, g, nil
 	}
 	c.mu.Unlock()
 	var res struct {
-		Items []struct {
+		Groups []EmojiGroup `json:"groups"`
+		Items  []struct {
 			Key      string   `json:"key"`
 			Label    string   `json:"label"`
 			ImageURL string   `json:"imageUrl"`
@@ -324,7 +327,7 @@ func (c *Client) Emojis(ctx context.Context) (map[string]Emoji, error) {
 		} `json:"items"`
 	}
 	if err := c.do(ctx, "GET", "/resources/emojis", nil, nil, &res); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make(map[string]Emoji, len(res.Items)*2)
 	for _, it := range res.Items {
@@ -340,14 +343,94 @@ func (c *Client) Emojis(ctx context.Context) (map[string]Emoji, error) {
 		out[strings.ToLower(it.Key)] = e
 	}
 	c.mu.Lock()
-	c.emojis, c.emojisAt = out, time.Now()
+	c.emojis, c.emojiGroups, c.emojisAt = out, res.Groups, time.Now()
 	c.mu.Unlock()
-	return out, nil
+	return out, res.Groups, nil
 }
 
 type Emoji struct {
 	Label string `json:"label"`
 	URL   string `json:"url"`
+}
+
+type EmojiGroup struct {
+	Title string   `json:"title"`
+	Keys  []string `json:"keys"`
+}
+
+// raw calls lark-connector and hands its JSON back with media URLs pointing at the hub (profiles, previews, posts).
+func (c *Client) raw(ctx context.Context, method, path string, query url.Values, body any) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(ctx, method, path, query, body, &out); err != nil {
+		return nil, err
+	}
+	return rewriteMedia(out), nil
+}
+
+// Profile is a person's profile card (lark-connector UserProfileDetail); feedID adds the group nickname.
+func (c *Client) Profile(ctx context.Context, userID, feedID string) (json.RawMessage, error) {
+	q := url.Values{}
+	if feedID != "" {
+		q.Set("feedId", feedID)
+	}
+	return c.raw(ctx, "GET", "/users/"+url.PathEscape(userID), q, nil)
+}
+
+// DirectChat returns the feed id of the 1:1 chat with a user, creating it if needed.
+func (c *Client) DirectChat(ctx context.Context, userID string) (string, error) {
+	var res struct {
+		FeedID string `json:"feedId"`
+	}
+	if err := c.do(ctx, "POST", "/conversations", nil, map[string]any{"type": "p2p", "userIds": []string{userID}}, &res); err != nil {
+		return "", err
+	}
+	if res.FeedID == "" {
+		return "", errors.New("lark: no chat with this user")
+	}
+	return res.FeedID, nil
+}
+
+// React adds (or with remove, takes back) the user's reaction on a message.
+func (c *Client) React(ctx context.Context, messageID, key string, remove bool) error {
+	if remove {
+		return c.do(ctx, "DELETE", "/messages/"+url.PathEscape(messageID)+"/reactions/"+url.PathEscape(key), nil, nil, nil)
+	}
+	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/reactions", nil, map[string]any{"key": key}, nil)
+}
+
+// QuickReactions are the reaction keys the user reaches for (Feishu's quick bar), most used first.
+func (c *Client) QuickReactions(ctx context.Context) ([]string, error) {
+	var res struct {
+		Quick  []string `json:"quick"`
+		Recent []string `json:"recent"`
+	}
+	if err := c.do(ctx, "GET", "/reactions/recent", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, k := range append(append(res.Recent, res.Quick...), "THUMBSUP", "HEART", "SMILE", "LAUGH", "SURPRISED", "CRY", "OK", "DONE") {
+		if !seen[strings.ToLower(k)] {
+			seen[strings.ToLower(k)] = true
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// URLPreview is the card Feishu shows under a link (removed posts, docs…).
+func (c *Client) URLPreview(ctx context.Context, messageID, link string) (json.RawMessage, error) {
+	return c.raw(ctx, "GET", "/message-url-preview", url.Values{"messageId": {messageID}, "url": {link}}, nil)
+}
+
+// MomentsPost is one removed post: author, text, pictures, counts.
+func (c *Client) MomentsPost(ctx context.Context, postID string) (json.RawMessage, error) {
+	return c.raw(ctx, "GET", "/moments/posts/"+url.PathEscape(postID), nil, nil)
+}
+
+// MomentsComments are a removed post's comments.
+func (c *Client) MomentsComments(ctx context.Context, postID string) (json.RawMessage, error) {
+	return c.raw(ctx, "GET", "/moments/posts/"+url.PathEscape(postID)+"/comments", nil, nil)
 }
 
 // Media streams one media resource (path below /agent/v1, e.g. "/media/<key>") to w, keeping its type and caching.

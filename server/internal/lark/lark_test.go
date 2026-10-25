@@ -78,7 +78,7 @@ func TestEmojisAndMedia(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/agent/v1/resources/emojis":
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{
+			_ = json.NewEncoder(w).Encode(map[string]any{"groups": []any{map[string]any{"title": "默认表情", "keys": []any{"THUMBSUP"}}}, "items": []any{
 				map[string]any{"key": "THUMBSUP", "label": "Like", "imageUrl": "/api/media/emoji_thumbsup.png", "skinKeys": []any{"MediumThumbsup", "THUMBSUP"}},
 			}})
 		case "/agent/v1/media/k1":
@@ -93,7 +93,10 @@ func TestEmojisAndMedia(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
-	emojis, err := c.Emojis(context.Background())
+	emojis, groups, err := c.Emojis(context.Background())
+	if len(groups) != 1 || groups[0].Keys[0] != "THUMBSUP" {
+		t.Fatalf("groups = %+v", groups)
+	}
 	if err != nil || emojis["mediumthumbsup"].URL != "/api/v1/lark/media/emoji_thumbsup.png" || emojis["thumbsup"].Label != "Like" {
 		t.Fatalf("emojis = %+v %v", emojis, err)
 	}
@@ -175,5 +178,61 @@ func TestFeedScopesPinnedAndActions(t *testing.T) {
 	n := 3
 	if err := c.MarkRead(ctx, "c", Read{Position: "20", BadgeCount: &n, MessageIDs: []string{"m"}}); err != nil || read["maxPosition"] != "20" || read["maxPositionBadgeCount"] != float64(3) {
 		t.Fatalf("read = %v %v", read, err)
+	}
+}
+
+func TestProfileReactionsAndMoments(t *testing.T) {
+	var reacted []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /agent/v1/users/u1":
+			if r.URL.Query().Get("feedId") != "f1" {
+				t.Errorf("feedId not forwarded")
+			}
+			_, _ = w.Write([]byte(`{"displayName":"Ann","avatarUrl":"/api/media/a1"}`))
+		case "POST /agent/v1/conversations":
+			var in map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			if in["type"] != "p2p" {
+				t.Errorf("chat body = %v", in)
+			}
+			_, _ = w.Write([]byte(`{"created":false,"feedId":"f9"}`))
+		case "POST /agent/v1/messages/m1/reactions":
+			var in map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			reacted = append(reacted, "+"+in["key"])
+		case "DELETE /agent/v1/messages/m1/reactions/OK":
+			reacted = append(reacted, "-OK")
+		case "GET /agent/v1/reactions/recent":
+			_, _ = w.Write([]byte(`{"quick":["OK","THUMBSUP"],"recent":["Fire","ok"]}`))
+		case "GET /agent/v1/moments/posts/p1":
+			_, _ = w.Write([]byte(`{"id":"p1","images":[{"url":"/api/media/i1"}]}`))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	ctx := context.Background()
+	raw, err := c.Profile(ctx, "u1", "f1")
+	if err != nil || !strings.Contains(string(raw), `"/api/v1/lark/media/a1"`) {
+		t.Fatalf("profile = %s %v", raw, err)
+	}
+	if feed, err := c.DirectChat(ctx, "u1"); err != nil || feed != "f9" {
+		t.Fatalf("chat = %q %v", feed, err)
+	}
+	if err := c.React(ctx, "m1", "Fire", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.React(ctx, "m1", "OK", true); err != nil || strings.Join(reacted, ",") != "+Fire,-OK" {
+		t.Fatalf("reacted = %v %v", reacted, err)
+	}
+	keys, err := c.QuickReactions(ctx)
+	if err != nil || strings.Join(keys[:3], ",") != "Fire,ok,THUMBSUP" {
+		t.Fatalf("quick = %v %v", keys, err)
+	}
+	post, err := c.MomentsPost(ctx, "p1")
+	if err != nil || !strings.Contains(string(post), "/api/v1/lark/media/i1") {
+		t.Fatalf("post = %s %v", post, err)
 	}
 }

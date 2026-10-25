@@ -122,8 +122,9 @@ nonisolated struct APIClient: Sendable {
 
     private func sp(_ k: SessionKey) -> String { "/api/v1/sessions/\(k.machineID)/\(k.sessionID)" }
 
-    func items(_ k: SessionKey, beforeSeq: Int?, limit: Int = 80) async throws -> ItemsResponse {
-        try await get(sp(k) + "/items", query: ["before_seq": beforeSeq.map(String.init) ?? "", "limit": String(limit)])
+    /// A page of history going back `turns` whole exchanges (user prompt + answer) before beforeSeq.
+    func items(_ k: SessionKey, beforeSeq: Int?, turns: Int = 2) async throws -> ItemsResponse {
+        try await get(sp(k) + "/items", query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80"])
     }
 
     struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }
@@ -241,4 +242,18 @@ nonisolated struct AnyEncodable: Encodable {
     let value: any Encodable
     init(_ value: any Encodable) { self.value = value }
     func encode(to encoder: Encoder) throws { try value.encode(to: encoder) }
+}
+
+extension Error {
+    /// A task or request that was cancelled (the screen went away, a newer load replaced it). iOS words it "已取消";
+    /// it is never something to show the user.
+    nonisolated var isCancellation: Bool {
+        if self is CancellationError { return true }
+        if let u = self as? URLError, u.code == .cancelled { return true }
+        let ns = self as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
+    }
+
+    /// The message to show, or nil for a cancellation.
+    nonisolated var shown: String? { isCancellation ? nil : localizedDescription }
 }

@@ -54,7 +54,7 @@ node 的 `session.start`：
 ## 发消息、中断、按键
 
 - 发消息：`agent prompt <pane> <text>`（原子地粘贴 + 回车，尊重 bracketed paste）。claude 正在工作时发，会进入它的排队输入。
-- 图片：存到 `~/.jarvis/uploads/<日期>/`，消息末尾附「请用 Read 查看：<路径>」。
+- 图片：存到 `~/.jarvis/uploads/<日期>/`，消息末尾附一行「相关图片：<路径>、<路径>」（Claude 自己会用 Read 打开）。
 - 中断：`pane send-keys <pane> esc`。
 - 任意 TUI 对话框：手机的终端页 / screen 交互 → `pane send-keys`（`up`/`down`/`enter`/`esc`/`tab`/`shift+tab`/`ctrl+c`/数字）、
   `pane send-text`。

@@ -164,7 +164,7 @@ struct FilesPane: View {
             let l = try await api.listDir(machine: machineID, path: target, cwd: cwd)
             if target == path { listing = l; listed = target; error = nil }
         } catch {
-            if target == path { self.error = error.localizedDescription }
+            if target == path { self.error = error.shown }
         }
     }
 }

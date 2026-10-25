@@ -67,7 +67,7 @@ struct UserBubble: View {
         VStack(alignment: .trailing, spacing: 6) {
         HStack {
             Spacer(minLength: 48)
-            Text(item.text ?? "")
+            Text(Self.display(item.text ?? ""))
                 .font(.body)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
@@ -79,6 +79,18 @@ struct UserBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: true)
+    }
+}
+
+extension UserBubble {
+    /// The note the phone appends for attached images ("相关图片：…", earlier "（我从手机发来了图片…）") shows as image
+    /// chips under the bubble; the bubble keeps just what was typed.
+    static func display(_ text: String) -> String {
+        var t = text
+        for pattern in [#"\n*相关图片：[^\n]*$"#, #"\n*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*$"#] {
+            if let r = t.range(of: pattern, options: .regularExpression) { t.removeSubrange(r) }
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? text : t
     }
 }
 

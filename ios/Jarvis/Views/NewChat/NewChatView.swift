@@ -200,7 +200,7 @@ struct NewChatView: View {
                 cwd = savedDir ?? recent.first?.path ?? ""
             }
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 
@@ -218,7 +218,7 @@ struct NewChatView: View {
             Haptics.success()
             onStarted(s)
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
             Haptics.error()
         }
     }
@@ -317,7 +317,7 @@ struct DirectoryBrowser: View {
                 path = l.path
             }
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 }

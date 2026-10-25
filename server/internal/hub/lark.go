@@ -143,13 +143,56 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		h.larkMedia(w, r, "/messages/"+url.PathEscape(r.PathValue("id"))+"/media/"+url.PathEscape(r.PathValue("key")))
 	})
 	api.HandleFunc("GET /api/v1/lark/emojis", func(w http.ResponseWriter, r *http.Request) {
-		emojis, err := h.lark.Emojis(r.Context())
+		emojis, groups, err := h.lark.Emojis(r.Context())
 		if err != nil {
 			writeErr(w, http.StatusBadGateway, err)
 			return
 		}
 		w.Header().Set("Cache-Control", "private, max-age=3600")
-		writeJSON(w, map[string]any{"emojis": emojis})
+		writeJSON(w, map[string]any{"emojis": emojis, "groups": groups})
+	})
+	api.HandleFunc("GET /api/v1/lark/reactions/quick", func(w http.ResponseWriter, r *http.Request) {
+		keys, err := h.lark.QuickReactions(r.Context())
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"keys": keys})
+	})
+	api.HandleFunc("POST /api/v1/lark/messages/{id}/reactions", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Key    string `json:"key"`
+			Remove bool   `json:"remove"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Key == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("key is required"))
+			return
+		}
+		if err := h.lark.React(r.Context(), r.PathValue("id"), in.Key, in.Remove); err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	api.HandleFunc("GET /api/v1/lark/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		h.larkRaw(w)(h.lark.Profile(r.Context(), r.PathValue("id"), r.URL.Query().Get("feed_id")))
+	})
+	api.HandleFunc("POST /api/v1/lark/users/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
+		feed, err := h.lark.DirectChat(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, map[string]any{"feed_id": feed})
+	})
+	api.HandleFunc("GET /api/v1/lark/messages/{id}/url-preview", func(w http.ResponseWriter, r *http.Request) {
+		h.larkRaw(w)(h.lark.URLPreview(r.Context(), r.PathValue("id"), r.URL.Query().Get("url")))
+	})
+	api.HandleFunc("GET /api/v1/lark/moments/posts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		h.larkRaw(w)(h.lark.MomentsPost(r.Context(), r.PathValue("id")))
+	})
+	api.HandleFunc("GET /api/v1/lark/moments/posts/{id}/comments", func(w http.ResponseWriter, r *http.Request) {
+		h.larkRaw(w)(h.lark.MomentsComments(r.Context(), r.PathValue("id")))
 	})
 	api.HandleFunc("POST /api/v1/lark/messages/{id}/card-actions/{action}", func(w http.ResponseWriter, r *http.Request) {
 		params, _ := io.ReadAll(io.LimitReader(r.Body, 64<<10))
@@ -159,6 +202,18 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// larkRaw writes lark-connector's own JSON (already rewritten to hub media URLs) or the error.
+func (h *Hub) larkRaw(w http.ResponseWriter) func(json.RawMessage, error) {
+	return func(raw json.RawMessage, err error) {
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(raw)
+	}
 }
 
 func (h *Hub) larkMedia(w http.ResponseWriter, r *http.Request, path string) {

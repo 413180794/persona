@@ -245,7 +245,7 @@ struct InboxView: View {
             loadedKey = key
             larkError = nil
         } catch {
-            if !(error is CancellationError) { larkError = error.localizedDescription }
+            if !(error is CancellationError) { larkError = error.shown }
         }
         if let p = try? await pinnedTask, group == .messages { pinned = p }
         if let l = try? await labelsTask { labels = l }
@@ -263,7 +263,7 @@ struct InboxView: View {
         guard let api = model.api else { return }
         async let m = api.mailMessages(account: nil)
         async let a = api.mailAccounts()
-        do { mails = try await m.messages; mailError = nil } catch { mailError = error.localizedDescription }
+        do { mails = try await m.messages; mailError = nil } catch { mailError = error.shown }
         accounts = (try? await a) ?? accounts
     }
 

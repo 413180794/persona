@@ -316,7 +316,7 @@ struct PairView: View {
             Haptics.success()
             dismiss()
         } catch {
-            self.error = "连接失败：\(error.localizedDescription)。手机需要能访问公司内网（removed）。"
+            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。手机需要能访问公司内网（removed）。" }
             Haptics.error()
         }
     }
@@ -428,7 +428,7 @@ struct ClaudeSettingsView: View {
             settings = try await api.claudeSettings(machine: machineID)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 
@@ -441,7 +441,7 @@ struct ClaudeSettingsView: View {
                 let list = try await api.setClaudeSetting(machine: id, key: key, value: value)
                 if id == machineID { settings = list }
             } catch {
-                failed.append("\(model.machine(id)?.name ?? id)：\(error.localizedDescription)")
+                if !error.isCancellation { failed.append("\(model.machine(id)?.name ?? id)：\(error.localizedDescription)") }
             }
         }
         if failed.isEmpty {

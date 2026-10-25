@@ -58,7 +58,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions", h.startSession)
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.proxy("session.items", func(r *http.Request) any {
 		q := r.URL.Query()
-		return map[string]any{"session_id": r.PathValue("sid"), "before_seq": atoi(q.Get("before_seq")), "limit": atoi(q.Get("limit"))}
+		return map[string]any{"session_id": r.PathValue("sid"), "before_seq": atoi(q.Get("before_seq")), "limit": atoi(q.Get("limit")),
+			"turns": atoi(q.Get("turns"))}
 	}))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.proxyBody("session.send"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
@@ -500,7 +501,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string, since int) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	params := map[string]any{"session_id": sid, "limit": 80}
+	params := map[string]any{"session_id": sid, "turns": 2} // the last two exchanges, however many rows they are
 	if since > 0 {
 		params["after_seq"] = since
 	}

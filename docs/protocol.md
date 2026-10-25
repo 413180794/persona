@@ -68,7 +68,7 @@
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?}` → `{"session":Session}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&limit=50` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序） |
+| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条）；旧客户端的 `limit` 仍按条数 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?}`；会话 offline 时先用原启动器 `--resume` 拉起 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
@@ -115,7 +115,7 @@
 
 | type | 字段 |
 | --- | --- |
-| `subscribe` | `machine_id`, `session_id`, `since_seq`（可选；有则补发其后的 items，否则补发最后 80 条） |
+| `subscribe` | `machine_id`, `session_id`, `since_seq`（可选；有则补发其后的 items，否则补发最后两轮） |
 | `unsubscribe` | `machine_id`, `session_id` |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |

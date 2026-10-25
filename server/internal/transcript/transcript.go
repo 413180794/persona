@@ -695,6 +695,32 @@ func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool) {
 	return out, start > 0
 }
 
+// PageTurns returns the items before beforeSeq (0 = the end) going back far enough to hold `turns` whole exchanges:
+// it starts at a user prompt, so a page never opens in the middle of a turn. maxItems caps one enormous turn.
+func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	end := len(f.items)
+	if beforeSeq > 0 {
+		end = 0
+		for end < len(f.items) && f.items[end].Seq < beforeSeq {
+			end++
+		}
+	}
+	start, seen := end, 0
+	for start > 0 && seen < turns && end-start < maxItems {
+		start--
+		if it := f.items[start]; it.Role == "user" && it.Kind == proto.KindText && !it.Queued {
+			seen++
+		}
+	}
+	for start > 0 && f.items[start].Seq == f.items[start-1].Seq { // never split a transcript line across pages
+		start--
+	}
+	out := append([]proto.Item(nil), f.items[start:end]...)
+	return out, start > 0
+}
+
 // After returns items with seq > afterSeq (at most limit, oldest first).
 func (f *File) After(afterSeq, limit int) []proto.Item {
 	f.mu.Lock()

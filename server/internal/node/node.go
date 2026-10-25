@@ -181,6 +181,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Staged          bool            `json:"staged"`
 		Hash            string          `json:"hash"`
 		Skip            int             `json:"skip"`
+		Turns           int             `json:"turns"`
 		Raw             json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -232,6 +233,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if p.AfterSeq != nil {
 			return map[string]any{"items": nonNil(f.After(*p.AfterSeq, 500)), "has_more": false}, nil
+		}
+		if p.Turns > 0 { // the phone pages by exchanges (user prompt + answer), not by rows
+			items, more := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
+			return map[string]any{"items": nonNil(items), "has_more": more}, nil
 		}
 		items, more := f.Page(p.BeforeSeq, limit)
 		return map[string]any{"items": nonNil(items), "has_more": more}, nil

@@ -104,4 +104,21 @@ struct TurnTests {
         #expect(t.users.count == 1)
         #expect(t.toolCount == 2)
     }
+
+    @Test func bubbleHidesTheImageNote() {
+        #expect(UserBubble.display("看这个\n\n相关图片：/a/1.jpg、/a/2.jpg") == "看这个")
+        #expect(UserBubble.display("看这个\n\n（我从手机发来了图片，请用 Read 查看：/a/1.jpg）") == "看这个")
+        #expect(UserBubble.display("相关图片：/a/1.jpg") == "相关图片：/a/1.jpg") // nothing else typed: keep it
+    }
+
+    @Test func cacheKeepsTheLastTwoExchanges() {
+        let items = [
+            item(1, .text, role: "user", text: "one"), item(2, .text, text: "a1"),
+            item(3, .text, role: "user", text: "two"), item(4, .text, role: "user", text: "two more", queued: true),
+            item(5, .text, text: "a2"),
+            item(6, .text, role: "user", text: "three"), item(7, .text, text: "a3"),
+        ]
+        #expect(ChatCache.tail(items, turns: 2).map(\.seq) == [3, 4, 5, 6, 7])
+    }
 }
+

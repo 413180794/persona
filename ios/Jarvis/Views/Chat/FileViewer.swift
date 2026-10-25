@@ -199,7 +199,7 @@ struct FileViewer: View {
         do {
             file = try await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd)
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.shown
         }
     }
 

@@ -63,7 +63,7 @@ struct AssistantView: View {
         } catch {
             withAnimation(.snappy) {
                 pending = nil
-                startError = error.localizedDescription
+                startError = error.shown
             }
             Haptics.error()
         }

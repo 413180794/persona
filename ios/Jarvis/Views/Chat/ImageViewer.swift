@@ -108,7 +108,7 @@ struct ImageViewer: View {
             AppModel.shared.toast = Toast("已保存到相册", style: .success)
         } catch {
             Haptics.error()
-            AppModel.shared.toast = Toast("保存失败：\(error.localizedDescription)", style: .error)
+            if !error.isCancellation { AppModel.shared.toast = Toast("保存失败：\(error.localizedDescription)", style: .error) }
         }
     }
 }

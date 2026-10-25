@@ -23,6 +23,8 @@ struct ChatView: View {
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
     @State private var menu = MessageMenu()
+    /// Turns the user folded / unfolded (default: running ones open, finished ones folded).
+    @State private var openTurns: [String: Bool] = [:]
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -107,6 +109,10 @@ struct ChatView: View {
             }
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        .onChange(of: pane) { _, p in
+            // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
+            if p == .chat { position = ScrollPosition(edge: .bottom); atBottom = true }
+        }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
@@ -134,6 +140,72 @@ struct ChatView: View {
             if st == .unread && model.visibleSession == key { model.markSeen(key) }
         }
     }
+
+    /// The chat as a flat list of lines (see `ChatLine`).
+    private func chatLines(_ blocks: [ChatBlock]) -> [ChatLine] {
+        let liveID = liveTurnID
+        var out: [ChatLine] = []
+        for block in blocks {
+            switch block {
+            case .row(let r):
+                out.append(.row(r))
+            case .turn(let t):
+                let live = t.id == liveID
+                let open = openTurns[t.id] ?? live
+                // Every message of the turn first (also ones sent while it runs), then the timer line, then the work.
+                out += t.users.map { .row($0) }
+                if live || !t.process.isEmpty { out.append(.header(t, live: live, open: open)) }
+                if open {
+                    let work = live ? t.steps : t.process
+                    for r in work { out += Self.stepLines(r, running: live && r.id == t.steps.last?.id) }
+                    if !live, let a = t.answer { out.append(.row(a)) }
+                } else if let a = t.answer {
+                    out.append(.row(a))
+                }
+                out += t.trailing.map { .row($0) }
+            }
+        }
+        return out
+    }
+
+    /// One step of the work: narration in gray, each stretch of tool calls as one "调用了 N 个工具" line.
+    private static func stepLines(_ r: ChatRow, running: Bool) -> [ChatLine] {
+        switch r {
+        case .thinking(let i):
+            return (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [.thought(i)]
+        case .tools(let steps):
+            let segments = ToolSegment.split(steps)
+            return segments.map { seg in
+                switch seg.kind {
+                case .thought(let i): .thought(i)
+                case .calls(let calls): .tools(id: seg.id, steps: calls, running: running && seg.id == segments.last?.id)
+                }
+            }
+        default:
+            return [.row(r)]
+        }
+    }
+
+    @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
+        switch line {
+        case .row(let r): rowView(r, isLatest: false, live: true)
+        case .header(let t, let live, let open):
+            WorkHeader(live: live, start: t.startedAt, end: t.endedAt, open: open,
+                       openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
+                Haptics.tap()
+                withAnimation(.snappy) { openTurns[t.id] = !open }
+            }
+        case .thought(let i): ThoughtText(text: i.text ?? "")
+        case .tools(_, let steps, let running): ToolCountRow(steps: steps, running: running)
+        }
+    }
+
+    private var liveTurnID: String? {
+        guard status.isActive, case .turn(let t) = store.blocks.last else { return nil }
+        return t.id
+    }
+
+    private var lastPromptID: String? { store.items.last { $0.role == "user" && $0.kind == .text }?.id }
 
     @ViewBuilder private var paneContent: some View {
         switch pane {
@@ -182,23 +254,12 @@ struct ChatView: View {
                 }
                 // Finished turns: the user's messages (queued ones gathered), one folded "process" row, the answer.
                 // The turn still running shows every step in arrival order.
-                let blocks = Self.debugTrim(store.blocks)
-                let liveTurn: Turn? = { if status.isActive, case .turn(let t) = blocks.last { return t } else { return nil } }()
-                ForEach(liveTurn == nil ? blocks : Array(blocks.dropLast())) { block in
-                    switch block {
-                    case .row(let row): rowView(row, isLatest: false, live: false).id(row.id).zIndex(holdsMenu(block) ? 1 : 0)
-                    case .turn(let turn):
-                        TurnView(turn: turn, style: style, live: false) { row in rowView(row, isLatest: false, live: true) }
-                            .id(block.id)
-                            .zIndex(holdsMenu(block) ? 1 : 0)
-                    }
-                }
-                if let liveTurn {
-                    TurnView(turn: liveTurn, style: style, live: true, openTerminal: style == .dev ? { showTerminal = true } : nil) { row in
-                        rowView(row, isLatest: false, live: true)
-                    }
-                    .id("live-" + liveTurn.id)
-                    .zIndex(holdsMenu(.turn(liveTurn)) ? 1 : 0)
+                // Every message, timer line, narration, tool count and answer is its own lazy row: a running turn can
+                // hold hundreds of steps and laying them out in one stack froze the page (blank for seconds).
+                ForEach(chatLines(Self.debugTrim(store.blocks))) { line in
+                    lineView(line)
+                        .id(line.id)
+                        .zIndex(menu.selected != nil && line.rowID == menu.selected ? 1 : 0)
                 }
                 if style == .assistant {
                     let live = store.liveText
@@ -234,6 +295,10 @@ struct ChatView: View {
         .onChange(of: rows.last?.id) { _, _ in
             if atBottom { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } }
         }
+        // A turn finishing folds its work away (the content gets much shorter) and a new one starts: without a
+        // jump the old offset lands in empty space below the content. Your own new message always goes to the end.
+        .onChange(of: liveTurnID) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
+        .onChange(of: lastPromptID) { old, _ in if old != nil { withAnimation(.snappy) { position.scrollTo(edge: .bottom) } } }
         .onChange(of: store.liveText.count / 40) { _, _ in
             if atBottom { position.scrollTo(edge: .bottom) }
         }
@@ -329,15 +394,6 @@ struct ChatView: View {
             model.drafts[key] = quoted + "\n\n" + draft
         }
         menu.edit = { [model, key] text in model.drafts[key] = text }
-    }
-
-    /// The block holding the message whose action bar is open draws above its neighbours.
-    private func holdsMenu(_ block: ChatBlock) -> Bool {
-        guard let sel = menu.selected else { return false }
-        switch block {
-        case .row(let r): return r.id == sel
-        case .turn(let t): return (t.users + t.steps + t.trailing).contains { $0.id == sel }
-        }
     }
 
     private func switchTo(_ next: SessionKey) {
@@ -727,7 +783,7 @@ struct DevInfoCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: 20, style: .continuous))
         .task(id: key) {
-            do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.localizedDescription }
+            do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
         }
     }
 
@@ -756,61 +812,26 @@ struct DevInfoCard: View {
 }
 
 /// A finished exchange: messages, the folded process, the answer.
-/// One exchange. The user's messages first (queued ones gathered), then a thin "正在工作 39 秒 / 已工作 5 分" line,
-/// then what the agent did: its words in full, tool runs only as "调用了 N 个工具" (tap for details), thoughts hidden.
-/// A finished turn folds the work away under that line and keeps just the answer; the running turn shows it all.
-struct TurnView<Row: View>: View {
-    let turn: Turn
-    var style: ChatStyle
-    var live: Bool
-    var openTerminal: (() -> Void)? = nil
-    @ViewBuilder var row: (ChatRow) -> Row
-    @State private var open: Bool? // nil: the default (open while live, folded when finished)
+/// One line of the chat. A turn renders as: its messages (queued ones gathered), a thin "正在工作 39 秒 / 已工作 5 分"
+/// line that folds the work, then — when open — the agent's words, narration in gray and each stretch of tool calls
+/// as "调用了 N 个工具"; finished turns are folded and keep just the answer. Lines are separate lazy rows on purpose.
+enum ChatLine: Identifiable {
+    case row(ChatRow)
+    case header(Turn, live: Bool, open: Bool)
+    case thought(Item)
+    case tools(id: String, steps: [ToolStep], running: Bool)
 
-    var body: some View {
-        let isOpen = open ?? live
-        // Running: the opening message(s), the header, then everything in arrival order. Finished: all messages first.
-        let lead = live ? Array(turn.ordered.prefix { if case .user = $0 { true } else { false } }) : turn.users
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(lead) { u in row(u) }
-            if live || !turn.process.isEmpty {
-                WorkHeader(live: live, start: turn.startedAt, end: turn.endedAt, open: isOpen, openTerminal: openTerminal) {
-                    Haptics.tap()
-                    withAnimation(.snappy) { open = !isOpen }
-                }
-            }
-            if live {
-                if isOpen {
-                    ForEach(turn.ordered.dropFirst(lead.count)) { r in step(r) }
-                } else if let a = turn.answer {
-                    row(a)
-                }
-            } else {
-                if isOpen {
-                    ForEach(turn.process) { r in step(r) }
-                }
-                if let a = turn.answer { row(a) }
-            }
-            ForEach(turn.trailing) { r in row(r) }
+    var id: String {
+        switch self {
+        case .row(let r): r.id
+        case .header(let t, _, _): "hdr-" + t.id
+        case .thought(let i): "th-" + i.id
+        case .tools(let id, _, _): "tc-" + id
         }
     }
 
-    @ViewBuilder private func step(_ r: ChatRow) -> some View {
-        switch r {
-        case .thinking(let i): ThoughtText(text: i.text ?? "")
-        case .tools(let steps):
-            // Narration between calls stays readable; each stretch of calls is one "调用了 N 个工具" line.
-            let segments = ToolSegment.split(steps)
-            let running = live && r.id == turn.steps.last?.id
-            ForEach(segments) { seg in
-                switch seg.kind {
-                case .thought(let i): ThoughtText(text: i.text ?? "")
-                case .calls(let calls): ToolCountRow(steps: calls, running: running && seg.id == segments.last?.id)
-                }
-            }
-        default: row(r)
-        }
-    }
+    /// The message row it is (for lifting the one whose action bar is open).
+    var rowID: String? { if case .row(let r) = self { r.id } else { nil } }
 }
 
 /// "正在工作 39 秒 ——— ⌄" (ticking) or "已工作 5 分 12 秒 ——— ⌄"; tapping folds / unfolds the work.

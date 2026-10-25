@@ -127,7 +127,7 @@ struct GitPane: View {
             noMore = false
             error = nil
         } catch {
-            if status == nil { self.error = error.localizedDescription }
+            if status == nil { self.error = error.shown }
         }
     }
 
@@ -283,7 +283,7 @@ struct GitDiffSheet: View {
                 diff = nil
                 do {
                     diff = try await model.api?.gitDiff(machine: machineID, cwd: cwd, path: target.file.path, staged: target.staged)
-                } catch { self.error = error.localizedDescription }
+                } catch { self.error = error.shown }
             }
         }
     }
@@ -349,7 +349,7 @@ struct GitCommitSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .task {
                 do { show = try await model.api?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
-                catch { self.error = error.localizedDescription }
+                catch { self.error = error.shown }
             }
         }
     }

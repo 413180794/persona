@@ -218,7 +218,7 @@ struct TerminalPanel: View {
             if r.text != text { text = r.text }
             if Self.lineCount(r.text) < lines { atTop = true }
         } catch {
-            if !loaded { self.error = error.localizedDescription }
+            if !loaded { self.error = error.shown }
         }
         loaded = true
     }
