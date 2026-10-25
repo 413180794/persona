@@ -3,7 +3,7 @@
 
   python3 scripts/asc_testflight.py                    # group "Internal" + testers, then status
   python3 scripts/asc_testflight.py status             # the last few builds and their processing state
-  python3 scripts/asc_testflight.py wait [minutes]     # poll until the newest build is VALID, then attach it
+  python3 scripts/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
 
 Internal testers must be users of the team in App Store Connect (tester@example.com is).
@@ -128,28 +128,34 @@ def write_info(build, whats_new: str):
     print("what to test written on build", build["attributes"]["version"])
 
 
-def wait(minutes: int):
-    """Poll until the newest uploaded build finishes processing, then attach it to the internal group."""
+def build_by_version(version: str):
+    found = request("GET", "/v1/builds", params={"filter[app]": APP_ID, "filter[version]": version, "limit": 1})["data"]
+    return found[0] if found else None
+
+
+def wait(minutes: int, version: str | None = None):
+    """Poll until the build finishes processing, then attach it to the internal group.
+
+    Pass the build number release.sh printed: right after an upload the new build is not listed yet, and "the newest
+    build" is still the previous one (already VALID), which got attached instead of the new one."""
     deadline = time.time() + minutes * 60
     last = None
     while True:
-        found = builds(1)
-        if found:
-            a = found[0]["attributes"]
+        build = build_by_version(version) if version else (builds(1) or [None])[0]
+        if build:
+            a = build["attributes"]
             state = a["processingState"]
             if state != last:
                 print(time.strftime("%H:%M:%S"), "build", a["version"], state)
                 last = state
             if state == "VALID":
-                build = newest_valid()
-                if build:
-                    write_info(build, default_whats_new())
-                    attach(build, group_id())
+                write_info(build, default_whats_new())
+                attach(build, group_id())
                 return
             if state in ("INVALID", "FAILED"):
                 sys.exit(f"build {a['version']} finished as {state}: check App Store Connect for the reason")
         if time.time() > deadline:
-            sys.exit(f"still {last or 'not uploaded'} after {minutes} min (builds appear 10–30 min after upload)")
+            sys.exit(f"still {last or 'not listed'} after {minutes} min (builds appear 10–30 min after upload)")
         time.sleep(30)
 
 
@@ -158,7 +164,7 @@ def main():
     if args[:1] == ["status"]:
         status()
     elif args[:1] == ["wait"]:
-        wait(int(args[1]) if len(args) > 1 else 45)
+        wait(int(args[1]) if len(args) > 1 else 45, args[2] if len(args) > 2 else None)
     elif args[:1] == ["info"]:
         build = newest_valid()
         if not build:

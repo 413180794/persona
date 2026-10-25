@@ -66,5 +66,5 @@ git tag -f "testflight/$BUILD" >/dev/null 2>&1 || true
 if [ -n "${NO_UPLOAD:-}" ]; then
   echo "Build $BUILD archived and exported to $OUT/export (not uploaded)."
 else
-  echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/asc_testflight.py status)."
+  echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/asc_testflight.py wait 45 $BUILD)."
 fi

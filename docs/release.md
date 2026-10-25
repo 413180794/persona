@@ -57,9 +57,10 @@ git push --tags
    确实是 `production`。
 6. `git tag -f testflight/<构建号>`。
 
-归档之后大约 10–30 分钟构建才会出现在 TestFlight。`asc_testflight.py wait [分钟数]` 会每 30 秒查一次，等到
+归档之后大约 10–30 分钟构建才会出现在 TestFlight。`asc_testflight.py wait [分钟数] [构建号]` 会每 30 秒查一次，等到
 `processingState=VALID` 后写默认的 What to Test 并加入 `Internal` 群组；`INVALID` / `FAILED` 会直接报错退出
-（原因在 App Store Connect 的构建页面里）。
+（原因在 App Store Connect 的构建页面里）。**要带上 release.sh 打印的构建号**：刚上传完新构建还查不到，不带构建号时
+「最新的构建」是上一个（早已 VALID），会把 What to Test 写到旧构建上（2026-10-25 踩过）。
 
 ## 为什么这样签名
 
