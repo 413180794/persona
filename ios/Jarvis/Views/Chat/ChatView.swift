@@ -14,7 +14,7 @@ struct ChatView: View {
     /// The session on screen; the sibling strip can switch it to another agent in the same space.
     @State private var key: SessionKey
     var style: ChatStyle = .dev
-    @State private var position = ScrollPosition(edge: .bottom)
+    @State private var position = ScrollPosition(edge: .top) // .top is the newest end of the flipped list
     /// The bottom sentinel is on screen. Starts false: if the first jump lands in unrendered space the arrow is the
     /// way out, and `settleAtEnd` retries until the sentinel has been seen.
     @State private var atBottom = false
@@ -133,7 +133,7 @@ struct ChatView: View {
         .onChange(of: pane) { _, p in
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
             if p == .chat {
-                position = ScrollPosition(id: Self.bottomID, anchor: .bottom)
+                position = ScrollPosition(edge: .top)
                 atBottom = false
                 settled = false
                 followsEnd = true
@@ -184,14 +184,34 @@ struct ChatView: View {
             case .turn(let t):
                 let live = t.id == liveID
                 let open = openTurns[t.id] ?? live
-                // Every message of the turn first (also ones sent while it runs), then the timer line, then the work.
-                out += t.users.map { .row($0) }
-                if live || !t.process.isEmpty { out.append(.header(t, live: live, open: open)) }
-                if open {
-                    out += Self.workLines(live ? t.steps : t.process, live: live)
-                    if !live, let a = t.answer { out.append(.row(a)) }
-                } else if let a = t.answer {
-                    out.append(.row(a))
+                // Messages sent before the agent did anything open the turn; the timer line follows them.
+                let lead = Array(t.ordered.prefix { if case .user = $0 { true } else { false } })
+                if live {
+                    // Running: one to one, in arrival order — each message with what the agent did after it.
+                    out += lead.map { .row($0) }
+                    out.append(.header(t, live: true, open: open))
+                    if open {
+                        out += Self.workLines(Array(t.ordered.dropFirst(lead.count)), live: true)
+                    } else if let a = t.answer {
+                        out.append(.row(a))
+                    }
+                } else if open {
+                    // Finished and unfolded: the first message carries the others folded in (they reappear below,
+                    // each before what the agent did for it), then the whole exchange in order.
+                    if t.users.count > 1, let first = t.users.first {
+                        out.append(.leadUser(first, more: t.users.count - 1))
+                        out.append(.header(t, live: false, open: true))
+                        out += Self.workLines(t.ordered.filter { $0.id != first.id }, live: false)
+                    } else {
+                        out += t.users.map { .row($0) }
+                        out.append(.header(t, live: false, open: true))
+                        out += Self.workLines(Array(t.ordered.filter { r in !t.users.contains { $0.id == r.id } }), live: false)
+                    }
+                } else {
+                    // Finished and folded: the messages as one group on the right, the timer line, the answer.
+                    if t.users.count > 1 { out.append(.userGroup(t)) } else { out += t.users.map { .row($0) } }
+                    if !t.process.isEmpty { out.append(.header(t, live: false, open: false)) }
+                    if let a = t.answer { out.append(.row(a)) }
                 }
                 out += t.trailing.map { .row($0) }
             }
@@ -237,6 +257,19 @@ struct ChatView: View {
                 withAnimation(.snappy) { openTurns[t.id] = !open }
             }
         case .tools(_, let steps, let running): ToolCountRow(steps: steps, running: running)
+        case .userGroup(let t): UserGroup(rows: t.users)
+        case .leadUser(let r, let more):
+            if case .user(let i) = r {
+                VStack(alignment: .trailing, spacing: 4) {
+                    UserBubble(item: i)
+                    Label("还有 \(more) 条，按顺序在下面", systemImage: "arrow.turn.left.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
     }
 
@@ -244,44 +277,25 @@ struct ChatView: View {
 
     /// Scrolls to the sentinel after the last row by id: SwiftUI lays that row out and positions around it, unlike
     /// `scrollTo(edge: .bottom)`, which trusts the lazy stack's estimated height and can land in unrendered space.
-    private func scrollToEnd() {
-        position.scrollTo(id: Self.bottomID, anchor: .bottom)
+    /// The newest message is at offset 0 of the flipped list: an exact jump, no estimate involved.
+    private func scrollToEnd(animated: Bool = false) {
+        if animated { withAnimation(.snappy) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
     }
 
-    /// Scrolls to the end once the rows that just changed have been laid out, then again after they settled
-    /// (markdown and images size themselves a moment later).
+    /// On entry / returning to the chat tab: at the newest (already the natural start of the flipped list).
     private func settleAtEnd() {
         Task { @MainActor in
             await Task.yield()
-            position.scrollTo(edge: .bottom) // a far jump by estimate first; the id jumps below land it exactly
-            await Task.yield()
             scrollToEnd()
-            // Lazy stacks estimate unrendered rows; a jump can land on an earlier message or in space nothing was laid
-            // out for (blank page). Until the bottom sentinel is really on screen, keep re-anchoring on it — unless the
-            // user took the list meanwhile.
-            for delay in [150, 400, 800, 1500] {
-                try? await Task.sleep(for: .milliseconds(delay))
-                guard followsEnd else { break }
-                if atBottom && delay >= 400 { break }
-                scrollToEnd()
-            }
+            try? await Task.sleep(for: .milliseconds(400))
             settled = true
         }
     }
 
-    /// The arrow: a jump by the bottom edge (works from far away, where an id jump into rows the lazy stack never laid
-    /// out could stop short), then land on the sentinel and retry until it is really on screen.
     private func jumpToEnd() {
         Haptics.tap()
         followsEnd = true
-        withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
-        Task { @MainActor in
-            for delay in [120, 300, 650, 1200] {
-                try? await Task.sleep(for: .milliseconds(delay))
-                guard followsEnd, !atBottom else { break }
-                scrollToEnd()
-            }
-        }
+        scrollToEnd(animated: true)
     }
 
     private var liveTurnID: String? {
@@ -318,91 +332,14 @@ struct ChatView: View {
         if let s = try? await api.gitStatus(machine: key.machineID, cwd: cwd) { git = s }
     }
 
+    /// The chat is an upside-down list (newest first, flipped back on screen), the way chat apps do it: the newest
+    /// message sits at scroll offset 0, so opening the page, following new messages and ↓ are exact jumps to 0 — a
+    /// lazy stack never has to estimate its way to the bottom (that is what left pages blank). Older pages load at the
+    /// far end and never push what you are reading.
     @ViewBuilder private var chatPane: some View {
-        let store = store
-        let rows = store.rows
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                if store.hasMore {
-                    // Reaching the top loads the page before it; runs again whenever older rows were prepended.
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(key) } }
-                }
-                if !store.loadedOnce && rows.isEmpty {
-                    ChatSkeleton()
-                } else if rows.isEmpty {
-                    EmptyStateView(symbol: "text.bubble", title: "还没有消息", message: "发一句话开始吧。")
-                }
-                // Finished turns: the user's messages (queued ones gathered), one folded "process" row, the answer.
-                // The turn still running shows every step in arrival order.
-                // Every message, timer line, narration, tool count and answer is its own lazy row: a running turn can
-                // hold hundreds of steps and laying them out in one stack froze the page (blank for seconds).
-                ForEach(chatLines(Self.debugTrim(store.blocks))) { line in
-                    lineView(line)
-                        .id(line.id)
-                        .zIndex(menu.selected != nil && line.rowID == menu.selected ? 1 : 0)
-                }
-                // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
-                let queued = Set((session?.queued ?? []).map(PendingMessage.normalize))
-                ForEach(store.pending.filter { !queued.contains(PendingMessage.normalize($0.text)) }) { msg in
-                    PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
-                        .id(msg.id.uuidString)
-                }
-                if style == .assistant {
-                    let live = store.liveText
-                    let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
-                    if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
-                        StreamingText(text: live).id("live")
-                    } else if status == .working && live.isEmpty {
-                        TypingIndicator(text: "Jarvis 正在思考…").id("typing")
-                    }
-                }
-                // Bottom sentinel: while it is on screen we are at the end and the "jump to bottom" arrow hides
-                // (geometry math missed the composer / queue insets and kept the arrow up at the very end).
-                Color.clear
-                    .frame(height: 1)
-                    .id(Self.bottomID)
-                    .onScrollVisibilityChange(threshold: 0.01) { visible in
-                        atBottom = visible
-                        if visible { followsEnd = true } // back at the end: follow new messages again
-                    }
-                if let err = store.error {
-                    Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+        GeometryReader { geo in
+            chatScroll(insets: geo.safeAreaInsets)
         }
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom)
-        .scrollDismissesKeyboard(.interactively)
-        .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
-        // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollPhaseChange { _, phase in
-            if phase == .tracking || phase == .interacting {
-                menu.dismiss()
-                userScrolled = true
-                followsEnd = false // the user has the list; nothing moves it until they return to the end
-            } else if phase == .idle, userScrolled, atBottom {
-                followsEnd = true
-            }
-        }
-        .environment(menu)
-        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
-
-        // New content while following the end: re-anchor after it is laid out (a turn folding away, a message
-        // absorbed above the timer, the first data on an empty page all move far content around).
-        .onChange(of: rows.last?.id) { _, _ in if followsEnd { settleAtEnd() } }
-        .onChange(of: liveTurnID) { _, _ in if followsEnd { settleAtEnd() } }
-        .onChange(of: store.items.count) { _, _ in if followsEnd { settleAtEnd() } }
-        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd() } }
-        // Your own message always brings you to the end.
-        .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; settleAtEnd() } }
-        .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; settleAtEnd() } }
         .overlay(alignment: .bottomTrailing) {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
@@ -437,6 +374,100 @@ struct ChatView: View {
         }
     }
 
+    private func chatScroll(insets: EdgeInsets) -> some View {
+        let store = store
+        let rows = store.rows
+        let lines = chatLines(Self.debugTrim(store.blocks))
+        let queued = Set((session?.queued ?? []).map(PendingMessage.normalize))
+        let pending = store.pending.filter { !queued.contains(PendingMessage.normalize($0.text)) }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
+                Color.clear
+                    .frame(height: 1)
+                    .id(Self.bottomID)
+                    .onScrollVisibilityChange(threshold: 0.01) { visible in
+                        atBottom = visible
+                        if visible { followsEnd = true } // back at the newest: follow new messages again
+                    }
+                if let err = store.error {
+                    Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger).flippedBack()
+                }
+                if style == .assistant {
+                    let live = store.liveText
+                    let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
+                    if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
+                        StreamingText(text: live).id("live").flippedBack()
+                    } else if status == .working && live.isEmpty {
+                        TypingIndicator(text: "Jarvis 正在思考…").id("typing").flippedBack()
+                    }
+                }
+                // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
+                ForEach(pending.reversed()) { msg in
+                    PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
+                        .flippedBack()
+                        .id(msg.id.uuidString)
+                }
+                // Every message, timer line, tool count and answer is its own lazy row (a running turn can hold
+                // hundreds of steps; one stack of them froze the page).
+                ForEach(lines.reversed()) { line in
+                    lineView(line)
+                        .flippedBack()
+                        .id(line.id)
+                        .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
+                }
+                if !store.loadedOnce && rows.isEmpty {
+                    ChatSkeleton().flippedBack()
+                } else if rows.isEmpty {
+                    EmptyStateView(symbol: "text.bubble", title: "还没有消息", message: "发一句话开始吧。").flippedBack()
+                }
+                if store.hasMore {
+                    // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(key) } }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .flippedBack() // the scroll view itself upside down; every row above is flipped back
+        // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
+        // (Content top = the composer side on screen, content bottom = the navigation side.)
+        .ignoresSafeArea(.container, edges: .vertical)
+        .contentMargins(.top, insets.bottom + 12, for: .scrollContent)
+        .contentMargins(.bottom, insets.top + 8, for: .scrollContent)
+        .scrollIndicators(.hidden)
+        // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
+        .scrollEdgeEffectHidden(true, for: .all)
+        .scrollPosition($position)
+        // New rows arrive at the newest end: keep the distance from the far end so what you read stays put.
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
+        // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
+        .onScrollPhaseChange { _, phase in
+            if phase == .tracking || phase == .interacting {
+                menu.dismiss()
+                userScrolled = true
+                followsEnd = false // the user has the list; nothing moves it until they return to the newest
+            } else if phase == .idle, userScrolled, atBottom {
+                followsEnd = true
+            }
+        }
+        .environment(menu)
+        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
+        // New content while following: back to offset 0 (exact; nothing to estimate).
+        .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd() } }
+        // Your own message always brings you to the newest.
+        .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; scrollToEnd() } }
+        .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; scrollToEnd(animated: true) } }
+    }
+
     private func appeared() {
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
@@ -456,7 +487,7 @@ struct ChatView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(6))
                     userScrolled = true
-                    position.scrollTo(edge: .top)
+                    position.scrollTo(edge: .bottom) // the oldest end of the flipped list
                     try? await Task.sleep(for: .seconds(4))
                     jumpToEnd()
                 }
@@ -478,7 +509,7 @@ struct ChatView: View {
                     try? await Task.sleep(for: .seconds(3))
                     while model.chat(key).hasMore { await model.loadOlder(key) }
                     try? await Task.sleep(for: .seconds(1))
-                    position.scrollTo(edge: .top)
+                    position.scrollTo(edge: .bottom) // the oldest end of the flipped list
                 }
             }
             #endif
@@ -526,7 +557,7 @@ struct ChatView: View {
         menu.selected = nil
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
         git = nil
-        position = ScrollPosition(id: Self.bottomID, anchor: .bottom)
+        position = ScrollPosition(edge: .top)
         model.subscribe(next)
         model.visibleSession = next
         model.markSeen(next)
@@ -936,17 +967,32 @@ enum ChatLine: Identifiable {
     case row(ChatRow)
     case header(Turn, live: Bool, open: Bool)
     case tools(id: String, steps: [ToolStep], running: Bool)
+    /// A finished turn's messages, folded: separate bubbles drawn as one group.
+    case userGroup(Turn)
+    /// A finished turn unfolded: its first message, with how many more follow below in order.
+    case leadUser(ChatRow, more: Int)
 
     var id: String {
         switch self {
         case .row(let r): r.id
         case .header(let t, _, _): "hdr-" + t.id
         case .tools(let id, _, _): "tc-" + id
+        case .userGroup(let t): "ug-" + t.id
+        case .leadUser(let r, _): r.id
+        }
+    }
+
+    /// Whether the message whose action bar is open is drawn by this line (it is lifted above its neighbours).
+    func holds(_ id: String?) -> Bool {
+        guard let id else { return false }
+        switch self {
+        case .row(let r), .leadUser(let r, _): return r.id == id
+        case .userGroup(let t): return t.users.contains { $0.id == id }
+        default: return false
         }
     }
 
     /// The message row it is (for lifting the one whose action bar is open).
-    var rowID: String? { if case .row(let r) = self { r.id } else { nil } }
 }
 
 /// "正在工作 39 秒 ——— ⌄" (ticking) or "已工作 5 分 12 秒 ——— ⌄"; tapping folds / unfolds the work.
@@ -962,13 +1008,14 @@ struct WorkHeader: View {
         HStack(spacing: 10) {
             Button(action: toggle) {
                 HStack(spacing: 8) {
+                    // The words keep their full width; only the hairline gives way ("正在工作 13 分 3…" was cut).
                     if live {
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            Text("正在工作 " + Self.duration(from: start, to: ctx.date))
+                            Text("正在工作 " + Self.duration(from: start, to: ctx.date)).fixedSize()
                         }
                         .foregroundStyle(Theme.working)
                     } else {
-                        Text(start != nil && end != nil ? "已工作 " + Self.duration(from: start, to: end ?? .now) : "已完成")
+                        Text(start != nil && end != nil ? "已工作 " + Self.duration(from: start, to: end ?? .now) : "已完成").fixedSize()
                     }
                     Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 0.5)
                     Image(systemName: "chevron.down")
@@ -1019,7 +1066,7 @@ struct ToolCountRow: View {
             } label: {
                 HStack(spacing: 6) {
                     if busy { ProgressView().controlSize(.mini) }
-                    Text(Self.label(calls: calls, thoughts: thoughts, notices: notices, busy: busy))
+                    Text(Self.label(calls: calls, thoughts: thoughts, notices: notices, busy: busy)).fixedSize()
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
@@ -1031,7 +1078,7 @@ struct ToolCountRow: View {
             }
             .buttonStyle(.plain)
             if expanded {
-                ToolGroupView(steps: steps, isLatest: running)
+                ToolGroupView(steps: steps, isLatest: running, flat: true) // one tap shows every step
                     .transition(.opacity)
             }
         }

@@ -11,9 +11,9 @@ final class AppModel {
 
     private(set) var config: ServerConfig?
     let live = LiveConnection()
-    private(set) var machines: [Machine] = []
-    private(set) var sessionsByMachine: [String: [Session]] = [:]
-    private(set) var interactions: [String: Interaction] = [:]
+    private(set) var machines: [Machine] = [] { didSet { saveSnapshot() } }
+    private(set) var sessionsByMachine: [String: [Session]] = [:] { didSet { saveSnapshot() } }
+    private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
     var toast: Toast?
     var openChat: SessionKey?
     var pendingConfirmation: PhoneConfirmation?
@@ -29,7 +29,7 @@ final class AppModel {
     }
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
-    private(set) var assistantConfig: APIClient.AssistantState?
+    private(set) var assistantConfig: APIClient.AssistantState? { didSet { saveSnapshot() } }
     /// The assistant conversation shown in the 对话 tab (persisted across launches).
     var assistantCurrent: SessionKey? {
         didSet {
@@ -48,6 +48,8 @@ final class AppModel {
 
     init() {
         config = Keychain.serverConfig
+        // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
+        if config != nil { restoreSnapshot() }
         if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
             selectedTab = tab
         }
@@ -68,7 +70,10 @@ final class AppModel {
     }
 
     #if DEBUG
-    func adopt(_ cfg: ServerConfig) { config = cfg }
+    func adopt(_ cfg: ServerConfig) {
+        config = cfg
+        if machines.isEmpty { restoreSnapshot() }
+    }
     #endif
 
     func start() {
@@ -431,6 +436,33 @@ final class AppModel {
         didSet {
             AppStyle.current = style
             UserDefaults.standard.set(style.rawValue, forKey: "ui.style")
+        }
+    }
+
+    // MARK: Snapshot
+
+    nonisolated private struct DevSnapshot: Codable, Sendable {
+        var machines: [Machine]
+        var sessions: [Session]
+        var interactions: [Interaction]
+        var assistant: APIClient.AssistantState?
+    }
+
+    @ObservationIgnored private let snapshotWriter = Debouncer(.seconds(2))
+
+    private func restoreSnapshot() {
+        guard let snap = StateCache.load("dev", as: DevSnapshot.self) else { return }
+        machines = snap.machines
+        sessionsByMachine = Dictionary(grouping: snap.sessions, by: \.machineID)
+        interactions = Dictionary(snap.interactions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        assistantConfig = snap.assistant
+    }
+
+    private func saveSnapshot() {
+        snapshotWriter.run { [weak self] in
+            guard let self, self.config != nil else { return }
+            StateCache.save("dev", DevSnapshot(machines: self.machines, sessions: self.sessionsByMachine.values.flatMap { $0 },
+                                               interactions: Array(self.interactions.values), assistant: self.assistantConfig))
         }
     }
 

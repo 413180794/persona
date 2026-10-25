@@ -53,7 +53,7 @@ struct SpaceView: View {
 
     private var sessions: [Session] {
         model.allSessions.filter { $0.spaceKey == spaceKey && $0.state.isLive }
-            .sorted { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
+            .sorted { ($0.state.priority, $0.slotIndex ?? 0, $0.sessionID) < ($1.state.priority, $1.slotIndex ?? 0, $1.sessionID) }
     }
 
     var body: some View {

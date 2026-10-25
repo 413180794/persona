@@ -115,6 +115,14 @@ struct LarkChatView: View {
         }
         .task {
             LarkMedia.shared.loadEmojiCatalog()
+            // The last messages seen here paint at once (offline too); the network only brings them up to date.
+            if messages.isEmpty, conversation.focus == nil, !opensAtMessage,
+               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty {
+                messages = cached
+                hasOlder = true
+                olderCursor = cached.first?.position
+                newerCursor = cached.last?.position
+            }
             await load()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
@@ -228,6 +236,7 @@ struct LarkChatView: View {
 
     private func apply(_ r: APIClient.LarkMessages) {
         messages = r.messages
+        if !r.hasNewer.map({ $0 }).isTrue { StateCache.save("lark-chat-\(conversation.id)", Array(r.messages.suffix(80))) }
         hasOlder = r.hasOlder
         hasNewer = r.hasNewer ?? false
         olderCursor = r.olderCursor ?? r.messages.first?.position
@@ -704,3 +713,8 @@ struct LarkReactionChip: View {
         .accessibilityLabel("\(media.emoji(reaction.key)?.label ?? reaction.key) \(reaction.count)")
     }
 }
+
+private extension Optional where Wrapped == Bool {
+    var isTrue: Bool { self == true }
+}
+

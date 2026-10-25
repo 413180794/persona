@@ -91,6 +91,8 @@ enum ToolPresentation {
 struct ToolGroupView: View {
     var steps: [ToolStep]
     var isLatest: Bool
+    /// Every step listed, no "N 个步骤" fold (inside a line that was already tapped open).
+    var flat = false
     @State private var expanded = false
 
     private var calls: [ToolCall] { steps.compactMap { if case .call(let c) = $0 { c } else { nil } } }
@@ -98,7 +100,7 @@ struct ToolGroupView: View {
     var body: some View {
         let calls = calls
         VStack(alignment: .leading, spacing: 6) {
-            if calls.count > 2 && !expanded {
+            if calls.count > 2 && !expanded && !flat {
                 Button {
                     withAnimation(.snappy) { expanded = true }
                 } label: {
@@ -125,7 +127,7 @@ struct ToolGroupView: View {
                         if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
                     }
                 }
-                if calls.count > 2 {
+                if calls.count > 2 && !flat {
                     Button("收起") { withAnimation(.snappy) { expanded = false } }
                         .font(.caption.weight(.medium))
                         .padding(.leading, 12)

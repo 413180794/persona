@@ -108,3 +108,9 @@ private struct SoftButtonStyle: ButtonStyle {
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 }
+
+extension View {
+    /// Mirrors vertically: applied to the chat's scroll view (newest first) and again to each row to stand it up.
+    func flippedBack() -> some View { scaleEffect(x: 1, y: -1) }
+}
+

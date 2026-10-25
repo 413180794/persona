@@ -84,8 +84,9 @@ struct InboxView: View {
             .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
             .sheet(item: $editingLabels) { c in LarkLabelPicker(conversation: c) { Task { await reload(quiet: true) } } }
             .task(id: listKey) {
-                if loadedKey != listKey { chats = []; cursor = nil }
-                await reload(quiet: false)
+                // Paint what was last seen for this list, then refresh quietly (a spinner only when nothing is known).
+                if loadedKey != listKey { restore(listKey) }
+                await reload(quiet: !chats.isEmpty || !flaggedChats.isEmpty)
                 #if DEBUG
                 if UserDefaults.standard.bool(forKey: "inboxDrawer") { drawer = true }
                 // Simulator automation: `-lark-connector <feedId>` opens that Feishu chat (as listed, so with its unread state).
@@ -198,7 +199,10 @@ struct InboxView: View {
         .listStyle(.plain)
         .themedPage()
         .refreshable { await reloadMail() }
-        .task { if mails.isEmpty { await reloadMail() } }
+        .task {
+            if mails.isEmpty { mails = InboxCache.shared.snapshot.mails; accounts = InboxCache.shared.snapshot.accounts }
+            await reloadMail() // quietly: the cached list stays until the fresh one replaces it
+        }
     }
 
     // MARK: Drawer
@@ -223,6 +227,36 @@ struct InboxView: View {
     private func closeDrawer() { withAnimation(.snappy(duration: 0.25)) { drawer = false } }
 
     // MARK: Loading
+
+    private func restore(_ key: String) {
+        let c = InboxCache.shared.snapshot
+        chats = c.lists[key] ?? []
+        cursor = c.cursors[key]
+        if pinned.isEmpty { pinned = c.pinned }
+        if labels.isEmpty { labels = c.labels }
+        if unreadTotal == 0 { unreadTotal = c.unread }
+        if flaggedChats.isEmpty { flaggedChats = c.flaggedChats; flaggedMessages = c.flaggedMessages }
+        if mails.isEmpty { mails = c.mails }
+        if accounts.isEmpty { accounts = c.accounts }
+        if c.lists[key] != nil { loadedKey = key }
+    }
+
+    /// Writes what is on screen back to the cache.
+    private func remember() {
+        let key = listKey, chats = chats, cursor = cursor, pinned = pinned, labels = labels, unread = unreadTotal
+        let fc = flaggedChats, fm = flaggedMessages, mails = mails, accounts = accounts
+        InboxCache.shared.update { s in
+            if !chats.isEmpty { s.lists[key] = Array(chats.prefix(200)) }
+            s.cursors[key] = cursor
+            s.pinned = pinned
+            s.labels = labels
+            s.unread = unread
+            s.flaggedChats = fc
+            s.flaggedMessages = fm
+            s.mails = Array(mails.prefix(100))
+            s.accounts = accounts
+        }
+    }
 
     private func reload(quiet: Bool) async {
         guard let api = model.api, group != .mail else { return }
@@ -258,6 +292,7 @@ struct InboxView: View {
         if let p = try? await pinnedTask, group == .messages { pinned = p }
         if let l = try? await labelsTask { labels = l }
         if let n = try? await unreadTask { unreadTotal = n }
+        remember()
     }
 
     private func loadMore() async {
@@ -265,6 +300,7 @@ struct InboxView: View {
         guard let r = try? await api.larkConversations(scope: scope, cursor: c) else { cursor = nil; return }
         chats += r.conversations.filter { n in !chats.contains { $0.id == n.id } }
         cursor = r.nextCursor
+        remember()
     }
 
     private func reloadMail() async {
@@ -273,6 +309,7 @@ struct InboxView: View {
         async let a = api.mailAccounts()
         do { mails = try await m.messages; mailError = nil } catch { mailError = error.shown }
         accounts = (try? await a) ?? accounts
+        remember()
     }
 
     /// Applies a chat action at once, then asks lark-connector; a failure reloads the true state.
@@ -294,6 +331,7 @@ struct InboxView: View {
             }
         }
         Haptics.tap()
+        remember()
         Task {
             guard let api = model.api else { return }
             do {
@@ -329,3 +367,34 @@ struct LarkAvatar: View {
             }
     }
 }
+
+/// The inbox's last known lists (per 消息 tab / group), pinned chats, labels, flags and mail, kept in memory and on
+/// disk: switching to 信息, a cold start or no network show them at once; refreshes replace them quietly.
+@MainActor
+final class InboxCache {
+    static let shared = InboxCache()
+
+    nonisolated struct Snapshot: Codable, Sendable {
+        var lists: [String: [LarkConversation]] = [:]
+        var cursors: [String: String] = [:]
+        var pinned: [LarkConversation] = []
+        var labels: [LarkLabel] = []
+        var unread = 0
+        var flaggedChats: [LarkConversation] = []
+        var flaggedMessages: [LarkFlaggedMessage] = []
+        var mails: [MailSummary] = []
+        var accounts: [MailAccount] = []
+    }
+
+    var snapshot: Snapshot
+    private let writer = Debouncer(.seconds(1))
+
+    private init() { snapshot = StateCache.load("inbox", as: Snapshot.self) ?? Snapshot() }
+
+    func update(_ change: (inout Snapshot) -> Void) {
+        change(&snapshot)
+        let snap = snapshot
+        writer.run { StateCache.save("inbox", snap) }
+    }
+}
+

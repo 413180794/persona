@@ -66,8 +66,22 @@ extension EnvironmentValues {
 
 struct UserBubble: View {
     var item: Item
+    /// Place in a group of consecutive messages (UserGroup): the corners join the bubbles into one column.
+    var group: GroupPlace = .single
     @Environment(\.openFile) private var openFile
     @Environment(\.loadImage) private var loadImage
+
+    enum GroupPlace { case single, first, middle, last }
+
+    private var shape: UnevenRoundedRectangle {
+        let big: CGFloat = 20, small: CGFloat = 6
+        switch group {
+        case .single: return UnevenRoundedRectangle(cornerRadii: .init(topLeading: big, bottomLeading: big, bottomTrailing: big, topTrailing: big), style: .continuous)
+        case .first: return UnevenRoundedRectangle(cornerRadii: .init(topLeading: big, bottomLeading: big, bottomTrailing: small, topTrailing: big), style: .continuous)
+        case .middle: return UnevenRoundedRectangle(cornerRadii: .init(topLeading: big, bottomLeading: big, bottomTrailing: small, topTrailing: small), style: .continuous)
+        case .last: return UnevenRoundedRectangle(cornerRadii: .init(topLeading: big, bottomLeading: big, bottomTrailing: big, topTrailing: small), style: .continuous)
+        }
+    }
 
     var body: some View {
         let text = item.text ?? ""
@@ -85,7 +99,7 @@ struct UserBubble: View {
                         .foregroundStyle(Theme.userBubbleText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+                        .background(Theme.userBubbleFill, in: shape)
                         .messageLongPress(id: item.id)
                 }
             }
@@ -123,6 +137,43 @@ extension UserBubble {
                 .filter { $0.hasPrefix("/") || $0.hasPrefix("~") }
         }
         return []
+    }
+}
+
+/// Several messages in a row (sent while the agent worked) shown as one unit: each is its own bubble — numbered, and
+/// separately long-pressable — but they sit tight with joined corners and a rail along their side, captioned
+/// "N 条连续消息".
+struct UserGroup: View {
+    var rows: [ChatRow]
+
+    var body: some View {
+        let items = rows.compactMap { if case .user(let i) = $0 { i } else { nil } }
+        VStack(alignment: .trailing, spacing: 3) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { n, item in
+                HStack(alignment: .center, spacing: 6) {
+                    Spacer(minLength: 24)
+                    Text("\(n + 1)")
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 18, height: 18)
+                        .background(Theme.accent.opacity(0.12), in: .circle)
+                    UserBubble(item: item, group: n == 0 ? .first : n == items.count - 1 ? .last : .middle)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Label("\(items.count) 条连续消息", systemImage: "square.stack")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.top, 2)
+        }
+        .padding(.trailing, 2)
+        .overlay(alignment: .trailing) {
+            // The rail that ties them together.
+            Capsule().fill(Theme.accent.opacity(0.35)).frame(width: 2).padding(.vertical, 10).offset(x: 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 

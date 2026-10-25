@@ -28,7 +28,8 @@ struct SpaceGroup: Identifiable {
         }
         return groups.values.map { g in
             var g = g
-            g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
+            // Needs you → working → finished unseen → idle, then tab order within each.
+            g.sessions.sort { ($0.state.priority, $0.slotIndex ?? 0, $0.sessionID) < ($1.state.priority, $1.slotIndex ?? 0, $1.sessionID) }
             return g
         }
         .sorted { a, b in
@@ -337,11 +338,18 @@ struct StateCounts: View {
                     }
                 }
             }
+            // Idle as a gray dot and a number like the others: "4 空闲" wrapped to two lines in a busy header.
             let idle = group.count(.idle) + group.count(.unknown)
             if idle > 0 {
-                Text("\(idle) 空闲").font(.caption2).foregroundStyle(.secondary).textCase(nil)
+                HStack(spacing: 3) {
+                    Circle().fill(Color.secondary.opacity(0.45)).frame(width: 6, height: 6)
+                    Text("\(idle)").font(.caption2.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("\(idle) 个空闲")
             }
         }
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 
@@ -371,9 +379,9 @@ struct SlotRow: View {
                             .layoutPriority(1)
                     }
                     if !quiet {
-                        Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1)
+                        Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
-                    if let loop = session.loop { LoopBadge(loop: loop).opacity(muted ? 0.6 : 1) }
+                    if let loop = session.loop { LoopBadge(loop: loop).fixedSize().opacity(muted ? 0.6 : 1) }
                     if muted {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
                     }
