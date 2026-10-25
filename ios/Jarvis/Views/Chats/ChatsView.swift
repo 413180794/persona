@@ -11,7 +11,8 @@ struct SpaceGroup: Identifiable {
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
-    var isQuiet: Bool { sessions.allSatisfy(\.isQuiet) }
+    /// Nothing going on: every agent quiet and none with background commands still running.
+    var isQuiet: Bool { sessions.allSatisfy { $0.isQuiet && ($0.background ?? []).isEmpty } }
 
     func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
 
@@ -103,7 +104,9 @@ struct ChatsView: View {
                     Section {
                         // Busy (and pinned / looping) agents first; idle ones fold into one row so a big workspace
                         // stays compact.
-                        let stays: (Session) -> Bool = { !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil }
+                        let stays: (Session) -> Bool = {
+                            !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil || !($0.background ?? []).isEmpty
+                        }
                         let idle = g.sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
                         ForEach(g.sessions.filter(stays)) { s in slotRow(s) }
@@ -382,6 +385,9 @@ struct SlotRow: View {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
                     if let loop = session.loop { LoopBadge(loop: loop).fixedSize().opacity(muted ? 0.6 : 1) }
+                    if let bg = session.background, !bg.isEmpty, session.state != .working, session.state != .needsYou {
+                        BackgroundBadge(count: bg.count).fixedSize().opacity(muted ? 0.6 : 1)
+                    }
                     if muted {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
                     }
@@ -572,6 +578,27 @@ private struct RenameSessionAlert: ViewModifier {
                 tab = session?.slotName ?? ""
                 title = session?.title ?? ""
             }
+    }
+}
+
+/// "⚙ 后台 2" on an agent whose turn is over but whose background commands / subagents still run: it is not
+/// really finished yet, so it should not look like the agents that are.
+struct BackgroundBadge: View {
+    var count: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "gearshape.2.fill")
+                .font(.system(size: 10, weight: .bold))
+                .symbolEffect(.rotate, options: .repeat(.periodic(delay: 1.5)))
+            Text("后台 \(count)").lineLimit(1)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Theme.busy)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1.5)
+        .background(Theme.busy.opacity(0.12), in: .capsule)
+        .accessibilityLabel("\(count) 个后台任务在运行")
     }
 }
 
