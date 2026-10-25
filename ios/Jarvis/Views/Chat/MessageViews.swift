@@ -214,6 +214,7 @@ struct MergedUserBubble: View {
                 ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
                     if n > 0 {
                         Capsule().fill(Theme.userBubbleText.opacity(0.22)).frame(width: 36, height: 1.5)
+                            .frame(maxWidth: .infinity) // centered in the bubble
                     }
                     Text(t).font(.body).foregroundStyle(Theme.userBubbleText)
                 }
