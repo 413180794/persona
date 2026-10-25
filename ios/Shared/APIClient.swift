@@ -262,6 +262,35 @@ extension Error {
 nonisolated struct Pins: Codable, Hashable, Sendable {
     var spaces: [String] = []
     var sessions: [String] = []
+    /// Mutes only: agents that keep notifications although their space is muted.
+    var allowed: [String] = []
+
+    init() {}
+
+    /// Mute rule (the hub's too): the agent is muted itself, or its space is unless the agent was turned back on.
+    func mutes(session: String, space: String?) -> Bool {
+        if sessions.contains(session) { return true }
+        if allowed.contains(session) { return false }
+        return space.map(spaces.contains) ?? false
+    }
+
+    /// Flips one agent's notifications on top of its space's setting.
+    func togglingMute(session: String, space: String?) -> Pins {
+        let wasMuted = mutes(session: session, space: space)
+        let spaceMuted = space.map(spaces.contains) ?? false
+        var p = self
+        p.sessions.removeAll { $0 == session }
+        p.allowed.removeAll { $0 == session }
+        if !wasMuted { p.sessions.insert(session, at: 0) } else if spaceMuted { p.allowed.insert(session, at: 0) }
+        return p
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        spaces = try c.decodeIfPresent([String].self, forKey: .spaces) ?? []
+        sessions = try c.decodeIfPresent([String].self, forKey: .sessions) ?? []
+        allowed = try c.decodeIfPresent([String].self, forKey: .allowed) ?? []
+    }
 }
 
 extension APIClient {

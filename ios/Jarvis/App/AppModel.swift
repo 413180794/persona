@@ -481,16 +481,18 @@ final class AppModel {
     }
 
     func isMuted(_ g: SpaceGroup) -> Bool { mutes.spaces.contains(Self.pinKey(space: g)) }
-    /// The agent itself or its space is muted.
-    func isMuted(_ k: SessionKey) -> Bool {
-        if mutes.sessions.contains(Self.pinKey(session: k)) { return true }
-        guard let space = session(k)?.spaceName else { return false }
-        return mutes.spaces.contains("\(k.machineID)/\(space)")
-    }
-    func isMutedItself(_ k: SessionKey) -> Bool { mutes.sessions.contains(Self.pinKey(session: k)) }
+    /// Muted: the agent itself, or its space unless the agent was turned back on there (same rule as the hub).
+    func isMuted(_ k: SessionKey) -> Bool { mutes.mutes(session: Self.pinKey(session: k), space: spaceKey(k)) }
+
+    private func spaceKey(_ k: SessionKey) -> String? { session(k)?.spaceName.map { "\(k.machineID)/\($0)" } }
 
     func toggleMute(_ g: SpaceGroup) { updateMutes { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
-    func toggleMute(_ k: SessionKey) { updateMutes { p in Self.toggle(&p.sessions, Self.pinKey(session: k)) } }
+    /// One agent's own switch, on top of its space's: muting adds it to the muted agents; turning it on inside a
+    /// muted space adds it to the allowed ones.
+    func toggleMute(_ k: SessionKey) {
+        let key = Self.pinKey(session: k), space = spaceKey(k)
+        updateMutes { p in p = p.togglingMute(session: key, space: space) }
+    }
 
     private func updateMutes(_ change: (inout Pins) -> Void) {
         Haptics.tap()

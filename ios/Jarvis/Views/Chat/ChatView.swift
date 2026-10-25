@@ -96,7 +96,7 @@ struct ChatView: View {
                     }
                     if style == .dev {
                         Button { model.toggleMute(key) } label: {
-                            Label(model.isMutedItself(key) ? "取消屏蔽通知" : "屏蔽通知", systemImage: model.isMutedItself(key) ? "bell" : "bell.slash")
+                            Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? "bell" : "bell.slash")
                         }
                     }
                     Divider()

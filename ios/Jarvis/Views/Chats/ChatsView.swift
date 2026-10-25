@@ -234,7 +234,7 @@ struct ChatsView: View {
                     Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash" : "pin")
                 }
                 Button { model.toggleMute(s.key) } label: {
-                    Label(model.isMutedItself(s.key) ? "取消屏蔽通知" : "屏蔽通知", systemImage: model.isMutedItself(s.key) ? "bell" : "bell.slash")
+                    Label(model.isMuted(s.key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(s.key) ? "bell" : "bell.slash")
                 }
                 if s.loop != nil {
                     Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: "stop.circle") }

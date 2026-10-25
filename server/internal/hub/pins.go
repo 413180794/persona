@@ -14,6 +14,8 @@ import (
 type Pins struct {
 	Spaces   []string `json:"spaces"`
 	Sessions []string `json:"sessions"`
+	// Allowed (mutes only): agents that keep their notifications although their space is muted.
+	Allowed []string `json:"allowed,omitempty"`
 }
 
 // Mutes use the same shape: muted spaces / agents get no push notifications (finished, needs you) and the phone
@@ -37,8 +39,12 @@ func (h *Hub) loadMutes(ctx context.Context) Pins {
 // muted reports whether pushes about this session are off (the agent or its space is muted).
 func (h *Hub) muted(machineID, sessionID string) bool {
 	p := h.loadMutes(context.Background())
-	if slices.Contains(p.Sessions, machineID+"/"+sessionID) {
+	key := machineID + "/" + sessionID
+	if slices.Contains(p.Sessions, key) {
 		return true
+	}
+	if slices.Contains(p.Allowed, key) { // turned back on inside a muted space
+		return false
 	}
 	if m := h.byID[machineID]; m != nil {
 		if s, ok := m.session(sessionID); ok && s.SpaceName != "" {
