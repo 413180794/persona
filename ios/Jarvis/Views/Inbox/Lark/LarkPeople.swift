@@ -19,7 +19,10 @@ extension EnvironmentValues {
 struct LarkProfileView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.feishuOpen) private var feishuOpen
     var person: LarkPersonRef
+    /// Pushed inside an existing navigation stack (a route) rather than presented as its own sheet.
+    var embedded = false
     @State private var profile: LarkProfile?
     @State private var error: String?
     @State private var showAll = false
@@ -27,30 +30,43 @@ struct LarkProfileView: View {
     @State private var opening = false
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
-                    if let sig = profile?.description, !sig.isEmpty {
-                        Text(sig).font(.subheadline).foregroundStyle(.secondary).lineLimit(6)
-                            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 12, style: .continuous))
-                    }
-                    if profile?.userType != "bot" { messageButton }
-                    fields
+        if embedded {
+            card
+        } else {
+            NavigationStack(path: $path) {
+                card
+                    .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.tint(LarkColor.blue) } }
+                    .feishuRoutes()
+            }
+            .environment(\.feishuOpen) { path.append($0) }
+        }
+    }
+
+    /// Opens a chat / another profile in whichever stack shows this card.
+    private func push(_ route: FeishuRoute) {
+        if embedded, let feishuOpen { feishuOpen(route) } else { path.append(route) }
+    }
+
+    private var card: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                if let error { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+                if let sig = profile?.description, !sig.isEmpty {
+                    Text(sig).font(.subheadline).foregroundStyle(.secondary).lineLimit(6)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 12, style: .continuous))
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                if profile?.userType != "bot" { messageButton }
+                fields
             }
-            .ignoresSafeArea(edges: .top)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() }.tint(LarkColor.blue) } }
-            .navigationDestination(for: LarkConversation.self) { c in LarkChatView(conversation: c) }
-            .navigationDestination(for: LarkPersonRef.self) { p in LarkProfileView(person: p) }
-            .task {
-                guard let api = model.api else { return }
-                do { profile = try await api.larkProfile(person.id, feedID: person.feedID) } catch { self.error = error.localizedDescription }
-            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+        .ignoresSafeArea(edges: .top)
+        .task {
+            guard let api = model.api else { return }
+            do { profile = try await api.larkProfile(person.id, feedID: person.feedID) } catch { self.error = error.localizedDescription }
         }
     }
 
@@ -110,7 +126,7 @@ struct LarkProfileView: View {
                 defer { opening = false }
                 do {
                     let feed = try await api.larkDirectChat(person.id)
-                    path.append(LarkConversation(id: feed, name: displayName, avatar: profile?.avatarUrl ?? person.avatar, isGroup: false))
+                    push(.chat(LarkConversation(id: feed, name: displayName, avatar: profile?.avatarUrl ?? person.avatar, isGroup: false)))
                 } catch {
                     model.show(error)
                 }
@@ -170,7 +186,7 @@ struct LarkProfileView: View {
             Text(label).font(.subheadline).foregroundStyle(.secondary).frame(width: 76, alignment: .leading).lineLimit(2)
             Group {
                 if let leader {
-                    Button { path.append(LarkPersonRef(id: leader, name: value)) } label: { Text(value).foregroundStyle(LarkColor.blue) }.buttonStyle(.plain)
+                    Button { push(.profile(LarkPersonRef(id: leader, name: value))) } label: { Text(value).foregroundStyle(LarkColor.blue) }.buttonStyle(.plain)
                 } else if let link {
                     Link(value, destination: link).foregroundStyle(LarkColor.blue)
                 } else {

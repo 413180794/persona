@@ -152,7 +152,7 @@ struct FeishuRouteView: View {
         case .chat(let c): LarkChatView(conversation: c)
         case .chatInfo(let c): FeishuChatInfoView(conversation: c)
         case .doc(let url, let title): FeishuDocReader(url: url, title: title)
-        case .profile(let p): LarkProfileView(person: p)
+        case .profile(let p): LarkProfileView(person: p, embedded: true)
         case .search(let q, let feed): FeishuSearchView(initialQuery: q, feedID: feed)
         case .event(let id): FeishuEventDetail(eventID: id)
         case .meeting(let id): FeishuMeetingDetail(historyID: id)
