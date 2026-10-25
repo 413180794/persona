@@ -91,7 +91,7 @@ struct SettingsView: View {
             .themedPage()
             .navigationTitle("设置")
             .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key) }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .task { await model.refreshAssistant() }
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }

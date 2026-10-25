@@ -113,7 +113,7 @@ struct SpaceView: View {
                 }
             }
         }
-        .navigationDestination(item: $started) { key in ChatView(key: key) }
+        .navigationDestination(item: $started) { key in ChatView(key: key).id(key) }
         .renameSpaceAlert($renaming)
     }
 }

@@ -84,7 +84,7 @@ nonisolated enum Theme {
     static var userBubble: Color { userBubble(style) }
     static func userBubble(_ style: AppStyle) -> Color {
         switch style {
-        case .glass: Color(light: 0x0A7AFF, dark: 0x0A84FF)
+        case .glass: Color(light: 0xDCEAFF, dark: 0x1D3557) // a soft tint: a solid system blue was too heavy
         case .claude: Color(light: 0xD4683F, dark: 0xC9623C)
         case .clay: Color(light: 0x8E7BFA, dark: 0x6E5CE0)
         case .island: Color(light: 0x14201E, dark: 0xE8F3F1)
@@ -94,12 +94,14 @@ nonisolated enum Theme {
     static var userBubbleText: Color {
         switch style {
         case .island: Color(light: 0xFFFFFF, dark: 0x0B1211)
-        case .lark: .primary
+        case .glass, .lark: .primary
         default: .white
         }
     }
     /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient.
-    static var userBubbleFill: AnyShapeStyle { style == .lark ? AnyShapeStyle(userBubble) : AnyShapeStyle(userBubble.gradient) }
+    static var userBubbleFill: AnyShapeStyle {
+        style == .lark || style == .glass ? AnyShapeStyle(userBubble) : AnyShapeStyle(userBubble.gradient)
+    }
 
     /// The page behind lists and chats.
     static var pageBackground: Color { pageBackground(style) }
