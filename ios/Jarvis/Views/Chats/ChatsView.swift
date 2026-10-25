@@ -275,9 +275,9 @@ struct ChatsView: View {
             if !rows.isEmpty {
                 Section {
                     if b.key == "idle" {
-                        foldedRows(rows, key: "state-idle", label: "已看")
+                        foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
-                        ForEach(rows) { s in slotRow(s, context: true) }
+                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: true) }
                     }
                 } header: {
                     SectionHeader(title: b.title, count: rows.count, tint: b.tint)
@@ -302,10 +302,10 @@ struct ChatsView: View {
     }
 
     /// Quiet rows behind one "还有 N 个…" row (always open while searching).
-    @ViewBuilder private func foldedRows(_ rows: [Session], key: String, label: String) -> some View {
+    @ViewBuilder private func foldedRows(_ rows: [Session], key: String, label: String, inStateSection: Bool = false) -> some View {
         if !rows.isEmpty {
             if expandedIdle.contains(key) || !query.isEmpty {
-                ForEach(rows) { s in slotRow(s, context: true) }
+                ForEach(rows) { s in slotRow(s, context: true, inStateSection: inStateSection) }
                 if query.isEmpty {
                     Button {
                         withAnimation(.snappy) { _ = expandedIdle.remove(key) }
@@ -326,10 +326,11 @@ struct ChatsView: View {
     private func spaceMenu(_ g: SpaceGroup) -> some View { SpaceMenuItems(group: g) { renamingSpace = g } }
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
-    private func slotRow(_ s: Session, context: Bool = false) -> some View {
+    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false) -> some View {
         NavigationLink(value: s.key) {
-            SlotRow(session: s, muted: model.isMuted(s.key), space: context ? s.spaceName : nil,
-                    machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil)
+            SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
+                    machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
+                    hideState: inStateSection)
         }
             .swipeActions(edge: .trailing) {
                 if s.startedByJarvis && s.state.isLive {
@@ -481,6 +482,8 @@ struct SlotRow: View {
     /// Named when the list is grouped by state or machine (otherwise the section is the space).
     var space: String? = nil
     var machine: String? = nil
+    /// The section already says the state (grouped by state): no state word on the row.
+    var hideState = false
 
     var body: some View {
         let quiet = muted || session.state == .idle || session.state == .unknown
@@ -488,22 +491,11 @@ struct SlotRow: View {
         HStack(alignment: .top, spacing: 10) {
             StatusDot(state: session.state, size: 9).padding(.top, 5)
             VStack(alignment: .leading, spacing: 3) {
+                // One line that never overflows: the name gives way (middle-truncated), state, badges and time
+                // keep their size.
                 HStack(spacing: 6) {
-                    if let space {
-                        Text(space + " ›").font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
-                    }
-                    if let slot = session.slotLabel {
-                        Text(slot)
-                            .font(.caption.weight(.semibold).monospaced())
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .foregroundStyle(tint)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1.5)
-                            .background(tint.opacity(0.12), in: .capsule)
-                            .layoutPriority(1)
-                    }
-                    if !quiet {
+                    name(tint: tint)
+                    if !quiet && !hideState {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
                     if let loop = session.loop { LoopBadge(loop: loop).fixedSize().opacity(muted ? 0.6 : 1) }
@@ -520,9 +512,6 @@ struct SlotRow: View {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
                     }
                     Spacer(minLength: 4)
-                    if let machine {
-                        Text(machine).font(.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
-                    }
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -532,13 +521,38 @@ struct SlotRow: View {
                     .font(.body.weight(session.state == .unread ? .bold : .semibold))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                if let last = session.lastText, !last.isEmpty {
-                    Text(Fmt.plain(last)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                let last = session.lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
+                if machine != nil || last != nil {
+                    // The machine leads the preview line instead of crowding the first one.
+                    (Text(machine.map { $0 + (last == nil ? "" : " · ") } ?? "").foregroundStyle(.tertiary) + Text(last ?? ""))
+                        .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
         }
         .padding(.vertical, 3)
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
+    }
+
+    /// "app › fix-login" as one string when the space is shown, else the tab chip.
+    @ViewBuilder private func name(tint: Color) -> some View {
+        if let space {
+            Text(space + " › " + (session.slotLabel ?? session.displayTitle))
+                .font(.caption.weight(.semibold).monospaced())
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(-1) // the one thing that gives way
+        } else if let slot = session.slotLabel {
+            Text(slot)
+                .font(.caption.weight(.semibold).monospaced())
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(tint)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 1.5)
+                .background(tint.opacity(0.12), in: .capsule)
+                .layoutPriority(-1)
+        }
     }
 }
 

@@ -138,7 +138,10 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     SiblingStrip(current: key) { next in switchTo(next) }
                     SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
-                    if pane == .chat, let agents = session?.subagents, !agents.isEmpty {
+                    // Only while subagents run (plus the one being read): finished ones stay reachable from their
+                    // Agent call ("查看子 Agent") without taking a row here.
+                    let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
+                    if pane == .chat, !agents.isEmpty {
                         AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
                     }
                 }
@@ -403,8 +406,8 @@ struct ChatView: View {
         let rows = store.rows
         var lines = chatLines(Self.debugTrim(store.blocks))
         if let frozenAt, let i = lines.firstIndex(where: { $0.id == frozenAt }) { lines = Array(lines[...i]) }
-        let queued = Set((session?.queued ?? []).map(PendingMessage.normalize))
-        let pending = store.pending.filter { !queued.contains(PendingMessage.normalize($0.text)) }
+        let queued = session?.queued ?? []
+        let pending = store.pending.filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.

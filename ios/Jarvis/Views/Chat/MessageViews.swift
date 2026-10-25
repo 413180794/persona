@@ -107,6 +107,8 @@ extension UserBubble {
         for pattern in notePatterns {
             while let r = t.range(of: pattern, options: .regularExpression) { t.replaceSubrange(r, with: "\n") }
         }
+        // Claude's placeholder for an image it attached; the image itself shows as a thumbnail.
+        t = t.replacingOccurrences(of: #"\[Image #\d+\]\s*"#, with: "", options: .regularExpression)
         return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

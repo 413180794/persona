@@ -219,8 +219,8 @@ final class ChatStore {
         if backlog { loadedOnce = true }
         guard changed else { return }
         if !pending.isEmpty { // the real message arrived: drop the local copy
-            let typed = Set(new.filter { $0.role == "user" && $0.kind == .text }.map { PendingMessage.normalize($0.text ?? "") })
-            pending.removeAll { typed.contains(PendingMessage.normalize($0.text)) }
+            let typed = new.filter { $0.role == "user" && $0.kind == .text }.map { $0.text ?? "" }
+            pending.removeAll { p in typed.contains { PendingMessage.same($0, p.text) } }
         }
         items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
         rows = ChatStore.buildRows(items)
@@ -414,13 +414,22 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Sendable {
     var images: [ImagePayload]
     var state: State = .sending
 
-    /// Comparable form: what the transcript keeps of it (the phone's image note and pasted wrappers removed).
+    /// Comparable form: what the transcript keeps of it — the phone's image note, pasted wrappers and Claude's
+    /// "[Image #21]" placeholders removed, whitespace ignored.
     static func normalize(_ s: String) -> String {
         var t = s
-        for pattern in [#"<attached_images>[\s\S]*?</attached_images>"#, #"<[\\/]*pasted_content[^>]*>"#] {
+        for pattern in [#"<attached_images>[\s\S]*?</attached_images>"#, #"<[\\/]*pasted_content[^>]*>"#, #"\[Image #\d+\]"#, #"\s+"#] {
             t = t.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
         }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t
+    }
+
+    /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:
+    /// Claude adds placeholders and the phone adds notes).
+    static func same(_ a: String, _ b: String) -> Bool {
+        let x = normalize(a), y = normalize(b)
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        return x == y || x.contains(y) || y.contains(x)
     }
 }
 

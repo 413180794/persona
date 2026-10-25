@@ -157,5 +157,12 @@ struct TurnTests {
         #expect(t.users.isEmpty && t.process.count == 1)
         if case .assistant(let a) = t.answer { #expect(a.text == "the command finished") } else { Issue.record("answer") }
     }
+
+    @Test func pendingMatchesTheTranscriptCopy() {
+        #expect(PendingMessage.same("[Image #21]1 多了一个空格色块\n2 有的 agent", "1 多了一个空格色块 2 有的 agent"))
+        #expect(PendingMessage.same("看这个", "看这个\n\n<attached_images>\n/a/1.jpg\n</attached_images>"))
+        #expect(!PendingMessage.same("别的话", "看这个"))
+        #expect(UserBubble.display("[Image #21]1 多了一个色块") == "1 多了一个色块")
+    }
 }
 
