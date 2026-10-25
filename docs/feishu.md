@@ -67,6 +67,15 @@
   `.environment(\.feishuOpen)` 挪到 `NavigationStack` 外面（leader 改）。
 - DEBUG：`-calendarDate 2026-10-22`（打开那天）、`-calendarEvent <id>`（直接推日程详情，可用实例 id）、`-fcBottom YES`（详情页停在底部，截下半页）。
 
+#### 实现说明（会议）
+
+- `FeishuMeetings.swift`：列表 `meetings?count=30&cursor`（`filter=calls` 只看通话），按 `sortedAt` 分天；`call.outcome` 非 accepted 标红。
+  `artifacts`（minutes / notes / docs / recording）显示成标签。
+- 详情 `meetings/:historyId` 与 `meetings/:historyId/insights` 并发取，纪要失败不影响详情。`recordings` 与 `documents` 里的妙记 / 录制
+  是同一个链接，按妙记 token 去重；妙记链接（`…/minutes/<token>`）推原生妙记页。
+- insights 的 `aiSummary.todos` 只是「我的待办」；`minutes.access` 常为 `denied`（别人录的会），此时不显示妙记章节。
+- 参会人头像是 CDN 完整 URL；`kind=room` 的是会议室设备。DEBUG：`-meetingID <historyId>`（从会议列表直接推详情）。
+
 ### 任务 / 审批 / OKR（`Work/`）
 - 任务：`todos?count`（我的未完成）、`todos/completed`、`todos/search?q`、`todos/:guid/detail`、`/subtasks`、`/comments`、`task-list-nav/sidebar`。
 - 审批：`approvals/counts`、`approvals?tab=todo|done|initiated|cc…&cursor`、`approvals/detail?instanceId`（表单、流程、时间线）。
