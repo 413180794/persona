@@ -94,5 +94,35 @@
 - 收藏：`favorites`（完整消息 + `target{messageId,position}`，点开定位）。
 - 话题：`threads/feed?cursor` → `{items[{feedId,conversationName,threadId,root,lastReply,replyCount,unreadCount}]}`，点开用 `LarkThreadView`。
 
+#### 实现说明（`Chat/`）
+
+- 文件：`FeishuChatModels.swift`（线上类型 + 纯逻辑，单测在 `JarvisTests/FeishuChatTests.swift`）、`FeishuChatShared.swift`
+  （`feishuChatChrome()`：定位到消息、话题弹层、文件 Quick Look、资料卡；消息卡片；分页尾；三态面板）、`FeishuChatInfoView.swift`
+  （会话信息 + Pin / 群任务 / 群成员子页）、`FeishuChatResources.swift`（文档 / 文件 / 图片视频行和整页）、`FeishuSavedView.swift`、`FeishuThreadsView.swift`。
+- **消息是 lark-connector 原样的 camelCase `MessageView`**（不是 hub 的 snake_case `LarkMessage`）：`FeishuRawMessage.lark` 照
+  hub 的 `rawMessage.normalize` 转一遍，就能直接用 `LarkPartsView` / `LarkThreadView`。头像 URL 有的是飞书 CDN 绝对地址，`LarkMedia` 两种都能拉。
+- **定位到消息**的规则（`FeishuMessageTarget`）：position 为正 → 打开会话 `focus = position`；position 为负（只存在于话题里的回复，
+  例如 `-3`）且有 threadId → 读 `messages/<threadId>`（返回 `{item, attachments}`）作为根消息弹 `LarkThreadView`；只有消息 id → 先读
+  `messages/<id>` 再按前两条走。文件 / 图片的 `messageUrl` 是 `/messenger/<feed>?message=&position=&thread=`；**文档没有 messageUrl**，
+  只有 `sourceMessageId`，要多读一次消息。收藏的 `target.threadId` 有值时直接开话题。
+- `settings`：每个群都有 `announcementDoc`（哪怕公告是空的），没有头像字段（用会话自带的）；单聊的 `name` 是「私聊」，要用会话名；
+  `userCount` 是去掉机器人的人数，`memberCount` 含机器人。公告预览：`documents/read?url=&format=markdown` 取前几行，去掉空标题、
+  lark-connector 加的 `[Source](…)` 行、markdown 转义和链接语法。
+- `pins`：`{items[{id,createdAt,operatorName,operatorGroupNickname,message}],nextCursor,hasMore,total}`，`limit` ≤ 100；`top-pins`
+  （群顶栏：消息 / 链接 / 公告，`type 3` = 公告）实测各群都是空的，`total` 却是 Pin 总数，不能当顶栏数量用。
+- `resources?kind=docs|files|media&cursor&q&locale`：cursor 是一大段 JSON 字符串，原样回传；`q` 服务端过滤（整页搜索框用它）；
+  标题带 HTML 实体（`&amp;`）；文件 `downloadUrl` 已改写成 hub 的 `/api/v1/lark/raw/conversations/.../files/...`，`LarkMedia.file` 直接下载进 Quick Look；
+  媒体只有 `thumbnailUrl`（不带 size 即原图），视频没有播放地址 → 点视频定位到消息播放。
+- `todos` → `{open, closed}`，只有负责人 id 没有名字；进行中按「我负责 → 截止时间 → 新建时间」排。`meeting-minutes` 只有日程群有。
+- `members?limit=` 一次给前 N 个（`hydrateMembers`），搜索用 `members/search?q=&limit≤200`。
+- `favorites`：只有 `nextCursor`（最后一个收藏 id）；`kind=merge` 的合并收藏没有 message，只显示来源。老收藏可能没有 `conversationName`，
+  单聊（`chatType 1`）用发送者名字兜底。2020 年的图片缩略图已过期，显示破图占位。
+- `threads/feed`：cursor 是 `<rankTimeMs>:<threadId>`，`hasMore` 为 false 时停；只读，不上报已读，点开后只在本地清掉未读角标。
+- **坑：从工作台推入的页面拿不到 `feishuOpen`**（实测为 nil：WorkbenchView 把它设在栈根内容上，`navigationDestination` 推出的页面不继承），
+  所以 `feishuChatChrome()` 在拿不到时用本地 `navigationDestination(item:)` 推 `FeishuRouteView`，并重新注入 `feishuOpen` 给子视图。
+- List 的 insetGrouped 行有很大的圆角裁剪：行内放自带圆角描边的卡片会被切角，快捷入口改成一张卡里四个无边框按钮。
+- DEBUG 启动参数：`-chatInfo <feedId>`（在收藏 / 话题页上自动打开该会话的会话信息）、`-chatInfoPage pins|docs|files|media|todos|members`
+  （再打开子页）、`-chatInfoFrom pins|media|docs|files|todos`（会话信息从该区块开始显示，截下半页用）、`-threadOpen <n>`（话题页打开第 n 个话题）。
+
 ### 今日（`Today/`，leader 最后做）
 聚合：今天的日程（`calendar/week`）、待办（`todos`）、审批待办数、未读 @我（`conversations/unread-mentions`）、文档通知、关注话题的新回复。
