@@ -118,8 +118,9 @@
 
 #### 实现说明（日历）
 
-- 文件：`CalendarModels.swift`（线上类型 + 纯逻辑，单测 `JarvisTests/FeishuCalendarTests.swift`）、`CalendarShared.swift`（卡片、三态、
-  路由兜底）、`FeishuCalendar.swift`（日历首页）、`FeishuEventDetail.swift`（日程详情）。
+- 文件：`FeishuCalModels.swift`（线上类型 + 纯逻辑，单测 `JarvisTests/FeishuCalendarTests.swift`）、`FeishuCalShared.swift`（卡片、三态、DEBUG 直达）、
+  `FeishuCalendar.swift`（日历首页）、`FeishuEventDetail.swift`（日程详情）、`FeishuMeetings.swift`、`FeishuMinutes.swift`、
+  `FeishuCalMediaLoader.swift`（妙记播放）。类型和扩展成员一律 `FeishuCal` / `feishuCal` 前缀。
 - `calendar/week` 的 `start` / `end` 用 UTC（`…Z`）：带 `+08:00` 时 `+` 在查询串里被当成空格，直接 400。按周（周一起）取、按周缓存，
   预取前后一周（周条的圆点立刻有）。
 - 重复日程的实例 id 是 `<sourceId>:<开始秒>`，`calendar/event/<实例id>` 回 400 `WEB_MGET_EVENTS_WITH_IDS`：详情一律用 sourceId 取，
@@ -131,10 +132,7 @@
 - `description` 常带一行 `AI-translated Title` 前缀，显示前去掉。会议室名形如 `Beijing-Dinghao DH3(鼎好DH3)-F17-04🎦 (12)`，
   拆成「F17-04 · 12 人」+ 楼宇。
 - 只读：不做 RSVP / 编辑；「加入会议」只是打开 `meetingUrl`。
-- **共享代码的坑**：工作台 NavigationStack 把 `feishuOpen` 设在根视图上（栈内），push 出来的页面拿到的是 nil。本目录用
-  `FCRouter`（`.fcRoutes()`）兜底：环境里没有时本页自己 `navigationDestination(item:)`。正确修法是把
-  `.environment(\.feishuOpen)` 挪到 `NavigationStack` 外面（leader 改）。
-- DEBUG：`-calendarDate 2026-10-22`（打开那天）、`-calendarEvent <id>`（直接推日程详情，可用实例 id）、`-fcBottom YES`（详情页停在底部，截下半页）。
+- DEBUG：`-openCalendarDate 2026-10-22`（打开那天）、`-openCalendarEvent <id>`（直接推日程详情，可用实例 id）、`-showDetailBottom YES`（详情页停在底部，截下半页）。
 
 #### 实现说明（会议）
 
@@ -143,7 +141,7 @@
 - 详情 `meetings/:historyId` 与 `meetings/:historyId/insights` 并发取，纪要失败不影响详情。`recordings` 与 `documents` 里的妙记 / 录制
   是同一个链接，按妙记 token 去重；妙记链接（`…/minutes/<token>`）推原生妙记页。
 - insights 的 `aiSummary.todos` 只是「我的待办」；`minutes.access` 常为 `denied`（别人录的会），此时不显示妙记章节。
-- 参会人头像是 CDN 完整 URL；`kind=room` 的是会议室设备。DEBUG：`-meetingID <historyId>`（从会议列表直接推详情）。
+- 参会人头像是 CDN 完整 URL；`kind=room` 的是会议室设备。DEBUG：`-openMeeting <historyId>`（从会议列表直接推详情）。
 
 #### 实现说明（妙记）
 
@@ -152,11 +150,11 @@
 - 详情：播放器、总结（关键词点一下 = 在文字记录里搜它）、章节、待办（文本末尾的「@某人」拆成负责人）、文字记录
   （按说话人分段、本地搜索高亮、播放时高亮当前段并跟随滚动，点段落 / 章节 / 待办时间跳到那里播放）。
 - **播放**：hub 的 raw 代理不转发 `Range`，`minutes/:token/media` 永远 200 整个文件（97MB 的 71 分钟视频），AVPlayer 拒播。
-  客户端用 `MinutesMediaLoader`（`AVAssetResourceLoaderDelegate` + 自定义 scheme）：一次 GET 边下边写临时文件，按 AVPlayer 的
+  客户端用 `FeishuCalMediaLoader`（`AVAssetResourceLoaderDelegate` + 自定义 scheme）：一次 GET 边下边写临时文件，按 AVPlayer 的
   范围请求从已下载部分回数据；飞书 mp4 索引在前，几秒就能开播，往后拖要等下载到那里。服务端转发 Range 后可直接流式（leader 待办）。
 - 只在点「播放」后才开始下载；离开页面停止并删临时文件。
-- DEBUG：`-minutesToken <token>`（从妙记列表直接推详情）、`-minutesTab 总结|章节|待办|文字记录`、`-minutesPlay YES`（自动播放）、
-  `-minutesSearch <词>`；日历 `-calendarNow <ISO 时间>`（假装现在是那一刻，看「正在进行 / 下一个」横幅和现在线）。
+- DEBUG：`-openMinutes <token>`（从妙记列表直接推详情）、`-showMinutesTab 总结|章节|待办|文字记录`、`-showMinutesPlaying YES`（自动播放）、
+  `-showMinutesSearch <词>`；日历 `-showCalendarNow <ISO 时间>`（假装现在是那一刻，看「正在进行 / 下一个」横幅和现在线）。
 
 ### 任务 / 审批 / OKR（`Work/`）
 - 任务：`todos?count`（我的未完成）、`todos/completed`、`todos/search?q`、`todos/:guid/detail`、`/subtasks`、`/comments`、`task-list-nav/sidebar`。
