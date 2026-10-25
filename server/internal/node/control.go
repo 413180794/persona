@@ -555,7 +555,9 @@ const herdrScrollbackLines = 1000
 
 // screenBefore returns up to `lines` lines of the pane's scrollback right before the anchor (the first lines the phone
 // already shows). Located by content, not by offset from the end, so output arriving meanwhile shifts nothing.
-func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lines int) (map[string]any, error) {
+// loaded is how many lines the phone already has (from the end): Claude's redraws push the same screens into the
+// scrollback again and again, so the anchor can match in several places — the one nearest len-loaded is ours.
+func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lines, loaded int) (map[string]any, error) {
 	if lines <= 0 || lines > 500 {
 		lines = 200
 	}
@@ -571,7 +573,7 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 		return nil, err
 	}
 	all := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	at := findBlock(all, anchor)
+	at := nearestBlock(all, anchor, len(all)-loaded)
 	if at < 0 { // the anchor scrolled out of the kept window: nothing older can be placed before it
 		return map[string]any{"text": "", "has_more": false, "at_limit": len(all) >= herdrScrollbackLines-20}, nil
 	}
@@ -582,6 +584,29 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 		// The start of what herdr keeps: older output was dropped (long panes) or never existed (short ones).
 		"at_limit": start == 0 && len(all) >= herdrScrollbackLines-20,
 	}, nil
+}
+
+// nearestBlock is the match of block whose start is closest to want, -1 when it does not appear.
+func nearestBlock(all, block []string, want int) int {
+	best := -1
+	for i := len(all) - len(block); i >= 0; {
+		j := findBlock(all[:i+len(block)], block)
+		if j < 0 {
+			break
+		}
+		if best < 0 || abs(j-want) < abs(best-want) {
+			best = j
+		}
+		i = j - 1
+	}
+	return best
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // findBlock returns where the lines of block start in all (the last match), -1 if they do not appear.

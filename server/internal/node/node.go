@@ -228,11 +228,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			SessionID string   `json:"session_id"`
 			Anchor    []string `json:"anchor"`
 			Lines     int      `json:"lines"`
+			Loaded    int      `json:"loaded"`
 		}
 		if err := json.Unmarshal(params, &a); err != nil {
 			return nil, err
 		}
-		return n.screenBefore(ctx, a.SessionID, a.Anchor, a.Lines)
+		return n.screenBefore(ctx, a.SessionID, a.Anchor, a.Lines, a.Loaded)
 	case "session.screen":
 		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source)
 		return map[string]any{"text": text, "status": status}, err

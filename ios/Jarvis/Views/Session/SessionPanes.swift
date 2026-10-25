@@ -220,9 +220,10 @@ struct TerminalPanel: View {
         loading = true
         paused = true // the tail must stay put while pages are placed above it
         defer { loading = false }
-        let anchor = Array(Self.lines(text).prefix(3))
+        let all = Self.lines(text)
+        let anchor = Array(all.prefix(20))
         do {
-            let r = try await api.screen(key, before: anchor, lines: Self.page)
+            let r = try await api.screen(key, before: anchor, loaded: all.count, lines: Self.page)
             if !r.text.isEmpty { older = Self.lines(r.text) + older }
             hasOlder = r.hasMore
             atLimit = r.atLimit
