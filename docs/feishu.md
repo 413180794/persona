@@ -30,6 +30,40 @@
   `todos/search?q=`；会话内 `search/in-chat?feedId=&q=`。
 - 点击：消息 → 会话定位到那条（`LarkConversation.focus = position`）；文档 → 阅读器；人 → 资料卡；群 → 会话；日程 → 日程详情。
 
+#### 实现（`Search/`）
+
+- 文件：`FeishuSearch.swift`（页面 + `FeishuSearchStore`）、`FeishuSearchRows.swift`（各分类结果行、高亮文本、骨架屏）、
+  `FeishuSearchFilters.swift`（筛选条、选人 / 选会话、自定义时间）、`FeishuSearchMail.swift`（邮件结果的阅读页）、
+  `FeishuSearchModels.swift`（线上模型和纯逻辑：请求体、高亮、最近搜索合并、分页合并，单元测试 `JarvisTests/FeishuSearchTests.swift`）。
+- 分类：综合（客户端自己并发取 联系人 / 群组 / 消息 / 云文档 / 日程 / 应用 各前几条，「查看全部」切到该分类）+ `search/tabs`
+  返回的服务端分类（只渲染认识的 key，去重）+ 妙记（`minutes/search`）+ 任务（`todos/search`）。会话内搜索的分类是固定的：
+  消息（`feedId`）、云文档（`tab=docs` + `chatIds=[feedId]`）、图片 / 视频 / 文件 / 链接（`feedId` + `attachmentTypes` 1/2/3/4）。
+- 筛选：消息 = 发送者 / 所在会话 / 时间；会话内 = 发送者 / 时间；云文档 = 类型 / 所有者 / 排序。只发当前分类提供的筛选（照 lark-connector
+  `pageInput`）。时间是 **Unix 秒**；「最近一周」从选择那一刻算起（翻页时窗口不变）；自定义按本地整天。
+- 首页：最近搜索 = 本机搜过的在前 + `search/home.history`（服务端历史只读，「清除」只是在本机隐藏）；常用联系人和群组点开直接进会话
+  （user 也带 `feedId`），长按看资料；「搜索指定内容」宫格选分类。
+- 输入即搜（350ms 防抖），切分类 / 筛选立即搜；同分类换词时旧结果先变淡不清空（不闪骨架屏）。分页到最后一行自动加载，失败可点重试。
+
+接口怪异行为：
+- **高亮区间是 UTF-16 偏移**（JS 字符串下标），`[start, end)`；可能为空数组（群组常见），此时客户端按查询词自己匹配。
+  消息 snippet 里有 markdown（`## `、反引号、`**`），去掉标记时要同步平移区间（`FeishuHighlight.plain`），直接 `Fmt.plain` 会高亮错位。
+  snippet 可能自带 `...` 前缀。
+- **消息命中的 `position` 可能是 -3**：话题里的回复不在主聊天流里。点开时先 `GET messages/:id`（拿 `feedId`、`chatType` 1 单聊 / 2 群 / 3 话题群、
+  `threadId`），position 为负就再取 `messages/:threadId` 用话题根的位置定位。`search/page` 的消息命中没有发送者头像。
+- `search/page` 的 `query` 不能为空（400）；`nextCursor` 是几 KB 的 token 并且每页变长，所以是 POST。邮箱 / 应用等有时给 `nextCursor` 不给 `total`。
+- 日程命中的 `id` 是 `<eventId>:<实例开始时间>`，`calendar/event/:id` 只认冒号前那段（整串 400）；详情返回的是重复日程的母日程时间。
+- `minutes/search` 用偏移 cursor（"15"、"30"…），到底后 cursor 可能原样返回：页为空或 cursor 不变即停。`todos/search` 翻页参数叫 `token`
+  （返回 `nextToken` + `hasMore`）。
+- 应用命中多数只有 `lark://` / `sslocal://` 入口，只有装了飞书 App 才打得开；服务台没有可用入口，只展示。
+- 邮件结果没有现成路由，搜索自带阅读页：`mail/messages/:id`（纯文本 body，可能截断）+ `/html`（完整 HTML，newsletter 是固定宽度表格，
+  注入样式压到屏宽）。
+- `feishuOpen` 设在 NavigationStack 根视图上，**传不到被推入的页面**（工作台 › 搜索里它是 nil）。搜索页自己兜底：没有 `feishuOpen` 时
+  用 `navigationDestination(item:)` 推，并给推出的页面注入下一层的 opener（`FeishuSearchPushedRoute`）。根治要在 `WorkbenchView` /
+  其他宿主把 `.environment(\.feishuOpen)` 挂到 NavigationStack 外层。
+- DEBUG 启动参数：`-searchQuery <q>`、`-searchTab <key>`（all / messages / docs / contacts / groups / calendar / email / apps / helpdesk /
+  minutes / tasks；会话内 chat / chatDocs / chatImages…）、`-searchFeed <feedId>`（会话内搜索）、`-searchFilter sender|chat|owner|time`
+  （打开筛选面板）、`-searchOpenFirst YES`（结果加载后点开第一条）。
+
 ### 云文档 / 知识库 / 文档通知（`Docs/`）
 - 列表：`documents/recent?cursor`；`documents/drive?view=mine|shared|starred|pinned`（view 必填）；`documents/drive/discover`。
 - 阅读：`documents/read?url=&format=markdown`（403 `DOCUMENT_EXPORT_FORBIDDEN` 时改 `format=json`：ProseMirror 风格节点树
