@@ -158,6 +158,34 @@ struct TurnTests {
         if case .assistant(let a) = t.answer { #expect(a.text == "the command finished") } else { Issue.record("answer") }
     }
 
+    @Test func backgroundWakeEndsTheTurnBeforeIt() {
+        var wake = item(4, .notice, role: "system", text: "Background command \"Release\" completed (exit code 0)")
+        wake.wake = true
+        let items = [
+            item(1, .text, role: "user", text: "go"), item(2, .toolUse, tool: "Bash", id: "a"),
+            item(3, .text, text: "the summary"),
+            wake, item(5, .toolUse, tool: "Bash", id: "b"), item(6, .text, text: "build 42 is up"),
+        ]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 2) // the summary stays the first turn's answer, not folded into one long turn
+        guard case .turn(let first) = blocks[0], case .turn(let woke) = blocks[1] else { Issue.record("turns"); return }
+        if case .assistant(let a) = first.answer { #expect(a.text == "the summary") } else { Issue.record("answer") }
+        if case .assistant(let a) = woke.answer { #expect(a.text == "build 42 is up") } else { Issue.record("answer") }
+        #expect(woke.users.isEmpty && woke.ordered.first?.id == wake.id)
+
+        // Absorbed mid-turn (no wake): the agent never stopped, it stays one turn.
+        wake.wake = nil
+        let one = ChatBlock.build(ChatStore.buildRows(items.map { $0.seq == 4 ? wake : $0 }))
+        #expect(one.count == 1)
+    }
+
+    @Test func wakeSummaryReadsInChinese() {
+        #expect(NoticeRow.wakeSummary("Background command \"Release master\" completed (exit code 0)") == ("后台命令完成 · Release master", false))
+        #expect(NoticeRow.wakeSummary("Background command \"Build\" failed with exit code 65").failed)
+        #expect(NoticeRow.wakeSummary("Agent \"Explore\" completed").text == "子 Agent 完成 · Explore")
+        #expect(NoticeRow.wakeSummary("后台任务有更新").text == "后台任务有更新")
+    }
+
     @Test func pendingMatchesTheTranscriptCopy() {
         #expect(PendingMessage.same("[Image #21]1 多了一个空格色块\n2 有的 agent", "1 多了一个空格色块 2 有的 agent"))
         #expect(PendingMessage.same("看这个", "看这个\n\n<attached_images>\n/a/1.jpg\n</attached_images>"))

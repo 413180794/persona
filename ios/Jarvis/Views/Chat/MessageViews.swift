@@ -400,6 +400,10 @@ struct ThinkingRow: View {
 struct NoticeRow: View {
     var item: Item
     var body: some View {
+        if item.wake == true { wake } else { plain }
+    }
+
+    private var plain: some View {
         Text(item.text ?? "")
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -408,6 +412,38 @@ struct NoticeRow: View {
             .padding(.vertical, 5)
             .background(Color.primary.opacity(0.05), in: .capsule)
             .frame(maxWidth: .infinity)
+    }
+
+    /// A background task woke the agent: opens the work that follows, like a message would.
+    private var wake: some View {
+        let w = Self.wakeSummary(item.text ?? "")
+        return HStack(spacing: 6) {
+            Image(systemName: w.failed ? "exclamationmark.circle.fill" : "bell.fill")
+                .foregroundStyle(w.failed ? Theme.danger : Theme.accent)
+            Text(w.text).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+        }
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.primary.opacity(0.05), in: .capsule)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// `Background command "Release" completed (exit code 0)` → "后台命令完成 · Release".
+    static func wakeSummary(_ s: String) -> (text: String, failed: Bool) {
+        guard let m = s.firstMatch(of: /^(.*?)\s*"(.+)"\s*(.*)$/) else { return (s, false) }
+        let kind = switch String(m.1) {
+        case "Background command": "后台命令"
+        case "Agent": "子 Agent "
+        case "Monitor": "监控"
+        default: "后台任务"
+        }
+        let rest = m.3.lowercased()
+        let code = rest.firstMatch(of: /exit code (\d+)/).flatMap { Int($0.1) }
+        let failed = rest.contains("fail") || rest.contains("error") || (code ?? 0) != 0
+        let state = failed ? "失败" : rest.contains("kill") || rest.contains("stop") ? "已停止"
+            : rest.contains("complet") ? "完成" : "有更新"
+        return ("\(kind)\(state) · \(m.2)", failed)
     }
 }
 

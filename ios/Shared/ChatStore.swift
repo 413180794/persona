@@ -150,8 +150,10 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             case .notice(let item):
                 // Inside a turn: "interrupted" closes it visibly; compaction / API errors are part of the process
                 // (auto-compaction happens mid-turn and must not split it).
-                if current == nil {
-                    // e.g. a background command finishing after a recap: part of the (next) work, never its own line.
+                if item.wake == true || current == nil {
+                    // A background task woke the idle agent (or one finished after a recap): the turn before it is
+                    // over, with its own answer; what the agent does now is a new exchange that starts at the notice.
+                    close()
                     current = Turn(id: row.id)
                     current!.process.append(row)
                     current!.ordered.append(row)
@@ -373,7 +375,8 @@ nonisolated enum ChatCache {
     private static func url(_ key: SessionKey) -> URL? {
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         let safe = "\(key.machineID)_\(key.sessionID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
-        return base.appending(path: "chats").appending(path: String(safe) + ".json")
+        // v2: items carry `wake`; older copies would keep the merged turns until they scrolled out.
+        return base.appending(path: "chats-v2").appending(path: String(safe) + ".json")
     }
 
     static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool)? {

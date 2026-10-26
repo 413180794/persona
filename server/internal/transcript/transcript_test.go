@@ -183,7 +183,8 @@ func TestInterruptedNotice(t *testing.T) {
 
 func TestTaskNotificationBecomesNotice(t *testing.T) {
 	items, _ := parse(t, `{"type":"user","uuid":"u12","message":{"role":"user","content":"<task-notification><summary>后台完成</summary></task-notification>"}}`)
-	if it := only(t, items); it.Kind != proto.KindNotice || it.Text != "后台完成" {
+	// A user message of its own: the agent was idle and the notice woke it.
+	if it := only(t, items); it.Kind != proto.KindNotice || it.Text != "后台完成" || !it.Wake {
 		t.Fatalf("unexpected notice %+v", it)
 	}
 }
@@ -527,7 +528,7 @@ func TestBackgroundTasks(t *testing.T) {
 		"type": "queued_command", "prompt": "<task-notification>\n<task-id>a3497dfa0fb026376</task-id>\n<summary>Agent done</summary>\n</task-notification>",
 		"commandMode": "task-notification", "origin": map[string]any{"kind": "task-notification"}}})
 	it := only(t, ParseLine(8, att, meta))
-	if it.Kind != proto.KindNotice || it.Text != "Agent done" || it.Queued {
+	if it.Kind != proto.KindNotice || it.Text != "Agent done" || it.Queued || it.Wake { // absorbed mid-turn: no wake
 		t.Fatalf("notice: %+v", it)
 	}
 	if len(meta.Background) != 0 {

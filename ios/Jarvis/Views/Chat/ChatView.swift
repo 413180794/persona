@@ -227,7 +227,14 @@ struct ChatView: View {
             switch block {
             case .row(let r):
                 out.append(.row(r))
-            case .turn(let t):
+            case .turn(var t):
+                // Work a background task woke the agent for opens with that notice, where a message would be.
+                var wokeAt: Date?
+                if let first = t.ordered.first, case .notice(let n) = first, n.wake == true {
+                    out.append(.row(first))
+                    t.ordered.removeFirst()
+                    wokeAt = n.ts
+                }
                 let segments = Self.segments(t.ordered)
                 let groupID = "wt-" + t.id
                 let messages = segments.compactMap(\.user)
@@ -262,7 +269,8 @@ struct ChatView: View {
                     if !items.isEmpty || live {
                         let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
                         out.append(.work(id: id, items: items, live: live,
-                                         start: seg.user?.firstTS ?? seg.rows.first?.firstTS ?? t.startedAt, end: seg.rows.last?.lastTS))
+                                         start: seg.user?.firstTS ?? (k == 0 ? wokeAt : nil) ?? seg.rows.first?.firstTS ?? t.startedAt,
+                                         end: seg.rows.last?.lastTS))
                     }
                     if let last { out.append(.row(seg.rows[last])) }
                 }
@@ -713,7 +721,9 @@ struct ChatView: View {
             if case .turn(let t) = b { return t.users.contains { if case .user(let u) = $0 { u.seq == seq } else { false } } }
             return false
         }) {
-            var out = Array(blocks[i..<min(i + 1, blocks.count)]) // near the newest end: no long scroll to reach it
+            var end = i + 1 // plus work background tasks woke the agent for right after it
+            while end < blocks.count, case .turn(let t) = blocks[end], t.users.isEmpty { end += 1 }
+            var out = Array(blocks[i..<end]) // near the newest end: no long scroll to reach it
             // `-dropUsers YES`: hide that turn's messages so its process row and answer fit one screenshot.
             if UserDefaults.standard.bool(forKey: "dropUsers"), case .turn(var t) = out[0] { t.users = []; out[0] = .turn(t) }
             return out

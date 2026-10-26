@@ -325,9 +325,11 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var queued: Bool?
     /// Sent by another Claude session (cross-session messaging), not typed by the user: its name.
     var from: String?
+    /// A background task's notice that woke the idle agent: new work after a finished turn.
+    var wake: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued, from
+        case id, seq, ts, role, kind, text, image, queued, from, wake
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error"
     }
 }

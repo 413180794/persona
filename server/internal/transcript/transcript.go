@@ -299,6 +299,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				return nil
 			}
 			items := userText(mk, s)
+			if strings.Contains(s, "<task-notification>") {
+				markWake(items)
+			}
 			if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
 				meta.FirstUser = items[0].Text
 			}
@@ -319,6 +322,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 					continue
 				}
 				items := userText(func(_ int, role, kind string) proto.Item { return mk(i, role, kind) }, b.Text)
+				if strings.Contains(b.Text, "<task-notification>") {
+					markWake(items)
+				}
 				if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
 					meta.FirstUser = items[0].Text
 				}
@@ -585,6 +591,16 @@ func CrossSession(s string) (from, body string, ok bool) {
 		from = n[1]
 	}
 	return from, strings.TrimSpace(m[2]), true
+}
+
+// markWake flags a background task's notice that arrives as a user message: the agent was idle and the notice
+// started a new turn (ones absorbed mid-turn come as queued_command attachments instead).
+func markWake(items []proto.Item) {
+	for i := range items {
+		if items[i].Kind == proto.KindNotice {
+			items[i].Wake = true
+		}
+	}
 }
 
 func userText(mk func(int, string, string) proto.Item, s string) []proto.Item {

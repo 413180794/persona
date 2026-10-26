@@ -40,6 +40,8 @@
  "tool_use_id":"toolu_…",                             // tool_use 与 tool_result 共用，App 据此合并成一张卡片
  "tool_name":"Bash", "tool_input":{...},              // 仅 tool_use
  "is_error":false,                                    // 仅 tool_result
+ "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
+ "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）
 
 // Interaction：需要人处理的事

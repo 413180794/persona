@@ -149,6 +149,9 @@ type Item struct {
 	IsError   bool            `json:"is_error,omitempty"`
 	Image     *Image          `json:"image,omitempty"`
 	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
+	// Wake marks a background task's notice that started new work after the agent had finished its turn
+	// (not one absorbed mid-turn): the exchange before it is over and its last words are an answer.
+	Wake bool `json:"wake,omitempty"`
 	// From names the Claude session that sent this message (cross-session messaging), not the user.
 	From string `json:"from,omitempty"`
 }
