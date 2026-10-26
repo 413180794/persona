@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -142,13 +143,19 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	switch it.Type {
 	case "UserMessage":
-		var parts []string
+		var parts, images []string
 		for _, c := range it.Content {
-			if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
-				parts = append(parts, c.Text)
+			switch {
+			case c.Type == "text" && strings.TrimSpace(c.Text) != "":
+				parts = append(parts, codexUserText(c.Text))
+			case c.Type == "local_image" && c.Path != "":
+				images = append(images, strings.TrimPrefix(c.Path, "file://"))
 			}
 		}
 		text := strings.TrimSpace(strings.Join(parts, "\n"))
+		if len(images) > 0 { // the apps show these paths as thumbnails (the phone's own photos travel the same way)
+			text = strings.TrimSpace(text + "\n\n<attached_images>\n" + strings.Join(images, "\n") + "\n</attached_images>")
+		}
 		if text == "" {
 			return nil
 		}
@@ -245,6 +252,36 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		return []proto.Item{n}
 	}
 	return nil
+}
+
+var (
+	// Ambient state the Codex app attaches to a message (open browser tabs and such), not something the user said.
+	codexAmbientRe = regexp.MustCompile(`(?s)<in-app-browser-context[^>]*>.*?</in-app-browser-context>`)
+	codexReplyRe   = regexp.MustCompile(`(?s)<send_user_message_question_reply>\s*(.*?)\s*</send_user_message_question_reply>`)
+)
+
+// codexUserText cleans what Codex records as the user's message: ambient context goes, and the answer to a question
+// Codex asked (request_user_input, stored as JSON) reads as the answer itself ("question：answer" when several).
+func codexUserText(s string) string {
+	s = codexAmbientRe.ReplaceAllString(s, "")
+	return strings.TrimSpace(codexReplyRe.ReplaceAllStringFunc(s, func(block string) string {
+		var replies []struct {
+			Question string `json:"question"`
+			Answer   string `json:"answer"`
+		}
+		m := codexReplyRe.FindStringSubmatch(block)
+		if json.Unmarshal([]byte(m[1]), &replies) != nil || len(replies) == 0 {
+			return block
+		}
+		if len(replies) == 1 {
+			return replies[0].Answer
+		}
+		var lines []string
+		for _, r := range replies {
+			lines = append(lines, strings.TrimSpace(r.Question)+"："+r.Answer)
+		}
+		return strings.Join(lines, "\n")
+	}))
 }
 
 // codexTool is a finished tool call: Codex writes the call and its result in one line.

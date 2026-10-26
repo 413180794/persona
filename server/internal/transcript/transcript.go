@@ -110,11 +110,13 @@ type Meta struct {
 	// Sidechain keeps isSidechain lines: a subagent's own transcript is all sidechain.
 	Sidechain bool
 	// Codex: the file is a Codex rollout (codex.go), not a Claude transcript.
-	Codex    bool
-	Cwd      string
-	Model    string
-	LastText string
-	Updated  time.Time
+	Codex bool
+	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
+	bashInput string
+	Cwd       string
+	Model     string
+	LastText  string
+	Updated   time.Time
 }
 
 // pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
@@ -250,12 +252,12 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		if strings.Contains(text, "<task-notification>") {
 			meta.taskFinished(text)
-			return userText(mk, text) // a "background task finished" notice
+			return userText(mk, text, meta) // a "background task finished" notice
 		}
 		if notification {
 			return nil // other harness notifications are not user input
 		}
-		items := userText(mk, text)
+		items := userText(mk, text, meta)
 		for i := range items {
 			items[i].Queued = true
 		}
@@ -306,7 +308,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			if e.IsMeta {
 				return nil
 			}
-			items := userText(mk, s)
+			items := userText(mk, s, meta)
 			if strings.Contains(s, "<task-notification>") {
 				markWake(items)
 			}
@@ -329,7 +331,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 				if e.IsMeta {
 					continue
 				}
-				items := userText(func(_ int, role, kind string) proto.Item { return mk(i, role, kind) }, b.Text)
+				items := userText(func(_ int, role, kind string) proto.Item { return mk(i, role, kind) }, b.Text, meta)
 				if strings.Contains(b.Text, "<task-notification>") {
 					markWake(items)
 				}
@@ -585,6 +587,12 @@ func (m *Meta) applyQueue(op, content string) {
 
 // A message another Claude session sent this one ("Another Claude session sent a message:" + the tagged body + an
 // English note on how to treat it).
+// caveatRe drops Claude Code's note that the lines around it came from a local command (context for the model).
+var caveatRe = regexp.MustCompile(`(?s)<local-command-caveat>.*?</local-command-caveat>`)
+
+var teammateRe = regexp.MustCompile(`(?s)<teammate-message([^>]*)>\s*(.*?)\s*</teammate-message>`)
+var teammateIDRe = regexp.MustCompile(`teammate_id="([^"]*)"`)
+
 var crossRe = regexp.MustCompile(`(?s)<cross-session-message([^>]*)>\s*(.*?)\s*</cross-session-message>`)
 var crossNameRe = regexp.MustCompile(`from-name="([^"]*)"`)
 
@@ -611,8 +619,8 @@ func markWake(items []proto.Item) {
 	}
 }
 
-func userText(mk func(int, string, string) proto.Item, s string) []proto.Item {
-	trimmed := strings.TrimSpace(pastedRe.ReplaceAllString(s, ""))
+func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []proto.Item {
+	trimmed := strings.TrimSpace(caveatRe.ReplaceAllString(pastedRe.ReplaceAllString(s, ""), ""))
 	if trimmed == "" {
 		return nil
 	}
@@ -620,6 +628,35 @@ func userText(mk func(int, string, string) proto.Item, s string) []proto.Item {
 		it := mk(0, "user", proto.KindText)
 		it.Text, it.From = clip(body), from
 		return []proto.Item{it}
+	}
+	if m := teammateRe.FindStringSubmatch(trimmed); m != nil { // agent teams: a teammate reporting to the lead
+		from := "队友"
+		if n := teammateIDRe.FindStringSubmatch(m[1]); n != nil && n[1] != "" {
+			from = n[1]
+		}
+		it := mk(0, "user", proto.KindText)
+		it.Text, it.From = clip(strings.TrimSpace(m[2])), from
+		return []proto.Item{it}
+	}
+	// "! cmd" typed in Claude Code runs the command directly: the input reads as the user's own line, its output
+	// as a Bash call under it (the input line comes first; its command is kept for the output's call).
+	if strings.HasPrefix(trimmed, "<bash-input>") {
+		cmd := strings.TrimSpace(firstTag(trimmed, "bash-input"))
+		meta.bashInput = cmd
+		it := mk(0, "user", proto.KindText)
+		it.Text = clip("! " + cmd)
+		return []proto.Item{it}
+	}
+	if strings.HasPrefix(trimmed, "<bash-stdout>") || strings.HasPrefix(trimmed, "<bash-stderr>") {
+		out := strings.TrimSpace(strings.TrimSpace(firstTag(trimmed, "bash-stdout")) + "\n" + strings.TrimSpace(firstTag(trimmed, "bash-stderr")))
+		input, _ := json.Marshal(map[string]string{"command": meta.bashInput})
+		meta.bashInput = ""
+		use := mk(0, "assistant", proto.KindToolUse)
+		id := strings.TrimSuffix(use.ID, "#0") + "-bash"
+		use.ToolUseID, use.ToolName, use.ToolInput = id, "Bash", input
+		res := mk(1, "user", proto.KindToolResult)
+		res.ToolUseID, res.Text, res.IsError = id, clip(out), strings.TrimSpace(firstTag(trimmed, "bash-stderr")) != ""
+		return []proto.Item{use, res}
 	}
 	if strings.HasPrefix(trimmed, "<command-name>") || strings.HasPrefix(trimmed, "<command-message>") {
 		name := firstTag(trimmed, "command-name")

@@ -157,9 +157,15 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
     static func build(_ rows: [ChatRow]) -> [ChatBlock] {
         var blocks: [ChatBlock] = []
         var current: Turn?
+        // The last exchange as it was before closing, and where it sits: a background task that reports back after
+        // a recap card (Claude Code writes one when a finished session sits idle) still belongs to that exchange.
+        var lastRaw: Turn?
+        var lastIndex = 0
+        var reopenedAt: Int?
 
         func close() {
             guard var t = current else { return }
+            lastRaw = t
             if !t.wakes.isEmpty { t.pickAnswerAcrossWakes() }
             // The answer is the last thing the assistant said; everything before it is process.
             // (Steps after the final words, rare trailing tool calls, stay in the process.)
@@ -167,7 +173,14 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             if let i = t.process.lastIndex(where: { if case .assistant = $0 { true } else { false } }) {
                 t.answer = t.process.remove(at: i)
             }
-            blocks.append(.turn(t))
+            if let i = reopenedAt {
+                blocks.insert(.turn(t), at: i) // back in its place, the recap card still after it
+                lastIndex = i
+            } else {
+                lastIndex = blocks.count
+                blocks.append(.turn(t))
+            }
+            reopenedAt = nil
             current = nil
         }
 
@@ -187,6 +200,12 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             case .notice(let item):
                 // Inside a turn: "interrupted" closes it visibly; compaction / API errors are part of the process
                 // (auto-compaction happens mid-turn and must not split it).
+                if item.wake == true, current == nil, let raw = lastRaw, blocks.indices.contains(lastIndex),
+                   case .turn(let closed) = blocks[lastIndex], closed.id == raw.id {
+                    blocks.remove(at: lastIndex) // reopen the exchange the recap closed
+                    reopenedAt = lastIndex
+                    current = raw
+                }
                 if item.wake == true, current != nil {
                     // A background task woke the idle agent: still the same exchange (the answer is picked at close).
                     current!.wakes.append(item)

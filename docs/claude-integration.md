@@ -122,3 +122,18 @@ node 的 `session.start`：
   在空闲时是一条 user 消息；工作中进排队（queue-operation 的 content 是同样的文本），被吸收时是 `queued_command` 附件，`origin.kind:"peer"`、`origin.name`、`origin.body`。
 - 解析成 user 条目并带 `from`（发送方名字），排队条里显示为「【来自 名字】正文」；手机上画成左侧的灰色卡片「来自 名字」，不当成用户自己的消息。
 
+
+## transcript 里的特殊 XML（2026-10-26 扫了本机和 example-machine）
+
+| 标签 | 处理 |
+| --- | --- |
+| `<command-name>` / `<command-message>` / `<command-args>` | 显示成「/命令 参数」 |
+| `<local-command-stdout>` / `-stderr` | 提示行 |
+| `<local-command-caveat>` | 给模型看的说明，去掉 |
+| `<task-notification>` | 后台任务完成提示（`docs/ios.md` 唤醒） |
+| `<cross-session-message from-name=…>` | 「来自另一个会话」的消息 |
+| `<teammate-message teammate_id=…>` | Agent 团队里队友的汇报，按「来自 teammate_id」显示 |
+| `<bash-input>` → `<bash-stdout>` / `<bash-stderr>` | 在 Claude Code 里 `!` 直接跑的命令：用户一条「! 命令」，输出是它下面的一个 Bash 工具 |
+| `<system-reminder>` | 去掉 |
+| `<attached_images>` | 手机发来的图片路径，App 显示成缩略图 |
+| `<jarvis-context>` | App 自己的引用上下文，App 显示成引用卡片 |

@@ -61,3 +61,18 @@ func TestCodexRollout(t *testing.T) {
 		t.Fatalf("notice: %+v", items[11])
 	}
 }
+
+func TestCodexUserMessageTags(t *testing.T) {
+	line := `{"timestamp":"2026-10-26T05:05:59.515Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u2","content":[` +
+		`{"type":"text","text":"<send_user_message_question_reply>\n[{\"questionItemId\":\"x\",\"question\":\"Accept the Xcode license?\",\"answer\":\"done, agreed\"}]\n</send_user_message_question_reply>"},` +
+		`{"type":"text","text":"\n<in-app-browser-context source=\"ambient-ui-state\">tabs: a, b</in-app-browser-context>"},` +
+		`{"type":"local_image","path":"/tmp/shot.png"}]}}}`
+	meta := &Meta{Codex: true}
+	it := only(t, ParseLine(1, []byte(line), meta))
+	if it.Text != "done, agreed\n\n<attached_images>\n/tmp/shot.png\n</attached_images>" {
+		t.Fatalf("got %q", it.Text)
+	}
+	if got := codexUserText(`<send_user_message_question_reply>[{"question":"A?","answer":"1"},{"question":"B?","answer":"2"}]</send_user_message_question_reply>`); got != "A?：1\nB?：2" {
+		t.Fatalf("several answers: %q", got)
+	}
+}

@@ -198,6 +198,22 @@ struct TurnTests {
         #expect(c.wakes.isEmpty)
     }
 
+    @Test func wakeAfterARecapStaysInItsExchange() {
+        var wake = item(4, .notice, role: "system", text: "Background command \"Release\" completed (exit code 0)")
+        wake.wake = true
+        let summary = "Agent tags and XML handling are done and pushed; the build is still packaging."
+        let items = [
+            item(1, .text, role: "user", text: "go"), item(2, .text, text: summary),
+            item(3, .recap, role: "system", text: "recap"),
+            wake, item(5, .toolUse, tool: "Bash", id: "b"), item(6, .text, text: "build 42 is up"),
+        ]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 2) // the exchange (wake folded in), then the recap card where it was
+        guard case .turn(let t) = blocks[0], case .row(.recap) = blocks[1] else { Issue.record("shape \(blocks)"); return }
+        if case .assistant(let a) = t.answer { #expect(a.text == summary) } else { Issue.record("answer") }
+        #expect(t.wakes.count == 1 && t.tail.count == 3)
+    }
+
     @Test func wakeSummaryReadsInChinese() {
         #expect(NoticeRow.wakeSummary("Background command \"Release master\" completed (exit code 0)") == ("后台命令完成 · Release master", false))
         #expect(NoticeRow.wakeSummary("Background command \"Build\" failed with exit code 65").failed)
