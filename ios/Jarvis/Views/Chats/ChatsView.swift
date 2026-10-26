@@ -514,7 +514,7 @@ struct SlotRow: View {
                 // keep their size.
                 HStack(spacing: 6) {
                     name(tint: tint)
-                    if session.isCodex { CodexTag() }
+                    AgentTag(label: session.agentLabel)
                     if !quiet && !hideState {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
@@ -788,10 +788,12 @@ struct MachineSectionHeader: View {
 }
 
 
-/// Marks a Codex agent among Claude ones (list rows, space cards).
-struct CodexTag: View {
+/// Which coding agent a row is (Claude / Codex): the same quiet outline for every one.
+struct AgentTag: View {
+    var label: String
+
     var body: some View {
-        Text("Codex")
+        Text(label)
             .font(.caption2.weight(.bold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5)

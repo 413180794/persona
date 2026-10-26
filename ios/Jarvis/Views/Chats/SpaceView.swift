@@ -157,7 +157,9 @@ struct SlotCard: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(tint.opacity(0.12), in: .capsule)
-                Spacer()
+                    .lineLimit(1)
+                AgentTag(label: session.agentLabel)
+                Spacer(minLength: 4)
                 StatusDot(state: session.state, size: 9)
             }
             Text(session.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)

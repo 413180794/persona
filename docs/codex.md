@@ -11,7 +11,7 @@ herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「开发」tab�
   同目录开多个 Codex 时可能认错，重启一下 Codex 就会带上 id。
 - herdr 的终端标题是「dots | codex | Ready」，不能当标题：标题用 Codex 自己起的线程名（`~/.codex/session_index.jsonl`
   的 `thread_name`，同一个 id 以最后一条为准），没有就用第一条用户消息。
-- `proto.Session.agent` = `codex`；App 列表行带「Codex」小标签，对话页副标题带「Codex」，输入框「给 Codex 发消息」，
+- `proto.Session.agent` = `codex`；App 列表行、空间页卡片都带 Agent 标签（Claude 和 Codex 同一种描边小标签，`AgentTag`），对话页副标题带 Agent 名，输入框「给 Codex 发消息」，
   分享卡片署名 Codex（深色图标）。
 
 ## 会话记录（rollout）

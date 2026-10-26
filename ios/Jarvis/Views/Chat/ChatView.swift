@@ -771,9 +771,12 @@ struct ChatView: View {
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
-            if UserDefaults.standard.bool(forKey: "openSpaceFromChat"), let space = session?.spaceKey { // chat → its space page
+            if UserDefaults.standard.bool(forKey: "openSpaceFromChat") { // chat → its space page
                 UserDefaults.standard.set(false, forKey: "openSpaceFromChat")
-                Task { try? await Task.sleep(for: .seconds(4)); openSpace?(space) }
+                Task {
+                    try? await Task.sleep(for: .seconds(5)) // the session list may not be in yet
+                    if let space = session?.spaceKey { openSpace?(space) }
+                }
             }
             if UserDefaults.standard.bool(forKey: "showCompactChrome") { chromeHidden = true } // folded, for screenshots
             if UserDefaults.standard.bool(forKey: "showWakeDrawer") { // the newest "后台任务完成" drawer
@@ -939,7 +942,7 @@ struct ChatView: View {
         }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-        return [machine, place.isEmpty ? nil : place, s.isCodex ? "Codex" : nil, s.state.label].compactMap { $0 }.joined(separator: " · ")
+        return [machine, place.isEmpty ? nil : place, s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
