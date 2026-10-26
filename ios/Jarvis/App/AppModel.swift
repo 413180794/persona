@@ -187,7 +187,7 @@ final class AppModel {
     func subscribe(_ key: SessionKey) {
         subscribed.insert(key)
         let store = chat(key)
-        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
+        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
         if store.lastSeq > 0 { msg["since_seq"] = store.lastSeq }
         live.send(msg)
         if live.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
@@ -226,7 +226,7 @@ final class AppModel {
     private func didConnect() {
         registerPhone()
         for key in subscribed {
-            var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
+            var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
             let seq = chat(key).lastSeq
             if seq > 0 { msg["since_seq"] = seq }
             live.send(msg)
@@ -260,7 +260,7 @@ final class AppModel {
             for m in list where m.online && wasOffline.contains(m.id) {
                 for key in subscribed where key.machineID == m.id {
                     chat(key).error = nil
-                    var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
+                    var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
                     if chat(key).lastSeq > 0 { msg["since_seq"] = chat(key).lastSeq }
                     live.send(msg)
                 }

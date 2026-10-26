@@ -907,6 +907,18 @@ func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool) {
 	return out, start > 0
 }
 
+// Item finds one item by id (an image a client fetches on demand).
+func (f *File) Item(id string) (proto.Item, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := len(f.items) - 1; i >= 0; i-- {
+		if f.items[i].ID == id {
+			return f.items[i], true
+		}
+	}
+	return proto.Item{}, false
+}
+
 // After returns items with seq > afterSeq (at most limit, oldest first).
 func (f *File) After(afterSeq, limit int) []proto.Item {
 	f.mu.Lock()

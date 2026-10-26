@@ -182,7 +182,7 @@ struct PendingBubble: View {
                     ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
                         Color.primary.opacity(0.06)
                             .frame(width: msg.images.count == 1 ? 120 : 76, height: msg.images.count == 1 ? 120 : 76)
-                            .overlay { if let img = AttachedImageCache.image(p) { Image(uiImage: img).resizable().scaledToFill() } }
+                            .overlay { ChatThumbnail(payload: p) }
                             .clipShape(.rect(cornerRadius: 12, style: .continuous))
                     }
                 }
@@ -259,7 +259,7 @@ struct SentPhotos: View {
                 Button { viewer = i } label: {
                     Color.primary.opacity(0.06)
                         .frame(width: side, height: side)
-                        .overlay { if let img = AttachedImageCache.image(p) { Image(uiImage: img).resizable().scaledToFill() } }
+                        .overlay { ChatThumbnail(payload: p) }
                         .clipShape(.rect(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
                 }
@@ -313,8 +313,8 @@ struct AttachedImages: View {
         return Color.primary.opacity(0.06)
             .frame(width: side, height: side)
             .overlay { // the square sets the size; the photo fills and is cropped to it
-                if let p = loaded[path], let img = AttachedImageCache.image(p) {
-                    Image(uiImage: img).resizable().scaledToFill()
+                if let p = loaded[path] {
+                    ChatThumbnail(payload: p)
                 } else {
                     ProgressView().controlSize(.small)
                 }
@@ -328,17 +328,9 @@ struct AttachedImages: View {
 /// Decoded thumbnails survive scrolling a lazy list (rows are rebuilt when they come back on screen).
 enum AttachedImageCache {
     private static var payloads: [String: ImagePayload] = [:]
-    private static var images: [String: UIImage] = [:]
 
     static func get(_ path: String) -> ImagePayload? { payloads[path] }
     static func put(_ path: String, _ p: ImagePayload) { payloads[path] = p }
-    static func image(_ p: ImagePayload) -> UIImage? {
-        let key = String(p.data.prefix(64)) + String(p.data.count)
-        if let img = images[key] { return img }
-        guard let data = Data(base64Encoded: p.data), let img = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 360, height: 360)) else { return nil }
-        images[key] = img
-        return img
-    }
 }
 
 struct AssistantText: View {

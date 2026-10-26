@@ -138,9 +138,31 @@ nonisolated struct APIClient: Sendable {
     /// A page of history going back `turns` whole exchanges (user prompt + answer) before beforeSeq.
     func items(_ k: SessionKey, beforeSeq: Int?, turns: Int = 2) async throws -> ItemsResponse {
         let data = try await request("GET", sp(k) + "/items",
-                                     query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80"])
-        // Pages run to megabytes (screenshots inline as base64): decode off the main thread, which called us.
+                                     query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80",
+                                            "lazy_images": "1"])
+        // Images come without their bytes (`image(ref:)` fetches one when it is shown); a page is still worth
+        // decoding off the main thread, which called us.
         return try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(ItemsResponse.self, from: data) }.value
+    }
+
+    /// The bytes of a lazy image (`ImagePayload.ref`, "<machine>/<session>/<item id>").
+    func image(ref: String) async throws -> Data {
+        let parts = ref.split(separator: "/", maxSplits: 2).map(String.init)
+        guard parts.count == 3 else { throw APIError(status: 0, message: "bad image ref") }
+        // Item ids carry '#' and ':'; appending(path:) would leave '#' to start a fragment.
+        let id = parts[2].addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? parts[2]
+        var comps = URLComponents(url: config.url, resolvingAgainstBaseURL: false)!
+        var base = comps.percentEncodedPath
+        if base.hasSuffix("/") { base.removeLast() }
+        comps.percentEncodedPath = base + "/api/v1/sessions/\(parts[0])/\(parts[1])/items/\(id)/image"
+        var req = URLRequest(url: comps.url!, timeoutInterval: 60)
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let (data, resp) = try await session.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
+        }
+        return data
     }
 
     struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }

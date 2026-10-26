@@ -416,6 +416,12 @@ struct Base64Image: View {
     var index = 0
     @State private var image: UIImage?
     @State private var showViewer = false
+    init(payload: ImagePayload, gallery: [ImagePayload] = [], index: Int = 0) {
+        self.payload = payload
+        self.gallery = gallery
+        self.index = index
+        _image = State(initialValue: ChatImageLoader.cached(payload, side: 900)) // back on screen: no placeholder flash
+    }
     @Namespace private var zoom
 
     var body: some View {
@@ -430,6 +436,11 @@ struct Base64Image: View {
                     .matchedTransitionSource(id: "image", in: zoom)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("图片，点按查看大图")
+            } else if let aspect = payload.aspect { // lazy: hold the image's shape while it downloads
+                RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05))
+                    .aspectRatio(aspect, contentMode: .fit)
+                    .frame(maxHeight: 280)
+                    .overlay { ProgressView().controlSize(.small) }
             } else {
                 RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)).frame(height: 120)
             }
@@ -439,13 +450,9 @@ struct Base64Image: View {
                         conversation: chatImages, attach: attachImage)
                 .navigationTransition(.zoom(sourceID: "image", in: zoom))
         }
-        .task(id: payload.data.count) {
-            let data = payload.data
+        .task(id: payload.identity) {
             // Thumbnails only need ~2x their on-screen size.
-            image = await Task.detached {
-                guard let d = Data(base64Encoded: data), let full = UIImage(data: d) else { return nil }
-                return full.preparingThumbnail(of: ZoomMath.fittedSize(image: full.size, in: CGSize(width: 900, height: 900))) ?? full
-            }.value
+            image = await ChatImageLoader.image(payload, side: 900)
         }
     }
 }

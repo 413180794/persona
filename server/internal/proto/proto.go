@@ -2,7 +2,13 @@
 package proto
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	_ "image/gif" // image sizes for lazy placeholders
+	_ "image/jpeg"
+	_ "image/png"
+	"strings"
 	"time"
 )
 
@@ -138,6 +144,37 @@ const (
 type Image struct {
 	Mime string `json:"mime"`
 	Data string `json:"data"`
+	// Lazy: the hub left Data out (clients that asked for lazy_images); fetch it from
+	// GET /api/v1/sessions/{mid}/{sid}/items/{item id}/image when the image is shown. Size is the byte count.
+	// Width / Height (pixels) let the app reserve the image's space before the bytes arrive.
+	Lazy   bool `json:"lazy,omitempty"`
+	Size   int  `json:"size,omitempty"`
+	Width  int  `json:"width,omitempty"`
+	Height int  `json:"height,omitempty"`
+}
+
+// WithoutImageData returns items whose images carry no data, only a placeholder to fetch on demand: chat pages
+// with screenshots inline ran to megabytes.
+func WithoutImageData(items []Item) []Item {
+	var out []Item
+	for i, it := range items {
+		if it.Image == nil || it.Image.Data == "" {
+			continue
+		}
+		if out == nil {
+			out = append([]Item(nil), items...)
+		}
+		lazy := &Image{Mime: it.Image.Mime, Lazy: true, Size: len(it.Image.Data) * 3 / 4}
+		// Only the header is read: the decoder stops once it knows the size.
+		if c, _, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(it.Image.Data))); err == nil {
+			lazy.Width, lazy.Height = c.Width, c.Height
+		}
+		out[i].Image = lazy
+	}
+	if out == nil {
+		return items
+	}
+	return out
 }
 
 // Item is one content block of a Claude Code transcript.

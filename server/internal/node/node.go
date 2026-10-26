@@ -246,6 +246,21 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.screen":
 		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source)
 		return map[string]any{"text": text, "status": status}, err
+	case "session.image":
+		var a struct {
+			ItemID string `json:"item_id"`
+		}
+		_ = json.Unmarshal(params, &a)
+		f, err := n.file(p.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		n.refresh(p.SessionID, f)
+		it, ok := f.Item(a.ItemID)
+		if !ok || it.Image == nil {
+			return nil, fmt.Errorf("no image %s in session %s", a.ItemID, p.SessionID)
+		}
+		return it.Image, nil
 	case "session.items":
 		f, err := n.file(p.SessionID)
 		if err != nil {

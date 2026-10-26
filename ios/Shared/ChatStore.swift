@@ -275,7 +275,8 @@ final class ChatStore {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = false
         var inOrder = true
-        for it in new where !ids.contains(it.id) {
+        for var it in new where !ids.contains(it.id) {
+            if it.image?.lazy == true { it.image?.ref = "\(key.machineID)/\(key.sessionID)/\(it.id)" }
             if let last = items.last, (it.seq, it.id) < (last.seq, last.id) { inOrder = false }
             ids.insert(it.id)
             items.append(it)

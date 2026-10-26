@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -56,11 +57,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-settings", h.proxyBody("claude.settings.set"))
 	api.HandleFunc("GET /api/v1/sessions", h.listSessions)
 	api.HandleFunc("POST /api/v1/sessions", h.startSession)
-	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.proxy("session.items", func(r *http.Request) any {
-		q := r.URL.Query()
-		return map[string]any{"session_id": r.PathValue("sid"), "before_seq": atoi(q.Get("before_seq")), "limit": atoi(q.Get("limit")),
-			"turns": atoi(q.Get("turns"))}
-	}))
+	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.withMachine(h.sessionItems))
+	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image", h.withMachine(h.sessionImage))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.proxyBody("session.send"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
@@ -224,6 +222,49 @@ func (h *Hub) proxy(method string, params func(*http.Request) any) http.HandlerF
 	})
 }
 
+// sessionItems pages through a session's history. With lazy_images=1 images come without their data (the app
+// fetches each one from sessionImage when it scrolls into view); older apps still get them inline.
+func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
+	q := r.URL.Query()
+	params := map[string]any{"session_id": r.PathValue("sid"), "before_seq": atoi(q.Get("before_seq")), "limit": atoi(q.Get("limit")),
+		"turns": atoi(q.Get("turns"))}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	var res struct {
+		Items   []proto.Item `json:"items"`
+		HasMore bool         `json:"has_more"`
+	}
+	if err := m.call(ctx, "session.items", params, &res); err != nil {
+		callErr(w, err)
+		return
+	}
+	if q.Get("lazy_images") == "1" {
+		res.Items = proto.WithoutImageData(res.Items)
+	}
+	writeJSON(w, res)
+}
+
+// sessionImage serves one item's image as raw bytes. An item's image never changes, so the app may cache it forever.
+func (h *Hub) sessionImage(w http.ResponseWriter, r *http.Request, m *Machine) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	var img proto.Image
+	if err := m.call(ctx, "session.image", map[string]any{"session_id": r.PathValue("sid"), "item_id": r.PathValue("iid")}, &img); err != nil {
+		callErr(w, err)
+		return
+	}
+	data, err := base64.StdEncoding.DecodeString(img.Data)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	if img.Mime != "" {
+		w.Header().Set("Content-Type", img.Mime)
+	}
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	_, _ = w.Write(data)
+}
+
 // proxyBody forwards a POST body (plus session_id from the path) to the node.
 func (h *Hub) proxyBody(method string) http.HandlerFunc {
 	return h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
@@ -304,6 +345,7 @@ type client struct {
 	subs  map[[2]string]bool
 	phone bool
 	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
+	lazy  bool // asked for items without image data (subscribe with lazy_images)
 	name  string
 	since time.Time
 }
@@ -353,6 +395,42 @@ func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
 			case c.out <- b:
 			default:
 			}
+		}
+	}
+}
+
+// itemsToSubscribers fans new items out, without image data to clients that load images on demand.
+func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item) {
+	msg := func(items []proto.Item) []byte {
+		b, _ := json.Marshal(map[string]any{"type": "items", "machine_id": machineID, "session_id": sessionID, "items": items})
+		return b
+	}
+	var full, lazy []byte
+	key := [2]string{machineID, sessionID}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		c.mu.Lock()
+		sub, wantsLazy := c.subs[key], c.lazy
+		c.mu.Unlock()
+		if !sub {
+			continue
+		}
+		var b []byte
+		if wantsLazy {
+			if lazy == nil {
+				lazy = msg(proto.WithoutImageData(items))
+			}
+			b = lazy
+		} else {
+			if full == nil {
+				full = msg(items)
+			}
+			b = full
+		}
+		select {
+		case c.out <- b:
+		default:
 		}
 	}
 }
@@ -452,6 +530,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		MachineID  string          `json:"machine_id"`
 		SessionID  string          `json:"session_id"`
 		SinceSeq   int             `json:"since_seq"`
+		LazyImages bool            `json:"lazy_images"`
 		DeviceName string          `json:"device_name"`
 		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
@@ -472,6 +551,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		c.mu.Lock()
 		already := c.subs[key]
 		c.subs[key] = true
+		if msg.LazyImages {
+			c.lazy = true
+		}
 		c.mu.Unlock()
 		if !already {
 			m.addWatcher(ctx, msg.SessionID)
@@ -516,6 +598,12 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 	if err := m.call(ctx, "session.items", params, &res); err != nil {
 		c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
 		return
+	}
+	c.mu.Lock()
+	lazy := c.lazy
+	c.mu.Unlock()
+	if lazy {
+		res.Items = proto.WithoutImageData(res.Items)
 	}
 	out := map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true}
 	if since == 0 {

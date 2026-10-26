@@ -304,7 +304,28 @@ nonisolated struct SessionKey: Hashable, Sendable, Codable {
 
 nonisolated struct ImagePayload: Codable, Hashable, Sendable {
     var mime: String
+    /// Base64; empty when `lazy`: history pages leave the bytes out and each image is fetched when it is shown.
     var data: String
+    var lazy: Bool? = nil
+    var size: Int? = nil
+    var width: Int? = nil
+    var height: Int? = nil
+    /// Where a lazy image lives: "<machine>/<session>/<item id>" (filled in by ChatStore).
+    var ref: String? = nil
+
+    init(mime: String, data: String) {
+        self.mime = mime
+        self.data = data
+    }
+
+    /// Tells images apart without comparing megabytes of base64.
+    var identity: String { ref ?? (String(data.prefix(64)) + String(data.count)) }
+
+    /// Width / height, when the hub told us (lazy images): lets a placeholder take the image's shape.
+    var aspect: CGFloat? {
+        guard let width, let height, width > 0, height > 0 else { return nil }
+        return CGFloat(width) / CGFloat(height)
+    }
 }
 
 nonisolated enum ItemKind: String, Codable, Sendable {

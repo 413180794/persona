@@ -321,7 +321,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			m.lastSeq[p.SessionID] = last
 		}
 		m.mu.Unlock()
-		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": p.SessionID, "items": p.Items})
+		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items)
 	case "session.screen":
 		var p struct {
 			SessionID string `json:"session_id"`

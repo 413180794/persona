@@ -19,7 +19,7 @@ struct ImageViewer: View {
     /// Opens at `tapped` within the whole conversation when it is there, else within `local`.
     init(images local: [ImagePayload], index: Int, conversation: [ImagePayload] = [], attach: ((UIImage) -> Void)? = nil) {
         let tapped = local.indices.contains(index) ? local[index] : nil
-        if let tapped, let at = conversation.firstIndex(where: { $0.data == tapped.data }) {
+        if let tapped, let at = conversation.firstIndex(where: { $0.identity == tapped.identity }) {
             images = conversation
             _index = State(initialValue: at)
         } else {
@@ -123,8 +123,7 @@ struct ImageViewer: View {
 
     private func decode(_ i: Int) async {
         guard decoded[i] == nil, images.indices.contains(i) else { return }
-        let data = images[i].data
-        decoded[i] = await Task.detached { Data(base64Encoded: data).flatMap(UIImage.init(data:)) }.value
+        decoded[i] = await ChatImageLoader.image(images[i], side: nil)
     }
 
     private func save() async {

@@ -21,6 +21,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 图片：任何图片点开全屏查看器（`ImageViewer.swift`），左右滑浏览整个会话的所有图片（`chatImages`），顶部「n / m」和关闭，点图片或下拉退出；
   双指 / 双击缩放。底部：保存（仅添加权限）、编辑、分享、拷贝。编辑（`ImageEditor.swift`）：框选 / 画笔、6 种颜色、撤销 / 清除，完成后「加到输入框」，
   作为下一条消息的附件（`AppModel.composerInbox`），补一句话就能发。输入框里待发的图片点一下也能先编辑再发。
+- 图片按需加载：历史分页和实时推送都不带图片数据（`lazy_images`，一页从几 MB 降到几百 KB），只带尺寸；行滚到屏幕上才按
+  `ImagePayload.ref` 取图（`ChatImageLoader`：同一张只下载一次，内存 NSCache + `Caches/chat-images` 磁盘缓存，图片不会变，永久有效），
+  取到之前按尺寸占好位置，列表不跳。缩略图、全屏查看器都走它；本地发出的图片仍是内嵌 base64。
 - 链接（`Views/Link/LinkSheet.swift`）：会话里的 http(s) 链接在 App 内的底部卡片打开（Telegram 式）：先升到 60%，上拉全屏、下拉收起，
   卡片升到 60% 时后面的对话照常可滚动、可输入（`presentationBackgroundInteraction`）。飞书文档 / 知识库走原生阅读器（`FeishuDocReader`），
   其他网页用 `WebViewPool`：每条回复出现时预加载其中前 3 个链接，最多常驻 6 个 WKWebView（LRU），共用默认的磁盘网站数据（缓存、登录态），
