@@ -10,6 +10,11 @@ final class MessageMenu {
     var anchor: CGPoint = .zero
     /// Text shown in the "select text" sheet.
     var selecting: SelectableText?
+    /// The message being shared as a card.
+    var sharing: ShareMessage?
+    /// Where the chat's messages come from ("app › leader"), printed on share cards (read when sharing: the
+    /// session may not be loaded yet when the chat binds the menu).
+    @ObservationIgnored var source: () -> String = { "" }
     @ObservationIgnored var quote: ((String) -> Void)?
     @ObservationIgnored var edit: ((String) -> Void)?
 
@@ -42,8 +47,8 @@ extension View {
     /// The pressable part of a message (the bubble / the text).
     func messageLongPress(id: String) -> some View { modifier(MessageLongPress(id: id)) }
     /// The whole row of a message: hosts the action bar above the press point and lifts the row above its neighbours.
-    func messageActionBar(id: String, text: String, isUser: Bool) -> some View {
-        modifier(MessageActionBarHost(id: id, text: text, isUser: isUser))
+    func messageActionBar(id: String, text: String, isUser: Bool, date: Date? = nil) -> some View {
+        modifier(MessageActionBarHost(id: id, text: text, isUser: isUser, date: date))
     }
 }
 
@@ -71,6 +76,7 @@ private struct MessageActionBarHost: ViewModifier {
     let id: String
     let text: String
     let isUser: Bool
+    let date: Date?
 
     func body(content: Content) -> some View {
         if let menu {
@@ -85,7 +91,7 @@ private struct MessageActionBarHost: ViewModifier {
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
                             let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)
-                            MessageActionBar(text: text, isUser: isUser, menu: menu)
+                            MessageActionBar(text: text, isUser: isUser, date: date, menu: menu)
                                 .position(x: x, y: y)
                                 .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
@@ -101,6 +107,7 @@ private struct MessageActionBarHost: ViewModifier {
 struct MessageActionBar: View {
     var text: String
     var isUser: Bool
+    var date: Date?
     var menu: MessageMenu
 
     static let height: CGFloat = 62
@@ -115,8 +122,9 @@ struct MessageActionBar: View {
             }
             action("选择", "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
             action("引用", "quote.opening") { menu.quote?(text) }
-            ShareLink(item: text) { label("分享", "square.and.arrow.up") }
-                .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
+            action("分享", "square.and.arrow.up") {
+                menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date)
+            }
             if isUser {
                 action("编辑", "pencil") { menu.edit?(text) }
             }
@@ -138,7 +146,8 @@ struct MessageActionBar: View {
 
     private func label(_ title: String, _ symbol: String) -> some View {
         VStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .medium))
+            // Symbols differ in height: a fixed box keeps every label on one line.
+            Image(systemName: symbol).font(.system(size: 17, weight: .medium)).frame(height: 22)
             Text(title).font(.caption2).lineLimit(1)
         }
         .foregroundStyle(.white)

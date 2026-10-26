@@ -98,7 +98,7 @@ struct UserBubble: View {
             if let openFile { FileChips(paths: FilePaths.find(in: text).filter { !images.contains($0) }, open: openFile) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .messageActionBar(id: item.id, text: shown, isUser: true)
+        .messageActionBar(id: item.id, text: shown, isUser: true, date: item.ts)
     }
 }
 
@@ -156,7 +156,7 @@ struct PeerMessage: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
         .padding(.trailing, 32)
         .messageLongPress(id: item.id)
-        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false)
+        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
     }
 }
 
@@ -231,7 +231,7 @@ struct MergedUserBubble: View {
             .messageLongPress(id: items.first?.id ?? "")
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .messageActionBar(id: items.first?.id ?? "", text: texts.joined(separator: "\n\n"), isUser: true)
+        .messageActionBar(id: items.first?.id ?? "", text: texts.joined(separator: "\n\n"), isUser: true, date: items.first?.ts)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(texts.count) 条消息：" + texts.joined(separator: "；"))
     }
@@ -348,7 +348,7 @@ struct AssistantText: View {
                 .messageLongPress(id: item.id)
             if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
         }
-        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false)
+        .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
     }
 }
 

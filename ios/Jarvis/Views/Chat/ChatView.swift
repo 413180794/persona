@@ -51,6 +51,12 @@ struct ChatView: View {
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
     @State private var closing: Session?
+    @Environment(\.dismiss) private var dismissChat
+    /// Safari-style: reading on hides the navigation bar, agent strip and tabs behind one slim bar; scrolling back,
+    /// tapping the bar or reaching the newest message brings them back.
+    @State private var chromeHidden = false
+    @State private var userDragging = false
+    @State private var scrollTravel: CGFloat = 0
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
 
@@ -78,8 +84,9 @@ struct ChatView: View {
         .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(chromeHidden ? .hidden : .visible, for: .navigationBar)
         .overlay(alignment: .top) {
-            if showInfo {
+            if showInfo && !chromeHidden {
                 DevInfoCard(key: key, session: session)
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
@@ -149,7 +156,9 @@ struct ChatView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if style == .dev {
+            if style == .dev && chromeHidden {
+                compactChrome
+            } else if style == .dev {
                 VStack(spacing: 0) {
                     SiblingStrip(current: key) { next in switchTo(next) }
                     SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
@@ -165,6 +174,7 @@ struct ChatView: View {
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         .onChange(of: pane) { _, p in
+            showChrome()
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
             if p == .chat {
                 position = ScrollPosition(edge: .top)
@@ -606,7 +616,10 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
+        .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { old, new in scrolled(by: new - old, at: new) }
         .onScrollPhaseChange { _, phase in
+            // The user's own scrolling, flick included (programmatic jumps and streaming are .animating).
+            userDragging = phase == .tracking || phase == .interacting || phase == .decelerating
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
                 userScrolled = true
@@ -617,6 +630,7 @@ struct ChatView: View {
         }
         .environment(menu)
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
+        .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: followsEnd) { _, follows in
             frozenAt = follows ? nil : chatLines(Self.debugTrim(store.blocks)).last?.id
@@ -629,6 +643,61 @@ struct ChatView: View {
         // Your own message always brings you to the newest.
         .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; scrollToEnd() } }
         .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; scrollToEnd(animated: true) } }
+    }
+
+    /// The flipped list's offset grows toward older messages. Reading on (toward the newest) hides the chrome,
+    /// going back shows it, and so does arriving at the newest end.
+    private func scrolled(by delta: CGFloat, at offset: CGFloat) {
+        guard style == .dev, pane == .chat, userDragging, delta != 0 else { return }
+        if offset < 40 { showChrome(); return }
+        if (delta < 0) != (scrollTravel < 0) { scrollTravel = 0 }
+        scrollTravel += delta
+        if scrollTravel < -60, !chromeHidden {
+            withAnimation(.snappy(duration: 0.25)) { chromeHidden = true; showInfo = false }
+        } else if scrollTravel > 60, chromeHidden {
+            showChrome()
+        }
+    }
+
+    private func showChrome() {
+        scrollTravel = 0
+        if chromeHidden { withAnimation(.snappy(duration: 0.25)) { chromeHidden = false } }
+    }
+
+    /// The chrome folded away: back, and where you are ("app › leader · 对话") — tap it for everything again.
+    private var compactChrome: some View {
+        HStack(spacing: 0) {
+            Button { dismissChat() } label: {
+                Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("返回")
+            Spacer(minLength: 0)
+            Button { Haptics.tap(); showChrome() } label: {
+                HStack(spacing: 6) {
+                    if let s = session { StatusDot(state: s.state, size: 7) }
+                    Text(compactPlace).lineLimit(1).truncationMode(.middle)
+                }
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(Color.primary.opacity(0.06), in: .capsule)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(compactPlace)，显示标题和标签")
+            Spacer(minLength: 0)
+            Color.clear.frame(width: 44, height: 34) // balances the back button: the place stays centered
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+        .background(.bar)
+        .transition(.opacity)
+    }
+
+    private var compactPlace: String {
+        let place = [session?.spaceName, session?.slotLabel].compactMap { $0 }.joined(separator: " › ")
+        return (place.isEmpty ? title : place) + " · " + pane.title
     }
 
     private func appeared() {
@@ -651,6 +720,16 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "openSpaceFromChat"), let space = session?.spaceKey { // chat → its space page
                 UserDefaults.standard.set(false, forKey: "openSpaceFromChat")
                 Task { try? await Task.sleep(for: .seconds(4)); openSpace?(space) }
+            }
+            if UserDefaults.standard.bool(forKey: "showCompactChrome") { chromeHidden = true } // folded, for screenshots
+            if UserDefaults.standard.bool(forKey: "showShareCard") { // the share card of the latest answer
+                Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    let answer = model.chat(key).blocks.reversed().lazy.compactMap { b -> Item? in
+                        if case .turn(let t) = b, case .assistant(let i)? = t.answer { i } else { nil }
+                    }.first
+                    if let a = answer { menu.sharing = ShareMessage(text: a.text ?? "", isUser: false, source: menu.source(), date: a.ts) }
+                }
             }
             if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
@@ -753,6 +832,10 @@ struct ChatView: View {
             model.drafts[key] = quoted + "\n\n" + draft
         }
         menu.edit = { [model, key] text in model.drafts[key] = text }
+        menu.source = { [model, key] in
+            let s = model.session(key)
+            return [s?.spaceName, s?.slotLabel].compactMap { $0 }.joined(separator: " › ")
+        }
     }
 
     private func switchTo(_ next: SessionKey) {
