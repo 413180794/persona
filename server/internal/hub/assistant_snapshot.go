@@ -137,7 +137,7 @@ func (h *Hub) snapshotChats(ctx context.Context) string {
 	var at, other []string
 	total := 0
 	for _, c := range convs {
-		if c.Unread == 0 && !c.MarkedUnread {
+		if c.Unread == 0 && !c.MarkedUnread && !c.AtMe { // an @me can outlive the unread count (read elsewhere, not answered)
 			continue
 		}
 		if c.Muted && !c.AtMe {
