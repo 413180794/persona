@@ -12,7 +12,8 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
   （`feat(ios): ...`、`feat(server): ...`、`fix(watch): ...`、`docs: ...`、`chore(release): ...`、`test(...)`），
   作者 `chyroc <chyroc@qq.com>`（仓库已 `git config`）。只 `git add` 自己改过的文件；push 被拒先 `git pull --rebase` 再推。
 - **每完成一个任务就自动发布 TestFlight**（2026-10-26 用户要求），不用等用户说：推送后在干净的
-  `git worktree add --detach /tmp/jarvis-rel origin/master` 里跑 `./scripts/release.sh`（后台跑），完成后把构建号告诉用户。
+  worktree 里跑 `./scripts/release.sh`（后台跑），完成后把构建号告诉用户：`rm -rf /tmp/jarvis-rel; git worktree prune;
+  git worktree add --detach /tmp/jarvis-rel origin/master`（顺序不能反：先 prune 再删目录会留下登记，下次 add 报 exit 128）。
   改了服务端的先 `./scripts/deploy.sh`。一次回复里做了几件事就最后统一发一版。
 - **随时沉淀经验**：踩坑、怪异行为、设计取舍当场写进本文件或 `docs/<主题>.md`。这条规则本身也要保留。
 - 代码注释、提交信息用英文；文档用中文；App 界面文案用中文。
