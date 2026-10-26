@@ -506,35 +506,67 @@ struct WakeDrawer<Content: View>: View {
     }
 }
 
-/// Claude Code's "while you were away" recap: a quiet card, not a centered notice pill.
+/// Claude Code's "while you were away" recap: like a background task's report, one short line ("离开期间回顾 · 10:02 ›");
+/// the recap itself opens in a drawer.
 struct RecapCard: View {
+    var item: Item
+    @State private var open = false
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            open = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
+                Text("离开期间回顾").lineLimit(1)
+                if let ts = item.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.primary.opacity(0.05), in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu { CopyButton(text: item.text ?? "") }
+        .accessibilityLabel("离开期间回顾，点击查看")
+        .sheet(isPresented: $open) { RecapDrawer(item: item) }
+        #if DEBUG
+        .task { if UserDefaults.standard.bool(forKey: "showRecapDrawer") { try? await Task.sleep(for: .seconds(3)); open = true } }
+        #endif
+    }
+}
+
+/// The recap in full, in the same kind of drawer as a background task's report.
+struct RecapDrawer: View {
+    @Environment(\.dismiss) private var dismiss
     var item: Item
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.uturn.backward.circle.fill")
-                Text("离开期间回顾")
-                Spacer()
-                if let ts = item.ts, ts.isMeaningful { Text(Fmt.relative(ts)).foregroundStyle(.secondary) }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let ts = item.ts, ts.isMeaningful {
+                        Text("写于 " + Fmt.relative(ts)).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Markdown(item.text ?? "")
+                        .markdownTheme(.jarvis)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(16)
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Theme.accent)
-            Text(LocalizedStringKey(item.text ?? ""))
-                .font(.callout)
-                .lineSpacing(3)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.pageBackground)
+            .navigationTitle("离开期间回顾")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
-        .padding(14)
-        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 16, style: .continuous))
-        .overlay(alignment: .leading) {
-            UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 16, style: .continuous)
-                .fill(Theme.accent.opacity(0.6))
-                .frame(width: 3)
-        }
-        .contextMenu { CopyButton(text: item.text ?? "") }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 

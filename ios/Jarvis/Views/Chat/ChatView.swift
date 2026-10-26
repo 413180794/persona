@@ -658,9 +658,11 @@ struct ChatView: View {
             if old.height != new.height { scrollTravel = 0; return }
             scrolled(by: new.offset - old.offset, at: new.offset)
         }
-        .onScrollPhaseChange { _, phase in
-            // The user's own scrolling, flick included (programmatic jumps and streaming are .animating).
-            userDragging = phase == .tracking || phase == .interacting || phase == .decelerating
+        .onScrollPhaseChange { old, phase in
+            // The user's own scrolling: a drag, and the glide after a flick. Deceleration alone is not proof — landing
+            // on the entry line produced it with no finger down and folded the chrome on open.
+            let flick = phase == .decelerating && (old == .tracking || old == .interacting || userDragging)
+            userDragging = phase == .tracking || phase == .interacting || flick
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
                 userScrolled = true
@@ -879,7 +881,10 @@ struct ChatView: View {
             return false
         }) {
             var end = i + 1 // plus work background tasks woke the agent for right after it
-            while end < blocks.count, case .turn(let t) = blocks[end], t.users.isEmpty { end += 1 }
+            while end < blocks.count {
+                if case .turn(let t) = blocks[end], !t.users.isEmpty { break } // up to the next message: recaps too
+                end += 1
+            }
             var out = Array(blocks[i..<end]) // near the newest end: no long scroll to reach it
             // `-dropUsers YES`: hide that turn's messages so its process row and answer fit one screenshot.
             if UserDefaults.standard.bool(forKey: "dropUsers"), case .turn(var t) = out[0] { t.users = []; out[0] = .turn(t) }
