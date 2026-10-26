@@ -51,6 +51,7 @@ struct ChatView: View {
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
     @State private var closing: Session?
+    @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
@@ -133,6 +134,9 @@ struct ChatView: View {
                             Label("拷贝恢复命令", systemImage: "doc.on.doc")
                         }
                         Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
+                        if let space = s.spaceKey, let openSpace {
+                            Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: "square.stack.3d.up") }
+                        }
                         if s.status.isLive {
                             Button(role: .destructive) { closing = s } label: {
                                 Label("关闭 Agent…", systemImage: "xmark.circle")
@@ -644,6 +648,10 @@ struct ChatView: View {
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "openSpaceFromChat"), let space = session?.spaceKey { // chat → its space page
+                UserDefaults.standard.set(false, forKey: "openSpaceFromChat")
+                Task { try? await Task.sleep(for: .seconds(4)); openSpace?(space) }
+            }
             if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
             }

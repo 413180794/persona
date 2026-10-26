@@ -65,6 +65,9 @@ enum DevGrouping: String, CaseIterable, Identifiable {
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
     @State private var path = NavigationPath()
+    /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
+    /// page goes back to it instead of stacking another copy.
+    @State private var spaceAt: [Int: String] = [:]
     @State private var query = ""
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
@@ -163,7 +166,7 @@ struct ChatsView: View {
                     } header: {
                         // A visible ⋯ for pin / mute: long press on a list section header does not reach a context menu.
                         HStack(spacing: 4) {
-                            Button { path.append(SpaceRoute(id: g.id)) } label: {
+                            Button { pushSpace(g.id) } label: {
                                 SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
                                             pinned: model.isPinned(g), muted: model.isMuted(g))
                             }
@@ -232,6 +235,7 @@ struct ChatsView: View {
                 }
             }
             .onChange(of: path) { _, p in
+                spaceAt = spaceAt.filter { $0.key < p.count }
                 if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
             }
             .onChange(of: model.openChat, initial: true) { _, key in
@@ -244,6 +248,14 @@ struct ChatsView: View {
                 if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
         }
+        .environment(\.openSpace) { space in
+            if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
+        }
+    }
+
+    private func pushSpace(_ id: String) {
+        path.append(SpaceRoute(id: id))
+        spaceAt[path.count - 1] = id
     }
 
     // MARK: By state / by machine

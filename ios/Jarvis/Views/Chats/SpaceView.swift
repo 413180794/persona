@@ -1,8 +1,14 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    /// Opens a space's page (its agents) from a chat; set on the dev tab's NavigationStack.
+    @Entry var openSpace: ((String) -> Void)? = nil
+}
+
 /// Agents in the same space shown together: switch between them without leaving the chat.
 struct SiblingStrip: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSpace) private var openSpace
     var current: SessionKey
     var select: (SessionKey) -> Void
 
@@ -11,11 +17,22 @@ struct SiblingStrip: View {
         if siblings.count > 1 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    if let name = model.session(current)?.spaceName {
-                        Label(name, systemImage: "square.stack.3d.up")
+                    if let s = model.session(current), let name = s.spaceName {
+                        // The space's name opens its page: every agent in it at a glance.
+                        Button { if let k = s.spaceKey { openSpace?(k) } } label: {
+                            HStack(spacing: 3) {
+                                Label(name, systemImage: "square.stack.3d.up")
+                                if openSpace != nil { Image(systemName: "chevron.right").font(.caption2.weight(.bold)) }
+                            }
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                             .padding(.trailing, 2)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(openSpace == nil || s.spaceKey == nil)
+                        .accessibilityLabel("空间 \(name) 的所有 Agent")
                     }
                     ForEach(siblings) { s in
                         let on = s.key == current
