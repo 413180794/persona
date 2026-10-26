@@ -134,3 +134,5 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
   （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
 - App 进后台不断开 WebSocket 的话，挂起的 socket 在 hub 看来还活着，`phone_*` 调用会干等到超时；现在进后台就断开，需要时用静默推送唤醒。
+- 新会话（无头助手或刚启动的 herdr Agent）在 claude 写下第一行之前没有 transcript：手机一订阅 hub 就要 backlog，`session.items`
+  对这种「正在启动」的会话（`startingSession`）要返回空列表而不是 not found，watch 等文件出现后先补发已写的行，否则对话页会闪一下报错。
