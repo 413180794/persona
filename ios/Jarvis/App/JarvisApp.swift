@@ -24,6 +24,10 @@ struct JarvisApp: App {
             if new == .active {
                 model.live.ensureConnected()
                 Task { await model.refresh() }
+            } else if new == .background {
+                // A suspended app's socket looks alive to the hub until it times out, and phone_* calls sent to it hang.
+                // Closed, the hub knows the phone is away and wakes it with a silent push instead.
+                model.live.disconnect()
             }
         }
     }
@@ -76,6 +80,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
+
+    /// Silent push from the hub (`jarvis_wake`): the assistant needs a phone_* tool while the app is in the background.
+    /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard userInfo["jarvis_wake"] != nil, AppModel.shared.isPaired else {
+            completionHandler(.noData)
+            return
+        }
+        AppModel.shared.live.ensureConnected()
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25) {
+            if UIApplication.shared.applicationState == .background { AppModel.shared.live.disconnect() }
+            done(.newData)
+        }
+    }
 
     // Completion-handler versions on purpose: the async variants of these delegate methods return on a background
     // executor, so UIKit gets its completion off the main thread and crashes when a tap opens the app. Hop to the main

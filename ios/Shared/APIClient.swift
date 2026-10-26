@@ -203,18 +203,113 @@ nonisolated struct APIClient: Sendable {
         var launcher: String
         var cwd: String
         var conversations: [Session]
-        enum CodingKeys: String, CodingKey { case launcher, cwd, conversations; case machineID = "machine_id" }
+        /// What the assistant is told about the user (设置 › 助手 › 关于我).
+        var notes: String?
+        var timezone: String?
+        enum CodingKeys: String, CodingKey {
+            case launcher, cwd, conversations, timezone; case machineID = "machine_id", notes = "notes_effective"
+        }
     }
     func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
     struct AssistantConfigBody: Encodable {
         var machineID: String?
         var launcher: String?
-        enum CodingKeys: String, CodingKey { case launcher; case machineID = "machine_id" }
+        var timezone: String?
+        var notes: String?
+        enum CodingKeys: String, CodingKey { case launcher, timezone, notes; case machineID = "machine_id" }
     }
-    func setAssistant(machine: String? = nil, launcher: String? = nil) async throws -> AssistantState {
+    func setAssistant(machine: String? = nil, launcher: String? = nil, timezone: String? = nil, notes: String? = nil) async throws -> AssistantState {
         try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
-            body: AssistantConfigBody(machineID: machine, launcher: launcher)))
+            body: AssistantConfigBody(machineID: machine, launcher: launcher, timezone: timezone, notes: notes)))
     }
+    /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once.
+    func warmAssistant(launcher: String?) async throws {
+        _ = try await request("POST", "/api/v1/assistant/warm", body: ["launcher": launcher ?? ""])
+    }
+
+    // MARK: Assistant routines, follow-ups, memory (docs/assistant.md)
+
+    /// A daily prompt the assistant runs on its own (早报…); each run is a new conversation, pushed when done.
+    struct Routine: Codable, Identifiable, Hashable, Sendable {
+        var id: String
+        var title: String
+        var prompt: String
+        var time: String          // "HH:MM" in the phone's time zone
+        var weekdays: [Int]       // 1 = Monday … 7 = Sunday; empty = every day
+        var enabled: Bool
+        var lastRun: Date?        // read-only, set by the hub
+        var lastSessionID: String?
+        var nextRun: Date?
+        enum CodingKeys: String, CodingKey {
+            case id, title, prompt, time, weekdays, enabled
+            case lastRun = "last_run", lastSessionID = "last_session_id", nextRun = "next_run"
+        }
+        init(id: String = "", title: String, prompt: String, time: String, weekdays: [Int], enabled: Bool) {
+            self.id = id; self.title = title; self.prompt = prompt; self.time = time; self.weekdays = weekdays; self.enabled = enabled
+        }
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decode(String.self, forKey: .title)
+            prompt = try c.decode(String.self, forKey: .prompt)
+            time = try c.decode(String.self, forKey: .time)
+            weekdays = try c.decodeIfPresent([Int].self, forKey: .weekdays) ?? []
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+            lastRun = (try? c.decodeIfPresent(Date.self, forKey: .lastRun)).flatMap { $0.realDate }
+            lastSessionID = try c.decodeIfPresent(String.self, forKey: .lastSessionID)
+            nextRun = (try? c.decodeIfPresent(Date.self, forKey: .nextRun)).flatMap { $0.realDate }
+        }
+        func encode(to e: Encoder) throws { // only what the user edits
+            var c = e.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id); try c.encode(title, forKey: .title); try c.encode(prompt, forKey: .prompt)
+            try c.encode(time, forKey: .time); try c.encode(weekdays, forKey: .weekdays); try c.encode(enabled, forKey: .enabled)
+        }
+    }
+    struct RoutinesBody: Codable { var routines: [Routine] }
+    func routines() async throws -> [Routine] { try await get("/api/v1/assistant/routines", as: RoutinesBody.self).routines }
+    func setRoutines(_ list: [Routine]) async throws -> [Routine] {
+        try JSON.decoder.decode(RoutinesBody.self, from: try await request("PUT", "/api/v1/assistant/routines", body: RoutinesBody(routines: list))).routines
+    }
+    struct RoutineRun: Decodable {
+        var sessionID: String
+        var machineID: String
+        enum CodingKeys: String, CodingKey { case sessionID = "session_id", machineID = "machine_id" }
+    }
+    /// Runs a routine now; returns the new conversation.
+    func runRoutine(_ id: String) async throws -> SessionKey {
+        let r = try await post("/api/v1/assistant/routines/\(id)/run", body: [String: String](), timeout: 130, as: RoutineRun.self)
+        return SessionKey(machineID: r.machineID, sessionID: r.sessionID)
+    }
+
+    /// A wake-up the assistant scheduled for itself (schedule_followup).
+    struct Followup: Decodable, Identifiable, Hashable, Sendable {
+        var id: String
+        var at: Date
+        var title: String?
+        var prompt: String
+        var machineID: String
+        var sessionID: String?   // the conversation it continues; nil = starts a new one
+        enum CodingKeys: String, CodingKey { case id, at, title, prompt; case machineID = "machine_id", sessionID = "session_id" }
+    }
+    struct FollowupsBody: Decodable { var followups: [Followup] }
+    func followups() async throws -> [Followup] { try await get("/api/v1/assistant/followups", as: FollowupsBody.self).followups }
+    func cancelFollowup(_ id: String) async throws { try await delete("/api/v1/assistant/followups/\(id)") }
+
+    /// One file of the assistant's memory (Claude Code auto-memory): frontmatter (name / description / type) + body.
+    /// MEMORY.md is the index the assistant keeps itself.
+    struct MemoryFile: Decodable, Identifiable, Hashable, Sendable {
+        var name: String
+        var content: String
+        var updatedAt: Date?
+        var id: String { name }
+        enum CodingKeys: String, CodingKey { case name, content; case updatedAt = "updated_at" }
+    }
+    struct MemoryBody: Decodable { var files: [MemoryFile] }
+    func assistantMemory() async throws -> [MemoryFile] { try await get("/api/v1/assistant/memory", as: MemoryBody.self).files }
+    func saveMemory(name: String, content: String) async throws {
+        _ = try await request("PUT", "/api/v1/assistant/memory/\(name)", body: ["content": content])
+    }
+    func deleteMemory(name: String) async throws { try await delete("/api/v1/assistant/memory/\(name)") }
     struct NewConversation: Encodable { var prompt: String; var images: [ImagePayload]?; var launcher: String? }
     func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil) async throws -> Session {
         try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images, launcher: launcher),
@@ -347,3 +442,8 @@ extension APIClient {
     }
 }
 
+
+extension Date {
+    /// nil for Go's zero time and other placeholder dates the hub sends for "never".
+    nonisolated var realDate: Date? { timeIntervalSince1970 > 946_684_800 ? self : nil }
+}

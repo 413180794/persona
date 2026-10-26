@@ -137,7 +137,19 @@ final class AppModel {
             if assistantCurrent == nil, neverChosen, let newest = st.conversations.max(by: { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }) {
                 assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
             }
+            // Routines and the assistant's sense of "now" follow the phone's time zone.
+            let tz = TimeZone.current.identifier
+            if st.timezone != tz, let updated = try? await api.setAssistant(timezone: tz) { assistantConfig = updated }
         }
+    }
+
+    @ObservationIgnored private var warmed: (launcher: String?, at: Date)?
+    /// The new-conversation page is showing: have the hub start claude now, so the first message answers sooner.
+    func warmAssistant(launcher: String?) async {
+        guard let api else { return }
+        if let w = warmed, w.launcher == launcher, Date().timeIntervalSince(w.at) < 180 { return }
+        warmed = (launcher, Date())
+        try? await api.warmAssistant(launcher: launcher)
     }
 
     func setAssistantLauncher(_ launcher: String) async {

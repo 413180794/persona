@@ -87,9 +87,9 @@ struct AssistantHome: View {
     private let suggestions: [(symbol: String, title: String, prompt: String)] = [
         ("calendar", "今天的安排", "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。"),
         ("envelope.badge", "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
-        ("macbook.and.iphone", "电脑在忙什么", "我的各台电脑上，herdr 里的 Claude 现在都在忙什么？有没有在等我处理的？"),
+        ("macbook.and.iphone", "电脑在忙什么", "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？"),
         ("bubble.left.and.text.bubble.right", "飞书消息", "总结一下我今天飞书上收到的重要消息，哪些需要我回复。"),
-        ("chevron.left.forwardslash.chevron.right", "没提交的代码", "检查一下公司 Mac 上 ~/code 里有哪些仓库有没提交或没推送的改动。"),
+        ("person.2.wave.2", "会前准备", "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。"),
         ("heart.text.square", "这周的健康", "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。"),
     ]
 
@@ -154,13 +154,14 @@ struct AssistantHome: View {
         }
         .navigationTitle("Jarvis")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
             AppGlyph(size: 56).padding(.top, 28)
             Text(greeting).font(.system(size: 32, weight: .bold, design: .rounded))
-            Text("我能看你的电脑、iPhone、邮箱和飞书。问我任何事。")
+            Text("我能看你的电脑、iPhone、邮箱和飞书，也能替你盯着事、到点提醒。问我任何事。")
                 .font(.body)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
