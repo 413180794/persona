@@ -39,6 +39,7 @@ type Node struct {
 	panes    map[string]string         // pane id -> session id (learned from hooks)
 	layout   layout                    // workspace / tab names from the last herdr snapshot
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
+	spare    *assistantProc            // warm process waiting for the next new conversation
 	lastList string                    // serialized last sessions.changed payload
 	metas    map[string]quickMeta      // transcript path -> cached meta
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
@@ -210,6 +211,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "assistant.send":
 		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images)
 		return map[string]any{"session_id": id}, err
+	case "assistant.warm":
+		return ok(n.assistantWarm(p.Cwd, p.Launcher))
+	case "assistant.memory":
+		var a memoryOp
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		return n.assistantMemory(a)
 	case "session.send":
 		if n.isAssistantSession(p.SessionID) {
 			_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images)

@@ -123,6 +123,26 @@ func (p *Pusher) token() (string, error) {
 }
 
 func (p *Pusher) send(payload map[string]any, collapseID string) {
+	p.sendAs(payload, collapseID, "alert", "10")
+}
+
+// ready reports whether pushes can go anywhere (APNs key loaded and a device registered).
+func (p *Pusher) ready() bool {
+	if p == nil || p.key == nil {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.devices) > 0
+}
+
+// wake sends a silent background push: iOS gives the app ~30 s to connect and run a pending phone_* call.
+// Best effort: the system throttles these and never delivers them to a force-quit app.
+func (p *Pusher) wake(reason string) {
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5")
+}
+
+func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string) {
 	if p == nil || p.key == nil {
 		return
 	}
@@ -155,8 +175,8 @@ func (p *Pusher) send(payload map[string]any, collapseID string) {
 		req, _ := http.NewRequest("POST", host+"/3/device/"+d.APNSToken, bytes.NewReader(body))
 		req.Header.Set("authorization", "bearer "+jwt)
 		req.Header.Set("apns-topic", topic)
-		req.Header.Set("apns-push-type", "alert")
-		req.Header.Set("apns-priority", "10")
+		req.Header.Set("apns-push-type", pushType)
+		req.Header.Set("apns-priority", priority)
 		if collapseID != "" {
 			req.Header.Set("apns-collapse-id", collapseID)
 		}

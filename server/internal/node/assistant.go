@@ -23,6 +23,10 @@ import (
 
 const assistantIdleTimeout = 20 * time.Minute
 
+// A spare process started when the app opens the 对话 tab, so the first message skips claude's startup.
+// Its context snapshot is taken at spawn time, so it is only adopted while fresh.
+const assistantSpareMaxAge = 10 * time.Minute
+
 type assistantProc struct {
 	id       string
 	launcher string
@@ -30,6 +34,7 @@ type assistantProc struct {
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
 	exited   chan struct{}
+	born     time.Time
 
 	mu         sync.Mutex
 	busy       bool
@@ -75,14 +80,18 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	if id == "" {
-		id = newUUID()
+		if p := n.adoptSpare(cwd, launcher); p != nil {
+			id, launcher, cwd = p.id, p.launcher, p.cwd
+		} else {
+			id = newUUID()
+		}
 	}
 	st, known := n.state.get(id)
 	if launcher == "" {
 		launcher = st.Launcher
 	}
 	if launcher == "" {
-		launcher = "ccc"
+		launcher = "claude"
 	}
 	if cwd == "" {
 		cwd = st.Cwd
@@ -107,7 +116,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	if p == nil {
 		var err error
-		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != ""); err != nil {
+		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false); err != nil {
 			return "", err
 		}
 	}
@@ -133,13 +142,83 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	return id, nil
 }
 
-func (n *Node) spawnAssistant(id, cwd, launcher string, resume bool) (*assistantProc, error) {
+// adoptSpare hands the warm spare process to a new conversation when it fits (same directory and launcher, fresh).
+func (n *Node) adoptSpare(cwd, launcher string) *assistantProc {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	p := n.spare
+	if p == nil || !p.alive() || time.Since(p.born) > assistantSpareMaxAge ||
+		(launcher != "" && p.launcher != launcher) || (cwd != "" && p.cwd != cwd) {
+		return nil
+	}
+	n.spare = nil
+	n.procs[p.id] = p
+	return p
+}
+
+// assistantWarm makes sure a fresh spare process is waiting for the next new conversation.
+func (n *Node) assistantWarm(cwd, launcher string) error {
+	if launcher == "" || !nameRe.MatchString(launcher) {
+		return fmt.Errorf("invalid launcher %q", launcher)
+	}
+	n.mu.Lock()
+	old := n.spare
+	if old != nil && old.alive() && old.launcher == launcher && old.cwd == cwd && time.Since(old.born) < assistantSpareMaxAge/2 {
+		n.mu.Unlock()
+		return nil
+	}
+	n.spare = nil
+	n.mu.Unlock()
+	if old != nil {
+		old.stop()
+	}
+	p, err := n.spawnAssistant(newUUID(), cwd, launcher, false, true)
+	if err != nil {
+		return err
+	}
+	n.mu.Lock()
+	if n.spare != nil { // a concurrent warm won
+		n.mu.Unlock()
+		p.stop()
+		return nil
+	}
+	n.spare = p
+	n.mu.Unlock()
+	return nil
+}
+
+// assistantContext asks the hub for the live snapshot (time, agents waiting, unread chats, today's meetings…)
+// that goes into the system prompt of a starting process.
+func (n *Node) assistantContext() string {
+	if n.peer == nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	var res struct {
+		Text string `json:"text"`
+	}
+	if err := n.peer.Call(ctx, "assistant.context", map[string]any{}, &res); err != nil {
+		n.logger.Printf("assistant context: %v", err)
+		return ""
+	}
+	return res.Text
+}
+
+func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
+	// Per-process MCP config: the assistant-only tools (ask_user, agents_*, lark_*…) and the conversation they act for.
+	mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{
+		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"JARVIS_ASSISTANT": "1", "JARVIS_SESSION_ID": id},
+	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
-		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", filepath.Join(n.dir, "mcp.json")}
+		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", string(mcp)}
+	if snap := n.assistantContext(); snap != "" {
+		args = append(args, "--append-system-prompt", snap)
+	}
 	if resume {
 		args = append(args, "--resume", id)
 	} else {
@@ -152,7 +231,8 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume bool) (*assistant
 	// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
 	cmd := exec.Command(shell, append([]string{"-ic", launcher + ` "$@"`, "jarvis"}, args...)...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1")
+	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
+	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -169,10 +249,13 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume bool) (*assistant
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
-	p := &assistantProc{id: id, launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), lastActive: time.Now()}
-	n.mu.Lock()
-	n.procs[id] = p
-	n.mu.Unlock()
+	p := &assistantProc{id: id, launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
+		born: time.Now(), lastActive: time.Now()}
+	if !spare {
+		n.mu.Lock()
+		n.procs[id] = p
+		n.mu.Unlock()
+	}
 	go func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
@@ -186,10 +269,17 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume bool) (*assistant
 		_ = cmd.Wait()
 		close(p.exited)
 		n.mu.Lock()
+		wasSpare := n.spare == p
+		if wasSpare {
+			n.spare = nil
+		}
 		if n.procs[id] == p {
 			delete(n.procs, id)
 		}
 		n.mu.Unlock()
+		if wasSpare {
+			return
+		}
 		n.emitDelta(id, "")
 		n.notifySessions()
 	}()
@@ -281,9 +371,12 @@ func (n *Node) stopAssistant(id string) {
 	p := n.procs[id]
 	delete(n.procs, id)
 	n.mu.Unlock()
-	if p == nil {
-		return
+	if p != nil {
+		p.stop()
 	}
+}
+
+func (p *assistantProc) stop() {
 	_ = p.stdin.Close()
 	if p.cmd.Process != nil {
 		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
@@ -309,7 +402,12 @@ func (n *Node) reapAssistants(ctx context.Context) {
 			for id := range n.procs {
 				ids = append(ids, id)
 			}
+			spare := n.spare
+			n.spare = nil
 			n.mu.Unlock()
+			if spare != nil {
+				spare.stop()
+			}
 			for _, id := range ids {
 				n.stopAssistant(id)
 			}
@@ -317,6 +415,10 @@ func (n *Node) reapAssistants(ctx context.Context) {
 		case <-t.C:
 		}
 		n.mu.Lock()
+		var stale *assistantProc
+		if n.spare != nil && time.Since(n.spare.born) > assistantSpareMaxAge {
+			stale, n.spare = n.spare, nil
+		}
 		var idle []string
 		for id, p := range n.procs {
 			p.mu.Lock()
@@ -328,6 +430,9 @@ func (n *Node) reapAssistants(ctx context.Context) {
 		n.mu.Unlock()
 		for _, id := range idle {
 			n.stopAssistant(id)
+		}
+		if stale != nil {
+			stale.stop()
 		}
 	}
 }

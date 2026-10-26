@@ -522,9 +522,7 @@ func rawGetDenied(path string) bool {
 	return strings.HasSuffix(path, "/qr-code") || strings.HasPrefix(path, "/links/open") || strings.HasPrefix(path, "/maintenance/")
 }
 
-// Raw forwards one read-only request to lark-connector's agent API (path below /agent/v1) and writes the answer:
-// JSON with its media / API paths pointing at the hub, anything else streamed as is.
-func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path string, query url.Values, body io.Reader, inbound http.Header) error {
+func readOnly(method, path string) error {
 	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
 		return errors.New("lark: bad path")
 	}
@@ -539,6 +537,24 @@ func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path st
 		}
 	default:
 		return errors.New("lark: only reads are allowed")
+	}
+	return nil
+}
+
+// Read makes one read-only call to lark-connector's agent API (the routes Raw allows) and returns the JSON answer
+// (the assistant's lark_api tool).
+func (c *Client) Read(ctx context.Context, method, path string, query url.Values, body any) (json.RawMessage, error) {
+	if err := readOnly(method, path); err != nil {
+		return nil, err
+	}
+	return c.raw(ctx, method, path, query, body)
+}
+
+// Raw forwards one read-only request to lark-connector's agent API (path below /agent/v1) and writes the answer:
+// JSON with its media / API paths pointing at the hub, anything else streamed as is.
+func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path string, query url.Values, body io.Reader, inbound http.Header) error {
+	if err := readOnly(method, path); err != nil {
+		return err
 	}
 	tok, err := c.agentToken(ctx)
 	if err != nil {

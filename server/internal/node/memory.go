@@ -1,0 +1,108 @@
+package node
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+)
+
+// The assistant's memory is Claude Code's auto-memory for its directory: one Markdown file per fact under
+// ~/.claude/projects/<encoded cwd>/memory, indexed by MEMORY.md. The app lists, edits and deletes the files.
+
+type memoryOp struct {
+	Op      string `json:"op"` // list | write | delete
+	Cwd     string `json:"cwd"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+type MemoryFile struct {
+	Name      string    `json:"name"` // file name, e.g. "lark-connector-access.md"
+	Content   string    `json:"content"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+var (
+	projectKeyRe = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	memoryNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.md$`)
+)
+
+// memoryDir is where Claude Code keeps auto-memory for cwd (it encodes the resolved path).
+func (n *Node) memoryDir(cwd string) string {
+	if real, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = real
+	}
+	return filepath.Join(n.projectsDir(), projectKeyRe.ReplaceAllString(cwd, "-"), "memory")
+}
+
+func (n *Node) assistantMemory(a memoryOp) (any, error) {
+	if a.Cwd == "" || !strings.HasSuffix(filepath.Clean(a.Cwd), "/.jarvis/assistant") {
+		return nil, errors.New("memory is only available for the assistant directory")
+	}
+	dir := n.memoryDir(a.Cwd)
+	switch a.Op {
+	case "list":
+		entries, err := os.ReadDir(dir)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		files := []MemoryFile{}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				continue
+			}
+			info, _ := e.Info()
+			f := MemoryFile{Name: e.Name(), Content: string(b)}
+			if info != nil {
+				f.UpdatedAt = info.ModTime().UTC()
+			}
+			files = append(files, f)
+		}
+		sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+		return map[string]any{"files": files, "dir": dir}, nil
+	case "write":
+		if !memoryNameRe.MatchString(a.Name) {
+			return nil, errors.New("bad memory file name")
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
+		return ok(os.WriteFile(filepath.Join(dir, a.Name), []byte(a.Content), 0o600))
+	case "delete":
+		if !memoryNameRe.MatchString(a.Name) || a.Name == "MEMORY.md" {
+			return nil, errors.New("bad memory file name")
+		}
+		if err := os.Remove(filepath.Join(dir, a.Name)); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		return ok(dropIndexLine(filepath.Join(dir, "MEMORY.md"), a.Name))
+	}
+	return nil, errors.New("unknown memory op " + a.Op)
+}
+
+// dropIndexLine removes the MEMORY.md pointer to a deleted file.
+func dropIndexLine(index, name string) error {
+	b, err := os.ReadFile(index)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var keep []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, "("+name+")") {
+			continue
+		}
+		keep = append(keep, l)
+	}
+	return os.WriteFile(index, []byte(strings.Join(keep, "\n")), 0o600)
+}

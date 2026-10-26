@@ -40,6 +40,13 @@ type Hub struct {
 	phoneTools   []proto.Tool
 	calls        map[string]chan proto.ToolResult
 	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
+	userTZ       string                  // the phone's time zone (assistant settings)
+	snap         string                  // the assistant's last live snapshot (assistant_snapshot.go)
+	snapAt       time.Time
+	wokeAt       time.Time            // last silent push to wake the phone for a tool call
+	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
+
+	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -87,7 +94,7 @@ func Run(ctx context.Context, version string) error {
 	h := &Hub{
 		cfg: cfg, version: version, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
-		calls: map[string]chan proto.ToolResult{},
+		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{},
 	}
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -116,6 +123,7 @@ func Run(ctx context.Context, version string) error {
 		go m.run(ctx)
 	}
 	go h.expireLoop(ctx)
+	go h.scheduleLoop(ctx)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
 	go func() {
@@ -449,12 +457,15 @@ func (h *Hub) setPhoneTools(tools []proto.Tool) {
 	}
 }
 
-func (h *Hub) mcpTools() []proto.Tool {
+func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	h.mu.Lock()
 	tools := append([]proto.Tool(nil), h.phoneTools...)
 	h.mu.Unlock()
 	if h.mail != nil {
 		tools = append(tools, h.mail.Tools()...)
+	}
+	if assistant {
+		tools = append(tools, assistantTools(h.lark != nil)...)
 	}
 	return tools
 }
@@ -484,7 +495,10 @@ func (h *Hub) approve(ctx context.Context, machineID, tool, summary string, inpu
 func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) proto.ToolResult {
 	c := h.phoneClient()
 	if c == nil {
-		return proto.TextResult("The user's iPhone is not connected: ask them to open the Jarvis app, then retry.", true)
+		c = h.wakePhone(ctx)
+	}
+	if c == nil {
+		return proto.TextResult("The user's iPhone is not connected and did not wake up in the background: ask them to open the Jarvis app, then retry.", true)
 	}
 	id := randomHex(8)
 	ch := make(chan proto.ToolResult, 1)
@@ -504,6 +518,36 @@ func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) 
 		return r
 	case <-ctx.Done():
 		return proto.TextResult("Timed out waiting for the iPhone (is the Jarvis app still open?).", true)
+	}
+}
+
+// wakePhone asks iOS to wake the app in the background (silent push) and waits briefly for it to connect.
+func (h *Hub) wakePhone(ctx context.Context) *client {
+	if !h.push.ready() {
+		return nil
+	}
+	h.mu.Lock()
+	recent := time.Since(h.wokeAt) < 30*time.Second
+	if !recent {
+		h.wokeAt = time.Now()
+	}
+	h.mu.Unlock()
+	if !recent {
+		h.push.wake("tool")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	t := time.NewTicker(300 * time.Millisecond)
+	defer t.Stop()
+	for {
+		if c := h.phoneClient(); c != nil {
+			return c
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
 	}
 }
 

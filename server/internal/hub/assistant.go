@@ -21,6 +21,10 @@ const assistantDir = ".jarvis/assistant" // relative to the machine's home
 type AssistantConfig struct {
 	MachineID string `json:"machine_id"`
 	Launcher  string `json:"launcher"`
+	// Timezone is the phone's (IANA name): routines and the snapshot read times in it.
+	Timezone string `json:"timezone,omitempty"`
+	// Notes, once edited in the app, replace hub.json's assistant.notes.
+	Notes *string `json:"notes,omitempty"`
 }
 
 func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
@@ -49,9 +53,18 @@ func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
 			if saved.Launcher != "" {
 				cfg.Launcher = saved.Launcher
 			}
+			cfg.Timezone, cfg.Notes = saved.Timezone, saved.Notes
 		}
 	}
 	return cfg
+}
+
+// assistantNotes is what the assistant knows about the user: edited in the app, else hub.json's assistant.notes.
+func (h *Hub) assistantNotes(ctx context.Context) string {
+	if n := h.assistantConfig(ctx).Notes; n != nil {
+		return strings.TrimSpace(*n)
+	}
+	return strings.TrimSpace(h.cfg.Assistant.Notes)
 }
 
 // assistantCwd is the assistant directory on a machine, or "" while the machine has not reported its home.
@@ -72,7 +85,7 @@ func isAssistant(cwd, dir string) bool {
 	return cwd == dir || strings.HasSuffix(cwd, "/"+assistantDir)
 }
 
-func (h *Hub) assistantClaudeMD() string {
+func (h *Hub) assistantClaudeMD(ctx context.Context) string {
 	var machines strings.Builder
 	for _, m := range h.machines {
 		if m.cfg.Kind == "local" {
@@ -89,9 +102,9 @@ func (h *Hub) assistantClaudeMD() string {
 	if owner == "" {
 		owner = "用户"
 	}
-	notes := strings.TrimSpace(h.cfg.Assistant.Notes)
+	notes := h.assistantNotes(ctx)
 	if notes != "" {
-		notes = "\n## 关于他（来自 hub.json 的 assistant.notes）\n\n" + notes + "\n"
+		notes = "\n## 关于他（他在 App 的 设置 › 助手 › 关于我 里写的）\n\n" + notes + "\n"
 	}
 	return strings.NewReplacer("{{machines}}", strings.TrimRight(machines.String(), "\n"), "{{owner}}", owner,
 		"{{notes}}", notes).Replace(assistantPrompt)
@@ -100,38 +113,51 @@ func (h *Hub) assistantClaudeMD() string {
 const assistantPrompt = `# Jarvis 助手
 
 你是 {{owner}} 的私人 AI 助手 **Jarvis**。他在 iPhone / Apple Watch 上的 Jarvis App 里和你对话：多半在手机上看，
-回答要**先给结论**，用短段落和列表，少用宽表格和大段代码；用中文。
+回答要**先给结论**，用短段落和列表，少用宽表格和大段代码；用中文。系统提示末尾有一份「实时快照」（时间、在等他的 Agent、
+飞书未读、今天接下来的会），先用它回答，需要细节再查。
 
-## 你能访问的数据
+## 你能访问的数据（优先用 jarvis 的 MCP 工具：快、结构化、不用找 token）
 
-- **他的电脑**（都装了 herdr，跑着很多 Claude Code 会话）：
+- **各台电脑上的 Agent**（herdr 里的 Claude Code / Codex）：` + "`agents_list`" + `（谁在等他、谁跑完了、最后说了什么）、
+  ` + "`agent_read`" + `（读某个 Agent 最近的对话）、` + "`agent_send`" + `（替他给 Agent 发消息）、` + "`agent_start`" + `（在某台电脑的项目里开新 Agent 干开发的活）。
+- **飞书**（他本人的账号）：` + "`lark_chats`" + `（未读 / @我 的会话）、` + "`lark_messages`" + `（读会话）、` + "`lark_search`" + `（消息、文档、人、日程、妙记、任务、邮件）、
+  ` + "`lark_api`" + `（日历 calendar/week、日程详情、会议纪要、妙记、云文档等只读接口）、` + "`lark_send`" + `（发消息，会先在手机上让他确认）。
+  lark-* skills / lark-cli 也能用（写文档、建日程这类 MCP 不支持的写操作）。
+- **iPhone**：` + "`phone_*`" + `（通讯录、日历、提醒事项、位置、健康、照片、设备信息、剪贴板、本地通知）。写操作会在手机上让他确认。
+- **邮件**：` + "`mail_*`" + `（他添加的所有邮箱：列账号、搜索、读信、发信；发信前会在手机上确认）。
+- **他的电脑本身**（需要读文件、跑命令时）：
 {{machines}}
-  - 一次执行一条非交互命令；看某台机器上在跑什么：` + "`herdr agent list`" + `；Claude 会话记录在 ` + "`~/.claude/projects/<目录>/<id>.jsonl`" + `。
-- **工作数据**：用这台机器上装好的 skills 和 CLI（具体有哪些见文末「关于他」，没写就先 ` + "`ls ~/.claude/skills`" + ` 看看）。
-- **iPhone**：MCP 工具 ` + "`phone_*`" + `（通讯录、日历、提醒事项、位置、健康、照片、设备信息、剪贴板、本地通知）。
-  需要 Jarvis App 在前台；写操作会在手机上让他确认。调用失败说「手机不在线」时，告诉他打开 App 再试。
-- **邮件**：MCP 工具 ` + "`mail_*`" + `（他添加的所有邮箱：列账号、搜索、读信、发信；发信前会在手机上确认）。
+  - 一次执行一条非交互命令，带超时（` + "`timeout 20 …`" + `）；Claude 会话记录在 ` + "`~/.claude/projects/<目录>/<id>.jsonl`" + `。
+- **工作数据**：这台机器上装好的 skills 和 CLI（具体有哪些见文末「关于他」，没写就先 ` + "`ls ~/.claude/skills`" + ` 看看）。
 - **网络**：可以联网搜索、抓网页。
+
+## 和他互动
+
+- 你是无头运行的（claude -p），**AskUserQuestion 用不了**。需要他确认或做选择时用 ` + "`ask_user`" + `：手机上弹出选项卡片和推送，
+  他点选后结果回到你这里。有风险的事（删除、替他给别人发消息 / 邮件、改线上配置、推代码、给 Agent 下有破坏性的指令）先用它确认。
+- 他说「提醒我…」「过一小时再看看」「等 X 跑完告诉我」：用 ` + "`schedule_followup`" + ` 安排自己到时候回来接着做，做完他会收到推送；
+  要立刻提醒他用 ` + "`notify_user`" + `（App 关着也能收到）。` + "`list_followups`" + ` / ` + "`cancel_followup`" + ` 管理已安排的。
+- 消息以「⏰」开头的是定时任务 / 你之前安排的跟进，不是他刚发的：直接把事做完，结果写成他扫一眼就懂的一屏；他会收到推送。
 
 ## 做事方式
 
-- 问到「我今天 / 这周的安排」：iPhone 日历和飞书日历都查，合并去重后按时间列。
+- 问到「我今天 / 这周的安排」：飞书日历（` + "`lark_api calendar/week`" + `）和 iPhone 日历（` + "`phone_calendar_events`" + `）都查，合并去重后按时间列。
 - 不确定数据在哪台机器、哪个邮箱时先查再答，不要猜；查不到就直说查了哪些地方。
-- 有风险的事（删除、给别人发消息 / 邮件、改线上配置、推代码）先用 AskUserQuestion 说清楚要做什么、让他确认。
-- 需要长时间跑的开发任务，建议他在 Jarvis 的「Agents」里对应项目新开会话，而不是在这里做。
-- 你是无头运行的（claude -p），没有终端界面；需要他做选择时用 AskUserQuestion，会出现在他的手机上。
+- 需要长时间跑的开发任务，用 ` + "`agent_start`" + ` 在对应项目开一个 Agent（告诉他在「Agents」里能看到），而不是在这里做。
+- 记住他的偏好和长期有用的事实（auto memory）：他纠正你、告诉你习惯、你踩坑找到正确做法时，写进记忆；他能在 App 里看到和修改。
 - 这个目录（` + "`~/.jarvis/assistant`" + `）是你的工作区，可以在这里放笔记、临时文件；本文件由 Jarvis 自动生成，会被覆盖，别改它。
 {{notes}}`
 
 type assistantView struct {
 	AssistantConfig
-	Cwd           string          `json:"cwd"`
-	Conversations []proto.Session `json:"conversations"`
+	Cwd            string          `json:"cwd"`
+	Conversations  []proto.Session `json:"conversations"`
+	NotesEffective string          `json:"notes_effective"` // what the assistant is told about the user
 }
 
 func (h *Hub) assistantState(ctx context.Context) assistantView {
 	cfg := h.assistantConfig(ctx)
-	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}}
+	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}, NotesEffective: h.assistantNotes(ctx)}
 	if m := h.byID[cfg.MachineID]; m != nil {
 		v.Cwd = m.assistantCwd()
 		for _, s := range h.decorated(m) {
@@ -164,6 +190,20 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		if in.Launcher != "" {
 			cfg.Launcher = in.Launcher
 		}
+		if in.Timezone != "" {
+			if _, err := time.LoadLocation(in.Timezone); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+			cfg.Timezone = in.Timezone
+			h.mu.Lock()
+			h.userTZ = in.Timezone
+			h.snapAt = time.Time{}
+			h.mu.Unlock()
+		}
+		if in.Notes != nil {
+			cfg.Notes = in.Notes
+		}
 		if h.store == nil {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))
 			return
@@ -174,6 +214,46 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, h.assistantState(r.Context()))
 	})
+	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup.
+	api.HandleFunc("POST /api/v1/assistant/warm", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Launcher string `json:"launcher"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		go h.warmAssistant(in.Launcher)
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	api.HandleFunc("GET /api/v1/assistant/memory", func(w http.ResponseWriter, r *http.Request) {
+		var res json.RawMessage
+		if err := h.assistantMemory(r.Context(), map[string]any{"op": "list"}, &res); err != nil {
+			callErr(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(res)
+	})
+	api.HandleFunc("PUT /api/v1/assistant/memory/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := h.assistantMemory(r.Context(), map[string]any{"op": "write", "name": r.PathValue("name"), "content": in.Content}, nil); err != nil {
+			callErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	api.HandleFunc("DELETE /api/v1/assistant/memory/{name}", func(w http.ResponseWriter, r *http.Request) {
+		if err := h.assistantMemory(r.Context(), map[string]any{"op": "delete", "name": r.PathValue("name")}, nil); err != nil {
+			callErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+	h.scheduleRoutes(api)
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Prompt   string        `json:"prompt"`
@@ -207,7 +287,7 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD()}, &prep); err != nil {
+	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
 		return nil, err
 	}
 	// Headless claude (node/assistant.go): no herdr tab, streamed tokens, any launcher per message.
@@ -223,4 +303,40 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	s.Assistant = true
 	s.State = proto.StateWorking
 	return &s, nil
+}
+
+func (h *Hub) warmAssistant(launcher string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cfg := h.assistantConfig(ctx)
+	if launcher == "" {
+		launcher = cfg.Launcher
+	}
+	m := h.byID[cfg.MachineID]
+	if m == nil {
+		return
+	}
+	var prep struct {
+		Cwd string `json:"cwd"`
+	}
+	if err := m.call(ctx, "assistant.prepare", map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx)}, &prep); err != nil {
+		return
+	}
+	if err := m.call(ctx, "assistant.warm", map[string]any{"cwd": prep.Cwd, "launcher": launcher}, nil); err != nil {
+		h.logf("warm assistant: %v", err)
+	}
+}
+
+// assistantMemory runs one memory operation (node/memory.go) on the assistant's machine.
+func (h *Hub) assistantMemory(ctx context.Context, op map[string]any, out any) error {
+	m := h.byID[h.assistantConfig(ctx).MachineID]
+	if m == nil {
+		return errors.New("assistant machine is not configured")
+	}
+	cwd := m.assistantCwd()
+	if cwd == "" {
+		return errors.New("assistant machine is offline")
+	}
+	op["cwd"] = cwd
+	return m.call(ctx, "assistant.memory", op, out)
 }

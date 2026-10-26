@@ -30,6 +30,7 @@ type sockRequest struct {
 	Name      string          `json:"name,omitempty"`
 	Args      json.RawMessage `json:"args,omitempty"`
 	SessionID string          `json:"session_id,omitempty"`
+	Assistant bool            `json:"assistant,omitempty"` // the caller is the assistant's MCP server
 }
 
 func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
@@ -113,14 +114,15 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		var res struct {
 			Tools []proto.Tool `json:"tools"`
 		}
-		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{}, &res); err != nil {
+		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{"assistant": req.Assistant, "session_id": req.SessionID}, &res); err != nil {
 			resp = map[string]any{"tools": []proto.Tool{}, "error": err.Error()}
 		} else {
 			resp = res
 		}
 	case "mcp.call":
 		var res proto.ToolResult
-		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": req.SessionID}, &res); err != nil {
+		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": req.SessionID,
+			"assistant": req.Assistant}, &res); err != nil {
 			res = proto.TextResult("Jarvis hub error: "+err.Error(), true)
 		}
 		resp = res

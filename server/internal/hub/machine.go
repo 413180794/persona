@@ -390,17 +390,27 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		return map[string]any{"sessions": out}, nil
 	case "mcp.tools":
-		return map[string]any{"tools": m.hub.mcpTools()}, nil
+		var p struct {
+			Assistant bool `json:"assistant"`
+		}
+		_ = json.Unmarshal(params, &p)
+		return map[string]any{"tools": m.hub.mcpTools(p.Assistant)}, nil
 	case "mcp.call":
 		var p struct {
 			Name      string          `json:"name"`
 			Args      json.RawMessage `json:"args"`
 			SessionID string          `json:"session_id"`
+			Assistant bool            `json:"assistant"`
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, err
 		}
+		if p.Assistant && isAssistantTool(p.Name) {
+			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
+		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
+	case "assistant.context":
+		return map[string]any{"text": m.hub.assistantSnapshot(ctx)}, nil
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
 }
@@ -413,6 +423,12 @@ func (m *Machine) notifyFinished(id string) {
 		return
 	}
 	if s.WokeByTask { // a background task's report and what the agent said about it: no ping
+		return
+	}
+	m.hub.mu.Lock()
+	pushed := time.Since(m.hub.notified[id]) < 3*time.Minute
+	m.hub.mu.Unlock()
+	if pushed { // the assistant already pushed what matters this turn (notify_user)
 		return
 	}
 	title := s.Title
