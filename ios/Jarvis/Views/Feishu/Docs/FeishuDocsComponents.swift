@@ -25,7 +25,7 @@ extension Error {
             switch e.code {
             case .notConnectedToInternet, .networkConnectionLost: return "网络不可用"
             case .timedOut: return "请求超时，请稍后重试"
-            case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（手机需要在公司网络 / removed）"
+            case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（确认手机能访问 hub）"
             default: break
             }
         }

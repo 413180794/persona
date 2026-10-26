@@ -43,10 +43,9 @@ func TestDefaultConfig(t *testing.T) {
 		}
 		ids[m.ID] = true
 	}
-	for _, want := range []string{"example-machine", "example-machine", "example-machine", "mac-home"} {
-		if !ids[want] {
-			t.Fatalf("missing machine %s", want)
-		}
+	// A fresh hub knows only itself; other machines are added to hub.json (docs/config.md).
+	if len(cfg.Machines) != 1 {
+		t.Fatalf("default machines should be just this one, got %+v", cfg.Machines)
 	}
 	if local := cfg.Machines[0]; local.Kind != "local" {
 		t.Fatalf("the first machine should be the local hub, got %+v", local)
@@ -168,7 +167,7 @@ func newTestHub(t *testing.T) *Hub {
 
 func TestWaitInteractionResolved(t *testing.T) {
 	h := newTestHub(t)
-	ix := proto.Interaction{ID: "ix_1", MachineID: "example-machine", SessionID: "s1", Kind: proto.IxPermission, Summary: "send mail"}
+	ix := proto.Interaction{ID: "ix_1", MachineID: "server", SessionID: "s1", Kind: proto.IxPermission, Summary: "send mail"}
 	done := make(chan proto.Resolution, 1)
 	go func() {
 		r, err := h.waitInteraction(context.Background(), ix)
@@ -214,7 +213,7 @@ func TestWaitInteractionResolved(t *testing.T) {
 
 func TestWaitInteractionExpiresAsDismiss(t *testing.T) {
 	h := newTestHub(t)
-	ix := proto.Interaction{ID: "ix_exp", MachineID: "example-machine", Kind: proto.IxQuestion,
+	ix := proto.Interaction{ID: "ix_exp", MachineID: "server", Kind: proto.IxQuestion,
 		ExpiresAt: time.Now().Add(50 * time.Millisecond)}
 	r, err := h.waitInteraction(context.Background(), ix)
 	if err != nil {
@@ -230,7 +229,7 @@ func TestWaitInteractionExpiresAsDismiss(t *testing.T) {
 
 func TestWaitInteractionDefaultExpiry(t *testing.T) {
 	h := newTestHub(t)
-	ix := proto.Interaction{ID: "ix_def", MachineID: "example-machine", Kind: proto.IxPlan}
+	ix := proto.Interaction{ID: "ix_def", MachineID: "server", Kind: proto.IxPlan}
 	got := make(chan proto.Interaction, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -261,7 +260,7 @@ func TestWaitInteractionDefaultExpiry(t *testing.T) {
 func TestWaitInteractionCancelledDismisses(t *testing.T) {
 	h := newTestHub(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	ix := proto.Interaction{ID: "ix_ctx", MachineID: "example-machine", Kind: proto.IxPermission,
+	ix := proto.Interaction{ID: "ix_ctx", MachineID: "server", Kind: proto.IxPermission,
 		ExpiresAt: time.Now().Add(time.Hour)}
 	done := make(chan proto.Resolution, 1)
 	go func() {
@@ -285,13 +284,13 @@ func TestWaitInteractionCancelledDismisses(t *testing.T) {
 func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 	h := newTestHub(t)
 	// A screen interaction (a guess from a blocked agent) is already pending for the session.
-	scr := proto.Interaction{ID: "scr_devbox_s1", MachineID: "example-machine", SessionID: "s1", Kind: proto.IxScreen,
+	scr := proto.Interaction{ID: "scr_devbox_s1", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen,
 		ExpiresAt: time.Now().Add(time.Hour)}
 	h.mu.Lock()
 	h.interactions[scr.ID] = &pending{ix: scr, done: make(chan proto.Resolution, 1)}
 	h.mu.Unlock()
 
-	ix := proto.Interaction{ID: "ix_hook", MachineID: "example-machine", SessionID: "s1", Kind: proto.IxPermission,
+	ix := proto.Interaction{ID: "ix_hook", MachineID: "server", SessionID: "s1", Kind: proto.IxPermission,
 		ExpiresAt: time.Now().Add(time.Hour)}
 	done := make(chan struct{})
 	go func() {
@@ -320,7 +319,7 @@ func TestScreenInteractionResolveRunsLocally(t *testing.T) {
 	ran := make(chan proto.Resolution, 1)
 	h.mu.Lock()
 	h.interactions["scr_x"] = &pending{
-		ix:    proto.Interaction{ID: "scr_x", MachineID: "example-machine", SessionID: "s1", Kind: proto.IxScreen},
+		ix:    proto.Interaction{ID: "scr_x", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen},
 		local: func(r proto.Resolution) { ran <- r },
 	}
 	h.mu.Unlock()
@@ -361,10 +360,10 @@ func TestPendingInteractionsSortedByCreatedAt(t *testing.T) {
 func TestCancelMachineInteractions(t *testing.T) {
 	h := newTestHub(t)
 	h.mu.Lock()
-	h.interactions["a"] = &pending{ix: proto.Interaction{ID: "a", MachineID: "example-machine"}, done: make(chan proto.Resolution, 1)}
-	h.interactions["b"] = &pending{ix: proto.Interaction{ID: "b", MachineID: "example-machine"}, done: make(chan proto.Resolution, 1)}
+	h.interactions["a"] = &pending{ix: proto.Interaction{ID: "a", MachineID: "server"}, done: make(chan proto.Resolution, 1)}
+	h.interactions["b"] = &pending{ix: proto.Interaction{ID: "b", MachineID: "laptop"}, done: make(chan proto.Resolution, 1)}
 	h.mu.Unlock()
-	h.cancelMachineInteractions("example-machine")
+	h.cancelMachineInteractions("server")
 	left := h.pendingInteractions()
 	if len(left) != 1 || left[0].ID != "b" {
 		t.Fatalf("left = %+v", left)
@@ -374,7 +373,7 @@ func TestCancelMachineInteractions(t *testing.T) {
 func TestApproveAsksThePhone(t *testing.T) {
 	h := newTestHub(t)
 	done := make(chan bool, 1)
-	go func() { done <- h.approve(context.Background(), "example-machine", "mail_send", "send it", nil) }()
+	go func() { done <- h.approve(context.Background(), "server", "mail_send", "send it", nil) }()
 
 	deadline := time.After(5 * time.Second)
 	for {
@@ -410,7 +409,7 @@ func TestApproveAsksThePhone(t *testing.T) {
 func TestApproveDeclined(t *testing.T) {
 	h := newTestHub(t)
 	done := make(chan bool, 1)
-	go func() { done <- h.approve(context.Background(), "example-machine", "mail_send", "send it", nil) }()
+	go func() { done <- h.approve(context.Background(), "server", "mail_send", "send it", nil) }()
 	for len(h.pendingInteractions()) == 0 {
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -457,13 +456,13 @@ func TestToolResultDeliversToWaiter(t *testing.T) {
 
 func TestCallToolDispatch(t *testing.T) {
 	h := newTestHub(t)
-	if r := h.callTool(context.Background(), "example-machine", "phone_device_info", json.RawMessage(`{}`)); !r.IsError {
+	if r := h.callTool(context.Background(), "server", "phone_device_info", json.RawMessage(`{}`)); !r.IsError {
 		t.Fatalf("phone tool without a phone should fail: %+v", r)
 	}
-	if r := h.callTool(context.Background(), "example-machine", "mail_send", json.RawMessage(`{}`)); !r.IsError {
+	if r := h.callTool(context.Background(), "server", "mail_send", json.RawMessage(`{}`)); !r.IsError {
 		t.Fatalf("mail tool without mail should fail: %+v", r)
 	}
-	r := h.callTool(context.Background(), "example-machine", "something_else", nil)
+	r := h.callTool(context.Background(), "server", "something_else", nil)
 	if !r.IsError || !strings.Contains(textOf(r), "unknown tool") {
 		t.Fatalf("unknown tool result = %+v", r)
 	}

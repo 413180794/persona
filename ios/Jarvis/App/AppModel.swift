@@ -116,6 +116,8 @@ final class AppModel {
     }
 
     func machine(_ id: String) -> Machine? { machines.first { $0.id == id } }
+    /// The machine the hub runs on (it reports itself as "local"): where the assistant lives by default.
+    var hubMachineID: String { machines.first { $0.kind == "local" }?.id ?? machines.first?.id ?? "" }
 
     var pendingInteractions: [Interaction] {
         interactions.values.sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }

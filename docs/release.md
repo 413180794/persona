@@ -1,36 +1,34 @@
 # TestFlight 发布
 
-只发 TestFlight 内部测试（测试员 tester@example.com），不上架、不做官网。
+只发 TestFlight 内部测试（测试员在配置的 `app_store.testers`）。
 
 ## 账号与标识
 
-| 项目 | 值 |
+都在构建配置里（`docs/config.md`）：`app.bundle_id` / `app.team_id`、`app_store.key_id` / `issuer_id` / `key_path`（API key 文件只放在
+仓库外，比如 `~/.appstoreconnect/`）、`app_store.app_id`（App 记录的数字 ID）、`app_store.testers`、`app_store.feedback_email`。
+
+| 项目 | 说明 |
 | --- | --- |
-| 团队 | chirpet.com，Team ID `ABCDE12345` |
-| Bundle ID | iOS `com.chirpet.jarvis`（API 记录 `BUNDLEID01`）、手表 `com.chirpet.jarvis.watchkitapp`（`BUNDLEID02`），2026-10-24 用 `scripts/asc_signing.py` 注册 |
+| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`，用 `scripts/asc_signing.py` 注册 |
 | App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`HEALTHKIT`；手表：无 |
-| 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`），发布证书 `CERTID0001`，2027-10-06 到期；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
-| App Store Connect API key | `~/.appstoreconnect/AuthKey_KEYID00001.p8`，Key ID `KEYID00001`，Issuer `00000000-0000-0000-0000-000000000000`（只在 `~/.appstoreconnect/` 里，不进仓库） |
-| 签名身份 | 登录钥匙串里的 `Apple Distribution: Your Name (ABCDE12345)` |
-| App Store Connect App ID | **还没建**：等网页建好 App 记录后写进 `scripts/app_id.txt`（一行数字），`asc_testflight.py` 从这里读 |
-| SKU（建 App 时填） | `jarvis-001` |
-| 名称 / 主要语言 | `Jarvis`，简体中文；只发内部 TestFlight |
-| 反馈邮箱 | `person@example.com` |
+| 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
+| 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
+| App Store Connect App ID | 网页建好 App 记录后填进配置的 `app_store.app_id` |
 
 API key 的角色是 App Manager，用不了 cloud-managed signing（`-allowProvisioningUpdates` 云签名会失败），所以
-归档走自动签名，导出时用 `ExportOptions.plist` 手动指定两个 App Store 描述文件重签。
+归档走自动签名，导出时 `release.sh` 按配置生成 ExportOptions（`scripts/jarvis_config.py export-options`），手动指定两个 App Store 描述文件重签。
 
 ## 首次准备（顺序）
 
-1. ✅ 2026-10-24 `python3 scripts/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送和 HealthKit、建两个 App Store
-   描述文件并装到本机。幂等，能力变了随时重跑。
-2. ✅ 2026-10-24 App ID 1234567890（商店名 `Jarvis Herd`，「Jarvis」已被占用；桌面显示名仍是 Jarvis）。**网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称 `Jarvis`、主要语言简体中文、
-   Bundle ID `com.chirpet.jarvis`、SKU `jarvis-001`、完全访问权限。把 App ID 写进 `scripts/app_id.txt`。
-3. ✅ 2026-10-24 `python3 scripts/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把 tester@example.com 加进去。
-4. ⬜ `NO_UPLOAD=1 ./scripts/release.sh` 验证归档 + 导出（不需要 App 记录就能跑）。
-5. ⬜ `./scripts/release.sh` 上传第一个构建 → `python3 scripts/asc_testflight.py wait` 等处理完并自动加入 Internal。
+1. 填好 `~/.config/jarvis/config.json`（`app`、`app_store` 的 key 部分）。
+2. `python3 scripts/asc_signing.py`：注册两个 Bundle ID、给 iOS 打开推送和 HealthKit、建两个 App Store 描述文件并装到本机。幂等，能力变了随时重跑。
+3. **网页创建 App 记录**（API 不能建）：App Store Connect › App › 新建 App：iOS、名称、主要语言、Bundle ID、SKU、完全访问权限。
+   把 App ID 填进配置的 `app_store.app_id`。
+4. `python3 scripts/asc_testflight.py setup`：建内部群组 `Internal`（`hasAccessToAllBuilds`）并把配置里的测试员加进去。
+5. `NO_UPLOAD=1 ./scripts/release.sh` 验证归档 + 导出（不需要 App 记录就能跑）。
+6. `./scripts/release.sh` 上传第一个构建 → `python3 scripts/asc_testflight.py wait` 等处理完并自动加入 Internal。
 
-第 2 步之前，`scripts/asc_testflight.py` 会直接报错告诉你缺 `scripts/app_id.txt`。
+没填 `app_store.app_id` 时 `scripts/asc_testflight.py` 会直接报错提示。
 
 ## 每次发版
 

@@ -13,7 +13,7 @@ struct MachinesView: View {
                             .buttonStyle(.plain)
                     }
                     if model.machines.isEmpty {
-                        EmptyStateView(symbol: "macbook.and.iphone", title: "还没有机器", message: "hub 连上后，这里会显示 example-machine 和各台 Mac。")
+                        EmptyStateView(symbol: "macbook.and.iphone", title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
                     }
                 }
                 .padding(16)

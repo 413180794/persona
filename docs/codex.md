@@ -1,6 +1,6 @@
 # Codex 支持
 
-herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「开发」tab：列表、对话、实时状态、发消息、终端、关闭都能用。
+herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab：列表、对话、实时状态、发消息、终端、关闭都能用。
 2026-10-26 起支持，`server/internal/node/codex.go` + `server/internal/transcript/codex.go`。
 
 ## 识别

@@ -18,9 +18,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from asc import APIError, create, get_all, request  # noqa: E402
+from asc import BUNDLE_ID, APIError, create, get_all, request  # noqa: E402
 
-APP = "com.chirpet.jarvis"
+APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
@@ -117,7 +117,7 @@ def main():
             profile(ids[identifier], profile_name.replace("App Store", "Development"), dev,
                     "IOS_APP_DEVELOPMENT", check_only)
     if not check_only:
-        print("\nDone. Release builds sign with these profiles (scripts/ExportOptions.plist).")
+        print("\nDone. Release builds sign with these profiles (release.sh generates the export options from the config).")
 
 
 if __name__ == "__main__":

@@ -107,8 +107,14 @@ struct AssistantSettingsView: View {
     @State private var launchers: [Launcher] = []
     @State private var selection = ""
 
+    /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
+    private var machinesLine: String {
+        let names = model.machines.map(\.name)
+        return names.isEmpty ? "hub 接入的各台电脑（ssh）" : names.joined(separator: "、") + "（ssh）"
+    }
+
     var body: some View {
-        let machineID = model.assistantConfig?.machineID ?? "example-machine"
+        let machineID = model.assistantConfig?.machineID ?? model.hubMachineID
         List {
             Section {
                 NavigationLink {
@@ -124,8 +130,8 @@ struct AssistantSettingsView: View {
                 Text("每段对话是 \(model.machine(machineID)?.name ?? machineID) 上 herdr 里的一个 Claude，改了只影响新对话。")
             }
             Section("能访问") {
-                Label("example-machine、公司 Mac、家里的 Mac（ssh）", systemImage: "macbook.and.iphone")
-                Label("飞书日历、文档、消息、邮件等公司数据", systemImage: "building.2")
+                Label(machinesLine, systemImage: "macbook.and.iphone")
+                Label("飞书日历、文档、消息、邮件等工作数据", systemImage: "building.2")
                 Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: "iphone")
                 Label("你添加的所有邮箱", systemImage: "envelope")
             }
@@ -232,7 +238,7 @@ struct WelcomeView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 18) {
-                feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "example-machine、公司 Mac、家里的 Mac，herdr 里的同一个会话")
+                feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "你的每台电脑，herdr 里的同一个会话")
                 feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
                 feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
                 feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")
@@ -246,7 +252,7 @@ struct WelcomeView: View {
             .themedButton(prominent: true)
             .controlSize(.large)
             .padding(.horizontal, 24)
-            Text("在 example-machine 上运行 `jarvisd hub pair` 显示二维码")
+            Text("在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 10)
@@ -273,7 +279,7 @@ struct WelcomeView: View {
 struct PairView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var url = "http://hub.example.com:18660"
+    @State private var url = ""
     @State private var token = ""
     @State private var connecting = false
     @State private var error: String?
@@ -326,7 +332,7 @@ struct PairView: View {
             Haptics.success()
             dismiss()
         } catch {
-            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。手机需要能访问公司内网（removed）。" }
+            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上）。" }
             Haptics.error()
         }
     }
@@ -366,7 +372,7 @@ struct QRScanner: UIViewControllerRepresentable {
 /// Claude Code's /config options (a whitelist of ~/.claude/settings.json keys) on each machine.
 struct ClaudeSettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("claudeSettings.machine") private var machineID = "example-machine"
+    @AppStorage("claudeSettings.machine") private var machineID = ""
     @AppStorage("claudeSettings.applyAll") private var applyAll = true
     @State private var settings: [APIClient.ClaudeSetting] = []
     @State private var loading = false
@@ -391,6 +397,7 @@ struct ClaudeSettingsView: View {
             }
         }
         .navigationTitle("Claude Code 设置")
+        .onAppear { if machineID.isEmpty { machineID = model.hubMachineID } } // first visit: the hub's machine
         .overlay { if loading && settings.isEmpty { ProgressView() } }
         .task(id: machineID) { await load() }
         .refreshable { await load() }

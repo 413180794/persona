@@ -1,0 +1,23 @@
+{
+  "app": {
+    "bundle_id": "com.example.jarvis",
+    "team_id": "ABCDE12345"
+  },
+  "app_store": {
+    "app_id": "1234567890",
+    "key_id": "ABC123DEFG",
+    "issuer_id": "00000000-0000-0000-0000-000000000000",
+    "key_path": "~/.appstoreconnect/AuthKey_ABC123DEFG.p8",
+    "testers": [{ "email": "you@example.com", "first_name": "You" }],
+    "feedback_email": "jarvis@example.com"
+  },
+  "hub": {
+    "machine": "server",
+    "url": "http://hub.example.com:18660"
+  },
+  "machines": [
+    { "id": "server", "ssh": "server", "os": "linux" },
+    { "id": "laptop", "ssh": "laptop", "os": "darwin", "hostnames": ["MyMacBook"] }
+  ],
+  "simulator": ""
+}

@@ -28,6 +28,6 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.chirpet.jarvis</string>
+	<string>$(JARVIS_BUNDLE_ID)</string>
 </dict>
 </plist>

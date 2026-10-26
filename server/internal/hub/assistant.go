@@ -14,7 +14,7 @@ import (
 )
 
 // The assistant ("对话" tab) is a Claude Code session like any other, started in a dedicated directory on one
-// machine (example-machine by default) whose CLAUDE.md tells it which of the user's data it can reach and how.
+// machine (the hub's own by default) whose CLAUDE.md tells it which of the user's data it can reach and how.
 
 const assistantDir = ".jarvis/assistant" // relative to the machine's home
 
@@ -24,9 +24,21 @@ type AssistantConfig struct {
 }
 
 func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
-	cfg := AssistantConfig{MachineID: "example-machine", Launcher: "ccc"}
-	if len(h.machines) > 0 && h.byID[cfg.MachineID] == nil {
-		cfg.MachineID = h.machines[0].cfg.ID
+	cfg := AssistantConfig{MachineID: h.cfg.Assistant.Machine, Launcher: h.cfg.Assistant.Launcher}
+	if cfg.Launcher == "" {
+		cfg.Launcher = "claude"
+	}
+	if h.byID[cfg.MachineID] == nil {
+		cfg.MachineID = ""
+		for _, m := range h.machines { // the hub's own machine, else the first one
+			if m.cfg.Kind == "local" {
+				cfg.MachineID = m.cfg.ID
+				break
+			}
+		}
+		if cfg.MachineID == "" && len(h.machines) > 0 {
+			cfg.MachineID = h.machines[0].cfg.ID
+		}
 	}
 	if h.store != nil {
 		var saved AssistantConfig
@@ -73,12 +85,21 @@ func (h *Hub) assistantClaudeMD() string {
 		}
 		fmt.Fprintf(&machines, "  - %s：`ssh %s '<命令>'`\n", m.cfg.Name, host)
 	}
-	return strings.ReplaceAll(assistantPrompt, "{{machines}}", strings.TrimRight(machines.String(), "\n"))
+	owner := strings.TrimSpace(h.cfg.Assistant.Owner)
+	if owner == "" {
+		owner = "用户"
+	}
+	notes := strings.TrimSpace(h.cfg.Assistant.Notes)
+	if notes != "" {
+		notes = "\n## 关于他（来自 hub.json 的 assistant.notes）\n\n" + notes + "\n"
+	}
+	return strings.NewReplacer("{{machines}}", strings.TrimRight(machines.String(), "\n"), "{{owner}}", owner,
+		"{{notes}}", notes).Replace(assistantPrompt)
 }
 
 const assistantPrompt = `# Jarvis 助手
 
-你是 chyroc 的私人 AI 助手 **Jarvis**。他在 iPhone / Apple Watch 上的 Jarvis App 里和你对话：多半在手机上看，
+你是 {{owner}} 的私人 AI 助手 **Jarvis**。他在 iPhone / Apple Watch 上的 Jarvis App 里和你对话：多半在手机上看，
 回答要**先给结论**，用短段落和列表，少用宽表格和大段代码；用中文。
 
 ## 你能访问的数据
@@ -86,16 +107,9 @@ const assistantPrompt = `# Jarvis 助手
 - **他的电脑**（都装了 herdr，跑着很多 Claude Code 会话）：
 {{machines}}
   - 一次执行一条非交互命令；看某台机器上在跑什么：` + "`herdr agent list`" + `；Claude 会话记录在 ` + "`~/.claude/projects/<目录>/<id>.jsonl`" + `。
-  - 代码一般在 ` + "`~/code`" + `；个人项目在 ` + "`~/code/chyroc`" + `。
-  - **绝不访问 Mac 上的 iCloud 目录 ` + "`~/Library/Mobile Documents`" + `**（机器没解锁时会卡死）。
-- **公司数据**：用这台机器上的 skills 和 CLI——飞书 ` + "`lark-*`" + `（日历、文档、消息、邮件、任务、审批、会议纪要）、
-  ` + "`provider-*`" + ` / ` + "`example-cli`" + `（代码库、日志、内部搜索等）。
+- **工作数据**：用这台机器上装好的 skills 和 CLI（具体有哪些见文末「关于他」，没写就先 ` + "`ls ~/.claude/skills`" + ` 看看）。
 - **iPhone**：MCP 工具 ` + "`phone_*`" + `（通讯录、日历、提醒事项、位置、健康、照片、设备信息、剪贴板、本地通知）。
   需要 Jarvis App 在前台；写操作会在手机上让他确认。调用失败说「手机不在线」时，告诉他打开 App 再试。
-- **飞书消息（lark-connector）**：本机 lark-connector 的 agent 接口，token 在容器环境变量里：
-  ` + "`T=$(docker inspect lark-connector-yunpeng --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^lark-connector_AGENT_TOKEN=//p')`" + `，
-  然后 ` + "`curl -H \"Authorization: Bearer $T\" http://127.0.0.1:8095/agent/v1/conversations?limit=50`" + `（会话列表，含未读和 @我）、
-  ` + "`.../conversations/<feedId>/messages?tail=1&limit=50`" + `（最新消息）、` + "`GET /agent/v1`" + `（全部路由）。发消息前先确认。不要打印 token。
 - **邮件**：MCP 工具 ` + "`mail_*`" + `（他添加的所有邮箱：列账号、搜索、读信、发信；发信前会在手机上确认）。
 - **网络**：可以联网搜索、抓网页。
 
@@ -104,10 +118,10 @@ const assistantPrompt = `# Jarvis 助手
 - 问到「我今天 / 这周的安排」：iPhone 日历和飞书日历都查，合并去重后按时间列。
 - 不确定数据在哪台机器、哪个邮箱时先查再答，不要猜；查不到就直说查了哪些地方。
 - 有风险的事（删除、给别人发消息 / 邮件、改线上配置、推代码）先用 AskUserQuestion 说清楚要做什么、让他确认。
-- 需要长时间跑的开发任务，建议他在 Jarvis 的「开发」里对应项目新开会话，而不是在这里做。
+- 需要长时间跑的开发任务，建议他在 Jarvis 的「Agents」里对应项目新开会话，而不是在这里做。
 - 你是无头运行的（claude -p），没有终端界面；需要他做选择时用 AskUserQuestion，会出现在他的手机上。
 - 这个目录（` + "`~/.jarvis/assistant`" + `）是你的工作区，可以在这里放笔记、临时文件；本文件由 Jarvis 自动生成，会被覆盖，别改它。
-`
+{{notes}}`
 
 type assistantView struct {
 	AssistantConfig

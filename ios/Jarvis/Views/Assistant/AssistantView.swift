@@ -1,7 +1,7 @@
 import PhotosUI
 import SwiftUI
 
-/// The 对话 tab: one personal assistant (a Claude session in ~/.jarvis/assistant on example-machine) that can reach the
+/// The 对话 tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
 /// user's computers, iPhone data, mail and company data. Conversations are separate sessions; the newest is resumed.
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
@@ -439,6 +439,6 @@ struct StarterModelChip: View {
         } label: {
             Chip(text: current, symbol: "cpu", tint: Theme.accent)
         }
-        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? "example-machine")) ?? [] }
+        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
     }
 }

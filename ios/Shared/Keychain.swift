@@ -2,7 +2,8 @@ import Foundation
 import Security
 
 nonisolated enum Keychain {
-    private static let service = "com.chirpet.jarvis"
+    // The phone app's bundle id on both phone and watch (the watch app's is <id>.watchkitapp).
+    private static let service = (Bundle.main.bundleIdentifier ?? "jarvis").replacingOccurrences(of: ".watchkitapp", with: "")
 
     static func save(_ data: Data, account: String) {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,

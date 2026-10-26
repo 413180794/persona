@@ -20,7 +20,7 @@ struct IntentsTests {
         """)
     }
 
-    private func session(_ id: String, machine: String = "example-machine", status: SessionStatus = .idle,
+    private func session(_ id: String, machine: String = "server", status: SessionStatus = .idle,
                          updated: TimeInterval = 0, title: String? = nil) -> Session {
         decode("""
         {"machine_id":"\(machine)","session_id":"\(id)","title":"\(title ?? id)","cwd":"/tmp/p",
@@ -33,7 +33,7 @@ struct IntentsTests {
                              plan: String? = nil) -> Interaction {
         Interaction(
             id: "ix_\(kind.rawValue)_\(Int(created))",
-            machineID: "example-machine",
+            machineID: "server",
             sessionID: "s1",
             sessionTitle: "修构建",
             cwd: "/tmp/p",
@@ -111,8 +111,8 @@ struct IntentsTests {
         #expect(IntentFailure.notPaired.sentence.contains("还没配对"))
         #expect(IntentFailure.noMachine.sentence.contains("没有在线的机器"))
         #expect(IntentFailure.offline("mac-home").sentence.contains("mac-home"))
-        #expect(IntentFailure.noSession("example-machine").sentence.contains("没有运行中的会话"))
-        #expect(IntentFailure.noLauncher("example-machine").sentence.contains("新对话"))
+        #expect(IntentFailure.noSession("server").sentence.contains("没有运行中的会话"))
+        #expect(IntentFailure.noLauncher("server").sentence.contains("新对话"))
         #expect(IntentFailure.noPending.sentence.contains("没有等你处理"))
     }
 
@@ -123,7 +123,7 @@ struct IntentsTests {
         #expect(IntentFailure.sentence(for: URLError(.timedOut), host: "hub:18660").contains("hub:18660"))
         let offline = IntentFailure.sentence(for: URLError(.cannotConnectToHost), host: "hub:18660")
         #expect(offline.contains("连不上 hub"))
-        #expect(offline.contains("removed"))
+        #expect(offline.contains("VPN"))
         // A plain NSError from URLSession takes the same path as a URLError.
         #expect(IntentFailure.sentence(for: NSError(domain: NSURLErrorDomain, code: -1004)).contains("连不上 hub"))
         // Unknown errors keep their own message rather than being flattened.
@@ -133,14 +133,14 @@ struct IntentsTests {
     // MARK: Selection
 
     @Test func machinePrefersTheRememberedOneAndFallsBackToOnline() {
-        let machines = [machine("example-machine", online: false), machine("example-machine", online: true)]
-        #expect(IntentPicker.machine(machines, preferred: "example-machine")?.id == "example-machine")
-        #expect(IntentPicker.machine(machines, preferred: "gone")?.id == "example-machine")
-        #expect(IntentPicker.machine(machines, preferred: nil)?.id == "example-machine")
+        let machines = [machine("server", online: false), machine("laptop", online: true)]
+        #expect(IntentPicker.machine(machines, preferred: "server")?.id == "server")
+        #expect(IntentPicker.machine(machines, preferred: "gone")?.id == "laptop")
+        #expect(IntentPicker.machine(machines, preferred: nil)?.id == "laptop")
         // Nobody online: still pick something, the intent reports it as offline.
-        let allOffline = [machine("example-machine", online: false)]
-        #expect(IntentPicker.machine(allOffline, preferred: nil)?.id == "example-machine")
-        #expect(IntentPicker.machine([], preferred: "example-machine") == nil)
+        let allOffline = [machine("server", online: false)]
+        #expect(IntentPicker.machine(allOffline, preferred: nil)?.id == "server")
+        #expect(IntentPicker.machine([], preferred: "server") == nil)
     }
 
     @Test func sessionPicksNewestLiveOneOnTheMachine() {
@@ -148,11 +148,11 @@ struct IntentsTests {
             session("old", status: .idle, updated: 10),
             session("newest", status: .done, updated: 30),
             session("dead", status: .offline, updated: 99),
-            session("elsewhere", machine: "example-machine", status: .working, updated: 42),
+            session("elsewhere", machine: "laptop", status: .working, updated: 42),
         ]
-        #expect(IntentPicker.session(sessions, machine: "example-machine")?.sessionID == "newest")
+        #expect(IntentPicker.session(sessions, machine: "server")?.sessionID == "newest")
         #expect(IntentPicker.session(sessions, machine: "mac-home") == nil)
-        #expect(IntentPicker.session([session("dead", status: .offline)], machine: "example-machine") == nil)
+        #expect(IntentPicker.session([session("dead", status: .offline)], machine: "server") == nil)
     }
 
     @Test func pendingPicksTheOldestInteraction() {
@@ -186,13 +186,13 @@ struct IntentsTests {
 
     @Test func sessionEntityRoundTripsThroughItsIdentifier() {
         let entity = SessionEntity(session("s1", title: "修构建"))
-        #expect(entity.id == "example-machine/s1")
-        #expect(entity.key == SessionKey(machineID: "example-machine", sessionID: "s1"))
-        #expect(SessionEntity(machineID: "example-machine", sessionID: "s1", title: "").id == entity.id)
+        #expect(entity.id == "server/s1")
+        #expect(entity.key == SessionKey(machineID: "server", sessionID: "s1"))
+        #expect(SessionEntity(machineID: "server", sessionID: "s1", title: "").id == entity.id)
     }
 
     @Test func machineEntityCarriesTheOnlineFlag() {
-        #expect(MachineEntity(machine("example-machine", online: false)).online == false)
-        #expect(MachineEntity(id: "example-machine", name: "example-machine").online == true)
+        #expect(MachineEntity(machine("server", online: false)).online == false)
+        #expect(MachineEntity(id: "server", name: "server").online == true)
     }
 }

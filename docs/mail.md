@@ -88,7 +88,7 @@ iOS 客户端「Jarvis iOS」：`1234-abcd.apps.googleusercontent.com`，已写�
    不填这些，「目标对象」里的「发布应用」按钮是灰的，页面也不提示缺什么。
 5. 「目标对象」里**发布应用（In production）**。停在 Testing 时 refresh token 7 天就过期；发布后不过期。
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
-6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID `com.chirpet.jarvis`、团队 ID `ABCDE12345`，得到
+6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID 和团队 ID 填配置里的 `app.bundle_id` / `app.team_id`，得到
    `<数字>-<串>.apps.googleusercontent.com`。
 7. 写进 example-machine `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh example-machine`）。
    iOS 客户端的 client ID 是公开信息，不算密钥。

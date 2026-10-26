@@ -216,7 +216,11 @@ struct ChatsView: View {
             }
             .listStyle(.insetGrouped)
             .themedPage()
-            .navigationTitle("开发")
+            .navigationTitle("Agents")
+            // No title over the list (the tab says it); the name stays for the back button. Removing the title only
+            // works inline: a large title ignores toolbar(removing:).
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(removing: .title)
             .searchable(text: $query, prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
             .toolbar {

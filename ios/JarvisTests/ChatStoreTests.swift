@@ -131,17 +131,17 @@ struct TurnTests {
 
     @Test func agentOverridesItsMutedSpace() {
         var p = Pins()
-        p.spaces = ["example-machine/app"]
-        #expect(p.mutes(session: "example-machine/a", space: "example-machine/app"))         // muted by its space
-        p = p.togglingMute(session: "example-machine/a", space: "example-machine/app")       // 开启通知
-        #expect(!p.mutes(session: "example-machine/a", space: "example-machine/app") && p.allowed == ["example-machine/a"])
-        #expect(p.mutes(session: "example-machine/b", space: "example-machine/app"))         // the others stay muted
-        p = p.togglingMute(session: "example-machine/a", space: "example-machine/app")       // 屏蔽通知 again
-        #expect(p.mutes(session: "example-machine/a", space: "example-machine/app") && p.sessions == ["example-machine/a"] && p.allowed.isEmpty)
+        p.spaces = ["server/app"]
+        #expect(p.mutes(session: "server/a", space: "server/app"))         // muted by its space
+        p = p.togglingMute(session: "server/a", space: "server/app")       // 开启通知
+        #expect(!p.mutes(session: "server/a", space: "server/app") && p.allowed == ["server/a"])
+        #expect(p.mutes(session: "server/b", space: "server/app"))         // the others stay muted
+        p = p.togglingMute(session: "server/a", space: "server/app")       // 屏蔽通知 again
+        #expect(p.mutes(session: "server/a", space: "server/app") && p.sessions == ["server/a"] && p.allowed.isEmpty)
         p.spaces = []                                                       // space unmuted: own mute still holds
-        #expect(p.mutes(session: "example-machine/a", space: "example-machine/app"))
-        p = p.togglingMute(session: "example-machine/a", space: "example-machine/app")
-        #expect(!p.mutes(session: "example-machine/a", space: "example-machine/app") && p.sessions.isEmpty && p.allowed.isEmpty)
+        #expect(p.mutes(session: "server/a", space: "server/app"))
+        p = p.togglingMute(session: "server/a", space: "server/app")
+        #expect(!p.mutes(session: "server/a", space: "server/app") && p.sessions.isEmpty && p.allowed.isEmpty)
     }
 
     @Test func noticeAfterARecapJoinsTheWork() {

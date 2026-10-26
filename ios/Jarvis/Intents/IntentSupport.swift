@@ -93,7 +93,7 @@ nonisolated enum IntentFailure: LocalizedError {
         case .notPaired:
             "还没配对。先打开 Jarvis 扫 `jarvisd hub pair` 的二维码。"
         case .noMachine:
-            "现在没有在线的机器。看看 example-machine 上的 jarvisd 和 SSH 隧道。"
+            "现在没有在线的机器。看看 hub 上的 jarvisd 和各台电脑的 SSH 连接。"
         case .offline(let name):
             "\(name) 现在离线，看看 jarvisd 和 SSH 隧道。"
         case .noSession(let name):
@@ -120,11 +120,11 @@ nonisolated enum IntentFailure: LocalizedError {
             switch url.code {
             case .timedOut: return "hub 没响应\(whereHub)，稍后再试。"
             case .notConnectedToInternet, .networkConnectionLost: return "手机没网\(whereHub)。"
-            default: return "连不上 hub\(whereHub)，手机要在公司网络或 removed 上。"
+            default: return "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。"
             }
         }
         if (error as NSError).domain == NSURLErrorDomain {
-            return "连不上 hub\(whereHub)，手机要在公司网络或 removed 上。"
+            return "连不上 hub\(whereHub)，确认手机能访问 hub（同一个网络或 VPN）。"
         }
         return error.localizedDescription
     }

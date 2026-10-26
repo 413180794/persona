@@ -4,14 +4,13 @@
 #   ./scripts/release.sh [build-number]            # archive + check + upload
 #   NO_UPLOAD=1 ./scripts/release.sh               # archive + check + export only (build-release/export)
 #
-# Uses the App Store Connect API key (ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_PATH). Builds into build-release/ so it
-# never touches the simulator build. The export re-signs manually with the "Jarvis App Store" / "Jarvis Watch App
-# Store" profiles (create them first with scripts/asc_signing.py): the App Manager API key can't cloud-sign.
+# The App Store Connect API key, bundle id and team come from the config (docs/config.md). Builds into build-release/
+# so it never touches the simulator build. The export re-signs manually with the "Jarvis App Store" / "Jarvis Watch
+# App Store" profiles (create them first with scripts/asc_signing.py): the App Manager API key can't cloud-sign.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ASC_KEY_ID="${ASC_KEY_ID:-KEYID00001}"
-ASC_ISSUER_ID="${ASC_ISSUER_ID:-00000000-0000-0000-0000-000000000000}"
-ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/AuthKey_$ASC_KEY_ID.p8}"
+eval "$(python3 scripts/jarvis_config.py env)"
+python3 scripts/jarvis_config.py xcconfig
 OUT=build-release
 BUILD="${1:-$(date +%Y%m%d%H%M)}"
 # Keep every archive where Xcode Organizer looks, so each version's dSYMs stay around for symbolicating crashes.
@@ -39,11 +38,12 @@ if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat|openAssis
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi
 
-OPTS=scripts/ExportOptions.plist
+OPTS=$(mktemp -t export).plist
 if [ -n "${NO_UPLOAD:-}" ]; then
-  OPTS=$(mktemp -t export).plist
-  sed 's#<string>upload</string>#<string>export</string>#' scripts/ExportOptions.plist > "$OPTS"
+  python3 scripts/jarvis_config.py export-options "$OPTS" export
   rm -rf "$OUT/export"
+else
+  python3 scripts/jarvis_config.py export-options "$OPTS" upload
 fi
 # The archive itself is signed automatically with a development profile (that is why its aps-environment reads
 # `development`); this step re-signs both bundles with the App Store profiles, which is where the shipped binary gets

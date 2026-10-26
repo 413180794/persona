@@ -106,7 +106,7 @@ struct MailView: View {
             Group {
                 if loadedAccounts && accounts.isEmpty {
                     EmptyStateView(symbol: "envelope.badge", title: "添加邮箱",
-                                   message: "Gmail、飞书邮箱或任意 IMAP/SMTP 邮箱。凭据加密保存在 example-machine 上，Claude 也能帮你查信、回信（发信前会在手机上确认）。",
+                                   message: "Gmail、飞书邮箱或任意 IMAP/SMTP 邮箱。凭据加密保存在 hub 上，Claude 也能帮你查信、回信（发信前会在手机上确认）。",
                                    action: ("添加邮箱", { showAccounts = true }))
                 } else {
                     list

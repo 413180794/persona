@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - 信息
 
-/// Feishu's 消息 page (through lark-connector on example-machine): pinned chats across the top, 消息 / 未读 / 标记 tabs,
+/// Feishu's 消息 page (through lark-connector next to the hub): pinned chats across the top, 消息 / 未读 / 标记 tabs,
 /// a 分组 drawer with 已完成, 标记 and every label, Feishu's swipe and long-press actions; e-mail is one more group.
 struct InboxView: View {
     @Environment(AppModel.self) private var model

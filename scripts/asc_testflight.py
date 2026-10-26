@@ -6,20 +6,20 @@
   python3 scripts/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
 
-Internal testers must be users of the team in App Store Connect (tester@example.com is).
-The App ID comes from scripts/app_id.txt (see docs/release.md).
+Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
+The App ID comes from app_store.app_id in the config (docs/config.md).
 """
 import os
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from asc import APIError, app_id, get_all, request  # noqa: E402
+from asc import STORE, APIError, app_id, get_all, request  # noqa: E402
 
 APP_ID = app_id()
 GROUP = "Internal"
-TESTERS = ["tester@example.com"]
-FEEDBACK_EMAIL = "person@example.com"
+TESTERS = STORE.get("testers", [])  # [{"email", "first_name"}]
+FEEDBACK_EMAIL = STORE.get("feedback_email", "")
 
 BETA_INFO = {
     "en-US": "Jarvis is a personal assistant that drives Claude Code sessions on your own computers from the iPhone and the "
@@ -46,7 +46,7 @@ def group_id() -> str:
     return request("POST", "/v1/betaGroups", body)["data"]["id"]
 
 
-def add_tester(gid: str, email: str):
+def add_tester(gid: str, email: str, first_name: str):
     members = get_all(f"/v1/betaGroups/{gid}/betaTesters")
     if any(m["attributes"].get("email", "").lower() == email.lower() for m in members):
         print("already in group:", email)
@@ -54,7 +54,7 @@ def add_tester(gid: str, email: str):
     # One email has a tester record per app, so linking another app's record answer with 409
     # "Tester(s) cannot be assigned to this group because they belong to another app". Creating the
     # tester together with the group relationship works and reuses the person.
-    body = {"data": {"type": "betaTesters", "attributes": {"email": email, "firstName": "chyroc"},
+    body = {"data": {"type": "betaTesters", "attributes": {"email": email, "firstName": first_name},
                      "relationships": {"betaGroups": {"data": [{"type": "betaGroups", "id": gid}]}}}}
     try:
         request("POST", "/v1/betaTesters", body)
@@ -173,8 +173,8 @@ def main():
         attach(build, group_id())
     elif args[:1] in ([], ["setup"]):
         gid = group_id()
-        for email in TESTERS:
-            add_tester(gid, email)
+        for t in TESTERS:
+            add_tester(gid, t["email"], t.get("first_name") or t["email"].split("@")[0])
         status()
 
 

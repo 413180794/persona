@@ -12,7 +12,7 @@ struct RootView: View {
                         AssistantView()
                     }
                     .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
-                    Tab("开发", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
+                    Tab("Agents", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
                         ChatsView()
                     }
                     .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count)

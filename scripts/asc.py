@@ -2,12 +2,11 @@
 """Minimal App Store Connect API client with no third-party dependencies.
 
 The ES256 JWT is signed with the system `openssl`, so this runs on a stock
-macOS Python. Credentials come from the environment (see docs/release.md):
+macOS Python. Credentials come from the config (docs/config.md), overridable with ASC_KEY_ID, ASC_ISSUER_ID,
+ASC_KEY_PATH in the environment.
 
-  ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
-
-The App Store Connect app id (not the bundle id) is read from scripts/app_id.txt,
-which is written once the App record exists in App Store Connect.
+The App Store Connect app id (not the bundle id) is read from the config
+(app_store.app_id in the config) — set once the App record exists in App Store Connect.
 
 Usage as a CLI for quick reads:
   python3 scripts/asc.py GET /v1/apps
@@ -22,24 +21,27 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import jarvis_config  # noqa: E402
+
 API = "https://api.appstoreconnect.apple.com"
-KEY_ID = os.environ.get("ASC_KEY_ID", "KEYID00001")
-ISSUER = os.environ.get("ASC_ISSUER_ID", "00000000-0000-0000-0000-000000000000")
-KEY_PATH = os.path.expanduser(os.environ.get("ASC_KEY_PATH", f"~/.appstoreconnect/AuthKey_{KEY_ID}.p8"))
+CONFIG = jarvis_config.load()
+STORE = CONFIG.get("app_store", {})
+BUNDLE_ID = jarvis_config.get(CONFIG, "app.bundle_id", "")
+KEY_ID = os.environ.get("ASC_KEY_ID") or STORE.get("key_id", "")
+ISSUER = os.environ.get("ASC_ISSUER_ID") or STORE.get("issuer_id", "")
+KEY_PATH = os.path.expanduser(os.environ.get("ASC_KEY_PATH") or STORE.get("key_path") or f"~/.appstoreconnect/AuthKey_{KEY_ID}.p8")
 
 
 def app_id() -> str:
-    """App Store Connect numeric app id, from scripts/app_id.txt."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_id.txt")
-    if not os.path.exists(path):
-        sys.exit(
-            f"missing {path}\n"
-            "Create the App record on the web first (App Store Connect › Apps › + › New App, bundle id "
-            "com.chirpet.jarvis), then put its numeric Apple ID in scripts/app_id.txt. See docs/release.md."
-        )
-    value = open(path).read().strip()
+    """App Store Connect numeric app id, from app_store.app_id in the config (docs/config.md)."""
+    value = str(STORE.get("app_id", "")).strip()
     if not value.isdigit():
-        sys.exit(f"{path} must contain the numeric App ID (e.g. 1234567890), got {value!r}")
+        sys.exit(
+            f"app_store.app_id in {jarvis_config.path()} must be the numeric Apple ID of the App record, got {value!r}.\n"
+            f"Create the record on the web first (App Store Connect › Apps › + › New App, bundle id {BUNDLE_ID}). "
+            "See docs/release.md."
+        )
     return value
 
 

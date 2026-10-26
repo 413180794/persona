@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/mdp/qrterminal/v3"
 
@@ -33,6 +34,14 @@ type GoogleConfig struct {
 	Proxy string `json:"proxy,omitempty"`
 }
 
+type AssistantProfile struct {
+	Owner string `json:"owner,omitempty"` // how the assistant refers to the user
+	Notes string `json:"notes,omitempty"` // Markdown appended to the assistant's instructions
+	// Defaults until changed in the app: the machine it runs on (default: the hub's own) and the launcher.
+	Machine  string `json:"machine,omitempty"`
+	Launcher string `json:"launcher,omitempty"`
+}
+
 type Config struct {
 	Listen             string `json:"listen"`
 	Token              string `json:"token"`
@@ -47,6 +56,9 @@ type Config struct {
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
 	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`
+	// Assistant personalizes the 对话 tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
+	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
+	Assistant AssistantProfile `json:"assistant"`
 
 	dir string
 }
@@ -56,19 +68,17 @@ func dataDir() string {
 	return filepath.Join(home, ".jarvis")
 }
 
+// defaultConfig is what a first run writes to ~/.jarvis/hub.json: this machine only, reachable by its host name.
+// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md).
 func defaultConfig() *Config {
 	host, _ := os.Hostname()
+	short := strings.Split(host, ".")[0]
 	return &Config{
 		Listen:             ":18660",
 		Token:              randomHex(24),
-		PublicURL:          fmt.Sprintf("http://%s.example.com:18660", host),
+		PublicURL:          fmt.Sprintf("http://%s:18660", host),
 		HookTimeoutMinutes: 30,
-		Machines: []MachineConfig{
-			{ID: "example-machine", Name: "公司 example-machine", Kind: "local", Icon: "server"},
-			{ID: "example-machine", Name: "公司 Mac", Kind: "ssh", SSHHost: "example-machine", Icon: "laptop"},
-			{ID: "example-machine", Name: "家里的公司 Mac", Kind: "ssh", SSHHost: "example-machine", Icon: "laptop"},
-			{ID: "mac-home", Name: "家里的 Mac", Kind: "ssh", SSHHost: "mac-home", Icon: "desktop"},
-		},
+		Machines:           []MachineConfig{{ID: short, Name: short, Kind: "local", Icon: "server"}},
 	}
 }
 

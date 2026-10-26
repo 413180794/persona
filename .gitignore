@@ -10,3 +10,6 @@ DerivedData/
 __pycache__/
 /tmp/
 florak/
+/ios/Config.xcconfig
+# Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
+/CLAUDE.local.md
