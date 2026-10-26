@@ -447,6 +447,65 @@ struct NoticeRow: View {
     }
 }
 
+/// Under an answer: background tasks reported back after it. Short and quiet; tap for what the agent did next.
+struct WakeChip: View {
+    var notices: [Item]
+    var live: Bool
+    var open: () -> Void
+
+    var body: some View {
+        let summary = notices.count == 1 ? NoticeRow.wakeSummary(notices[0].text ?? "") : nil
+        let failed = notices.contains { NoticeRow.wakeSummary($0.text ?? "").failed }
+        Button(action: open) {
+            HStack(spacing: 6) {
+                if live {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: failed ? "exclamationmark.circle.fill" : "bell.fill")
+                        .foregroundStyle(failed ? Theme.danger : Theme.accent)
+                }
+                Text(live ? "后台任务完成 · 正在处理" : summary?.text ?? "\(notices.count) 个后台任务完成")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.primary.opacity(0.05), in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("后台任务完成，查看之后的消息")
+    }
+}
+
+/// The drawer behind a WakeChip: which tasks reported back, then what the agent did and said after.
+struct WakeDrawer<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    var notices: [Item]
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    content()
+                }
+                .padding(16)
+            }
+            .background(Theme.pageBackground)
+            .navigationTitle(notices.count > 1 ? "\(notices.count) 个后台任务完成" : "后台任务完成")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 /// Claude Code's "while you were away" recap: a quiet card, not a centered notice pill.
 struct RecapCard: View {
     var item: Item

@@ -79,6 +79,12 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     var process: [ChatRow] = []
     var answer: ChatRow?
     var trailing: [ChatRow] = [] // notices that belong to the turn (e.g. "interrupted")
+    /// Background tasks that woke the agent during this exchange (their notices).
+    var wakes: [Item] = []
+    /// Everything from the first wake on, for the "后台任务完成" drawer.
+    var afterWake: [ChatRow] = []
+    /// What came after the answer (a follow-up once a background task reported back): only in the drawer.
+    var tail: [ChatRow] = []
     /// Everything the agent did in arrival order, answer included.
     var steps: [ChatRow] = []
     /// Messages and steps in arrival order (how the running turn is shown: input sent mid-turn stays where it was sent).
@@ -104,6 +110,36 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
         }
     }
     var interimCount: Int { process.filter { if case .assistant = $0 { true } else { false } }.count }
+
+    /// Background tasks split an exchange into runs (before the first wake, after each one), each ending in the
+    /// agent's words. The answer is the longest of those: a full summary followed by "build 42 is up", or "waiting
+    /// for the build" followed by the full summary. What comes before it folds into one work line (wakes included);
+    /// what comes after it shows only in the drawer.
+    mutating func pickAnswerAcrossWakes() {
+        let all = ordered
+        var candidates: [Int] = []
+        var last: Int?
+        for (i, r) in all.enumerated() {
+            switch r {
+            case .notice(let n) where n.wake == true:
+                if let l = last { candidates.append(l) }
+                last = nil
+            case .assistant: last = i
+            default: break
+            }
+        }
+        if let l = last { candidates.append(l) }
+        func length(_ i: Int) -> Int { if case .assistant(let a) = all[i] { a.text?.count ?? 0 } else { 0 } }
+        var pick: Int?
+        for c in candidates where pick == nil || length(c) >= length(pick!) { pick = c } // ties: the later one
+        if let first = all.firstIndex(where: { if case .notice(let n) = $0 { n.wake == true } else { false } }) {
+            afterWake = Array(all[first...]).filter { if case .user = $0 { false } else { true } }
+        }
+        guard let pick else { return }
+        tail = all[(pick + 1)...].filter { if case .user = $0 { false } else { true } }
+        ordered = Array(all[...pick]) + all[(pick + 1)...].filter { if case .user = $0 { true } else { false } }
+        process = ordered.filter { if case .user = $0 { false } else { true } }
+    }
 }
 
 /// Rows grouped for display: turns, plus standalone rows (recaps, compaction notices) between them.
@@ -124,6 +160,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
 
         func close() {
             guard var t = current else { return }
+            if !t.wakes.isEmpty { t.pickAnswerAcrossWakes() }
             // The answer is the last thing the assistant said; everything before it is process.
             // (Steps after the final words, rare trailing tool calls, stay in the process.)
             t.steps = t.process
@@ -150,10 +187,13 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
             case .notice(let item):
                 // Inside a turn: "interrupted" closes it visibly; compaction / API errors are part of the process
                 // (auto-compaction happens mid-turn and must not split it).
-                if item.wake == true || current == nil {
-                    // A background task woke the idle agent (or one finished after a recap): the turn before it is
-                    // over, with its own answer; what the agent does now is a new exchange that starts at the notice.
-                    close()
+                if item.wake == true, current != nil {
+                    // A background task woke the idle agent: still the same exchange (the answer is picked at close).
+                    current!.wakes.append(item)
+                    current!.process.append(row)
+                    current!.ordered.append(row)
+                } else if current == nil {
+                    // e.g. a background command finishing after a recap: part of the (next) work, never its own line.
                     current = Turn(id: row.id)
                     current!.process.append(row)
                     current!.ordered.append(row)

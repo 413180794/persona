@@ -326,7 +326,7 @@ struct AssistantHistory: View {
     }
 }
 
-/// Tool activity in the assistant: one quiet line ("用了 4 个工具 · 运行 3 · 读取 1"), expandable to the steps.
+/// Tool activity in the assistant: one quiet line ("工具 4 · 运行 3 · 读取 1"), expandable to the steps.
 struct AssistantToolsRow: View {
     var steps: [ToolStep]
     @State private var open = false
@@ -348,7 +348,7 @@ struct AssistantToolsRow: View {
                         }
                     } else {
                         Image(systemName: "wrench.and.screwdriver")
-                        Text("用了 \(calls.count) 个工具")
+                        Text("工具 \(calls.count)")
                         Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 0)

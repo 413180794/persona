@@ -158,25 +158,44 @@ struct TurnTests {
         if case .assistant(let a) = t.answer { #expect(a.text == "the command finished") } else { Issue.record("answer") }
     }
 
-    @Test func backgroundWakeEndsTheTurnBeforeIt() {
+    @Test func backgroundWakeKeepsTheSubstantialAnswer() {
         var wake = item(4, .notice, role: "system", text: "Background command \"Release\" completed (exit code 0)")
         wake.wake = true
-        let items = [
+        let summary = "All four are done and pushed; here is what changed and how to try each of them on the phone."
+
+        // A full summary, then a short follow-up once the build is up: the summary is the answer, the follow-up
+        // waits in the drawer.
+        var items = [
             item(1, .text, role: "user", text: "go"), item(2, .toolUse, tool: "Bash", id: "a"),
-            item(3, .text, text: "the summary"),
+            item(3, .text, text: summary),
             wake, item(5, .toolUse, tool: "Bash", id: "b"), item(6, .text, text: "build 42 is up"),
         ]
-        let blocks = ChatBlock.build(ChatStore.buildRows(items))
-        #expect(blocks.count == 2) // the summary stays the first turn's answer, not folded into one long turn
-        guard case .turn(let first) = blocks[0], case .turn(let woke) = blocks[1] else { Issue.record("turns"); return }
-        if case .assistant(let a) = first.answer { #expect(a.text == "the summary") } else { Issue.record("answer") }
-        if case .assistant(let a) = woke.answer { #expect(a.text == "build 42 is up") } else { Issue.record("answer") }
-        #expect(woke.users.isEmpty && woke.ordered.first?.id == wake.id)
+        var blocks = ChatBlock.build(ChatStore.buildRows(items))
+        #expect(blocks.count == 1) // one exchange, not split at the wake
+        guard case .turn(let a) = blocks[0] else { Issue.record("turn"); return }
+        if case .assistant(let i) = a.answer { #expect(i.text == summary) } else { Issue.record("answer") }
+        #expect(a.wakes.map(\.id) == [wake.id])
+        #expect(a.tail.count == 3) // the wake, the follow-up tool and words: only in the drawer
+        #expect(a.ordered.last?.id == "3#0")
+        #expect(a.afterWake.first?.id == wake.id && a.afterWake.count == 3)
 
-        // Absorbed mid-turn (no wake): the agent never stopped, it stays one turn.
+        // "Waiting for it", then the summary after the wake: the summary is the answer, and every tool before it
+        // (the wake included) is one stretch of work.
+        items = [
+            item(1, .text, role: "user", text: "go"), item(2, .toolUse, tool: "Bash", id: "a"),
+            item(3, .text, text: "waiting for the build"),
+            wake, item(5, .toolUse, tool: "Bash", id: "b"), item(6, .text, text: summary),
+        ]
+        blocks = ChatBlock.build(ChatStore.buildRows(items))
+        guard case .turn(let b) = blocks[0], blocks.count == 1 else { Issue.record("turn"); return }
+        if case .assistant(let i) = b.answer { #expect(i.text == summary) } else { Issue.record("answer") }
+        #expect(b.tail.isEmpty && b.process.count == 4) // tool, interim words, wake, tool
+
+        // Absorbed mid-turn (no wake): an ordinary turn, the last words are the answer.
         wake.wake = nil
-        let one = ChatBlock.build(ChatStore.buildRows(items.map { $0.seq == 4 ? wake : $0 }))
-        #expect(one.count == 1)
+        blocks = ChatBlock.build(ChatStore.buildRows(items.map { $0.seq == 4 ? wake : $0 }))
+        guard case .turn(let c) = blocks[0] else { Issue.record("turn"); return }
+        #expect(c.wakes.isEmpty)
     }
 
     @Test func wakeSummaryReadsInChinese() {

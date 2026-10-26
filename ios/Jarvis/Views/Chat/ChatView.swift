@@ -51,6 +51,8 @@ struct ChatView: View {
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
     @State private var closing: Session?
+    /// The turn whose "后台任务完成" drawer is open.
+    @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
     /// Safari-style: reading on hides the navigation bar, agent strip and tabs behind one slim bar; scrolling back,
     /// tapping the bar or reaching the newest message brings them back.
@@ -268,13 +270,15 @@ struct ChatView: View {
                         }.map(\.element)
                         out.append(.work(id: groupID, items: Self.workItems(rest), live: false, start: t.startedAt, end: t.endedAt))
                         if let answer { out.append(.row(t.ordered[answer])) }
+                        if !t.wakes.isEmpty { out.append(.wakes(t, live: false)) }
                         out += t.trailing.map { .row($0) }
                         continue
                     }
                     out.append(.splitHeader(id: groupID, count: messages.count))
                 }
                 for (k, seg) in segments.enumerated() {
-                    let live = t.id == liveID && k == segments.count - 1
+                    // Once the answer is in and a background task woke the agent, the new work runs behind the chip.
+                    let live = t.id == liveID && k == segments.count - 1 && t.tail.isEmpty
                     if let u = seg.user { out.append(.row(u)) }
                     // Photos sent with the message (Claude inlines a pasted image path as an image block) sit under
                     // it, not in the agent's work.
@@ -290,6 +294,8 @@ struct ChatView: View {
                     }
                     if let last { out.append(.row(seg.rows[last])) }
                 }
+                // After the answer: one small line for the background tasks; what they led to opens in a drawer.
+                if !t.wakes.isEmpty { out.append(.wakes(t, live: t.id == liveID && !t.tail.isEmpty)) }
                 out += t.trailing.map { .row($0) }
             }
         }
@@ -367,7 +373,30 @@ struct ChatView: View {
                 Haptics.tap()
                 withAnimation(.snappy) { if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) } }
             }
+        case .wakes(let t, let live):
+            WakeChip(notices: t.wakes, live: live) {
+                Haptics.tap()
+                wakeDrawer = t.id
+            }
         }
+    }
+
+    /// The drawer's content: what happened from the first wake on, as messages and work lines.
+    private func wakeLines(_ t: Turn, live: Bool) -> [ChatLine] {
+        var out: [ChatLine] = []
+        let segments = Self.segments(t.afterWake)
+        for (k, seg) in segments.enumerated() {
+            if let u = seg.user { out.append(.row(u)) }
+            let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
+            let isLive = live && k == segments.count - 1
+            let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
+            if !items.isEmpty || isLive {
+                out.append(.work(id: "dw-" + (seg.rows.first?.id ?? t.id), items: items, live: isLive,
+                                 start: seg.rows.first?.firstTS, end: seg.rows.last?.lastTS))
+            }
+            if let last { out.append(.row(seg.rows[last])) }
+        }
+        return out
     }
 
 
@@ -631,6 +660,14 @@ struct ChatView: View {
         .environment(menu)
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
+        .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) {
+            // Looked up live: the drawer follows the work while the agent is still on it.
+            let t = store.blocks.lazy.compactMap { b -> Turn? in if case .turn(let t) = b, t.id == wakeDrawer { t } else { nil } }.first
+            WakeDrawer(notices: t?.wakes ?? []) {
+                if let t { ForEach(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty)) { lineView($0) } }
+            }
+            .environment(menu)
+        }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: followsEnd) { _, follows in
             frozenAt = follows ? nil : chatLines(Self.debugTrim(store.blocks)).last?.id
@@ -722,6 +759,14 @@ struct ChatView: View {
                 Task { try? await Task.sleep(for: .seconds(4)); openSpace?(space) }
             }
             if UserDefaults.standard.bool(forKey: "showCompactChrome") { chromeHidden = true } // folded, for screenshots
+            if UserDefaults.standard.bool(forKey: "showWakeDrawer") { // the newest "后台任务完成" drawer
+                Task {
+                    try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 30 : 6))
+                    wakeDrawer = Self.debugTrim(model.chat(key).blocks).reversed().lazy.compactMap { b -> String? in
+                        if case .turn(let t) = b, !t.wakes.isEmpty { t.id } else { nil }
+                    }.first
+                }
+            }
             if UserDefaults.standard.bool(forKey: "showShareCard") { // the share card of the latest answer
                 Task {
                     try? await Task.sleep(for: .seconds(5))
@@ -1322,6 +1367,8 @@ enum ChatLine: Identifiable {
     case mergedUsers(id: String, rows: [ChatRow])
     /// A finished multi-message turn unfolded: "N 条消息 · 收起".
     case splitHeader(id: String, count: Int)
+    /// "后台任务完成" under an answer: tap for what the agent did once the tasks reported back.
+    case wakes(Turn, live: Bool)
 
     var id: String {
         switch self {
@@ -1330,6 +1377,7 @@ enum ChatLine: Identifiable {
         case .userImages(let id, _): id
         case .mergedUsers(let id, _): id
         case .splitHeader(let id, _): id + "-h"
+        case .wakes(let t, _): "wk-" + t.id
         }
     }
 
@@ -1365,8 +1413,8 @@ enum WorkItem: Identifiable {
     }
 }
 
-/// The quiet line under a message: what the agent did for it. Finished: "调用了 3 个工具，思考 1 次 · 1 分 20 秒 ›";
-/// running: a spinner and "正在工作 39 秒 · 调用了 2 个工具" (ticking) with the terminal at the end. Tap to list every
+/// The quiet line under a message: what the agent did for it. Finished: "工具 3 · 思考 1 · 1 分 20 秒 ›";
+/// running: a spinner and "正在工作 39 秒 · 工具 2" (ticking) with the terminal at the end. Tap to list every
 /// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
 struct WorkLine: View {
     @Environment(\.openSubagent) private var openSubagent
@@ -1453,17 +1501,20 @@ struct WorkLine: View {
         for item in items {
             switch item {
             case .step(.call): calls += 1
-            case .step(.thought(let t)): if t.kind == .notice { notices += 1 } else { thoughts += 1 }
+            case .step(.thought(let t)):
+                // A background task reporting back counts as one of the agent's tools.
+                if t.kind == .notice { if t.wake == true { calls += 1 } else { notices += 1 } } else { thoughts += 1 }
             case .text: texts += 1
             }
         }
         var parts: [String] = []
-        if calls > 0 { parts.append("\(calls) 个工具") }
+        // One shape for every count: name, then number ("工具 3 · 思考 2 · 回复 1").
+        if calls > 0 { parts.append("工具 \(calls)") }
         if !short {
             if thoughts > 0 { parts.append("思考 \(thoughts)") }
             if texts > 0 { parts.append("回复 \(texts)") }
         }
-        if parts.isEmpty && notices > 0 { parts.append("后台通知 \(notices) 条") }
+        if parts.isEmpty && notices > 0 { parts.append("后台通知 \(notices)") }
         let took = Self.duration(from: start, to: now)
         if live { parts.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { parts.append(took) }
         return parts.isEmpty ? "已完成" : parts.joined(separator: " · ")
