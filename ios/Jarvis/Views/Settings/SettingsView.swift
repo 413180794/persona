@@ -5,6 +5,8 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmUnpair = false
     @State private var showPair = false
+    @State private var debugAssistant = false
+    @State private var debugOpened = false
 
     var body: some View {
         NavigationStack {
@@ -93,6 +95,11 @@ struct SettingsView: View {
             .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .task { await model.refreshAssistant() }
+            #if DEBUG
+            // `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about` (with `-tab settings`)
+            .navigationDestination(isPresented: $debugAssistant) { AssistantSettingsView() }
+            .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
+            #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }
             }
@@ -106,6 +113,10 @@ struct AssistantSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [Launcher] = []
     @State private var selection = ""
+    @State private var routinesOn: Int?
+    @State private var followupCount: Int?
+    @State private var memoryCount: Int?
+    @State private var debugPage: String?
 
     /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
     private var machinesLine: String {
@@ -127,13 +138,49 @@ struct AssistantSettingsView: View {
                 LabeledContent("运行在", value: model.machine(machineID)?.name ?? machineID)
                 LabeledContent("工作目录", value: "~/.jarvis/assistant")
             } footer: {
-                Text("每段对话是 \(model.machine(machineID)?.name ?? machineID) 上 herdr 里的一个 Claude，改了只影响新对话。")
+                Text("每段对话在 \(model.machine(machineID)?.name ?? machineID) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器只影响新对话。")
             }
-            Section("能访问") {
+            Section {
+                NavigationLink { AssistantRoutinesView() } label: {
+                    LabeledContent {
+                        if let routinesOn { Text(routinesOn == 0 ? "未开启" : "\(routinesOn) 个开启") }
+                    } label: {
+                        Label("定时任务", systemImage: "alarm")
+                    }
+                }
+                NavigationLink { AssistantFollowupsView() } label: {
+                    LabeledContent {
+                        if let followupCount, followupCount > 0 { Text("\(followupCount)") }
+                    } label: {
+                        Label("已安排的跟进", systemImage: "calendar.badge.clock")
+                    }
+                }
+                NavigationLink { AssistantMemoryView() } label: {
+                    LabeledContent {
+                        if let memoryCount, memoryCount > 0 { Text("\(memoryCount) 条") }
+                    } label: {
+                        Label("记忆", systemImage: "brain")
+                    }
+                }
+                NavigationLink { AssistantNotesView() } label: {
+                    Label("关于我", systemImage: "person.text.rectangle")
+                }
+            } header: {
+                Text("主动做事和记忆")
+            } footer: {
+                Text("Jarvis 会按时自己开始工作，到点跟进它答应你的事，并记住你的偏好。")
+            }
+            Section {
                 Label(machinesLine, systemImage: "macbook.and.iphone")
-                Label("飞书日历、文档、消息、邮件等工作数据", systemImage: "building.2")
+                Label("各台电脑上的 Agent：看状态、读对话、发消息、开新的", systemImage: "rectangle.stack.badge.person.crop")
+                Label("飞书：消息、日历、文档、会议纪要、任务、邮件", systemImage: "building.2")
                 Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: "iphone")
                 Label("你添加的所有邮箱", systemImage: "envelope")
+                Label("在手机上问你、给你推送", systemImage: "bell.badge")
+            } header: {
+                Text("能访问")
+            } footer: {
+                Text("发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")
             }
         }
         .navigationTitle("助手")
@@ -141,10 +188,35 @@ struct AssistantSettingsView: View {
             selection = model.assistantConfig?.launcher ?? "ccc"
             launchers = (try? await model.launchers(machineID)) ?? []
         }
+        .task { await loadCounts() }
+        #if DEBUG
+        .onAppear {
+            if debugPage == nil, let p = UserDefaults.standard.string(forKey: "openAssistantPage"), p != "assistant" { debugPage = p }
+        }
+        .navigationDestination(item: $debugPage) { p in
+            switch p {
+            case "routines", "routine", "newRoutine": AssistantRoutinesView()
+            case "followups": AssistantFollowupsView()
+            case "memory", "memoryFile", "memoryEdit": AssistantMemoryView()
+            default: AssistantNotesView()
+            }
+        }
+        #endif
         .onChange(of: selection) { old, new in
             guard !old.isEmpty, old != new else { return }
             Task { await model.setAssistantLauncher(new) }
         }
+    }
+
+    /// The counts on the rows; reloaded each time the page shows (coming back from a sub-page included).
+    private func loadCounts() async {
+        guard let api = model.api else { return }
+        async let routines = try? api.routines()
+        async let followups = try? api.followups()
+        async let memory = try? api.assistantMemory()
+        if let r = await routines { routinesOn = r.filter(\.enabled).count }
+        if let f = await followups { followupCount = f.count }
+        if let m = await memory { memoryCount = m.filter { $0.name != AssistantMemoryEntry.index }.count }
     }
 }
 
