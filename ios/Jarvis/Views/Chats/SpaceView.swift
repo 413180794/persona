@@ -11,6 +11,8 @@ struct SiblingStrip: View {
     @Environment(\.openSpace) private var openSpace
     var current: SessionKey
     var select: (SessionKey) -> Void
+    /// The strip's own scroll position (not ScrollViewReader: its scrollTo drags the page above along).
+    @State private var shown: SessionKey?
 
     var body: some View {
         let siblings = model.siblings(of: current)
@@ -50,11 +52,17 @@ struct SiblingStrip: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+                        .id(s.key)
                     }
                 }
+                .scrollTargetLayout()
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+            // A space with many tabs opens on the current one, not the first few.
+            .scrollPosition(id: $shown, anchor: .center)
+            .onAppear { shown = current }
+            .onChange(of: current) { _, k in withAnimation(.snappy) { shown = k } }
             .background(.bar)
         }
     }

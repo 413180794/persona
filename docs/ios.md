@@ -30,6 +30,7 @@ Bundle ID `com.chirpet.jarvis`、`com.chirpet.jarvis.watchkitapp`。界面中文
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
 - 同空间同伴条（开发页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。
+  tab 多时可以左右滑，打开时滚到当前 tab（居中），用横向 ScrollView 自己的 `scrollPosition`，不用 ScrollViewReader（会连带滚动外层）。
   条最前面的空间名「jarvis ›」点进空间页（这个空间的所有 Agent），对话页「…」→「空间里的所有 Agent」同样（只有一个 Agent、没有同伴条时用它）。
   对话本来就是从这个空间页点进来的，就直接返回，不再叠一层（ChatsView 记着哪一层是哪个空间页：`spaceAt`）。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
