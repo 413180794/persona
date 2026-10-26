@@ -59,6 +59,8 @@ struct ChatView: View {
     @State private var chromeHidden = false
     @State private var userDragging = false
     @State private var scrollTravel: CGFloat = 0
+    /// When the chrome last folded or unfolded: the list resizes with it, and that move is not the user's.
+    @State private var chromeToggledAt = Date.distantPast
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
 
@@ -540,6 +542,11 @@ struct ChatView: View {
     private var mainFooter: some View {
             VStack(spacing: 10) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
+                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "showSampleQuestion"), let ix = Interaction.sampleQuestion(key) {
+                    InteractionPanel(interaction: ix) // `-showSampleQuestion YES`: the question UI, for screenshots
+                }
+                #endif
                 if let loop = session?.loop, style == .dev {
                     LoopStrip(loop: loop) { model.stopLoop(key) }
                 }
@@ -645,7 +652,12 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { old, new in scrolled(by: new - old, at: new) }
+        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height) }) { old, new in
+            // Folding the chrome changes the list's height, which moves the offset: never read that as scrolling
+            // (it toggled the chrome back, which moved it again — a loop).
+            if old.height != new.height { scrollTravel = 0; return }
+            scrolled(by: new.offset - old.offset, at: new.offset)
+        }
         .onScrollPhaseChange { _, phase in
             // The user's own scrolling, flick included (programmatic jumps and streaming are .animating).
             userDragging = phase == .tracking || phase == .interacting || phase == .decelerating
@@ -686,10 +698,13 @@ struct ChatView: View {
     /// going back shows it, and so does arriving at the newest end.
     private func scrolled(by delta: CGFloat, at offset: CGFloat) {
         guard style == .dev, pane == .chat, userDragging, delta != 0 else { return }
+        guard Date.now.timeIntervalSince(chromeToggledAt) > 0.5 else { scrollTravel = 0; return } // settling
         if offset < 40 { showChrome(); return }
         if (delta < 0) != (scrollTravel < 0) { scrollTravel = 0 }
         scrollTravel += delta
         if scrollTravel < -60, !chromeHidden {
+            chromeToggledAt = .now
+            scrollTravel = 0
             withAnimation(.snappy(duration: 0.25)) { chromeHidden = true; showInfo = false }
         } else if scrollTravel > 60, chromeHidden {
             showChrome()
@@ -698,7 +713,9 @@ struct ChatView: View {
 
     private func showChrome() {
         scrollTravel = 0
-        if chromeHidden { withAnimation(.snappy(duration: 0.25)) { chromeHidden = false } }
+        guard chromeHidden else { return }
+        chromeToggledAt = .now
+        withAnimation(.snappy(duration: 0.25)) { chromeHidden = false }
     }
 
     /// The chrome folded away: back, and where you are ("app › leader · 对话") — tap it for everything again.
@@ -1531,3 +1548,9 @@ struct WorkLine: View {
 
 private struct EditIndex: Identifiable { var id: Int }
 
+
+/// The chat list's offset and visible height, watched together (see `scrolled`).
+private struct ListScroll: Equatable {
+    var offset: CGFloat
+    var height: CGFloat
+}

@@ -178,6 +178,9 @@ struct InteractionPanel: View {
     }
 }
 
+/// AskUserQuestion, iOS-list style: the question, its options in one grouped box (numbered like the terminal, a
+/// check when picked, 推荐 for the suggested one), "其他" as the box's last row. One question, one choice: a tap answers.
+/// Several questions: "header · 1/2" on top, small 上一题 / 下一题 / 提交 below.
 struct QuestionForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
@@ -185,79 +188,188 @@ struct QuestionForm: View {
     @State private var other: [String: String] = [:]
     @State private var page = 0
     @State private var sending = false
+    @State private var writing = false
+    @FocusState private var otherFocused: Bool
 
     private var questions: [Question] { interaction.questions ?? [] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if questions.count > 1 {
-                Picker("问题", selection: $page) {
-                    ForEach(Array(questions.enumerated()), id: \.offset) { i, q in
-                        Text(q.header ?? "问题 \(i + 1)").tag(i)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
             if questions.indices.contains(page) {
                 let q = questions[page]
-                Text(q.question).font(.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
-                if q.multiSelect { Text("可多选").font(.caption).foregroundStyle(.secondary) }
-                VStack(spacing: 8) {
-                    ForEach(q.options, id: \.label) { opt in option(q, opt) }
-                    TextField("其他（自己写）", text: Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 }), axis: .vertical)
-                        .lineLimit(1...4)
-                        .padding(12)
-                        .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
+                if questions.count > 1 || q.header != nil || q.multiSelect {
+                    Text([q.header.flatMap { $0.isEmpty ? nil : $0 },
+                          questions.count > 1 ? "\(page + 1)/\(questions.count)" : nil,
+                          q.multiSelect ? "可多选" : nil].compactMap { $0 }.joined(separator: " · "))
+                        .monospacedDigit()
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 }
+                Text(q.question)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                options(q)
+                    .id(page)
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             }
-            Button {
-                submit()
-            } label: {
-                HStack {
-                    if sending { ProgressView().tint(.white) }
-                    Text(questions.count > 1 && page < questions.count - 1 && !allAnswered ? "下一题" : "提交回答")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .themedButton(prominent: true)
-            .controlSize(.large)
-            .disabled(!canAdvance || sending)
+            if needsFooter { footer }
         }
+        .onChange(of: page) { _, p in writing = questions.indices.contains(p) && !(other[questions[p].question] ?? "").isEmpty }
     }
 
-    private func option(_ q: Question, _ opt: QuestionOption) -> some View {
-        let selected = picks[q.question, default: []].contains(opt.label)
-        return Button {
-            Haptics.tap()
-            var set = picks[q.question, default: []]
-            if q.multiSelect {
-                if selected { set.remove(opt.label) } else { set.insert(opt.label) }
-            } else {
-                set = [opt.label]
-                other[q.question] = ""
+    // MARK: Options
+
+    private func options(_ q: Question) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(q.options.enumerated()), id: \.element.label) { i, opt in
+                if i > 0 { Divider().padding(.leading, 50) }
+                option(q, opt, number: i + 1)
             }
-            picks[q.question] = set
-            // Single question, single choice: answer right away.
-            if questions.count == 1 && !q.multiSelect { submit() }
-        } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: q.multiSelect ? (selected ? "checkmark.square.fill" : "square") : (selected ? "largecircle.fill.circle" : "circle"))
-                    .foregroundStyle(selected ? Theme.accent : .secondary)
-                    .font(.title3)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(opt.label).font(.body.weight(.medium)).foregroundStyle(.primary)
+            Divider().padding(.leading, 50)
+            otherRow(q)
+        }
+        .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 16, style: .continuous))
+    }
+
+    private func option(_ q: Question, _ opt: QuestionOption, number: Int) -> some View {
+        let selected = picks[q.question, default: []].contains(opt.label)
+        let (label, recommended) = Self.display(opt.label)
+        return Button { pick(q, opt) } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle().fill(selected ? Theme.accent : Color.primary.opacity(0.08))
+                    if selected {
+                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                    } else {
+                        Text("\(number)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 24, height: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(label).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        if recommended {
+                            Text("推荐")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.accent.opacity(0.12), in: .capsule)
+                                .fixedSize()
+                        }
+                    }
                     if let d = opt.description, !d.isEmpty {
-                        Text(d).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(d).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
             }
             .multilineTextAlignment(.leading)
-            .padding(12)
-            .background(selected ? Theme.accent.opacity(0.12) : Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? Theme.accent.opacity(0.5) : .clear, lineWidth: 1))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(selected ? Theme.accent.opacity(0.08) : .clear)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(sending)
+        .accessibilityLabel(label + (recommended ? "，推荐" : "") + (selected ? "，已选" : ""))
+    }
+
+    /// "其他": a quiet row; tapping it turns it into a field with its own send arrow.
+    @ViewBuilder private func otherRow(_ q: Question) -> some View {
+        let text = Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 })
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "pencil")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(Color.primary.opacity(0.08), in: .circle)
+            if writing {
+                TextField("写下你的回答", text: text, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($otherFocused)
+                    .onChange(of: text.wrappedValue) { _, v in
+                        if !v.trimmingCharacters(in: .whitespaces).isEmpty, !q.multiSelect { picks[q.question] = [] }
+                    }
+                if !needsFooter, !text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button { submit() } label: {
+                        Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("发送回答")
+                }
+            } else {
+                Text("其他回答…").foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .contentShape(.rect)
+        .onTapGesture {
+            guard !writing else { return }
+            withAnimation(.snappy) { writing = true }
+            otherFocused = true
+        }
+    }
+
+    // MARK: Footer (several questions, or several choices)
+
+    private var needsFooter: Bool { questions.count > 1 || questions.first?.multiSelect == true }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            if page > 0 {
+                Button { withAnimation(.snappy) { page -= 1 } } label: { Text("上一题").lineLimit(1) }
+                    .themedButton()
+            }
+            Spacer(minLength: 0)
+            Button { advance() } label: {
+                HStack(spacing: 6) {
+                    if sending { ProgressView().controlSize(.small).tint(.white) }
+                    Text(isLast ? "提交" : "下一题").lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+            }
+            .themedButton(prominent: true)
+            .disabled(!canAdvance || sending)
+        }
+        .controlSize(.regular)
+    }
+
+    // MARK: Logic
+
+    /// "取最长的那段 (Recommended)" → ("取最长的那段", true). The answer sent back keeps the original label.
+    static func display(_ label: String) -> (String, Bool) {
+        for suffix in [" (Recommended)", "(Recommended)", "（推荐）", "(推荐)"] where label.hasSuffix(suffix) {
+            return (String(label.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces), true)
+        }
+        return (label, false)
+    }
+
+    private func pick(_ q: Question, _ opt: QuestionOption) {
+        Haptics.tap()
+        var set = picks[q.question, default: []]
+        if q.multiSelect {
+            if set.contains(opt.label) { set.remove(opt.label) } else { set.insert(opt.label) }
+        } else {
+            set = [opt.label]
+            other[q.question] = ""
+            writing = false
+        }
+        withAnimation(.snappy(duration: 0.2)) { picks[q.question] = set }
+        guard !q.multiSelect else { return }
+        if questions.count == 1 {
+            submit() // one question, one choice: the tap is the answer
+        } else if page < questions.count - 1 {
+            Task { try? await Task.sleep(for: .milliseconds(250)); withAnimation(.snappy) { page += 1 } }
+        }
+    }
+
+    private var isLast: Bool { page >= questions.count - 1 || allAnswered }
+
+    private func advance() {
+        if isLast { submit() } else { withAnimation(.snappy) { page += 1 } }
     }
 
     private func answer(_ q: Question) -> String? {
@@ -273,10 +385,11 @@ struct QuestionForm: View {
 
     private func submit() {
         if !allAnswered {
-            if let next = questions.firstIndex(where: { answer($0) == nil }) { withAnimation { page = next } }
+            if let next = questions.firstIndex(where: { answer($0) == nil }) { withAnimation(.snappy) { page = next } }
             return
         }
         sending = true
+        otherFocused = false
         var answers: [String: String] = [:]
         for q in questions { answers[q.question] = answer(q) }
         Task {
@@ -456,3 +569,23 @@ struct TerminalText: View {
         .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
     }
 }
+
+#if DEBUG
+extension Interaction {
+    /// A two-question AskUserQuestion (descriptions, a recommended option, a multi-select) for screenshots.
+    static func sampleQuestion(_ key: SessionKey) -> Interaction? {
+        let json = """
+        {"id":"sample-q","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","questions":[
+         {"question":"一轮对话里有后台任务把 Claude 唤醒时，哪一段算「真正的回复」？","header":"真正的回复","multi_select":false,"options":[
+          {"label":"取最长的那段 (Recommended)","description":"唤醒前后各有一段收尾的话，取最长的作为回复；其余收进工作行和抽屉。"},
+          {"label":"永远取最后一段","description":"所有工具合成一行，回复永远是最后一段话。"},
+          {"label":"永远取唤醒前那段","description":"唤醒后的工具和回复全部收进「后台任务完成」。"}]},
+         {"question":"抽屉里要显示哪些内容？","header":"抽屉内容","multi_select":true,"options":[
+          {"label":"工具调用","description":"唤醒后跑的每个工具"},
+          {"label":"思考","description":null},
+          {"label":"回复","description":"唤醒后 Claude 说的话"}]}]}
+        """
+        return try? JSON.decoder.decode(Interaction.self, from: Data(json.utf8))
+    }
+}
+#endif
