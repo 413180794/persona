@@ -21,6 +21,11 @@ extension InteractionKind {
     }
 }
 
+extension Interaction {
+    /// The assistant asks through its ask_user tool: it is Jarvis asking, not a Claude Code agent.
+    var title: String { toolName == "ask_user" ? "Jarvis 在问你" : kind.title }
+}
+
 /// Compact card on the chat list: enough context plus one-tap answers for simple questions.
 struct InteractionPreviewCard: View {
     @Environment(AppModel.self) private var model
@@ -34,7 +39,7 @@ struct InteractionPreviewCard: View {
                     .foregroundStyle(Theme.attention)
                     .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(interaction.kind.title).font(.subheadline.weight(.semibold))
+                    Text(interaction.title).font(.subheadline.weight(.semibold))
                     Text([interaction.sessionTitle, model.machine(interaction.machineID)?.name].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -126,7 +131,7 @@ struct InteractionPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: interaction.kind.symbol).foregroundStyle(Theme.attention)
-                Text(interaction.kind.title).font(.subheadline.weight(.semibold))
+                Text(interaction.title).font(.subheadline.weight(.semibold))
                 if collapsed {
                     Text(previewText).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }

@@ -210,6 +210,9 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 	title := map[string]string{
 		proto.IxQuestion: "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
 	}[ix.Kind]
+	if ix.ToolName == "ask_user" {
+		title = "Jarvis 在问你"
+	}
 	body := ix.Summary
 	switch ix.Kind {
 	case proto.IxQuestion:
