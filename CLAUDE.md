@@ -56,6 +56,7 @@ Jarvis：只给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
+| `docs/codex.md` | Codex 支持：herdr 里的 Codex 怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
 | `docs/feishu.md` | 飞书信息能力（工作台）：参考飞书源码 `florak/` 的功能、lark-connector 只读代理、各领域接口与分工 |
 
 ## 机器

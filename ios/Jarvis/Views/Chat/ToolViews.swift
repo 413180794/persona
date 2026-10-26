@@ -220,7 +220,11 @@ struct ToolDetail: View {
                 CodeBlock(text: "$ " + (i["command"]?.string ?? ""), maxLines: 12)
             case "Edit":
                 path(i["file_path"]?.string)
-                DiffView(old: i["old_string"]?.string ?? "", new: i["new_string"]?.string ?? "")
+                if let diff = i["diff"]?.string { // Codex: the patch as a unified diff
+                    UnifiedDiffView(diff: diff)
+                } else {
+                    DiffView(old: i["old_string"]?.string ?? "", new: i["new_string"]?.string ?? "")
+                }
             case "MultiEdit":
                 path(i["file_path"]?.string)
                 ForEach(Array((i["edits"]?.array ?? []).enumerated()), id: \.offset) { _, e in
@@ -346,6 +350,39 @@ struct DiffView: View {
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(color.opacity(0.1))
+    }
+}
+
+/// A unified diff as Codex writes it: hunk headers quiet, + green, - red, context plain.
+struct UnifiedDiffView: View {
+    var diff: String
+    private static let maxLines = 60
+
+    var body: some View {
+        let lines = diff.components(separatedBy: "\n").filter { !$0.hasPrefix("---") && !$0.hasPrefix("+++") }
+        let shown = lines.prefix(Self.maxLines)
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { _, l in line(l) }
+                if lines.count > Self.maxLines {
+                    Text("… 还有 \(lines.count - Self.maxLines) 行").font(.caption2).foregroundStyle(.secondary).padding(6)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
+    }
+
+    private func line(_ l: String) -> some View {
+        let color: Color? = l.hasPrefix("+") ? Theme.idle : l.hasPrefix("-") ? Theme.danger : nil
+        return Text(l.isEmpty ? " " : l)
+            .font(.system(size: 11.5, design: .monospaced))
+            .foregroundStyle(l.hasPrefix("@@") ? Color.secondary : color ?? .primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background((color ?? .clear).opacity(0.1))
     }
 }
 

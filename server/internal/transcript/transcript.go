@@ -109,10 +109,12 @@ type Meta struct {
 	customTitle  bool // Title came from /rename; later ai-titles do not replace it
 	// Sidechain keeps isSidechain lines: a subagent's own transcript is all sidechain.
 	Sidechain bool
-	Cwd       string
-	Model     string
-	LastText  string
-	Updated   time.Time
+	// Codex: the file is a Codex rollout (codex.go), not a Claude transcript.
+	Codex    bool
+	Cwd      string
+	Model    string
+	LastText string
+	Updated  time.Time
 }
 
 // pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
@@ -123,7 +125,13 @@ var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|
 
 // ParseLine converts one JSONL line (1-based seq) into items, updating meta.
 func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
-	items := parseLine(seq, line, meta)
+	var items []proto.Item
+	if meta.Codex || isCodexLine(line) {
+		meta.Codex = true
+		items = parseCodexLine(seq, line, meta)
+	} else {
+		items = parseLine(seq, line, meta)
+	}
 	if len(items) > 0 && items[0].Role == "user" && items[0].Kind == proto.KindText {
 		meta.Turns++
 	}

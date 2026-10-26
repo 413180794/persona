@@ -1,0 +1,265 @@
+package transcript
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// Codex rollouts (~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl) are a different JSONL: every line is
+// {timestamp, type, payload}. The conversation lives in event_msg/item_completed (UserMessage, AgentMessage,
+// Reasoning, CommandExecution, FileChange, McpToolCall, ImageView, ContextCompaction); response_item lines repeat
+// the same content in the model's wire format and are skipped. They map onto the same items as Claude's transcript,
+// with Claude's tool names (Bash, Edit, Read, mcp__server__tool) so the apps render them alike.
+
+type codexLine struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Type      string          `json:"type"`
+	Payload   json.RawMessage `json:"payload"`
+}
+
+type codexPayload struct {
+	Type string `json:"type"`
+	// session_meta
+	ID         string `json:"id"`
+	Cwd        string `json:"cwd"`
+	CLIVersion string `json:"cli_version"`
+	// turn_context
+	Model          string `json:"model"`
+	ApprovalPolicy string `json:"approval_policy"`
+	// event_msg
+	Item   *codexItem `json:"item"`
+	Reason string     `json:"reason"`
+	Info   *struct {
+		Total struct {
+			OutputTokens int `json:"output_tokens"`
+		} `json:"total_token_usage"`
+		Last struct {
+			InputTokens int `json:"input_tokens"`
+		} `json:"last_token_usage"`
+	} `json:"info"`
+}
+
+type codexItem struct {
+	Type    string `json:"type"`
+	ID      string `json:"id"`
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+		Path string `json:"path"`
+	} `json:"content"`
+	Phase       string   `json:"phase"`
+	SummaryText []string `json:"summary_text"`
+	// CommandExecution
+	Command          []string `json:"command"`
+	Status           string   `json:"status"`
+	AggregatedOutput string   `json:"aggregated_output"`
+	Stdout           string   `json:"stdout"`
+	Stderr           string   `json:"stderr"`
+	ExitCode         *int     `json:"exit_code"`
+	// FileChange
+	Changes map[string]struct {
+		Type        string `json:"type"`
+		UnifiedDiff string `json:"unified_diff"`
+		Content     string `json:"content"`
+	} `json:"changes"`
+	// McpToolCall
+	Server    string          `json:"server"`
+	Tool      string          `json:"tool"`
+	Arguments json.RawMessage `json:"arguments"`
+	Result    *struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	} `json:"result"`
+	Error json.RawMessage `json:"error"`
+	// ImageView
+	Path string `json:"path"`
+}
+
+// isCodexLine tells a rollout line from a Claude transcript line: only rollouts wrap everything in "payload".
+func isCodexLine(line []byte) bool {
+	return bytes.Contains(line, []byte(`"payload"`)) &&
+		(bytes.Contains(line, []byte(`"type":"session_meta"`)) || bytes.Contains(line, []byte(`"type":"event_msg"`)) ||
+			bytes.Contains(line, []byte(`"type":"response_item"`)) || bytes.Contains(line, []byte(`"type":"turn_context"`)))
+}
+
+func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
+	var l codexLine
+	if json.Unmarshal(line, &l) != nil {
+		return nil
+	}
+	var p codexPayload
+	if json.Unmarshal(l.Payload, &p) != nil {
+		return nil
+	}
+	switch l.Type {
+	case "session_meta":
+		meta.Cwd, meta.Version = p.Cwd, p.CLIVersion
+		if meta.StartedAt.IsZero() {
+			meta.StartedAt = l.Timestamp
+		}
+		return nil
+	case "turn_context":
+		if p.Model != "" {
+			meta.Model = p.Model
+		}
+		meta.PermissionMode = p.ApprovalPolicy
+		return nil
+	case "event_msg":
+	default:
+		return nil
+	}
+	mk := func(idx int, id, role, kind string) proto.Item {
+		if id == "" {
+			id = fmt.Sprintf("line%d", seq)
+		}
+		return proto.Item{ID: fmt.Sprintf("%s#%d", id, idx), Seq: seq, TS: l.Timestamp, Role: role, Kind: kind}
+	}
+	switch p.Type {
+	case "token_count":
+		if p.Info != nil {
+			meta.ContextTokens, meta.OutputTokens = p.Info.Last.InputTokens, p.Info.Total.OutputTokens
+		}
+		return nil
+	case "turn_aborted":
+		it := mk(0, "", "system", proto.KindNotice)
+		it.Text = "已中断"
+		return []proto.Item{it}
+	case "item_completed":
+	default:
+		return nil
+	}
+	it := p.Item
+	if it == nil {
+		return nil
+	}
+	switch it.Type {
+	case "UserMessage":
+		var parts []string
+		for _, c := range it.Content {
+			if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
+				parts = append(parts, c.Text)
+			}
+		}
+		text := strings.TrimSpace(strings.Join(parts, "\n"))
+		if text == "" {
+			return nil
+		}
+		u := mk(0, it.ID, "user", proto.KindText)
+		u.Text = clip(text)
+		if meta.FirstUser == "" {
+			meta.FirstUser = u.Text
+		}
+		return []proto.Item{u}
+	case "AgentMessage":
+		var b strings.Builder
+		for _, c := range it.Content {
+			b.WriteString(c.Text)
+		}
+		text := strings.TrimSpace(b.String())
+		if text == "" {
+			return nil
+		}
+		// Narration between tool calls ("commentary") reads like Claude's thinking blocks: part of the work, not
+		// the answer.
+		kind := proto.KindText
+		if it.Phase == "commentary" {
+			kind = proto.KindThinking
+		} else {
+			meta.LastText = text
+		}
+		a := mk(0, it.ID, "assistant", kind)
+		a.Text = clip(text)
+		return []proto.Item{a}
+	case "Reasoning":
+		text := strings.TrimSpace(strings.Join(it.SummaryText, "\n\n"))
+		if text == "" {
+			return nil
+		}
+		t := mk(0, it.ID, "assistant", proto.KindThinking)
+		t.Text = clip(text)
+		return []proto.Item{t}
+	case "CommandExecution":
+		input, _ := json.Marshal(map[string]string{"command": shellCommand(it.Command)})
+		out := it.AggregatedOutput
+		if out == "" {
+			out = strings.TrimSpace(it.Stdout + "\n" + it.Stderr)
+		}
+		failed := it.Status == "failed" || (it.ExitCode != nil && *it.ExitCode != 0)
+		if it.ExitCode != nil && *it.ExitCode != 0 {
+			out = strings.TrimSpace(out + fmt.Sprintf("\n(exit code %d)", *it.ExitCode))
+		}
+		return codexTool(mk, it.ID, "Bash", input, out, failed)
+	case "FileChange":
+		// One Edit per file, the patch as a unified diff (the apps draw "diff" when there is no old/new string).
+		var out []proto.Item
+		n := 0
+		for path, ch := range it.Changes {
+			diff := ch.UnifiedDiff
+			if diff == "" {
+				diff = ch.Content
+			}
+			input, _ := json.Marshal(map[string]string{"file_path": path, "diff": diff, "change": ch.Type})
+			id := fmt.Sprintf("%s-%d", it.ID, n)
+			use := mk(2*n, id, "assistant", proto.KindToolUse)
+			use.ToolUseID, use.ToolName, use.ToolInput = id, "Edit", input
+			res := mk(2*n+1, id, "user", proto.KindToolResult)
+			res.ToolUseID, res.Text, res.IsError = id, ch.Type+" "+path, it.Status == "failed"
+			out = append(out, use, res)
+			n++
+		}
+		return out
+	case "McpToolCall":
+		args := it.Arguments
+		if len(args) == 0 {
+			args = json.RawMessage(`{}`)
+		}
+		var parts []string
+		isErr := it.Status == "failed" || len(it.Error) > 0 && string(it.Error) != "null"
+		if it.Result != nil {
+			isErr = isErr || it.Result.IsError
+			for _, c := range it.Result.Content {
+				if c.Type == "text" {
+					parts = append(parts, c.Text)
+				}
+			}
+		}
+		if len(parts) == 0 && isErr && len(it.Error) > 0 {
+			parts = append(parts, string(it.Error))
+		}
+		return codexTool(mk, it.ID, "mcp__"+it.Server+"__"+it.Tool, args, strings.Join(parts, "\n"), isErr)
+	case "ImageView":
+		input, _ := json.Marshal(map[string]string{"file_path": strings.TrimPrefix(it.Path, "file://")})
+		return codexTool(mk, it.ID, "Read", input, "", false)
+	case "ContextCompaction":
+		meta.Compactions++
+		n := mk(0, it.ID, "system", proto.KindNotice)
+		n.Text = "上下文已压缩"
+		return []proto.Item{n}
+	}
+	return nil
+}
+
+// codexTool is a finished tool call: Codex writes the call and its result in one line.
+func codexTool(mk func(int, string, string, string) proto.Item, id, name string, input json.RawMessage, result string, isErr bool) []proto.Item {
+	use := mk(0, id, "assistant", proto.KindToolUse)
+	use.ToolUseID, use.ToolName, use.ToolInput = id, name, input
+	res := mk(1, id, "user", proto.KindToolResult)
+	res.ToolUseID, res.Text, res.IsError = id, clip(result), isErr
+	return []proto.Item{use, res}
+}
+
+// shellCommand drops the login-shell wrapper Codex runs everything through: ["/bin/zsh", "-lc", "ls"] → "ls".
+func shellCommand(argv []string) string {
+	if len(argv) == 3 && (argv[1] == "-lc" || argv[1] == "-c") {
+		return argv[2]
+	}
+	return strings.Join(argv, " ")
+}

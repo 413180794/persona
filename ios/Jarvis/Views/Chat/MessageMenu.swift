@@ -15,6 +15,8 @@ final class MessageMenu {
     /// Where the chat's messages come from ("app › leader"), printed on share cards (read when sharing: the
     /// session may not be loaded yet when the chat binds the menu).
     @ObservationIgnored var source: () -> String = { "" }
+    /// Who answers in this chat ("Claude" / "Codex"), for share cards.
+    @ObservationIgnored var agent: () -> String = { "Claude" }
     @ObservationIgnored var quote: ((String) -> Void)?
     @ObservationIgnored var edit: ((String) -> Void)?
 
@@ -123,7 +125,7 @@ struct MessageActionBar: View {
             action("选择", "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
             action("引用", "quote.opening") { menu.quote?(text) }
             action("分享", "square.and.arrow.up") {
-                menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date)
+                menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
             if isUser {
                 action("编辑", "pencil") { menu.edit?(text) }

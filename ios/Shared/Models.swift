@@ -90,6 +90,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var tabID: String?
     var workspaceID: String?
     var agentName: String?
+    /// The coding agent in the pane: "claude" (or nil, from older hubs) or "codex".
+    var agent: String? = nil
     var launcher: String?
     var model: String?
     var startedByJarvis: Bool
@@ -118,8 +120,12 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
+    var isCodex: Bool { agent == "codex" }
+    /// Who the user talks to in this session: "Claude" or "Codex".
+    var agentLabel: String { isCodex ? "Codex" : "Claude" }
+
     enum CodingKeys: String, CodingKey {
-        case title, cwd, status, launcher, model
+        case title, cwd, status, launcher, model, agent
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
@@ -138,6 +144,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         tabID = try c.decodeIfPresent(String.self, forKey: .tabID)
         workspaceID = try c.decodeIfPresent(String.self, forKey: .workspaceID)
         agentName = try c.decodeIfPresent(String.self, forKey: .agentName)
+        agent = try c.decodeIfPresent(String.self, forKey: .agent)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false

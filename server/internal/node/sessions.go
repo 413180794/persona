@@ -147,7 +147,8 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	head := make([]byte, 32*1024)
 	nr, _ := f.Read(head)
 	for _, line := range bytes.Split(head[:nr], []byte("\n")) {
-		if bytes.Contains(line, []byte(`"cwd"`)) || bytes.Contains(line, []byte(`"type":"user"`)) {
+		if bytes.Contains(line, []byte(`"cwd"`)) || bytes.Contains(line, []byte(`"type":"user"`)) ||
+			bytes.Contains(line, []byte(`"type":"UserMessage"`)) { // Codex rollouts: session_meta, then the first prompt
 			transcript.ParseLine(0, line, &tm)
 			if tm.Cwd != "" && tm.FirstUser != "" {
 				break
@@ -193,7 +194,11 @@ func (n *Node) transcriptPath(id string) string {
 	}
 	matches, _ := filepath.Glob(filepath.Join(n.projectsDir(), "*", id+".jsonl"))
 	if len(matches) == 0 {
-		return ""
+		if p := n.codexPath(id); p != "" {
+			matches = []string{p}
+		} else {
+			return ""
+		}
 	}
 	n.mu.Lock()
 	n.paths[id] = matches[0]
@@ -251,13 +256,16 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	for id, a := range agents {
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
-			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title,
+			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
+		}
+		if a.Agent == "codex" {
+			s.Title = n.codexTitle(id) // the terminal title is "dots | codex | Ready"
 		}
 		n.placeIn(&s, a)
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
-				if m.title != "" {
+				if m.title != "" && a.Agent != "codex" {
 					s.Title = m.title
 				}
 				if s.Title == "" || s.Title == "Claude Code" {
@@ -456,9 +464,13 @@ func (n *Node) placeIn(s *proto.Session, a herdr.Agent) {
 
 func (n *Node) setAgents(agents []herdr.Agent) {
 	m := map[string]herdr.Agent{}
-	var unknown []herdr.Agent
+	var unknown, codex []herdr.Agent
 	n.mu.Lock()
 	for _, a := range agents {
+		if a.Agent == "codex" {
+			codex = append(codex, a)
+			continue
+		}
 		if a.Agent != "claude" {
 			continue
 		}
@@ -480,6 +492,22 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 		id := n.sessionFromProcess(a.PaneID)
 		if _, taken := m[id]; id == "" || taken {
 			id = n.guessSession(a, m)
+		}
+		if id != "" {
+			m[id] = a
+		}
+	}
+	for _, a := range codex {
+		// herdr's codex integration reports the session id at start; a Jarvis-started one is bound to its pane;
+		// otherwise the newest rollout in its directory nobody else has.
+		id := a.SessionID()
+		if id == "" {
+			n.mu.Lock()
+			id = n.panes[a.PaneID]
+			n.mu.Unlock()
+		}
+		if _, taken := m[id]; id == "" || taken {
+			id = n.codexSession(a, m)
 		}
 		if id != "" {
 			m[id] = a

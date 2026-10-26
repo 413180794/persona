@@ -558,7 +558,7 @@ struct ChatView: View {
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
-                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : nil)
+                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息")
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -790,7 +790,7 @@ struct ChatView: View {
                     let answer = model.chat(key).blocks.reversed().lazy.compactMap { b -> Item? in
                         if case .turn(let t) = b, case .assistant(let i)? = t.answer { i } else { nil }
                     }.first
-                    if let a = answer { menu.sharing = ShareMessage(text: a.text ?? "", isUser: false, source: menu.source(), date: a.ts) }
+                    if let a = answer { menu.sharing = ShareMessage(text: a.text ?? "", isUser: false, source: menu.source(), date: a.ts, agent: menu.agent()) }
                 }
             }
             if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
@@ -894,6 +894,7 @@ struct ChatView: View {
             model.drafts[key] = quoted + "\n\n" + draft
         }
         menu.edit = { [model, key] text in model.drafts[key] = text }
+        menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
             let s = model.session(key)
             return [s?.spaceName, s?.slotLabel].compactMap { $0 }.joined(separator: " › ")
@@ -938,7 +939,7 @@ struct ChatView: View {
         }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-        return [machine, place.isEmpty ? nil : place, s.state.label].compactMap { $0 }.joined(separator: " · ")
+        return [machine, place.isEmpty ? nil : place, s.isCodex ? "Codex" : nil, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
