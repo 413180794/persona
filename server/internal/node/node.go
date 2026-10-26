@@ -249,6 +249,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.items":
 		f, err := n.file(p.SessionID)
 		if err != nil {
+			if n.startingSession(p.SessionID) { // nothing written yet: an empty chat, not an error
+				return map[string]any{"items": []proto.Item{}, "has_more": false}, nil
+			}
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)

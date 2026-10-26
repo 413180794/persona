@@ -181,6 +181,19 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	return m
 }
 
+// startingSession reports whether a session without a transcript is one that exists but has not written its first
+// line yet (a headless conversation, or an agent that is live or that Jarvis started), rather than an unknown id.
+func (n *Node) startingSession(id string) bool {
+	if n.isAssistantSession(id) {
+		return true
+	}
+	if _, live := n.agent(id); live {
+		return true
+	}
+	_, known := n.state.get(id)
+	return known
+}
+
 // transcriptPath finds ~/.claude/projects/*/<id>.jsonl.
 func (n *Node) transcriptPath(id string) string {
 	n.mu.Lock()

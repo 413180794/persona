@@ -371,17 +371,26 @@ type watch struct {
 func (n *Node) watch(id string, since int) error {
 	f, err := n.file(id)
 	if err != nil {
-		if !n.isAssistantSession(id) {
+		if !n.startingSession(id) {
 			return err
 		}
-		// A brand-new headless conversation has no transcript until claude writes its first line.
+		// A session that just started has no transcript until claude writes its first line: watch once it exists,
+		// sending everything written before the watch began (the phone's backlog was empty).
 		go func() {
-			for i := 0; i < 60; i++ {
+			for i := 0; i < 120; i++ {
 				time.Sleep(500 * time.Millisecond)
-				if _, err := n.file(id); err == nil {
-					_ = n.watch(id, since)
-					return
+				f, err := n.file(id)
+				if err != nil {
+					continue
 				}
+				if _, err := f.Refresh(); err == nil {
+					if items := f.After(since, 500); len(items) > 0 {
+						_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": items})
+						since = items[len(items)-1].Seq
+					}
+				}
+				_ = n.watch(id, since)
+				return
 			}
 		}()
 		return nil
