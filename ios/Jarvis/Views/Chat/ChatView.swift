@@ -44,7 +44,9 @@ struct ChatView: View {
     /// you left off (finished, read).
     @State private var entry: Entry?
     /// Lines on screen (for remembering where you were).
-    @State private var visibleLines: [String] = []
+    /// Bookkeeping written while scrolling (visible rows, finger down) and the cached lines: kept out of SwiftUI's
+    /// state so writing it never re-renders the page.
+    @State private var scratch = ChatScratch()
 
     private enum Entry: Equatable { case latestAnswer, line(String) }
 
@@ -57,8 +59,6 @@ struct ChatView: View {
     /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
     /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
     @State private var chrome = ChatChrome()
-    /// The finger is on the list (or the list is gliding after a flick): only then does the chrome follow it.
-    @State private var userDragging = false
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
 
@@ -109,6 +109,11 @@ struct ChatView: View {
             }
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
+        .task(id: store.version) {
+            let items = store.items
+            await Task.detached(priority: .utility) { RowMemo.prewarm(items) }.value
+        }
         .onChange(of: pane) { _, p in
             showChrome()
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
@@ -172,6 +177,18 @@ struct ChatView: View {
 
     /// The chat as a flat list of lines (see `ChatLine`): every message of a turn opens its own exchange — the
     /// message, one work line for what the agent did after it, and the agent's last words before the next message.
+    /// The chat's lines, rebuilt only when what they come from changed: the store's blocks, the running turn and
+    /// which work lines are open. (Every re-render used to walk the whole history again.)
+    private func currentLines() -> [ChatLine] {
+        let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: store.version,
+                                       live: liveTurnID, open: openWork)
+        if scratch.linesKey == key { return scratch.lines }
+        let lines = chatLines(Self.debugTrim(store.blocks))
+        scratch.lines = lines
+        scratch.linesKey = key
+        return lines
+    }
+
     private func chatLines(_ blocks: [ChatBlock]) -> [ChatLine] {
         let liveID = liveTurnID
         var out: [ChatLine] = []
@@ -364,12 +381,12 @@ struct ChatView: View {
     /// Remembers the top line on screen when leaving (nothing when at the newest: open at the newest again).
     private func rememberReadPosition() {
         guard viewing == nil else { return }
-        if atBottom || visibleLines.isEmpty {
+        if atBottom || scratch.visibleLines.isEmpty {
             UserDefaults.standard.removeObject(forKey: readKey)
             return
         }
-        let order = chatLines(store.blocks).map(\.id)
-        let top = visibleLines.min { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+        let order = currentLines().map(\.id)
+        let top = scratch.visibleLines.min { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
         UserDefaults.standard.set(top, forKey: readKey)
     }
 
@@ -516,7 +533,7 @@ struct ChatView: View {
     private func chatScroll() -> some View {
         let store = store
         let rows = store.rows
-        var lines = chatLines(Self.debugTrim(store.blocks))
+        var lines = currentLines()
         if let frozenAt, let i = lines.firstIndex(where: { $0.id == frozenAt }) { lines = Array(lines[...i]) }
         let queued = session?.queued ?? []
         let pending = store.pending.filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
@@ -575,7 +592,7 @@ struct ChatView: View {
         // Side margins as scroll content margins, not padding: jumping to a row aligns its leading edge with the
         // margin instead of the screen edge (padding shifted the page 16pt sideways after landing on a row).
         .contentMargins(.horizontal, 16, for: .scrollContent)
-        .onScrollTargetVisibilityChange(idType: String.self) { ids in visibleLines = ids }
+        .onScrollTargetVisibilityChange(idType: String.self) { ids in scratch.visibleLines = ids }
         .flippedBack() // the scroll view itself upside down; every row above is flipped back
         // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
         // (Content top = the composer side on screen, content bottom = the navigation side.)
@@ -599,8 +616,8 @@ struct ChatView: View {
         .onScrollPhaseChange { old, phase in
             // The user's own scrolling: a drag, and the glide after a flick. Deceleration alone is not proof — landing
             // on the entry line produced it with no finger down and folded the chrome on open.
-            let flick = phase == .decelerating && (old == .tracking || old == .interacting || userDragging)
-            userDragging = phase == .tracking || phase == .interacting || flick
+            let flick = phase == .decelerating && (old == .tracking || old == .interacting || scratch.userDragging)
+            scratch.userDragging = phase == .tracking || phase == .interacting || flick
             if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
@@ -623,7 +640,7 @@ struct ChatView: View {
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: followsEnd) { _, follows in
-            frozenAt = follows ? nil : chatLines(Self.debugTrim(store.blocks)).last?.id
+            frozenAt = follows ? nil : currentLines().last?.id
         }
         .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
@@ -639,7 +656,7 @@ struct ChatView: View {
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
     /// reading on (toward the newest) folds it as far as the finger goes, going back into the history unfolds it.
     private func scrolled(by delta: CGFloat) {
-        guard style == .dev, pane == .chat, userDragging, delta != 0 else { return }
+        guard style == .dev, pane == .chat, scratch.userDragging, delta != 0 else { return }
         let folded = min(max(chrome.collapse - delta, 0), chrome.maxCollapse)
         guard folded != chrome.collapse else { return }
         chrome.collapse = folded
@@ -820,6 +837,20 @@ struct ChatView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(5)) // the session list may not be in yet
                     if let space = session?.spaceKey { openSpace?(space) }
+                }
+            }
+            if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
+                Task {
+                    try? await Task.sleep(for: .seconds(12)) // the history loads (-loadAll) and the page settles
+                    FrameStats.shared.start()
+                    // Like a reader flicking: four fast flicks back into the history, then four back to the newest.
+                    var y: CGFloat = 0
+                    for step in 0..<8 {
+                        y = max(0, y + (step < 4 ? 3000 : -3000))
+                        withAnimation(.easeOut(duration: 2.5)) { position.scrollTo(y: y) }
+                        try? await Task.sleep(for: .seconds(2.8))
+                    }
+                    FrameStats.shared.stop(label: "sweep")
                 }
             }
             if UserDefaults.standard.bool(forKey: "showCompactChrome") { // folded, once the header has its height
@@ -1647,4 +1678,21 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
         .clipped()
         .background(.bar, ignoresSafeAreaEdges: .top)
     }
+}
+
+/// Per-chat bookkeeping that must not redraw the page when it changes. A plain class held in @State: SwiftUI keeps
+/// the same instance across renders but does not observe it.
+final class ChatScratch {
+    struct LinesKey: Equatable {
+        var store: String
+        var version: Int
+        var live: String?
+        var open: Set<String>
+    }
+    /// Rows on screen (for remembering where you left off), written by the list as it scrolls.
+    var visibleLines: [String] = []
+    /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.
+    var userDragging = false
+    var linesKey: LinesKey?
+    var lines: [ChatLine] = []
 }

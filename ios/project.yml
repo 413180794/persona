@@ -133,16 +133,32 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Jarvis"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  # UI tests drive the real app in the simulator against the configured hub (scripts/ui-test.sh); not in the
+  # default test run, which must work offline.
+  JarvisUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: JarvisUITests
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).uitests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Jarvis
 schemes:
   Jarvis:
     build:
       targets:
         Jarvis: all
         JarvisTests: [test]
+        JarvisUITests: [test]
     run:
       config: Debug
     test:
-      targets: [JarvisTests]
+      targets: [JarvisTests, JarvisUITests]
   JarvisWatch:
     build:
       targets:

@@ -131,21 +131,23 @@ final class LiveConnection {
 
     private func receive(_ t: URLSessionWebSocketTask, _ gen: Int) {
         t.receive { [weak self] result in
+            // Decode here, off the main thread: session lists are large and arrive every second while agents
+            // work (decoding them on the main thread showed up in scrolling profiles).
+            let event: ServerEvent? = switch result {
+            case .success(.string(let s)): s.data(using: .utf8).flatMap(ServerEvent.decode)
+            case .success(.data(let d)): ServerEvent.decode(d)
+            default: nil
+            }
             Task { @MainActor in
                 guard let self, gen == self.generation else { return }
                 switch result {
-                case .success(let msg):
+                case .success:
                     if self.state != .connected {
                         self.state = .connected
                         self.backoff = 1
                         self.onConnected?()
                     }
-                    let data: Data? = switch msg {
-                    case .string(let s): s.data(using: .utf8)
-                    case .data(let d): d
-                    @unknown default: nil
-                    }
-                    if let data, let ev = ServerEvent.decode(data) { self.onEvent?(ev) }
+                    if let event { self.onEvent?(event) }
                     self.receive(t, gen)
                 case .failure(let err):
                     self.state = .failed(err.localizedDescription)

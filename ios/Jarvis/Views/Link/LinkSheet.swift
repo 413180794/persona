@@ -30,7 +30,11 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
         pattern: #"<jarvis-context\s+kind="([^"]*)"\s+title="([^"]*)"\s+url="([^"]*)">\s*([\s\S]*?)\s*</jarvis-context>\s*"#)
 
     /// The contexts in a message and the message without them.
-    static func parse(_ text: String) -> (refs: [ContextRef], rest: String) {
+    private static let memo = TextMemo<(refs: [ContextRef], rest: String)>()
+
+    static func parse(_ text: String) -> (refs: [ContextRef], rest: String) { memo(text, scan) }
+
+    private static func scan(_ text: String) -> (refs: [ContextRef], rest: String) {
         let ns = text as NSString
         var refs: [ContextRef] = []
         for m in tagRe.matches(in: text, range: NSRange(location: 0, length: ns.length)) {

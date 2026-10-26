@@ -74,10 +74,10 @@ struct UserBubble: View {
     @Environment(\.loadImage) private var loadImage
 
     var body: some View {
-        let parsed = ContextRef.parse(item.text ?? "")
-        let text = parsed.rest
-        let shown = Self.display(text)
-        let images = Self.imagePaths(text)
+        let d = RowMemo.user(item.id) { _ in UserRowText(item.text ?? "") } // once per message, keyed by its short id
+        let parsed = (refs: d.refs, rest: d.text)
+        let shown = d.shown
+        let images = d.images
         VStack(alignment: .trailing, spacing: 6) {
             if !parsed.refs.isEmpty { ContextCards(refs: parsed.refs) }
             if !images.isEmpty, let loadImage {
@@ -95,7 +95,7 @@ struct UserBubble: View {
                         .messageLongPress(id: item.id)
                 }
             }
-            if let openFile { FileChips(paths: FilePaths.find(in: text).filter { !images.contains($0) }, open: openFile) }
+            if let openFile { FileChips(paths: d.files, open: openFile) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .messageActionBar(id: item.id, text: shown, isUser: true, date: item.ts)
@@ -104,11 +104,16 @@ struct UserBubble: View {
 
 extension UserBubble {
     /// `<attached_images>` (current), and the plain-text notes older builds appended (own last line / old wording).
-    private static let notePatterns = [#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#,
+    nonisolated private static let notePatterns = [#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#,
                                        #"(?:\A|\n)\s*相关图片：[^\n]*\z"#, #"\s*（我从手机发来了图片，请用 Read 查看：[^）]*）\s*\z"#]
 
     /// What was typed: the note the phone appends for attached photos becomes thumbnails above the bubble instead.
-    static func display(_ text: String) -> String {
+    nonisolated private static let displayMemo = TextMemo<String>()
+    nonisolated private static let pathsMemo = TextMemo<[String]>()
+
+    nonisolated static func display(_ text: String) -> String { displayMemo(text, computeDisplay) }
+
+    nonisolated private static func computeDisplay(_ text: String) -> String {
         var t = text
         for pattern in notePatterns {
             while let r = t.range(of: pattern, options: .regularExpression) { t.replaceSubrange(r, with: "\n") }
@@ -119,7 +124,9 @@ extension UserBubble {
     }
 
     /// The photo paths listed in that note.
-    static func imagePaths(_ text: String) -> [String] {
+    nonisolated static func imagePaths(_ text: String) -> [String] { pathsMemo(text, computeImagePaths) }
+
+    nonisolated private static func computeImagePaths(_ text: String) -> [String] {
         for pattern in notePatterns {
             guard let r = text.range(of: pattern, options: .regularExpression) else { continue }
             var note = String(text[r])
@@ -340,15 +347,24 @@ struct AssistantText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Markdown(item.text ?? "")
-                .task(id: item.id) { WebViewPool.shared.preload(WebLinks.find(in: item.text ?? "")) } // links open instantly
+            let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
+            Markdown(d.markdown)
+                .task(id: item.id) { await Self.preloadLinks(item) }
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .messageLongPress(id: item.id)
-            if let openFile { FileChips(paths: FilePaths.find(in: item.text ?? ""), open: openFile) }
+            if let openFile { FileChips(paths: d.files, open: openFile) }
         }
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
+    }
+
+    /// Links in a fresh answer open instantly: their pages load in the background. Only for recent answers — every
+    /// old one scrolling past used to create web views on the main thread, and those were the long freezes.
+    private static func preloadLinks(_ item: Item) async {
+        guard let ts = item.ts, Date.now.timeIntervalSince(ts) < 15 * 60, let text = item.text else { return }
+        let links = await Task.detached(priority: .utility) { WebLinks.find(in: text) }.value // data detection is slow
+        if !links.isEmpty, !Task.isCancelled { WebViewPool.shared.preload(links) }
     }
 }
 
@@ -430,7 +446,11 @@ struct NoticeRow: View {
     }
 
     /// `Background command "Release" completed (exit code 0)` → "后台命令完成 · Release".
-    static func wakeSummary(_ s: String) -> (text: String, failed: Bool) {
+    private static let wakeMemo = TextMemo<(text: String, failed: Bool)>(limit: 500)
+
+    static func wakeSummary(_ s: String) -> (text: String, failed: Bool) { wakeMemo(s, computeWakeSummary) }
+
+    private static func computeWakeSummary(_ s: String) -> (text: String, failed: Bool) {
         guard let m = s.firstMatch(of: /^(.*?)\s*"(.+)"\s*(.*)$/) else { return (s, false) }
         let kind = switch String(m.1) {
         case "Background command": "后台命令"
@@ -584,11 +604,64 @@ struct StreamingText: View {
 nonisolated enum WebLinks {
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
-    /// The web links in a message, in order.
+    private static let memo = TextMemo<[URL]>()
+
+    /// The web links in a message, in order (memoized: data detection is slow and rows ask on every appearance).
     static func find(in text: String) -> [URL] {
-        guard let d = detector else { return [] }
-        return d.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
-            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+        memo(text) { text in
+            guard let d = detector else { return [] }
+            return d.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
+                .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+        }
     }
 }
 
+
+/// Parsed Markdown per text: MarkdownUI parses (cmark) in `Markdown.init`, on every redraw of the row.
+enum MarkdownMemo {
+    private static let memo = TextMemo<MarkdownContent>()
+    static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent($0) } }
+}
+
+/// What a chat row derives from its message (parsed Markdown, paths, links, the shown text), computed once per
+/// message and keyed by the item's short id: rows redraw constantly, and hashing a long text on every redraw
+/// was itself measurable. Items never change their text under the same id.
+nonisolated enum RowMemo {
+    static let assistant = TextMemo<AssistantRowText>(limit: 20_000) // a very long session's worth of messages
+    static let user = TextMemo<UserRowText>(limit: 20_000)
+
+    /// Fills both memos off the main thread for messages just loaded, so a row scrolling into view only lays out.
+    static func prewarm(_ items: [Item]) {
+        for it in items where it.kind == .text {
+            guard let text = it.text, !text.isEmpty else { continue }
+            if it.role == "assistant" { _ = assistant(it.id) { _ in AssistantRowText(text) } }
+            if it.role == "user" { _ = user(it.id) { _ in UserRowText(text) } }
+        }
+    }
+}
+
+nonisolated struct AssistantRowText {
+    let markdown: MarkdownContent
+    let files: [String]
+    init(_ text: String) {
+        markdown = MarkdownContent(text)
+        files = FilePaths.find(in: text)
+    }
+}
+
+nonisolated struct UserRowText {
+    let refs: [ContextRef]
+    let text: String   // without the context tags
+    let shown: String  // without the image notes
+    let images: [String]
+    let files: [String]
+    init(_ raw: String) {
+        let parsed = ContextRef.parse(raw)
+        refs = parsed.refs
+        text = parsed.rest
+        shown = UserBubble.display(parsed.rest)
+        let images = UserBubble.imagePaths(parsed.rest)
+        self.images = images
+        files = FilePaths.find(in: parsed.rest).filter { !images.contains($0) }
+    }
+}

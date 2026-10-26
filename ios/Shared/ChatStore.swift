@@ -240,6 +240,8 @@ final class ChatStore {
     private(set) var items: [Item] = []
     private(set) var rows: [ChatRow] = []
     private(set) var blocks: [ChatBlock] = []
+    /// Bumped whenever `blocks` is rebuilt: views key derived data (the chat's lines) on it instead of diffing blocks.
+    @ObservationIgnored private(set) var version = 0
     private(set) var hasMore = false
     private(set) var loadedOnce = false
     var screen: String = ""
@@ -263,6 +265,7 @@ final class ChatStore {
             hasMore = cached.hasMore
             rows = ChatStore.buildRows(items)
             blocks = ChatBlock.build(rows)
+            version += 1
         }
     }
 
@@ -271,7 +274,9 @@ final class ChatStore {
     func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = false
+        var inOrder = true
         for it in new where !ids.contains(it.id) {
+            if let last = items.last, (it.seq, it.id) < (last.seq, last.id) { inOrder = false }
             ids.insert(it.id)
             items.append(it)
             changed = true
@@ -283,10 +288,26 @@ final class ChatStore {
             let typed = new.filter { $0.role == "user" && $0.kind == .text }.map { $0.text ?? "" }
             pending.removeAll { p in typed.contains { PendingMessage.same($0, p.text) } }
         }
-        items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
-        rows = ChatStore.buildRows(items)
-        blocks = ChatBlock.build(rows)
+        // Streamed items arrive in order: only older pages / reconnect backlogs need the sort.
+        if !inOrder { items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq } }
+        scheduleRebuild()
         scheduleSave()
+    }
+
+    @ObservationIgnored private var rebuildScheduled = false
+
+    /// Rows and blocks are rebuilt from all items; a burst of events (a tool call, its result, the next thought)
+    /// is rebuilt and redrawn once, on the next turn of the main actor, instead of once per event.
+    private func scheduleRebuild() {
+        guard !rebuildScheduled else { return }
+        rebuildScheduled = true
+        Task { [weak self] in
+            guard let self else { return }
+            self.rebuildScheduled = false
+            self.rows = ChatStore.buildRows(self.items)
+            self.blocks = ChatBlock.build(self.rows)
+            self.version += 1
+        }
     }
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?

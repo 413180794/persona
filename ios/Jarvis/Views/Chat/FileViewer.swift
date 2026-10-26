@@ -40,8 +40,14 @@ nonisolated enum FilePaths {
     private static let pattern = try! NSRegularExpression(
         pattern: #"(?<![\w/:.\-~])(~(?:/[\w.@+\-]+)+/?|/[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![\w/\-])"#)
 
-    /// File-looking paths in text, in order, without duplicates or URL fragments.
+    private static let memo = TextMemo<[String]>()
+
+    /// File-looking paths in text, in order, without duplicates or URL fragments (memoized: rows ask on every redraw).
     static func find(in text: String, limit: Int = 6) -> [String] {
+        limit == 6 ? memo(text) { scan($0, limit: 6) } : scan(text, limit: limit)
+    }
+
+    private static func scan(_ text: String, limit: Int) -> [String] {
         let ns = text as NSString
         var out: [String] = []
         for m in pattern.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
