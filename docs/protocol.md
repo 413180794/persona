@@ -89,9 +89,16 @@
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
-| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","conversations":[Session]}` |
-| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?}`，存 Postgres settings |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes_effective","conversations":[Session]}` |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?}`，存 Postgres settings（`docs/assistant.md`） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
+| POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 |
+| GET / PUT | `/api/v1/assistant/routines` | `{"routines":[{id,title,prompt,time:"HH:MM",weekdays:[1..7],enabled,last_run,last_session_id,next_run}]}`，PUT 整表替换 |
+| POST | `/api/v1/assistant/routines/{id}/run` | 立即运行 → `{"session_id","machine_id"}` |
+| GET | `/api/v1/assistant/followups` | `{"followups":[{id,at,title,prompt,machine_id,session_id}]}`（助手用 schedule_followup 安排的） |
+| DELETE | `/api/v1/assistant/followups/{id}` | 取消 |
+| GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}` |
+| PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`；删除时顺带删 MEMORY.md 里的索引行 |
 | POST | `/api/v1/ai/mail-account` | `{"text"}` → `{"account":{…AddAccount},"missing":["password"],"note"}`（cc_ds 网关，hub.json `ai` 可改） |
 | GET / PUT | `/api/v1/machines/{mid}/claude-settings` | 白名单的 Claude Code 设置；PUT `{"key","value"}`（value 为 null 恢复默认） |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |

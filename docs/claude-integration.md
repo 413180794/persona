@@ -75,7 +75,11 @@ node 的 `session.start`：
 
 - 一个进程能通过 stdin 连续多轮（每行一个 `{"type":"user","message":{…}}`，图片直接放 base64 image block）。
 - `stream_event` 里的 `content_block_delta/text_delta` 是逐字输出 → WS `delta`；`result` 表示这轮结束。结构化消息仍从 transcript 读。
-- hooks 照常触发（AskUserQuestion 照样到手机）。
+- hooks 照常触发，但 **AskUserQuestion 在 -p 模式下不可用**（工具直接报 `No such tool available … nobody in this session can answer it`，
+  PreToolUse hook 没机会触发）：助手用 MCP `ask_user` 代替（`docs/assistant.md`）。
+- MCP 配置是每个进程一份内联 JSON（`--mcp-config '{…}'`），带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID`；进程环境带
+  `ENABLE_TOOL_SEARCH=false`（工具少且常用，不走 ToolSearch）；`--append-system-prompt` 是 hub 生成的实时快照。
+- 备用进程（spare）：claude 起来后在 stdin 上等第一条消息，可以提前起；新对话直接用它的 session id。
 - 换启动器 = 杀掉进程，用新启动器 `--resume` 接上；空闲 20 分钟的进程会被回收，下次发消息自动 `--resume`。
 - 中断：-p 模式没有 stdin 中断，直接结束进程，下一条消息续上。
 - 无头会话的 transcript 里第一条 user 内容是 block 数组；没有 ai-title 时用第一句话当标题。

@@ -52,6 +52,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
 | `docs/codex.md` | Codex 支持：herdr 里的 Codex 怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
+| `docs/assistant.md` | 「对话」tab 的助手：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/feishu.md` | 飞书信息能力（工作台）：参考飞书源码 `florak/` 的功能、lark-connector 只读代理、各领域接口与分工 |
 
 ## 构建与验证
@@ -130,4 +131,6 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - SwiftUI：给 NavigationStack 推出页面用的环境值（如 `feishuOpen`）要挂在 NavigationStack 本身上，挂在栈根内容上推出的页面拿不到。
 - 代理视频 / 音频必须转发 Range / Content-Range（AVPlayer 先要 2 个字节，拿到整个文件就拒播）；`URL.appending(path:)` 会把 `%`
   再编码一次，ID 里带 `/` 的路径要用 `percentEncodedPath` 自己拼。
-
+- 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
+  （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
+- App 进后台不断开 WebSocket 的话，挂起的 socket 在 hub 看来还活着，`phone_*` 调用会干等到超时；现在进后台就断开，需要时用静默推送唤醒。
