@@ -87,7 +87,9 @@ struct ChatsView: View {
     }
 
     var body: some View {
-        let groups = SpaceGroup.build(filtered)
+        // A pinned agent shows once, under 置顶; every grouping below is built from the rest.
+        let unpinned = filtered.filter { !model.isPinned($0.key) }
+        let groups = SpaceGroup.build(unpinned)
         // Pinned spaces lead and never fold away with the quiet ones.
         // Pinned spaces lead; muted spaces with something running come after the other busy ones, shown quietly;
         // quiet spaces (muted or not) fold into 空闲的空间.
@@ -128,9 +130,9 @@ struct ChatsView: View {
                 }
 
                 if grouping == .state {
-                    stateSections(filtered.filter { $0.state.isLive })
+                    stateSections(unpinned.filter { $0.state.isLive })
                 } else if grouping == .machine {
-                    machineSections(filtered.filter { $0.state.isLive })
+                    machineSections(unpinned.filter { $0.state.isLive })
                 } else {
                 ForEach(active) { g in
                     Section {
