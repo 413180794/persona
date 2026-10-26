@@ -276,22 +276,26 @@ struct ChatsView: View {
         }
     }
 
-    /// 需要你 → 完成未看 → 工作中 → 已看 (the last one folded: it is the long tail).
+    /// 需要你 → 完成未看 → 工作中 → 已屏蔽 → 已看 (the last one folded: it is the long tail). Muted agents that are
+    /// working or finished-unread wait in 已屏蔽 instead of their state's section; one that needs you stays there.
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
-        let buckets: [(key: String, title: String, states: [AgentState], tint: Color)] = [
-            ("needs", "需要你", [.needsYou], Theme.needsYou),
-            ("unread", "完成未看", [.unread], Theme.unread),
-            ("working", "工作中", [.working], Theme.busy),
-            ("idle", "已看", [.idle, .unknown], .secondary),
+        let quieted: (Session) -> Bool = { ($0.state == .working || $0.state == .unread) && model.isMuted($0.key) }
+        let buckets: [(key: String, title: String, rows: [Session], tint: Color)] = [
+            ("needs", "需要你", live.filter { $0.state == .needsYou }, Theme.needsYou),
+            ("unread", "完成未看", live.filter { $0.state == .unread && !quieted($0) }, Theme.unread),
+            ("working", "工作中", live.filter { $0.state == .working && !quieted($0) }, Theme.busy),
+            ("muted", "已屏蔽", live.filter(quieted), .secondary),
+            ("idle", "已看", live.filter { $0.state == .idle || $0.state == .unknown }, .secondary),
         ]
         ForEach(buckets, id: \.key) { b in
-            let rows = ordered(live.filter { b.states.contains($0.state) })
+            let rows = ordered(b.rows)
             if !rows.isEmpty {
                 Section {
                     if b.key == "idle" {
                         foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
-                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: true) }
+                        // 已屏蔽 mixes states: each row says its own.
+                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
                     SectionHeader(title: b.title, count: rows.count, tint: b.tint)
