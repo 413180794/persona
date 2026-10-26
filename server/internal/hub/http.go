@@ -517,6 +517,11 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 		c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
 		return
 	}
-	c.sendJSON(map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items,
-		"backlog": true, "has_more": res.HasMore && since == 0})
+	out := map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true}
+	if since == 0 {
+		// Only a page counted back from the end knows whether older items exist. A catch-up after since_seq does
+		// not: sending false there told the app the history was complete, and scrolling up stopped at its oldest.
+		out["has_more"] = res.HasMore
+	}
+	c.sendJSON(out)
 }

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Jarvis
 
@@ -212,6 +213,18 @@ struct TurnTests {
         guard case .turn(let t) = blocks[0], case .row(.recap) = blocks[1] else { Issue.record("shape \(blocks)"); return }
         if case .assistant(let a) = t.answer { #expect(a.text == summary) } else { Issue.record("answer") }
         #expect(t.wakes.count == 1 && t.tail.count == 3)
+    }
+
+    @Test func catchUpNeverEndsTheHistory() {
+        let store = ChatStore(key: SessionKey(machineID: "test", sessionID: UUID().uuidString))
+        store.merge((100...110).map { item($0, .text, text: "m\($0)") }, backlog: true, hasMore: true)
+        #expect(store.hasMore)
+        // A catch-up after since_seq (only newer items) saying "nothing older": not about our start, ignored.
+        store.merge((111...112).map { item($0, .text, text: "m\($0)") }, backlog: true, hasMore: false)
+        #expect(store.hasMore)
+        // No answer at all (newer hubs omit it on catch-ups): unchanged.
+        store.merge([item(113, .text, text: "m")], backlog: true, hasMore: Bool?.none)
+        #expect(store.hasMore)
     }
 
     @Test func wakeSummaryReadsInChinese() {

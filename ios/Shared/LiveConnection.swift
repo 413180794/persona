@@ -5,7 +5,8 @@ nonisolated enum ServerEvent: Sendable {
     case hello
     case machines([Machine])
     case sessions(machineID: String, [Session])
-    case items(SessionKey, [Item], backlog: Bool, hasMore: Bool)
+    /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell.
+    case items(SessionKey, [Item], backlog: Bool, hasMore: Bool?)
     case screen(SessionKey, text: String, status: SessionStatus)
     case delta(SessionKey, text: String)
     case interaction(Interaction)
@@ -53,7 +54,7 @@ nonisolated enum ServerEvent: Sendable {
             return .sessions(machineID: m, (e.sessions ?? []).map { var s = $0; s.machineID = m; return s })
         case "items":
             guard let key else { return nil }
-            return .items(key, e.items ?? [], backlog: e.backlog ?? false, hasMore: e.hasMore ?? false)
+            return .items(key, e.items ?? [], backlog: e.backlog ?? false, hasMore: e.hasMore)
         case "screen":
             guard let key else { return nil }
             return .screen(key, text: e.text ?? "", status: e.status ?? .unknown)

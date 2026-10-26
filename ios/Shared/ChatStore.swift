@@ -281,7 +281,10 @@ final class ChatStore {
             items.append(it)
             changed = true
         }
-        if let hasMore, backlog, !loadedOnce || items.count <= new.count { self.hasMore = hasMore }
+        // "Nothing older" only counts from a page that reaches our oldest item: a catch-up batch (newer items only)
+        // saying so had the list stop at its oldest loaded message with no way further up.
+        let reachesStart = new.map(\.seq).min().map { $0 <= (items.first?.seq ?? .max) } ?? false
+        if let hasMore, backlog, !loadedOnce || items.count <= new.count, hasMore || reachesStart { self.hasMore = hasMore }
         if backlog { loadedOnce = true }
         guard changed else { return }
         if !pending.isEmpty { // the real message arrived: drop the local copy

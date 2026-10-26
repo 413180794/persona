@@ -402,8 +402,17 @@ struct ChatView: View {
         UserDefaults.standard.set(top, forKey: readKey)
     }
 
+    private func prefetchOlder() {
+        let store = store
+        guard userScrolled, store.hasMore, !store.isLoadingOlder else { return }
+        Task { await model.loadOlder(shownKey) }
+    }
+
     /// The newest message is at offset 0 of the flipped list: an exact jump, no estimate involved.
     private func scrollToEnd(animated: Bool = false) {
+        #if DEBUG
+        scratch.endJumps += 1
+        #endif
         if animated { withAnimation(.snappy) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
     }
 
@@ -579,10 +588,14 @@ struct ChatView: View {
                 }
                 // Every message, timer line, tool count and answer is its own lazy row (a running turn can hold
                 // hundreds of steps; one stack of them froze the page).
+                // The oldest dozen lines start loading the page before them: by the time you reach the top it is
+                // usually there (pages with screenshots run to megabytes and take seconds).
+                let prefetch = Set(lines.prefix(12).map(\.id))
                 ForEach(lines.reversed()) { line in
                     lineView(line)
                         .flippedBack()
                         .id(line.id)
+                        .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
                         .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
                 }
                 if !store.loadedOnce && rows.isEmpty {
@@ -855,6 +868,26 @@ struct ChatView: View {
                 Task {
                     try? await Task.sleep(for: .seconds(5)) // the session list may not be in yet
                     if let space = session?.spaceKey { openSpace?(space) }
+                }
+            }
+            if UserDefaults.standard.bool(forKey: "showScrollToOldest") { // testing: flick toward the oldest, log progress
+                Task {
+                    try? await Task.sleep(for: .seconds(8))
+                    userScrolled = true // as if dragged: older pages only load after the user took the list
+                    followsEnd = false
+                    var log: [String] = []
+                    var y: CGFloat = chrome.offset
+                    for step in 0..<20 {
+                        y += 4000
+                        withAnimation(.easeOut(duration: 1.5)) { position.scrollTo(y: y) }
+                        try? await Task.sleep(for: .seconds(2.5))
+                        let s = model.chat(shownKey)
+                        log.append("step \(step) offset=\(Int(chrome.offset)) target=\(Int(y)) items=\(s.items.count) rows=\(s.rows.count) first=\(s.items.first?.seq ?? 0) more=\(s.hasMore) loading=\(s.isLoadingOlder) follows=\(followsEnd) atBottom=\(atBottom) ends=\(scratch.endJumps)")
+                        y = max(y, chrome.offset)
+                    }
+                    if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        try? log.joined(separator: "\n").write(to: dir.appending(path: "oldest.txt"), atomically: true, encoding: .utf8)
+                    }
                 }
             }
             if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
@@ -1718,4 +1751,7 @@ final class ChatScratch {
     var lastActivity = Date.now
     var linesKey: LinesKey?
     var lines: [ChatLine] = []
+    #if DEBUG
+    var endJumps = 0 // jumps to the newest (scrollToEnd), for the scroll probe
+    #endif
 }

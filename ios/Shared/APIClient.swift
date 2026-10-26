@@ -93,7 +93,7 @@ nonisolated struct APIClient: Sendable {
     struct LaunchersResponse: Decodable { var launchers: [Launcher] }
     struct SessionsResponse: Decodable { var sessions: [Session] }
     struct SessionResponse: Decodable { var session: Session }
-    struct ItemsResponse: Decodable {
+    struct ItemsResponse: Decodable, Sendable {
         var items: [Item]
         var hasMore: Bool
         enum CodingKeys: String, CodingKey { case items; case hasMore = "has_more" }
@@ -137,7 +137,10 @@ nonisolated struct APIClient: Sendable {
 
     /// A page of history going back `turns` whole exchanges (user prompt + answer) before beforeSeq.
     func items(_ k: SessionKey, beforeSeq: Int?, turns: Int = 2) async throws -> ItemsResponse {
-        try await get(sp(k) + "/items", query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80"])
+        let data = try await request("GET", sp(k) + "/items",
+                                     query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80"])
+        // Pages run to megabytes (screenshots inline as base64): decode off the main thread, which called us.
+        return try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(ItemsResponse.self, from: data) }.value
     }
 
     struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }
