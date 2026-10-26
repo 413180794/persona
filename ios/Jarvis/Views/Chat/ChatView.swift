@@ -109,6 +109,18 @@ struct ChatView: View {
             }
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        // Left alone for a few seconds, the open chrome folds away by itself (the page goes back to being all chat).
+        .task(id: style == .dev && pane == .chat) {
+            guard style == .dev, pane == .chat else { return }
+            scratch.lastActivity = .now
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                if chrome.collapse == 0, !showInfo, !scratch.userDragging,
+                   Date.now.timeIntervalSince(scratch.lastActivity) >= Self.chromeIdleSeconds {
+                    hideChrome()
+                }
+            }
+        }
         // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
         .task(id: store.version) {
             let items = store.items
@@ -616,6 +628,7 @@ struct ChatView: View {
         .onScrollPhaseChange { old, phase in
             // The user's own scrolling: a drag, and the glide after a flick. Deceleration alone is not proof — landing
             // on the entry line produced it with no finger down and folded the chrome on open.
+            if phase != .idle { scratch.lastActivity = .now }
             let flick = phase == .decelerating && (old == .tracking || old == .interacting || scratch.userDragging)
             scratch.userDragging = phase == .tracking || phase == .interacting || flick
             if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
@@ -655,8 +668,12 @@ struct ChatView: View {
 
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
     /// reading on (toward the newest) folds it as far as the finger goes, going back into the history unfolds it.
+    /// Idle time before the open chrome folds itself.
+    static let chromeIdleSeconds: TimeInterval = 3
+
     private func scrolled(by delta: CGFloat) {
         guard style == .dev, pane == .chat, scratch.userDragging, delta != 0 else { return }
+        scratch.lastActivity = .now
         let folded = min(max(chrome.collapse - delta, 0), chrome.maxCollapse)
         guard folded != chrome.collapse else { return }
         chrome.collapse = folded
@@ -682,6 +699,7 @@ struct ChatView: View {
     }
 
     private func showChrome() {
+        scratch.lastActivity = .now // shown on purpose: give it the full idle time before folding again
         guard chrome.collapse > 0 else { return }
         withAnimation(.smooth(duration: 0.35)) { chrome.collapse = 0 }
     }
@@ -774,7 +792,7 @@ struct ChatView: View {
 
     /// The Agents header: title row, agent strip and tabs, folding into a slim bar as the list scrolls.
     private var devChrome: some View {
-        ChromeHeader(chrome: chrome) {
+        ChromeHeader(chrome: chrome, touched: { scratch.lastActivity = .now }) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Button { dismissChat() } label: {
@@ -1656,6 +1674,8 @@ final class ChatChrome {
 /// driven by `chrome.collapse` (the finger, or a short animation when it settles).
 private struct ChromeHeader<Full: View, Compact: View>: View {
     var chrome: ChatChrome
+    /// Any touch on the header (switching agents, scrolling the strip): it stays open while in use.
+    var touched: () -> Void
     @ViewBuilder var full: () -> Full
     @ViewBuilder var compact: () -> Compact
 
@@ -1677,6 +1697,7 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
         .frame(height: chrome.height > 0 ? max(chrome.height - c, ChatChrome.compactHeight) : nil, alignment: .top)
         .clipped()
         .background(.bar, ignoresSafeAreaEdges: .top)
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in touched() })
     }
 }
 
@@ -1693,6 +1714,8 @@ final class ChatScratch {
     var visibleLines: [String] = []
     /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.
     var userDragging = false
+    /// Last time the user scrolled or touched the header: the chrome folds itself after a few idle seconds.
+    var lastActivity = Date.now
     var linesKey: LinesKey?
     var lines: [ChatLine] = []
 }

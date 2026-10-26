@@ -38,4 +38,24 @@ final class SwipeBackTests: XCTestCase {
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "still in the chat after the swipe")
         XCTAssertFalse(back.isHittable)
     }
+
+    /// Left alone, the open header folds into the slim bar within a few seconds (ChatView.chromeIdleSeconds).
+    @MainActor func testHeaderFoldsWhenIdle() throws {
+        let app = try launch([])
+        XCTAssertTrue(app.buttons["返回"].waitForExistence(timeout: 15), "the chat did not open")
+        let slim = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "显示标题和标签")).firstMatch
+        XCTAssertTrue(slim.waitForExistence(timeout: 8), "the header did not fold")
+        let deadline = Date.now.addingTimeInterval(4)
+        while !slim.isHittable && Date.now < deadline { usleep(200_000) }
+        XCTAssertTrue(slim.isHittable, "the slim bar is not showing")
+    }
+
+    /// The header watches touches (to stay open while used): its buttons must still work.
+    @MainActor func testHeaderButtonsStillWork() throws {
+        let app = try launch([])
+        let terminal = app.buttons["终端"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 15), "the chat did not open")
+        terminal.tap()
+        XCTAssertTrue(app.textFields["发送文字到终端"].waitForExistence(timeout: 5), "tapping 终端 did nothing")
+    }
 }

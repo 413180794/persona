@@ -97,6 +97,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   （`ChromeHeader`，系统导航栏在 Agents 对话页隐藏），浮在列表上方；**跟手**：手指往新消息方向推，顶栏按同样的距离往上滑走、同时淡出，
   细条（返回 +「● app › leader · 对话」）在后半段淡入；往历史方向拉就一点点滑回来。松手后不会停在半截：在最新处收起，
   否则按离哪头近吸附到全开或全收（`.smooth` 0.3 秒）。跟着新内容自动滚动时也收起（用户动过列表之后）；点细条、切 tab 展开。
+  停住 3 秒（`ChatView.chromeIdleSeconds`：没滑列表、没碰顶栏、信息卡没开）也自动收起；碰顶栏（横滑 Agent 条等）、点细条展开、切 tab 都重新计时。
   - 为什么顺：折叠程度放在单独的 `@Observable`（`ChatChrome`），每帧只重画顶栏；顶栏浮在列表上、列表的 frame 不变（只在最老那头
     留出顶栏高度的 contentMargins），所以收起展开时消息一像素都不动。以前是开关式：系统导航栏和两条标签各自做动画、列表跟着变高，看着突兀。
   - 只认用户的拖动和拖完的惯性（`onScrollPhaseChange` 的 tracking / interacting，及紧跟其后的 decelerating）；键盘弹起改变列表高度时的偏移变化不算。
