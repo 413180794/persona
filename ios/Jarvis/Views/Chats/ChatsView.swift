@@ -7,7 +7,7 @@ struct SpaceGroup: Identifiable {
     var spaceID: String
     var name: String
     var index: Int
-    var sessions: [Session] // ordered by slot
+    var sessions: [Session] // in tab order
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
@@ -31,8 +31,8 @@ struct SpaceGroup: Identifiable {
         }
         return groups.values.map { g in
             var g = g
-            // Needs you → working → finished unseen → idle, then tab order within each.
-            g.sessions.sort { ($0.state.priority, $0.slotIndex ?? 0, $0.sessionID) < ($1.state.priority, $1.slotIndex ?? 0, $1.sessionID) }
+            // Tab order, as in herdr: an agent keeps its place whatever its state (the state shows on the row).
+            g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
             return g
         }
         .sorted { a, b in
@@ -266,13 +266,11 @@ struct ChatsView: View {
             || (s.subagents ?? []).contains(where: \.running)
     }
 
-    /// Unmuted first, then the most recently active.
+    /// Inside a state or machine section: the most recently updated first.
     private func ordered(_ list: [Session]) -> [Session] {
         list.sorted { a, b in
-            let ma = model.isMuted(a.key), mb = model.isMuted(b.key)
-            if ma != mb { return !ma }
-            if a.state.priority != b.state.priority { return a.state.priority < b.state.priority }
-            return (a.updatedAt ?? .distantPast) > (b.updatedAt ?? .distantPast)
+            let ta = a.updatedAt ?? .distantPast, tb = b.updatedAt ?? .distantPast
+            return ta != tb ? ta > tb : a.sessionID < b.sessionID
         }
     }
 
