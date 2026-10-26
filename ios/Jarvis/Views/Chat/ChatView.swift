@@ -54,13 +54,11 @@ struct ChatView: View {
     /// The turn whose "后台任务完成" drawer is open.
     @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
-    /// Safari-style: reading on hides the navigation bar, agent strip and tabs behind one slim bar; scrolling back,
-    /// tapping the bar or reaching the newest message brings them back.
-    @State private var chromeHidden = false
+    /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
+    /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
+    @State private var chrome = ChatChrome()
+    /// The finger is on the list (or the list is gliding after a flick): only then does the chrome follow it.
     @State private var userDragging = false
-    @State private var scrollTravel: CGFloat = 0
-    /// When the chrome last folded or unfolded: the list resizes with it, and that move is not the user's.
-    @State private var chromeToggledAt = Date.distantPast
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
 
@@ -88,92 +86,26 @@ struct ChatView: View {
         .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarVisibility(chromeHidden ? .hidden : .visible, for: .navigationBar)
+        // Agents chats draw their own header (devChrome) so it can follow the scroll; the assistant keeps the system bar.
+        .toolbarVisibility(style == .dev ? .hidden : .visible, for: .navigationBar)
         .overlay(alignment: .top) {
-            if showInfo && !chromeHidden {
+            if style == .dev { devChrome }
+        }
+        .overlay(alignment: .top) {
+            if showInfo {
                 DevInfoCard(key: key, session: session)
                     .padding(.horizontal, 12)
-                    .padding(.top, 6)
+                    .padding(.top, (style == .dev ? chrome.height : 0) + 6)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .toolbar {
-            // A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
-            ToolbarItem(placement: .principal) {
-                Button {
-                    Haptics.tap()
-                    withAnimation(.snappy) { showInfo.toggle() }
-                } label: {
-                    VStack(spacing: 1) {
-                        Text(title).font(.headline).lineLimit(1)
-                        HStack(spacing: 3) {
-                            Text(subtitle).lineLimit(1)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                                .rotationEffect(.degrees(showInfo ? 180 : 0))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: 260)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
-            }
             if style == .assistant {
+                ToolbarItem(placement: .principal) { titleButton }
                 ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    if style == .dev {
-                        Button { withAnimation(.snappy) { pane = .terminal } } label: { Label("终端", systemImage: "terminal") }
-                    }
-                    if status.isActive {
-                        Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
-                    }
-                    if style == .dev, let s = session {
-                        Button { renaming = s } label: { Label("重命名…", systemImage: "pencil") }
-                    }
-                    if style == .dev {
-                        Button { model.toggleMute(key) } label: {
-                            Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? "bell" : "bell.slash")
-                        }
-                    }
-                    Divider()
-                    if let s = session {
-                        Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
-                            Label("拷贝恢复命令", systemImage: "doc.on.doc")
-                        }
-                        Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
-                        if let space = s.spaceKey, let openSpace {
-                            Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: "square.stack.3d.up") }
-                        }
-                        if s.status.isLive {
-                            Button(role: .destructive) { closing = s } label: {
-                                Label("关闭 Agent…", systemImage: "xmark.circle")
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu { moreMenuItems } label: { Image(systemName: "ellipsis") }
                 }
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if style == .dev && chromeHidden {
-                compactChrome
-            } else if style == .dev {
-                VStack(spacing: 0) {
-                    SiblingStrip(current: key) { next in switchTo(next) }
-                    SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
-                    // Only while subagents run (plus the one being read): finished ones stay reachable from their
-                    // Agent call ("查看子 Agent") without taking a row here.
-                    let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
-                    if pane == .chat, !agents.isEmpty {
-                        AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
-                    }
-                }
-                .background(.bar)
             }
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
@@ -472,11 +404,14 @@ struct ChatView: View {
     @ViewBuilder private var paneContent: some View {
         switch pane {
         case .chat: chatPane
-        case .terminal: TerminalPanel(key: key).padding(.horizontal, 12).padding(.bottom, 8)
-        case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git)
-        case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git)
+        case .terminal: TerminalPanel(key: key).padding(.horizontal, 12).padding(.bottom, 8).padding(.top, headerRoom)
+        case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
+        case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
         }
     }
+
+    /// The custom header's full height (Agents): the other panes sit below it, the chat list scrolls under it.
+    private var headerRoom: CGFloat { style == .dev ? chrome.height : 0 }
 
     /// Git only for repositories, files only when we know the directory; the assistant has neither.
     private var panes: [SessionPane] {
@@ -644,7 +579,10 @@ struct ChatView: View {
         .flippedBack() // the scroll view itself upside down; every row above is flipped back
         // Safe areas would land on the wrong ends of a flipped scroll view: ignore them and add the room ourselves.
         // (Content top = the composer side on screen, content bottom = the navigation side.)
-        .contentMargins(.vertical, 10, for: .scrollContent)
+        // The header floats over the list (Agents): the oldest end leaves its full height free, so nothing hides
+        // under it; the list's own frame never changes as it folds, so folding never moves the messages.
+        .contentMargins(.top, 10, for: .scrollContent)
+        .contentMargins(.bottom, headerRoom + 10, for: .scrollContent)
         .scrollIndicators(.hidden)
         // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
         .scrollEdgeEffectHidden(true, for: .all)
@@ -653,16 +591,17 @@ struct ChatView: View {
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
         .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height) }) { old, new in
-            // Folding the chrome changes the list's height, which moves the offset: never read that as scrolling
-            // (it toggled the chrome back, which moved it again — a loop).
-            if old.height != new.height { scrollTravel = 0; return }
-            scrolled(by: new.offset - old.offset, at: new.offset)
+            chrome.offset = new.offset
+            // A height change (keyboard) moves the offset too: that is not the user scrolling.
+            if old.height != new.height { return }
+            scrolled(by: new.offset - old.offset)
         }
         .onScrollPhaseChange { old, phase in
             // The user's own scrolling: a drag, and the glide after a flick. Deceleration alone is not proof — landing
             // on the entry line produced it with no finger down and folded the chrome on open.
             let flick = phase == .decelerating && (old == .tracking || old == .interacting || userDragging)
             userDragging = phase == .tracking || phase == .interacting || flick
+            if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
                 userScrolled = true
@@ -697,33 +636,37 @@ struct ChatView: View {
         .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; scrollToEnd(animated: true) } }
     }
 
-    /// The flipped list's offset grows toward older messages. Reading on (toward the newest) hides the chrome,
-    /// going back shows it, and so does arriving at the newest end.
-    private func scrolled(by delta: CGFloat, at offset: CGFloat) {
+    /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
+    /// reading on (toward the newest) folds it as far as the finger goes, going back into the history unfolds it.
+    private func scrolled(by delta: CGFloat) {
         guard style == .dev, pane == .chat, userDragging, delta != 0 else { return }
-        guard Date.now.timeIntervalSince(chromeToggledAt) > 0.5 else { scrollTravel = 0; return } // settling
-        if offset < 40 { hideChrome(); return } // at the newest: reading what is coming in, the page is all chat
-        if (delta < 0) != (scrollTravel < 0) { scrollTravel = 0 }
-        scrollTravel += delta
-        if scrollTravel < -60 {
+        let folded = min(max(chrome.collapse - delta, 0), chrome.maxCollapse)
+        guard folded != chrome.collapse else { return }
+        chrome.collapse = folded
+        if folded > 0, showInfo { showInfo = false }
+    }
+
+    /// The finger lifted: never stay half folded. At the newest the chrome folds (the page is all chat); elsewhere
+    /// it goes to whichever end is nearer.
+    private func settleChrome() {
+        guard style == .dev, pane == .chat else { return }
+        let full = chrome.maxCollapse
+        if chrome.offset < 40 {
             hideChrome()
-        } else if scrollTravel > 60 {
-            showChrome() // back into the history: the tabs are there to go elsewhere
+        } else if chrome.collapse > 0, chrome.collapse < full {
+            withAnimation(.smooth(duration: 0.3)) { chrome.collapse = chrome.collapse > full / 2 ? full : 0 }
         }
     }
 
     private func hideChrome() {
-        scrollTravel = 0
-        guard !chromeHidden, style == .dev, pane == .chat else { return }
-        chromeToggledAt = .now
-        withAnimation(.snappy(duration: 0.25)) { chromeHidden = true; showInfo = false }
+        guard style == .dev, pane == .chat, chrome.collapse < chrome.maxCollapse else { return }
+        withAnimation(.smooth(duration: 0.35)) { chrome.collapse = chrome.maxCollapse }
+        showInfo = false
     }
 
     private func showChrome() {
-        scrollTravel = 0
-        guard chromeHidden else { return }
-        chromeToggledAt = .now
-        withAnimation(.snappy(duration: 0.25)) { chromeHidden = false }
+        guard chrome.collapse > 0 else { return }
+        withAnimation(.smooth(duration: 0.35)) { chrome.collapse = 0 }
     }
 
     /// The chrome folded away: back, and where you are ("app › leader · 对话") — tap it for everything again.
@@ -752,9 +695,102 @@ struct ChatView: View {
             Color.clear.frame(width: 44, height: 34) // balances the back button: the place stays centered
         }
         .padding(.horizontal, 4)
-        .padding(.bottom, 4)
-        .background(.bar)
-        .transition(.opacity)
+        .frame(height: ChatChrome.compactHeight)
+    }
+
+    /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
+    @ViewBuilder private var moreMenuItems: some View {
+            if style == .dev {
+                Button { withAnimation(.snappy) { pane = .terminal } } label: { Label("终端", systemImage: "terminal") }
+            }
+            if status.isActive {
+                Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
+            }
+            if style == .dev, let s = session {
+                Button { renaming = s } label: { Label("重命名…", systemImage: "pencil") }
+            }
+            if style == .dev {
+                Button { model.toggleMute(key) } label: {
+                    Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? "bell" : "bell.slash")
+                }
+            }
+            Divider()
+            if let s = session {
+                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
+                    Label("拷贝恢复命令", systemImage: "doc.on.doc")
+                }
+                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
+                if let space = s.spaceKey, let openSpace {
+                    Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: "square.stack.3d.up") }
+                }
+                if s.status.isLive {
+                    Button(role: .destructive) { closing = s } label: {
+                        Label("关闭 Agent…", systemImage: "xmark.circle")
+                    }
+                }
+            }
+    }
+
+    /// A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
+    private var titleButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(.snappy) { showInfo.toggle() }
+        } label: {
+            VStack(spacing: 1) {
+                Text(title).font(.headline).lineLimit(1)
+                HStack(spacing: 3) {
+                    Text(subtitle).lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .rotationEffect(.degrees(showInfo ? 180 : 0))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 260)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
+    }
+
+    /// The Agents header: title row, agent strip and tabs, folding into a slim bar as the list scrolls.
+    private var devChrome: some View {
+        ChromeHeader(chrome: chrome) {
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Button { dismissChat() } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .surface(interactive: true, in: .circle)
+                    .accessibilityLabel("返回")
+                    Spacer(minLength: 0)
+                    titleButton
+                    Spacer(minLength: 0)
+                    Menu { moreMenuItems } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
+                            .contentShape(.circle)
+                    }
+                    .surface(interactive: true, in: .circle)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+                SiblingStrip(current: key) { next in switchTo(next) }
+                SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
+                // Only while subagents run (plus the one being read): finished ones stay reachable from their
+                // Agent call ("查看子 Agent") without taking a row here.
+                let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
+                if pane == .chat, !agents.isEmpty {
+                    AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
+                }
+            }
+        } compact: {
+            compactChrome
+        }
     }
 
     private var compactPlace: String {
@@ -786,7 +822,9 @@ struct ChatView: View {
                     if let space = session?.spaceKey { openSpace?(space) }
                 }
             }
-            if UserDefaults.standard.bool(forKey: "showCompactChrome") { chromeHidden = true } // folded, for screenshots
+            if UserDefaults.standard.bool(forKey: "showCompactChrome") { // folded, once the header has its height
+                Task { try? await Task.sleep(for: .seconds(3)); withAnimation(.smooth) { chrome.collapse = chrome.maxCollapse } }
+            }
             if UserDefaults.standard.bool(forKey: "showWakeDrawer") { // the newest "后台任务完成" drawer
                 Task {
                     try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 30 : 6))
@@ -1568,4 +1606,45 @@ private struct EditIndex: Identifiable { var id: Int }
 private struct ListScroll: Equatable {
     var offset: CGFloat
     var height: CGFloat
+}
+
+/// How far the Agents header is folded (0 = open, maxCollapse = just the slim bar). Written on every scroll frame,
+/// read only by `ChromeHeader`, so following the finger redraws the header and nothing else.
+@Observable
+final class ChatChrome {
+    static let compactHeight: CGFloat = 40
+    var collapse: CGFloat = 0
+    /// The open header's height, measured.
+    var height: CGFloat = 0
+    /// The list's offset (0 = newest), kept for deciding where to settle.
+    @ObservationIgnored var offset: CGFloat = 0
+    var maxCollapse: CGFloat { max(0, height - Self.compactHeight) }
+}
+
+/// The open header slides up under a shrinking clip while the slim bar fades in over it: one continuous motion,
+/// driven by `chrome.collapse` (the finger, or a short animation when it settles).
+private struct ChromeHeader<Full: View, Compact: View>: View {
+    var chrome: ChatChrome
+    @ViewBuilder var full: () -> Full
+    @ViewBuilder var compact: () -> Compact
+
+    var body: some View {
+        let maxC = chrome.maxCollapse
+        let c = min(max(chrome.collapse, 0), maxC)
+        let p = maxC > 0 ? c / maxC : 0 // 0 open … 1 folded
+        ZStack(alignment: .top) {
+            full()
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chrome.height = $0 }
+                .offset(y: -c)
+                .opacity(1 - min(1, p * 1.5))
+                .allowsHitTesting(p < 0.5)
+            compact()
+                .opacity(max(0, (p - 0.5) * 2))
+                .allowsHitTesting(p >= 0.5)
+        }
+        .frame(height: chrome.height > 0 ? max(chrome.height - c, ChatChrome.compactHeight) : nil, alignment: .top)
+        .clipped()
+        .background(.bar, ignoresSafeAreaEdges: .top)
+    }
 }
