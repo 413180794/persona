@@ -120,9 +120,30 @@ struct EmptyStateView: View {
 
 struct ConnectionBanner: View {
     @Environment(AppModel.self) private var model
+    /// Shown only after the hub has been out of reach for 5 s in a row: reconnects after a network blip or coming
+    /// back to the app finish well within that, and the banner just flashed.
+    @State private var due = false
+
+    private var isUp: Bool {
+        switch model.live.state {
+        case .connected, .idle: true
+        default: false
+        }
+    }
 
     var body: some View {
+        content
+            .task(id: isUp) {
+                guard !isUp else { due = false; return }
+                try? await Task.sleep(for: .seconds(5))
+                if !Task.isCancelled { withAnimation(.snappy) { due = true } }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
         switch model.live.state {
+        case _ where !due:
+            EmptyView()
         case .connected, .idle:
             EmptyView()
         case .connecting:

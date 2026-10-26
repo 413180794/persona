@@ -123,7 +123,8 @@ struct ChatsView: View {
 
                 if !pinnedAgents.isEmpty {
                     Section {
-                        ForEach(pinnedAgents) { s in slotRow(s, context: true) }
+                        // No state word: the dot and the name's color already say it.
+                        ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
                     } header: {
                         SectionHeader(title: "置顶", count: nil, tint: Theme.accent)
                     }

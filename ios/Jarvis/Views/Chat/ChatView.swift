@@ -689,8 +689,9 @@ struct ChatView: View {
         .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
-        .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd() } }
-        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd() } }
+        // Following the newest as it streams in folds the chrome too (once the user has taken the list).
+        .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
+        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
         // Your own message always brings you to the newest.
         .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; scrollToEnd() } }
         .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; scrollToEnd(animated: true) } }
@@ -701,16 +702,21 @@ struct ChatView: View {
     private func scrolled(by delta: CGFloat, at offset: CGFloat) {
         guard style == .dev, pane == .chat, userDragging, delta != 0 else { return }
         guard Date.now.timeIntervalSince(chromeToggledAt) > 0.5 else { scrollTravel = 0; return } // settling
-        if offset < 40 { showChrome(); return }
+        if offset < 40 { hideChrome(); return } // at the newest: reading what is coming in, the page is all chat
         if (delta < 0) != (scrollTravel < 0) { scrollTravel = 0 }
         scrollTravel += delta
-        if scrollTravel < -60, !chromeHidden {
-            chromeToggledAt = .now
-            scrollTravel = 0
-            withAnimation(.snappy(duration: 0.25)) { chromeHidden = true; showInfo = false }
-        } else if scrollTravel > 60, chromeHidden {
-            showChrome()
+        if scrollTravel < -60 {
+            hideChrome()
+        } else if scrollTravel > 60 {
+            showChrome() // back into the history: the tabs are there to go elsewhere
         }
+    }
+
+    private func hideChrome() {
+        scrollTravel = 0
+        guard !chromeHidden, style == .dev, pane == .chat else { return }
+        chromeToggledAt = .now
+        withAnimation(.snappy(duration: 0.25)) { chromeHidden = true; showInfo = false }
     }
 
     private func showChrome() {

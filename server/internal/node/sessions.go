@@ -115,6 +115,7 @@ type quickMeta struct {
 	cwd      string
 	model    string
 	lastText string
+	wake     bool // the latest turn was a background task waking the agent
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -176,6 +177,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 		}
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
+	m.wake = tm.LastTurnWake
 	return m
 }
 
@@ -273,6 +275,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), lastUsed(m, st)
+				s.WokeByTask = m.wake
 				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
 				}

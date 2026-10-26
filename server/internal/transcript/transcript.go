@@ -111,6 +111,9 @@ type Meta struct {
 	Sidechain bool
 	// Codex: the file is a Codex rollout (codex.go), not a Claude transcript.
 	Codex bool
+	// LastTurnWake: the latest turn was started by a background task reporting back, not by a message (no
+	// "finished" push for it).
+	LastTurnWake bool
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
 	bashInput string
 	Cwd       string
@@ -140,6 +143,12 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	for _, it := range items {
 		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
 			meta.LastActivity = it.TS
+		}
+		switch {
+		case it.Wake:
+			meta.LastTurnWake = true
+		case it.Role == "user" && it.Kind == proto.KindText && !it.Queued:
+			meta.LastTurnWake = false
 		}
 	}
 	return items

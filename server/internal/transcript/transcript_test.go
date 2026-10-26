@@ -643,3 +643,19 @@ func TestClaudeSpecialTags(t *testing.T) {
 		t.Fatalf("caveat should vanish: %+v", items)
 	}
 }
+
+func TestLastTurnWake(t *testing.T) {
+	meta := &Meta{}
+	ParseLine(1, []byte(`{"type":"user","uuid":"u1","message":{"role":"user","content":"go"}}`), meta)
+	if meta.LastTurnWake {
+		t.Fatal("a message is not a wake")
+	}
+	ParseLine(2, []byte(`{"type":"user","uuid":"w1","message":{"role":"user","content":"<task-notification><summary>Background command \"x\" completed</summary></task-notification>"}}`), meta)
+	if !meta.LastTurnWake {
+		t.Fatal("the task report started the turn")
+	}
+	ParseLine(3, []byte(`{"type":"user","uuid":"u2","message":{"role":"user","content":"next"}}`), meta)
+	if meta.LastTurnWake {
+		t.Fatal("the user's next message starts a user turn again")
+	}
+}

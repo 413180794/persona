@@ -115,10 +115,13 @@ type Session struct {
 	// Subagents the agent launched (Agent / Task tool); each one's transcript is the session "<id>@<agent id>".
 	Subagents []Subagent `json:"subagents,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
-	Loop                *LoopInfo `json:"loop,omitempty"`
-	UpdatedAt           time.Time `json:"updated_at"`
-	LastText            string    `json:"last_text,omitempty"`
-	PendingInteractions int       `json:"pending_interactions"`
+	Loop      *LoopInfo `json:"loop,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	LastText  string    `json:"last_text,omitempty"`
+	// WokeByTask: the latest turn was started by a background task reporting back, not by the user; finishing
+	// it sends no push (the user did not ask for anything).
+	WokeByTask          bool `json:"woke_by_task,omitempty"`
+	PendingInteractions int  `json:"pending_interactions"`
 }
 
 // Item kinds.

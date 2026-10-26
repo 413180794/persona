@@ -137,3 +137,6 @@ node 的 `session.start`：
 | `<system-reminder>` | 去掉 |
 | `<attached_images>` | 手机发来的图片路径，App 显示成缩略图 |
 | `<jarvis-context>` | App 自己的引用上下文，App 显示成引用卡片 |
+
+后台任务唤醒的那一轮结束时不推「已完成」通知：node 解析时记下最近一轮是不是唤醒开始的（`Meta.LastTurnWake` → `Session.woke_by_task`），
+hub 的 `notifyFinished` 看到就跳过；会话照样变成「完成未看」，只是不弹 iOS 通知（2026-10-26 用户要求）。

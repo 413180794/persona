@@ -412,6 +412,9 @@ func (m *Machine) notifyFinished(id string) {
 	if !ok || (s.Status != proto.StatusDone && s.Status != proto.StatusIdle) || m.hub.muted(m.cfg.ID, id) {
 		return
 	}
+	if s.WokeByTask { // a background task's report and what the agent said about it: no ping
+		return
+	}
 	title := s.Title
 	if title == "" || title == "Claude Code" {
 		title = path.Base(s.Cwd)
