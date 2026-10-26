@@ -88,7 +88,7 @@
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
 | GET | `/api/v1/machines/{mid}/git/show?cwd=&hash=` | `{"commit","files","diff","truncated"}` |
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
-| POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（仅 jarvis 启动的会话） |
+| POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","conversations":[Session]}` |
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?}`，存 Postgres settings |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |

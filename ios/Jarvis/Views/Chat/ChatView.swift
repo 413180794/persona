@@ -50,6 +50,7 @@ struct ChatView: View {
 
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
+    @State private var closing: Session?
     @State private var link: LinkTarget?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
@@ -132,9 +133,9 @@ struct ChatView: View {
                             Label("拷贝恢复命令", systemImage: "doc.on.doc")
                         }
                         Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
-                        if s.startedByJarvis && s.status.isLive {
-                            Button(role: .destructive) { Task { await model.close(key) } } label: {
-                                Label("退出 Claude 并关闭标签页", systemImage: "xmark.circle")
+                        if s.status.isLive {
+                            Button(role: .destructive) { closing = s } label: {
+                                Label("关闭 Agent…", systemImage: "xmark.circle")
                             }
                         }
                     }
@@ -173,6 +174,7 @@ struct ChatView: View {
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
         .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
         .renameSessionAlert($renaming)
+        .confirmClose($closing)
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
         #if DEBUG
         // Simulator automation: `-openFirstImage YES` opens the viewer on the first image once it loads.
@@ -642,6 +644,9 @@ struct ChatView: View {
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
+                Task { try? await Task.sleep(for: .seconds(3)); closing = session }
+            }
             if let u = UserDefaults.standard.string(forKey: "openLinkURL").flatMap(URL.init(string:)) { // `-openLinkURL <url>`
                 Task { try? await Task.sleep(for: .seconds(3)); link = LinkTarget(url: u) }
             }

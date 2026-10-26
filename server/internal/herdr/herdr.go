@@ -204,6 +204,29 @@ func (c *Client) TabClose(ctx context.Context, tab string) error {
 	return c.run(ctx, nil, "tab", "close", tab)
 }
 
+func (c *Client) PaneClose(ctx context.Context, pane string) error {
+	return c.run(ctx, nil, "pane", "close", pane)
+}
+
+// TabPanes counts the panes in a tab (a split tab holds more than the agent's own).
+func (c *Client) TabPanes(ctx context.Context, workspace, tab string) (int, error) {
+	var res struct {
+		Panes []struct {
+			TabID string `json:"tab_id"`
+		} `json:"panes"`
+	}
+	if err := c.run(ctx, &res, "pane", "list", "--workspace", workspace); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, p := range res.Panes {
+		if p.TabID == tab {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (c *Client) PaneRun(ctx context.Context, pane, command string) error {
 	return c.run(ctx, nil, "pane", "run", pane, command)
 }

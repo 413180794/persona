@@ -159,3 +159,22 @@ extension View {
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
     }
 }
+
+/// Asks before closing an agent: quitting Claude and closing its herdr tab on a computer can't be undone.
+struct CloseAgentConfirmation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var session: Session?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("关闭这个 Agent？", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } }),
+                                   titleVisibility: .visible, presenting: session) { s in
+            Button("退出 Claude 并关闭", role: .destructive) { Task { await model.close(s.key) } }
+        } message: { s in
+            Text("会退出「\(s.agentName ?? s.title)」的 Claude，并关闭它在\(model.machine(s.machineID)?.name ?? s.machineID)上的 herdr 标签页（分屏时只关这个窗格）。对话记录保留，之后可以用 claude --resume 接着聊。")
+        }
+    }
+}
+
+extension View {
+    func confirmClose(_ session: Binding<Session?>) -> some View { modifier(CloseAgentConfirmation(session: session)) }
+}

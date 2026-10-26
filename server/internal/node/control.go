@@ -342,18 +342,23 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string) 
 	return text, a.AgentStatus, err
 }
 
+// close quits any Claude running in herdr (started by Jarvis or by hand) and closes its tab; in a split tab only
+// its own pane goes, so the other panes survive.
 func (n *Node) close(ctx context.Context, id string) error {
-	if _, ok := n.state.get(id); !ok {
-		return fmt.Errorf("only sessions started by Jarvis can be closed from the phone")
-	}
 	a, ok := n.agent(id)
 	if !ok {
-		return nil
+		if _, mine := n.state.get(id); mine {
+			return nil // already gone
+		}
+		return fmt.Errorf("这个 Agent 不在 herdr 里运行，没法从手机关闭")
 	}
 	_ = n.herdr.PaneSendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(200 * time.Millisecond)
 	_ = n.herdr.PaneSendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(500 * time.Millisecond)
+	if panes, err := n.herdr.TabPanes(ctx, a.WorkspaceID, a.TabID); err == nil && panes > 1 {
+		return n.herdr.PaneClose(ctx, a.PaneID)
+	}
 	return n.herdr.TabClose(ctx, a.TabID)
 }
 

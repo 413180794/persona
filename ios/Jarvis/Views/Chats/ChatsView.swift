@@ -73,6 +73,7 @@ struct ChatsView: View {
     @State private var expandedIdle = Set<String>()
     @State private var renamingSpace: SpaceGroup?
     @State private var renamingSession: Session?
+    @State private var closingSession: Session?
 
     private var filtered: [Session] {
         model.allSessions.filter { s in
@@ -222,6 +223,7 @@ struct ChatsView: View {
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .renameSpaceAlert($renamingSpace)
             .renameSessionAlert($renamingSession)
+            .confirmClose($closingSession)
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
@@ -333,8 +335,8 @@ struct ChatsView: View {
                     hideState: inStateSection)
         }
             .swipeActions(edge: .trailing) {
-                if s.startedByJarvis && s.state.isLive {
-                    Button(role: .destructive) { Task { await model.close(s.key) } } label: { Label("关闭", systemImage: "xmark") }
+                if s.state.isLive {
+                    Button { closingSession = s } label: { Label("关闭", systemImage: "xmark") }.tint(Theme.danger)
                 }
             }
             .swipeActions(edge: .leading) {
@@ -364,6 +366,9 @@ struct ChatsView: View {
                 }
                 Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
                 Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
+                if s.state.isLive {
+                    Button(role: .destructive) { closingSession = s } label: { Label("关闭 Agent…", systemImage: "xmark.circle") }
+                }
             }
     }
 
