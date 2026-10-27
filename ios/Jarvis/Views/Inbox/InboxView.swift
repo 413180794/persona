@@ -71,10 +71,6 @@ struct InboxView: View {
                         .accessibilityLabel("分组")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { path.append(FeishuRoute.search(query: nil, feedID: nil)) } label: { Image(systemName: "magnifyingglass") }
-                        .accessibilityLabel("搜索")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: "square.and.pencil") }
                             .disabled(accounts.isEmpty)

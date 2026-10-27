@@ -182,16 +182,119 @@ extension View {
 }
 
 /// Asks before closing an agent: quitting Claude and closing its herdr tab on a computer can't be undone.
+/// Asks before closing an agent: a small sheet that says which one (name, where it runs) and what closing does, with
+/// 关闭 and 取消. (The system confirmation dialog was a wall of text with no cancel button.)
 struct CloseAgentConfirmation: ViewModifier {
-    @Environment(AppModel.self) private var model
     @Binding var session: Session?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog("关闭这个 Agent？", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } }),
-                                   titleVisibility: .visible, presenting: session) { s in
-            Button("退出 Claude 并关闭", role: .destructive) { Task { await model.close(s.key) } }
-        } message: { s in
-            Text("会退出「\(s.agentName ?? s.title)」的 Claude，并关闭它在\(model.machine(s.machineID)?.name ?? s.machineID)上的 herdr 标签页（分屏时只关这个窗格）。对话记录保留，之后可以用 claude --resume 接着聊。")
+        content.sheet(item: $session) { s in CloseAgentSheet(session: s) }
+    }
+}
+
+struct CloseAgentSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var session: Session
+    @State private var closing = false
+    @State private var height: CGFloat = 380
+
+    private var name: String {
+        let n = session.agentName ?? session.title
+        return n.isEmpty ? session.folderName : n
+    }
+
+    private var place: String {
+        var parts: [String] = []
+        if let m = model.machine(session.machineID)?.name { parts.append(m) }
+        if let space = session.spaceName, !space.isEmpty {
+            // A tab named by its number reads "#1", as in the chat's header.
+            let slot = session.slotName.map { $0.allSatisfy(\.isNumber) ? "#" + $0 : $0 }
+            parts.append(slot.map { "\(space) › \($0)" } ?? space)
+        } else if !session.folderName.isEmpty {
+            parts.append(session.folderName)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "xmark")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(Theme.danger)
+                .frame(width: 56, height: 56)
+                .background(Theme.danger.opacity(0.12), in: .circle)
+                .padding(.top, 28)
+            Text("关闭这个 Agent？")
+                .font(.title3.weight(.bold))
+                .padding(.top, 14)
+            VStack(spacing: 4) {
+                Text(name).font(.headline).lineLimit(2).multilineTextAlignment(.center)
+                HStack(spacing: 6) {
+                    Text(session.agentLabel)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .overlay(Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 1))
+                    if !place.isEmpty { Text(place).lineLimit(1) }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.top, 10)
+            .padding(.horizontal, 24)
+
+            VStack(alignment: .leading, spacing: 12) {
+                fact("power", "退出 \(session.agentLabel)，关掉它在 herdr 里的标签页（分屏时只关这个窗格）")
+                fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.isCodex ? "codex resume" : "claude --resume") 接着聊")
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+
+            VStack(spacing: 10) {
+                Button {
+                    closing = true
+                    Haptics.tap()
+                    Task {
+                        await model.close(session.key)
+                        dismiss()
+                    }
+                } label: {
+                    Group {
+                        if closing { ProgressView().tint(.white) } else { Text("关闭 Agent").lineLimit(1) }
+                    }
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 30)
+                }
+                .themedButton(prominent: true)
+                .tint(Theme.danger)
+                .disabled(closing)
+                Button { dismiss() } label: {
+                    Text("取消").lineLimit(1).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
+                }
+                .themedButton()
+                .disabled(closing)
+            }
+            .controlSize(.large)
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
+        .presentationDetents([.height(height)])
+        .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(closing)
+    }
+
+    private func fact(_ symbol: String, _ text: String) -> some View {
+        Label {
+            Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: symbol).font(.subheadline).foregroundStyle(.secondary).frame(width: 22)
         }
     }
 }

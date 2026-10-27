@@ -46,7 +46,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         switch d.string(forKey: "tab") {
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail
-        case "workbench": AppModel.shared.selectedTab = .workbench
         case "settings": AppModel.shared.selectedTab = .settings
         default: break
         }

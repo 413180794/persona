@@ -704,3 +704,14 @@ struct FeishuDocsThreadCard: View {
         return out
     }
 }
+
+/// The reader's 在飞书中打开 / 拷贝链接 / 分享 menu items.
+struct FeishuDocsLinkMenu: View {
+    var url: String
+
+    var body: some View {
+        Button { FeishuDocsLinks.openInFeishu(url) } label: { Label("在飞书中打开", systemImage: "arrow.up.forward.app") }
+        Button { UIPasteboard.general.string = url } label: { Label("拷贝链接", systemImage: "link") }
+        if let u = URL(string: url) { ShareLink(item: u) { Label("分享", systemImage: "square.and.arrow.up") } }
+    }
+}

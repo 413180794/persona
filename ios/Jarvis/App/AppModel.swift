@@ -642,7 +642,7 @@ final class AppModel {
 }
 
 enum AppTab: String, Hashable {
-    case assistant, chats, mail, workbench, settings
+    case assistant, chats, mail, settings
 }
 
 struct PhoneConfirmation: Identifiable {

@@ -65,78 +65,7 @@ struct FeishuDocsTests {
         #expect(file.object?.kind == "file" && file.object?.extension == "md")
     }
 
-    @Test func decodesWikiTreeUpdatesAndNotices() throws {
-        let tree: FeishuDocsWikiTree = try decode("""
-        {"space":{"id":"1","name":"Team","description":"","kind":"team","starred":false,"homeToken":"h"},
-         "wikiBaseUrl":"https://x/wiki/","roots":[{"token":"a","spaceId":"1","title":"A","objType":22,"url":"u","hasChildren":true,"supported":true}],
-         "children":{},"path":[]}
-        """)
-        #expect(tree.roots.first?.hasChildren == true)
-        let ups: FeishuDocsWikiUpdatesPage = try decode("""
-        {"updates":[{"token":"k","title":"t","objType":8,"url":"u","supported":true,"editor":{"id":"e","name":"助手","app":true},"updatedAt":1792930657000},
-                    {"token":"z","title":"t","objType":22,"url":"u","editor":{"id":"e","name":"n"},"updatedAt":0}],"nextCursor":"c"}
-        """)
-        #expect(ups.updates[0].editor.app == true)
-        #expect(ups.updates[0].updated != nil && ups.updates[1].updated == nil)
-        let notes: FeishuDocsNoticePage = try decode("""
-        {"items":[{"id":"1","title":"Doc","url":"u","type":22,"kind":"mention","summary":"A: hi","atMe":true,"unreadCount":2,"updatedAt":"2026-10-25T10:00:00Z"},
-                  {"id":"2","title":"D2","type":3,"kind":"weird","summary":"","atMe":false,"unreadCount":0,"updatedAt":"2026-10-20T10:00:00Z","muted":true}]}
-        """)
-        #expect(notes.items[1].noticeKind == .other)
-        #expect(FeishuDocsNoticeFilter.mention.matches(notes.items[0]))
-        #expect(!FeishuDocsNoticeFilter.unread.matches(notes.items[1]))
-        #expect(FeishuDocsNoticeFilter.all.matches(notes.items[1]))
-    }
-
     // MARK: Lists
-
-    @Test func bucketsByDay() throws {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        let now = try #require(JSON.parseDate("2026-10-25T12:00:00+08:00"))
-        func d(_ s: String) -> Date { JSON.parseDate(s)! }
-        #expect(FeishuDocsBucket.of(d("2026-10-25T00:30:00+08:00"), now: now, calendar: cal) == .today)
-        #expect(FeishuDocsBucket.of(d("2026-10-24T23:59:00+08:00"), now: now, calendar: cal) == .yesterday)
-        #expect(FeishuDocsBucket.of(d("2026-10-20T09:00:00+08:00"), now: now, calendar: cal) == .week)
-        #expect(FeishuDocsBucket.of(d("2026-10-01T09:00:00+08:00"), now: now, calendar: cal) == .month)
-        #expect(FeishuDocsBucket.of(d("2025-01-01T09:00:00+08:00"), now: now, calendar: cal) == .earlier)
-        #expect(FeishuDocsBucket.of(nil, now: now, calendar: cal) == .earlier)
-
-        let dates = ["2026-10-25T09:00:00+08:00", "2026-10-01T09:00:00+08:00", "2026-10-25T08:00:00+08:00", "2026-10-24T08:00:00+08:00"]
-        let groups = FeishuDocsBucket.group(Array(dates.enumerated()), now: now, calendar: cal) { JSON.parseDate($0.element) }
-        #expect(groups.map(\.bucket) == [.today, .yesterday, .month])
-        #expect(groups[0].items.map(\.offset) == [0, 2]) // order kept inside a bucket
-    }
-
-    @Test func foldersFirstFiltersAndDedup() throws {
-        let page: FeishuDocsPage = try decode("""
-        {"items":[{"id":"a","title":"a","url":"https://x/docx/a","type":22},{"id":"f","kind":"folder","title":"f","url":"u","type":0},
-                  {"id":"s","title":"s","url":"https://x/sheets/s","type":3}]}
-        """)
-        #expect(feishuDocsFoldersFirst(page.items).map(\.id) == ["f", "a", "s"])
-        #expect(page.items.filter(FeishuDocsFilter.sheet.matches).map(\.id) == ["s"])
-        #expect(page.items.filter(FeishuDocsFilter.doc.matches).map(\.id) == ["a"])
-        #expect(feishuDocsAppendUnique(Array(page.items.prefix(2)), page.items).map(\.id) == ["a", "f", "s"])
-    }
-
-    @Test func wikiRowsFollowExpansion() {
-        func n(_ t: String, kids: Bool = false) -> FeishuDocsWikiNode {
-            FeishuDocsWikiNode(token: t, spaceId: "s", title: t, objType: 22, url: "u", hasChildren: kids)
-        }
-        let roots = [n("a", kids: true), n("b", kids: true), n("c")]
-        let children = ["a": [n("a1", kids: true), n("a2")], "a1": [n("a1x")], "b": [n("b1")]]
-        #expect(feishuDocsWikiRows(roots: roots, children: children, expanded: []).map(\.id) == ["a", "b", "c"])
-        let rows = feishuDocsWikiRows(roots: roots, children: children, expanded: ["a", "a1"])
-        #expect(rows.map(\.id) == ["a", "a1", "a1x", "a2", "b", "c"])
-        #expect(rows.map(\.depth) == [0, 1, 2, 1, 0, 0])
-        #expect(rows[0].expanded && !rows[4].expanded)
-        // Expanded but not loaded yet: the row says expanded, nothing below it.
-        #expect(feishuDocsWikiRows(roots: roots, children: [:], expanded: ["b"]).map(\.id) == ["a", "b", "c"])
-        // A shortcut lists its target's children.
-        var s = n("sc", kids: true)
-        s.target = .init(spaceId: "other", token: "t")
-        #expect(s.childrenSource.space == "other" && s.childrenSource.node == "t")
-    }
 
     @Test func sortsCommentThreads() throws {
         let c: FeishuDocsComments = try decode("""

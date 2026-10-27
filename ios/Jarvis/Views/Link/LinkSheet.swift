@@ -3,7 +3,8 @@ import UIKit
 import WebKit
 
 // Links open inside the app, Telegram-style (CLAUDE.md): a sheet that rises to 60%, drags up to full screen and down
-// to close, with the chat behind it still usable. Feishu docs open in the native reader; any other page in a
+// to close, with the chat behind it still usable. Feishu docs open in the native reader and removed links as the post
+// (FeishuLinks.route); any other page in a
 // WKWebView taken from a pool that preloads the links of the latest answers. Text selected on a page can go to the
 // agent as an edit request (AI 修改) or ride along with the next message (作为上下文), both as <jarvis-context>.
 
@@ -74,14 +75,16 @@ struct LinkSheet: View {
     @State private var instruction = ""
 
     private var isFeishuDoc: Bool { FeishuLinks.isDoc(target.url) }
+    /// Feishu links with a native view (documents, removed posts).
+    private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url) }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if isFeishuDoc {
+            if let feishuRoute {
                 NavigationStack {
-                    FeishuDocReader(url: target.url.absoluteString, title: nil)
+                    FeishuRouteView(route: feishuRoute)
                         .toolbar(.hidden, for: .navigationBar)
                         .feishuRoutes()
                         .environment(\.docPick) { text, kind in pick(text, kind: kind) }
@@ -107,7 +110,7 @@ struct LinkSheet: View {
     private var header: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : target.url.host ?? "网页") : title)
+                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : target.url.host ?? "网页") : title)
                     .font(.subheadline.weight(.semibold)).lineLimit(1)
                 Text(target.url.host ?? target.url.absoluteString).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -186,7 +189,7 @@ final class WebViewPool {
 
     /// Starts loading links that may be opened soon.
     func preload(_ urls: [URL]) {
-        for u in urls.prefix(3) where views[u.absoluteString] == nil && !FeishuLinks.isDoc(u) { _ = view(for: u) }
+        for u in urls.prefix(3) where views[u.absoluteString] == nil && FeishuLinks.route(u) == nil { _ = view(for: u) }
     }
 
     private func touch(_ key: String) {

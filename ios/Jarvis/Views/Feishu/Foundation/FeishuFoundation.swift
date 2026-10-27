@@ -25,90 +25,14 @@ extension APIClient {
 
 // MARK: - Routes
 
-/// Everything one Feishu screen can open from another. Each screen pushes routes through `feishuOpen`; the
-/// navigation stack that owns it (信息, 工作台, a sheet) resolves them with `.feishuRoutes()`.
+/// What a Feishu view can open from another: a chat, a document, a person, a removed post. Jarvis is not a second
+/// Feishu: there are no browsing screens, only what a link or a message leads to. The navigation stack that owns a
+/// Feishu view resolves these with `.feishuRoutes()`.
 enum FeishuRoute: Hashable {
     case chat(LarkConversation)
-    case chatInfo(LarkConversation)
     case doc(url: String, title: String?)
     case profile(LarkPersonRef)
-    case search(query: String?, feedID: String?)
-    case event(id: String)
-    case meeting(historyID: String)
-    case minutes(token: String)
-    case todo(guid: String)
-    case approval(instanceID: String)
     case momentsPost(id: String)
-    case department(id: String, name: String)
-    case wikiSpace(id: String, name: String)
-    case screen(FeishuScreen)
-}
-
-/// Whole screens reachable from the 工作台 grid.
-enum FeishuScreen: String, Hashable, CaseIterable, Identifiable {
-    case today, search, docs, wiki, docNotifications, calendar, meetings, minutes, tasks, approvals, okr, contacts, moments, saved, threads, mail
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .today: "今日"
-        case .search: "搜索"
-        case .docs: "云文档"
-        case .wiki: "知识库"
-        case .docNotifications: "文档通知"
-        case .calendar: "日历"
-        case .meetings: "会议"
-        case .minutes: "妙记"
-        case .tasks: "任务"
-        case .approvals: "审批"
-        case .okr: "OKR"
-        case .contacts: "通讯录"
-        case .moments: "removed"
-        case .saved: "收藏"
-        case .threads: "话题"
-        case .mail: "飞书邮箱"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .today: "sun.max.fill"
-        case .search: "magnifyingglass"
-        case .docs: "doc.text.fill"
-        case .wiki: "books.vertical.fill"
-        case .docNotifications: "bell.badge.fill"
-        case .calendar: "calendar"
-        case .meetings: "video.fill"
-        case .minutes: "waveform"
-        case .tasks: "checklist"
-        case .approvals: "checkmark.seal.fill"
-        case .okr: "target"
-        case .contacts: "person.2.fill"
-        case .moments: "circle.hexagongrid.fill"
-        case .saved: "bookmark.fill"
-        case .threads: "bubble.left.and.bubble.right.fill"
-        case .mail: "envelope.fill"
-        }
-    }
-
-    var hue: String {
-        switch self {
-        case .today: "orange"
-        case .search, .docs, .threads: "blue"
-        case .wiki: "indigo"
-        case .docNotifications: "red"
-        case .calendar: "orange"
-        case .meetings: "turquoise"
-        case .minutes: "violet"
-        case .tasks: "green"
-        case .approvals: "wathet"
-        case .okr: "purple"
-        case .contacts: "blue"
-        case .moments: "carmine"
-        case .saved: "yellow"
-        case .mail: "blue"
-        }
-    }
 }
 
 extension EnvironmentValues {
@@ -122,11 +46,11 @@ extension View {
         navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0) }
     }
 
-    /// Feishu doc / wiki links open in the native reader instead of Safari.
+    /// Feishu doc / wiki links open in the native reader and removed links as the post, instead of Safari.
     func feishuHandlesLinks(_ open: ((FeishuRoute) -> Void)?) -> some View {
         environment(\.openURL, OpenURLAction { url in
-            if let open, FeishuLinks.isDoc(url) {
-                open(.doc(url: url.absoluteString, title: nil))
+            if let open, let route = FeishuLinks.route(url) {
+                open(route)
                 return .handled
             }
             return .systemAction
@@ -142,6 +66,13 @@ nonisolated enum FeishuLinks {
         let first = url.pathComponents.dropFirst().first ?? ""
         return ["docx", "wiki", "docs", "sheets", "base", "mindnotes", "file", "slides"].contains(first)
     }
+
+    /// The native view a Feishu link opens in, if there is one.
+    static func route(_ url: URL) -> FeishuRoute? {
+        if isDoc(url) { return .doc(url: url.absoluteString, title: nil) }
+        if let id = LarkMoments.postID(url.absoluteString) { return .momentsPost(id: id) }
+        return nil
+    }
 }
 
 struct FeishuRouteView: View {
@@ -150,80 +81,14 @@ struct FeishuRouteView: View {
     var body: some View {
         switch route {
         case .chat(let c): LarkChatView(conversation: c)
-        case .chatInfo(let c): FeishuChatInfoView(conversation: c)
         case .doc(let url, let title): FeishuDocReader(url: url, title: title)
         case .profile(let p): LarkProfileView(person: p, embedded: true)
-        case .search(let q, let feed): FeishuSearchView(initialQuery: q, feedID: feed)
-        case .event(let id): FeishuEventDetail(eventID: id)
-        case .meeting(let id): FeishuMeetingDetail(historyID: id)
-        case .minutes(let token): FeishuMinutesDetail(token: token)
-        case .todo(let guid): FeishuTaskDetail(guid: guid)
-        case .approval(let id): FeishuApprovalDetail(instanceID: id)
         case .momentsPost(let id): LarkMomentsPostView(postID: id)
-        case .department(let id, let name): FeishuDepartmentView(departmentID: id, name: name)
-        case .wikiSpace(let id, let name): FeishuWikiSpaceView(spaceID: id, name: name)
-        case .screen(let s): FeishuScreenView(screen: s)
-        }
-    }
-}
-
-struct FeishuScreenView: View {
-    var screen: FeishuScreen
-
-    var body: some View {
-        switch screen {
-        case .today: FeishuTodayView()
-        case .search: FeishuSearchView(initialQuery: nil, feedID: nil)
-        case .docs: FeishuDocsHome()
-        case .wiki: FeishuWikiHome()
-        case .docNotifications: FeishuDocNotificationsView()
-        case .calendar: FeishuCalendarView()
-        case .meetings: FeishuMeetingsView()
-        case .minutes: FeishuMinutesListView()
-        case .tasks: FeishuTasksView()
-        case .approvals: FeishuApprovalsView()
-        case .okr: FeishuOKRView()
-        case .contacts: FeishuContactsView()
-        case .moments: FeishuMomentsView()
-        case .saved: FeishuSavedView()
-        case .threads: FeishuThreadsView()
-        case .mail: FeishuMailView()
         }
     }
 }
 
 // MARK: - Shared pieces
-
-/// A screen that is not built yet (kept so every route compiles while areas land one by one).
-struct FeishuPlaceholder: View {
-    var title: String
-
-    var body: some View {
-        EmptyStateView(symbol: "hammer", title: title, message: "即将上线")
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// Load-once / refresh state for a Feishu screen: loading spinner, error line, data.
-@MainActor @Observable
-final class FeishuLoader<T> {
-    var value: T?
-    var error: String?
-    var loading = false
-
-    func load(_ fetch: @escaping () async throws -> T) async {
-        loading = true
-        defer { loading = false }
-        do {
-            value = try await fetch()
-            error = nil
-        } catch is CancellationError {
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}
 
 /// The square, colored icon Feishu uses for apps and document types.
 struct FeishuAppIcon: View {
