@@ -9,7 +9,7 @@ import SwiftUI
 struct InboxView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
-    @AppStorage("inbox.kind") private var kind = ""     // "" all, dm, mention, group, mail
+    @AppStorage("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
     @State private var query = ""
     @State private var accounts: [MailAccount] = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
     /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed.
@@ -28,6 +28,15 @@ struct InboxView: View {
 
     private var openItems: [InboxItem] { store.items.filter { !$0.isDone && matches($0) } }
     private func openItems(_ tier: InboxItem.Tier) -> [InboxItem] { openItems.filter { $0.triage == tier } }
+
+    /// Agents (and the assistant) waiting for an answer, an approval or a plan review: they need the user too, so they
+    /// head 需要你. Opening one goes to its chat; the Agents tab stays as it is.
+    private var waitingAgents: [Interaction] {
+        guard source.isEmpty, kind.isEmpty || kind == "agent" else { return [] }
+        return model.pendingInteractions.filter { ix in
+            !model.isMuted(ix.sessionKey) && (query.isEmpty || [ix.sessionTitle ?? "", ix.summary ?? "", ix.title].contains { $0.localizedCaseInsensitiveContains(query) })
+        }
+    }
     private var doneItems: [InboxItem] {
         store.items.filter { $0.isDone && matches($0) }.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
     }
@@ -82,7 +91,7 @@ struct InboxView: View {
                 Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
                     .themedRow()
             }
-            if openItems.isEmpty && !store.loading {
+            if openItems.isEmpty && waitingAgents.isEmpty && !store.loading {
                 EmptyStateView(symbol: "checkmark.seal", title: query.isEmpty ? "都处理完了" : "没有匹配的",
                                message: query.isEmpty ? "新的飞书消息和邮件会出现在这里。" : "换个关键词试试。")
                     .listRowBackground(Color.clear)
@@ -90,12 +99,16 @@ struct InboxView: View {
             }
             // The AI's triage: 需要你 (and what it has not looked at yet), 知悉即可, 已折叠 (noise).
             ForEach(InboxItem.Tier.allCases, id: \.self) { tier in
-                let items = openItems(tier)
-                if !items.isEmpty {
+                let items = kind == "agent" ? [] : openItems(tier)
+                let agents = tier == .action ? waitingAgents : []
+                if !items.isEmpty || !agents.isEmpty {
                     Section {
-                        if expanded.contains(tier.rawValue) { ForEach(items) { row($0) } }
+                        if expanded.contains(tier.rawValue) {
+                            ForEach(agents) { agentRow($0) }
+                            ForEach(items) { row($0) }
+                        }
                     } header: {
-                        sectionHeader(tier.title, count: items.count, key: tier.rawValue,
+                        sectionHeader(tier.title, count: items.count + agents.count, key: tier.rawValue,
                                       clear: tier == .action ? nil : (tier == .fyi ? "全部看过" : "全部清除", { store.setDone(items, true) }))
                     }
                 }
@@ -142,6 +155,27 @@ struct InboxView: View {
         .padding(.vertical, 2)
     }
 
+    private func agentRow(_ ix: Interaction) -> some View {
+        Button { open(ix) } label: {
+            InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID)?.name ?? ix.machineID)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+        .themedRow()
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
+    }
+
+    /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
+    private func open(_ ix: Interaction) {
+        if model.session(ix.sessionKey)?.assistant == true {
+            model.assistantCurrent = ix.sessionKey
+            model.selectedTab = .assistant
+        } else {
+            model.openChat = ix.sessionKey
+            model.selectedTab = .chats
+        }
+    }
+
     private func row(_ it: InboxItem) -> some View {
         InboxRow(item: it, showAccount: accounts.count > 1)
             .background { NavigationLink(value: it) { EmptyView() }.opacity(0) }
@@ -169,7 +203,7 @@ struct InboxView: View {
                     chip(Self.short(a.email), symbol: "envelope", on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
                 Divider().frame(height: 18)
-                ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件")], id: \.0) { k, title in
+                ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
                     chip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
             }
@@ -285,6 +319,45 @@ struct InboxRow: View {
                 .offset(x: 3, y: 3)
         }
         .frame(width: 40, height: 40)
+    }
+}
+
+/// An agent waiting on the user, among the inbox rows: what it waits for, which agent, on which machine.
+struct InboxAgentRow: View {
+    var interaction: Interaction
+    var machine: String
+
+    var body: some View {
+        let ix = interaction
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: ix.kind.symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(Theme.attention.gradient, in: .circle)
+                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(ix.sessionTitle?.isEmpty == false ? ix.sessionTitle! : (ix.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Agent"))
+                        .font(.body.weight(.semibold)).lineLimit(1)
+                    Text(ix.title)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Theme.attention)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Theme.attention.opacity(0.14), in: .capsule)
+                        .lineLimit(1)
+                        .fixedSize()
+                    Spacer(minLength: 4)
+                    Text(LarkTime.short(ix.createdAt)).font(.caption).foregroundStyle(.secondary).fixedSize()
+                }
+                if let s = ix.summary ?? ix.questions?.first?.question, !s.isEmpty {
+                    Text(s).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                }
+                Text(machine).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+            }
+        }
+        .padding(.vertical, 10)
+        .contentShape(.rect)
     }
 }
 
