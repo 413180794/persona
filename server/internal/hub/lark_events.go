@@ -29,6 +29,7 @@ func (h *Hub) larkEvents(ctx context.Context) {
 		pending, timer = map[string]bool{}, nil
 		mu.Unlock()
 		h.broadcast(map[string]any{"type": "lark", "feed_ids": ids})
+		h.kickInbox()
 	}
 	h.lark.Events(ctx, func(ev lark.Event) {
 		mu.Lock()

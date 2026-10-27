@@ -115,5 +115,5 @@ nonisolated enum FeishuTime {
     }
 
     /// Compact relative time used in Feishu lists: 刚刚 / 5 分钟前 / 14:05 / 昨天 / 10月21日.
-    static func short(_ d: Date?) -> String { LarkFeedRow.time(d) }
+    static func short(_ d: Date?) -> String { LarkTime.short(d) }
 }

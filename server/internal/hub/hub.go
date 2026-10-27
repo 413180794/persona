@@ -16,6 +16,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -47,6 +48,7 @@ type Hub struct {
 	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
 
 	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
+	inbox inbox    // the unified inbox (inbox.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -54,6 +56,9 @@ type Mail interface {
 	Handler() http.Handler
 	Tools() []proto.Tool
 	Call(ctx context.Context, name string, args json.RawMessage, approve func(ctx context.Context, summary string, input json.RawMessage) bool) proto.ToolResult
+	ListAccounts() ([]mail.MailAccount, error)
+	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
+	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).
@@ -77,6 +82,8 @@ type Store interface {
 	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
+	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
+	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
 }
 
 type pending struct {
@@ -125,6 +132,7 @@ func Run(ctx context.Context, version string) error {
 	go h.expireLoop(ctx)
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
+	go h.inboxLoop(ctx)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
 	go func() {

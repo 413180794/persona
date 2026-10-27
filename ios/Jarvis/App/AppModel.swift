@@ -231,6 +231,7 @@ final class AppModel {
         registerPhone()
         AgentSync.shared.schedule()
         LarkSync.shared.reconnected()
+        InboxStore.shared.reload()
         for key in subscribed {
             var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
             let seq = chat(key).lastSeq
@@ -281,6 +282,8 @@ final class AppModel {
             AgentSync.shared.revs(machine: machineID, revs)
         case .lark(let feedIDs):
             LarkSync.shared.received(feedIDs)
+        case .inbox:
+            InboxStore.shared.reload()
         case .items(let key, let items, let backlog, let hasMore):
             chat(key).merge(items, backlog: backlog, hasMore: hasMore)
         case .screen(let key, let text, let status):

@@ -328,3 +328,25 @@ struct LarkFileOpener: ViewModifier {
             }
     }
 }
+
+/// Initials (or a group glyph) on a colour picked from the name: chats and people without a picture.
+struct LarkAvatar: View {
+    var name: String
+    var isGroup: Bool
+    var size: CGFloat = 44
+
+    var body: some View {
+        let palette: [Color] = [Color(hex: 0x3370FF), Color(hex: 0x00B42A), Color(hex: 0xFF7D00), Color(hex: 0x7B61FF), Color(hex: 0x14C9C9), Color(hex: 0xF54A45)]
+        let color = palette[abs(name.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }) % palette.count]
+        Circle()
+            .fill(color.gradient)
+            .frame(width: size, height: size)
+            .overlay {
+                if isGroup {
+                    Image(systemName: "person.2.fill").font(.system(size: size * 0.38)).foregroundStyle(.white)
+                } else {
+                    Text(String(name.prefix(1))).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(.white)
+                }
+            }
+    }
+}

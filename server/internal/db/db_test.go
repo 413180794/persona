@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, phone_tools, node_sessions, mail_accounts, interactions, settings`); err != nil {
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -140,5 +140,33 @@ func TestSessionViews(t *testing.T) {
 	got, err := d.SeenTimes(ctx)
 	if err != nil || !got[[2]string{"example-machine", "s"}].Equal(t1) {
 		t.Fatalf("seen = %v, %v", got, err)
+	}
+}
+
+func TestInboxItems(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	now := time.Now()
+	old := now.Add(-10 * 24 * time.Hour)
+	if err := d.PutInboxItem(ctx, "a", []byte(`{"id":"a"}`), now, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PutInboxItem(ctx, "a", []byte(`{"id":"a","count":2}`), now, &now); err != nil { // update
+		t.Fatal(err)
+	}
+	if err := d.PutInboxItem(ctx, "old", []byte(`{"id":"old"}`), old, &old); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := d.InboxItems(ctx, now.Add(-8*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want the old done item gone", len(rows))
+	}
+	var it struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(rows[0], &it); err != nil || it.Count != 2 {
+		t.Fatalf("row = %s", rows[0])
 	}
 }

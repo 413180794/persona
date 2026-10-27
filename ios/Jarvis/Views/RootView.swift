@@ -16,9 +16,10 @@ struct RootView: View {
                         ChatsView()
                     }
                     .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count)
-                    Tab("信息", systemImage: "tray.full", value: AppTab.mail) {
+                    Tab("收件箱", systemImage: "tray.full", value: AppTab.mail) {
                         InboxView()
                     }
+                    .badge(InboxStore.shared.actionCount)
                     Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
                         SettingsView()
                     }

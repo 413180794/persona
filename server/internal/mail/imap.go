@@ -490,9 +490,11 @@ func stripHTML(s string) string {
 			if strings.HasPrefix(tag, "<style") {
 				closing = "</style"
 			}
-			if j := strings.Index(lower[i:], closing); j >= 0 {
-				i += j
+			j := strings.Index(lower[i:], closing)
+			if j < 0 {
+				break // a preview cut off inside a <style> block: the rest is CSS, not text
 			}
+			i += j
 		} else if strings.HasPrefix(tag, "<br") || strings.HasPrefix(tag, "</p") || strings.HasPrefix(tag, "</div") {
 			b.WriteByte(' ')
 		}
@@ -721,3 +723,6 @@ func storeFlag(c *imapclient.Client, set imap.UIDSet, flag imap.Flag, on bool) e
 
 // errNotFound is returned when a mailbox or message does not exist.
 var errNotFound = errors.New("not found")
+
+// PlainText is an HTML body as readable text (styles and scripts dropped, whitespace collapsed).
+func PlainText(html string) string { return strings.Join(strings.Fields(stripHTML(html)), " ") }

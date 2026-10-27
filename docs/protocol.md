@@ -221,6 +221,23 @@ node → hub 请求：
 //                               "in_reply_to","references":[…]}
 ```
 
+## 收件箱 API
+
+hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server/internal/hub/inbox.go`）。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context` |
+| GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
+| POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
+| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表 |
+
+`InboxItem`：`id`、`source`（lark / mail）、`kind`（dm / mention / group / bot / mail）、`account`（`feishu` 或邮箱账号 id）、
+`account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
+`tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、
+`lark{feed_id,is_group,is_topic,start_position,mention_position,at_all}`、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`。
+列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。
+
 ## 飞书 API（lark-connector）
 
 hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。

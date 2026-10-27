@@ -8,7 +8,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 
 | 能力 | 位置 | 说明 |
 | --- | --- | --- |
-| 飞书消息 | 「信息」tab | 会话列表和会话页（`LarkFeed` / `LarkChatView`），不再加飞书式的附属页面 |
+| 飞书消息 | 「收件箱」（`docs/inbox.md`） | 未读 / @我 / 私聊和邮件混在一个列表，按件聚合，AI 分拣；点开是这段对话（`LarkChatView`） |
 | 飞书文档链接 | `FeishuDocReader`（`Views/Feishu/Docs/`） | 任何地方点飞书文档链接都在 App 内原生渲染（链接卡片 `LinkSheet`、飞书消息里的链接） |
 | removed链接 | `LarkMomentsCard` / `LarkMomentsPostView` | 消息里的分享显示预览卡，点开看单条帖子和评论；没有 feed，不能刷 |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |

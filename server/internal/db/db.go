@@ -395,3 +395,33 @@ func (d *DB) SeenTimes(ctx context.Context) (map[[2]string]time.Time, error) {
 	}
 	return out, rows.Err()
 }
+
+// ---- inbox ----
+
+// PutInboxItem stores one inbox item (hub/inbox.go owns the JSON).
+func (d *DB) PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO inbox_items (id, data, updated_at, done_at) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = $3, done_at = $4`, id, data, updatedAt, doneAt)
+	return err
+}
+
+// InboxItems returns the open items and those done after doneSince; older done items are deleted.
+func (d *DB) InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error) {
+	if _, err := d.pool.Exec(ctx, `DELETE FROM inbox_items WHERE done_at < $1`, doneSince); err != nil {
+		return nil, err
+	}
+	rows, err := d.pool.Query(ctx, `SELECT data FROM inbox_items ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][]byte
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		out = append(out, raw)
+	}
+	return out, rows.Err()
+}

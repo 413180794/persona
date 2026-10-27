@@ -17,6 +17,8 @@ nonisolated enum ServerEvent: Sendable {
     case revs(machineID: String, [String: Int64])
     /// Feishu conversations with new or changed messages (lark-connector's realtime events, relayed by the hub).
     case lark(feedIDs: [String])
+    /// The unified inbox changed (hub/inbox.go): pull it.
+    case inbox
     case error(SessionKey?, String)
 
     private struct Envelope: Decodable {
@@ -80,6 +82,7 @@ nonisolated enum ServerEvent: Sendable {
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
         case "lark": return .lark(feedIDs: e.feedIDs ?? [])
+        case "inbox": return .inbox
         default: return nil
         }
     }
