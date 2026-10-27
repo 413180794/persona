@@ -151,3 +151,40 @@ func triageInput(it *InboxItem) string {
 	b.WriteString(it.Context)
 	return b.String()
 }
+
+const draftPrompt = `你替用户（称呼：%s）起草一条回复，用户看过、改过之后自己发出去。
+
+- 用用户的口吻，第一人称，简洁自然，直接回应对方要的东西；不要解释你在做什么，只输出回复正文。
+- 飞书消息：口语、短，像同事之间聊天，不要「您好」「此致」这类客套；群里回复时不用 @ 对方（发送时会在原会话里）。
+- 邮件：按来信的语言和正式程度，可以有简短的称呼和落款；营销邮件一般不需要回，真要回也要短。
+- 不知道的事实（时间、数字、结论）不要编，用【】标出来让用户补，比如「【周几】之前给你」。`
+
+// draftReply writes a reply to an inbox item in the user's voice (optionally following their instruction).
+func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, error) {
+	h.inbox.mu.Lock()
+	it, ok := h.inbox.items[id]
+	var input string
+	if ok {
+		input = triageInput(it)
+	}
+	h.inbox.mu.Unlock()
+	if !ok {
+		return "", errNoInboxItem
+	}
+	owner := h.cfg.Assistant.Owner
+	if owner == "" {
+		owner = "你"
+	}
+	system := fmt.Sprintf(draftPrompt, owner)
+	if n := strings.TrimSpace(h.cfg.Assistant.Notes); n != "" {
+		system += "\n\n关于用户：\n" + n
+	}
+	if s := strings.TrimSpace(instruction); s != "" {
+		input += "\n\n用户希望这样回：" + s
+	}
+	text, err := h.ai.Complete(ctx, system, input, 1024)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
+}

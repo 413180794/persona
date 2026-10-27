@@ -55,4 +55,16 @@
   （`InboxAgentRow`，橙色图标 + 等什么 + 哪个 Agent / 哪台机器），点开跳到那个 Agent 的对话（助手的在「对话」tab）。只在 App 端合并，
   hub 的收件箱不存它们；Agents tab 照旧。筛选里的「Agent」只看它们；选了某个来源时不显示。
 - 点开：飞书会话停在这件事的第一条新消息（`LarkChatView`，focus = start_position），邮件打开最新一封；右上角「已处理」。
-- DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）。
+  导航栏下面是操作条（`InboxActionBar`）：✦ 摘要 +「AI 草拟回复」「交给 AI」。
+- DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）、`-showInboxAction draft|handoff`（再打开那个浮层）。
+
+## 对一件事能做什么（`Jarvis/Views/Inbox/InboxActions.swift`）
+
+- **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，hub 用小任务模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
+  不知道的事实用【】标出来让用户补，不编；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
+  「发送」：飞书发到原会话（`POST /api/v1/lark/conversations/{feed}/messages`），邮件按回复发出（Re: 主题、In-Reply-To / References、
+  引用原文，用收到它的账号），然后这件事标为已处理。
+- **交给 AI**：把这件事作为 `<jarvis-context kind="context" title="飞书 · 群名">`（hub 给的 `context` + feedId / 邮件 uid，方便它用工具读更多、
+  回复）加上「要它做什么」（默认「总结一下，告诉我要做什么，给出建议的回复」，另有两个预设）发出去：给 Jarvis 就新开一个对话（跳到「对话」），
+  给某个 Agent（最近 8 个）就发进它的会话（跳过去）。默认同时标为已处理。
+- **已处理**：行上左滑、详情右上角 ✓，或发送 / 交给 AI 时顺带。

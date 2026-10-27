@@ -363,16 +363,34 @@ struct InboxAgentRow: View {
 
 // MARK: - Detail
 
-/// One inbox item opened: the Feishu chat at its first new message, or the mail; 已处理 in the toolbar.
+/// One inbox item opened: the Feishu chat at its first new message, or the mail; the AI's summary with AI 草拟回复 /
+/// 交给 AI on top, 已处理 in the toolbar.
 struct InboxDetailView: View {
     var item: InboxItem
     var accounts: [MailAccount]
     @Environment(\.dismiss) private var dismiss
+    @State private var drafting = false
+    @State private var handingOff = false
 
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
     var body: some View {
         content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                InboxActionBar(item: current, draft: { drafting = true }, handOff: { handingOff = true })
+            }
+            .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts) }
+            .sheet(isPresented: $handingOff) { InboxHandOffSheet(item: current) }
+            #if DEBUG
+            // `-showInboxAction draft|handoff`: open that sheet (screenshots).
+            .task {
+                switch UserDefaults.standard.string(forKey: "showInboxAction") {
+                case "draft": drafting = true
+                case "handoff": handingOff = true
+                default: break
+                }
+            }
+            #endif
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if current.isDone {

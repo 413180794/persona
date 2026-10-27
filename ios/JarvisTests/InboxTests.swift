@@ -42,3 +42,20 @@ struct InboxTests {
         #expect(FeishuLinks.route(minutes) == nil) // a web page in the link sheet
     }
 }
+
+@MainActor
+struct InboxHandOffTests {
+    @Test func handOffCarriesTheItemAsContext() throws {
+        var it = try JSON.decoder.decode(InboxItem.self, from: Data("""
+        {"id":"lark:f1:11","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"Sample Contact","preview":"合入了吗",
+         "count":1,"lark":{"feed_id":"f1","is_group":false}}
+        """.utf8))
+        it.context = "飞书私聊（Sample Contact）的新消息：\n[10-27 17:55] Sample Contact：合入到 1013 release 吗"
+        let text = InboxHandOffSheet.message(it, ask: "帮我查一下")
+        let parsed = ContextRef.parse(text)
+        #expect(parsed.refs.count == 1)
+        #expect(parsed.refs[0].title == "飞书 · Sample Contact")
+        #expect(parsed.refs[0].text.contains("合入到 1013 release") && parsed.refs[0].text.contains("feedId f1"))
+        #expect(parsed.rest == "帮我查一下")
+    }
+}

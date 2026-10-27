@@ -649,6 +649,8 @@ func mailContext(a mail.MailAccount, msgs []mail.MailSummary) string {
 
 // ---- API ----
 
+var errNoInboxItem = errors.New("no such inbox item")
+
 func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	h.inbox.init()
 	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {
@@ -663,7 +665,7 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 		}
 		h.inbox.mu.Unlock()
 		if !ok {
-			writeErr(w, http.StatusNotFound, errors.New("no such inbox item"))
+			writeErr(w, http.StatusNotFound, errNoInboxItem)
 			return
 		}
 		c.Last, c.TriagedAt = "", ""
@@ -683,6 +685,21 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			return
 		}
 		writeJSON(w, it)
+	})
+	api.HandleFunc("POST /api/v1/inbox/{id}/draft", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Instruction string `json:"instruction"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		text, err := h.draftReply(r.Context(), r.PathValue("id"), in.Instruction)
+		switch {
+		case errors.Is(err, errNoInboxItem):
+			writeErr(w, http.StatusNotFound, err)
+		case err != nil:
+			writeErr(w, http.StatusBadGateway, err)
+		default:
+			writeJSON(w, map[string]any{"text": text})
+		}
 	})
 	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
 		h.collectInbox(r.Context(), true)
@@ -711,7 +728,7 @@ func (h *Hub) setInboxDone(ctx context.Context, id string, done bool) (InboxItem
 	it, ok := h.inbox.items[id]
 	if !ok {
 		h.inbox.mu.Unlock()
-		return InboxItem{}, errors.New("no such inbox item")
+		return InboxItem{}, errNoInboxItem
 	}
 	if done {
 		it.done(time.Now(), "user")
