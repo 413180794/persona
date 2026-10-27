@@ -59,6 +59,7 @@ type Mail interface {
 	ListAccounts() ([]mail.MailAccount, error)
 	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
 	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
+	Send(ctx context.Context, req mail.SendRequest) error
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).

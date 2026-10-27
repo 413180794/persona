@@ -107,4 +107,17 @@ extension APIClient {
     func setInboxDone(_ id: String, _ done: Bool) async throws {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])
     }
+
+    private struct InboxText: Codable { var text: String }
+    private struct InboxDraftBody: Encodable { var instruction: String }
+
+    /// A reply drafted by the hub's model; `instruction` steers it ("同意，但下周再说").
+    func inboxDraft(_ id: String, instruction: String = "") async throws -> String {
+        try await post("/api/v1/inbox/" + id + "/draft", body: InboxDraftBody(instruction: instruction), timeout: 90, as: InboxText.self).text
+    }
+
+    /// Sends the user's reply (in the Feishu chat, or as a mail reply) and files the item as done.
+    func inboxReply(_ id: String, text: String) async throws {
+        try await post("/api/v1/inbox/" + id + "/reply", body: InboxText(text: text), timeout: 60)
+    }
 }

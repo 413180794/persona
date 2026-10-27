@@ -701,6 +701,24 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			writeJSON(w, map[string]any{"text": text})
 		}
 	})
+	api.HandleFunc("POST /api/v1/inbox/{id}/reply", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Text string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
+			return
+		}
+		it, err := h.replyInbox(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text))
+		switch {
+		case errors.Is(err, errNoInboxItem):
+			writeErr(w, http.StatusNotFound, err)
+		case err != nil:
+			writeErr(w, http.StatusBadGateway, err)
+		default:
+			writeJSON(w, it)
+		}
+	})
 	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
 		h.collectInbox(r.Context(), true)
 		writeJSON(w, map[string]any{"items": h.inboxList()})

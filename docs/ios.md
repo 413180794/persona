@@ -180,7 +180,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   UIKit 在非主线程收到完成回调，点通知冷启动会崩）。
 - 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」
   （sendMessage 请求，iPhone 回复配对）；iPhone 设置里有「同步到 Apple Watch」。
-- 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
+- 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互、收件箱里需要你的事）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
   回答 / 发消息 / 中断也直接调 hub。
 
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）

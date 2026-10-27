@@ -3,16 +3,6 @@ import SwiftUI
 // What can be done with one inbox item besides reading it (docs/inbox.md): AI 草拟回复 (a reply in the user's voice,
 // edited and sent from here), 交给 AI (the item as <jarvis-context> to the assistant or an agent), 已处理.
 
-extension APIClient {
-    private struct Draft: Codable { var text: String }
-    private struct DraftBody: Encodable { var instruction: String }
-
-    /// A reply drafted by the hub's model; `instruction` steers it ("同意，但下周再说").
-    func inboxDraft(_ id: String, instruction: String = "") async throws -> String {
-        try await post("/api/v1/inbox/" + id + "/draft", body: DraftBody(instruction: instruction), timeout: 90, as: Draft.self).text
-    }
-}
-
 /// The strip under the navigation bar of an opened item: the AI's summary and the two actions.
 struct InboxActionBar: View {
     var item: InboxItem
@@ -144,15 +134,7 @@ struct InboxDraftSheet: View {
         sending = true
         defer { sending = false }
         do {
-            if let l = item.lark {
-                try await api.larkSend(l.feedID, text: body)
-            } else if let s = item.mailSummary {
-                let original = try? await api.mailMessage(account: s.accountID, uid: s.uid, mailbox: s.mailbox)
-                var d = ComposeDraft.reply(to: s, message: original)
-                d.body = body + d.body
-                try await api.sendMail(.init(accountID: d.accountID, to: [MailAddress(name: nil, email: d.to)], cc: [], subject: d.subject,
-                                             text: d.body, inReplyTo: d.inReplyTo, references: d.references))
-            }
+            try await api.inboxReply(item.id, text: body) // the hub sends it and files the item
             InboxStore.shared.setDone(item, true, haptic: false)
             Haptics.success()
             model.toast = Toast("已发送，标为已处理", style: .success)

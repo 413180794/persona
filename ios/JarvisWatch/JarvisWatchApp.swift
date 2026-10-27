@@ -22,6 +22,8 @@ final class WatchModel {
     var config: ServerConfig?
     var sessions: [Session] = []
     var interactions: [Interaction] = []
+    /// The inbox's 需要你 (Feishu messages and mail the AI says need the user), newest first.
+    var inbox: [InboxItem] = []
     var machines: [Machine] = []
     var error: String?
     var lastUpdate: Date?
@@ -43,6 +45,7 @@ final class WatchModel {
         WatchSync.shared.onSummary = { [weak self] s in
             guard let self else { return }
             self.apply(sessions: s.sessions, interactions: s.interactions, machines: s.machines)
+            if let inbox = s.inbox { self.applyInbox(inbox) }
         }
         WatchSync.shared.activate()
         Task { await poll() }
@@ -59,14 +62,23 @@ final class WatchModel {
         if hadNew { WKInterfaceDevice.current().play(.notification) }
     }
 
+    private func applyInbox(_ items: [InboxItem]) {
+        let open = items.filter { !$0.isDone && $0.triage == .action }
+        let hadNew = open.contains { it in !inbox.contains { $0.id == it.id } } && !inbox.isEmpty
+        inbox = open
+        if hadNew { WKInterfaceDevice.current().play(.notification) }
+    }
+
     func refresh() async {
         guard let api else { return }
         do {
             async let s = api.sessions()
             async let i = api.interactions()
             async let m = api.machines()
+            async let x = api.inbox()
             let (ss, ii, mm) = try await (s, i, m)
             apply(sessions: ss, interactions: ii, machines: mm)
+            if let xx = try? await x { applyInbox(xx) }
             error = nil
         } catch {
             self.error = error.shown
@@ -103,6 +115,32 @@ final class WatchModel {
         }
     }
 
+    func setDone(_ item: InboxItem) async {
+        guard let api else { return }
+        do {
+            try await api.setInboxDone(item.id, true)
+            inbox.removeAll { $0.id == item.id }
+            WKInterfaceDevice.current().play(.success)
+        } catch {
+            self.error = error.shown
+            WKInterfaceDevice.current().play(.failure)
+        }
+    }
+
+    func reply(_ item: InboxItem, _ text: String) async -> Bool {
+        guard let api else { return false }
+        do {
+            try await api.inboxReply(item.id, text: text)
+            inbox.removeAll { $0.id == item.id }
+            WKInterfaceDevice.current().play(.success)
+            return true
+        } catch {
+            self.error = error.shown
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+    }
+
     func interrupt(_ key: SessionKey) async {
         try? await api?.interrupt(key)
         WKInterfaceDevice.current().play(.stop)
@@ -113,6 +151,7 @@ final class WatchModel {
 
 struct WatchRootView: View {
     @Environment(WatchModel.self) private var model
+    @State private var openedItem: InboxItem?
 
     var body: some View {
         NavigationStack {
@@ -120,8 +159,8 @@ struct WatchRootView: View {
                 WatchPairView()
             } else {
                 List {
-                    if !model.interactions.isEmpty {
-                        Section("等你处理") {
+                    if !model.interactions.isEmpty || !model.inbox.isEmpty {
+                        Section("需要你") {
                             ForEach(model.interactions) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
                                     VStack(alignment: .leading, spacing: 2) {
@@ -132,6 +171,9 @@ struct WatchRootView: View {
                                         Text(ix.sessionTitle ?? "").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
+                            }
+                            ForEach(model.inbox) { it in
+                                NavigationLink { WatchInboxItemView(item: it) } label: { WatchInboxRow(item: it) }
                             }
                         }
                     }
@@ -160,6 +202,15 @@ struct WatchRootView: View {
                 }
                 .navigationTitle("Jarvis")
                 .refreshable { await model.refresh() }
+                .navigationDestination(item: $openedItem) { WatchInboxItemView(item: $0) }
+                #if DEBUG
+                // `-openInboxFirst YES`: open the first inbox item (screenshots).
+                .task {
+                    guard UserDefaults.standard.bool(forKey: "openInboxFirst") else { return }
+                    for _ in 0..<20 where model.inbox.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
+                    openedItem = model.inbox.first
+                }
+                #endif
             }
         }
     }
@@ -357,5 +408,83 @@ struct WatchPairView: View {
             }
             .padding()
         }
+    }
+}
+
+// MARK: - 收件箱
+
+/// One inbox item in 需要你: where it came from, the title, the AI's summary.
+struct WatchInboxRow: View {
+    var item: InboxItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(item.isLark ? (item.kindLabel ?? "飞书") : "邮件", systemImage: item.isLark ? "bubble.left.fill" : "envelope.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(item.kind == "mention" ? Theme.danger : Theme.accent)
+            Text(item.title).font(.footnote.weight(.semibold)).lineLimit(1)
+            Text(item.summary?.isEmpty == false ? item.summary! : item.preview).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
+        }
+    }
+}
+
+/// An inbox item on the wrist: the summary and the latest message; AI 回复 drafts a reply to read and send,
+/// 已处理 files it.
+struct WatchInboxItemView: View {
+    @Environment(WatchModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var item: InboxItem
+    @State private var draft: String?
+    @State private var drafting = false
+    @State private var sending = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                if let s = item.summary, !s.isEmpty {
+                    Text(s).font(.footnote.weight(.semibold))
+                }
+                Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："))
+                    .font(.caption2).foregroundStyle(.secondary)
+                if let draft {
+                    Text(draft)
+                        .font(.caption2)
+                        .padding(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.accent.opacity(0.25), in: .rect(cornerRadius: 8))
+                    Button {
+                        sending = true
+                        Task {
+                            if await model.reply(item, draft) { dismiss() }
+                            sending = false
+                        }
+                    } label: {
+                        if sending { ProgressView() } else { Text("发送").lineLimit(1) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(sending)
+                } else {
+                    Button {
+                        drafting = true
+                        Task {
+                            draft = try? await model.api?.inboxDraft(item.id)
+                            drafting = false
+                            if draft == nil { WKInterfaceDevice.current().play(.failure) }
+                        }
+                    } label: {
+                        if drafting { ProgressView() } else { Label("AI 回复", systemImage: "sparkles").lineLimit(1) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(drafting)
+                }
+                Button {
+                    Task {
+                        await model.setDone(item)
+                        dismiss()
+                    }
+                } label: { Label("已处理", systemImage: "checkmark").lineLimit(1) }
+            }
+        }
+        .navigationTitle(item.title)
     }
 }

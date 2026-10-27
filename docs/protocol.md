@@ -231,6 +231,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
+| POST | `/api/v1/inbox/{id}/reply` | `{text}`：飞书发到原会话 / 邮件按回复发出，并标为已处理（`done_by=replied`），返回这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表 |
 
 `InboxItem`：`id`、`source`（lark / mail）、`kind`（dm / mention / group / bot / mail）、`account`（`feishu` 或邮箱账号 id）、

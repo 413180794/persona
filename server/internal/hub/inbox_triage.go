@@ -2,10 +2,13 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/mail"
 )
 
 // InboxConfig tunes the inbox (hub.json "inbox").
@@ -187,4 +190,68 @@ func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, e
 		return "", err
 	}
 	return strings.TrimSpace(text), nil
+}
+
+// replyInbox sends text as the user's reply — in the Feishu chat, or as a reply to the newest mail of the thread
+// from the account that received it — and files the item as done.
+func (h *Hub) replyInbox(ctx context.Context, id, text string) (InboxItem, error) {
+	h.inbox.mu.Lock()
+	it, ok := h.inbox.items[id]
+	var c InboxItem
+	if ok {
+		c = *it
+		if it.Mail != nil {
+			m := *it.Mail
+			c.Mail = &m
+		}
+	}
+	h.inbox.mu.Unlock()
+	if !ok {
+		return InboxItem{}, errNoInboxItem
+	}
+	switch {
+	case c.Lark != nil:
+		if err := h.lark.Send(ctx, c.Lark.FeedID, text); err != nil {
+			return InboxItem{}, err
+		}
+	case c.Mail != nil && h.mail != nil && len(c.Mail.UIDs) > 0:
+		orig, err := h.mail.GetMessage(ctx, c.Mail.AccountID, c.Mail.UIDs[len(c.Mail.UIDs)-1], c.Mail.Mailbox)
+		if err != nil {
+			return InboxItem{}, err
+		}
+		if err := h.mail.Send(ctx, mailReply(c.Mail.AccountID, orig, text)); err != nil {
+			return InboxItem{}, err
+		}
+	default:
+		return InboxItem{}, errors.New("this item cannot be replied to")
+	}
+	h.inbox.mu.Lock()
+	it.done(time.Now(), "replied")
+	out := it.listed()
+	h.inbox.mu.Unlock()
+	h.saveInbox(ctx, []*InboxItem{it})
+	return out, nil
+}
+
+// mailReply is a reply to orig: Re: subject, threading headers, the original quoted below.
+func mailReply(accountID string, orig *mail.MailMessage, text string) mail.SendRequest {
+	subject := orig.Subject
+	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
+		subject = "Re: " + subject
+	}
+	refs := append(append([]string{}, orig.References...), orig.MessageID)
+	var quoted []string
+	for i, l := range strings.Split(orig.Text, "\n") {
+		if i >= 40 {
+			break
+		}
+		quoted = append(quoted, "> "+l)
+	}
+	from := orig.From.Name
+	if from == "" {
+		from = orig.From.Email
+	}
+	body := text + "\n\n" + orig.Date + "，" + from + " 写道：\n" + strings.Join(quoted, "\n")
+	return mail.SendRequest{AccountID: accountID, To: []mail.Address{orig.From}, Subject: subject, Text: body,
+		InReplyTo: orig.MessageID, References: strings.Join(refs, " ")}
 }

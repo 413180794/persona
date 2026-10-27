@@ -640,7 +640,9 @@ final class AppModel {
     func watchSummary() -> WatchSummary {
         let sessions = allSessions.filter { $0.status.isLive }
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
-        return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: pendingInteractions, machines: machines)
+        let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action }
+        return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: pendingInteractions, machines: machines,
+                            inbox: Array(inbox.prefix(20)))
     }
 }
 

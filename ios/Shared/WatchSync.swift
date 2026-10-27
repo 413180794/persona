@@ -6,6 +6,8 @@ nonisolated struct WatchSummary: Codable, Sendable {
     var sessions: [Session]
     var interactions: [Interaction]
     var machines: [Machine]
+    /// Open inbox items that need the user (docs/inbox.md); nil from an older phone.
+    var inbox: [InboxItem]? = nil
     var at: Date = .now
 }
 

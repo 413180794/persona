@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -179,5 +180,20 @@ func TestInboxRuleTier(t *testing.T) {
 		if got := ruleTier(&c.it); got != c.want {
 			t.Errorf("%d: %q, want %q", i, got, c.want)
 		}
+	}
+}
+
+func TestInboxMailReply(t *testing.T) {
+	orig := &mail.MailMessage{MailSummary: mail.MailSummary{Subject: "周报", MessageID: "<m2@x>", From: mail.Address{Name: "HR", Email: "hr@x"},
+		Date: "2026-10-27T03:00:00Z"}, Text: "请确认\n谢谢", References: []string{"<m1@x>"}}
+	r := mailReply("a1", orig, "收到")
+	if r.Subject != "Re: 周报" || r.InReplyTo != "<m2@x>" || r.References != "<m1@x> <m2@x>" || len(r.To) != 1 || r.To[0].Email != "hr@x" {
+		t.Fatalf("reply = %+v", r)
+	}
+	if !strings.HasPrefix(r.Text, "收到\n\n") || !strings.Contains(r.Text, "> 请确认\n> 谢谢") {
+		t.Fatalf("body = %q", r.Text)
+	}
+	if mailReply("a1", &mail.MailMessage{MailSummary: mail.MailSummary{Subject: "RE: x"}}, "y").Subject != "RE: x" {
+		t.Fatal("kept an existing Re:")
 	}
 }

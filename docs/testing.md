@@ -20,7 +20,7 @@ cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme J
 | 计划审批 | ExitPlanMode → deny + 意见 → 改计划 → allow + setMode | 两种分支都对（`docs/claude-integration.md`） |
 | 手机工具 | example-machine 的 claude 调 `mcp__jarvis__phone_device_info` | 经 node → hub → 模拟器 App 返回 iPhone 17 Pro / iOS 26.5 |
 | 实时流 | App 打开 example-machine 上正在工作的会话 | 工具步骤实时追加，状态条显示 spinner 行 |
-| 手表 | 手表模拟器 `-pairURL` | 列出三台机器的运行中会话 |
+| 手表 | 手表模拟器 `-pairURL` | 「需要你」（等你的 Agent + 收件箱里需要你的事）、运行中会话；`-openInboxFirst YES` 打开第一件 |
 
 ## 界面检查清单（每次改界面都要截图看）
 
@@ -28,7 +28,7 @@ cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme J
 - 对话页：长 markdown（表格、代码块）、折叠的工具组、diff、待办、图片；工作中状态条；提问 / 计划 / 授权 / 终端四种面板。
 - 新建对话：机器卡片（离线变灰）、最近目录、目录浏览、启动器搜索。
 - 机器、邮件（空状态、列表、详情、写信、添加邮箱）、设置、手机数据授权。
-- 手表：列表、交互详情、会话详情。
+- 手表：列表、交互详情、收件箱详情（AI 回复）、会话详情。
 
 模拟器限制：屏幕锁着时 computer-use 点不了模拟器，靠 DEBUG 启动参数直达页面；推送、HealthKit 真实数据、WatchConnectivity 同步要真机。
 

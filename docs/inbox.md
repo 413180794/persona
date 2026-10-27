@@ -62,9 +62,16 @@
 
 - **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，hub 用小任务模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
   不知道的事实用【】标出来让用户补，不编；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
-  「发送」：飞书发到原会话（`POST /api/v1/lark/conversations/{feed}/messages`），邮件按回复发出（Re: 主题、In-Reply-To / References、
-  引用原文，用收到它的账号），然后这件事标为已处理。
+  「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：hub 在原会话发飞书消息，或按回复发邮件（Re: 主题、In-Reply-To / References、
+  引用原文前 40 行，用收到它的账号），然后标为已处理（`done_by=replied`）。手机和手表都用这一个接口。
 - **交给 AI**：把这件事作为 `<jarvis-context kind="context" title="飞书 · 群名">`（hub 给的 `context` + feedId / 邮件 uid，方便它用工具读更多、
   回复）加上「要它做什么」（默认「总结一下，告诉我要做什么，给出建议的回复」，另有两个预设）发出去：给 Jarvis 就新开一个对话（跳到「对话」），
   给某个 Agent（最近 8 个）就发进它的会话（跳过去）。默认同时标为已处理。
 - **已处理**：行上左滑、详情右上角 ✓，或发送 / 交给 AI 时顺带。
+
+## 手表
+
+- 首页「需要你」= 等你的 Agent（原来的「等你处理」）+ 收件箱里 `action` 的事（`WatchInboxRow`：来源 / 类型、标题、AI 摘要）。
+  iPhone 推给手表的摘要里带最多 20 件（`WatchSummary.inbox`），手表打开时每 8 秒直接拉 `/api/v1/inbox`；新的一件来了震一下。
+- 点开（`WatchInboxItemView`）：摘要、最新一条；「AI 回复」先起草、显示出来，再点「发送」（`/reply`）；「已处理」。
+- DEBUG：手表 `-openInboxFirst YES` 打开第一件。
