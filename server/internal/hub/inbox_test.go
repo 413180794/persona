@@ -162,3 +162,22 @@ func TestInboxMailThreads(t *testing.T) {
 		t.Fatalf("read elsewhere: %+v", it)
 	}
 }
+
+func TestInboxRuleTier(t *testing.T) {
+	cases := []struct {
+		it   InboxItem
+		want string
+	}{
+		{InboxItem{Kind: KindDM}, TierAction},
+		{InboxItem{Kind: KindMention}, TierAction},
+		{InboxItem{Kind: KindGroup}, TierFYI},
+		{InboxItem{Kind: KindBot}, TierNoise},
+		{InboxItem{Kind: KindMail, Mail: &InboxMail{Direct: true}}, TierFYI},
+		{InboxItem{Kind: KindMail, Mail: &InboxMail{}}, TierNoise},
+	}
+	for i, c := range cases {
+		if got := ruleTier(&c.it); got != c.want {
+			t.Errorf("%d: %q, want %q", i, got, c.want)
+		}
+	}
+}

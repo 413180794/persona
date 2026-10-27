@@ -59,6 +59,8 @@ type Config struct {
 	// Assistant personalizes the 对话 tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`
+	// Inbox tunes the 收件箱's AI triage (docs/inbox.md).
+	Inbox InboxConfig `json:"inbox"`
 
 	dir string
 }

@@ -60,12 +60,18 @@ final class InboxStore {
         WatchSync.shared.push(summary: AppModel.shared.watchSummary())
     }
 
-    func setDone(_ item: InboxItem, _ done: Bool) {
+    /// 全部看过 / 全部清除: a whole section at once.
+    func setDone(_ list: [InboxItem], _ done: Bool) {
+        for it in list { setDone(it, done, haptic: false) }
+        Haptics.success()
+    }
+
+    func setDone(_ item: InboxItem, _ done: Bool, haptic: Bool = true) {
         guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
         let before = items[i]
         items[i].doneAt = done ? .now : nil
         items[i].doneBy = done ? "user" : nil
-        Haptics.tap()
+        if haptic { Haptics.tap() }
         Task {
             do {
                 try await AppModel.shared.api?.setInboxDone(item.id, done)

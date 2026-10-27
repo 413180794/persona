@@ -109,11 +109,12 @@ func (it *InboxItem) listed() InboxItem {
 }
 
 type inbox struct {
-	mu      sync.Mutex
-	items   map[string]*InboxItem
-	kick    chan struct{}
-	once    sync.Once
-	running sync.Mutex // one collection at a time
+	mu       sync.Mutex
+	items    map[string]*InboxItem
+	kick     chan struct{}
+	once     sync.Once
+	running  sync.Mutex // one collection at a time
+	triaging sync.Mutex // one triage pass at a time (inbox_triage.go)
 }
 
 func (b *inbox) init() {
@@ -203,9 +204,6 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 	h.saveInbox(ctx, changed)
 	h.triageInbox(ctx)
 }
-
-// triageInbox sorts new items into 需要你 / 知悉即可 / 噪音 (inbox_triage.go).
-func (h *Hub) triageInbox(ctx context.Context) {}
 
 // saveInbox persists changed items and tells the apps.
 func (h *Hub) saveInbox(ctx context.Context, changed []*InboxItem) {

@@ -12,7 +12,8 @@ struct InboxView: View {
     @AppStorage("inbox.kind") private var kind = ""     // "" all, dm, mention, group, mail
     @State private var query = ""
     @State private var accounts: [MailAccount] = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
-    @State private var showDone = false
+    /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed.
+    @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var showAccounts = false
     @State private var composing: ComposeDraft?
     @State private var path = NavigationPath()
@@ -26,6 +27,7 @@ struct InboxView: View {
     }
 
     private var openItems: [InboxItem] { store.items.filter { !$0.isDone && matches($0) } }
+    private func openItems(_ tier: InboxItem.Tier) -> [InboxItem] { openItems.filter { $0.triage == tier } }
     private var doneItems: [InboxItem] {
         store.items.filter { $0.isDone && matches($0) }.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
     }
@@ -86,23 +88,23 @@ struct InboxView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            Section {
-                ForEach(openItems) { row($0) }
+            // The AI's triage: 需要你 (and what it has not looked at yet), 知悉即可, 已折叠 (noise).
+            ForEach(InboxItem.Tier.allCases, id: \.self) { tier in
+                let items = openItems(tier)
+                if !items.isEmpty {
+                    Section {
+                        if expanded.contains(tier.rawValue) { ForEach(items) { row($0) } }
+                    } header: {
+                        sectionHeader(tier.title, count: items.count, key: tier.rawValue,
+                                      clear: tier == .action ? nil : (tier == .fyi ? "全部看过" : "全部清除", { store.setDone(items, true) }))
+                    }
+                }
             }
             if !doneItems.isEmpty {
                 Section {
-                    if showDone { ForEach(doneItems) { row($0) } }
+                    if expanded.contains("done") { ForEach(doneItems) { row($0) } }
                 } header: {
-                    Button { withAnimation(.snappy) { showDone.toggle() } } label: {
-                        HStack(spacing: 6) {
-                            Text("已处理 · \(doneItems.count)")
-                            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).rotationEffect(.degrees(showDone ? 90 : 0))
-                            Spacer()
-                        }
-                        .lineLimit(1)
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
+                    sectionHeader("已处理", count: doneItems.count, key: "done", clear: nil)
                 }
             }
         }
@@ -110,6 +112,34 @@ struct InboxView: View {
         .themedPage()
         .refreshable { await store.refresh() }
         .overlay { if store.loading && store.items.isEmpty { ProgressView() } }
+    }
+
+    /// A section title that opens / closes the section, with an optional action on the right (List headers take no
+    /// context menu, so it is a visible button).
+    private func sectionHeader(_ title: String, count: Int, key: String, clear: (String, () -> Void)?) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                withAnimation(.snappy) { if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) } }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("\(title) · \(count)").font(.subheadline.weight(.semibold)).foregroundStyle(key == "action" ? Color.primary : .secondary)
+                    Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded.contains(key) ? 90 : 0))
+                    Spacer(minLength: 0)
+                }
+                .lineLimit(1)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            if let clear {
+                Button(clear.0) { withAnimation(.snappy) { clear.1() } }
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .buttonStyle(.borderless)
+            }
+        }
+        .textCase(nil)
+        .padding(.vertical, 2)
     }
 
     private func row(_ it: InboxItem) -> some View {
@@ -204,7 +234,15 @@ struct InboxRow: View {
                     Text(LarkTime.short(item.updatedAt)).font(.caption).foregroundStyle(.secondary).fixedSize()
                 }
                 HStack(alignment: .top, spacing: 6) {
-                    Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    if let summary = item.summary, !summary.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + summary))
+                                .font(.subheadline).foregroundStyle(.primary.opacity(item.isDone ? 0.7 : 0.9)).lineLimit(2)
+                            Text(from).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                        }
+                    } else {
+                        Text(from).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    }
                     Spacer(minLength: 0)
                     if item.count > 1 && !item.isDone {
                         Text(item.count > 99 ? "99+" : "\(item.count)")
@@ -224,9 +262,8 @@ struct InboxRow: View {
         .contentShape(.rect)
     }
 
-    /// The AI's one-line summary once triaged; until then who wrote what.
-    private var detail: String {
-        if let s = item.summary, !s.isEmpty { return s }
+    /// Who wrote what (under the AI's summary once it has one).
+    private var from: String {
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
         return sender + "：" + item.preview
     }
