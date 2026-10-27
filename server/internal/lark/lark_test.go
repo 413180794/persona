@@ -297,3 +297,17 @@ func TestRawProxy(t *testing.T) {
 		}
 	}
 }
+
+func TestParseEvent(t *testing.T) {
+	ev, ok := parseEvent([]byte(`{"type":"message.upserted","feedId":"f1","messageId":"m","message":{}}`))
+	if !ok || ev.Type != "message.upserted" || len(ev.FeedIDs) != 1 || ev.FeedIDs[0] != "f1" {
+		t.Fatalf("message event = %+v %v", ev, ok)
+	}
+	ev, ok = parseEvent([]byte(`{"type":"conversations.upserted","conversations":[{"feedId":"a"},{"feedId":"b"}]}`))
+	if !ok || len(ev.FeedIDs) != 2 {
+		t.Fatalf("conversations event = %+v %v", ev, ok)
+	}
+	if _, ok := parseEvent([]byte(`{"type":"message.cot.updated","messageId":"m"}`)); ok {
+		t.Fatal("unrelated events should be dropped")
+	}
+}

@@ -458,7 +458,7 @@ func (n *Node) assistantSessions() []proto.Session {
 		if path := n.transcriptPath(p.id); path != "" {
 			if st, err := os.Stat(path); err == nil {
 				m := n.meta(path, st)
-				s.Title, s.Model, s.LastText = m.title, m.model, snippet(m.lastText)
+				s.Title, s.Model, s.LastText, s.Rev = m.title, m.model, snippet(m.lastText), st.Size()
 				untitled(&s, m)
 				if !p.busy {
 					s.UpdatedAt = lastUsed(m, st)
@@ -479,6 +479,7 @@ func (n *Node) notifySessions() {
 	list := n.sessionList(context.Background(), false)
 	n.mu.Lock()
 	n.lastList = listKey(list)
+	n.revsChanged(list)
 	n.mu.Unlock()
 	_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
 }

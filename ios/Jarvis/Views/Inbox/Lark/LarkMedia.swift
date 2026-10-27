@@ -32,6 +32,9 @@ final class LarkMedia {
 
     private init() { images.totalCostLimit = 120 << 20 }
 
+    /// Settings › 存储空间 cleared the files: drop the decoded copies too (emoji stay, they are tiny and on every page).
+    func clearMemory() { images.removeAllObjects() }
+
     // MARK: Bytes
 
     /// Raw bytes of a media URL (hub-relative or absolute), from disk when seen before.
@@ -42,11 +45,12 @@ final class LarkMedia {
         let d: Data
         if url.hasPrefix("http://") || url.hasPrefix("https://") {
             guard let u = URL(string: url) else { throw URLError(.badURL) }
-            let (body, resp) = try await URLSession.shared.data(from: u)
+            let (body, resp) = try await APIClient.uncachedSession.data(from: u) // kept in `dir`, not twice
             guard ((resp as? HTTPURLResponse)?.statusCode ?? 200) < 400 else { throw URLError(.badServerResponse) }
             d = body
         } else {
-            guard let api = AppModel.shared.api else { throw URLError(.userAuthenticationRequired) }
+            guard var api = AppModel.shared.api else { throw URLError(.userAuthenticationRequired) }
+            api.session = APIClient.uncachedSession
             var path = url
             var query: [String: String] = [:]
             if let q = url.firstIndex(of: "?") {

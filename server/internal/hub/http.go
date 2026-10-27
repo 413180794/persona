@@ -137,6 +137,9 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
+		// API answers are live data: without this the phone's URLCache kept a copy of every page it pulled (megabytes,
+		// never read again). Images and media that may be cached set their own Cache-Control.
+		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -228,11 +231,15 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 	q := r.URL.Query()
 	params := map[string]any{"session_id": r.PathValue("sid"), "before_seq": atoi(q.Get("before_seq")), "limit": atoi(q.Get("limit")),
 		"turns": atoi(q.Get("turns"))}
+	if q.Has("after_seq") { // what came after the app's newest item (background sync); has_more is meaningless here
+		params["after_seq"] = atoi(q.Get("after_seq"))
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	var res struct {
-		Items   []proto.Item `json:"items"`
-		HasMore bool         `json:"has_more"`
+		Items     []proto.Item `json:"items"`
+		HasMore   bool         `json:"has_more"`
+		MoreAfter bool         `json:"more_after,omitempty"`
 	}
 	if err := m.call(ctx, "session.items", params, &res); err != nil {
 		callErr(w, err)

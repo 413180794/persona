@@ -275,8 +275,7 @@ final class ChatStore {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = false
         var inOrder = true
-        for var it in new where !ids.contains(it.id) {
-            if it.image?.lazy == true { it.image?.ref = "\(key.machineID)/\(key.sessionID)/\(it.id)" }
+        for it in Self.withImageRefs(new, key) where !ids.contains(it.id) {
             if let last = items.last, (it.seq, it.id) < (last.seq, last.id) { inOrder = false }
             ids.insert(it.id)
             items.append(it)
@@ -327,6 +326,24 @@ final class ChatStore {
             let more = self.hasMore || tail.count < self.items.count
             Task.detached(priority: .utility) { ChatCache.save(key, items: tail, hasMore: more) }
         }
+    }
+
+    /// Lazy images learn where to fetch their bytes from.
+    nonisolated static func withImageRefs(_ items: [Item], _ key: SessionKey) -> [Item] {
+        guard items.contains(where: { $0.image?.lazy == true }) else { return items }
+        return items.map { it in
+            var it = it
+            if it.image?.lazy == true { it.image?.ref = "\(key.machineID)/\(key.sessionID)/\(it.id)" }
+            return it
+        }
+    }
+
+    /// Starts over from the latest page: what came in between was too much to fetch, and a hole would never fill.
+    func replace(with latest: [Item], hasMore: Bool) {
+        items = []
+        ids = []
+        self.hasMore = hasMore
+        merge(latest)
     }
 
     func prepend(_ older: [Item], hasMore: Bool) {

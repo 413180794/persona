@@ -287,7 +287,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					s.Title = ""
 					untitled(&s, m)
 				}
-				s.Model, s.LastText, s.UpdatedAt = m.model, snippet(m.lastText), lastUsed(m, st)
+				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
 				s.WokeByTask = m.wake
 				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
@@ -379,7 +379,7 @@ func (n *Node) scanOffline() []proto.Session {
 		n.mu.Unlock()
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
-			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st),
+			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
 		untitled(&s, m)
 		out = append(out, s)
@@ -653,11 +653,36 @@ func (n *Node) pollAgents(ctx context.Context) {
 		n.mu.Lock()
 		changed := key != n.lastList
 		n.lastList = key
+		revs := n.revsChanged(list)
 		n.mu.Unlock()
-		if changed && n.peer != nil {
+		if n.peer == nil {
+			continue
+		}
+		if changed {
 			_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
+		} else if len(revs) > 0 {
+			// A transcript grew without anything the list shows changing (a tool call, a result): only the new
+			// revs go out, a few bytes instead of the whole list, so the app can pull those sessions.
+			_ = n.peer.Notify("sessions.revs", map[string]any{"revs": revs})
 		}
 	}
+}
+
+// revsChanged records the list's revs and returns those that differ from the last pushed. Callers hold n.mu.
+func (n *Node) revsChanged(list []proto.Session) map[string]int64 {
+	var out map[string]int64
+	next := make(map[string]int64, len(list))
+	for _, s := range list {
+		next[s.SessionID] = s.Rev
+		if s.Rev != 0 && n.lastRevs[s.SessionID] != s.Rev {
+			if out == nil {
+				out = map[string]int64{}
+			}
+			out[s.SessionID] = s.Rev
+		}
+	}
+	n.lastRevs = next
+	return out
 }
 
 // listKey ignores fields that churn without meaning (updated_at of live sessions).

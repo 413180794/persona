@@ -1,0 +1,145 @@
+import Foundation
+
+/// Keeps the recent agents' conversations current while the app is open and online, the way an IM client syncs:
+/// the hub pushes a tiny "this transcript changed" (each session's `rev`, in the session list and the `revs` event)
+/// and the app pulls only what is new (`after_seq`) — into the chat's store when it is in memory, else into the disk
+/// cache a chat paints from. Opening a chat then shows its latest messages at once. Chats on screen are live over
+/// their own subscription and are left alone.
+@MainActor
+final class AgentSync {
+    static let shared = AgentSync()
+
+    /// Worth keeping current: every live agent, and any session used within this window.
+    static let recentWindow: TimeInterval = 24 * 3600
+    static let maxSessions = 40
+    static let concurrency = 3
+
+    private var known: [SessionKey: Int64] = [:]
+    /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches.
+    private var synced: [String: Int64]
+    private var queue: [SessionKey] = []
+    private var running = Set<SessionKey>()
+    private var scheduled = false
+    private let saver = Debouncer(.seconds(2))
+    private static let defaultsKey = "agentSync.revs"
+
+    private init() {
+        synced = (UserDefaults.standard.dictionary(forKey: Self.defaultsKey) as? [String: Int64]) ?? [:]
+    }
+
+    /// The disk cache was cleared: pull everything recent again.
+    func forget() {
+        synced = [:]
+        save()
+        schedule()
+    }
+
+    /// A machine's full session list arrived.
+    func sessions(_ list: [Session]) {
+        for s in list { if let r = s.rev { known[s.key] = r } }
+        schedule()
+    }
+
+    /// Only some transcripts grew (the light `revs` event).
+    func revs(machine: String, _ changed: [String: Int64]) {
+        for (sid, r) in changed { known[SessionKey(machineID: machine, sessionID: sid)] = r }
+        schedule()
+    }
+
+    /// After a burst of events, look once.
+    func schedule() {
+        guard !scheduled else { return }
+        scheduled = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            scheduled = false
+            plan()
+        }
+    }
+
+    private func plan() {
+        let model = AppModel.shared
+        guard model.live.state == .connected, model.api != nil else { return }
+        let cutoff = Date.now.addingTimeInterval(-Self.recentWindow)
+        let recent = model.sessionsByMachine.values.joined()
+            .filter { $0.status != .offline || ($0.updatedAt ?? .distantPast) > cutoff }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .prefix(Self.maxSessions)
+        var due: [SessionKey] = []
+        for s in recent {
+            guard let rev = known[s.key] ?? s.rev, synced[s.id] != rev else { continue }
+            if model.isSubscribed(s.key) {
+                synced[s.id] = rev // on screen: its subscription already brings everything
+            } else if !running.contains(s.key) {
+                due.append(s.key)
+            }
+        }
+        queue = due // newest first; replaces an older plan
+        pump()
+        save()
+    }
+
+    private func pump() {
+        while running.count < Self.concurrency, !queue.isEmpty {
+            let key = queue.removeFirst()
+            guard let rev = known[key] else { continue }
+            running.insert(key)
+            Task {
+                let ok = await pull(key)
+                running.remove(key)
+                if ok { synced["\(key.machineID)/\(key.sessionID)"] = rev; save() }
+                pump()
+            }
+        }
+    }
+
+    private func save() {
+        let snapshot = synced
+        saver.run { UserDefaults.standard.set(snapshot, forKey: Self.defaultsKey) }
+    }
+
+    /// Brings one session up to date; false when the hub could not be reached (it is tried again on the next change).
+    private func pull(_ key: SessionKey) async -> Bool {
+        let model = AppModel.shared
+        guard let api = model.api else { return false }
+        do {
+            if let store = model.existingChat(key), !store.items.isEmpty {
+                let r = try await api.items(key, afterSeq: store.lastSeq)
+                if r.moreAfter == true {
+                    let page = try await api.items(key, beforeSeq: nil)
+                    store.replace(with: page.items, hasMore: page.hasMore)
+                } else if !r.items.isEmpty {
+                    store.merge(r.items)
+                }
+                return true
+            }
+            try await Self.pullToDisk(key, api)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// No store in memory: update the disk cache the chat will open from (decoding and writing off the main thread).
+    private nonisolated static func pullToDisk(_ key: SessionKey, _ api: APIClient) async throws {
+        let cached = await Task.detached(priority: .utility) { ChatCache.load(key) }.value
+        if let cached, let last = cached.items.last?.seq {
+            let r = try await api.items(key, afterSeq: last)
+            if r.items.isEmpty { return }
+            if r.moreAfter != true {
+                await Task.detached(priority: .utility) {
+                    let have = Set(cached.items.map(\.id))
+                    let all = (cached.items + ChatStore.withImageRefs(r.items, key).filter { !have.contains($0.id) })
+                        .sorted { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
+                    let tail = ChatCache.tail(all, turns: 2)
+                    ChatCache.save(key, items: tail, hasMore: cached.hasMore || tail.count < all.count)
+                }.value
+                return
+            }
+        }
+        let page = try await api.items(key, beforeSeq: nil)
+        await Task.detached(priority: .utility) {
+            ChatCache.save(key, items: ChatStore.withImageRefs(page.items, key), hasMore: page.hasMore)
+        }.value
+    }
+}

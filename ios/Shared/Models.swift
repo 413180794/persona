@@ -115,6 +115,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
+    /// Changes whenever the transcript does: the app pulls sessions whose rev it has not synced (`AgentSync`).
+    var rev: Int64?
 
     var id: String { machineID + "/" + sessionID }
     var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
@@ -130,7 +132,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop, subagents,
-             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions"
+             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev
     }
 
     init(from decoder: Decoder) throws {
@@ -165,6 +167,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
+        rev = try c.decodeIfPresent(Int64.self, forKey: .rev)
     }
 }
 

@@ -41,6 +41,7 @@ type Node struct {
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
 	spare    *assistantProc            // warm process waiting for the next new conversation
 	lastList string                    // serialized last sessions.changed payload
+	lastRevs map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
 	metas    map[string]quickMeta      // transcript path -> cached meta
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
 	panePIDs map[string]panePID        // pane -> its claude pid (no herdr integration: example-machine)
@@ -275,7 +276,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			limit = 80
 		}
 		if p.AfterSeq != nil {
-			return map[string]any{"items": nonNil(f.After(*p.AfterSeq, 500)), "has_more": false}, nil
+			// more_after: the 500 cap cut it short; the app takes the latest page instead of leaving a hole.
+			const most = 500
+			items := f.After(*p.AfterSeq, most)
+			return map[string]any{"items": nonNil(items), "has_more": false, "more_after": len(items) == most}, nil
 		}
 		if p.Turns > 0 { // the phone pages by exchanges (user prompt + answer), not by rows
 			items, more := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)

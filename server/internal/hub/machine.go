@@ -308,6 +308,22 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		if json.Unmarshal(params, &p) == nil {
 			m.setSessions(p.Sessions)
 		}
+	case "sessions.revs":
+		var p struct {
+			Revs map[string]int64 `json:"revs"`
+		}
+		if json.Unmarshal(params, &p) != nil || len(p.Revs) == 0 {
+			return
+		}
+		m.mu.Lock()
+		for i := range m.sessions {
+			if r, ok := p.Revs[m.sessions[i].SessionID]; ok {
+				m.sessions[i].Rev = r
+			}
+		}
+		m.mu.Unlock()
+		// Every app, not only those watching: this is what lets them pull a session before it is opened.
+		m.hub.broadcast(map[string]any{"type": "revs", "machine_id": m.cfg.ID, "revs": p.Revs})
 	case "session.items":
 		var p struct {
 			SessionID string       `json:"session_id"`

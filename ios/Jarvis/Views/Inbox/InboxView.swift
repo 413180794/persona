@@ -107,9 +107,16 @@ struct InboxView: View {
                     path.append(c)
                 }
                 #endif
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(30))
+                while !Task.isCancelled { // a fallback: changes arrive as pushes (LarkSync)
+                    try? await Task.sleep(for: .seconds(90))
                     if path.isEmpty { await reload(quiet: true) }
+                }
+            }
+            .task {
+                // Pushed: a conversation changed in Feishu. Bursts collapse into one reload every 2s at most.
+                for await _ in LarkSync.shared.changes() where path.isEmpty && group != .mail {
+                    await reload(quiet: true)
+                    try? await Task.sleep(for: .seconds(2)) // a busy group fires every second: four requests per reload
                 }
             }
             .onChange(of: path.count) { old, new in
@@ -301,6 +308,7 @@ struct InboxView: View {
             if !(error is CancellationError) { larkError = error.shown }
         }
         if let p = try? await pinnedTask, group == .messages { pinned = p }
+        LarkSync.shared.know(pinned + chats)
         if let l = try? await labelsTask { labels = l }
         if let n = try? await unreadTask { unreadTotal = n }
         remember()

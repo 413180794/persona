@@ -126,18 +126,26 @@ struct LarkChatView: View {
         .task {
             LarkMedia.shared.loadEmojiCatalog()
             // The last messages seen here paint at once (offline too); the network only brings them up to date.
-            if messages.isEmpty, conversation.focus == nil, !opensAtMessage,
-               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty {
+            // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
+            // opens at its first unread message: the cache serves when it reaches back that far.
+            if messages.isEmpty, conversation.focus == nil,
+               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty,
+               !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
                 messages = cached
                 hasOlder = true
                 olderCursor = cached.first?.position
                 newerCursor = cached.last?.position
+                let read = conversation.readPosition ?? "0"
+                if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
             }
             await load()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+            while !Task.isCancelled { // a fallback: changes arrive as pushes (below)
+                try? await Task.sleep(for: .seconds(60))
                 await refreshLatest()
             }
+        }
+        .task {
+            for await _ in LarkSync.shared.changes(of: conversation.id) { await refreshLatest() }
         }
         .onDisappear { flushRead() }
     }

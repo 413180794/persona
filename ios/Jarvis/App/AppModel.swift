@@ -193,6 +193,10 @@ final class AppModel {
         if live.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
     }
 
+    func isSubscribed(_ key: SessionKey) -> Bool { subscribed.contains(key) }
+    /// The chat's store if one is in memory (never creates one: background sync writes to the disk cache instead).
+    func existingChat(_ key: SessionKey) -> ChatStore? { chats[key] }
+
     func unsubscribe(_ key: SessionKey) {
         subscribed.remove(key)
         live.send(["type": "unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
@@ -225,6 +229,8 @@ final class AppModel {
 
     private func didConnect() {
         registerPhone()
+        AgentSync.shared.schedule()
+        LarkSync.shared.reconnected()
         for key in subscribed {
             var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
             let seq = chat(key).lastSeq
@@ -270,6 +276,11 @@ final class AppModel {
             sessionsByMachine[machineID] = list
             WatchSync.shared.push(summary: watchSummary())
             notifyTransitions(old: old, new: list)
+            AgentSync.shared.sessions(list)
+        case .revs(let machineID, let revs):
+            AgentSync.shared.revs(machine: machineID, revs)
+        case .lark(let feedIDs):
+            LarkSync.shared.received(feedIDs)
         case .items(let key, let items, let backlog, let hasMore):
             chat(key).merge(items, backlog: backlog, hasMore: hasMore)
         case .screen(let key, let text, let status):

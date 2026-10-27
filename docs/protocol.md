@@ -73,7 +73,7 @@
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?}` → `{"session":Session}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取 |
+| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的全部新内容（后台同步用，最多 500 条；`more_after: true` 表示截断了，App 改取最新一页） |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?}`；会话 offline 时先用原启动器 `--resume` 拉起 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
@@ -119,7 +119,9 @@
 | --- | --- |
 | `hello` | `server_version`, `client_id` |
 | `machines` | `machines` |
-| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推） |
+| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容） |
+| `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
+| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
 | `session` | `session`（单个状态变化） |
 | `items` | `machine_id`, `session_id`, `items`（只推给订阅了该会话的客户端） |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束） |
@@ -165,7 +167,8 @@ hub → node 请求：
 | `session.close` | `{session_id}` |
 | `interaction.resolve` | `{id, resolution}` |
 
-node → hub 事件：`session.items {session_id, items}`、`session.screen {session_id, text, status}`、`sessions.changed {sessions}`。
+node → hub 事件：`session.items {session_id, items}`、`session.screen {session_id, text, status}`、`sessions.changed {sessions}`、
+`sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）。
 
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）

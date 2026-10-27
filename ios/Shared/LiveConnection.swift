@@ -13,6 +13,10 @@ nonisolated enum ServerEvent: Sendable {
     case interactionResolved(String)
     case toolCall(callID: String, name: String, args: JSONValue)
     case hookEvent(SessionKey, event: String, message: String?, lastText: String?)
+    /// Transcripts that grew on a machine (session id → rev): pull them before they are opened.
+    case revs(machineID: String, [String: Int64])
+    /// Feishu conversations with new or changed messages (lark-connector's realtime events, relayed by the hub).
+    case lark(feedIDs: [String])
     case error(SessionKey?, String)
 
     private struct Envelope: Decodable {
@@ -35,11 +39,13 @@ nonisolated enum ServerEvent: Sendable {
         var message: String?
         var lastAssistantMessage: String?
         var error: String?
+        var revs: [String: Int64]?
+        var feedIDs: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error
+            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
-                 lastAssistantMessage = "last_assistant_message"
+                 lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
         }
     }
 
@@ -70,6 +76,10 @@ nonisolated enum ServerEvent: Sendable {
             guard let key else { return nil }
             return .hookEvent(key, event: e.event ?? "", message: e.message, lastText: e.lastAssistantMessage)
         case "error": return .error(key, e.error ?? "未知错误")
+        case "revs":
+            guard let m = e.machineID, let revs = e.revs else { return nil }
+            return .revs(machineID: m, revs)
+        case "lark": return .lark(feedIDs: e.feedIDs ?? [])
         default: return nil
         }
     }

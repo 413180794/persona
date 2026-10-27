@@ -124,6 +124,7 @@ func Run(ctx context.Context, version string) error {
 	}
 	go h.expireLoop(ctx)
 	go h.scheduleLoop(ctx)
+	go h.larkEvents(ctx)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
 	go func() {

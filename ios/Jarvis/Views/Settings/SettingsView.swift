@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var showPair = false
     @State private var debugAssistant = false
     @State private var debugOpened = false
+    @State private var storage: Int64?
+    @State private var debugStorage = false
 
     var body: some View {
         NavigationStack {
@@ -81,6 +83,16 @@ struct SettingsView: View {
                     Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
                 }
 
+                Section {
+                    NavigationLink { StorageView() } label: {
+                        LabeledContent {
+                            Text(storage?.storageText ?? "").monospacedDigit()
+                        } label: {
+                            Label("存储空间", systemImage: "internaldrive")
+                        }
+                    }
+                }
+
                 Section("服务器") {
                     Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
                     Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: "xmark.circle") }
@@ -95,9 +107,15 @@ struct SettingsView: View {
             .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .task { await model.refreshAssistant() }
+            .onAppear { // measured each time the page shows (back from 存储空间 after clearing, too)
+                Task { storage = await Task.detached(priority: .utility) { StorageUsage.scan().values.reduce(0, +) }.value }
+            }
             #if DEBUG
             // `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about` (with `-tab settings`)
             .navigationDestination(isPresented: $debugAssistant) { AssistantSettingsView() }
+            // `-openStorage YES` (with `-tab settings`): 存储空间.
+            .navigationDestination(isPresented: $debugStorage) { StorageView() }
+            .onAppear { if UserDefaults.standard.bool(forKey: "openStorage"), !debugOpened { debugOpened = true; debugStorage = true } }
             .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {

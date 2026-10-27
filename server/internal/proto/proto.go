@@ -124,6 +124,9 @@ type Session struct {
 	Loop      *LoopInfo `json:"loop,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
+	// Rev changes whenever the transcript does (its size): the app pulls new items for every session whose rev
+	// differs from what it has, without opening it. Changes travel as the light `revs` event.
+	Rev int64 `json:"rev,omitempty"`
 	// WokeByTask: the latest turn was started by a background task reporting back, not by the user; finishing
 	// it sends no push (the user did not ask for anything).
 	WokeByTask          bool `json:"woke_by_task,omitempty"`

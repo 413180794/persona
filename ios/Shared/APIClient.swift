@@ -46,6 +46,15 @@ nonisolated struct APIClient: Sendable {
     var config: ServerConfig
     var session: URLSession = .shared
 
+    /// For bytes the app caches itself (chat images, Feishu media): through `.shared` the system's URLCache kept a
+    /// second copy of every one of them.
+    static let uncachedSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.urlCache = nil
+        c.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: c)
+    }()
+
     func url(_ path: String, query: [String: String] = [:]) -> URL {
         var comps = URLComponents(url: config.url.appending(path: path), resolvingAgainstBaseURL: false)!
         let items = query.filter { !$0.value.isEmpty }.map { URLQueryItem(name: $0.key, value: $0.value) }
@@ -157,12 +166,25 @@ nonisolated struct APIClient: Sendable {
         comps.percentEncodedPath = base + "/api/v1/sessions/\(parts[0])/\(parts[1])/items/\(id)/image"
         var req = URLRequest(url: comps.url!, timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
-        let (data, resp) = try await session.data(for: req)
+        let (data, resp) = try await Self.uncachedSession.data(for: req) // ChatImageLoader keeps it on disk
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
         }
         return data
+    }
+
+    struct NewerResponse: Decodable, Sendable {
+        var items: [Item]
+        /// The hub stopped at its cap: more came after these, so a gap would remain (take the latest page instead).
+        var moreAfter: Bool?
+        enum CodingKeys: String, CodingKey { case items; case moreAfter = "more_after" }
+    }
+
+    /// Everything after `afterSeq` (background sync of a session the app has not opened).
+    func items(_ k: SessionKey, afterSeq: Int) async throws -> NewerResponse {
+        let data = try await request("GET", sp(k) + "/items", query: ["after_seq": String(afterSeq), "lazy_images": "1"])
+        return try await Task.detached(priority: .utility) { try JSON.decoder.decode(NewerResponse.self, from: data) }.value
     }
 
     struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }

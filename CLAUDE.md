@@ -149,3 +149,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   它要是比 HTTP 第一页先到，App 就以为历史到头了，往上翻停在已加载的最早一条（2026-10-26）。现在 hub 补发时不带这个字段，
   App 把缺失当未知，而且一批没覆盖到本地最早一条的消息不许把它改成 false。复现：`-showScrollToOldest YES` 一路往上翻并记日志。
 - 带很多截图的会话，一页更早的消息有 1–5 MB（图片 base64 内嵌）：分页在后台线程解码，最早的十几行一出现就预取前一页。
+- 后台同步别靠「订阅所有会话」：订阅会让 node 每 250ms 刷 transcript、每 400ms 读一次终端（herdr 进程调用）。改成 IM 式的推拉结合：
+  hub 只推每个会话的 `rev`（transcript 字节数），App 按 `after_seq` 拉增量（`docs/ios.md` 后台同步）。整个会话列表约 130 KB，
+  别为 rev 变化重发列表，用单独的 `revs` 事件。lark-connector 有实时事件 WebSocket（`/agent/v1/events`，`message.upserted` /
+  `conversation.upserted`），飞书的推送从这里来。
+- hub 的 API 默认回 `Cache-Control: no-store`：不加的话 iOS 的 URLCache 会把每个 JSON 分页存一份（后台同步十几 MB，从来不读）。
+  App 自己做磁盘缓存的东西（对话图片、飞书媒体）用 `APIClient.uncachedSession` 取，否则同一份字节存两遍。
