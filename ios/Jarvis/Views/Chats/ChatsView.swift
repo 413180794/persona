@@ -11,10 +11,8 @@ struct SpaceGroup: Identifiable {
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
-    /// Nothing going on: every agent quiet and none with background commands still running.
-    var isQuiet: Bool {
-        sessions.allSatisfy { $0.isQuiet && ($0.background ?? []).isEmpty && !($0.subagents ?? []).contains(where: \.running) }
-    }
+    /// Nothing going on: every agent quiet and none waiting on a /loop or background work.
+    var isQuiet: Bool { sessions.allSatisfy { $0.isQuiet && !$0.isWaiting } }
 
     func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
 
@@ -38,6 +36,14 @@ struct SpaceGroup: Identifiable {
         .sorted { a, b in
             a.state.priority != b.state.priority ? a.state.priority < b.state.priority : a.updatedAt > b.updatedAt
         }
+    }
+}
+
+extension Session {
+    /// Nothing to look at now, but a /loop that has not fired yet or background work still running will wake it:
+    /// new messages may come in minutes. 待唤醒 in the list.
+    var isWaiting: Bool {
+        isQuiet && (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running))
     }
 }
 
@@ -143,9 +149,10 @@ struct ChatsView: View {
                             !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil || !($0.background ?? []).isEmpty
                                 || ($0.subagents ?? []).contains(where: \.running)
                         }
-                        let idle = g.sessions.filter { !stays($0) }
+                        let sessions = ordered(g.sessions)
+                        let idle = sessions.filter { !stays($0) }
                         let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
-                        ForEach(g.sessions.filter(stays)) { s in slotRow(s) }
+                        ForEach(sessions.filter(stays)) { s in slotRow(s) }
                         if !idle.isEmpty {
                             if showIdle {
                                 ForEach(idle) { s in slotRow(s) }
@@ -273,25 +280,39 @@ struct ChatsView: View {
             || (s.subagents ?? []).contains(where: \.running)
     }
 
-    /// Inside a state or machine section: the most recently updated first.
+    /// One order for every grouping (inside a space, a machine, and the sections of 按状态):
+    /// 需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看. Muted agents that are working, finished-unread or waiting
+    /// rank as 已屏蔽; one that needs you stays first.
+    private func rank(_ s: Session) -> Int {
+        if s.state == .needsYou { return 0 }
+        let live = s.state == .working || s.state == .unread || s.isWaiting
+        if live && model.isMuted(s.key) { return 4 }
+        switch s.state {
+        case .unread: return 1
+        case .working: return 2
+        default: return s.isWaiting ? 3 : 5
+        }
+    }
+
+    /// By rank, then the most recently updated first.
     private func ordered(_ list: [Session]) -> [Session] {
         list.sorted { a, b in
+            let ra = rank(a), rb = rank(b)
+            if ra != rb { return ra < rb }
             let ta = a.updatedAt ?? .distantPast, tb = b.updatedAt ?? .distantPast
             return ta != tb ? ta > tb : a.sessionID < b.sessionID
         }
     }
 
-    /// 需要你 → 完成未看 → 工作中 → 已屏蔽 → 已看 (the last one folded: it is the long tail). Muted agents that are
-    /// working or finished-unread wait in 已屏蔽 instead of their state's section; one that needs you stays there.
+    /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background
+    /// work will bring some.
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
-        let quieted: (Session) -> Bool = { ($0.state == .working || $0.state == .unread) && model.isMuted($0.key) }
-        let buckets: [(key: String, title: String, rows: [Session], tint: Color)] = [
-            ("needs", "需要你", live.filter { $0.state == .needsYou }, Theme.needsYou),
-            ("unread", "完成未看", live.filter { $0.state == .unread && !quieted($0) }, Theme.unread),
-            ("working", "工作中", live.filter { $0.state == .working && !quieted($0) }, Theme.busy),
-            ("muted", "已屏蔽", live.filter(quieted), .secondary),
-            ("idle", "已看", live.filter { $0.state == .idle || $0.state == .unknown }, .secondary),
+        let titles: [(key: String, title: String, tint: Color)] = [
+            ("needs", "需要你", Theme.needsYou), ("unread", "完成未看", Theme.unread), ("working", "工作中", Theme.busy),
+            ("waiting", "待唤醒", Theme.done), ("muted", "已屏蔽", .secondary), ("idle", "已看", .secondary),
         ]
+        let byRank = Dictionary(grouping: live, by: rank)
+        let buckets = titles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }
         ForEach(buckets, id: \.key) { b in
             let rows = ordered(b.rows)
             if !rows.isEmpty {
@@ -299,7 +320,7 @@ struct ChatsView: View {
                     if b.key == "idle" {
                         foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
-                        // 已屏蔽 mixes states: each row says its own.
+                        // 已屏蔽 mixes states: each row says its own. 待唤醒 rows show their loop / background badge.
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
