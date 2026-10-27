@@ -195,7 +195,7 @@ struct ChatView: View {
         let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: store.version,
                                        live: liveTurnID, open: openWork)
         if scratch.linesKey == key { return scratch.lines }
-        let lines = chatLines(Self.debugTrim(store.blocks))
+        let lines = unfoldWork(chatLines(Self.debugTrim(store.blocks)))
         scratch.lines = lines
         scratch.linesKey = key
         return lines
@@ -265,6 +265,113 @@ struct ChatView: View {
         return out
     }
 
+    #if DEBUG
+    /// Opens and folds a work line from its header, then from 收起 under its steps, logging how far the header and the
+    /// reply under the steps moved on screen (both should be 0).
+    private func foldProbe() async {
+        func pause() async { try? await Task.sleep(for: .seconds(1.5)) }
+        // Puts a line's top at a fraction of the list on screen: jump near, then correct by what is measured.
+        func bring(_ id: String, to f: CGFloat) async {
+            position.scrollTo(id: id, anchor: UnitPoint(x: 0.5, y: 1 - f))
+            for _ in 0..<6 {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let now = scratch.lineY[id], Set(scratch.visibleLines).contains(id) else { continue }
+                let target = scratch.listFrame.minY + scratch.listFrame.height * f
+                if abs(target - now) < 1 { break }
+                scrollList(to: chrome.offset + (target - now))
+            }
+            await pause()
+        }
+        try? await Task.sleep(for: .seconds(6))
+        var log: [String] = []
+        for kind in ["w-", "wt-"] {
+            // The newest work line of this kind with steps, brought into view.
+            let newest = currentLines().last { if case .work(let id, let items, _, _, _) = $0 { id.hasPrefix(kind) && !items.isEmpty } else { false } }
+            guard let w = newest?.id else { log.append("no \(kind) work line"); continue }
+            await bring(w, to: 0.3)
+            guard let y0 = scratch.workHeadY[w], Set(scratch.visibleLines).contains(w) else { log.append("\(w) not on screen"); continue }
+            toggleWork(w, fromHeader: true); await pause()
+            let y1 = scratch.workHeadY[headLine(w, open: true)] ?? .nan
+            toggleWork(w, fromHeader: true); await pause()
+            let y2 = scratch.workHeadY[w] ?? .nan
+            log.append("header \(w) at \(Int(y0)): opening moved it \(Int(y1 - y0)), folding \(Int(y2 - y0))")
+            guard kind == "w-" else { continue }
+            toggleWork(w, fromHeader: true); await pause()
+            let lines = currentLines()
+            guard let e = lines.firstIndex(where: { $0.id == w + "-end" }), e + 1 < lines.count else { log.append("no line after the steps"); continue }
+            let reply = lines[e + 1].id
+            await bring(w + "-end", to: 0.4)
+            let r0 = scratch.lineY[reply] ?? .nan, end0 = scratch.lineY[w + "-end"] ?? .nan
+            toggleWork(w, fromHeader: false); await pause()
+            let r1 = scratch.lineY[reply] ?? .nan
+            log.append("收起 at \(Int(end0)), reply at \(Int(r0)): folding moved the reply \(Int(r1 - r0)); header now \(Int(scratch.workHeadY[w] ?? .nan))")
+        }
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            try? log.joined(separator: "\n").write(to: dir.appending(path: "fold.txt"), atomically: true, encoding: .utf8)
+        }
+        // Left open with 收起 in the middle of the screen, for screenshots.
+        if let w = currentLines().last(where: { if case .work(let id, let items, _, _, _) = $0 { id.hasPrefix("w-") && !items.isEmpty } else { false } })?.id {
+            toggleWork(w, fromHeader: false); await pause()
+            await bring(w + "-end", to: 0.5)
+        }
+    }
+    #endif
+
+    /// Open work lines get their steps as lines of their own and a 收起 line after the last.
+    private func unfoldWork(_ lines: [ChatLine]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count)
+        for line in lines {
+            out.append(line)
+            if case .work(let id, let items, _, _, _) = line, isOpen(id), !items.isEmpty {
+                out += items.map { .workStep(group: id, item: $0) }
+                out.append(.workEnd(group: id, count: items.count))
+            }
+        }
+        return out
+    }
+
+    private func isOpen(_ work: String) -> Bool { openWork.contains(work) != Self.debugOpenAll }
+
+    /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
+    /// still on its own: folding from 收起 under the last step leaves the reply below it where it was. From the header,
+    /// the header stays under the finger instead (what is above it holds still; the reply comes up to meet it).
+    /// Scrolls to a vertical offset, keeping the horizontal one (see `ChatScratch.offsetX`).
+    private func scrollList(to y: CGFloat) {
+        position.scrollTo(point: CGPoint(x: scratch.offsetX, y: y))
+    }
+
+    /// A merged multi-message turn ("wt-…") opens into its messages under a "N 条消息 · 收起" line instead.
+    private func headLine(_ id: String, open: Bool) -> String { id.hasPrefix("wt-") && open ? id + "-h" : id }
+
+    private func toggleWork(_ id: String, fromHeader: Bool) {
+        Haptics.tap()
+        let frame = scratch.listFrame
+        let wasOpen = isOpen(id)
+        let y = scratch.workHeadY[headLine(id, open: wasOpen)]
+        var t = Transaction()
+        t.disablesAnimations = true // hundreds of rows animating out left blank frames behind
+        withTransaction(t) {
+            if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) }
+        }
+        guard fromHeader, let y, frame.height > 0 else { return }
+        let v = (y - frame.minY) / frame.height // 0 = top of the list on screen
+        guard (0...1).contains(v) else { return }
+        let head = headLine(id, open: !wasOpen)
+        // The scroll view is flipped: its own top is the bottom on screen. Rows not drawn yet only have estimated
+        // heights, so this lands near; the header's measured position then corrects the rest.
+        withTransaction(t) { position.scrollTo(id: head, anchor: UnitPoint(x: 0.5, y: 1 - v)) }
+        Task { @MainActor in
+            for _ in 0..<4 {
+                try? await Task.sleep(for: .milliseconds(16))
+                guard let now = scratch.workHeadY[head] else { continue }
+                let off = y - now // > 0: the header sits too high; the flipped list scrolls toward older to lower it
+                if abs(off) < 0.5 { break }
+                withTransaction(t) { scrollList(to: chrome.offset + off) }
+            }
+        }
+    }
+
     private static func photos(_ rows: [ChatRow]) -> [Item] {
         rows.compactMap { r -> Item? in
             if case .image(let i) = r, i.role == "user", i.toolUseID == nil, i.image != nil { return i }
@@ -316,8 +423,7 @@ struct ChatView: View {
             MergedUserBubble(items: rows.compactMap { if case .user(let i) = $0 { i } else { nil } })
         case .splitHeader(let id, let count):
             Button {
-                Haptics.tap()
-                withAnimation(.snappy) { _ = openWork.remove(id) }
+                toggleWork(id, fromHeader: true)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "rectangle.split.1x2").font(.caption)
@@ -330,12 +436,29 @@ struct ChatView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id + "-h"] = $0 }
         case .work(let id, let items, let live, let start, let end):
-            WorkLine(items: items, live: live, start: start, end: end, open: openWork.contains(id) != Self.debugOpenAll,
+            WorkLine(items: items, live: live, start: start, end: end, open: isOpen(id),
                      openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
-                Haptics.tap()
-                withAnimation(.snappy) { if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) } }
+                toggleWork(id, fromHeader: true)
             }
+            .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
+        case .workStep(_, let item):
+            WorkStepView(item: item)
+        case .workEnd(let group, let count):
+            Button { toggleWork(group, fromHeader: false) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                    Text("收起 \(count) 步").lineLimit(1).fixedSize()
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 2)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("收起过程")
+            .accessibilityIdentifier("work-fold-bottom")
         case .wakes(let t, let live):
             WakeChip(notices: t.wakes, live: live) {
                 Haptics.tap()
@@ -594,6 +717,7 @@ struct ChatView: View {
                 ForEach(lines.reversed()) { line in
                     lineView(line)
                         .flippedBack()
+                        .debugLineY(line.id, scratch)
                         .id(line.id)
                         .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
                         .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
@@ -629,10 +753,12 @@ struct ChatView: View {
         // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
         .scrollEdgeEffectHidden(true, for: .all)
         .scrollPosition($position)
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { scratch.listFrame = $0 }
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height) }) { old, new in
+        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x) }) { old, new in
+            scratch.offsetX = new.x
             chrome.offset = new.offset
             // A height change (keyboard) moves the offset too: that is not the user scrolling.
             if old.height != new.height { return }
@@ -660,7 +786,7 @@ struct ChatView: View {
             // Looked up live: the drawer follows the work while the agent is still on it.
             let t = store.blocks.lazy.compactMap { b -> Turn? in if case .turn(let t) = b, t.id == wakeDrawer { t } else { nil } }.first
             WakeDrawer(notices: t?.wakes ?? []) {
-                if let t { ForEach(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty)) { lineView($0) } }
+                if let t { ForEach(unfoldWork(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty))) { lineView($0) } }
             }
             .environment(menu)
         }
@@ -879,7 +1005,7 @@ struct ChatView: View {
                     var y: CGFloat = chrome.offset
                     for step in 0..<20 {
                         y += 4000
-                        withAnimation(.easeOut(duration: 1.5)) { position.scrollTo(y: y) }
+                        withAnimation(.easeOut(duration: 1.5)) { scrollList(to: y) }
                         try? await Task.sleep(for: .seconds(2.5))
                         let s = model.chat(shownKey)
                         log.append("step \(step) offset=\(Int(chrome.offset)) target=\(Int(y)) items=\(s.items.count) rows=\(s.rows.count) first=\(s.items.first?.seq ?? 0) more=\(s.hasMore) loading=\(s.isLoadingOlder) follows=\(followsEnd) atBottom=\(atBottom) ends=\(scratch.endJumps)")
@@ -890,6 +1016,9 @@ struct ChatView: View {
                     }
                 }
             }
+            if UserDefaults.standard.bool(forKey: "showFoldProbe") { // folding keeps what you read in place: Documents/fold.txt
+                Task { await foldProbe() }
+            }
             if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
                 Task {
                     try? await Task.sleep(for: .seconds(12)) // the history loads (-loadAll) and the page settles
@@ -898,7 +1027,7 @@ struct ChatView: View {
                     var y: CGFloat = 0
                     for step in 0..<8 {
                         y = max(0, y + (step < 4 ? 3000 : -3000))
-                        withAnimation(.easeOut(duration: 2.5)) { position.scrollTo(y: y) }
+                        withAnimation(.easeOut(duration: 2.5)) { scrollList(to: y) }
                         try? await Task.sleep(for: .seconds(2.8))
                     }
                     FrameStats.shared.stop(label: "sweep")
@@ -989,6 +1118,10 @@ struct ChatView: View {
     }
 
     /// Simulator automation: `-openWork YES` shows every work line unfolded (screenshots of the expanded state).
+    #if DEBUG
+    static let foldProbe = UserDefaults.standard.bool(forKey: "showFoldProbe")
+    #endif
+
     private static var debugOpenAll: Bool {
         #if DEBUG
         UserDefaults.standard.bool(forKey: "openWork")
@@ -1521,11 +1654,16 @@ enum ChatLine: Identifiable {
     case splitHeader(id: String, count: Int)
     /// "后台任务完成" under an answer: tap for what the agent did once the tasks reported back.
     case wakes(Turn, live: Bool)
+    /// An open work line's steps, one lazy line each (a long turn holds hundreds), then 收起 under the last one.
+    case workStep(group: String, item: WorkItem)
+    case workEnd(group: String, count: Int)
 
     var id: String {
         switch self {
         case .row(let r): r.id
         case .work(let id, _, _, _, _): id
+        case .workStep(let group, let item): group + "/" + item.id
+        case .workEnd(let group, _): group + "-end"
         case .userImages(let id, _): id
         case .mergedUsers(let id, _): id
         case .splitHeader(let id, _): id + "-h"
@@ -1565,11 +1703,46 @@ enum WorkItem: Identifiable {
     }
 }
 
+/// One step of an open work line, a line of the chat list itself. The rule on the left runs on through the gaps
+/// between lines, so the steps read as one block under their header.
+struct WorkStepView: View {
+    @Environment(\.openSubagent) private var openSubagent
+    var item: WorkItem
+    /// Half the list's spacing (`LazyVStack(spacing: 14)`).
+    private static let bridge: CGFloat = 7
+
+    var body: some View {
+        Group {
+            switch item {
+            case .step(.call(let c)):
+                VStack(alignment: .leading, spacing: 4) {
+                    ToolCallRow(call: c, autoExpand: false)
+                    if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
+                        Button { open(id) } label: {
+                            Label("查看子 Agent", systemImage: "arrow.up.right").font(.caption.weight(.semibold)).lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.accent)
+                        .padding(.leading, 12)
+                    }
+                }
+            case .step(.thought(let t)):
+                if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
+            case .text(let i): AssistantText(item: i)
+            }
+        }
+        .padding(.leading, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 2).padding(.vertical, -Self.bridge)
+        }
+    }
+}
+
 /// The quiet line under a message: what the agent did for it. Finished: "工具 3 · 思考 1 · 1 分 20 秒 ›";
 /// running: a spinner and "正在工作 39 秒 · 工具 2" (ticking) with the terminal at the end. Tap to list every
 /// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
 struct WorkLine: View {
-    @Environment(\.openSubagent) private var openSubagent
     var items: [WorkItem]
     var live: Bool
     var start: Date?
@@ -1605,38 +1778,13 @@ struct WorkLine: View {
                 .buttonStyle(.plain)
                 .disabled(items.isEmpty)
                 .accessibilityLabel(open ? "收起过程" : "展开过程")
+                .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
                 if let openTerminal {
                     Button(action: openTerminal) { Image(systemName: "terminal").font(.footnote).foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("打开终端")
                 }
-            }
-            if open && !items.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(items) { item in
-                        switch item {
-                        case .step(.call(let c)):
-                            VStack(alignment: .leading, spacing: 4) {
-                                ToolCallRow(call: c, autoExpand: false)
-                                if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
-                                    Button { open(id) } label: {
-                                        Label("查看子 Agent", systemImage: "arrow.up.right").font(.caption.weight(.semibold)).lineLimit(1)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(Theme.accent)
-                                    .padding(.leading, 12)
-                                }
-                            }
-                        case .step(.thought(let t)):
-                            if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
-                        case .text(let i): AssistantText(item: i)
-                        }
-                    }
-                }
-                .padding(.leading, 12)
-                .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.2)).frame(width: 2) }
-                .transition(.opacity)
             }
         }
     }
@@ -1688,6 +1836,7 @@ private struct EditIndex: Identifiable { var id: Int }
 private struct ListScroll: Equatable {
     var offset: CGFloat
     var height: CGFloat
+    var x: CGFloat
 }
 
 /// How far the Agents header is folded (0 = open, maxCollapse = just the slim bar). Written on every scroll frame,
@@ -1751,7 +1900,30 @@ final class ChatScratch {
     var lastActivity = Date.now
     var linesKey: LinesKey?
     var lines: [ChatLine] = []
+    /// Where each open work line's header is on screen (global midY), and the list's frame: folding or opening from
+    /// the header keeps the header under the finger.
+    var workHeadY: [String: CGFloat] = [:]
+    var listFrame: CGRect = .zero
+    /// The list's horizontal offset at rest (-16: the side margins are content margins). Vertical jumps keep it:
+    /// `scrollTo(y:)` set it to 0 and the page lost its margins.
+    var offsetX: CGFloat = 0
     #if DEBUG
     var endJumps = 0 // jumps to the newest (scrollToEnd), for the scroll probe
+    var lineY: [String: CGFloat] = [:] // each line's top on screen, for the fold probe (-showFoldProbe)
     #endif
+}
+
+extension View {
+    /// DEBUG, with -showFoldProbe: records the line's top on screen (fold probe). Otherwise nothing.
+    @ViewBuilder func debugLineY(_ id: String, _ scratch: ChatScratch) -> some View {
+        #if DEBUG
+        if ChatView.foldProbe {
+            onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).minY }) { scratch.lineY[id] = $0 }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
 }
