@@ -105,6 +105,18 @@ func LoadConfig() (*Config, error) {
 		if err := json.Unmarshal(b, cfg); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
+		// A hub.json written by someone else first (scripts/db.sh only puts database_url in it) has no token: keep
+		// the generated one, or every start (and `jarvisd hub pair`) would make up a different one.
+		var raw map[string]any
+		if err := json.Unmarshal(b, &raw); err == nil {
+			if _, ok := raw["token"]; !ok {
+				raw["token"] = cfg.Token
+				out, _ := json.MarshalIndent(raw, "", "  ")
+				if err := os.WriteFile(path, out, 0o600); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("%s: token is empty", path)

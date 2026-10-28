@@ -76,6 +76,37 @@ func TestLoadConfigCreatesAndReloads(t *testing.T) {
 	}
 }
 
+// scripts/db.sh creates hub.json with only database_url before the hub's first start: the token generated then must
+// be written down, or each start and `jarvisd hub pair` would invent another one and paired phones get 401.
+func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".jarvis")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "hub.json")
+	if err := os.WriteFile(path, []byte(`{"database_url":"postgres://x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token == "" || again.Token != cfg.Token {
+		t.Fatalf("token changed between loads: %q then %q", cfg.Token, again.Token)
+	}
+	var raw map[string]any
+	b, _ := os.ReadFile(path)
+	if err := json.Unmarshal(b, &raw); err != nil || raw["database_url"] != "postgres://x" || raw["token"] != cfg.Token {
+		t.Fatalf("hub.json = %s", b)
+	}
+}
+
 func TestLoadConfigFillsMissingTimeout(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
