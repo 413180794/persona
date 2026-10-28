@@ -449,6 +449,110 @@ nonisolated enum ScreenParser {
         return t.count > 20 && t.allSatisfy { $0 == "─" || $0 == "━" || $0 == "-" }
     }
 
+    /// A choice the terminal is waiting on (AskUserQuestion without the hook, a permission prompt…), read off the
+    /// screen: its header chip, the question, numbered options with their descriptions.
+    struct Dialog: Equatable, Sendable {
+        enum Kind: Equatable, Sendable { case plain, typeSomething, chat }
+        struct Option: Equatable, Sendable {
+            var key: String
+            var label: String
+            var detail: String?
+            var kind: Kind = .plain
+        }
+        var header: String?
+        var question: String
+        /// Lines above the question that belong to it (the command a permission prompt is about).
+        var detail: String?
+        var options: [Option]
+    }
+
+    /// The dialog at the bottom of the screen, or nil when there is none (plain options or none at all).
+    static func dialog(_ screen: String) -> Dialog? {
+        let lines = screen.components(separatedBy: "\n")
+        // Numbered rows: (line index, number, label, indent of the label).
+        var rows: [(i: Int, n: Int, label: String, indent: Int)] = []
+        for (i, raw) in lines.enumerated() {
+            var t = Substring(raw)
+            let lead = t.prefix { $0 == " " }.count
+            t = t.dropFirst(lead)
+            var indent = lead
+            if t.hasPrefix("❯") || t.hasPrefix(">") {
+                t = t.dropFirst()
+                let sp = t.prefix { $0 == " " }.count
+                t = t.dropFirst(sp)
+                indent += 1 + sp
+            }
+            guard let dot = t.firstIndex(of: "."), let n = Int(t[..<dot]), (1...9).contains(n) else { continue }
+            let after = t[t.index(after: dot)...]
+            guard after.hasPrefix(" ") else { continue }
+            let label = after.trimmingCharacters(in: .whitespaces)
+            guard !label.isEmpty else { continue }
+            rows.append((i, n, label, indent + t.distance(from: t.startIndex, to: dot) + 2))
+        }
+        // The last run 1, 2, 3… is the live dialog.
+        guard let start = rows.lastIndex(where: { $0.n == 1 }) else { return nil }
+        var block = [rows[start]]
+        for r in rows[(start + 1)...] where r.n == block.last!.n + 1 { block.append(r) }
+        guard block.count >= 2 else { return nil }
+
+        var options: [Dialog.Option] = []
+        for (k, r) in block.enumerated() {
+            let end = k + 1 < block.count ? block[k + 1].i : min(lines.count, r.i + 6)
+            var detail: [String] = []
+            for line in lines[(r.i + 1)..<end] {
+                let lead = line.prefix { $0 == " " }.count
+                let t = line.trimmingCharacters(in: .whitespaces)
+                if t.isEmpty || isRule(t) || lead < r.indent - 1 { if !detail.isEmpty { break } else { continue } }
+                detail.append(t)
+            }
+            let lower = r.label.lowercased()
+            let kind: Dialog.Kind = lower.hasPrefix("type something") ? .typeSomething : lower.hasPrefix("chat about this") ? .chat : .plain
+            options.append(Dialog.Option(key: String(r.n), label: r.label, detail: detail.isEmpty ? nil : joinWrapped(detail), kind: kind))
+        }
+
+        // Above the options, up to the rule that opens the dialog.
+        let first = block[0].i
+        var top = 0
+        for i in stride(from: first - 1, through: 0, by: -1) where isRule(lines[i]) { top = i + 1; break }
+        var header: String?
+        var quoted: [String] = []
+        var plain: [String] = []
+        for line in lines[top..<first] {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty { continue }
+            if let c = t.first, "☐□☒✔◻■".contains(c) {
+                header = t.dropFirst().trimmingCharacters(in: .whitespaces)
+            } else if t.hasPrefix("│") || t.hasPrefix("|") {
+                quoted.append(t.dropFirst().trimmingCharacters(in: .whitespaces))
+            } else {
+                plain.append(t)
+            }
+        }
+        let question: String
+        var detail: String?
+        if !quoted.isEmpty {
+            question = joinWrapped(quoted)
+            if !plain.isEmpty { detail = plain.joined(separator: "\n") }
+        } else if let last = plain.last {
+            question = last
+            if plain.count > 1 { detail = plain.dropLast().joined(separator: "\n") }
+        } else {
+            question = header ?? ""
+            if header != nil { header = nil }
+        }
+        return Dialog(header: header, question: question, detail: detail, options: options)
+    }
+
+    /// Rows the terminal wrapped, back into one text: no space where a row ended inside CJK text.
+    static func joinWrapped(_ rows: [String]) -> String {
+        var out = ""
+        for r in rows {
+            if let last = out.last, let next = r.first, !(last.isCJK || next.isCJK) { out += " " }
+            out += r
+        }
+        return out
+    }
+
     /// Numbered options on a TUI dialog ("❯ 1. Yes", "2. No") → (number, label).
     static func options(_ screen: String) -> [(key: String, label: String, selected: Bool)] {
         var out: [(String, String, Bool)] = []
@@ -537,3 +641,9 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Sendable {
     }
 }
 
+nonisolated private extension Character {
+    var isCJK: Bool {
+        guard let v = unicodeScalars.first?.value else { return false }
+        return (0x2E80...0x9FFF).contains(v) || (0xF900...0xFAFF).contains(v) || (0xFF00...0xFFEF).contains(v) || (0x3000...0x303F).contains(v)
+    }
+}

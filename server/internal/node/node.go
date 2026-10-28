@@ -175,6 +175,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		WorkspaceID     string          `json:"workspace_id"`
 		Text            string          `json:"text"`
 		Images          []proto.Image   `json:"images"`
+		PreKeys         []string        `json:"pre_keys"`
 		Keys            []string        `json:"keys"`
 		Lines           int             `json:"lines"`
 		BeforeSeq       int             `json:"before_seq"`
@@ -227,6 +228,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))
 	case "session.keys":
+		if len(p.PreKeys) > 0 {
+			if err := n.keys(ctx, p.SessionID, p.PreKeys, ""); err != nil {
+				return nil, err
+			}
+			time.Sleep(150 * time.Millisecond) // the TUI opens the field the keys picked before the text arrives
+		}
 		return ok(n.keys(ctx, p.SessionID, p.Keys, p.Text))
 	case "session.interrupt":
 		if n.isAssistantSession(p.SessionID) {

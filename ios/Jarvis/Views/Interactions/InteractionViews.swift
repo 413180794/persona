@@ -131,7 +131,7 @@ struct InteractionPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: interaction.kind.symbol).foregroundStyle(Theme.attention)
-                Text(interaction.title).font(.subheadline.weight(.semibold))
+                Text(panelTitle).font(.subheadline.weight(.semibold))
                 if collapsed {
                     Text(previewText).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -178,8 +178,14 @@ struct InteractionPanel: View {
         case .question: interaction.questions?.first?.question ?? ""
         case .plan: PlanText.title(interaction.plan ?? "")
         case .permission: interaction.summary ?? ""
-        case .screen: ""
+        case .screen: ScreenParser.dialog(interaction.screen ?? "")?.question ?? ""
         }
+    }
+
+    /// A terminal dialog that reads as a question is titled like one.
+    private var panelTitle: String {
+        if interaction.kind == .screen, ScreenParser.dialog(interaction.screen ?? "") != nil { return "终端在问你" }
+        return interaction.title
     }
 }
 
@@ -506,51 +512,179 @@ struct PermissionForm: View {
     }
 }
 
+/// The terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…). The dialog is read
+/// off the screen and laid out like a question: header, question, numbered options with their descriptions, "其他回答…"
+/// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
 struct ScreenForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
     @State private var text = ""
+    @State private var writing = false
+    @State private var sending: String?
+    @State private var showTerminal = false
+    @FocusState private var focused: Bool
 
     var body: some View {
-        let options = ScreenParser.options(interaction.screen ?? "")
+        let screen = interaction.screen ?? ""
+        if let d = ScreenParser.dialog(screen) {
+            dialog(d, screen: screen)
+        } else {
+            VStack(alignment: .leading, spacing: 12) { terminal(screen) }
+        }
+    }
+
+    private func dialog(_ d: ScreenParser.Dialog, screen: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            TerminalText(text: interaction.screen ?? "", maxLines: 18)
-                .frame(maxHeight: 220)
-            if !options.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(options, id: \.key) { opt in
-                        Button {
-                            Task { await model.resolve(interaction, Resolution(keys: [opt.key])) }
-                        } label: {
-                            HStack {
-                                Text(opt.key).font(.caption.weight(.bold).monospacedDigit())
-                                    .frame(width: 22, height: 22)
-                                    .background(Theme.accent.opacity(0.15), in: .circle)
-                                Text(opt.label).font(.subheadline).multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                                if opt.selected { Image(systemName: "chevron.left").font(.caption).foregroundStyle(.secondary) }
-                            }
-                            .padding(10)
-                            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
+            if let h = d.header, !h.isEmpty {
+                Text(h).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            if !d.question.isEmpty {
+                Text(d.question).font(.headline).fixedSize(horizontal: false, vertical: true)
+            }
+            if let detail = d.detail {
+                Text(detail)
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(.secondary)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 12, style: .continuous))
+            }
+            let choices = d.options.filter { $0.kind != .chat }
+            VStack(spacing: 0) {
+                ForEach(Array(choices.enumerated()), id: \.element.key) { i, opt in
+                    if i > 0 { Divider().padding(.leading, 50) }
+                    if opt.kind == .typeSomething { typeRow(opt) } else { choice(opt) }
                 }
             }
-            TerminalKeyBar { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
-            HStack {
-                TextField("输入文字发送到终端", text: $text)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
-                Button {
-                    let t = text
-                    text = ""
-                    Task { await model.resolve(interaction, Resolution(keys: ["enter"], text: t)) }
-                } label: { Image(systemName: "return") }
-                    .themedButton(prominent: true)
-                    .disabled(text.isEmpty)
+            .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 16, style: .continuous))
+            HStack(spacing: 16) {
+                if let chat = d.options.first(where: { $0.kind == .chat }) {
+                    Button { send(chat.key, Resolution(keys: [chat.key])) } label: {
+                        Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button { withAnimation(.snappy) { showTerminal.toggle() } } label: {
+                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: "terminal").lineLimit(1)
+                }
             }
+            .font(.footnote.weight(.medium))
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.accent)
+            if showTerminal { terminal(screen) }
+        }
+    }
+
+    private func choice(_ opt: ScreenParser.Dialog.Option) -> some View {
+        let (label, recommended) = QuestionForm.display(opt.label)
+        return Button { send(opt.key, Resolution(keys: [opt.key])) } label: {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    Circle().fill(sending == opt.key ? Theme.accent : Color.primary.opacity(0.08))
+                    if sending == opt.key {
+                        ProgressView().controlSize(.mini).tint(.white)
+                    } else {
+                        Text(opt.key).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 24, height: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(label).font(.body.weight(.medium)).foregroundStyle(.primary)
+                        if recommended {
+                            Text("推荐")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.accent.opacity(0.12), in: .capsule)
+                                .fixedSize()
+                        }
+                    }
+                    if let d = opt.detail {
+                        Text(d).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(sending == opt.key ? Theme.accent.opacity(0.08) : .clear)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(sending != nil)
+        .accessibilityLabel(label + (recommended ? "，推荐" : ""))
+    }
+
+    /// "Type something.": a quiet row that turns into a field; sending picks the option, types, presses enter.
+    private func typeRow(_ opt: ScreenParser.Dialog.Option) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "pencil")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(Color.primary.opacity(0.08), in: .circle)
+            if writing {
+                TextField("写下你的回答", text: $text, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($focused)
+                    .submitLabel(.send)
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        focused = false
+                        send(opt.key, Resolution(keys: ["enter"], text: t, preKeys: [opt.key]))
+                    } label: {
+                        if sending == opt.key { ProgressView().controlSize(.small) }
+                        else { Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(Theme.accent) }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(sending != nil)
+                    .accessibilityLabel("发送回答")
+                }
+            } else {
+                Text("其他回答…").foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .contentShape(.rect)
+        .onTapGesture {
+            guard !writing else { return }
+            withAnimation(.snappy) { writing = true }
+            focused = true
+        }
+    }
+
+    /// The raw screen, its keys and a line of text: for anything the dialog reading did not catch.
+    @ViewBuilder private func terminal(_ screen: String) -> some View {
+        TerminalText(text: screen, maxLines: 18)
+            .frame(maxHeight: 220)
+        TerminalKeyBar { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
+        HStack {
+            TextField("输入文字发送到终端", text: $text)
+                .textFieldStyle(.plain)
+                .padding(10)
+                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            Button {
+                let t = text
+                text = ""
+                Task { await model.resolve(interaction, Resolution(keys: ["enter"], text: t)) }
+            } label: { Image(systemName: "return") }
+                .themedButton(prominent: true)
+                .disabled(text.isEmpty)
+        }
+    }
+
+    private func send(_ key: String, _ r: Resolution) {
+        Haptics.tap()
+        sending = key
+        Task {
+            await model.resolve(interaction, r)
+            sending = nil
         }
     }
 }
@@ -578,6 +712,32 @@ struct TerminalText: View {
 #if DEBUG
 extension Interaction {
     /// A two-question AskUserQuestion (descriptions, a recommended option, a multi-select) for screenshots.
+    /// The terminal waiting on an AskUserQuestion dialog (the hook did not catch it), for screenshots.
+    static func sampleScreen(_ key: SessionKey) -> Interaction? {
+        let screen = [
+            " Ran 1 shell command",
+            "────────────────────────────────────────────────",
+            " ☐ 取消发布单",
+            "",
+            " │沙箱镜像第一次构建失败：SES 用 garble 混淆编译，而我选的 hertz-cli 版本",
+            " │不支持，换版本后编译通过，修复也已推送（a7553e20）。但失败的那张发布单 37997",
+            " │卡在构建阶段，没法重新构建。要取消它吗？",
+            "",
+            "❯ 1. 同意取消 37997 (Recommended)",
+            "     用 example-cli release delivery cancel 37997 取消，然后用修复后的 commit 重新发一次。",
+            "  2. 先不取消",
+            "     我停在这里；镜像、Nacos 和 e2e 都先不动，release 7807 也暂时保留。",
+            "  3. Type something.",
+            "────────────────────────────────────────────────",
+            "  4. Chat about this",
+            "",
+            " Enter to select · ↑/↓ to navigate · Esc to cancel",
+        ].joined(separator: "\n")
+        let payload: [String: Any] = ["id": "sample-s", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "screen", "screen": screen]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return try? JSON.decoder.decode(Interaction.self, from: data)
+    }
+
     static func sampleQuestion(_ key: SessionKey) -> Interaction? {
         let json = """
         {"id":"sample-q","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","questions":[

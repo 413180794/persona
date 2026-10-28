@@ -225,9 +225,9 @@ struct ChatView: View {
                 // one work line for everything, the final answer. Opening the work line splits it back up.
                 if t.id != liveID && messages.count > 1 {
                     if !openWork.contains(groupID) {
-                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
                         let photos = segments.flatMap { Self.photos($0.rows) }
                         if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
+                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
                         let answer = t.ordered.lastIndex { if case .assistant = $0 { true } else { false } }
                         let rest = t.ordered.enumerated().filter { n, r in
                             if case .user = r { return false }
@@ -244,11 +244,11 @@ struct ChatView: View {
                 for (k, seg) in segments.enumerated() {
                     // Once the answer is in and a background task woke the agent, the new work runs behind the chip.
                     let live = t.id == liveID && k == segments.count - 1 && t.tail.isEmpty
-                    if let u = seg.user { out.append(.row(u)) }
-                    // Photos sent with the message (Claude inlines a pasted image path as an image block) sit under
-                    // it, not in the agent's work.
+                    // Photos sent with the message (Claude inlines a pasted image path as an image block) sit above
+                    // its text, as they did while it was being sent — not in the agent's work.
                     let photos = Self.photos(seg.rows)
                     if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
+                    if let u = seg.user { out.append(.row(u)) }
                     let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
                     let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
                     if !items.isEmpty || live {
@@ -420,7 +420,9 @@ struct ChatView: View {
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line {
         case .row(let r): rowView(r, isLatest: false, live: true)
-        case .userImages(_, let items): SentPhotos(images: items.compactMap(\.image))
+        case .userImages(_, let items):
+            // Close to the bubble below it, like the photos on a message being sent (the list's spacing is 14).
+            SentPhotos(images: items.compactMap(\.image)).padding(.bottom, -8)
         case .mergedUsers(_, let rows):
             MergedUserBubble(items: rows.compactMap { if case .user(let i) = $0 { i } else { nil } })
         case .splitHeader(let id, let count):
@@ -673,6 +675,9 @@ struct ChatView: View {
                 #if DEBUG
                 if UserDefaults.standard.bool(forKey: "showSampleQuestion"), let ix = Interaction.sampleQuestion(key) {
                     InteractionPanel(interaction: ix) // `-showSampleQuestion YES`: the question UI, for screenshots
+                }
+                if UserDefaults.standard.bool(forKey: "showSampleScreen"), let ix = Interaction.sampleScreen(key) {
+                    InteractionPanel(interaction: ix) // `-showSampleScreen YES`: a terminal dialog, for screenshots
                 }
                 #endif
                 if let loop = session?.loop, style == .dev {

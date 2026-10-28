@@ -267,7 +267,7 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 		}
 		kctx, kcancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer kcancel()
-		_ = m.call(kctx, "session.keys", map[string]any{"session_id": s.SessionID, "keys": r.Keys, "text": r.Text}, nil)
+		_ = m.call(kctx, "session.keys", map[string]any{"session_id": s.SessionID, "keys": r.Keys, "text": r.Text, "pre_keys": r.PreKeys}, nil)
 	}}
 	h.mu.Unlock()
 	h.record(ix)

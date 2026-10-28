@@ -249,7 +249,9 @@ type Resolution struct {
 	Message  string            `json:"message,omitempty"`
 	Keys     []string          `json:"keys,omitempty"`
 	Text     string            `json:"text,omitempty"`
-	Dismiss  bool              `json:"dismiss,omitempty"`
+	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
+	PreKeys []string `json:"pre_keys,omitempty"`
+	Dismiss bool     `json:"dismiss,omitempty"`
 }
 
 // Tool is an MCP tool definition.

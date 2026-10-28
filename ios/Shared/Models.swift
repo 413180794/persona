@@ -437,6 +437,13 @@ nonisolated struct Resolution: Codable, Sendable {
     var keys: [String]?
     var text: String?
     var dismiss: Bool?
+    /// Keys before `text` (`keys` go after it): pick "Type something." by its number, then type.
+    var preKeys: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss
+        case preKeys = "pre_keys"
+    }
 
     static let dismissed = Resolution(dismiss: true)
 }
