@@ -132,9 +132,12 @@ nonisolated struct APIClient: Sendable {
         var prompt: String?
         var resumeSessionID: String?
         var workspaceID: String?
+        var permissionMode: String? = nil
+        var effort: String? = nil
         enum CodingKeys: String, CodingKey {
-            case cwd, launcher, prompt
-            case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id"
+            case cwd, launcher, prompt, effort
+            case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id",
+                 permissionMode = "permission_mode"
         }
     }
 
@@ -223,6 +226,7 @@ nonisolated struct APIClient: Sendable {
         var gitBranch: String?
         var version: String?
         var permissionMode: String?
+        var effort: String?
         var contextTokens: Int
         var outputTokens: Int
         var compactions: Int
@@ -230,13 +234,23 @@ nonisolated struct APIClient: Sendable {
         var startedAt: Date?
         var lastActivity: Date?
         enum CodingKeys: String, CodingKey {
-            case cwd, model, launcher, version, compactions, turns
+            case cwd, model, launcher, version, compactions, turns, effort
             case sessionID = "session_id", transcriptPath = "transcript_path", gitBranch = "git_branch",
                  permissionMode = "permission_mode", contextTokens = "context_tokens", outputTokens = "output_tokens",
                  startedAt = "started_at", lastActivity = "last_activity"
         }
     }
     func sessionInfo(_ k: SessionKey) async throws -> SessionInfo { try await get(sp(k) + "/info") }
+
+    struct ModesBody: Encodable {
+        var permissionMode: String?
+        var effort: String?
+        enum CodingKeys: String, CodingKey { case effort; case permissionMode = "permission_mode" }
+    }
+    /// Changes a session's permission mode and / or effort level (nil leaves it); a TUI agent takes a second or two.
+    func setModes(_ k: SessionKey, permissionMode: String? = nil, effort: String? = nil) async throws {
+        try await post(sp(k) + "/modes", body: ModesBody(permissionMode: permissionMode, effort: effort), timeout: 30)
+    }
 
     struct QueueEdit: Encodable { var keep: [Int] }
     struct QueueResponse: Decodable { var queue: [String] }
@@ -357,9 +371,18 @@ nonisolated struct APIClient: Sendable {
         _ = try await request("PUT", "/api/v1/assistant/memory/\(name)", body: ["content": content])
     }
     func deleteMemory(name: String) async throws { try await delete("/api/v1/assistant/memory/\(name)") }
-    struct NewConversation: Encodable { var prompt: String; var images: [ImagePayload]?; var launcher: String? }
-    func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil) async throws -> Session {
-        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images, launcher: launcher),
+    struct NewConversation: Encodable {
+        var prompt: String
+        var images: [ImagePayload]?
+        var launcher: String?
+        var permissionMode: String?
+        var effort: String?
+        enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort; case permissionMode = "permission_mode" }
+    }
+    func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil, permissionMode: String? = nil,
+                           effort: String? = nil) async throws -> Session {
+        try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
+                                                                              launcher: launcher, permissionMode: permissionMode, effort: effort),
                        timeout: 110, as: SessionResponse.self).session
     }
 

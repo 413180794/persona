@@ -94,6 +94,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var agent: String? = nil
     var launcher: String?
     var model: String?
+    /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex.
+    var permissionMode: String? = nil
+    var effort: String? = nil
     var startedByJarvis: Bool
     var assistant: Bool
     var spaceKind: String?
@@ -130,7 +133,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
 
     enum CodingKeys: String, CodingKey {
-        case title, cwd, status, launcher, model, agent
+        case title, cwd, status, launcher, model, agent, effort
+        case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
@@ -152,6 +156,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         agent = try c.decodeIfPresent(String.self, forKey: .agent)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
+        permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
+        effort = try c.decodeIfPresent(String.self, forKey: .effort)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         spaceKind = try c.decodeIfPresent(String.self, forKey: .spaceKind)

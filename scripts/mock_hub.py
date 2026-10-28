@@ -45,6 +45,8 @@ def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes,
          "slot_id": f"w{sidx}:t{slidx}", "slot_name": slot, "slot_index": slidx, "pane_id": f"w{sidx}:p{slidx}",
          "tab_id": f"w{sidx}:t{slidx}", "workspace_id": f"w{sidx}", "updated_at": ago(minutes=minutes),
          "last_text": last, "pending_interactions": pending, "rev": 1000}
+    if agent == "claude":
+        s.update(permission_mode="default", effort="high")
     s.update(kw)
     return s
 
@@ -62,7 +64,7 @@ ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
 
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
-         "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。"),
+         "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits"),
     sess("macbook", TESTS, "补齐网络层的单元测试", "/Users/me/code/weather", "blocked", "needs_you", "weather", 1, "tests", 2, 2,
          "开始写测试前想确认一下用哪个测试框架。", pending=1),
     sess("macbook", REVIEW, "检查 PR #42 的改动", "/Users/me/code/weather", "idle", "idle", "weather", 1, "review", 3, 95,
@@ -70,7 +72,7 @@ SESSIONS = [
     sess("studio", BLOG, "博客迁移到 Astro", "/Users/me/code/blog", "done", "unread", "blog", 2, "1", 1, 12,
          "迁移完成：32 篇文章都能正常构建，旧链接全部加了 301 跳转，Lighthouse 性能分从 71 提到 98。"),
     sess("studio", PHOTOS, "照片同步脚本支持 HEIC", "/Users/me/code/photo-sync", "blocked", "needs_you", "photo-sync", 3, "1", 1, 6,
-         "计划写好了，等你批准后开始改。", pending=1),
+         "计划写好了，等你批准后开始改。", pending=1, permission_mode="plan", effort="xhigh"),
     sess("server", ORDERS, "排查 /orders 接口变慢", "/home/me/code/shop-api", "working", "working", "shop-api", 1, "perf", 1, 1,
          "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。", agent="codex"),
     sess("macbook", RECIPE, "菜谱网站加搜索", "/Users/me/code/recipes", "offline", "offline", "", 0, "", 0, 60 * 26,
@@ -82,6 +84,7 @@ def assistant_sess(sid, title, minutes, last):
     return {"machine_id": "server", "session_id": sid, "title": title, "cwd": "/home/me/.jarvis/assistant",
             "status": "idle", "state": "idle", "agent": "claude", "launcher": "claude", "model": "opus",
             "started_by_jarvis": True, "assistant": True, "updated_at": ago(minutes=minutes), "last_text": last,
+            "permission_mode": "default", "effort": "high",
             "pending_interactions": 0, "rev": 1000, "seen_at": ago(minutes=minutes)}
 
 
@@ -291,15 +294,28 @@ class H(BaseHTTPRequestHandler):
             b = q.get("before_seq", [""])[0]
             if b: items = [x for x in items if x["seq"] < int(b)]
             return self.send_json({"items": items, "has_more": False})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's 开发信息 card
+            s = next((s for s in all_sessions() if s["session_id"] == p.split("/")[5]), {})
+            return self.send_json({"session_id": s.get("session_id", ""), "cwd": s.get("cwd"), "model": "claude-opus-5",
+                                   "launcher": s.get("launcher"), "git_branch": "main", "version": "2.1.320",
+                                   "permission_mode": s.get("permission_mode"), "effort": s.get("effort"),
+                                   "context_tokens": 48200, "output_tokens": 12800, "compactions": 0, "turns": 6,
+                                   "started_at": ago(minutes=40), "last_activity": ago()})
         if p.startswith("/api/v1/sessions/") and p.endswith("/screen"):
             return self.send_json({"text": "", "status": "idle"})
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
-        self.body()
+        self.last_body = self.body()
         p = urlparse(self.path).path
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
+            body = json.loads(self.last_body or b"{}")
+            for s in all_sessions():
+                if s["session_id"] == p.split("/")[5]:
+                    s.update({k: v for k, v in body.items() if k in ("permission_mode", "effort") and v})
+            return self.send_json({"ok": True})
         self.send_json({"ok": True})
 
     do_PUT = do_POST

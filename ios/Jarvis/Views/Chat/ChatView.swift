@@ -691,6 +691,9 @@ struct ChatView: View {
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
+                if viewing == nil, session?.isCodex != true, session?.isTraex != true {
+                    SessionModeBar(key: key, session: session).padding(.leading, 4)
+                }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息")
             }
             .padding(.horizontal, 12)
@@ -1619,7 +1622,8 @@ struct DevInfoCard: View {
                     row("folder", "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home))
                     row("macbook", "位置", [model.machine(key.machineID)?.name, session?.spaceName, session?.slotLabel].compactMap { $0 }.joined(separator: " › "))
                     row("text.bubble", "对话", "\(info.turns) 轮 · 共生成 \(Self.tokens(info.outputTokens)) tokens")
-                    row("lock.open", "权限", info.permissionMode ?? "—")
+                    row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode) ?? "—")
+                    row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort) ?? "—")
                     row("shippingbox", "Claude Code", info.version ?? "—")
                     if let started = info.startedAt, started.isMeaningful {
                         row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))

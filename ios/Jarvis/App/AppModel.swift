@@ -441,6 +441,27 @@ final class AppModel {
         do { try await api?.interrupt(key); Haptics.tap() } catch { show(error) }
     }
 
+    /// Changes a session's permission mode / effort level (nil leaves one). Shown right away; the hub's next session
+    /// list confirms it. Returns whether it worked.
+    @discardableResult
+    func setModes(_ key: SessionKey, permissionMode: String? = nil, effort: String? = nil) async -> Bool {
+        guard let api else { return false }
+        do {
+            try await api.setModes(key, permissionMode: permissionMode, effort: effort)
+            if var list = sessionsByMachine[key.machineID], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }) {
+                if let permissionMode { list[i].permissionMode = permissionMode }
+                if let effort { list[i].effort = effort }
+                sessionsByMachine[key.machineID] = list
+            }
+            Haptics.success()
+            return true
+        } catch {
+            show(error)
+            Haptics.error()
+            return false
+        }
+    }
+
     func keys(_ key: SessionKey, _ keys: [String], text: String = "") async {
         do { try await api?.keys(key, keys: keys, text: text) } catch { show(error) }
     }

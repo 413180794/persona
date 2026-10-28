@@ -19,6 +19,8 @@ struct NewChatView: View {
     @AppStorage("newChat.machine") private var machineID = ""
     @State private var cwd = ""
     @State private var launcher = ""
+    @State private var mode = ""   // "" = whatever the launcher uses
+    @State private var effort = ""
     @State private var prompt = ""
     @State private var launchers: [Launcher] = []
     @State private var recent: [RecentDir] = []
@@ -108,6 +110,21 @@ struct NewChatView: View {
                 }
 
                 Section {
+                    Picker(selection: $mode) {
+                        Text("跟随启动器").tag("")
+                        ForEach(SessionModes.permissionModes) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
+                    } label: { Label { Text("权限模式") } icon: { Image(systemName: "lock.shield").foregroundStyle(Theme.accent) } }
+                    Picker(selection: $effort) {
+                        Text("跟随启动器").tag("")
+                        ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
+                    } label: { Label { Text("思考强度") } icon: { Image(systemName: "gauge.with.dots.needle.50percent").foregroundStyle(Theme.accent) } }
+                } header: { Text("权限与思考") } footer: {
+                    Text(SessionModes.mode(mode)?.detail ?? "权限模式和思考强度在对话里也能随时改。")
+                }
+                .pickerStyle(.menu)
+                .tint(Theme.accent)
+
+                Section {
                     TextField("想让 Claude 做什么？（可以留空）", text: $prompt, axis: .vertical)
                         .lineLimit(3...10)
                         .focused($promptFocused)
@@ -193,6 +210,8 @@ struct NewChatView: View {
             launchers = ls
             recent = dirs.recent ?? []
             let saved = UserDefaults.standard.string(forKey: "launcher.\(machineID)")
+            mode = UserDefaults.standard.string(forKey: "mode.\(machineID)") ?? ""
+            effort = UserDefaults.standard.string(forKey: "effort.\(machineID)") ?? ""
             if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
             else if !ls.contains(where: { $0.name == launcher }) { launcher = ls.first?.name ?? "" }
             if let preset { cwd = preset.cwd } else {
@@ -212,8 +231,11 @@ struct NewChatView: View {
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: p.isEmpty ? nil : p,
-                                              workspaceID: preset?.workspaceID))
+                                              workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
+                                              effort: effort.isEmpty ? nil : effort))
             UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
+            UserDefaults.standard.set(mode, forKey: "mode.\(machineID)")
+            UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()
             onStarted(s)

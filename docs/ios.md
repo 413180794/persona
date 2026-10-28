@@ -154,6 +154,21 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 输入框：照片（最多 4 张，压缩到 1600px）、快捷指令（继续、/compact、/context、提交并推送、汇报进展），工作中变成红色停止键。
 - 导航副标题：机器 · 模型 · 状态。
 
+## 思考强度和权限模式
+
+对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），
+相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新开 Agent 的表单、助手首页的输入框上方
+也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示。
+
+- 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先
+  （node/modes.go）。终端里 shift+tab 改的模式要等下一条消息才写进 transcript，开发信息卡片读终端底栏拿实时值。
+- 新开：`--permission-mode` / `--effort`。
+- 改在跑的会话：助手（无头）往 stdin 发 control request（`set_permission_mode`、`apply_flag_settings {effortLevel}`），下一次请求就生效；
+  herdr 里的 Agent 像人一样操作：shift+tab 循环到目标模式（default → acceptEdits → plan → auto），思考强度打开 `/effort` 选择器移到目标档位
+  按 `s`（只对本会话生效）。**别发 `/effort <档位>`**：它会顺手存成这个模型以后所有新会话的默认值（写进 settings 的 `modelSettings`）。
+- 改思考强度要等这一轮结束、终端输入框是空的（否则 `/effort` 会接在别人没发出的草稿后面）；「全部放行」只能新开时选，循环里没有它。
+- 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
+
 ## 设计语言
 
 - 界面风格（设置 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：

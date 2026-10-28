@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail
         case "settings": AppModel.shared.selectedTab = .settings
+        case "assistant": AppModel.shared.selectedTab = .assistant
         default: break
         }
         if let open = d.string(forKey: "openSession"), let slash = open.firstIndex(of: "/") {
@@ -55,9 +56,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         if d.string(forKey: "lark-connector") != nil { AppModel.shared.selectedTab = .mail }
         if let open = d.string(forKey: "openAssistant"), let slash = open.firstIndex(of: "/") {
+            AppModel.shared.selectedTab = .assistant
             AppModel.shared.assistantCurrent = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
         }
-        if d.bool(forKey: "newAssistant") { AppModel.shared.assistantCurrent = nil }
+        if d.bool(forKey: "newAssistant") {
+            AppModel.shared.selectedTab = .assistant
+            AppModel.shared.assistantCurrent = nil
+        }
         AppModel.shared.debugShowNewChat = d.bool(forKey: "showNewChat")
         // `-simulateTap <machine>/<session>`: what tapping a push does, 4 s after launch (on another screen by then).
         if let tap = d.string(forKey: "simulateTap"), let slash = tap.firstIndex(of: "/") {

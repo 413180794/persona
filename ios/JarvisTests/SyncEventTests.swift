@@ -21,6 +21,17 @@ struct SyncEventTests {
         #expect(s.rev == 42)
     }
 
+    @Test func sessionCarriesModes() throws {
+        let s = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s","status":"idle","permission_mode":"plan","effort":"xhigh"}"#.utf8))
+        #expect(s.permissionMode == "plan")
+        #expect(s.effort == "xhigh")
+        #expect(SessionModes.modeLabel(s.permissionMode) == "只做计划")
+        #expect(SessionModes.effortLabel(s.effort) == "很高")
+        #expect(SessionModes.modeLabel("on-request") == "on-request") // unknown values (Codex) show as they are
+        let old = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"s","status":"idle"}"#.utf8))
+        #expect(old.permissionMode == nil && old.effort == nil)
+    }
+
     @Test func lazyImagesLearnTheirRef() {
         var it = Item(id: "u#1", seq: 3, ts: nil, role: "user", kind: .image, text: nil, toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)
         var img = ImagePayload(mime: "image/png", data: "")

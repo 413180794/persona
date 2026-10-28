@@ -9,6 +9,9 @@ struct AssistantView: View {
     @State private var showHistory = false
     @State private var startError: String?
     @State private var starterLauncher: String?
+    /// Mode / effort for new conversations ("" = the launcher's own), remembered across launches.
+    @AppStorage("assistant.newMode") private var starterMode = ""
+    @AppStorage("assistant.newEffort") private var starterEffort = ""
 
     private var current: SessionKey? { model.assistantCurrent }
 
@@ -19,7 +22,8 @@ struct AssistantView: View {
                     ChatView(key: key, style: .assistant)
                         .id(key)
                 } else {
-                    AssistantHome(pending: pending, error: startError, launcher: $starterLauncher) { text, images in
+                    AssistantHome(pending: pending, error: startError, launcher: $starterLauncher, mode: $starterMode,
+                                  effort: $starterEffort) { text, images in
                         Task { await start(text, images) }
                     }
                 }
@@ -54,7 +58,9 @@ struct AssistantView: View {
         startError = nil
         withAnimation(.snappy) { pending = PendingStart(text: text, imageCount: images.count) }
         do {
-            let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher)
+            let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
+                                                    permissionMode: starterMode.isEmpty ? nil : starterMode,
+                                                    effort: starterEffort.isEmpty ? nil : starterEffort)
             Haptics.success()
             withAnimation(.snappy) {
                 model.assistantCurrent = s.key
@@ -82,6 +88,8 @@ struct AssistantHome: View {
     var pending: PendingStart?
     var error: String?
     @Binding var launcher: String?
+    @Binding var mode: String
+    @Binding var effort: String
     var send: (String, [ImagePayload]) -> Void
 
     private let suggestions: [(symbol: String, title: String, prompt: String)] = [
@@ -146,7 +154,13 @@ struct AssistantHome: View {
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                StarterModelChip(launcher: $launcher).padding(.leading, 4)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        StarterModelChip(launcher: $launcher)
+                        NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.switchableModes)
+                    }
+                    .padding(.horizontal, 4)
+                }
                 StarterComposer(disabled: pending != nil, send: send)
             }
             .padding(.horizontal, 12)
@@ -438,7 +452,7 @@ struct StarterModelChip: View {
                 }
             }
         } label: {
-            Chip(text: current, symbol: "cpu", tint: Theme.accent)
+            ModeChip(symbol: "cpu", text: current, tint: Theme.accent)
         }
         .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
     }
