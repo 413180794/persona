@@ -28,7 +28,7 @@ func newUUID() string {
 // start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
 // workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
 // after the directory is reused or created.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID string) (*proto.Session, error) {
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort string) (*proto.Session, error) {
 	if launcher == "" {
 		launcher = "claude"
 	}
@@ -37,6 +37,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	if resume != "" && !validID(resume) {
 		return nil, fmt.Errorf("invalid session id %q", resume)
+	}
+	if err := validModes(mode, effort); err != nil {
+		return nil, err
 	}
 	if strings.HasPrefix(cwd, "~/") {
 		cwd = filepath.Join(n.home, cwd[2:])
@@ -80,13 +83,14 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	} else {
 		args = "--resume " + id
 	}
-	cmd := fmt.Sprintf("%s %s --settings %s --mcp-config %s", launcher, args,
+	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", launcher, args, modeFlags(mode, effort),
 		shellQuote(filepath.Join(n.dir, "claude-settings.json")), shellQuote(filepath.Join(n.dir, "mcp.json")))
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC()}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt
 	}
 	n.state.put(id, st)
+	n.noteModes(id, mode, effort) // shown before the first prompt writes them down
 	// Give the fresh shell a moment to load ~/.zshrc; typed input is buffered either way.
 	time.Sleep(300 * time.Millisecond)
 	if err := n.herdr.PaneRun(ctx, pane, cmd); err != nil {
@@ -218,6 +222,7 @@ func (n *Node) sessionFor(id string, a herdr.Agent) *proto.Session {
 	_ = n.refreshHerdr(context.Background())
 	n.placeIn(s, a)
 	n.decorate(s)
+	s.PermissionMode, s.Effort = n.modesOf(id)
 	return s
 }
 
@@ -254,7 +259,8 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 				}
 			}
 		}
-		s, err := n.start(ctx, cwd, launcher, "", id, "")
+		mode, effort := n.modesOf(id) // resume with what it ran with
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort)
 		if err != nil {
 			return err
 		}

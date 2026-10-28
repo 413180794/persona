@@ -116,6 +116,10 @@ type quickMeta struct {
 	model    string
 	lastText string
 	wake     bool // the latest turn was a background task waking the agent
+	mode     string
+	modeAt   time.Time
+	effort   string
+	effortAt time.Time
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -178,6 +182,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	m.wake = tm.LastTurnWake
+	m.mode, m.modeAt, m.effort, m.effortAt = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt
 	return m
 }
 
@@ -282,6 +287,11 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 		}
 		n.placeIn(&s, a)
+		n.mu.Lock()
+		if n.driving[id] && s.Status == proto.StatusBlocked {
+			s.Status = proto.StatusIdle
+		}
+		n.mu.Unlock()
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
@@ -293,6 +303,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				if a.Agent != "codex" && a.Agent != traexAgent {
+					s.PermissionMode, s.Effort = n.currentModes(id, m)
+				}
 				s.WokeByTask = m.wake
 				if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 					s.Queued = m.queue // an idle agent has taken everything; stale entries are from outside the tail
@@ -386,6 +399,7 @@ func (n *Node) scanOffline() []proto.Session {
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
+		s.PermissionMode, s.Effort = n.currentModes(id, m)
 		untitled(&s, m)
 		out = append(out, s)
 	}

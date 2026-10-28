@@ -95,9 +95,13 @@ type Session struct {
 	WorkspaceID string `json:"workspace_id,omitempty"`
 	AgentName   string `json:"agent_name,omitempty"`
 	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex".
-	Agent           string `json:"agent,omitempty"`
-	Launcher        string `json:"launcher,omitempty"`
-	Model           string `json:"model,omitempty"`
+	Agent    string `json:"agent,omitempty"`
+	Launcher string `json:"launcher,omitempty"`
+	Model    string `json:"model,omitempty"`
+	// PermissionMode and Effort are what Claude Code runs with now: default / acceptEdits / plan / auto /
+	// bypassPermissions, and low … max. Empty while unknown (before the first turn, Codex).
+	PermissionMode  string `json:"permission_mode,omitempty"`
+	Effort          string `json:"effort,omitempty"`
 	StartedByJarvis bool   `json:"started_by_jarvis"`
 	Assistant       bool   `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
 	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab

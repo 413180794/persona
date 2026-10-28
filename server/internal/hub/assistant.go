@@ -256,9 +256,11 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	h.scheduleRoutes(api)
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Prompt   string        `json:"prompt"`
-			Images   []proto.Image `json:"images"`
-			Launcher string        `json:"launcher"`
+			Prompt         string        `json:"prompt"`
+			Images         []proto.Image `json:"images"`
+			Launcher       string        `json:"launcher"`
+			PermissionMode string        `json:"permission_mode"`
+			Effort         string        `json:"effort"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -266,7 +268,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
 		defer cancel()
-		s, err := h.startAssistant(ctx, in.Prompt, in.Images, in.Launcher)
+		s, err := h.startAssistant(ctx, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort)
 		if err != nil {
 			callErr(w, err)
 			return
@@ -275,7 +277,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	})
 }
 
-func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher string) (*proto.Session, error) {
+func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher, mode, effort string) (*proto.Session, error) {
 	cfg := h.assistantConfig(ctx)
 	if launcher != "" {
 		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
@@ -294,11 +296,12 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var res struct {
 		SessionID string `json:"session_id"`
 	}
-	if err := m.call(ctx, "assistant.send", map[string]any{"cwd": prep.Cwd, "launcher": cfg.Launcher, "text": prompt, "images": images}, &res); err != nil {
+	if err := m.call(ctx, "assistant.send", map[string]any{"cwd": prep.Cwd, "launcher": cfg.Launcher, "text": prompt, "images": images,
+		"permission_mode": mode, "effort": effort}, &res); err != nil {
 		return nil, err
 	}
 	s := proto.Session{SessionID: res.SessionID, Cwd: prep.Cwd, Status: proto.StatusWorking, Launcher: cfg.Launcher,
-		StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
+		PermissionMode: mode, Effort: effort, StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
 	s.MachineID = m.cfg.ID
 	s.Assistant = true
 	s.State = proto.StateWorking

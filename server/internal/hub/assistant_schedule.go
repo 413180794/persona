@@ -360,7 +360,7 @@ func (h *Hub) runRoutine(r Routine) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	prompt := "⏰ " + r.Title + "（定时任务）\n\n" + r.Prompt
-	sess, err := h.startAssistant(ctx, prompt, nil, "")
+	sess, err := h.startAssistant(ctx, prompt, nil, "", "", "")
 	if err != nil {
 		h.logf("routine %s: %v", r.ID, err)
 		return "", err
@@ -395,7 +395,7 @@ func (h *Hub) runFollowup(f Followup) {
 			h.logf("follow-up %s into %s: %v; starting a new conversation", f.ID, f.SessionID, err)
 		}
 	}
-	if _, err := h.startAssistant(ctx, prompt, nil, ""); err != nil {
+	if _, err := h.startAssistant(ctx, prompt, nil, "", "", ""); err != nil {
 		h.logf("follow-up %s: %v", f.ID, err)
 	}
 }

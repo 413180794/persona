@@ -65,6 +65,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.proxyBody("session.rename"))
+	// {"permission_mode": …, "effort": …}: either may be left out (node/modes.go).
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.proxyBody("session.modes"))
 	api.HandleFunc("POST /api/v1/machines/{mid}/spaces/{wid}/rename", h.withMachine(h.renameSpace))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/info", h.proxy("session.info", func(r *http.Request) any {
 		return map[string]any{"session_id": r.PathValue("sid")}
@@ -319,6 +321,8 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
 		WorkspaceID     string `json:"workspace_id"`
+		PermissionMode  string `json:"permission_mode,omitempty"`
+		Effort          string `json:"effort,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeErr(w, http.StatusBadRequest, err)

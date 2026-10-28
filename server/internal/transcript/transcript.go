@@ -48,6 +48,7 @@ type entry struct {
 	GitBranch      string `json:"gitBranch"`
 	Version        string `json:"version"`
 	PermissionMode string `json:"permissionMode"`
+	Effort         string `json:"effort"` // assistant lines: the effort level the reply was generated with
 	Operation      string `json:"operation"`
 	Attachment     *struct {
 		Type        string          `json:"type"`
@@ -86,12 +87,16 @@ type Meta struct {
 	GitBranch      string
 	Version        string
 	PermissionMode string
-	ContextTokens  int // input + cache read + cache creation of the latest reply: what the model last saw
-	OutputTokens   int // total generated, counted once per message
-	Compactions    int
-	Turns          int // user prompts
-	StartedAt      time.Time
-	lastMessageID  string
+	// ModeAt / Effort / EffortAt: when the permission mode was last seen, and the effort level of the latest reply.
+	ModeAt        time.Time
+	Effort        string
+	EffortAt      time.Time
+	ContextTokens int // input + cache read + cache creation of the latest reply: what the model last saw
+	OutputTokens  int // total generated, counted once per message
+	Compactions   int
+	Turns         int // user prompts
+	StartedAt     time.Time
+	lastMessageID string
 	// Queue holds input typed while Claude works and not yet taken (queue-operation lines:
 	// enqueue / dequeue / remove / popAll — popAll is "up arrow pulls them back into the input").
 	Queue []string
@@ -178,9 +183,14 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	if meta.StartedAt.IsZero() && !e.Timestamp.IsZero() {
 		meta.StartedAt = e.Timestamp
 	}
+	// The mode is written on every prompt (user lines) and as its own line when it changes; the effort on replies.
+	if e.PermissionMode != "" && !e.IsSidechain && (e.Type == "permission-mode" || e.Type == "user") {
+		meta.PermissionMode, meta.ModeAt = e.PermissionMode, meta.Updated
+	}
+	if e.Effort != "" && e.Type == "assistant" && !e.IsSidechain {
+		meta.Effort, meta.EffortAt = e.Effort, meta.Updated
+	}
 	switch {
-	case e.Type == "permission-mode" && e.PermissionMode != "":
-		meta.PermissionMode = e.PermissionMode
 	case e.Type == "system" && e.Subtype == "compact_boundary":
 		meta.Compactions++
 	case e.Type == "assistant" && e.Message != nil && e.Message.Usage != nil && !e.IsSidechain:

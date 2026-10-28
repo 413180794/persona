@@ -659,3 +659,21 @@ func TestLastTurnWake(t *testing.T) {
 		t.Fatal("the user's next message starts a user turn again")
 	}
 }
+
+func TestPermissionModeAndEffort(t *testing.T) {
+	meta := &Meta{}
+	for i, l := range []string{
+		`{"type":"user","timestamp":"2026-10-28T16:00:00Z","permissionMode":"default","message":{"role":"user","content":"hi"}}`,
+		`{"type":"assistant","timestamp":"2026-10-28T16:00:05Z","effort":"high","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"yo"}]}}`,
+		`{"type":"permission-mode","permissionMode":"plan"}`,
+		`{"type":"assistant","isSidechain":true,"timestamp":"2026-10-28T16:00:09Z","effort":"low","message":{"id":"m2","role":"assistant","content":[]}}`,
+	} {
+		ParseLine(i+1, []byte(l), meta)
+	}
+	if meta.PermissionMode != "plan" || meta.Effort != "high" {
+		t.Fatalf("mode %q effort %q", meta.PermissionMode, meta.Effort)
+	}
+	if want := time.Date(2026, 10, 28, 16, 0, 5, 0, time.UTC); !meta.EffortAt.Equal(want) || !meta.ModeAt.Equal(want) {
+		t.Fatalf("effortAt %v modeAt %v", meta.EffortAt, meta.ModeAt) // the mode line has no time: the previous line's
+	}
+}

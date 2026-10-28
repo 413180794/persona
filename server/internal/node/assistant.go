@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,11 +37,23 @@ type assistantProc struct {
 	exited   chan struct{}
 	born     time.Time
 
+	wmu    sync.Mutex   // one writer on stdin at a time (messages and control requests)
+	reqSeq atomic.Int64 // control request ids
+
 	mu         sync.Mutex
+	mode       string // permission mode / effort level already sent (modes.go)
+	effort     string
 	busy       bool
 	lastActive time.Time
 	partial    strings.Builder // text of the assistant message being generated
 	lastDelta  time.Time
+}
+
+func (p *assistantProc) write(line []byte) error {
+	p.wmu.Lock()
+	defer p.wmu.Unlock()
+	_, err := p.stdin.Write(append(line, '\n'))
+	return err
 }
 
 func (p *assistantProc) alive() bool {
@@ -71,12 +84,15 @@ func (n *Node) isAssistantSession(id string) bool {
 
 // assistantSend delivers a user message, starting or restarting the headless claude when needed.
 // id == "" starts a new conversation and returns its id.
-func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string, images []proto.Image) (string, error) {
+func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string, images []proto.Image, mode, effort string) (string, error) {
 	if launcher != "" && !nameRe.MatchString(launcher) {
 		return "", fmt.Errorf("invalid launcher %q", launcher)
 	}
 	if id != "" && !validID(id) {
 		return "", fmt.Errorf("invalid session id %q", id)
+	}
+	if err := validModes(mode, effort); err != nil {
+		return "", err
 	}
 	resume := id != ""
 	if id == "" {
@@ -99,6 +115,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if cwd == "" {
 		cwd = filepath.Join(n.home, ".jarvis", "assistant")
 	}
+	n.noteModes(id, mode, effort)
 	if !known || st.Launcher != launcher || st.Cwd != cwd {
 		started := st.StartedAt
 		if started.IsZero() {
@@ -129,12 +146,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
 	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
+	n.syncAssistantModes(p) // a new or resumed process starts without them
 	p.mu.Lock()
 	p.busy = true
 	p.lastActive = time.Now()
 	p.partial.Reset()
 	p.mu.Unlock()
-	if _, err := p.stdin.Write(append(line, '\n')); err != nil {
+	if err := p.write(line); err != nil {
 		n.stopAssistant(id)
 		return "", fmt.Errorf("send to claude: %w", err)
 	}
@@ -297,7 +315,11 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			continue
 		}
 		var ev struct {
-			Type  string `json:"type"`
+			Type     string `json:"type"`
+			Response struct {
+				Subtype string `json:"subtype"`
+				Error   string `json:"error"`
+			} `json:"response"`
 			Event struct {
 				Type  string `json:"type"`
 				Delta struct {
@@ -310,6 +332,10 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			continue
 		}
 		switch ev.Type {
+		case "control_response":
+			if ev.Response.Subtype == "error" {
+				n.logger.Printf("assistant %s: control request failed: %s", p.id[:8], ev.Response.Error)
+			}
 		case "stream_event":
 			switch ev.Event.Type {
 			case "message_start":
@@ -459,6 +485,7 @@ func (n *Node) assistantSessions() []proto.Session {
 			if st, err := os.Stat(path); err == nil {
 				m := n.meta(path, st)
 				s.Title, s.Model, s.LastText, s.Rev = m.title, m.model, snippet(m.lastText), st.Size()
+				s.PermissionMode, s.Effort = n.currentModes(p.id, m)
 				untitled(&s, m)
 				if !p.busy {
 					s.UpdatedAt = lastUsed(m, st)

@@ -45,6 +45,8 @@ type Node struct {
 	metas    map[string]quickMeta      // transcript path -> cached meta
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
 	panePIDs map[string]panePID        // pane -> its claude pid (no herdr integration: example-machine)
+	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
+	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 }
 
 func New(version string) (*Node, error) {
@@ -82,6 +84,8 @@ func New(version string) (*Node, error) {
 		metas:    map[string]quickMeta{},
 		bgScans:  map[string]*bgScan{},
 		panePIDs: map[string]panePID{},
+		modes:    map[string]sessionModes{},
+		driving:  map[string]bool{},
 	}
 	n.state = newState()
 	return n, nil
@@ -190,6 +194,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Name            string          `json:"name"`
 		TabName         *string         `json:"tab_name"`
 		Title           *string         `json:"title"`
+		PermissionMode  string          `json:"permission_mode"`
+		Effort          string          `json:"effort"`
 		Raw             json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -208,11 +214,13 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "sessions.list":
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID)
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort)
 		return map[string]any{"session": s}, err
 	case "assistant.send":
-		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images)
+		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort)
 		return map[string]any{"session_id": id}, err
+	case "session.modes":
+		return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
 	case "assistant.warm":
 		return ok(n.assistantWarm(p.Cwd, p.Launcher))
 	case "assistant.memory":
@@ -223,7 +231,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.assistantMemory(a)
 	case "session.send":
 		if n.isAssistantSession(p.SessionID) {
-			_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images)
+			_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "")
 			return ok(err)
 		}
 		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))
@@ -356,9 +364,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.refresh(p.SessionID, f)
 		m := f.Meta()
 		st, _ := n.state.get(p.SessionID)
+		mode, effort := n.modesOf(p.SessionID)
+		if pane, err := n.paneFor(ctx, p.SessionID); err == nil && !n.isAssistantSession(p.SessionID) {
+			if screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
+				mode = tuiMode(screen) // shift+tab in the terminal shows up in the transcript only with the next prompt
+			}
+		}
 		return map[string]any{
 			"session_id": p.SessionID, "transcript_path": f.Path, "cwd": m.Cwd, "model": m.Model, "launcher": st.Launcher,
-			"git_branch": m.GitBranch, "version": m.Version, "permission_mode": m.PermissionMode,
+			"git_branch": m.GitBranch, "version": m.Version, "permission_mode": mode, "effort": effort,
 			"context_tokens": m.ContextTokens, "output_tokens": m.OutputTokens, "compactions": m.Compactions,
 			"turns": m.Turns, "started_at": m.StartedAt, "last_activity": m.LastActivity,
 		}, nil
