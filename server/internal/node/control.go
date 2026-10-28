@@ -226,8 +226,7 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 	if a, ok := n.agent(id); ok {
 		return a.PaneID, nil
 	}
-	if agents, err := n.herdr.Agents(ctx); err == nil {
-		n.setAgents(agents)
+	if err := n.refreshHerdr(ctx); err == nil { // the whole snapshot: agents herdr does not detect (TRAEX) too
 		if a, ok := n.agent(id); ok {
 			return a.PaneID, nil
 		}
@@ -237,6 +236,9 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 
 func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) error {
 	pane, err := n.paneFor(ctx, id)
+	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
+		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
+	}
 	if err != nil {
 		// Offline: resume with the launcher that started it (or plain claude) and then send.
 		st, _ := n.state.get(id)
@@ -266,7 +268,21 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 		// In a tag so it never mixes with what the user typed; the phone shows these as thumbnails.
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
-	return n.herdr.AgentPrompt(ctx, pane, text)
+	return n.prompt(ctx, pane, text)
+}
+
+// prompt submits text to the agent in a pane. herdr only prompts agents it detects; for the others (TRAEX) the text
+// is typed into the pane and enter pressed.
+func (n *Node) prompt(ctx context.Context, pane, text string) error {
+	err := n.herdr.AgentPrompt(ctx, pane, text)
+	if err == nil || !herdr.IsNotFound(err) {
+		return err
+	}
+	if err := n.herdr.PaneSendText(ctx, pane, text); err != nil {
+		return err
+	}
+	time.Sleep(150 * time.Millisecond) // the TUI takes the pasted text before the enter that submits it
+	return n.herdr.PaneSendKeys(ctx, pane, "enter")
 }
 
 func (n *Node) saveImages(images []proto.Image) ([]string, error) {
@@ -507,7 +523,7 @@ func (n *Node) editQueue(ctx context.Context, id string, keep []int) ([]string, 
 	_ = n.herdr.PaneSendKeys(ctx, pane, "ctrl+u")
 	for _, k := range keep {
 		if k >= 0 && k < len(queue) {
-			if err := n.herdr.AgentPrompt(ctx, pane, queue[k]); err != nil {
+			if err := n.prompt(ctx, pane, queue[k]); err != nil {
 				return queue, fmt.Errorf("re-queue: %w", err)
 			}
 			time.Sleep(150 * time.Millisecond)
@@ -545,7 +561,7 @@ func (n *Node) renameSession(ctx context.Context, id string, tab, title *string)
 			return fmt.Errorf("empty title")
 		}
 		if live && !n.isAssistantSession(id) {
-			return n.herdr.AgentPrompt(ctx, a.PaneID, "/rename "+t)
+			return n.prompt(ctx, a.PaneID, "/rename "+t)
 		}
 		p := n.transcriptPath(id)
 		if p == "" {

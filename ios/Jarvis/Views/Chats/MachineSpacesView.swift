@@ -39,7 +39,7 @@ struct MachineSpacesView: View {
             if groups.isEmpty {
                 Section {
                     EmptyStateView(symbol: machine?.symbol ?? "desktopcomputer", title: "没有在跑的 Agent",
-                                   message: machine?.online == false ? "这台机器现在离线。" : "在这台机器的 herdr 里启动 Claude 或 Codex，就会出现在这里。")
+                                   message: machine?.online == false ? "这台机器现在离线。" : "在这台机器的 herdr 里启动 Claude、Codex 或 TRAEX，就会出现在这里。")
                 }
                 .listRowBackground(Color.clear)
             }

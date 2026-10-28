@@ -211,6 +211,8 @@ func (n *Node) transcriptPath(id string) string {
 	if len(matches) == 0 {
 		if p := n.codexPath(id); p != "" {
 			matches = []string{p}
+		} else if p := n.traexPath(id); p != "" {
+			matches = []string{p}
 		} else {
 			return ""
 		}
@@ -273,14 +275,17 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
 		}
-		if a.Agent == "codex" {
+		switch a.Agent {
+		case "codex":
 			s.Title = n.codexTitle(id) // the terminal title is "dots | codex | Ready"
+		case traexAgent:
+			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 		}
 		n.placeIn(&s, a)
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
-				if m.title != "" && a.Agent != "codex" {
+				if m.title != "" && a.Agent != "codex" && a.Agent != traexAgent {
 					s.Title = m.title
 				}
 				if s.Title == "" || s.Title == "Claude Code" {
@@ -459,7 +464,8 @@ func (n *Node) refreshHerdr(ctx context.Context) error {
 	n.mu.Lock()
 	n.layout = l
 	n.mu.Unlock()
-	n.setAgents(snap.Agents)
+	// Panes running an agent herdr does not detect (TRAEX) become agents of our own.
+	n.setAgents(append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...))
 	return nil
 }
 
@@ -485,6 +491,12 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 	for _, a := range agents {
 		if a.Agent == "codex" {
 			codex = append(codex, a)
+			continue
+		}
+		if a.Agent == traexAgent { // found by its process, which names its session (traex.go)
+			if id := a.SessionID(); id != "" {
+				m[id] = a
+			}
 			continue
 		}
 		if a.Agent != "claude" {

@@ -90,7 +90,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var tabID: String?
     var workspaceID: String?
     var agentName: String?
-    /// The coding agent in the pane: "claude" (or nil, from older hubs) or "codex".
+    /// The coding agent in the pane: "claude" (or nil, from older hubs), "codex" or "traex" (TRAEX, an in-house Codex fork).
     var agent: String? = nil
     var launcher: String?
     var model: String?
@@ -123,8 +123,11 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var folderName: String { (cwd as NSString).lastPathComponent }
 
     var isCodex: Bool { agent == "codex" }
-    /// Who the user talks to in this session: "Claude" or "Codex".
-    var agentLabel: String { isCodex ? "Codex" : "Claude" }
+    var isTraex: Bool { agent == "traex" }
+    /// Who the user talks to in this session: "Claude", "Codex" or "TRAEX".
+    var agentLabel: String { isCodex ? "Codex" : isTraex ? "TRAEX" : "Claude" }
+    /// How to pick the conversation up again on the computer.
+    var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
 
     enum CodingKeys: String, CodingKey {
         case title, cwd, status, launcher, model, agent

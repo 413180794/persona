@@ -46,3 +46,22 @@ UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 example-machine
 - 从手机新建 Codex 会话（启动器只认 claude 系列），离线（已退出）的 Codex 会话也不进列表。
 - Codex 没有 Claude 那样的 hook 代答：它在终端里等确认时（herdr 状态 blocked）走通用的「终端等你处理」屏幕交互。
 - 排队消息、子 Agent、后台任务这些 Claude transcript 才有的信息，Codex 会话里都是空的。
+
+## TRAEX
+
+TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，和 Codex 一样出现在 Agents 里（列表、对话、实时状态、发消息、终端、关闭），
+标签「TRAEX」，输入框「给 TRAEX 发消息」。代码：`server/internal/node/traex.go`，rollout 解析和 Codex 共用 `transcript/codex.go`。
+
+- **herdr 不认识它**：traex 窗格在 herdr 里是普通窗格（`agent_status: unknown`，不在 `agent list` 里），herdr 也没有自定义 Agent 的配置。
+  node 自己找：`~/.trae/cli/thread-writer-locks/<会话 id>.owner.json` 写着正在写这个会话的 pid；pid 的环境变量里有 herdr 的
+  `HERDR_PANE_ID`（Linux 读 `/proc/<pid>/environ`，macOS 用 `ps -E`），于是 窗格 → pid → 会话 是精确的，不靠目录猜。窗格信息来自
+  `herdr api snapshot` 的 `panes`。
+- **状态自己判断**：终端标题前面有盲文转圈字符（`terminal_title`，不是 stripped 的那个）或屏幕上有「esc to interrupt」= 工作中；
+  屏幕上有「› 1.」这样的编号选择 = 等你（走「终端在问你」卡片）；其余报 `done`，hub 按看没看过算「完成未看 / 已看」。屏幕最多 2 秒读一次。
+- **文件布局和 Codex 一样**，只是根目录是 `~/.trae/cli`：`sessions/YYYY/MM/DD/rollout-*.jsonl`、`session_index.jsonl`（线程名，做标题）。
+- **rollout 是更新的格式**：用户消息和回复在 `history_mutation.display_completions[].item` 里（item 结构同 `item_completed`），
+  工具调用仍在 `event_msg/item_completed`，同一个 item 可能两处都有（按 id 去重）；`history_mutation` 一行可能上百 KB 到 1 MB
+  （压缩后带整个上下文），只解 `display_completions`。`task_started` / `task_complete` 记在 `Meta.TurnOpen`。
+  `TerminalInteraction`（向运行中的命令轮询 / 输入）不显示。
+- **发消息**：herdr 的 `agent prompt` 只认它识别的 Agent，对 traex 窗格报 not found，于是改成 `pane send-text` + 回车（`Node.prompt`）。
+- 已退出的 TRAEX / Codex 会话从手机发消息会报错（不能用 claude 去 resume 它们的会话 id）。

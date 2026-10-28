@@ -15,7 +15,8 @@ import (
 )
 
 // Codex support: herdr reports Codex panes as agent "codex"; their conversations are rollouts under
-// ~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session id>.jsonl (parsed by transcript/codex.go). herdr's codex
+// ~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session id>.jsonl (parsed by transcript/codex.go). TRAEX, a Codex
+// fork, keeps the same layout under ~/.trae/cli (traex.go). herdr's codex
 // integration reports the session id when Codex starts; a Codex started before that integration has none, and its
 // rollout is found by working directory (the newest one there not already claimed).
 
@@ -28,8 +29,8 @@ type codexRollout struct {
 	mtime time.Time
 }
 
-var codexCache struct {
-	sync.Mutex
+// rolloutCache is one rollout home's scan (Codex: ~/.codex, TRAEX: ~/.trae/cli — the same layout).
+type rolloutCache struct {
 	at       time.Time
 	rollouts []codexRollout
 	cwds     map[string]string // path → cwd (never changes once written)
@@ -37,44 +38,60 @@ var codexCache struct {
 	titlesAt time.Time
 }
 
+var rolloutCaches = struct {
+	sync.Mutex
+	byHome map[string]*rolloutCache
+}{byHome: map[string]*rolloutCache{}}
+
 var rolloutIDRe = regexp.MustCompile(`([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.jsonl$`)
 
-func (n *Node) codexDir() string { return filepath.Join(n.home, ".codex", "sessions") }
+func (n *Node) codexHome() string { return filepath.Join(n.home, ".codex") }
 
-// codexRollouts lists the rollouts of the last two weeks, newest first; the scan is cached for 5s.
-func (n *Node) codexRollouts() []codexRollout {
-	codexCache.Lock()
-	defer codexCache.Unlock()
-	if time.Since(codexCache.at) < 5*time.Second {
-		return codexCache.rollouts
+func (n *Node) codexRollouts() []codexRollout { return rollouts(n.codexHome()) }
+func (n *Node) codexPath(id string) string    { return rolloutPath(n.codexHome(), id) }
+func (n *Node) codexTitle(id string) string   { return threadTitle(n.codexHome(), id) }
+
+func cacheFor(home string) *rolloutCache {
+	c := rolloutCaches.byHome[home]
+	if c == nil {
+		c = &rolloutCache{cwds: map[string]string{}}
+		rolloutCaches.byHome[home] = c
 	}
-	if codexCache.cwds == nil {
-		codexCache.cwds = map[string]string{}
+	return c
+}
+
+// rollouts lists a home's rollouts of the last two weeks (<home>/sessions/YYYY/MM/DD), newest first; cached for 5s.
+func rollouts(home string) []codexRollout {
+	rolloutCaches.Lock()
+	defer rolloutCaches.Unlock()
+	c := cacheFor(home)
+	if time.Since(c.at) < 5*time.Second {
+		return c.rollouts
 	}
 	var out []codexRollout
 	for d := 0; d <= int(codexWindow/(24*time.Hour)); d++ {
 		day := time.Now().AddDate(0, 0, -d)
-		files, _ := filepath.Glob(filepath.Join(n.codexDir(), day.Format("2006"), day.Format("01"), day.Format("02"), "rollout-*.jsonl"))
+		files, _ := filepath.Glob(filepath.Join(home, "sessions", day.Format("2006"), day.Format("01"), day.Format("02"), "rollout-*.jsonl"))
 		for _, p := range files {
 			m := rolloutIDRe.FindStringSubmatch(p)
 			st, err := os.Stat(p)
 			if m == nil || err != nil {
 				continue
 			}
-			cwd, ok := codexCache.cwds[p]
+			cwd, ok := c.cwds[p]
 			if !ok {
 				cwd = rolloutCwd(p)
-				codexCache.cwds[p] = cwd
+				c.cwds[p] = cwd
 			}
 			out = append(out, codexRollout{id: m[1], path: p, cwd: cwd, mtime: st.ModTime()})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].mtime.After(out[j].mtime) })
-	codexCache.rollouts, codexCache.at = out, time.Now()
+	c.rollouts, c.at = out, time.Now()
 	return out
 }
 
-// rolloutCwd reads the working directory from a rollout's first line (session_meta, ~20 KB of instructions).
+// rolloutCwd reads the working directory from a rollout's first line (session_meta, tens of KB of instructions).
 func rolloutCwd(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -95,9 +112,9 @@ func rolloutCwd(path string) string {
 	return l.Payload.Cwd
 }
 
-// codexPath finds a Codex session's rollout by id.
-func (n *Node) codexPath(id string) string {
-	for _, r := range n.codexRollouts() {
+// rolloutPath finds a session's rollout under a home by id.
+func rolloutPath(home, id string) string {
+	for _, r := range rollouts(home) {
 		if r.id == id {
 			return r.path
 		}
@@ -105,7 +122,7 @@ func (n *Node) codexPath(id string) string {
 	if !validID(id) {
 		return ""
 	}
-	matches, _ := filepath.Glob(filepath.Join(n.codexDir(), "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	matches, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
 	if len(matches) == 0 {
 		return ""
 	}
@@ -126,16 +143,17 @@ func (n *Node) codexSession(a herdr.Agent, taken map[string]herdr.Agent) string 
 	return ""
 }
 
-// codexTitle is the name Codex gave the thread (~/.codex/session_index.jsonl, last entry wins); re-read on change.
-func (n *Node) codexTitle(id string) string {
-	path := filepath.Join(n.home, ".codex", "session_index.jsonl")
+// threadTitle is the name the agent gave the thread (<home>/session_index.jsonl, last entry wins); re-read on change.
+func threadTitle(home, id string) string {
+	path := filepath.Join(home, "session_index.jsonl")
 	st, err := os.Stat(path)
 	if err != nil {
 		return ""
 	}
-	codexCache.Lock()
-	defer codexCache.Unlock()
-	if codexCache.titles == nil || st.ModTime().After(codexCache.titlesAt) {
+	rolloutCaches.Lock()
+	defer rolloutCaches.Unlock()
+	c := cacheFor(home)
+	if c.titles == nil || st.ModTime().After(c.titlesAt) {
 		titles := map[string]string{}
 		if f, err := os.Open(path); err == nil {
 			sc := bufio.NewScanner(f)
@@ -151,7 +169,7 @@ func (n *Node) codexTitle(id string) string {
 			}
 			f.Close()
 		}
-		codexCache.titles, codexCache.titlesAt = titles, st.ModTime()
+		c.titles, c.titlesAt = titles, st.ModTime()
 	}
-	return codexCache.titles[id]
+	return c.titles[id]
 }

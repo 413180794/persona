@@ -246,7 +246,7 @@ struct CloseAgentSheet: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 fact("power", "退出 \(session.agentLabel)，关掉它在 herdr 里的标签页（分屏时只关这个窗格）")
-                fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.isCodex ? "codex resume" : "claude --resume") 接着聊")
+                fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)

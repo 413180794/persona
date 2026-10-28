@@ -76,3 +76,47 @@ func TestCodexUserMessageTags(t *testing.T) {
 		t.Fatalf("several answers: %q", got)
 	}
 }
+
+// TRAEX (a Codex fork) writes the newer rollout: messages come as history_mutation display_completions, tool calls
+// still as event_msg/item_completed, and an item may appear in both.
+func TestHistoryMutationRollout(t *testing.T) {
+	lines := []string{
+		`{"timestamp":"2026-10-28T08:42:16.027Z","ordinal":0,"type":"session_meta","payload":{"session_id":"01a1","id":"01a1","cwd":"/r/fake","originator":"traex-tui","cli_version":"0.210.1"}}`,
+		`{"timestamp":"2026-10-28T08:42:48.700Z","ordinal":1,"type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}`,
+		`{"timestamp":"2026-10-28T08:42:48.752Z","ordinal":2,"type":"history_mutation","payload":{"version":1,"turn_id":"t1","operation":"append","items":[{"type":"message","role":"developer","content":[{"type":"input_text","text":"<collaboration_mode>…</collaboration_mode>"}]}]}}`,
+		`{"timestamp":"2026-10-28T08:42:48.954Z","ordinal":6,"type":"history_mutation","payload":{"display_completions":[{"turn_id":"t1","item":{"type":"UserMessage","id":"u1","content":[{"type":"text","text":"build the proxy","text_elements":[]}]}}],"version":1,"operation":"append","items":[{"type":"message","role":"user","content":[{"type":"input_text","text":"build the proxy"}]}]}}`,
+		`{"timestamp":"2026-10-28T08:43:40.492Z","ordinal":8,"type":"history_mutation","payload":{"display_completions":[{"turn_id":"t1","item":{"type":"AgentMessage","id":"m1","content":[{"type":"Text","text":"Checking the repo first."}],"phase":"commentary"}}],"version":1,"operation":"append","items":[]}}`,
+		`{"timestamp":"2026-10-28T08:43:41.000Z","ordinal":9,"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"e1","command":["/bin/zsh","-lc","ls"],"status":"completed","aggregated_output":"a\n","exit_code":0}}}`,
+		`{"timestamp":"2026-10-28T08:43:41.100Z","ordinal":10,"type":"history_mutation","payload":{"display_completions":[{"turn_id":"t1","item":{"type":"CommandExecution","id":"e1","command":["/bin/zsh","-lc","ls"],"status":"completed","aggregated_output":"a\n","exit_code":0}}]}}`,
+		`{"timestamp":"2026-10-28T08:43:42.000Z","ordinal":11,"type":"event_msg","payload":{"type":"item_completed","item":{"type":"TerminalInteraction","id":"ti1","stdin":"","command":"go test ./..."}}}`,
+		`{"timestamp":"2026-10-28T08:43:50.000Z","ordinal":12,"type":"history_mutation","payload":{"display_completions":[{"turn_id":"t1","item":{"type":"AgentMessage","id":"m2","content":[{"type":"Text","text":"Done: the proxy runs."}],"phase":"final_answer"}}]}}`,
+	}
+	path := filepath.Join(t.TempDir(), "rollout-2026-10-28T16-42-16-01a1.jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := NewFile(path)
+	items, err := f.Refresh()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, it := range items {
+		got = append(got, it.Role+":"+it.Kind+":"+it.ToolName+":"+it.Text)
+	}
+	want := []string{
+		"user:text::build the proxy", "assistant:thinking::Checking the repo first.",
+		"assistant:tool_use:Bash:", "user:tool_result::a\n", "assistant:text::Done: the proxy runs.",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("items\n got %q\nwant %q", got, want)
+	}
+	m := f.Meta()
+	if !m.Codex || m.Cwd != "/r/fake" || m.LastText != "Done: the proxy runs." || !m.TurnOpen {
+		t.Fatalf("meta: %+v", m)
+	}
+	_ = os.WriteFile(path, []byte(strings.Join(append(lines, `{"timestamp":"2026-10-28T08:43:51.000Z","ordinal":13,"type":"event_msg","payload":{"type":"task_complete","turn_id":"t1"}}`), "\n")+"\n"), 0o644)
+	if _, err := f.Refresh(); err != nil || f.Meta().TurnOpen {
+		t.Fatalf("turn still open after task_complete: %v", err)
+	}
+}

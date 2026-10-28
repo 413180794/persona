@@ -15,7 +15,7 @@ final class MessageMenu {
     /// Where the chat's messages come from ("app › leader"), printed on share cards (read when sharing: the
     /// session may not be loaded yet when the chat binds the menu).
     @ObservationIgnored var source: () -> String = { "" }
-    /// Who answers in this chat ("Claude" / "Codex"), for share cards.
+    /// Who answers in this chat ("Claude" / "Codex" / "TRAEX"), for share cards.
     @ObservationIgnored var agent: () -> String = { "Claude" }
     @ObservationIgnored var quote: ((String) -> Void)?
     @ObservationIgnored var edit: ((String) -> Void)?

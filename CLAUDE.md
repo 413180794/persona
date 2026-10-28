@@ -54,7 +54,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
-| `docs/codex.md` | Codex 支持：herdr 里的 Codex 怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
+| `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
 | `docs/assistant.md` | 「对话」tab 的助手：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI |
 | `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
@@ -162,3 +162,5 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - 聊天列表用 `ScrollPosition.scrollTo(y:)` 会把横向偏移也归零：左右边距是 `contentMargins(.horizontal)`，整页会贴到屏幕边。
   竖向跳转用 `scrollTo(point:)` 带上当前的 x（`ChatView.scrollList`）。`scrollTo(id:anchor:)` 跳到没画过的行只按估算高度落点，
   要精确停在某处就跳过去后按实测位置再修正一两次。倒置列表里的行，XCUITest 拿到的 frame 不对（报在屏幕外），量位置用 App 内的 DEBUG 探针。
+- herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
+  加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。

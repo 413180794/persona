@@ -88,13 +88,36 @@ type codexItem struct {
 func isCodexLine(line []byte) bool {
 	return bytes.Contains(line, []byte(`"payload"`)) &&
 		(bytes.Contains(line, []byte(`"type":"session_meta"`)) || bytes.Contains(line, []byte(`"type":"event_msg"`)) ||
-			bytes.Contains(line, []byte(`"type":"response_item"`)) || bytes.Contains(line, []byte(`"type":"turn_context"`)))
+			bytes.Contains(line, []byte(`"type":"response_item"`)) || bytes.Contains(line, []byte(`"type":"turn_context"`)) ||
+			bytes.Contains(line, []byte(`"type":"history_mutation"`)))
+}
+
+// historyMutation is the newer rollout format (TRAEX, a Codex fork): the conversation's messages arrive as
+// display_completions, each holding an item shaped like event_msg/item_completed's. The rest of the line (the model
+// context, up to a megabyte after a compaction) is not needed.
+type historyMutation struct {
+	DisplayCompletions []struct {
+		Item *codexItem `json:"item"`
+	} `json:"display_completions"`
 }
 
 func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	var l codexLine
 	if json.Unmarshal(line, &l) != nil {
 		return nil
+	}
+	if l.Type == "history_mutation" {
+		var h historyMutation
+		if json.Unmarshal(l.Payload, &h) != nil {
+			return nil
+		}
+		var out []proto.Item
+		for _, c := range h.DisplayCompletions {
+			if c.Item != nil {
+				out = append(out, codexItemLines(seq, l.Timestamp, c.Item, meta)...)
+			}
+		}
+		return out
 	}
 	var p codexPayload
 	if json.Unmarshal(l.Payload, &p) != nil {
@@ -129,7 +152,14 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 			meta.ContextTokens, meta.OutputTokens = p.Info.Last.InputTokens, p.Info.Total.OutputTokens
 		}
 		return nil
+	case "task_started":
+		meta.TurnOpen = true
+		return nil
+	case "task_complete":
+		meta.TurnOpen = false
+		return nil
 	case "turn_aborted":
+		meta.TurnOpen = false
 		it := mk(0, "", "system", proto.KindNotice)
 		it.Text = "已中断"
 		return []proto.Item{it}
@@ -137,9 +167,28 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 	default:
 		return nil
 	}
-	it := p.Item
-	if it == nil {
+	if p.Item == nil {
 		return nil
+	}
+	return codexItemLines(seq, l.Timestamp, p.Item, meta)
+}
+
+// codexItemLines maps one finished item (UserMessage, AgentMessage, CommandExecution…) to chat items, once per id.
+func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.Item {
+	if it.ID != "" {
+		if meta.codexSeen[it.ID] {
+			return nil
+		}
+		if meta.codexSeen == nil {
+			meta.codexSeen = map[string]bool{}
+		}
+		meta.codexSeen[it.ID] = true
+	}
+	mk := func(idx int, id, role, kind string) proto.Item {
+		if id == "" {
+			id = fmt.Sprintf("line%d", seq)
+		}
+		return proto.Item{ID: fmt.Sprintf("%s#%d", id, idx), Seq: seq, TS: ts, Role: role, Kind: kind}
 	}
 	switch it.Type {
 	case "UserMessage":

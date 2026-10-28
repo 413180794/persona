@@ -29,12 +29,11 @@ struct MessageShareCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: message.isUser ? "person.fill" : message.agent == "Codex" ? "chevron.left.forwardslash.chevron.right" : "sparkle")
+                Image(systemName: message.isUser ? "person.fill" : Self.symbol(message.agent))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
-                    .background(message.isUser ? AnyShapeStyle(Color.gray)
-                                : message.agent == "Codex" ? AnyShapeStyle(Self.codex) : AnyShapeStyle(Self.claude), in: .circle)
+                    .background(message.isUser ? AnyShapeStyle(Color.gray) : AnyShapeStyle(Self.fill(message.agent)), in: .circle)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.isUser ? "我" : message.agent).font(.system(size: 15, weight: .semibold))
                     if !message.source.isEmpty {
@@ -70,6 +69,24 @@ struct MessageShareCard: View {
 
     private static let claude = LinearGradient(colors: [Color(hex: 0xE0875A), Color(hex: 0xC9643C)], startPoint: .top, endPoint: .bottom)
     private static let codex = LinearGradient(colors: [Color(hex: 0x3A3A3C), Color(hex: 0x111111)], startPoint: .top, endPoint: .bottom)
+    private static let traex = LinearGradient(colors: [Color(hex: 0x2FD38F), Color(hex: 0x12935E)], startPoint: .top, endPoint: .bottom)
+
+    /// Each agent its own mark on the card: Claude's sparkle, Codex's code brackets, TRAEX's terminal.
+    private static func symbol(_ agent: String) -> String {
+        switch agent {
+        case "Codex": "chevron.left.forwardslash.chevron.right"
+        case "TRAEX": "terminal.fill"
+        default: "sparkle"
+        }
+    }
+
+    private static func fill(_ agent: String) -> LinearGradient {
+        switch agent {
+        case "Codex": codex
+        case "TRAEX": traex
+        default: claude
+        }
+    }
 
     @MainActor static func render(_ message: ShareMessage, dark: Bool) -> UIImage? {
         let r = ImageRenderer(content: MessageShareCard(message: message, dark: dark))

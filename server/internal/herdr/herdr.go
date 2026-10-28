@@ -59,20 +59,25 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &he) && strings.HasSuffix(he.Code, "not_found")
 }
 
+// AgentSession is what an agent integration reported about its session ({kind: "id", value: <session id>}).
+type AgentSession struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
 type Agent struct {
-	Agent        string `json:"agent"`
-	AgentSession *struct {
-		Kind  string `json:"kind"`
-		Value string `json:"value"`
-	} `json:"agent_session"`
-	Name          string `json:"name"`
-	AgentStatus   string `json:"agent_status"`
-	Cwd           string `json:"cwd"`
-	ForegroundCwd string `json:"foreground_cwd"`
-	PaneID        string `json:"pane_id"`
-	TabID         string `json:"tab_id"`
-	WorkspaceID   string `json:"workspace_id"`
-	Title         string `json:"terminal_title_stripped"`
+	Agent         string        `json:"agent"`
+	AgentSession  *AgentSession `json:"agent_session"`
+	Name          string        `json:"name"`
+	AgentStatus   string        `json:"agent_status"`
+	Cwd           string        `json:"cwd"`
+	ForegroundCwd string        `json:"foreground_cwd"`
+	PaneID        string        `json:"pane_id"`
+	TabID         string        `json:"tab_id"`
+	WorkspaceID   string        `json:"workspace_id"`
+	Title         string        `json:"terminal_title_stripped"`
+	// RawTitle keeps what the stripped title drops, e.g. the spinner a busy TUI puts in front ("⠸ fix the build").
+	RawTitle string `json:"terminal_title"`
 }
 
 // PaneProcesses returns the pids of a pane's foreground processes, claude first.
@@ -150,6 +155,8 @@ type Snapshot struct {
 	Workspaces []Workspace `json:"workspaces"`
 	Tabs       []Tab       `json:"tabs"`
 	Agents     []Agent     `json:"agents"`
+	// Panes is every pane, agent or not (agent empty): where agents herdr does not detect, such as TRAEX, are found.
+	Panes []Agent `json:"panes"`
 }
 
 func (c *Client) Snapshot(ctx context.Context) (*Snapshot, error) {

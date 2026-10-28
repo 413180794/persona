@@ -111,6 +111,10 @@ type Meta struct {
 	Sidechain bool
 	// Codex: the file is a Codex rollout (codex.go), not a Claude transcript.
 	Codex bool
+	// TurnOpen: a rollout's latest turn has started and not finished (task_started without task_complete).
+	TurnOpen bool
+	// codexSeen: newer rollouts record an item both as event_msg/item_completed and in history_mutation.
+	codexSeen map[string]bool
 	// LastTurnWake: the latest turn was started by a background task reporting back, not by a message (no
 	// "finished" push for it).
 	LastTurnWake bool
