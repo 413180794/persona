@@ -89,7 +89,6 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 
 ## 推送（APNs）
 
-- 2026-10-24 在 developer.apple.com 建了 APNs key「Jarvis APNs」，Key ID `APNSKEY001`，Sandbox & Production，Team Scoped。
-- 文件：本机 `~/.appstoreconnect/AuthKey_APNSKEY001_APNs.p8`、example-machine `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），
-  1Password `密码管理器`。key 只能下载一次，丢了就重建。
+- 在 developer.apple.com 建一个 APNs key（Sandbox & Production，Team Scoped），Key ID 和 .p8 文件都不进仓库。
+- 文件：hub 机器的 `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
 - 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。

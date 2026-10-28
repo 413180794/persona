@@ -97,7 +97,7 @@ node 的 `session.start`：
   transcript 单独做增量扫描（`bgScan`：第一次读全文件，之后只读新增部分，只解析含相关关键字、小于 64 KB 的行），结果放进
   `Session.background`。超过 24 小时的视为已经没了（claude 重启后台任务就没了）。
 
-## /loop（2026-10-25 实测，example-machine app 的 loop-check / get-login）
+## /loop（2026-10-25 实测）
 
 - 动态循环：每轮结束 Claude 调 `ScheduleWakeup {delaySeconds, prompt:"/loop …", reason}`，结果是
   `Next wakeup scheduled for 11:57:00 (in 1859s)`；到点 harness 把 prompt 当成一条 `/loop …` 用户消息重新发进来。`{stop:true}` 结束。

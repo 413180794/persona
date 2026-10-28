@@ -61,5 +61,5 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 ## 运维
 
-- 机器离线：App 里显示 ssh 的最后一行错误。`mac-home` 的隧道（2224）还没装，见 `docs/config.md`。
-- 手动调接口：`curl -H "Authorization: Bearer $TOKEN" http://hub.example.com:18660/api/v1/machines`。
+- 机器离线：App 里显示 ssh 的最后一行错误。NAT 后面的电脑要先建好反向隧道（`docs/config.md`）。
+- 手动调接口：`curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`。

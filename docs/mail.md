@@ -60,7 +60,6 @@ App                         hub                                Google
 - **Gmail 流量走代理**：example-machine 只连得上 Google 的少数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 多数时候解析到 173.194.x.x，
   443 / 993 / 465 / 587 全部超时；HTTPS 能通只是因为走了 IPv6）。`hub.json` 的 `google.proxy`（`http://[user:pass@]host:port`）
   让 Gmail 账号的 IMAP / SMTP（HTTP CONNECT 隧道）、Google 换 token、Gmail API 全部经代理出去；其他服务商照旧直连。
-  hub 机器上用本地代理（`http://127.0.0.1:<端口>`）。
 - **发信走 Gmail API**（`POST gmail.googleapis.com/gmail/v1/users/me/messages/send`，raw MIME），不走 SMTP：
   example-machine 连不上 `smtp.gmail.com`（465 / 587 都超时，2026-10-25 实测），HTTPS 到 Google 正常；`https://mail.google.com/` 授权同样覆盖 Gmail API
   （项目里已启用 Gmail API）。密送靠在 raw 前面加 `Bcc:` 头，Gmail 投递后会去掉；发出的信 Gmail 自己归进「已发送」。
@@ -74,9 +73,8 @@ App                         hub                                Google
 开源邮件客户端（Thunderbird、K-9、FairEmail、Mailspring、GNOME Online Accounts）都是项目方注册好客户端、写死在源码里，
 并通过了 Google 对受限 scope 的验证；Thunderbird 源码里明确写着「别复制这些值，自己注册一个」。Jarvis 只给自己用，建一个自己的就行。
 
-**现状（2026-10-25 已建好）**：个人账号 me@gmail.com 下的项目 `jarvis-mail-000000`（Jarvis Mail），
-同意屏幕「Jarvis」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Jarvis」），
-iOS 客户端「Jarvis iOS」：`1234-abcd.apps.googleusercontent.com`，已写进 example-machine `hub.json`。
+建好的客户端是同意屏幕「Jarvis」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Jarvis」），
+client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和文档。
 发布成正式版要求品牌页有首页、隐私政策、服务条款链接，且域名在「已获授权的网域」里，所以建了 `jarvis.chirpet.com`（仓库 `site/`）。
 
 步骤（重建时参考）：
@@ -90,7 +88,7 @@ iOS 客户端「Jarvis iOS」：`1234-abcd.apps.googleusercontent.com`，已写�
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。
 6. 「客户端」→ 创建 OAuth 客户端，类型 **iOS**，Bundle ID 和团队 ID 填配置里的 `app.bundle_id` / `app.team_id`，得到
    `<数字>-<串>.apps.googleusercontent.com`。
-7. 写进 example-machine `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh example-machine`）。
+7. 写进 hub 机器的 `~/.jarvis/hub.json`：`"google": {"client_id": "…apps.googleusercontent.com"}`，重启 hub（`scripts/deploy.sh <hub 机器 id>`）。
    iOS 客户端的 client ID 是公开信息，不算密钥。
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。

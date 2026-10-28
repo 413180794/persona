@@ -17,7 +17,7 @@
  "last_seen":"..."}
 
 // Launcher（来自 zsh 的 _claude_launchers）
-{"name":"cc_ds","base_url":"http://192.0.2.10:18000","model":"deepseek/v4.1-flash-chain"}
+{"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
 {"machine_id":"example-machine","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",

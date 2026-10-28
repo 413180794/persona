@@ -11,7 +11,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 
 - **配置化，不写死个人的东西**：机器名、域名、账号、邮箱、路径、启动器、公司内部工具、个人偏好一律走配置
   （构建 / 部署：`~/.config/jarvis/config.json`；运行：hub 的 `~/.jarvis/hub.json`；见 `docs/config.md`），代码、脚本、
-  界面文案、测试、本文件里都不出现具体某个人的值；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
+  界面文案、测试、文档、本文件里都不出现具体某个人的值（内网域名 / IP、主机名、内部项目名、个人账号、各种 key 的 ID 也算）；界面说「hub 所在的机器」「你的各台电脑」。本机的具体情况写 `CLAUDE.local.md`。
 - **随时沉淀经验**：踩坑、怪异行为、设计取舍当场写进本文件或 `docs/<主题>.md`。这条规则本身也要保留。
 - 代码注释、提交信息用英文；文档用中文；App 界面文案用中文。
 - **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
@@ -109,7 +109,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   `atBottom` 不要默认 true（白屏时就没有箭头可点）。验证：脚本批量冷启动打开会话，按对话区像素标准差判断白屏。
 - List 的分组标题（Section header）不是单元格，挂在上面的 `.contextMenu` 长按基本触发不了：标题上的操作要给一个看得见的按钮 / Menu。
 - 没装 herdr claude 集成的机器认窗格对应哪个会话，用 `herdr pane process-info` 拿 claude 的 pid，再读
-  `~/.claude/sessions/<pid>.json` 的 sessionId；别靠「同目录最新的 transcript」猜（app 六个 Agent 在同一个仓库，tab 名全串了）。
+  `~/.claude/sessions/<pid>.json` 的 sessionId；别靠「同目录最新的 transcript」猜（同一个仓库里开六个 Agent，tab 名全串了）。
 - 长列表里不要把一组可能很多的行包成一个子视图（LazyVStack 里的一个 VStack）：几百行一次布局会卡死主线程、页面空白，要拆成独立的懒加载行。
 - 被取消的请求 / 任务（离开页面、切换）会抛 URLError.cancelled（「已取消」）或 CancellationError，展示错误前先过滤（`Error.shown`）。
 - 新版 Claude Code 把工具调用之间的叙述写进非空的 `thinking` 块（不是 `text`），界面不能把 thinking 一律藏掉。
@@ -126,7 +126,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - DEBUG 启动参数的名字不能和任何 Swift 标识符同名：枚举 case 名会以反射元数据进 Release 二进制，`release.sh` 的 `strings` 检查会误报
   （`Tab.workbench` 撞了 `-workbench`，已改名 `-openWorkbench`）。新开关用 `open…` / `show…` 这类不会是类型成员的名字，并加进 release.sh 的列表。
 - 有的网络（作者的 hub 机器）连不上 Google 的多数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 常解析到 173.194.x.x，所有端口超时），HTTPS 能通只是走了 IPv6。
-  hub 访问 Gmail 一律走 `hub.json` 的 `google.proxy`（比如本机代理 `http://127.0.0.1:8080`），别再加直连兜底（`docs/mail.md`）。
+  hub 访问 Gmail 一律走 `hub.json` 的 `google.proxy`（比如 hub 机器上的本地代理），别再加直连兜底（`docs/mail.md`）。
 - hub 的内存状态随时会被别的 agent 重新部署清掉（2026-10-25 两分钟内被部署三次）：跨请求的流程（比如 OAuth state）要自包含或落库。
 - 多个 agent 并行改同一仓库（飞书工作台 6 个 worker，见 `docs/feishu.md`）：每人独立 worktree + 独立克隆模拟器；新增类型带领域前缀
   （`FeishuSearchXxx`…，否则 master 撞名编译失败）；rebase 冲突时自己目录外的文件一律取 origin/master 版本，push 前看

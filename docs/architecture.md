@@ -50,7 +50,7 @@
   按键面板。
 - **hooks 只注入 jarvis 启动的会话**（`--settings ~/.jarvis/claude-settings.json`），不改全局 settings，不影响用户自己开的 claude。
   不是 jarvis 启动的 herdr claude 也能在 App 里看（按 herdr 报告的 session id 找 transcript）、发消息、按键回答。
-- **node 经 SSH stdio**：复用 `~/.ssh/config` 已有的 `ssh example-machine` 等别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
+- **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh example-machine` 等别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
 - **hub 在 example-machine**：example-machine 常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
 ## 关键流程
