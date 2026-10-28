@@ -1,9 +1,10 @@
-// Package ai calls an Anthropic-compatible Messages API for small structured tasks in the app (e.g. turning a
-// pasted blob into a mail account). It reuses the gateway the cc_ds launcher uses on example-machine; the key is read from
-// its key file at call time and never stored by Jarvis.
+// Package ai calls an Anthropic-compatible Messages API, or an OpenAI-compatible Responses API, for small structured
+// tasks in the app (e.g. turning a pasted blob into a mail account). The key is read from its key file at call time
+// and never stored by Jarvis.
 package ai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,9 +19,13 @@ import (
 )
 
 type Config struct {
+	// API is "messages" (Anthropic Messages, the default) or "responses" (OpenAI Responses, streamed).
+	API        string `json:"api"`
 	BaseURL    string `json:"base_url"`
 	APIKeyFile string `json:"api_key_file"`
 	Model      string `json:"model"`
+	// ReasoningEffort is sent as reasoning.effort to the Responses API when set (e.g. "low").
+	ReasoningEffort string `json:"reasoning_effort"`
 }
 
 // Defaults mirror the cc_ds launcher on example-machine (relay-history → DeepSeek).
@@ -65,6 +70,9 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 	if err != nil {
 		return "", err
 	}
+	if c.cfg.API == "responses" {
+		return c.respond(ctx, key, system, user)
+	}
 	body, _ := json.Marshal(map[string]any{
 		"model": c.cfg.Model, "max_tokens": maxTokens, "system": system,
 		"messages": []any{map[string]any{"role": "user", "content": user}},
@@ -99,6 +107,80 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 		if part.Type == "text" {
 			b.WriteString(part.Text)
 		}
+	}
+	return b.String(), nil
+}
+
+// respond calls the Responses API. It always streams: some compatible endpoints (Codex-backed relays) reject
+// stream=false, and the text is just the concatenated output_text deltas. The system prompt goes in as a developer
+// message rather than `instructions`, which those relays replace with their own.
+func (c *Client) respond(ctx context.Context, key, system, user string) (string, error) {
+	req := map[string]any{
+		"model": c.cfg.Model, "store": false, "stream": true,
+		"input": []any{
+			map[string]any{"role": "developer", "content": system},
+			map[string]any{"role": "user", "content": user},
+		},
+	}
+	if c.cfg.ReasoningEffort != "" {
+		req["reasoning"] = map[string]any{"effort": c.cfg.ReasoningEffort}
+	}
+	body, _ := json.Marshal(req)
+	hreq, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/responses", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	hreq.Header.Set("content-type", "application/json")
+	hreq.Header.Set("accept", "text/event-stream")
+	hreq.Header.Set("authorization", "Bearer "+key)
+	resp, err := c.http.Do(hreq)
+	if err != nil {
+		return "", fmt.Errorf("ai: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return "", fmt.Errorf("ai: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw[:min(len(raw), 300)])))
+	}
+	var b strings.Builder
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	for sc.Scan() {
+		data, ok := strings.CutPrefix(sc.Text(), "data:")
+		if !ok {
+			continue
+		}
+		var ev struct {
+			Type     string `json:"type"`
+			Delta    string `json:"delta"`
+			Message  string `json:"message"`
+			Response struct {
+				Error *struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			} `json:"response"`
+		}
+		if json.Unmarshal([]byte(strings.TrimSpace(data)), &ev) != nil {
+			continue
+		}
+		switch ev.Type {
+		case "response.output_text.delta":
+			b.WriteString(ev.Delta)
+		case "response.completed":
+			return b.String(), nil
+		case "response.failed", "response.incomplete", "error":
+			msg := ev.Message
+			if ev.Response.Error != nil {
+				msg = ev.Response.Error.Message
+			}
+			return "", fmt.Errorf("ai: %s: %s", ev.Type, msg)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return "", fmt.Errorf("ai: read stream: %w", err)
+	}
+	if b.Len() == 0 {
+		return "", errors.New("ai: stream ended without a reply")
 	}
 	return b.String(), nil
 }
