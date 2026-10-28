@@ -168,5 +168,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
   加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。
 - node 只认 `~/.claude`（`projects/` 找 transcript、`sessions/<pid>.json` 认窗格、`settings.json` 是「机器设置」改的文件）。启动器要是设了 `CLAUDE_CONFIG_DIR`（多套 profile），重启后 node 找不到 transcript：助手续聊报「Session ID … is already in use」、App 里显示 transcript not found（重启前靠 hook 报来的路径缓存还能用，所以平时看不出来）。在那台机器上把 `~/.claude/projects`、`~/.claude/sessions` 软链到 profile 里对应的目录。
+- Claude Code 默认清理 30 天前的 transcript（`cleanupPeriodDays`，启动时做，2026-10-29 一次删掉了这台机器 200 多个会话）：
+  想留作解析样本的会话要及时脱敏存成 fixture（`server/internal/transcript/testdata/README.md`）。脱敏只能白名单式，
+  「短数字原样保留」这种放行会把 IP 的每一段都放过去（踩过）。
 - 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
   别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。

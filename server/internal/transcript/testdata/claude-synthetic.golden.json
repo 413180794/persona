@@ -1,0 +1,65 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001#0",
+      "seq": 1,
+      "ts": "2026-01-01T00:00:00Z",
+      "role": "user",
+      "kind": "text",
+      "text": "run the checks"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002#0",
+      "seq": 2,
+      "ts": "2026-01-01T00:00:01Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "API 错误："
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003#0",
+      "seq": 3,
+      "ts": "2026-01-01T00:00:02Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "API 错误："
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004#0",
+      "seq": 4,
+      "ts": "2026-01-01T00:00:05Z",
+      "role": "assistant",
+      "kind": "text",
+      "text": "Checks pass."
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006#0",
+      "seq": 6,
+      "ts": "2026-01-01T00:31:00Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "Background command \"go test\" completed (exit code 0)",
+      "wake": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007#0",
+      "seq": 7,
+      "ts": "2026-01-01T00:31:00.5Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "Background command \"go test\" completed (exit code 0)"
+    }
+  ],
+  "meta": {
+    "first_user": "run the checks",
+    "last_text": "Checks pass.",
+    "model": "claude-opus-5-5",
+    "cwd": "/work/project",
+    "turns": 1,
+    "compactions": 0,
+    "context_tokens": 10,
+    "output_tokens": 3,
+    "last_turn_wake": true,
+    "last_activity": "2026-01-01T00:00:05Z"
+  }
+}

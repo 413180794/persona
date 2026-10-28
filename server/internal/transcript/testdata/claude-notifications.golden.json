@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "id": "f750b25c-f672-94b6-35a0-d53bb2c91700#0",
+      "seq": 1,
+      "ts": "2026-01-01T00:00:00.756Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" is raseihq tm qeo ddc background zclb",
+      "wake": true
+    },
+    {
+      "id": "cedc7ab6-db38-4449-679d-490e297b0296#0",
+      "seq": 2,
+      "ts": "2026-01-01T00:00:40.307Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" is raseihq tm qeo ddc background zclb",
+      "wake": true
+    },
+    {
+      "id": "ca9516d2-d446-b631-2217-9e6200391740#0",
+      "seq": 3,
+      "ts": "2026-01-01T00:00:59.295Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" yzzgamuw",
+      "wake": true
+    }
+  ],
+  "meta": {
+    "cwd": "/work/project/f1",
+    "permission_mode": "bypassPermissions",
+    "turns": 0,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "last_turn_wake": true,
+    "last_activity": "0001-01-01T00:00:00Z"
+  }
+}

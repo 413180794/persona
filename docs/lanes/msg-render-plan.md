@@ -63,7 +63,7 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
 | --- | --- | --- |
 | B1 | **【确认】`system/local_command` 整条丢弃**：新版 Claude Code 把斜杠命令（`/model` 等）和它的输出写成 `type:system, subtype:local_command`，内容是 `<command-name>…` / `<local-command-stdout>…`，`parseLine` 的 system 分支 default 返回 nil。Ovis 有专门处理（`claude-transcript.ts:20-50`、`317-322`） | `transcript.go:283-299`；本机样本 6 条（2.1.259） |
 | B2 | **【确认】`api_error` 显示成没有内容的「API 错误：」**：错误在 `error.formatted` / `error.message`，不在 `content`；而且每次重试（`retryAttempt` 1..10）都写一条，会刷出一串 | `transcript.go:286-287`；本机样本 1 条 |
-| B3 | **【确认】同一个后台任务的完成通知显示 2–3 次**：同一个 `<task-notification>` 会出现在 user 记录、`attachment(queued_command, commandMode=task-notification)` 多处，每处都变成一条 notice。Ovis 按 `taskId+toolUseId` 只出一次 | `transcript.go:242-245`、`321-327`、`353-357`；本机样本 95 个任务重复（某会话一个任务出现在第 958、964、1029 行） |
+| B3 | **【确认，范围修正】同一条后台任务通知显示两次**：同一个 `<task-notification>` 会同时写成 user 记录和 `attachment(queued_command, commandMode=task-notification)`，每处都变成一条 notice。**但同一个 task-id 也会有多次内容不同的真通知**（子 Agent 先报「还在等后台任务」、再报「完成」，阶段 0 的 `claude-notifications.jsonl`），所以不能像 Ovis 那样按 task-id 去重，只合并内容完全相同的 | `transcript.go:242-245`、`321-327`、`353-357`；本机样本 95 个 task-id 出现多次（2026-10-29 Claude Code 自动清理了 30 天前的 transcript，原样本已无法逐条区分哪些是真重复） |
 | B4 | **【确认】`system/scheduled_task_fire`（/loop 到点唤醒）不显示**：用户看不到这一轮为什么开始 | `transcript.go:298`；本机样本 6 条 |
 | B5 | **【确认】Codex `Extension`（web.search 等）不显示**，FileChange 遍历 Go map 编号，**同一 rollout 两次解析 id ↔ 文件的对应关系不同**（node 重启后 id 指向别的文件） | `transcript/codex.go:260-272`；本机样本 Extension 20 条 |
 | B6 | **【确认，低】`continued-in` 不跟随**：会话续写到另一个 session id 时，Ovis 读末尾 64 KiB 跟过去；Jarvis 停在旧文件 | 本机样本 1 条 |
@@ -137,7 +137,7 @@ item 一经发出不再变化，这个模型是对的。Ovis 值得借的是三�
 - **改什么**
   - `After` 不切开同一行；补发 / 增量统一返回 `more_after`（A2）。node watch 的 catch-up 循环发完（A1 的 node 半边），`since=0` 时也推 Refresh 出来的新行（A5）。
   - 解析：`local_command`（命令名作为用户行、stdout 作为提示，去终端控制序列）（B1）；`api_error` 取 `error.formatted`，
-    同一请求的重试合并成一条「API 错误（重试 n 次）」（B2）；task-notification 按 task-id 去重（B3）；`scheduled_task_fire` 显示「/loop 到点唤醒」（B4）；
+    同一请求的重试合并成一条「API 错误（重试 n 次）」（B2）；task-notification 只合并内容完全相同的（B3）；`scheduled_task_fire` 显示「/loop 到点唤醒」（B4）；
     Codex Extension `web.search` 显示成搜索工具、FileChange 按路径排序编号（B5）。
   - 用 fixture 核实 D1，必要时 quickMeta 的活动时间改为不跳过大行、只跳过解析内容。
 - **验证**：阶段 0 的失败测试全部转绿；golden 快照 diff 逐条人工看；部署到本机 node，用 `-openSession` 打开含这些类型的会话，模拟器截图（深 / 浅）。

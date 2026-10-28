@@ -1,0 +1,23 @@
+# transcript 解析的样本
+
+| 文件 | 来源 | 覆盖 |
+| --- | --- | --- |
+| `claude-session.jsonl` | 真实 Claude Code 2.1.3xx 会话的几段 | 会话开头（`/clear`、`local_command`、各种 attachment）、并行工具、带图片的用户消息、away_summary、排队消息（queue-operation + queued_command）、中断、带图片的工具结果 |
+| `claude-compact.jsonl` | 真实会话的两段 | 后台任务通知、上下文压缩（compact_boundary、isCompactSummary、informational） |
+| `claude-notifications.jsonl` | 真实会话 | 同一个后台任务的三次通知（内容不同，都是真事件，不能按 task-id 去重） |
+| `claude-subagent.jsonl` | 真实 subagent transcript 的开头 | 全是 sidechain 的行 |
+| `codex-0.163.jsonl` | 真实 Codex 0.163 rollout 的几段 | session_meta、response_item（跳过）、Extension（web.search）、McpToolCall、12 个文件的 FileChange、ImageView、compacted / ContextCompaction、turn_aborted |
+| `claude-synthetic.jsonl` | 手写（照真实行的结构） | 本机样本里没有的：api_error 重试、/loop 到点（scheduled_task_fire）、同一通知的两处记录、`/model` 的 local_command、continued-in |
+
+`*.golden.json` 是解析结果（全部 item + 会话级 Meta），`fixtures_test.go` 比对；改了解析就
+`go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当成评审内容逐条看。
+
+## 加样本
+
+1. `python3 scripts/transcript_stats.py` 看本机有哪些类型、在哪个文件哪一行。
+2. `python3 -I scripts/redact_transcript.py --words -o testdata/<名字>.jsonl <transcript>:<行号范围>`：白名单式脱敏
+   （JSON 结构、像标识符的键、已知键的枚举值、一小组 shell / Claude Code 词保留，其余每个词换成同长度的随机词；
+   uuid / 消息 id 重新映射、时间平移到 2026-01-01、路径换成 `/work/project/fN`、IP 换成 192.0.2.x、图片换成 1×1 PNG）。
+3. **人工复核再提交**（红线）：`--words` 打印原样保留的词；再 grep 一遍内网域名 / IP、主机名、人名、邮箱、仓库名、token，
+   以及所有 JSON 键和枚举值（键是原样保留的）。拿不准的行直接删掉。每份控制在 250 KB 以内。
+4. 跑 `-update` 生成 golden，看 diff。

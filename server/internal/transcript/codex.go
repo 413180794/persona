@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -255,9 +256,16 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		return codexTool(mk, it.ID, "Bash", input, out, failed)
 	case "FileChange":
 		// One Edit per file, the patch as a unified diff (the apps draw "diff" when there is no old/new string).
+		// In path order: map order would give the same file a different id on every parse.
+		paths := make([]string, 0, len(it.Changes))
+		for path := range it.Changes {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
 		var out []proto.Item
 		n := 0
-		for path, ch := range it.Changes {
+		for _, path := range paths {
+			ch := it.Changes[path]
 			diff := ch.UnifiedDiff
 			if diff == "" {
 				diff = ch.Content

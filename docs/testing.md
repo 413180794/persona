@@ -9,6 +9,11 @@ cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme J
 ./scripts/sim.sh [-openSession example-machine/<id>]                    # 模拟器里跑，自动配对真实 hub
 ```
 
+transcript 解析用真实样本做 golden 测试（`server/internal/transcript/testdata/`，`fixtures_test.go`）：每份样本的解析结果、
+「边写边读 = 一次读完」、「往前翻页不漏不重」。改了解析跑 `go test ./internal/transcript -run Fixture -update`，把 golden 的 diff 当评审看。
+加样本前先 `scripts/redact_transcript.py` 脱敏、人工复核（`testdata/README.md`）；Claude Code / Codex 升级后跑
+`scripts/transcript_stats.py` 看有没有解析器不认识的新类型。
+
 接口冒烟：`curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`、`…/api/v1/sessions?machine_id=example-machine`。
 
 ## 端到端（2026-10-24 实测通过）
