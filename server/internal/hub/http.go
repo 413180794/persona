@@ -596,32 +596,50 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	}
 }
 
+// backlogPages caps a catch-up at 4000 items; past that the last batch says more_after and the app takes the latest
+// page instead (an old app would keep the hole, as before).
+const backlogPages = 8
+
 func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string, since int) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	params := map[string]any{"session_id": sid, "turns": 2} // the last two exchanges, however many rows they are
-	if since > 0 {
-		params["after_seq"] = since
-	}
-	var res struct {
-		Items   []proto.Item `json:"items"`
-		HasMore bool         `json:"has_more"`
-	}
-	if err := m.call(ctx, "session.items", params, &res); err != nil {
-		c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
-		return
-	}
 	c.mu.Lock()
 	lazy := c.lazy
 	c.mu.Unlock()
-	if lazy {
-		res.Items = proto.WithoutImageData(res.Items)
+	after := since
+	for page := 0; ; page++ {
+		params := map[string]any{"session_id": sid, "turns": 2} // the last two exchanges, however many rows they are
+		if since > 0 {
+			params["after_seq"] = after
+		}
+		var res struct {
+			Items     []proto.Item `json:"items"`
+			HasMore   bool         `json:"has_more"`
+			MoreAfter bool         `json:"more_after"`
+		}
+		if err := m.call(ctx, "session.items", params, &res); err != nil {
+			c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
+			return
+		}
+		if lazy {
+			res.Items = proto.WithoutImageData(res.Items)
+		}
+		out := map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true}
+		if since == 0 {
+			// Only a page counted back from the end knows whether older items exist. A catch-up after since_seq does
+			// not: sending false there told the app the history was complete, and scrolling up stopped at its oldest.
+			out["has_more"] = res.HasMore
+		}
+		// A catch-up continues page by page (one page used to be all: whatever came after its 500 items was lost).
+		more := since > 0 && res.MoreAfter && len(res.Items) > 0
+		if more && page+1 >= backlogPages {
+			out["more_after"] = true
+			more = false
+		}
+		c.sendJSON(out)
+		if !more {
+			return
+		}
+		after = res.Items[len(res.Items)-1].Seq
 	}
-	out := map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true}
-	if since == 0 {
-		// Only a page counted back from the end knows whether older items exist. A catch-up after since_seq does
-		// not: sending false there told the app the history was complete, and scrolling up stopped at its oldest.
-		out["has_more"] = res.HasMore
-	}
-	c.sendJSON(out)
 }

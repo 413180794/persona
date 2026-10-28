@@ -39,7 +39,7 @@ UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 example-machine
 `<environment_context>`、`<INSTRUCTIONS>`、`<skill>`、`<turn_aborted>`、`<subagent_notification>`、`<realtime_delegation>`、
 `<codex_internal_context>` 只出现在 response_item（模型输入），不会进对话。
 
-`response_item` 是同样内容的模型线格式，跳过。SubAgentActivity、Extension（生图）、CollabAgentToolCall 暂不显示。
+`response_item` 是同样内容的模型线格式，跳过。Extension 里的 `web.search` 显示成 `WebSearch`（搜索，输入是查询词）/ `WebFetch`（`action.type=openPage`，输入是网址），结果每条「标题  网址」；SubAgentActivity、其他 Extension（生图）、CollabAgentToolCall 暂不显示。
 
 ## 还不支持
 

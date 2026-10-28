@@ -27,7 +27,11 @@ node 的 `session.start`：
 - transcript：`~/.claude/projects/<编码后的 cwd>/<session id>.jsonl`，每个内容块完成就追加一行（thinking、text、tool_use 各自一行，
   tool_result 在下一条 user 行里）。不是逐 token，逐字效果靠屏幕采样。
 - 需要跳过：`isSidechain`（子代理）、`isMeta`（系统注入的 user 消息）、`attachment` / `api-request*` / `mode` / `permission-mode`
-  / `file-history-*` 等非对话行。`ai-title` 行给会话标题。`system` 里只要 `compact_boundary`、`api_error`、`informational`、`away_summary`。
+  / `file-history-*` 等非对话行。`ai-title` 行给会话标题。`system` 里只要 `compact_boundary`、`api_error`、`informational`、`away_summary`、
+  `local_command`（新版把斜杠命令和输出写成 system 行：`<command-name>` 是用户输入，`<local-command-stdout>` 去掉终端转义后当提示）、
+  `scheduled_task_fire`（/loop 到点，算唤醒）。`api_error` 每次重试写一行（`retryAttempt` / `maxRetries`），原因在 `error.formatted`，
+  只显示第一次和放弃时那次；`error` 在别的行里可能是字符串，解析时按原始 JSON 取。同一条 `<task-notification>` 常同时写成 user 行和
+  queued_command，内容完全相同的只显示一次（同一任务内容不同的多次通知都是真事件）。
 
 ## Hooks（只注入 jarvis 启动的会话）
 

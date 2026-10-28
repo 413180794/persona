@@ -62,6 +62,12 @@ type entry struct {
 	} `json:"attachment"`
 	Cwd           string          `json:"cwd"`
 	ToolUseResult json.RawMessage `json:"toolUseResult"`
+	// system/api_error: {message, formatted} (raw: other lines may carry a plain string here), and which retry this is.
+	Error        json.RawMessage `json:"error"`
+	RetryAttempt int             `json:"retryAttempt"`
+	MaxRetries   int             `json:"maxRetries"`
+	// system/scheduled_task_fire: the /loop prompt that is about to run.
+	Prompt string `json:"prompt"`
 }
 
 type block struct {
@@ -125,6 +131,9 @@ type Meta struct {
 	LastTurnWake bool
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
 	bashInput string
+	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
+	// as a queued_command attachment). The same task reporting again with other content is a new event and shows.
+	notified map[string]bool
 	Cwd       string
 	Model     string
 	LastText  string
@@ -294,7 +303,31 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		case "compact_boundary":
 			text = "上下文已压缩"
 		case "api_error":
-			text = "API 错误：" + rawString(e.Content)
+			// Claude Code writes one line per retry (retryAttempt 1..maxRetries): show the first and, if it never
+			// got through, the last.
+			if e.RetryAttempt > 1 && (e.MaxRetries == 0 || e.RetryAttempt < e.MaxRetries) {
+				return nil
+			}
+			text = "API 错误：" + apiErrorText(e)
+			switch {
+			case e.MaxRetries > 0 && e.RetryAttempt >= e.MaxRetries:
+				text += fmt.Sprintf("（重试 %d 次后放弃）", e.RetryAttempt)
+			case e.RetryAttempt == 1:
+				text += "（正在重试）"
+			}
+		case "local_command":
+			// Newer Claude Code writes slash commands and their output as system lines (older ones as user lines):
+			// "<command-name>/model</command-name>…" is what the user typed, "<local-command-stdout>…" the answer.
+			return userText(mk, rawString(e.Content), meta)
+		case "scheduled_task_fire":
+			// A /loop or cron job firing: the turn that follows was started by the schedule, not by a message.
+			text = "/loop 到点，开始新一轮"
+			if p := snippetLine(e.Prompt, 80); p != "" {
+				text += "：" + p
+			}
+			it := mk(0, "system", proto.KindNotice)
+			it.Text, it.Wake = text, true
+			return []proto.Item{it}
 		case "away_summary":
 			recap := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(rawString(e.Content)), "(disable recaps in /config)"))
 			if recap == "" {
@@ -690,13 +723,20 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	}
 	if strings.HasPrefix(trimmed, "<local-command-stdout>") || strings.HasPrefix(trimmed, "<local-command-stderr>") {
 		it := mk(0, "system", proto.KindNotice)
-		it.Text = clip(strings.TrimSpace(tagRe.ReplaceAllString(trimmed, "$2")))
+		it.Text = clip(strings.TrimSpace(ansiRe.ReplaceAllString(tagRe.ReplaceAllString(trimmed, "$2"), "")))
 		if it.Text == "" {
 			return nil
 		}
 		return []proto.Item{it}
 	}
 	if strings.HasPrefix(trimmed, "<task-notification>") {
+		if meta.notified[trimmed] {
+			return nil
+		}
+		if meta.notified == nil {
+			meta.notified = map[string]bool{}
+		}
+		meta.notified[trimmed] = true
 		it := mk(0, "system", proto.KindNotice)
 		summary := firstTag(trimmed, "summary")
 		if summary == "" {
@@ -722,6 +762,43 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	it := mk(0, "user", proto.KindText)
 	it.Text = clip(text)
 	return []proto.Item{it}
+}
+
+// ansiRe matches terminal escape sequences (colors, bold) that local command output keeps.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+// apiErrorText is what an api_error line says went wrong: error.formatted / error.message, or older lines' content.
+func apiErrorText(e entry) string {
+	var s string
+	if json.Unmarshal(e.Error, &s) == nil && s != "" {
+		return s
+	}
+	var obj struct {
+		Message   string `json:"message"`
+		Formatted string `json:"formatted"`
+	}
+	if json.Unmarshal(e.Error, &obj) == nil {
+		if obj.Formatted != "" {
+			return obj.Formatted
+		}
+		if obj.Message != "" {
+			return obj.Message
+		}
+	}
+	if s := strings.TrimSpace(rawString(e.Content)); s != "" {
+		return s
+	}
+	return "请求失败"
+}
+
+// snippetLine is the first line of s, at most n runes.
+func snippetLine(s string, n int) string {
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
+	r := []rune(strings.TrimSpace(s))
+	if len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return string(r)
 }
 
 func firstTag(s, tag string) string {
@@ -933,20 +1010,24 @@ func (f *File) Item(id string) (proto.Item, bool) {
 	return proto.Item{}, false
 }
 
-// After returns items with seq > afterSeq (at most limit, oldest first).
-func (f *File) After(afterSeq, limit int) []proto.Item {
+// After returns items with seq > afterSeq, oldest first: at least limit of them unless fewer exist, and never part of
+// a line (a Codex tool call is its call and its result on one line; a client resuming from the last seq it got would
+// never see the rest). more says items are left after the last one returned.
+func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var out []proto.Item
-	for _, it := range f.items {
-		if it.Seq > afterSeq {
-			out = append(out, it)
-			if len(out) >= limit {
-				break
-			}
-		}
+	i := 0
+	for i < len(f.items) && f.items[i].Seq <= afterSeq {
+		i++
 	}
-	return out
+	end := min(i+limit, len(f.items))
+	for end > i && end < len(f.items) && f.items[end].Seq == f.items[end-1].Seq {
+		end++
+	}
+	if end == i {
+		return nil, false
+	}
+	return append([]proto.Item(nil), f.items[i:end]...), end < len(f.items)
 }
 
 func (f *File) Meta() Meta {

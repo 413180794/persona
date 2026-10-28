@@ -83,6 +83,20 @@ type codexItem struct {
 	Error json.RawMessage `json:"error"`
 	// ImageView
 	Path string `json:"path"`
+	// Extension (kind web.search): what was searched or opened, and what came back
+	Kind    string `json:"kind"`
+	Query   string `json:"query"`
+	Action  *struct {
+		Type    string   `json:"type"`
+		Queries []string `json:"queries"`
+		URL     string   `json:"url"`
+	} `json:"action"`
+	Results []struct {
+		Title   string `json:"title"`
+		URL     string `json:"url"`
+		Domain  string `json:"domain"`
+		Snippet string `json:"snippet"`
+	} `json:"results"`
 }
 
 // isCodexLine tells a rollout line from a Claude transcript line: only rollouts wrap everything in "payload".
@@ -302,6 +316,11 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 	case "ImageView":
 		input, _ := json.Marshal(map[string]string{"file_path": strings.TrimPrefix(it.Path, "file://")})
 		return codexTool(mk, it.ID, "Read", input, "", false)
+	case "Extension":
+		if it.Kind != "web.search" {
+			return nil // other extensions (image generation…) are not shown yet
+		}
+		return codexWebSearch(mk, it)
 	case "ContextCompaction":
 		meta.Compactions++
 		n := mk(0, it.ID, "system", proto.KindNotice)
@@ -339,6 +358,33 @@ func codexUserText(s string) string {
 		}
 		return strings.Join(lines, "\n")
 	}))
+}
+
+// codexWebSearch shows a web search (or a page it opened) the way Claude's WebSearch / WebFetch calls look: the query or
+// URL as input, the results as one "title  url" line each.
+func codexWebSearch(mk func(int, string, string, string) proto.Item, it *codexItem) []proto.Item {
+	name, input := "WebSearch", map[string]string{"query": it.Query}
+	if a := it.Action; a != nil {
+		switch {
+		case a.Type == "openPage" && a.URL != "":
+			name, input = "WebFetch", map[string]string{"url": a.URL}
+		case it.Query == "" && len(a.Queries) > 0:
+			input["query"] = strings.Join(a.Queries, "\n")
+		}
+	}
+	var lines []string
+	for _, r := range it.Results {
+		where := r.URL
+		if where == "" {
+			where = r.Domain
+		}
+		line := strings.TrimSpace(strings.TrimSpace(r.Title) + "  " + where)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	raw, _ := json.Marshal(input)
+	return codexTool(mk, it.ID, name, raw, strings.Join(lines, "\n"), false)
 }
 
 // codexTool is a finished tool call: Codex writes the call and its result in one line.

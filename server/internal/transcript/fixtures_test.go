@@ -195,6 +195,24 @@ func TestFixturePagingCoversEverything(t *testing.T) {
 			}
 			walk("Page", func(before int) ([]proto.Item, bool) { return f.Page(before, 3) })
 			walk("PageTurns", func(before int) ([]proto.Item, bool) { return f.PageTurns(before, 1, 2000) })
+			// Forward, the way catch-up and background sync go: resume after the last seq received.
+			for _, limit := range []int{1, 3} {
+				var got []proto.Item
+				after := 0
+				for {
+					items, more := f.After(after, limit)
+					got = append(got, items...)
+					if len(items) > 0 {
+						after = items[len(items)-1].Seq
+					}
+					if !more {
+						break
+					}
+				}
+				if !bytes.Equal(marshal(t, got), marshal(t, all)) {
+					t.Fatalf("After by %d: %d items, the file %d", limit, len(got), len(all))
+				}
+			}
 		})
 	}
 }

@@ -173,8 +173,12 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 			if len(line) == 0 {
 				continue
 			}
-			// Skip big tool results quickly; small user lines still count as activity.
+			// Skip parsing big tool results; they still count as activity (a turn that ended on one would otherwise
+			// look finished earlier, and a look at it in the app in between would count as having seen the end).
 			if bytes.Contains(line, []byte(`"type":"user"`)) && len(line) > 8<<10 {
+				if ts := lineTime(line); ts.After(tm.LastActivity) {
+					tm.LastActivity = ts
+				}
 				continue
 			}
 			transcript.ParseLine(0, line, &tm)
@@ -184,6 +188,23 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	m.wake = tm.LastTurnWake
 	m.mode, m.modeAt, m.effort, m.effortAt = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt
 	return m
+}
+
+// lineTime reads a transcript line's own "timestamp" without decoding it (Claude Code writes it after the message, so
+// the last one; quotes inside the message are escaped and do not match).
+func lineTime(line []byte) time.Time {
+	key := []byte(`"timestamp":"`)
+	i := bytes.LastIndex(line, key)
+	if i < 0 {
+		return time.Time{}
+	}
+	rest := line[i+len(key):]
+	j := bytes.IndexByte(rest, '"')
+	if j < 0 {
+		return time.Time{}
+	}
+	t, _ := time.Parse(time.RFC3339Nano, string(rest[:j]))
+	return t
 }
 
 // startingSession reports whether a session without a transcript is one that exists but has not written its first

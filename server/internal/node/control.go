@@ -406,10 +406,7 @@ func (n *Node) watch(id string, since int) error {
 					continue
 				}
 				if _, err := f.Refresh(); err == nil {
-					if items := f.After(since, 500); len(items) > 0 {
-						_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": items})
-						since = items[len(items)-1].Seq
-					}
+					since = n.catchUp(id, f, since)
 				}
 				_ = n.watch(id, since)
 				return
@@ -427,14 +424,34 @@ func (n *Node) watch(id string, since int) error {
 	n.watches[id] = w
 	n.mu.Unlock()
 
-	// Catch up on lines appended after the client's last seen seq, then stream.
-	if _, err := f.Refresh(); err == nil && since > 0 {
-		if items := f.After(since, 500); len(items) > 0 {
-			_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": items})
+	// Catch up on lines appended after the hub's last seen seq, then stream. Without a seq (the hub has not seen this
+	// session since it started) the lines this Refresh appends still go out — watchLoop only pushes what later
+	// Refreshes find — unless it is the first read of the file: that is the whole history, the subscriber's backlog.
+	readBefore := f.LastSeq() > 0
+	if fresh, err := f.Refresh(); err == nil {
+		if since > 0 {
+			n.catchUp(id, f, since)
+		} else if readBefore && len(fresh) > 0 {
+			_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": fresh})
 		}
 	}
 	go n.watchLoop(ctx, id, f, w)
 	return nil
+}
+
+// catchUp pushes every item after since, a page at a time (one page used to be all: after 500 the rest was lost), and
+// returns the last seq sent.
+func (n *Node) catchUp(id string, f *transcript.File, since int) int {
+	for {
+		items, more := f.After(since, 500)
+		if len(items) > 0 {
+			_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": items})
+			since = items[len(items)-1].Seq
+		}
+		if !more {
+			return since
+		}
+	}
 }
 
 func (n *Node) unwatch(id string) {

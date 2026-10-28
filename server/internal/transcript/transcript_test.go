@@ -343,18 +343,22 @@ func TestPageBeforeSeq(t *testing.T) {
 
 func TestAfterSeq(t *testing.T) {
 	f := pageFixture(t)
-	items := f.After(5, 10)
-	if len(items) != 2 {
-		t.Fatalf("want both items of line 6, got %+v", items)
+	items, more := f.After(5, 10)
+	if len(items) != 2 || more {
+		t.Fatalf("want both items of line 6 and nothing more, got %+v more %v", items, more)
 	}
 	if items[0].Seq != 6 || items[1].Seq != 6 {
 		t.Fatalf("unexpected seqs %+v", items)
 	}
-	if got := f.After(0, 3); len(got) != 3 || got[2].Seq != 3 {
-		t.Fatalf("limit not honoured: %+v", got)
+	if got, more := f.After(0, 3); len(got) != 3 || got[2].Seq != 3 || !more {
+		t.Fatalf("limit not honoured: %+v more %v", got, more)
 	}
-	if got := f.After(6, 10); len(got) != 0 {
+	if got, more := f.After(6, 10); len(got) != 0 || more {
 		t.Fatalf("nothing after the last line, got %+v", got)
+	}
+	// The limit falls inside line 6 (two items): the page takes the whole line.
+	if got, _ := f.After(4, 2); len(got) != 3 || got[2].Seq != 6 {
+		t.Fatalf("a line was split: %+v", got)
 	}
 }
 
@@ -675,5 +679,43 @@ func TestPermissionModeAndEffort(t *testing.T) {
 	}
 	if want := time.Date(2026, 10, 28, 16, 0, 5, 0, time.UTC); !meta.EffortAt.Equal(want) || !meta.ModeAt.Equal(want) {
 		t.Fatalf("effortAt %v modeAt %v", meta.EffortAt, meta.ModeAt) // the mode line has no time: the previous line's
+	}
+}
+
+func TestAPIErrorRetriesAndLenientErrorField(t *testing.T) {
+	meta := &Meta{}
+	var texts []string
+	for i, l := range []string{
+		`{"type":"system","subtype":"api_error","uuid":"e1","error":{"formatted":"Overloaded"},"retryAttempt":1,"maxRetries":3}`,
+		`{"type":"system","subtype":"api_error","uuid":"e2","error":{"formatted":"Overloaded"},"retryAttempt":2,"maxRetries":3}`,
+		`{"type":"system","subtype":"api_error","uuid":"e3","error":{"message":"Overloaded"},"retryAttempt":3,"maxRetries":3}`,
+		`{"type":"system","subtype":"api_error","uuid":"e4","content":"old style"}`,
+		// Some lines carry "error" as a plain string: the line must still parse.
+		`{"type":"assistant","uuid":"a1","error":"rate_limit","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"limit hit"}]}}`,
+	} {
+		for _, it := range ParseLine(i+1, []byte(l), meta) {
+			texts = append(texts, it.Text)
+		}
+	}
+	want := []string{"API 错误：Overloaded（正在重试）", "API 错误：Overloaded（重试 3 次后放弃）", "API 错误：old style", "limit hit"}
+	if strings.Join(texts, "|") != strings.Join(want, "|") {
+		t.Fatalf("got %q, want %q", texts, want)
+	}
+}
+
+func TestLocalCommandLines(t *testing.T) {
+	meta := &Meta{}
+	var got []string
+	for i, l := range []string{
+		`{"type":"system","subtype":"local_command","uuid":"c1","content":"<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args>opus</command-args>"}`,
+		`{"type":"system","subtype":"local_command","uuid":"c2","content":"<local-command-stdout>Set model to \u001b[1mOpus\u001b[22m</local-command-stdout>"}`,
+		`{"type":"system","subtype":"local_command","uuid":"c3","content":"<local-command-stdout></local-command-stdout>"}`,
+	} {
+		for _, it := range ParseLine(i+1, []byte(l), meta) {
+			got = append(got, it.Role+":"+it.Text)
+		}
+	}
+	if want := "user:/model opus|system:Set model to Opus"; strings.Join(got, "|") != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
