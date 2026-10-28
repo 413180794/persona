@@ -33,7 +33,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 图片按需加载：历史分页和实时推送都不带图片数据（`lazy_images`，一页从几 MB 降到几百 KB），只带尺寸；行滚到屏幕上才按
   `ImagePayload.ref` 取图（`ChatImageLoader`：同一张只下载一次，内存 NSCache + `Caches/chat-images` 磁盘缓存，图片不会变，永久有效），
   取到之前按尺寸占好位置，列表不跳。缩略图、全屏查看器都走它；本地发出的图片仍是内嵌 base64。
-- 链接（`Views/Link/LinkSheet.swift`）：会话里的 http(s) 链接在 App 内的底部卡片打开（Telegram 式）：先升到 60%，上拉全屏、下拉收起，
+- 链接（`Views/Link/LinkSheet.swift`）：会话里的 http(s) 链接在 App 内的底部卡片打开（Telegram 式）：打开即铺满屏幕，下拉到 60% 时对话照常可用、再下拉收起，
   卡片升到 60% 时后面的对话照常可滚动、可输入（`presentationBackgroundInteraction`）。飞书文档 / 知识库走原生阅读器（`FeishuDocReader`），
   其他网页用 `WebViewPool`：每条回复出现时预加载其中前 3 个链接，最多常驻 6 个 WKWebView（LRU），共用默认的磁盘网站数据（缓存、登录态），
   请求用 `returnCacheDataElseLoad`，打开时直接拿已加载好的视图。网页里选中文字，系统菜单多「AI 修改」（填修改要求后立即发给 Agent）和

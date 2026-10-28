@@ -73,6 +73,8 @@ struct LinkSheet: View {
     @State private var title = ""
     @State private var editing: ContextRef?
     @State private var instruction = ""
+    /// Opens full screen (2026-10-28: half a screen was too little to read); pull down to 0.6 to see the chat again.
+    @State private var detent: PresentationDetent = .large
 
     private var isFeishuDoc: Bool { FeishuLinks.isDoc(target.url) }
     /// Feishu links with a native view (documents, removed posts).
@@ -91,9 +93,10 @@ struct LinkSheet: View {
                 }
             } else {
                 PooledWebView(url: target.url, title: $title) { selected, kind in pick(selected, kind: kind) }
+                    .ignoresSafeArea(.container, edges: .bottom) // full screen: the page runs under the home indicator
             }
         }
-        .presentationDetents([.fraction(0.6), .large])
+        .presentationDetents([.fraction(0.6), .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.pageBackground) // pages with a clear background let the chat show through
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.6))) // the chat stays usable behind
