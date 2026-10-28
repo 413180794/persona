@@ -1,5 +1,7 @@
 # 架构
 
+![Jarvis 架构](architecture.svg)
+
 ## 目标
 
 - 手机（和手表）上像聊天 App 一样和 Claude 对话，但 Claude 本体始终是某台机器 herdr 里的一个**交互式 Claude Code**：
