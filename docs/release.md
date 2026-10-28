@@ -92,3 +92,19 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 - 在 developer.apple.com 建一个 APNs key（Sandbox & Production，Team Scoped），Key ID 和 .p8 文件都不进仓库。
 - 文件：hub 机器的 `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
 - 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。
+
+## 外部测试（只按邮箱邀请）
+
+内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`），**不开公开链接**，
+只有 `app_store.external.testers` 里的邮箱会收到邀请，别人拿不到加入的入口。
+
+```sh
+python3 scripts/asc_testflight.py external   # 建群组（关掉公开链接）、写测试信息、挂最新构建、提交审核、发邀请
+```
+
+- 外部测试的构建要过 **Beta App Review**（第一次约一天，同一版本后面的构建多数自动通过）。提交前必须有联系人：
+  `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交。
+- 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
+- App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
+- 邀请邮件里的链接只对被邀请的邮箱有效；测试员在 TestFlight 里用这个 Apple ID 接受。
+

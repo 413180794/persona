@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""TestFlight setup for Jarvis (idempotent). Jarvis is internal-only: one internal group, one tester.
+"""TestFlight setup for Jarvis (idempotent): an internal group, and an external one people join by invitation only.
 
   python3 scripts/asc_testflight.py                    # group "Internal" + testers, then status
   python3 scripts/asc_testflight.py status             # the last few builds and their processing state
   python3 scripts/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
+  python3 scripts/asc_testflight.py external           # group "Friends": newest build, Beta App Review, invitations
 
 Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
-The App ID comes from app_store.app_id in the config (docs/config.md).
+External testers (app_store.external.testers) can be anyone: they get an email invitation, and the group has no
+public link, so nobody else can join. Their first build of a version goes through Beta App Review, which needs the
+contact in app_store.external.review (docs/release.md). The App ID comes from app_store.app_id in the config (docs/config.md).
 """
 import os
 import sys
@@ -20,13 +23,17 @@ APP_ID = app_id()
 GROUP = "Internal"
 TESTERS = STORE.get("testers", [])  # [{"email", "first_name"}]
 FEEDBACK_EMAIL = STORE.get("feedback_email", "")
+EXTERNAL = STORE.get("external", {})  # {"group", "testers", "review", "privacy_url"}
+EXTERNAL_GROUP = EXTERNAL.get("group", "Friends")
 
 BETA_INFO = {
-    "en-US": "Jarvis is a personal assistant that drives Claude Code sessions on your own computers from the iPhone and the "
-             "Apple Watch: watch every step stream in, answer questions, approve plans and tool calls. It can also read and "
-             "write your contacts, calendar, reminders, photos, health data and mail when you ask.",
-    "zh-Hans": "Jarvis 是只给自己用的助手：在 iPhone 和 Apple Watch 上驱动自己电脑里的 Claude Code 会话——实时看每一步、"
-               "回答提问、审批计划和工具调用；也能在你需要时读写通讯录、日历、提醒事项、照片、健康数据和邮件。",
+    "en-US": "Jarvis drives the Claude Code and Codex sessions on your own computers from the iPhone and the Apple Watch: "
+             "watch every step stream in, answer questions, approve plans and tool calls. Its assistant can also read your "
+             "mail and calendar and, when you ask, your contacts, reminders, photos and health data. It connects to a hub "
+             "you run yourself (see the README of the project).",
+    "zh-Hans": "Jarvis 让你在 iPhone 和 Apple Watch 上驱动自己各台电脑里的 Claude Code 和 Codex：实时看每一步、回答提问、"
+               "审批计划和工具调用；助手还能读你的邮件和日历，在你需要时读写通讯录、提醒事项、照片和健康数据。"
+               "需要连接你自己部署的 hub（见项目 README）。",
 }
 
 
@@ -46,7 +53,7 @@ def group_id() -> str:
     return request("POST", "/v1/betaGroups", body)["data"]["id"]
 
 
-def add_tester(gid: str, email: str, first_name: str):
+def add_tester(gid: str, email: str, first_name: str, last_name: str = ""):
     members = get_all(f"/v1/betaGroups/{gid}/betaTesters")
     if any(m["attributes"].get("email", "").lower() == email.lower() for m in members):
         print("already in group:", email)
@@ -54,15 +61,18 @@ def add_tester(gid: str, email: str, first_name: str):
     # One email has a tester record per app, so linking another app's record answer with 409
     # "Tester(s) cannot be assigned to this group because they belong to another app". Creating the
     # tester together with the group relationship works and reuses the person.
-    body = {"data": {"type": "betaTesters", "attributes": {"email": email, "firstName": first_name},
+    attrs = {"email": email, "firstName": first_name}
+    if last_name:
+        attrs["lastName"] = last_name
+    body = {"data": {"type": "betaTesters", "attributes": attrs,
                      "relationships": {"betaGroups": {"data": [{"type": "betaGroups", "id": gid}]}}}}
     try:
         request("POST", "/v1/betaTesters", body)
         print("invited", email)
     except APIError as e:
         if e.status == 409:
-            print(f"{email}: already a tester under another app (409); add it to this app's {GROUP} group by hand "
-                  "in App Store Connect › Users and Access › TestFlight")
+            print(f"{email}: already a tester under another app (409); add it to this app's group by hand "
+                  "in App Store Connect › TestFlight")
             return
         raise
 
@@ -106,6 +116,8 @@ def write_info(build, whats_new: str):
     locales = {l["attributes"]["locale"]: l for l in get_all(f"/v1/apps/{APP_ID}/betaAppLocalizations")}
     for locale, description in BETA_INFO.items():
         attrs = {"description": description, "feedbackEmail": FEEDBACK_EMAIL}
+        if EXTERNAL.get("privacy_url"):
+            attrs["privacyPolicyUrl"] = EXTERNAL["privacy_url"]  # external testing requires one
         if locale in locales:
             request("PATCH", f"/v1/betaAppLocalizations/{locales[locale]['id']}",
                     {"data": {"type": "betaAppLocalizations", "id": locales[locale]["id"], "attributes": attrs}})
@@ -159,6 +171,73 @@ def wait(minutes: int, version: str | None = None):
         time.sleep(30)
 
 
+def external_group_id() -> str:
+    """The external group: invitation only (no public link), so only the emails added here can install."""
+    for g in get_all(f"/v1/apps/{APP_ID}/betaGroups"):
+        if g["attributes"]["name"] == EXTERNAL_GROUP:
+            if g["attributes"].get("publicLinkEnabled"):
+                request("PATCH", f"/v1/betaGroups/{g['id']}",
+                        {"data": {"type": "betaGroups", "id": g["id"], "attributes": {"publicLinkEnabled": False}}})
+                print("turned off the public link of", EXTERNAL_GROUP)
+            return g["id"]
+    print("create group", EXTERNAL_GROUP)
+    body = {"data": {"type": "betaGroups",
+                     "attributes": {"name": EXTERNAL_GROUP, "isInternalGroup": False, "publicLinkEnabled": False,
+                                    "feedbackEnabled": True},
+                     "relationships": {"app": {"data": {"type": "apps", "id": APP_ID}}}}}
+    return request("POST", "/v1/betaGroups", body)["data"]["id"]
+
+
+def write_review_details() -> bool:
+    """Beta App Review's contact and notes; False when the config has no contact yet (review can't be submitted)."""
+    r = EXTERNAL.get("review", {})
+    missing = [k for k in ("first_name", "last_name", "phone", "email") if not r.get(k)]
+    if missing:
+        print("app_store.external.review is missing", ", ".join(missing), "- not submitting for Beta App Review")
+        return False
+    attrs = {"contactFirstName": r["first_name"], "contactLastName": r["last_name"], "contactPhone": r["phone"],
+             "contactEmail": r["email"], "notes": r.get("notes", ""), "demoAccountRequired": bool(r.get("demo_account"))}
+    if r.get("demo_account"):
+        attrs["demoAccountName"] = r["demo_account"].get("name", "")
+        attrs["demoAccountPassword"] = r["demo_account"].get("password", "")
+    detail = request("GET", f"/v1/apps/{APP_ID}/betaAppReviewDetail")["data"]
+    request("PATCH", f"/v1/betaAppReviewDetails/{detail['id']}",
+            {"data": {"type": "betaAppReviewDetails", "id": detail["id"], "attributes": attrs}})
+    print("beta app review contact written")
+    return True
+
+
+def submit_for_review(build):
+    """Asks for Beta App Review; a build already submitted (or approved) answers 409/422, which is fine."""
+    state = request("GET", f"/v1/builds/{build['id']}/buildBetaDetail")["data"]["attributes"].get("externalBuildState")
+    if state in ("WAITING_FOR_BETA_REVIEW", "IN_BETA_REVIEW", "BETA_APPROVED", "IN_BETA_TESTING"):
+        print("build", build["attributes"]["version"], "beta review:", state)
+        return
+    request("POST", "/v1/betaAppReviewSubmissions",
+            {"data": {"type": "betaAppReviewSubmissions",
+                      "relationships": {"build": {"data": {"type": "builds", "id": build["id"]}}}}})
+    print("build", build["attributes"]["version"], "submitted for Beta App Review")
+
+
+def external(build=None):
+    build = build or newest_valid()
+    if not build:
+        sys.exit("no VALID build yet (python3 scripts/asc_testflight.py wait)")
+    gid = external_group_id()
+    write_info(build, default_whats_new())
+    linked = {b["id"] for b in get_all(f"/v1/betaGroups/{gid}/builds")}
+    if build["id"] not in linked:
+        request("POST", f"/v1/betaGroups/{gid}/relationships/builds", {"data": [{"type": "builds", "id": build["id"]}]})
+        print("build", build["attributes"]["version"], "is now in", EXTERNAL_GROUP)
+    if write_review_details():
+        submit_for_review(build)
+    testers = EXTERNAL.get("testers", [])
+    if not testers:
+        print("no app_store.external.testers in the config: nobody invited yet")
+    for t in testers:
+        add_tester(gid, t["email"], t.get("first_name") or t["email"].split("@")[0], t.get("last_name", ""))
+
+
 def main():
     args = sys.argv[1:]
     if args[:1] == ["status"]:
@@ -171,6 +250,8 @@ def main():
             sys.exit("no VALID build yet (python3 scripts/asc_testflight.py wait)")
         write_info(build, args[1] if len(args) > 1 else default_whats_new())
         attach(build, group_id())
+    elif args[:1] == ["external"]:
+        external()
     elif args[:1] in ([], ["setup"]):
         gid = group_id()
         for t in TESTERS:
