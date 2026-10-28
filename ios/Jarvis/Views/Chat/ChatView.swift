@@ -49,6 +49,8 @@ struct ChatView: View {
     @State private var scratch = ChatScratch()
 
     private enum Entry: Equatable { case latestAnswer, line(String) }
+    /// The line being landed on, measured while landing (only that one row watches its frame).
+    @State private var landing: String?
 
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
@@ -504,12 +506,42 @@ struct ChatView: View {
         guard let id else { return }
         entry = nil
         followsEnd = false
+        if target == .latestAnswer, let i = lines.lastIndex(where: \.isInput) {
+            landUnderInput(lines[i].id)
+            return
+        }
         Task { @MainActor in
             await Task.yield()
             // Flipped: anchoring at the scroll view's bottom is the top of the screen — the line starts the page.
             position.scrollTo(id: id, anchor: .bottomLeading)
             try? await Task.sleep(for: .milliseconds(300))
             position.scrollTo(id: id, anchor: .bottomLeading)
+        }
+    }
+
+    /// How much of your last message stays on screen above the answer: about its last line (and the bubble's edge).
+    static let inputTail: CGFloat = 34
+
+    /// A finished turn you have not seen: your message's last line at the top of the page, the agent's answer under it.
+    /// Jumps to the message, then moves by what is measured (rows not drawn yet only have estimated heights). The
+    /// header folds to its slim bar at once (you came to read; it would fold a moment later anyway and uncover more of
+    /// your message), so the page is laid out against the slim bar.
+    private func landUnderInput(_ input: String) {
+        landing = input
+        scratch.landingMaxY = nil
+        Task { @MainActor in
+            await Task.yield()
+            position.scrollTo(id: input, anchor: .bottomLeading)
+            for n in 0..<8 {
+                try? await Task.sleep(for: .milliseconds(60))
+                if n == 1 { hideChrome() } // once the header has measured itself
+                guard let bottom = scratch.landingMaxY, scratch.listFrame.height > 0 else { continue }
+                let want = scratch.listFrame.minY + (style == .dev ? ChatChrome.compactHeight : 0) + Self.inputTail
+                let off = want - bottom // > 0: too high; the flipped list scrolls toward older to lower it
+                if abs(off) < 1 { break }
+                scrollList(to: chrome.offset + off)
+            }
+            landing = nil
         }
     }
 
@@ -718,6 +750,7 @@ struct ChatView: View {
                     lineView(line)
                         .flippedBack()
                         .debugLineY(line.id, scratch)
+                        .landingFrame(line.id == landing, scratch)
                         .id(line.id)
                         .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
                         .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
@@ -976,7 +1009,7 @@ struct ChatView: View {
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
                 entered = true
-                if style == .dev, session?.state == .unread {
+                if style == .dev, session?.state == .unread || Self.debugAsUnread {
                     entry = .latestAnswer // finished, not seen: read the latest answer from its start
                 } else if style == .dev, let saved = UserDefaults.standard.string(forKey: readKey) {
                     entry = .line(saved) // where you left off
@@ -1120,6 +1153,10 @@ struct ChatView: View {
     /// Simulator automation: `-openWork YES` shows every work line unfolded (screenshots of the expanded state).
     #if DEBUG
     static let foldProbe = UserDefaults.standard.bool(forKey: "showFoldProbe")
+    /// `-showAsUnread YES`: open the chat as if its answer had not been seen (where it lands).
+    static let debugAsUnread = UserDefaults.standard.bool(forKey: "showAsUnread")
+    #else
+    static let debugAsUnread = false
     #endif
 
     private static var debugOpenAll: Bool {
@@ -1904,6 +1941,8 @@ final class ChatScratch {
     /// the header keeps the header under the finger.
     var workHeadY: [String: CGFloat] = [:]
     var listFrame: CGRect = .zero
+    /// The bottom on screen of the line being landed on (`ChatView.landing`).
+    var landingMaxY: CGFloat?
     /// The list's horizontal offset at rest (-16: the side margins are content margins). Vertical jumps keep it:
     /// `scrollTo(y:)` set it to 0 and the page lost its margins.
     var offsetX: CGFloat = 0
@@ -1925,5 +1964,16 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+extension View {
+    /// Reports this line's bottom on screen while the chat lands on it (`ChatView.landUnderInput`).
+    @ViewBuilder func landingFrame(_ on: Bool, _ scratch: ChatScratch) -> some View {
+        if on {
+            onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) { scratch.landingMaxY = $0 }
+        } else {
+            self
+        }
     }
 }
