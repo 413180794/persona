@@ -32,6 +32,26 @@ cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme J
 
 模拟器限制：屏幕锁着时 computer-use 点不了模拟器，靠 DEBUG 启动参数直达页面；推送、HealthKit 真实数据、WatchConnectivity 同步要真机。
 
+## 用 mock 数据截图（README / 宣传图）
+
+截图不能带真实的业务数据：`scripts/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、
+一个提问、一个计划审批、飞书 + 邮件的收件箱），够主要界面用。
+
+```sh
+python3 scripts/mock_hub.py &                                  # 127.0.0.1:18760
+SIM=$(xcrun simctl create "Jarvis Shots" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <iOS 26 runtime>)
+xcrun simctl status_bar $SIM override --time "$(date +%H:%M)" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+xcrun simctl launch --terminate-running-process $SIM <bundle id> \
+  -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760&token=mock" [-tab dev|mail] [-openSession <machine>/<session>]
+```
+
+- **新建一台模拟器**，别用连过真实 hub 的：App 的磁盘缓存（对话、收件箱）会把真实数据带进截图。
+- mock 的条目 id 是固定的；改了 mock 数据（或 id）后要卸载重装 App，否则旧缓存和新数据合在一起，每一步出现两次。
+- Agent 对话页默认把工作过程折成一行，`-openWork YES` 展开。`-tab` 没有对话 tab，App 会停在上次的 tab：
+  要拍对话 tab 就先卸载重装（新装默认在对话 tab）。
+- 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
+- 深色：`xcrun simctl ui $SIM appearance dark`。
+
 ## UI 测试（`scripts/ui-test.sh`）
 
 `ios/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
