@@ -6,6 +6,21 @@ Jarvis 是一个 iPhone + Apple Watch 助手：在手机上用聊天的方式，
 Claude Code 始终跑在你自己的电脑上（[herdr](https://herdr.dev) 里的一个普通会话）。手机只是另一块屏幕：
 出门时在手机上回答它的提问、批准计划，回到电脑前打开 herdr，接着用的还是同一个会话。
 
+<table>
+  <tr>
+    <td><img src="docs/screenshots/assistant-home.png" width="200" alt="对话首页"></td>
+    <td><img src="docs/screenshots/assistant-chat.png" width="200" alt="助手回答今天要处理的事"></td>
+    <td><img src="docs/screenshots/agents.png" width="200" alt="Agents 列表"></td>
+    <td><img src="docs/screenshots/inbox.png" width="200" alt="收件箱"></td>
+  </tr>
+  <tr>
+    <td align="center">对话：随身的助手</td>
+    <td align="center">今天要处理的事</td>
+    <td align="center">各台电脑上的 Agent</td>
+    <td align="center">飞书和邮件一个收件箱</td>
+  </tr>
+</table>
+
 ![Jarvis 架构](docs/architecture.svg)
 
 ## 能做什么
