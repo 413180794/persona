@@ -88,9 +88,23 @@ struct SpaceView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if let first {
                     HStack(spacing: 8) {
-                        Image(systemName: model.machine(first.machineID)?.symbol ?? "laptopcomputer")
-                        Text(model.machine(first.machineID)?.name ?? first.machineID)
-                        Text("·")
+                        // The machine opens its own list of projects.
+                        NavigationLink(value: MachineRoute(id: first.machineID)) {
+                            HStack(spacing: 5) {
+                                Image(systemName: model.machine(first.machineID)?.symbol ?? "laptopcomputer")
+                                Text(model.machine(first.machineID)?.name ?? first.machineID).lineLimit(1)
+                                Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Theme.accent.opacity(0.1), in: .capsule)
+                            .contentShape(.capsule)
+                        }
+                        .buttonStyle(.plain)
+                        .layoutPriority(1)
+                        .accessibilityLabel("\(model.machine(first.machineID)?.name ?? first.machineID) 上的所有项目")
                         Text(Fmt.path(first.cwd, home: model.machine(first.machineID)?.home)).lineLimit(1).truncationMode(.head)
                     }
                     .font(.footnote)

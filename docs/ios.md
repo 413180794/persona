@@ -45,6 +45,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   tab 多时可以左右滑，打开时滚到当前 tab（居中），用横向 ScrollView 自己的 `scrollPosition`，不用 ScrollViewReader（会连带滚动外层）。
   条最前面的空间名「jarvis ›」点进空间页（这个空间的所有 Agent），对话页「…」→「空间里的所有 Agent」同样（只有一个 Agent、没有同伴条时用它）。
   对话本来就是从这个空间页点进来的，就直接返回，不再叠一层（ChatsView 记着哪一层是哪个空间页：`spaceAt`）。
+  空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
+  那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
+  DEBUG：`-tab dev -openMachinePage <机器 id>`。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
 - 展示逻辑（助手和开发统一，`chatLines` + `WorkLine`）：一轮按「消息」切成若干段，每条消息自成一段对话：
   你的消息 → 一行灰色的工作行「工具 5 · 思考 1 · 回复 1 · 4 分 17 秒 ›」（计数一律「名称 数字」）→ Agent 在下一条消息之前说的最后一段话 → 下一条消息……

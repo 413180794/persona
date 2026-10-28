@@ -242,6 +242,7 @@ struct ChatsView: View {
             .renameSessionAlert($renamingSession)
             .confirmClose($closingSession)
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
+            .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
                     showNew = false
@@ -259,6 +260,10 @@ struct ChatsView: View {
             }
             .onAppear {
                 if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
+                #if DEBUG
+                // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
+                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { path.append(MachineRoute(id: m)) }
+                #endif
                 if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
         }
