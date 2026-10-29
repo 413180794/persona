@@ -14,7 +14,7 @@ struct FleetLiveActivity: Widget {
         ActivityConfiguration(for: JarvisActivityAttributes.self) { context in
             FleetLockScreen(state: context.state, stale: context.isStale)
                 .widgetURL(FleetLink.whole(context.state))
-                .activitySystemActionForegroundColor(FleetPalette.coral)
+                .activitySystemActionForegroundColor(FleetPalette.accent)
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
@@ -60,7 +60,7 @@ struct FleetLiveActivity: Widget {
                 IslandCellView(cell: IslandCell.minimal(state), small: true)
             }
             .widgetURL(FleetLink.whole(state))
-            .keylineTint(FleetPalette.coral)
+            .keylineTint(FleetPalette.accent)
         }
         .supplementalActivityFamilies([.small])
     }
@@ -186,14 +186,14 @@ struct FleetActionRow: View {
             HStack(spacing: 10) {
                 switch item.kind {
                 // 拒绝 / 查看: the system's neutral fill with primary words (white on gray was 1.6:1 on a light lock
-                // screen); 允许 / 批准: a coral dark enough for white words.
+                // screen); 允许 / 批准: a blue dark enough for white words.
                 case .permission:
                     Button(intent: DenyPermissionIntent(interactionID: id)) { label("拒绝", "xmark") }
                         .buttonStyle(.bordered)
                         .tint(.primary)
                     Button(intent: AllowPermissionIntent(interactionID: id)) { label("允许", "checkmark") }
                         .buttonStyle(.borderedProminent)
-                        .tint(FleetPalette.coralButton)
+                        .tint(FleetPalette.button)
                         .foregroundStyle(.white)
                 case .plan:
                     Link(destination: FleetLink.url(item)!) {
@@ -204,7 +204,7 @@ struct FleetActionRow: View {
                     .foregroundStyle(.primary)
                     Button(intent: ApprovePlanIntent(interactionID: id)) { label("批准", "checkmark") }
                         .buttonStyle(.borderedProminent)
-                        .tint(FleetPalette.coralButton)
+                        .tint(FleetPalette.button)
                         .foregroundStyle(.white)
                 default:
                     EmptyView()

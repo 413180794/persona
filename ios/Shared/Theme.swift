@@ -73,6 +73,9 @@ nonisolated enum Theme {
         case .lark: Color(light: 0x3370FF, dark: 0x4C88FF)
         }
     }
+    /// The app icon's coral. Only for Jarvis' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
+    /// something to tap: that is `accent`, whatever the style.
+    static let brand = Color(light: 0xD4683F, dark: 0xE8835C)
     static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
 
     // Meanings that are not agent states. Never use a state color (StatusPalette) for these: changing a state color

@@ -319,9 +319,9 @@ struct AppGlyph: View {
             .overlay {
                 Image(systemName: "sparkle")
                     .font(.system(size: size * 0.48, weight: .semibold))
-                    .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFB08A), Theme.accent], startPoint: .top, endPoint: .bottom))
+                    .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFB08A), Theme.brand], startPoint: .top, endPoint: .bottom))
             }
-            .shadow(color: Theme.accent.opacity(0.25), radius: size * 0.15, y: size * 0.05)
+            .shadow(color: Theme.brand.opacity(0.25), radius: size * 0.15, y: size * 0.05)
     }
 }
 

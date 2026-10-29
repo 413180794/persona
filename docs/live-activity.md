@@ -36,7 +36,7 @@ App 负责开始活动、上报 token；Widget 扩展（`ios/JarvisWidgets`）�
 - 计时在手机本地走（`Text(timerInterval:)`），起点是 hub 记的这一轮开始时间（`turnTracker`），不为计时推送。
 - 锁屏默认只显示数量和「有个授权等你」这类不带名字的一行；设置 › 通知 › 锁屏显示详情 打开后才显示 Agent 名字和内容（按设备存，`prefs.lock_details`，
   hub 推给每台设备时填进 `details`）。灵动岛只在解锁时可见，总是显示详情。
-- 视觉：Jarvis 的状态色（不跟随界面风格，扩展读不到）；锁屏左上保留 App 图标的珊瑚四角星（认得出是 Jarvis），灵动岛不再放。锁屏和展开态都限高约 160pt，所以最多两条。
+- 视觉：Jarvis 的状态色（不跟随界面风格，扩展读不到）；锁屏左上保留 App 图标的珊瑚四角星（认得出是 Jarvis），灵动岛不再放；描边和「允许 / 批准」按钮是系统蓝，和 App 的主色一致。锁屏和展开态都限高约 160pt，所以最多两条。
 - Apple Watch：不单独开发，`supplementalActivityFamilies([.small])` 给智能叠放一个单行版本（最急那一类的符号 + 「2 个需要你」+ 下一类的数量）。
 
 ## ContentState（`FleetState`）

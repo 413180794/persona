@@ -66,7 +66,7 @@ struct NotificationSettingsView: View {
                             Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(.footnote).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "sparkle").foregroundStyle(Theme.accent(.claude))
+                        Image(systemName: "sparkle").foregroundStyle(Theme.brand)
                     }
                 }
                 Toggle(isOn: binding(\.lockDetails)) {

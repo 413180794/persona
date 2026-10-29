@@ -34,7 +34,7 @@ struct IslandSettingsView: View {
                             }
                             Spacer(minLength: 8)
                             if island.preset == preset {
-                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Color.accentColor)
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Theme.accent)
                             }
                         }
                         .contentShape(.rect)
