@@ -97,3 +97,31 @@ func TestBackgroundTasksBigFirstReadIsAsync(t *testing.T) {
 		t.Fatal("a small append should be read in line")
 	}
 }
+
+// A subagent transcript that has not changed is not read again for the session list.
+func TestSubagentEdgesCached(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-x.jsonl")
+	write := func(text string) os.FileInfo {
+		line := `{"type":"assistant","timestamp":"2026-10-29T01:00:00Z","isSidechain":true,"message":{"role":"assistant","content":[{"type":"text","text":"` + text + `"}]}}` + "\n"
+		if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := os.Stat(path)
+		return st
+	}
+	st := write("one")
+	_, first := subagentEdgesCached(path, st)
+	_, again := subagentEdgesCached(path, st)
+	if first != again {
+		t.Fatalf("cached read differs: %q vs %q", first, again)
+	}
+	edgeCache.Lock()
+	e := edgeCache.m[path]
+	e.readAt = time.Time{} // as if read long ago
+	edgeCache.m[path] = e
+	edgeCache.Unlock()
+	st = write("two, longer")
+	if _, last := subagentEdgesCached(path, st); last == first && first != "" {
+		t.Fatalf("a changed file should be read again, still %q", last)
+	}
+}

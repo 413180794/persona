@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -86,7 +87,7 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		if !running && time.Since(st.ModTime()) > 24*time.Hour {
 			continue
 		}
-		started, last := subagentEdges(jp)
+		started, last := subagentEdgesCached(jp, st)
 		out = append(out, proto.Subagent{
 			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
 			ToolUseID: m.ToolUseID, Running: running, Background: m.RequestShape == "background",
@@ -100,6 +101,36 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		return out[i].StartedAt.After(out[j].StartedAt)
 	})
 	return out
+}
+
+// edgeCache remembers subagentEdges per file. The session list is rebuilt every second and lists each live
+// session's subagents of the last day: re-reading the head and a 96 KB tail of every one each time kept a node
+// with a few subagent-heavy sessions reading ~20 MB/s. A growing file is re-read at most every metaMinInterval.
+var edgeCache = struct {
+	sync.Mutex
+	m map[string]edgeMemo
+}{m: map[string]edgeMemo{}}
+
+type edgeMemo struct {
+	size    int64
+	mtime   time.Time
+	readAt  time.Time
+	started time.Time
+	last    string
+}
+
+func subagentEdgesCached(path string, st os.FileInfo) (time.Time, string) {
+	edgeCache.Lock()
+	e, ok := edgeCache.m[path]
+	edgeCache.Unlock()
+	if ok && (e.size == st.Size() && e.mtime.Equal(st.ModTime()) || time.Since(e.readAt) < metaMinInterval) {
+		return e.started, e.last
+	}
+	started, last := subagentEdges(path)
+	edgeCache.Lock()
+	edgeCache.m[path] = edgeMemo{size: st.Size(), mtime: st.ModTime(), readAt: time.Now(), started: started, last: last}
+	edgeCache.Unlock()
+	return started, last
 }
 
 // subagentEdges reads the first timestamp and the latest assistant text of a subagent transcript.
