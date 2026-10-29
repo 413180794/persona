@@ -688,8 +688,48 @@ enum TerminalFont: String, CaseIterable {
     }()
 }
 
+@MainActor fileprivate final class TerminalGlyphMemo {
+    private nonisolated struct Key: Hashable {
+        let text: String
+        let width: UInt8
+        let font: UIFont
+        let color: UIColor
+    }
+
+    struct Glyph {
+        let line: CTLine
+        let scale: CGFloat
+        let inset: CGFloat
+    }
+
+    private var values: [Key: Glyph] = [:]
+
+    func glyph(_ text: String, width: UInt8, font: UIFont, color: UIColor, cell: CGSize) -> Glyph {
+        let key = Key(text: text, width: width, font: font, color: color)
+        if let value = values[key] { return value }
+        var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        var advance = CTLineGetTypographicBounds(line, nil, nil, nil)
+        let room = CGFloat(width) * cell.width
+        if width == 2, advance > 0, advance < room * 0.9 {
+            let grow = min(room * 0.92 / advance, cell.height * 0.86 / font.pointSize, 1.25)
+            if grow > 1.02 {
+                attributes[.font] = font.withSize(font.pointSize * grow)
+                line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+                advance = CTLineGetTypographicBounds(line, nil, nil, nil)
+            }
+        }
+        let scale = advance > room * 1.02 ? room / advance : 1
+        let value = Glyph(line: line, scale: scale, inset: max(0, (room - advance * scale) / 2))
+        if values.count >= 4096 { values.removeAll(keepingCapacity: true) }
+        values[key] = value
+        return value
+    }
+}
+
 /// Cell size of the monospaced font at a size.
 struct CellMetrics {
+    fileprivate let glyphs = TerminalGlyphMemo()
     let size: CGFloat
     let regular: UIFont
     let bold: UIFont
@@ -788,23 +828,9 @@ private final class LineRender {
             if c.width == 1, let s = text.unicodeScalars.first, text.unicodeScalars.count == 1, s.properties.isEmoji {
                 text.unicodeScalars.append("\u{FE0E}")
             }
-            var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
-            var glyph = CTLineGetTypographicBounds(line, nil, nil, nil)
-            let room = CGFloat(c.width) * m.cell.width
-            // A Chinese glyph is about one em, two cells are 1.2: drawn at the font's size the characters stand apart.
-            // Grown to fill their cells (within the line's height) they read as text.
-            if c.width == 2, glyph > 0, glyph < room * 0.9 {
-                let grow = min(room * 0.92 / glyph, m.cell.height * 0.86 / font.pointSize, 1.25)
-                if grow > 1.02 {
-                    var big = attrs
-                    big[.font] = font.withSize(font.pointSize * grow)
-                    line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: big))
-                    glyph = CTLineGetTypographicBounds(line, nil, nil, nil)
-                }
-            }
-            let scale = glyph > room * 1.02 ? room / glyph : 1
-            let x = CGFloat(i - from) * m.cell.width + max(0, (room - glyph * scale) / 2)
-            texts.append((line, CGPoint(x: x, y: m.baseline), scale))
+            let glyph = m.glyphs.glyph(text, width: c.width, font: font, color: color, cell: m.cell)
+            let x = CGFloat(i - from) * m.cell.width + glyph.inset
+            texts.append((glyph.line, CGPoint(x: x, y: m.baseline), glyph.scale))
         }
         flush()
     }
