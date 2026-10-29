@@ -791,7 +791,8 @@ struct ChatView: View {
                 if viewing == nil, session?.isCodex != true, session?.isTraex != true {
                     SessionModeBar(key: key, session: session).padding(.leading, 4)
                 }
-                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息")
+                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
+                         onCleared: { switchTo($0) })
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -1531,6 +1532,8 @@ struct Composer: View {
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?
+    /// After /clear the pane runs a new session: the page follows it.
+    var onCleared: ((SessionKey) -> Void)? = nil
     private var text: String {
         get { model.drafts[key] ?? "" }
         nonmutating set { model.drafts[key] = newValue }
@@ -1544,7 +1547,15 @@ struct Composer: View {
     @State private var showFiles = false
     @State private var uploads = FileUploads()
     @State private var selection: TextSelection?
+    @State private var confirmClear = false
+    @State private var clearing = false
     @FocusState private var focused: Bool
+
+    /// /clear only for Claude in a herdr pane (the headless assistant and Codex / TRAEX have no such command here).
+    private var canClear: Bool {
+        guard let s = model.session(key) else { return false }
+        return s.paneID != nil && !s.isCodex && !s.isTraex
+    }
 
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty
@@ -1610,6 +1621,12 @@ struct Composer: View {
                         ForEach(SlashCommand.all) { cmd in
                             Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
                         }
+                        if canClear {
+                            Button(role: .destructive) { confirmClear = true } label: {
+                                Label("清空上下文 /clear", systemImage: "eraser")
+                            }
+                            .disabled(status.isActive || clearing)
+                        }
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -1662,6 +1679,26 @@ struct Composer: View {
             }
         }
         .animation(.snappy, value: suggestion)
+        #if DEBUG
+        .task { // `-showClearConfirm YES`: the /clear confirmation, for screenshots
+            guard UserDefaults.standard.bool(forKey: "showClearConfirm") else { return }
+            try? await Task.sleep(for: .seconds(4))
+            for _ in 0..<20 where !canClear { try? await Task.sleep(for: .seconds(1)) } // the session list loads
+            confirmClear = canClear
+        }
+        #endif
+        .confirmationDialog("清空上下文？", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("清空", role: .destructive) {
+                clearing = true
+                Task {
+                    let next = await model.clearContext(key)
+                    clearing = false
+                    if let next { onCleared?(next) }
+                }
+            }
+        } message: {
+            Text("\(model.session(key)?.agentLabel ?? "Claude") 会开一个新会话，这段对话留在历史里，页面会跳到新会话。")
+        }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }

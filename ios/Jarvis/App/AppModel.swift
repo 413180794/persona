@@ -530,6 +530,21 @@ final class AppModel {
         deliver(key, msg)
     }
 
+    /// Sends /clear to a herdr pane's claude and waits for the pane to show up under its new session id (Claude Code
+    /// starts a new transcript; the node follows the pane, sessions.go). Returns the new session, nil if it did not
+    /// appear within 20 seconds.
+    func clearContext(_ key: SessionKey) async -> SessionKey? {
+        guard let pane = session(key)?.paneID, await send(key, text: "/clear") else { return nil }
+        for _ in 0..<40 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if let s = sessionsByMachine[key.machineID]?.first(where: { $0.paneID == pane && $0.sessionID != key.sessionID && $0.state.isLive }) {
+                return SessionKey(machineID: key.machineID, sessionID: s.sessionID)
+            }
+        }
+        toast = Toast("已发送 /clear，新会话出现后在列表里打开", style: .info)
+        return nil
+    }
+
     func retry(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
         chat(key).pending[i].state = .sending
