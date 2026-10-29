@@ -123,13 +123,23 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 }
 
 extension APIClient {
-    private struct InboxList: Decodable { var items: [InboxItem] }
+    private struct InboxList: Decodable, Sendable { var items: [InboxItem] }
+
+    private static func decodeInbox(_ data: Data) async throws -> [InboxItem] {
+        try await Task.detached(priority: .userInitiated) {
+            try JSON.decoder.decode(InboxList.self, from: data).items
+        }.value
+    }
 
     /// Open items and the ones done in the last few days, newest first.
-    func inbox() async throws -> [InboxItem] { try await get("/api/v1/inbox", as: InboxList.self).items }
+    func inbox() async throws -> [InboxItem] {
+        try await Self.decodeInbox(request("GET", "/api/v1/inbox"))
+    }
 
     /// Collects Feishu and mail now, then lists.
-    func refreshInbox() async throws -> [InboxItem] { try await post("/api/v1/inbox/refresh", timeout: 60, as: InboxList.self).items }
+    func refreshInbox() async throws -> [InboxItem] {
+        try await Self.decodeInbox(post("/api/v1/inbox/refresh", timeout: 60))
+    }
 
     // Item ids are `lark:<feed>:<position>` / `mail:<account>:<thread>:<uid>`: path-safe as they are
     // (`URL.appending(path:)` would encode an escaped id a second time).
