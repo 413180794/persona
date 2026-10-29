@@ -47,6 +47,7 @@ type Node struct {
 	panePIDs map[string]panePID        // pane -> its claude pid (no herdr integration: example-machine)
 	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
+	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 }
 
 func New(version string) (*Node, error) {
@@ -86,6 +87,7 @@ func New(version string) (*Node, error) {
 		panePIDs: map[string]panePID{},
 		modes:    map[string]sessionModes{},
 		driving:  map[string]bool{},
+		events:   newHerdrEvents(),
 	}
 	n.state = newState()
 	return n, nil
@@ -108,6 +110,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 		defer ln.Close()
 	}
 	go n.pollAgents(ctx)
+	go n.watchHerdr(ctx)
 	go n.reapAssistants(ctx)
 	return n.peer.Serve(ctx, os.Stdin)
 }

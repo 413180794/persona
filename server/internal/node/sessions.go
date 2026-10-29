@@ -501,6 +501,7 @@ func (n *Node) refreshHerdr(ctx context.Context) error {
 	n.mu.Unlock()
 	// Panes running an agent herdr does not detect (TRAEX) become agents of our own.
 	n.setAgents(append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...))
+	n.panesChanged()
 	return nil
 }
 
@@ -686,14 +687,24 @@ func (n *Node) agent(id string) (herdr.Agent, bool) {
 func (n *Node) pollAgents(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
+	var snapped time.Time
 	for {
+		kicked := false
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-n.events.kick:
+			// herdr said something changed: one snapshot for the whole burst (a new tab sends several events).
+			time.Sleep(50 * time.Millisecond)
+			kicked = true
 		}
-		if err := n.refreshHerdr(ctx); err != nil {
-			continue
+		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
+		if kicked || n.snapshotDue(snapped) {
+			if err := n.refreshHerdr(ctx); err != nil {
+				continue
+			}
+			snapped = time.Now()
 		}
 		list := n.sessionList(ctx, false)
 		key := listKey(list)

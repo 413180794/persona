@@ -37,7 +37,8 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 | `space_id` / `space_name` / `space_index` | workspace id / label / number | 项目、房间、会话组 |
 | `slot_id` / `slot_name` / `slot_index` | tab id / label / number | 角色、窗口、频道 |
 
-node 每秒一次 `herdr api snapshot`（一次拿到 workspace、tab、agent）填这些字段。tab 名是默认数字时 App 显示 `#2`。
+node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）填这些字段：herdr 经 `events.subscribe` 推来变化时立刻取一次，
+平时 10 秒兜底一次（事件流断开、或有 TRAEX 窗格时每秒一次，见 `docs/server.md`「和 herdr 的连接」）。tab 名是默认数字时 App 显示 `#2`。
 
 App 里的表现：
 

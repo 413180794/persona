@@ -9,12 +9,28 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/proto` | 线上类型 |
 | `internal/rpc` | hub↔node 的双向 JSON-lines RPC |
 | `internal/transcript` | Claude Code JSONL → `proto.Item`，增量读取、分页 |
-| `internal/herdr` | herdr CLI 封装 |
+| `internal/herdr` | herdr 的 socket API 客户端（CLI 兜底）和事件订阅 |
 | `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket |
 | `internal/hub` | hub：HTTP / WebSocket、机器连接、交互队列、手机工具转发、APNs |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |
 | `internal/mcpserver` | `jarvisd mcp`：给 claude 的 stdio MCP server |
+
+## 和 herdr 的连接
+
+- node 直连 herdr 的 unix socket（`$HERDR_SOCKET_PATH`，否则 `$XDG_CONFIG_HOME/herdr/herdr.sock`，默认 `~/.config/herdr/herdr.sock`）：
+  每次调用新开一条连接，写一行 `{"id","method","params"}`，读一行回复（单行上限 64 MB，超时 10 秒）。herdr CLI 只是同一个 API 的
+  薄客户端（每次还要先 ping 一次），结果结构完全一样；socket 连不上或 herdr 太旧不认识方法（`invalid_request` + `unknown variant`）时
+  退回 CLI。方法名以 `herdr api schema --json` 为准（`pane run` 对应 `pane.send_input` + `keys:["Enter"]`；`pane.process_info` 必须传
+  `pane_id`，传 target 会回答当前聚焦的窗格）。
+- `events.subscribe` 一条长连接：生命周期事件（workspace / tab / pane 的增删改）加每个 Agent 窗格的 `pane.agent_status_changed`
+  （herdr 只按窗格订阅状态）。任何事件都让 `pollAgents` 马上取一次 snapshot（50ms 合并一串事件）；平时 10 秒兜底一次。
+  事件流没连上，或有 TRAEX 窗格（它的状态在标题的转圈字符里，只变转圈不发 `pane.updated`）时仍每秒一次。
+- 订阅的坑：同一条连接第二次 subscribe 会被静默忽略，窗格集合变了要带全集重开连接；herdr 会关掉跟不上的订阅者，`events_lost`
+  不一定送得到，以连接关闭为准重连（指数退避到 30 秒），重连后先取一次 snapshot 补齐。推来的事件名用下划线（`tab_created`），
+  订阅时的类型用点（`tab.created`）。
+- 本机实测（herdr 0.9.3，7 个 Agent）：稳定时 30 秒内零事件；tab 改名到 `sessions.changed` 发出 80–140ms（原来最多 1 秒）。
+  联调：`go test -tags herdrlive ./internal/herdr/` 对着本机的 herdr 跑（会建一个 tab 再关掉）。
 
 ## 部署
 

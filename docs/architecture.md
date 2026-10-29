@@ -24,7 +24,8 @@
                      （example-machine 本机直接起子进程）
                                                   ▼
                               jarvisd node（每台机器一个，生命周期跟随 hub 的连接）
-                               ├─ herdr CLI：建 tab、启动 claude、prompt、send-keys、read、agent 状态
+                               ├─ herdr socket API（~/.config/herdr/herdr.sock，CLI 兜底）：建 tab、启动 claude、prompt、
+                               │   send-keys、read、agent 状态；events.subscribe 推变化
                                ├─ tail ~/.claude/projects/*/<session>.jsonl → 结构化事件
                                ├─ unix socket ~/.jarvis/node.sock ◄── jarvisd hook（Claude Code hooks）
                                │                                 ◄── jarvisd mcp（给 claude 的 MCP 工具）
