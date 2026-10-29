@@ -287,8 +287,8 @@ struct KeyCap: View {
         }
         .foregroundStyle(state == .locked ? Color.white : state == .off ? Color.primary : Theme.accent)
         .frame(minWidth: 36, minHeight: 36)
-        .background(state == .locked ? Theme.accent : state == .off ? Color.primary.opacity(0.1) : Theme.accent.opacity(0.18),
-                    in: .capsule)
+        // As in Moshi: plain labels and icons on the bar; only an armed or locked key gets a fill.
+        .background(state == .locked ? Theme.accent : state == .off ? Color.clear : Theme.accent.opacity(0.18), in: .capsule)
         .overlay(Capsule().stroke(state == .once || state == .held ? Theme.accent : .clear, lineWidth: 1.5))
         .overlay(alignment: .bottom) {
             if state == .locked { Capsule().fill(.white).frame(width: 12, height: 2).padding(.bottom, 6) }

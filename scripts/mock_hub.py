@@ -662,7 +662,7 @@ class H(BaseHTTPRequestHandler):
 
         SOCKETS.add(self.connection)
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
-              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll"] if TERMINAL_CONTROL else [])})
+              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
         send({"type": "machines", "machines": MACHINES})
         by = {}

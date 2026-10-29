@@ -313,3 +313,10 @@ Claude 默认模式下这就是终端接管以后的全部输出；shell 的历�
 - 键盘弹起时终端让出行数（`testDrivingTheTerminalSendsItsBytes`）。注意：模拟器会被 XCUITest 的打字切成「硬件键盘」模式，之后软键盘不再出现、终端不让行，
   这个测试就失败（干净的 master 上也一样）；没有 Simulator.app 时改不回来，新建一台模拟器跑。
 
+## 十五、点终端 = 点在终端里；键盘只从键栏的按钮出来（2026-10-30，用户要求）
+
+- Claude Code 的全屏界面里很多地方能点：顶上钉住的提问（点了跳到那条）、「Jump to bottom」（点了到底）。以前手机上点终端一律弹键盘。
+- 现在照 Moshi：接管中点终端 = 在那一格左键单击（`terminal_input.click` → hub → node `terminal.click` → herdr `terminal.mouse` 按下 + 松开，列和行从 0 起；
+  实测点「Jump to bottom」Claude 就回到底部）。链接照旧打开、双击照旧粘贴；键盘只从键栏右边的键盘按钮出来（双击它是回车），不会误触弹键盘。feature `terminal_click`。
+- 默认字号 15（Moshi 在 6.9 寸屏上一行约 46 个字；原来 13 是 56 个），键栏的键平时只有字和图标，按住 / 锁定时才有底色（同 Moshi）。
+

@@ -18,7 +18,7 @@ enum TerminalPrefs {
     /// "phone": the phone drives the terminal at its own size while the tab is open; "mirror": it shows the pane at the
     /// computer's size and folds long rows.
     static let size = "terminalSize"
-    static let defaultFontSize = 13.0
+    static let defaultFontSize = 15.0 // as Moshi reads: about 46 columns on a 6.9-inch phone
     static let defaultShortcuts = ["git status", "git diff --stat", "ls -la", "/compact", "/status"]
     static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", "快捷命令"),
                                                          ("paste", "粘贴"), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", "方向键")]
@@ -154,7 +154,7 @@ struct TerminalSettingsView: View {
                     Text("输入")
                 } footer: {
                     Text(inputMode == "field" ? "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。"
-                         : "点终端弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；键栏贴在键盘上方。")
+                         : "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。")
                 }
                 Section {
                     ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { _, s in
@@ -187,7 +187,9 @@ struct TerminalSettingsView: View {
                     Text("ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。")
                 }
                 Section("手势") {
-                    Label("点终端：弹出键盘直接打字", systemImage: "keyboard")
+                    Label("点终端：点在终端里（Claude 的「Jump to bottom」、顶上的提问）", systemImage: "hand.tap")
+                    Label("上下拖：在终端里滚动（Claude 往回翻对话）", systemImage: "arrow.up.and.down")
+                    Label("键栏的键盘按钮：弹出键盘；双击是回车", systemImage: "keyboard")
                     Label("捏合调字号", systemImage: "arrow.up.left.and.arrow.down.right")
                     Label("双指左右滑：切换同一空间里的 Agent", systemImage: "arrow.left.arrow.right")
                     Label("双指上下滑：切换到相邻的空间", systemImage: "arrow.up.arrow.down")

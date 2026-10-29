@@ -234,23 +234,26 @@ func TestTerminalControlDrivesAndGivesBack(t *testing.T) {
 	h.terminalInput(a, "m1", "s1", "", &termCtl{44, 18}, 0) // the keyboard came up
 	h.terminalInput(a, "m1", "s1", "", nil, 3)              // a swipe down the screen: the wheel, back in history
 	h.terminalInput(b, "m1", "s1", "", nil, -2)
+	h.terminalClick(a, "m1", "s1", 5, 7) // a tap on the screen: a click there
+	h.terminalClick(b, "m1", "s1", 1, 1)
 	h.terminalSubscribe(ctx, b, "m1", "s1", "", 0, nil, false)
-	got := tn.await(t, 4)
+	got := tn.await(t, 5)
 	want := []string{"control 44x30 takeover=false", `terminal.input {"session_id":"s1","text":"ls\r"}`,
-		`terminal.resize {"cols":44,"rows":18,"session_id":"s1"}`, `terminal.scroll {"lines":3,"session_id":"s1","up":true}`}
+		`terminal.resize {"cols":44,"rows":18,"session_id":"s1"}`, `terminal.scroll {"lines":3,"session_id":"s1","up":true}`,
+		`terminal.click {"column":5,"row":7,"session_id":"s1"}`}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("node got %q, want %q", got, want)
 	}
 	h.terminalUnsubscribe(a, "m1", "s1") // b still watches: back to the pane's own size
-	if got := tn.await(t, 5); got[4] != "observe" {
+	if got := tn.await(t, 6); got[5] != "observe" {
 		t.Fatalf("after the driver left: %q", got)
 	}
 	h.terminalUnsubscribe(b, "m1", "s1")
-	if got := tn.await(t, 6); got[5] != "terminal.unwatch" {
+	if got := tn.await(t, 7); got[6] != "terminal.unwatch" {
 		t.Fatalf("after the last left: %q", got)
 	}
 	h.terminalInput(a, "m1", "s1", "x", nil, 0) // gone: nothing reaches the node
-	if got := tn.await(t, 6); len(got) != 6 {
+	if got := tn.await(t, 7); len(got) != 7 {
 		t.Fatalf("typed into a terminal nobody drives: %q", got)
 	}
 }

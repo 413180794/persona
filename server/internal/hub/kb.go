@@ -287,7 +287,7 @@ func (s *larkItems) Items(ctx context.Context) ([]kb.Item, error) {
 	var out []kb.Item
 	now := time.Now().UTC()
 	q := url.Values{"start": {now.AddDate(0, 0, -1).Format("2006-01-02T00:00:00Z")}, "end": {now.AddDate(0, 0, 8).Format("2006-01-02T00:00:00Z")}}
-	if raw, err := s.c.Read(ctx, "GET", "calendar/week", q, nil); err == nil {
+	if raw, err := s.c.Read(ctx, "GET", "/calendar/week", q, nil); err == nil {
 		var cal struct {
 			Events []struct {
 				ID, SourceID, Title string
@@ -310,7 +310,7 @@ func (s *larkItems) Items(ctx context.Context) ([]kb.Item, error) {
 	} else {
 		return nil, err
 	}
-	if raw, err := s.c.Read(ctx, "GET", "meetings", url.Values{"count": {"30"}}, nil); err == nil {
+	if raw, err := s.c.Read(ctx, "GET", "/meetings", url.Values{"count": {"30"}}, nil); err == nil {
 		var ms struct {
 			Items []struct {
 				HistoryID string    `json:"historyId"`
@@ -335,7 +335,7 @@ func (s *larkItems) Items(ctx context.Context) ([]kb.Item, error) {
 func (s *larkItems) DocTitle(ctx context.Context, u string) string {
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	raw, err := s.c.Read(cctx, "GET", "documents/read", url.Values{"url": {u}, "format": {"markdown"}}, nil)
+	raw, err := s.c.Read(cctx, "GET", "/documents/read", url.Values{"url": {u}, "format": {"markdown"}}, nil)
 	if err != nil {
 		return ""
 	}

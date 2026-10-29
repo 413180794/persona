@@ -29,7 +29,7 @@ final class TerminalTypingTests: XCTestCase {
         let screen = app.descendants(matching: .any)["terminal-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 15), "no terminal:\n\(app.debugDescription)")
         sleep(1)
-        screen.tap()
+        app.buttons["键盘"].tap() // only the key bar's button brings the keyboard up (a tap on the screen does not)
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard on the terminal")
         XCTAssertTrue(app.buttons["收起键盘"].exists)
 
@@ -80,7 +80,14 @@ final class TerminalTypingTests: XCTestCase {
         let rowsBefore = Int(size.label.split(separator: "×").last ?? "") ?? 0
         let before = input().count
         let screen = app.descendants(matching: .any)["terminal-screen"]
-        screen.tap()
+        // A tap on the screen is a click for the program there (Claude's "Jump to bottom"), not the keyboard.
+        screen.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        sleep(1)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "a tap on the terminal brought the keyboard up")
+        let clicks = input().dropFirst(before).compactMap { $0["click"] as? [Int] }
+        XCTAssertEqual(clicks.count, 1, "no click for the tap: \(input().dropFirst(before))")
+        XCTAssertTrue(clicks.first.map { $0[0] > 0 && $0[1] >= 0 } ?? false, "click at \(clicks)")
+        app.buttons["键盘"].tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard on the terminal")
         sleep(1)
         app.typeText("ls\n")

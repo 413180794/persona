@@ -9,9 +9,12 @@ struct TerminalContent: Equatable {
     var cols = 0
     /// Row and column of the cursor when it is shown.
     var cursor: (row: Int, col: Int)?
+    /// Where the live screen starts in `rows` (history above it): a tap is a click at a cell of the screen.
+    var screenStart = 0
 
     static func == (a: TerminalContent, b: TerminalContent) -> Bool {
-        a.cols == b.cols && a.cursor?.row == b.cursor?.row && a.cursor?.col == b.cursor?.col && a.rows == b.rows
+        a.cols == b.cols && a.cursor?.row == b.cursor?.row && a.cursor?.col == b.cursor?.col && a.screenStart == b.screenStart
+            && a.rows == b.rows
     }
 }
 
@@ -40,6 +43,10 @@ struct TerminalView: UIViewRepresentable {
     /// Driving the terminal: a vertical drag is the mouse wheel for it, in rows (> 0 back), not a scroll of this view
     /// (herdr gives it to the program — Claude Code scrolls its conversation — or scrolls its own history, as in Moshi).
     var onWheel: ((Int) -> Void)?
+    /// Driving the terminal: a tap is a click at a cell of its screen (column, row; 0-based) — Claude Code jumps to
+    /// the prompt pinned on top, or to the bottom from "Jump to bottom". A tap never brings the keyboard up (as in
+    /// Moshi: the key bar's keyboard button does).
+    var onClick: ((Int, Int) -> Void)?
     /// The cols × rows that fit the view at the font size (it changes with the keyboard, a rotation, a pinch).
     var onGrid: ((TerminalGridSize) -> Void)?
 
@@ -53,6 +60,7 @@ struct TerminalView: UIViewRepresentable {
         v.onSwipe = onSwipe
         v.onDoubleTap = onDoubleTap
         v.setWheel(onWheel)
+        v.onClick = onClick
         v.onInput = onInput
         v.onGrid = onGrid
         v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
@@ -80,6 +88,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
     var onWheel: ((Int) -> Void)?
+    var onClick: ((Int, Int) -> Void)?
     private let wheelPan = UIPanGestureRecognizer()
     private var wheelRows: CGFloat = 0
     private var glide: CADisplayLink?
@@ -466,7 +475,21 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             onOpenURL?(url)
             return
         }
-        if onInput != nil, !isFirstResponder { _ = becomeFirstResponder() }
+        // A click for the program (driving it); the keyboard comes up only from the key bar's button, so a tap meant
+        // for the screen never covers it with the keyboard.
+        if let onClick, let at = screenCell(at: g.location(in: self)) { onClick(at.col, at.row) }
+    }
+
+    /// The cell of the live screen under a point (not clamped to the text: a click may go anywhere on the row).
+    private func screenCell(at p: CGPoint) -> (col: Int, row: Int)? {
+        guard !lines.isEmpty, metrics.cell.height > 0, metrics.cell.width > 0 else { return nil }
+        let i = Int((p.y - inset.top) / metrics.cell.height)
+        guard lines.indices.contains(i) else { return nil }
+        let line = lines[i]
+        let row = line.row - content.screenStart
+        let col = line.from + Int((p.x - inset.left) / metrics.cell.width) - line.indent
+        guard row >= 0, col >= 0, content.cols == 0 || col < content.cols else { return nil }
+        return (col, row)
     }
 
     /// The OSC 8 link under a cell, else a URL written in its row.

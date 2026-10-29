@@ -191,6 +191,17 @@ func (s *Control) Scroll(lines int, up bool) error {
 	return s.send(map[string]any{"type": "terminal.scroll", "lines": lines, "direction": dir})
 }
 
+// Click is a left click at a cell of the screen (0-based column and row): a program that takes the mouse gets it —
+// Claude Code's fullscreen renderer jumps to the prompt pinned on top, or to the bottom from "Jump to bottom".
+func (s *Control) Click(column, row int) error {
+	for _, action := range []string{"down", "up"} {
+		if err := s.send(map[string]any{"type": "terminal.mouse", "action": action, "button": "left", "column": column, "row": row}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Done is closed when the session ended (released, taken over, the pane gone).
 func (s *Control) Done() <-chan struct{} { return s.done }
 

@@ -47,6 +47,7 @@ var Features = []string{
 	"terminal_stream",        // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
 	"terminal_control",       // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
 	"terminal_scroll",        // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
+	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 }
 

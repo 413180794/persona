@@ -332,6 +332,7 @@ struct TerminalPanel: View {
                          onSwipe: swipe,
                          onDoubleTap: pasteClipboard,
                          onWheel: feed.drives && model.canScrollTerminal ? { model.terminalScroll(key, lines: $0) } : nil,
+                         onClick: feed.drives && model.canClickTerminal ? { model.terminalClick(key, column: $0, row: $1) } : nil,
                          onGrid: gridChanged)
         }
     }
@@ -675,7 +676,7 @@ struct TerminalTips: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("终端小技巧").font(.subheadline.weight(.semibold))
             VStack(alignment: .leading, spacing: 7) {
-                if direct { tip("keyboard", "点终端直接打字，键栏在键盘上方") }
+                if direct { tip("keyboard", "键栏右边的键盘按钮弹出键盘直接打字；点终端是点在终端里") }
                 tip("arrow.up.left.and.arrow.down.right", "双指捏合调字号")
                 tip("hand.tap", "双击终端粘贴剪贴板")
                 tip("bolt", "闪电：常用命令，单击输入、双击执行")

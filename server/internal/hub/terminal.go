@@ -276,6 +276,22 @@ func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *t
 	}
 }
 
+// terminalClick is a tap on a terminal the app drives, to its node in order with the keys (the driver's only).
+func (h *Hub) terminalClick(c *client, machineID, sessionID string, column, row int) {
+	m := h.byID[machineID]
+	if m == nil || column < 0 || row < 0 {
+		return
+	}
+	t := &h.terms
+	t.mu.Lock()
+	r := t.relays[[2]string{machineID, sessionID}]
+	live := r != nil && r.controller == c && r.synced != nil
+	t.mu.Unlock()
+	if live {
+		_ = m.notify("terminal.click", map[string]any{"session_id": sessionID, "column": column, "row": row})
+	}
+}
+
 // terminalKeepalive renews the node's lease on every terminal an app drives; a node that stops hearing it lets the
 // terminal go (docs/terminal.md).
 func (h *Hub) terminalKeepalive(ctx context.Context) {

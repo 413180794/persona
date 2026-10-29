@@ -68,6 +68,7 @@ final class TerminalFeed {
         while end > 0, end - 1 > (cursor?.row ?? -1), screen[end - 1].allSatisfy(\.isBlank) { end -= 1 }
         var c = TerminalContent(rows: older + scrollback + screen[..<end], cols: cols)
         if let cursor { c.cursor = (older.count + scrollback.count + cursor.row, cursor.col) }
+        c.screenStart = older.count + scrollback.count
         return c
     }
 

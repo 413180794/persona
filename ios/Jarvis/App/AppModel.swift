@@ -288,6 +288,8 @@ final class AppModel {
     var canControlTerminal: Bool { hubFeatures.contains("terminal_control") }
     /// The hub takes the wheel over a terminal the app drives (terminal_input scroll) to herdr.
     var canScrollTerminal: Bool { hubFeatures.contains("terminal_scroll") }
+    /// The hub takes a tap on a terminal the app drives (terminal_input click) to herdr as a click.
+    var canClickTerminal: Bool { hubFeatures.contains("terminal_click") }
     var isLive: Bool { live.state == .connected }
 
     /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream. grid: drive it at
@@ -317,6 +319,11 @@ final class AppModel {
     func terminalScroll(_ key: SessionKey, lines: Int) {
         guard lines != 0 else { return }
         live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines])
+    }
+
+    /// A tap on a terminal the app drives: a left click at that cell of its screen (0-based).
+    func terminalClick(_ key: SessionKey, column: Int, row: Int) {
+        live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
     }
 
     func terminalUnsubscribe(_ key: SessionKey) {
