@@ -36,6 +36,8 @@ MACHINES = [
      "hostname": "Studio", "os": "darwin", "arch": "arm64", "home": "/Users/me", "herdr_version": "0.9.5",
      "claude_version": "2.1.320", "last_seen": ago()},
 ]
+if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
+    MACHINES[2]["node_mismatch"] = True
 
 
 def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes, last, agent="claude", pending=0, **kw):

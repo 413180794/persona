@@ -20,7 +20,7 @@ import (
 func (h *Hub) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"ok": true, "version": h.version})
+		writeJSON(w, map[string]any{"ok": true, "version": h.version, "features": proto.Features})
 	})
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
@@ -577,7 +577,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	c.sendJSON(map[string]any{"type": "hello", "server_version": h.version, "client_id": randomHex(6)})
+	c.sendJSON(map[string]any{"type": "hello", "server_version": h.version, "client_id": randomHex(6), "features": proto.Features})
 	c.sendJSON(map[string]any{"type": "machines", "machines": h.machineList()})
 	for _, m := range h.machines {
 		c.sendJSON(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})

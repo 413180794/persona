@@ -7,6 +7,10 @@
 - `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 example-machine `~/.jarvis/hub.json` 的 `token`，
   `jarvisd hub pair` 打印 URL + token（以及终端二维码，App 扫码配对）。
 - `GET /api/v1/health` 不需要鉴权，返回 `{"ok":true,"version":"..."}`。
+- 功能协商：`/api/v1/health` 和 WebSocket 的 `hello` 带 `features`（`proto.Features`：`client_msg_id`、`send_refusals`、
+  `screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`）。新字段都是可选的，App 目前靠字段在不在判断；
+  以后有「旧 hub 会误解」的新请求时先查这里。机器列表里的 `node_version` / `node_mismatch`：那台电脑上的 jarvisd 不是 hub 这次部署的
+  （`deploy.sh` 只部署了一部分），App 在「设置 › 机器」里提示重新部署，hub 连上时也记一行日志。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
 ## 数据类型

@@ -46,3 +46,19 @@ func TestRequestID(t *testing.T) {
 		}
 	}
 }
+
+func TestNodeMismatch(t *testing.T) {
+	for _, c := range []struct {
+		hub, node string
+		want      bool
+	}{
+		{"a1b2c3d-202610290900", "a1b2c3d-202610290900", false},
+		{"a1b2c3d-202610290900", "9f8e7d6-202610281200", true},
+		{"dev", "9f8e7d6-202610281200", false},
+		{"a1b2c3d-202610290900", "", false}, // offline / unknown
+	} {
+		if got := nodeMismatch(c.hub, c.node); got != c.want {
+			t.Errorf("%q vs %q: %v", c.hub, c.node, got)
+		}
+	}
+}

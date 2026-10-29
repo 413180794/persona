@@ -29,6 +29,21 @@ type Machine struct {
 	HerdrVersion  string    `json:"herdr_version,omitempty"`
 	ClaudeVersion string    `json:"claude_version,omitempty"`
 	LastSeen      time.Time `json:"last_seen,omitempty"`
+	// NodeVersion is the machine's jarvisd build; NodeMismatch: not the hub's build (deploy.sh missed it, or
+	// deployed it alone). Hub and node read terminal dialogs with the same code, so a mismatch can refuse answers.
+	NodeVersion  string `json:"node_version,omitempty"`
+	NodeMismatch bool   `json:"node_mismatch,omitempty"`
+}
+
+// Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
+// clients that need to know before they try (docs/protocol.md).
+var Features = []string{
+	"client_msg_id",          // session.send dedupes retries
+	"send_refusals",          // 409 dialog_open / input_draft, clear_draft
+	"screen_dialog",          // interaction.dialog, Resolution.option, 409 prompt_changed
+	"resumable_interactions", // hook questions survive hub / node restarts
+	"secret_prompts",         // interaction.secret
+	"request_id",             // X-Request-Id
 }
 
 type NodeInfo struct {

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var storage: Int64?
     @State private var debugStorage = false
     @State private var debugNotifications = false
+    @State private var debugMachines = false
 
     var body: some View {
         NavigationStack {
@@ -121,6 +122,9 @@ struct SettingsView: View {
             .navigationDestination(isPresented: $debugNotifications) { NotificationSettingsView() }
             .onAppear { if UserDefaults.standard.bool(forKey: "openNotificationSettings"), !debugOpened { debugOpened = true; debugNotifications = true } }
             .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
+            // `-openMachines YES` (with `-tab settings`): 机器.
+            .navigationDestination(isPresented: $debugMachines) { MachinesView() }
+            .onAppear { if UserDefaults.standard.bool(forKey: "openMachines"), !debugOpened { debugOpened = true; debugMachines = true } }
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }

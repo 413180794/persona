@@ -18,10 +18,13 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var herdrVersion: String?
     var claudeVersion: String?
     var lastSeen: Date?
+    /// The machine's jarvisd is not from the hub's build (newer hubs): some answers may be refused until it is deployed.
+    var nodeMismatch: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, name, kind, icon, online, error, hostname, os, arch, home
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
+        case nodeMismatch = "node_mismatch"
     }
 
     var symbol: String {

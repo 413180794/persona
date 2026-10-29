@@ -70,6 +70,11 @@ struct MachineCard: View {
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
                     if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)", tint: Theme.accent) }
                 }
+                if machine.nodeMismatch == true {
+                    Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.needsYou)
+                }
             } else if let err = machine.error, !err.isEmpty {
                 Text(err).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             }

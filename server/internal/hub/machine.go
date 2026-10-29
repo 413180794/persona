@@ -53,6 +53,7 @@ func (m *Machine) snapshot() proto.Machine {
 		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online, Error: m.err,
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
+		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
 	}
 }
 
@@ -174,6 +175,9 @@ func (m *Machine) connect(ctx context.Context) error {
 	}
 	m.mu.Unlock()
 	m.hub.logf("[%s] connected: %s %s/%s herdr %s claude %s", m.cfg.ID, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
+	if nodeMismatch(m.hub.version, info.Version) {
+		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
+	}
 	m.hub.broadcastMachines()
 
 	m.configureNode(ctx, peer)
@@ -473,4 +477,13 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	}
 	long := ncfg.longTurn()
 	m.hub.push.notifyDone(m.cfg.ID, place, id, "✅ "+title, text, func(p NotifyPrefs) bool { return p.wantsDone(took, long) })
+}
+
+// nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>
+// (deploy.sh); dev builds ("dev", empty) are never flagged. The local node is the hub binary itself.
+func nodeMismatch(hub, node string) bool {
+	if hub == "" || node == "" || hub == "dev" || node == "dev" {
+		return false
+	}
+	return hub != node
 }
