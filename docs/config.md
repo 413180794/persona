@@ -147,6 +147,17 @@
   `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
   `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。
   每台设备要哪些推送是 App 里各自设置的（设置 › 通知，存在 hub 的 `devices.prefs`），不在这里。
+- `inbox.triage_ai` / `inbox.judge_ai`（可选，字段同 `ai`，没写的字段取 `ai` 的）：AI 分身的模型 1（分拣）和模型 2（要不要交给 Agent）；
+  不写就都用 `ai`。`inbox.agent`：模型 3，`enabled`、`launcher`（Claude Code 启动器，默认助手的）、`machine`（默认助手的机器）、
+  `concurrency`（1）、`timeout_minutes`（15）、`max_age_hours`（24）、`rules`（给模型 2 的个人规则）。见 `docs/inbox.md`「AI 分身」。
+
+  ```json
+  "inbox": {
+    "triage_ai": { "base_url": "<网关地址>", "api_key_file": "removed-secret-value", "model": "<模型>" },
+    "judge_ai":  { "base_url": "<网关地址>", "api_key_file": "removed-secret-value", "model": "<模型>" },
+    "agent": { "enabled": true, "launcher": "<启动器>" }
+  }
+  ```
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
 
 ## 给写代码的人

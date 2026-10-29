@@ -34,6 +34,29 @@
 - 每件只在内容变了（`last` 变了）时重新分拣；后台并发 4 个，一轮跑完才开下一轮。分拣前的事在界面上算「需要你」。
 - 2026-10-27 第一次跑：51 件里 3 件需要你、29 件噪音（全是营销邮件），摘要像「Sample Contact问 codex 代码是否已合入 1013，等你确认答复」。
 
+## AI 分身（自动处理 + 草拟回复）
+
+三个模型串起来（2026-10-29），全在 hub 后台跑，**只起草、不发送**：
+
+| 步骤 | 模型 | 做什么 | 代码 |
+| --- | --- | --- | --- |
+| 1 收集 | `inbox.triage_ai`（小模型） | 上面的分拣：每件新事分 action / fyi / noise 并写摘要 | `inbox_triage.go` |
+| 2 判断 | `inbox.judge_ai`（小模型） | 只看「需要你」、内容已分拣过的事：要不要交给 Agent（`handle`）、交给它做什么（`task`，一两句指令） | `inbox_agent.go` `judgeOne` |
+| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器） | 无头 claude，在助手目录里跑（所以有助手的全部工具：飞书、邮件、Agents、读代码、上网），查清楚后调 MCP `inbox_draft` 交草稿和依据 | `startInboxAgent`、`toolInboxDraft` |
+
+- 状态记在条目的 `agent` 里：`skipped`（模型 2 不交）→ `queued` → `running` → `drafted` / `failed`。
+  每件只在内容变了（`last` 变了）时重新判断，新消息来了旧草稿作废、重新走一遍。
+- 并发 `inbox.agent.concurrency`（默认 1）；超过 `timeout_minutes`（默认 15）没交草稿，或这一轮结束了却没调 `inbox_draft`，算失败。
+  最新一条早于 `max_age_hours`（默认 24）的事不交，打开开关时不会给积压的旧事一口气开一堆 Agent。
+- Agent 的提示词禁止它自己发（`lark_send` / `mail_send` / `agent_send`）和用 `ask_user` / `notify_user` 打扰用户；`lark_send`、`mail_send` 本来也要手机批准。
+  `inbox_draft` 只认「为某件事启动的那个对话」，普通助手对话调用会报错。
+- 它的对话出现在「对话」tab（可以点进去看它查了什么），但跑完不推「完成」（`notifyFinished` 跳过）：结果就是收件箱里的草稿。
+- App：行下面一张「AI 分身草拟的回复」卡片，**点「发送」直接发**（`POST /reply`，发完标已处理）；「修改」打开草拟浮层（已填好草稿，
+  上方是 Agent 的依据和「查看 AI 分身的处理过程」）。处理中的行显示「AI 分身正在处理：<task>」。详情页操作条的按钮变成「查看草稿」。
+  手表打开这件事时直接显示草稿和「发送」。
+- 本地验证模型 1、2：`JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` 跑 `TestInboxModelsLive`
+  （经 `GOCMD=… ./scripts/test-server.sh ./internal/hub` 在 hub 机器上跑，key 文件在那台机器上）。
+
 ## 生命周期
 
 - hub 后台采集（`server/internal/hub/inbox.go`）：飞书实时事件来了 3 秒后采一次，否则每 2 分钟；邮件每 3 分钟。下拉刷新

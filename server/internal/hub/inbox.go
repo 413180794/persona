@@ -72,12 +72,15 @@ type InboxItem struct {
 	DoneBy      string     `json:"done_by,omitempty"` // user | read | replied
 	Lark        *InboxLark `json:"lark,omitempty"`
 	Mail        *InboxMail `json:"mail,omitempty"`
+	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
+	Agent *InboxAgent `json:"agent,omitempty"`
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
 	Context   string `json:"context,omitempty"`    // the conversation as text, for triage and 交给 AI
 	TriagedAt string `json:"triaged_at,omitempty"` // Last when it was triaged
-	BodyOf    string `json:"body_of,omitempty"`    // mail: Last when the full text was read into Preview / Context
+	BodyOf    string `json:"body_of,omitempty"`
+	JudgedAt  string `json:"judged_at,omitempty"` // Last when model 2 looked at it    // mail: Last when the full text was read into Preview / Context
 }
 
 type InboxLark struct {
@@ -104,7 +107,11 @@ func (it *InboxItem) open() bool { return it.DoneAt == nil }
 // listed is the item as the list shows it (no context).
 func (it *InboxItem) listed() InboxItem {
 	c := *it
-	c.Context, c.Last, c.TriagedAt, c.BodyOf = "", "", "", ""
+	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt = "", "", "", "", ""
+	if it.Agent != nil { // the copy is encoded after the lock is released
+		a := *it.Agent
+		c.Agent = &a
+	}
 	return c
 }
 
@@ -115,6 +122,7 @@ type inbox struct {
 	once     sync.Once
 	running  sync.Mutex // one collection at a time
 	triaging sync.Mutex // one triage pass at a time (inbox_triage.go)
+	handing  sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
 }
 
 func (b *inbox) init() {
@@ -661,14 +669,14 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 		it, ok := h.inbox.items[r.PathValue("id")]
 		var c InboxItem
 		if ok {
-			c = *it
+			c = it.listed()
+			c.Context = it.Context
 		}
 		h.inbox.mu.Unlock()
 		if !ok {
 			writeErr(w, http.StatusNotFound, errNoInboxItem)
 			return
 		}
-		c.Last, c.TriagedAt = "", ""
 		writeJSON(w, c)
 	})
 	api.HandleFunc("POST /api/v1/inbox/{id}/done", func(w http.ResponseWriter, r *http.Request) {

@@ -489,7 +489,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	ncfg := m.hub.cfg.Notify
 	time.Sleep(ncfg.doneDelay())
 	s, ok := m.session(id)
-	if !ok {
+	if !ok || m.hub.isInboxAgent(id) { // an inbox agent's result is the draft in the inbox
 		return
 	}
 	m.hub.mu.Lock()

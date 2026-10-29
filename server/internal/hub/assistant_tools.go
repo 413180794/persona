@@ -53,6 +53,7 @@ func assistantTools(withLark bool) []proto.Tool {
 		{Name: "agent_start", Description: "Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first " +
 			"prompt. Use for real development work instead of doing it here. Returns the new session id.",
 			InputSchema: schema(`{"type":"object","required":["machine","cwd","prompt"],"properties":{"machine":{"type":"string"},"cwd":{"type":"string","description":"absolute path or ~/…"},"prompt":{"type":"string"},"launcher":{"type":"string","description":"shell command that starts claude (default: the machine's default)"}}}`)},
+		inboxDraftTool,
 	}
 	if withLark {
 		tools = append(tools,
@@ -82,7 +83,7 @@ func assistantTools(withLark bool) []proto.Tool {
 func isAssistantTool(name string) bool {
 	switch name {
 	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup",
-		"agents_list", "agent_read", "agent_send", "agent_start":
+		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft":
 		return true
 	}
 	return strings.HasPrefix(name, "lark_")
@@ -125,6 +126,8 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 			return "", fmt.Errorf("no pending follow-up %q", a.ID)
 		}
 		return "Cancelled.", nil
+	case "inbox_draft":
+		return h.toolInboxDraft(ctx, sessionID, args)
 	case "agents_list":
 		var a struct{ State, Machine, Query string }
 		_ = json.Unmarshal(args, &a)

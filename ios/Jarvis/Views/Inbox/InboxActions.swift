@@ -18,7 +18,7 @@ struct InboxActionBar: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
-                action("AI 草拟回复", symbol: "pencil.and.scribble", prominent: true, perform: draft)
+                action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: "pencil.and.scribble", prominent: true, perform: draft)
                 action("交给 AI", symbol: "paperplane", prominent: false, perform: handOff)
             }
         }
@@ -62,6 +62,9 @@ struct InboxDraftSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if let a = item.agent, item.agentDraft != nil {
+                    agentNote(a)
+                }
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $text)
                         .focused($editing)
@@ -110,9 +113,36 @@ struct InboxDraftSheet: View {
                     .disabled(sending || loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .task { if text.isEmpty { await load() } }
+            .task {
+                guard text.isEmpty else { return }
+                if let d = item.agentDraft { text = d } else { await load() }
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// What the AI 分身 found, and a way into its conversation.
+    private func agentNote(_ a: InboxItem.Agent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let note = a.note, !note.isEmpty {
+                (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + note))
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(4)
+            }
+            if let key = a.sessionKey {
+                Button {
+                    model.assistantCurrent = key
+                    model.selectedTab = .assistant
+                    dismiss()
+                } label: {
+                    Label("查看 AI 分身的处理过程", systemImage: "list.bullet.rectangle").font(.footnote.weight(.medium)).lineLimit(1)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Theme.accent.opacity(0.06))
     }
 
     private func load() async {

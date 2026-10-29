@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/mail"
 )
 
@@ -16,6 +17,19 @@ type InboxConfig struct {
 	// Rules is extra guidance for triage, in the user's words ("anything from my manager needs me", "alerts from
 	// group X are noise"…), appended to the prompt.
 	Rules string `json:"rules,omitempty"`
+	// TriageAI (model 1) sorts and summarizes new items; JudgeAI (model 2) decides which ones the agent handles.
+	// Empty fields fall back to hub.json's "ai"; without them both use "ai".
+	TriageAI *ai.Config `json:"triage_ai,omitempty"`
+	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
+	// Agent (model 3) works on the items the judge hands over and drafts the reply (inbox_agent.go).
+	Agent InboxAgentConfig `json:"agent,omitempty"`
+}
+
+func (h *Hub) triageModel() *ai.Client {
+	if h.triageAI != nil {
+		return h.triageAI
+	}
+	return h.ai
 }
 
 const triageConcurrency = 4
@@ -38,7 +52,7 @@ reason：不超过 12 个字，为什么这么分。
 // triageInbox sorts open items whose content changed since they were last looked at into 需要你 / 知悉即可 / 噪音
 // with a one-line summary (the hub's small-task model, ai.go). It runs in the background; one pass at a time.
 func (h *Hub) triageInbox(ctx context.Context) {
-	if h.ai == nil || !h.inbox.triaging.TryLock() {
+	if h.triageModel() == nil || !h.inbox.triaging.TryLock() {
 		return
 	}
 	h.inbox.mu.Lock()
@@ -51,6 +65,7 @@ func (h *Hub) triageInbox(ctx context.Context) {
 	h.inbox.mu.Unlock()
 	if len(todo) == 0 {
 		h.inbox.triaging.Unlock()
+		h.handInbox(ctx)
 		return
 	}
 	go func() {
@@ -69,6 +84,7 @@ func (h *Hub) triageInbox(ctx context.Context) {
 			}(it)
 		}
 		wg.Wait()
+		h.handInbox(ctx)
 	}()
 }
 
@@ -91,7 +107,7 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 		Reason  string `json:"reason"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	err := h.ai.JSON(cctx, system, input, &out)
+	err := h.triageModel().JSON(cctx, system, input, &out)
 	cancel()
 	if ctx.Err() != nil {
 		return false

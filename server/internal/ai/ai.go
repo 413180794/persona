@@ -28,6 +28,26 @@ type Config struct {
 	ReasoningEffort string `json:"reasoning_effort"`
 }
 
+// Over is c with its empty fields taken from base: a task that uses another model names only what differs.
+func (c Config) Over(base Config) Config {
+	if c.API == "" {
+		c.API = base.API
+	}
+	if c.BaseURL == "" {
+		c.BaseURL = base.BaseURL
+	}
+	if c.APIKeyFile == "" {
+		c.APIKeyFile = base.APIKeyFile
+	}
+	if c.Model == "" {
+		c.Model = base.Model
+	}
+	if c.ReasoningEffort == "" {
+		c.ReasoningEffort = base.ReasoningEffort
+	}
+	return c
+}
+
 // Defaults mirror the launcher used on the hub machine.
 func (c Config) withDefaults() Config {
 	if c.BaseURL == "" {

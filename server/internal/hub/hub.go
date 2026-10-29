@@ -33,7 +33,9 @@ type Hub struct {
 	push     *Pusher
 	store    Store // nil in unit tests: nothing is persisted
 	ai       *ai.Client
-	lark     *lark.Client
+	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
+	triageAI, judgeAI *ai.Client
+	lark              *lark.Client
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 
@@ -158,6 +160,12 @@ func Run(ctx context.Context, version string) error {
 	}
 	h.push = newPusher(cfg.dir, h.store, h.logf)
 	h.ai = ai.New(cfg.AI)
+	if c := cfg.Inbox.TriageAI; c != nil {
+		h.triageAI = ai.New(c.Over(cfg.AI))
+	}
+	if c := cfg.Inbox.JudgeAI; c != nil {
+		h.judgeAI = ai.New(c.Over(cfg.AI))
+	}
 	h.lark = lark.New(cfg.Lark)
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)

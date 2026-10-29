@@ -499,5 +499,6 @@ struct WatchInboxItemView: View {
             }
         }
         .navigationTitle(item.title)
+        .onAppear { if draft == nil { draft = item.agentDraft } } // the AI 分身's, ready to send
     }
 }

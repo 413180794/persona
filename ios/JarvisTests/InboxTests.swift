@@ -33,6 +33,20 @@ struct InboxTests {
         #expect(mail.larkConversation == nil && chat.mailSummary == nil)
     }
 
+    @Test func decodesTheAgentsDraft() throws {
+        let drafted = try JSON.decoder.decode(InboxItem.self, from: Data("""
+        {"id":"x","source":"lark","kind":"dm","account":"feishu","account_name":"飞书","title":"t","preview":"p","count":1,
+         "agent":{"state":"drafted","draft":"合了","note":"查到 MR","machine_id":"server","session_id":"s1","started_at":"2026-10-27T01:00:00Z"}}
+        """.utf8))
+        #expect(drafted.agentDraft == "合了" && !drafted.agentWorking)
+        #expect(drafted.agent?.sessionKey == SessionKey(machineID: "server", sessionID: "s1"))
+        var running = drafted
+        running.agent = .init(state: "running")
+        #expect(running.agentDraft == nil && running.agentWorking && running.agent?.sessionKey == nil)
+        running.agent = nil
+        #expect(running.agentDraft == nil && !running.agentWorking)
+    }
+
     @Test func feishuLinksOpenNatively() throws {
         let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
         let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))

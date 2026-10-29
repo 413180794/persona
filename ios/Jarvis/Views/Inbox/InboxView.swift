@@ -16,6 +16,7 @@ struct InboxView: View {
     @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var showAccounts = false
     @State private var composing: ComposeDraft?
+    @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
     @State private var path = NavigationPath()
     private var store: InboxStore { .shared }
 
@@ -61,6 +62,7 @@ struct InboxView: View {
                 .feishuRoutes()
                 .sheet(isPresented: $showAccounts, onDismiss: { Task { await loadAccounts() } }) { MailAccountsView() }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
+                .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
                 #if DEBUG
                 // `-addMail YES`: open 管理邮箱 › 添加邮箱 for screenshots.
                 .onAppear { if UserDefaults.standard.bool(forKey: "addMail") { showAccounts = true } }
@@ -177,7 +179,8 @@ struct InboxView: View {
     }
 
     private func row(_ it: InboxItem) -> some View {
-        InboxRow(item: it, showAccount: accounts.count > 1)
+        InboxRow(item: it, showAccount: accounts.count > 1, sending: store.sending.contains(it.id),
+                 send: { text in Task { await store.send(it, text: text) } }, edit: { editingDraft = it })
             .background { NavigationLink(value: it) { EmptyView() }.opacity(0) }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
@@ -248,6 +251,10 @@ struct InboxView: View {
 struct InboxRow: View {
     var item: InboxItem
     var showAccount = false
+    var sending = false
+    /// 发送 / 修改 on the AI 分身's draft (the list only).
+    var send: ((String) -> Void)?
+    var edit: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -289,6 +296,19 @@ struct InboxRow: View {
                 if showAccount && !item.isLark {
                     Text(item.accountName).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                 }
+                if !item.isDone {
+                    if let draft = item.agentDraft, let send {
+                        InboxDraftCard(draft: draft, sending: sending, send: { send(draft) }, edit: edit)
+                            .padding(.top, 5)
+                    } else if item.agentWorking {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.mini)
+                            Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .padding(.top, 2)
+                    }
+                }
             }
         }
         .padding(.vertical, 10)
@@ -319,6 +339,56 @@ struct InboxRow: View {
                 .offset(x: 3, y: 3)
         }
         .frame(width: 40, height: 40)
+    }
+}
+
+/// The AI 分身's reply under an inbox row: one tap sends it as it is, 修改 opens it in the draft sheet.
+struct InboxDraftCard: View {
+    var draft: String
+    var sending: Bool
+    var send: () -> Void
+    var edit: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("AI 分身草拟的回复", systemImage: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .lineLimit(1)
+            Text(draft)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                if let edit {
+                    Button(action: edit) {
+                        Text("修改").font(.subheadline.weight(.medium)).lineLimit(1)
+                            .padding(.horizontal, 14).padding(.vertical, 6)
+                            .foregroundStyle(Theme.accent)
+                            .background(Theme.accent.opacity(0.12), in: .capsule)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                Button(action: send) {
+                    HStack(spacing: 4) {
+                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: "paperplane.fill").font(.caption) }
+                        Text("发送")
+                    }
+                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .foregroundStyle(.white)
+                    .background(Theme.accent, in: .capsule)
+                }
+                .buttonStyle(.borderless)
+                .disabled(sending)
+                .accessibilityLabel("发送 AI 分身草拟的回复")
+            }
+        }
+        .padding(10)
+        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.18), lineWidth: 0.5))
     }
 }
 

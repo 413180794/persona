@@ -25,6 +25,39 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var mail: Mail?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
+    /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
+    var agent: Agent?
+
+    nonisolated struct Agent: Codable, Hashable, Sendable {
+        var state: String // skipped | queued | running | drafted | failed
+        var task: String?
+        var reason: String?
+        var machineID: String?
+        var sessionID: String?
+        var draft: String?
+        var note: String?
+        var error: String?
+
+        enum CodingKeys: String, CodingKey {
+            case state, task, reason, draft, note, error
+            case machineID = "machine_id", sessionID = "session_id"
+        }
+
+        /// The agent's conversation (in 对话), to see how it got to the draft.
+        var sessionKey: SessionKey? {
+            guard let m = machineID, let s = sessionID, !m.isEmpty, !s.isEmpty else { return nil }
+            return SessionKey(machineID: m, sessionID: s)
+        }
+    }
+
+    /// The agent's reply, ready to send.
+    var agentDraft: String? {
+        guard agent?.state == "drafted", let d = agent?.draft, !d.isEmpty else { return nil }
+        return d
+    }
+
+    /// An agent is on it (queued or working).
+    var agentWorking: Bool { agent?.state == "queued" || agent?.state == "running" }
 
     nonisolated struct Lark: Codable, Hashable, Sendable {
         var feedID: String
@@ -56,7 +89,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, context
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, context, agent
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 

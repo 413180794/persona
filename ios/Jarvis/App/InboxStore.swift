@@ -82,6 +82,29 @@ final class InboxStore {
         }
     }
 
+    /// Items whose reply is being sent from the list (the row shows a spinner, a second tap does nothing).
+    private(set) var sending: Set<String> = []
+
+    /// 发送 on the AI 分身's draft: the hub replies in the chat / by mail and files the item as done.
+    func send(_ item: InboxItem, text: String) async -> Bool {
+        guard let api = AppModel.shared.api, !sending.contains(item.id) else { return false }
+        sending.insert(item.id)
+        defer { sending.remove(item.id) }
+        do {
+            try await api.inboxReply(item.id, text: text)
+            if let i = items.firstIndex(where: { $0.id == item.id }) {
+                items[i].doneAt = .now
+                items[i].doneBy = "replied"
+            }
+            Haptics.success()
+            AppModel.shared.toast = Toast("已发送，标为已处理", style: .success)
+            return true
+        } catch {
+            AppModel.shared.show(error)
+            return false
+        }
+    }
+
     /// Feishu chats in the inbox are the ones background sync keeps fresh (their pages open at once).
     private func teachLarkSync() {
         LarkSync.shared.know(items.compactMap(\.larkConversation))
