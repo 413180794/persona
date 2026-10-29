@@ -79,4 +79,41 @@ final class TerminalKeysTests: XCTestCase {
         copy.tap()
         XCTAssertTrue(app.staticTexts["已拷贝"].waitForExistence(timeout: 3), "no copy toast") // the runner may not read the pasteboard
     }
+
+    /// A double tap on a shortcut sends it with return; typing offers completions from what the pane shows.
+    @MainActor func testShortcutsAndSuggestions() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal"]
+        app.launch()
+        let bolt = app.buttons["快捷命令"]
+        XCTAssertTrue(bolt.waitForExistence(timeout: 15), "no shortcuts button:\n\(app.debugDescription)")
+        func keysSent() -> [[String: Any]] {
+            guard let data = try? Data(contentsOf: URL(string: hub + "/mock/keys")!),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+            return obj["keys"] as? [[String: Any]] ?? []
+        }
+        let before = keysSent().count
+        bolt.tap()
+        let item = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "git status")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.doubleTap()
+        let deadline = Date.now.addingTimeInterval(8)
+        while keysSent().count <= before, Date.now < deadline { usleep(300_000) }
+        let last = try XCTUnwrap(keysSent().dropFirst(before).last)
+        XCTAssertEqual(last["text"] as? String, "git status")
+        XCTAssertEqual(last["keys"] as? [String], ["enter"])
+
+        sleep(2) // the screen (mock: "$ swift test --filter NetworkTests" …) is there
+        let field = app.textFields.firstMatch
+        field.tap()
+        field.typeText("sw")
+        let chip = app.buttons["swift test --filter NetworkTests"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 3), "no completion:\n\(app.debugDescription)")
+        chip.tap()
+        XCTAssertEqual(field.value as? String, "swift test --filter NetworkTests")
+    }
 }

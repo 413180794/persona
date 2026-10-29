@@ -73,6 +73,8 @@ struct TerminalModifiers: Equatable {
 struct TerminalKeyBar: View {
     /// Shared with a text field that should honor them; the bar keeps its own when nil.
     var mods: Binding<TerminalModifiers>? = nil
+    /// The optional buttons shown (TerminalPrefs.allKeys ids); ctrl always is.
+    var visible: Set<String> = Set(TerminalPrefs.allKeys.map(\.id))
     var send: ([String]) -> Void
     @State private var own = TerminalModifiers()
     #if DEBUG
@@ -91,21 +93,13 @@ struct TerminalKeyBar: View {
     var body: some View {
         HStack(spacing: 6) {
             modifier(.ctrl, "ctrl", name: "Control")
-            modifier(.alt, "alt", name: "Option")
-            modifier(.shift, "⇧", name: "Shift")
-            key("esc") { press("esc") }
-            key("tab") { press("tab") }
-            key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) }
+            if visible.contains("alt") { modifier(.alt, "alt", name: "Option") }
+            if visible.contains("shift") { modifier(.shift, "⇧", name: "Shift") }
+            if visible.contains("esc") { key("esc") { press("esc") } }
+            if visible.contains("tab") { key("tab") { press("tab") } }
+            if visible.contains("ctrlc") { key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) } }
             Spacer(minLength: 0)
-            Button {
-                Haptics.tap()
-                withAnimation(.spring(duration: 0.3, bounce: 0.3)) { pad.toggle() }
-            } label: {
-                KeyCap(symbol: pad ? "gamecontroller.fill" : "gamecontroller", state: pad ? .once : .off)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("方向键")
-            .accessibilityAddTraits(pad ? .isSelected : [])
+            if visible.contains("pad") { padButton }
         }
         #if DEBUG
         // `-showKeyMods locked,once,held`: ctrl, alt, shift in those states, for screenshots.
@@ -125,6 +119,18 @@ struct TerminalKeyBar: View {
                     .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
             }
         }
+    }
+
+    private var padButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(.spring(duration: 0.3, bounce: 0.3)) { pad.toggle() }
+        } label: {
+            KeyCap(symbol: pad ? "gamecontroller.fill" : "gamecontroller", state: pad ? .once : .off)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("方向键")
+        .accessibilityAddTraits(pad ? .isSelected : [])
     }
 
     private func key(_ label: String, name: String? = nil, action: @escaping () -> Void) -> some View {

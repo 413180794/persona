@@ -689,7 +689,7 @@ struct ChatView: View {
     @ViewBuilder private var paneContent: some View {
         switch pane {
         case .chat: chatPane
-        case .terminal: TerminalPanel(key: key).padding(.horizontal, 12).padding(.bottom, 8).padding(.top, headerRoom)
+        case .terminal: TerminalPanel(key: key, switchTo: switchTo).padding(.horizontal, 12).padding(.bottom, 8).padding(.top, headerRoom)
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
         case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
         }

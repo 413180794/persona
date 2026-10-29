@@ -27,6 +27,11 @@ struct TerminalView: UIViewRepresentable {
     var onNearTop: (() -> Void)?
     var onOpenURL: ((URL) -> Void)?
     var onCopy: (() -> Void)?
+    /// Pinch: the font size to use now (continuous while the fingers move).
+    var onFontSize: ((CGFloat) -> Void)?
+    /// Two fingers swiped: left / right / up / down.
+    var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
+    var onDoubleTap: (() -> Void)?
 
     func makeUIView(context: Context) -> TerminalScrollView { TerminalScrollView() }
 
@@ -34,6 +39,9 @@ struct TerminalView: UIViewRepresentable {
         v.onNearTop = onNearTop
         v.onOpenURL = onOpenURL
         v.onCopy = onCopy
+        v.onFontSize = onFontSize
+        v.onSwipe = onSwipe
+        v.onDoubleTap = onDoubleTap
         v.update(content: content, wrap: wrap, fontSize: fontSize, theme: theme,
                  dark: context.environment.colorScheme == .dark)
     }
@@ -43,6 +51,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onNearTop: (() -> Void)?
     var onOpenURL: ((URL) -> Void)?
     var onCopy: (() -> Void)?
+    var onFontSize: ((CGFloat) -> Void)?
+    var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
+    var onDoubleTap: (() -> Void)?
+    private var pinchFrom: CGFloat = 11
 
     private let canvas = TerminalCanvas()
     private var content = TerminalContent()
@@ -83,7 +95,21 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         let press = UILongPressGestureRecognizer(target: self, action: #selector(longPress(_:)))
         press.minimumPressDuration = 0.35
         addGestureRecognizer(press)
-        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tap(_:))))
+        let double = UITapGestureRecognizer(target: self, action: #selector(doubleTap(_:)))
+        double.numberOfTapsRequired = 2
+        addGestureRecognizer(double)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tap(_:)))
+        tap.require(toFail: double)
+        addGestureRecognizer(tap)
+        addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
+        // One finger scrolls; two fingers are for swipes and the pinch.
+        panGestureRecognizer.maximumNumberOfTouches = 1
+        for d: UISwipeGestureRecognizer.Direction in [.left, .right, .up, .down] {
+            let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swipe(_:)))
+            swipe.direction = d
+            swipe.numberOfTouchesRequired = 2
+            addGestureRecognizer(swipe)
+        }
         isAccessibilityElement = true
         accessibilityLabel = "终端"
         accessibilityIdentifier = "terminal-screen"
@@ -234,6 +260,23 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         default: break
         }
         canvas.setNeedsDisplay()
+    }
+
+    @objc private func pinch(_ g: UIPinchGestureRecognizer) {
+        switch g.state {
+        case .began: pinchFrom = fontSize
+        case .changed: onFontSize?(min(max(pinchFrom * g.scale, Self.fontRange.lowerBound), Self.fontRange.upperBound).rounded(toPlaces: 1))
+        default: break
+        }
+    }
+
+    static let fontRange: ClosedRange<CGFloat> = 7...20
+
+    @objc private func swipe(_ g: UISwipeGestureRecognizer) { onSwipe?(g.direction) }
+
+    @objc private func doubleTap(_ g: UITapGestureRecognizer) {
+        guard selection == nil else { return }
+        onDoubleTap?()
     }
 
     @objc private func tap(_ g: UITapGestureRecognizer) {
@@ -479,5 +522,12 @@ private final class LineRender {
             }
             ctx.restoreGState()
         }
+    }
+}
+
+private extension CGFloat {
+    func rounded(toPlaces n: Int) -> CGFloat {
+        let m = pow(10, CGFloat(n))
+        return (self * m).rounded() / m
     }
 }

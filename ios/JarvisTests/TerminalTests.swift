@@ -80,3 +80,28 @@ import Testing
         #expect(m.typed("a") == (nil, "A"))
     }
 }
+
+@MainActor struct TerminalCompletionTests {
+    private func rows(_ lines: [String]) -> [TermRow] { TerminalGrid.rows(fromANSI: lines.joined(separator: "\n")) }
+
+    @Test func commandsAfterPrompts() {
+        #expect(TerminalCompletion.command(in: "~/app $ git status") == "git status")
+        #expect(TerminalCompletion.command(in: "➜  weather git:(main) ✗ make test") == "weather git:(main) ✗ make test")
+        #expect(TerminalCompletion.command(in: "Build complete! (8.31s)") == nil)
+        #expect(TerminalCompletion.command(in: "$ ") == nil)
+    }
+
+    @Test func latestFirstThenWords() {
+        let screen = rows(["$ swift build", "Compiling Sources/Weather/Client.swift", "$ swift test --filter NetworkTests", "$ git status"])
+        #expect(TerminalCompletion.suggestions(for: "swift", rows: screen) == ["swift test --filter NetworkTests", "swift build"])
+        #expect(TerminalCompletion.suggestions(for: "cat Sour", rows: screen) == ["cat Sources/Weather/Client.swift"])
+        #expect(TerminalCompletion.suggestions(for: "", rows: screen).isEmpty)
+        #expect(TerminalCompletion.suggestions(for: "git status", rows: screen).isEmpty) // already typed in full
+    }
+
+    @Test func shortcutsRoundTrip() {
+        #expect(TerminalPrefs.decode("") == TerminalPrefs.defaultShortcuts)
+        #expect(TerminalPrefs.decode(TerminalPrefs.encode(["a b", "/compact"])) == ["a b", "/compact"])
+        #expect(TerminalPrefs.decode(TerminalPrefs.encode([])) == [])
+    }
+}

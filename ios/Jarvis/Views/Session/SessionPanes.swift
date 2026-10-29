@@ -105,12 +105,23 @@ struct TerminalPanel: View {
     @AppStorage("terminalWrap") private var wrap = true
     @AppStorage("terminalFontSize") private var fontSize = 11.0
     @AppStorage("terminalTheme") private var themeID = TerminalTheme.jarvis.id
+    @AppStorage(TerminalPrefs.shortcuts) private var shortcutsJSON = ""
+    @AppStorage(TerminalPrefs.keys) private var visibleKeys = TerminalPrefs.defaultKeys
+    @AppStorage(TerminalPrefs.autoHide) private var autoHideKeys = false
+    @FocusState private var typing: Bool
+    @State private var showShortcuts = false
+    @State private var showSettings = false
+    @State private var suggestions: [String] = []
+    @State private var pasting: String?
+    /// Switches the page to another session (two-finger swipes); nil where the panel cannot (the full-screen sheet).
+    var switchTo: ((SessionKey) -> Void)?
 
     /// Older than this without a fresh screen counts as stale even before anything fails (a request may hang).
     static let staleAfter: TimeInterval = 4
 
-    init(key: SessionKey) {
+    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil) {
         self.key = key
+        self.switchTo = switchTo
         _feed = State(initialValue: TerminalFeed(key: key))
     }
 
@@ -120,9 +131,24 @@ struct TerminalPanel: View {
     var body: some View {
         VStack(spacing: 10) {
             screen
-            TerminalKeyBar(mods: $mods) { keys in send(keys) }
+            if !autoHideKeys || typing || mods.active {
+                TerminalKeyBar(mods: $mods, visible: Set(visibleKeys.split(separator: ",").map(String.init))) { keys in send(keys) }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if typing, !suggestions.isEmpty {
+                SuggestionStrip(items: suggestions) { input = $0 }
+            }
             HStack(spacing: 8) {
+                Button {
+                    Haptics.tap()
+                    withAnimation(.spring(duration: 0.3, bounce: 0.25)) { showShortcuts.toggle() }
+                } label: {
+                    KeyCap(symbol: showShortcuts ? "bolt.fill" : "bolt", state: showShortcuts ? .once : .off)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("快捷命令")
                 TextField(Self.placeholder(mods), text: $input)
+                    .focused($typing)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(10)
@@ -130,7 +156,10 @@ struct TerminalPanel: View {
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(mods.active ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
                     .onSubmit(sendInput)
-                    .onChange(of: input) { old, new in typed(old: old, new: new) }
+                    .onChange(of: input) { old, new in
+                        typed(old: old, new: new)
+                        suggestions = TerminalCompletion.suggestions(for: input, rows: feed.content.rows)
+                    }
                 Button(action: sendInput) {
                     Image(systemName: "return").frame(width: 24, height: 24)
                 }
@@ -138,7 +167,31 @@ struct TerminalPanel: View {
                 .disabled(input.isEmpty)
                 .accessibilityLabel("发送并回车")
             }
+            .overlay(alignment: .bottomLeading) {
+                if showShortcuts {
+                    ShortcutsPanel(items: TerminalPrefs.decode(shortcutsJSON),
+                                   fill: { input = $0; showShortcuts = false; typing = true },
+                                   send: { send(["enter"], text: $0); showShortcuts = false },
+                                   edit: { showShortcuts = false; showSettings = true })
+                        .padding(.bottom, 52)
+                        .transition(.scale(scale: 0.6, anchor: .bottomLeading).combined(with: .opacity))
+                }
+            }
         }
+        .animation(.snappy, value: typing)
+        .sheet(isPresented: $showSettings) { TerminalSettingsView() }
+        .confirmationDialog(pasting.map { "粘贴 \($0.split(separator: "\n", omittingEmptySubsequences: false).count) 行到终端？" } ?? "",
+                            isPresented: Binding(get: { pasting != nil }, set: { if !$0 { pasting = nil } }),
+                            titleVisibility: .visible) {
+            Button("粘贴") { if let t = pasting { paste(t) } }
+        } message: {
+            Text("多行文字在 shell 里可能被逐行执行。")
+        }
+        #if DEBUG
+        .onAppear { if UserDefaults.standard.bool(forKey: "focusTerminalInput") { typing = true } }
+        .onAppear { if UserDefaults.standard.bool(forKey: "openShortcutsPanel") { showShortcuts = true } }
+        .onAppear { if UserDefaults.standard.bool(forKey: "openTerminalSettings") { showSettings = true } }
+        #endif
         .task(id: key) {
             if feed.key != key { feed = TerminalFeed(key: key) }
             #if DEBUG
@@ -183,13 +236,24 @@ struct TerminalPanel: View {
                     historyStatus
                     Spacer(minLength: 8)
                     wrapToggle
+                    Button { showSettings = true } label: {
+                        Image(systemName: "slider.horizontal.3").font(.caption.weight(.semibold))
+                            .frame(width: 26, height: 22)
+                            .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
+                    .accessibilityLabel("终端设置")
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 8)
                 TerminalView(content: feed.content, wrap: wrap, fontSize: fontSize, theme: theme,
                              onNearTop: { Task { await feed.loadOlder(model) } },
                              onOpenURL: { openURL($0) },
-                             onCopy: { model.toast = Toast("已拷贝", style: .success) })
+                             onCopy: { model.toast = Toast("已拷贝", style: .success) },
+                             onFontSize: { fontSize = Double($0) },
+                             onSwipe: swipe,
+                             onDoubleTap: pasteClipboard)
             }
             .background(Color(hex: side.background), in: .rect(cornerRadius: 12, style: .continuous))
             .clipShape(.rect(cornerRadius: 12, style: .continuous))
@@ -250,6 +314,43 @@ struct TerminalPanel: View {
         .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
         .accessibilityLabel("长行换行")
         .accessibilityValue(wrap ? "开" : "关，左右滑动看")
+    }
+
+    /// Double tap: the clipboard goes to the terminal as typed (no return); several lines ask first.
+    private func pasteClipboard() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            model.toast = Toast("剪贴板里没有文字", style: .error)
+            return
+        }
+        if text.contains("\n") { pasting = text } else { paste(text) }
+    }
+
+    private func paste(_ text: String) {
+        Haptics.tap()
+        send([], text: text)
+        model.toast = Toast("已粘贴", style: .success)
+        pasting = nil
+    }
+
+    /// Two fingers: left / right go to the next / previous agent of this space (herdr's tabs), up / down to the
+    /// first agent of the next / previous space on this machine.
+    private func swipe(_ d: UISwipeGestureRecognizer.Direction) {
+        guard let switchTo else { return }
+        let target: SessionKey?
+        switch d {
+        case .left, .right:
+            let list = model.siblings(of: key).map(\.key)
+            guard let i = list.firstIndex(of: key), list.count > 1 else { return }
+            target = list[(i + (d == .left ? 1 : list.count - 1)) % list.count]
+        default:
+            let live = model.allSessions.filter { $0.machineID == key.machineID && $0.state.isLive && $0.spaceKey != nil }
+            let spaces = Array(Set(live.compactMap(\.spaceKey))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            guard let here = model.session(key)?.spaceKey, let i = spaces.firstIndex(of: here), spaces.count > 1 else { return }
+            let next = spaces[(i + (d == .up ? 1 : spaces.count - 1)) % spaces.count]
+            guard let there = live.first(where: { $0.spaceKey == next }) else { return }
+            target = model.siblings(of: there.key).first?.key
+        }
+        if let target, target != key { switchTo(target) }
     }
 
     /// The return after the text takes the modifiers that are down (shift+enter: a new line in Claude's box).
