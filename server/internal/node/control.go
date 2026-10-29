@@ -239,12 +239,20 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 	return "", fmt.Errorf("session %s is not running", id)
 }
 
-func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) error {
+func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, opts sendOpts) error {
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
 		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
 	}
-	if err != nil {
+	if err == nil {
+		kind := "claude"
+		if a, ok := n.agent(id); ok && a.Agent != "" {
+			kind = a.Agent
+		}
+		if err := n.checkPane(ctx, pane, kind, opts.ClearDraft); err != nil { // sendsafe.go
+			return err
+		}
+	} else {
 		// Offline: resume with the launcher that started it (or plain claude) and then send.
 		st, _ := n.state.get(id)
 		launcher := st.Launcher
@@ -274,7 +282,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image) 
 		// In a tag so it never mixes with what the user typed; the phone shows these as thumbnails.
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
-	return n.prompt(ctx, pane, text)
+	return uncertain(n.prompt(ctx, pane, text))
 }
 
 // prompt submits text to the agent in a pane. herdr only prompts agents it detects; for the others (TRAEX) the text

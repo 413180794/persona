@@ -24,7 +24,16 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
 nonisolated struct APIError: LocalizedError, Sendable {
     var status: Int
     var message: String
+    /// The response's other string fields: a refused send (409) has code (dialog_open / input_draft), delivered
+    /// (none / unknown), draft and clearable (docs/protocol.md「发消息」).
+    var fields: [String: String] = [:]
     var errorDescription: String? { message }
+    var code: String? { fields["code"] }
+
+    static func fields(in data: Data) -> [String: String] {
+        guard case .object(let obj)? = try? JSON.decoder.decode(JSONValue.self, from: data) else { return [:] }
+        return obj.compactMapValues { $0.string }
+    }
 
     /// The hub's `{"error":"…"}`, or lark-connector's `{"error":{"code","message"}}` passed through the read-only proxy.
     static func message(in data: Data) -> String? {
@@ -74,7 +83,8 @@ nonisolated struct APIClient: Sendable {
         let (data, resp) = try await session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
+            throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status),
+                           fields: APIError.fields(in: data))
         }
         return data
     }
@@ -190,10 +200,22 @@ nonisolated struct APIClient: Sendable {
         return try await Task.detached(priority: .utility) { try JSON.decoder.decode(NewerResponse.self, from: data) }.value
     }
 
-    struct SendBody: Encodable { var text: String; var images: [ImagePayload]?; var launcher: String? }
-    /// launcher switches the model of a headless (assistant) conversation from this message on.
-    func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil) async throws {
-        try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher), timeout: 100)
+    struct SendBody: Encodable {
+        var text: String
+        var images: [ImagePayload]?
+        var launcher: String?
+        var clientMsgID: String?
+        var clearDraft: String?
+        enum CodingKeys: String, CodingKey {
+            case text, images, launcher, clientMsgID = "client_msg_id", clearDraft = "clear_draft"
+        }
+    }
+    /// launcher switches the model of a headless (assistant) conversation from this message on. clientMsgID stays the
+    /// same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to clear first.
+    func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil,
+              clientMsgID: String? = nil, clearDraft: String? = nil) async throws {
+        try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
+                                                           clientMsgID: clientMsgID, clearDraft: clearDraft), timeout: 100)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
 

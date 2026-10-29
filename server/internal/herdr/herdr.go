@@ -400,6 +400,28 @@ func (c *Client) PaneRead(ctx context.Context, pane, source string, lines int) (
 	return string(out), nil
 }
 
+// PaneReadANSI reads a pane with its colors and styles (SGR escapes kept): what tells grey text from typed text.
+func (c *Client) PaneReadANSI(ctx context.Context, pane, source string, lines int) (string, error) {
+	var res struct {
+		Read struct {
+			Text string `json:"text"`
+		} `json:"read"`
+	}
+	params := map[string]any{"pane_id": pane, "source": strings.ReplaceAll(source, "-", "_"), "lines": lines,
+		"format": "ansi", "strip_ansi": false}
+	err := c.rpc(ctx, "pane.read", params, &res)
+	if err == nil || !fallback(err) {
+		return res.Read.Text, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, c.Bin, "pane", "read", pane, "--source", source, "--lines", fmt.Sprint(lines), "--format", "ansi").Output()
+	if err != nil {
+		return "", fmt.Errorf("herdr pane read: %w", err)
+	}
+	return string(out), nil
+}
+
 func (c *Client) PaneSendText(ctx context.Context, pane, text string) error {
 	return c.call(ctx, "pane.send_text", map[string]any{"pane_id": pane, "text": text}, nil, "pane", "send-text", pane, text)
 }

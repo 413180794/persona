@@ -49,6 +49,7 @@ type Node struct {
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
+	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
 }
 
 func New(version string) (*Node, error) {
@@ -245,11 +246,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		return n.assistantMemory(a)
 	case "session.send":
-		if n.isAssistantSession(p.SessionID) {
-			_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "")
-			return ok(err)
-		}
-		return ok(n.send(ctx, p.SessionID, p.Text, p.Images))
+		var opts sendOpts
+		_ = json.Unmarshal(params, &opts)
+		return ok(n.sends.once(opts.ClientMsgID, func() error {
+			if n.isAssistantSession(p.SessionID) {
+				_, err := n.assistantSend(ctx, p.SessionID, "", p.Launcher, p.Text, p.Images, "", "")
+				return err
+			}
+			return n.send(ctx, p.SessionID, p.Text, p.Images, opts)
+		}))
 	case "session.keys":
 		if len(p.PreKeys) > 0 {
 			if err := n.keys(ctx, p.SessionID, p.PreKeys, ""); err != nil {

@@ -193,6 +193,7 @@ INTERACTIONS = [
 
 PREFS = {"input": True, "done": "long", "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
+SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
 
 INBOX = [
     {"id": "lark:f1:100", "source": "lark", "kind": "dm", "account": "lark", "account_name": "飞书", "title": "韩梅梅",
@@ -266,6 +267,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
+        if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
@@ -321,6 +323,18 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
             PREFS.update({k: v for k, v in json.loads(self.last_body or b"{}").items() if k in ("input", "done")})
             return self.send_json(PREFS)
+        if p.startswith("/api/v1/sessions/") and p.endswith("/messages") and os.environ.get("MOCK_SEND_REFUSE"):
+            # MOCK_SEND_REFUSE=input_draft|dialog_open: the computer refuses sends (SendSafety); clear_draft then succeeds
+            body = json.loads(self.last_body or b"{}")
+            SENT.append(body)
+            if body.get("clear_draft"):
+                return self.send_json({"ok": True})
+            if os.environ["MOCK_SEND_REFUSE"] == "dialog_open":
+                return self.send_json({"error": "电脑上的终端正开着一个对话框（确认、选择列表等），这条消息没有发出去：先回答或关掉它再发。",
+                                       "code": "dialog_open", "delivered": "none"}, 409)
+            return self.send_json({"error": "电脑上的输入框里有没发出去的内容：「顺便把 README 也更新一下」。这条消息没有发出去，免得拼在一起。",
+                                   "code": "input_draft", "delivered": "none", "draft": "顺便把 README 也更新一下",
+                                   "clearable": "顺便把 README 也更新一下"}, 409)
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
             for s in all_sessions():

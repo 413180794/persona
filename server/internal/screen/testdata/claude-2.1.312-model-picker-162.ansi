@@ -1,0 +1,45 @@
+
+[0m[38;2;215;119;87m ▐[0m[38;2;215;119;87m[48;2;0;0;0m▛███▛█   [0m[1mClaude Code [0m[38;2;153;153;153mv2.1.312[0m
+[0m[38;2;215;119;87m▝▜[0m[38;2;215;119;87m[48;2;0;0;0m█████[0m[38;2;215;119;87m█▀  [0m[38;2;153;153;153mSonnet 5.5 · API Usage Billing[0m
+[0m[38;2;215;119;87m ▝▝   ▝▝   [0m[38;2;153;153;153m/private/tmp/project[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[0m[38;2;177;185;249m▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ [0m[38;2;153;153;153mCtrl+Y to paste deleted text[0m[38;2;177;185;249m ▔[0m
+   [0m[1m[38;2;177;185;249mSelect model[0m
+   [0m[38;2;153;153;153mSwitch between Claude models. Your pick becomes the default for new sessions. For other/previous model names, specify with --model.[0m
+
+     [0m[38;2;153;153;153m1. [0mDefault (recommended)  [0m[38;2;153;153;153mUse the default model (currently [0m[38;2;215;119;87mOpus 5.5[0m[38;2;153;153;153m) · $4/$20 per Mtok[0m
+     [0m[38;2;153;153;153m2. [0mOpus                   [0m[38;2;215;119;87mOpus 5.5[0m[38;2;153;153;153m · Best for everyday, complex tasks · $4/$20 per Mtok[0m
+     [0m[38;2;153;153;153m3. [0mFable                  [0m[38;2;153;153;153mFable 5 · Most capable for your hardest and longest-running tasks[0m
+   [0m[38;2;177;185;249m❯[0m [0m[38;2;153;153;153m4. [0m[38;2;78;186;101mSonnet[0m [0m[38;2;78;186;101m✔[0m               [0m[38;2;153;153;153mSonnet 5.5 · Efficient for routine tasks · $2/$10 per Mtok[0m
+     [0m[38;2;153;153;153m5. [0mHaiku                  [0m[38;2;153;153;153mHaiku 5.5 · Fastest for quick answers · $0.10/$0.50 per Mtok ($0.50/$2.50 for prompts over 100k)[0m
+     [0m[38;2;153;153;153m6. Fable 5.1 (disabled)[0m   [0m[38;2;153;153;153mUpdate to 2.1.255+ to use Fable 5.1[0m
+
+   [0m[38;2;215;119;87m◐[0m[38;2;153;153;153m Medium effort (default)[0m[38;2;80;80;80m ←/→ to adjust[0m
+
+   [0m[38;2;153;153;153mUse [0m[1m[38;2;153;153;153m/fast[0m[38;2;153;153;153m to turn on Fast mode (Opus 5.5).[0m
+
+   [0m[38;2;153;153;153mEnter to set as default · s to use this session only · Esc to cancel[0m

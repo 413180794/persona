@@ -260,3 +260,22 @@ func TestUnknownJSONLinesAreSkipped(t *testing.T) {
 		t.Fatalf("events = %+v", got)
 	}
 }
+
+func TestCodedErrorReachesCaller(t *testing.T) {
+	a2b, b2a := io.Pipe()
+	c2d, d2c := io.Pipe()
+	a := New("a", b2a)
+	b := New("b", d2c)
+	b.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		return nil, &Error{Code: "input_draft", Message: "draft there", Data: json.RawMessage(`{"draft":"hi"}`)}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = a.Serve(ctx, c2d) }()
+	go func() { _ = b.Serve(ctx, a2b) }()
+	err := a.Call(ctx, "x", nil, nil)
+	var re *Error
+	if !errors.As(err, &re) || re.Code != "input_draft" || string(re.Data) != `{"draft":"hi"}` || re.Message != "draft there" {
+		t.Fatalf("got %#v", err)
+	}
+}

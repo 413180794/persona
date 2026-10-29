@@ -33,6 +33,10 @@ type message struct {
 
 type Error struct {
 	Message string `json:"message"`
+	// Code and Data are set by handlers that return an *Error themselves, for callers that act on the kind of
+	// failure (a refused send) rather than show the message.
+	Code string          `json:"code,omitempty"`
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Message }
@@ -102,7 +106,10 @@ func (p *Peer) handle(ctx context.Context, m message) {
 		res, err = p.OnRequest(ctx, m.Method, m.Params)
 	}
 	out := message{ID: m.ID}
-	if err != nil {
+	var coded *Error
+	if errors.As(err, &coded) {
+		out.Error = coded
+	} else if err != nil {
 		out.Error = &Error{Message: err.Error()}
 	} else {
 		b, merr := json.Marshal(res)

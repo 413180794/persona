@@ -1110,6 +1110,9 @@ struct ChatView: View {
                 }
             }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
+            if let t = UserDefaults.standard.string(forKey: "openSendMessage") { // `-openSendMessage <text>`: refusals (SendSafety)
+                Task { try? await Task.sleep(for: .seconds(3)); model.sendNow(key, text: t) }
+            }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
             if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent

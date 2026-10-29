@@ -1,0 +1,161 @@
+package node
+
+import (
+	"context"
+	"encoding/json"
+	"sync"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/screen"
+)
+
+// Typing into someone's terminal is the riskiest thing Jarvis does. Before a message goes into a running agent's
+// pane the node reads the screen and refuses — nothing typed — when
+//   - a dialog has the keyboard (permission prompt, picker, rewind): the text would pick an option (dialog_open);
+//   - Claude's input box holds a draft typed at the computer, or bash mode: the message would be appended to it and
+//     sent together, or run as a command (input_draft, with the box's text). The app may ask to clear that exact
+//     draft and send (clear_draft).
+// Sends carry the app's client_msg_id: a retry of one already delivered (the response was lost) is acknowledged
+// without typing it again. See docs/protocol.md「发消息」.
+
+// sendOpts are the optional fields of session.send.
+type sendOpts struct {
+	ClientMsgID string `json:"client_msg_id"`
+	// ClearDraft is the draft the user saw in a refusal and chose to clear: cleared only if the box still shows it.
+	ClearDraft string `json:"clear_draft"`
+}
+
+// Delivery states a failed send reports: "none" when nothing reached the pane (safe to resend), "unknown" when the
+// failure came after typing started.
+const (
+	deliveredNone    = "none"
+	deliveredUnknown = "unknown"
+)
+
+func refusal(code, message string, data map[string]any) error {
+	if data == nil {
+		data = map[string]any{}
+	}
+	data["delivered"] = deliveredNone
+	b, _ := json.Marshal(data)
+	return &rpc.Error{Code: code, Message: message, Data: b}
+}
+
+// checkPane refuses a send into a pane that is not ready for typed text, after clearing the draft the user agreed
+// to clear. kind is the agent ("claude", "codex", TRAEX).
+func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) error {
+	if kind != "claude" { // Codex / TRAEX: only their numbered approvals and pickers
+		text, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		if err == nil && screen.Choosing(text) {
+			return refusal(screen.DialogOpen, dialogMessage, nil)
+		}
+		return nil
+	}
+	read := func() string {
+		s, err := n.herdr.PaneReadANSI(ctx, pane, "visible", 60)
+		if err != nil {
+			s, _ = n.herdr.PaneRead(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
+		}
+		return s
+	}
+	code, in := screen.CheckClaude(read())
+	if code == screen.InputDraft && clearDraft != "" && in.Clearable == clearDraft {
+		if err := n.herdr.PaneSendKeys(ctx, pane, screen.ClearKeys...); err != nil {
+			return refusal(code, draftMessage(in.Text), map[string]any{"draft": in.Text})
+		}
+		time.Sleep(150 * time.Millisecond)
+		code, in = screen.CheckClaude(read())
+	}
+	switch code {
+	case screen.DialogOpen:
+		return refusal(code, dialogMessage, nil)
+	case screen.InputDraft:
+		data := map[string]any{"draft": in.Text}
+		if in.Clearable != "" {
+			data["clearable"] = in.Clearable
+		}
+		return refusal(code, draftMessage(in.Text), data)
+	}
+	return nil
+}
+
+const dialogMessage = "电脑上的终端正开着一个对话框（确认、选择列表等），这条消息没有发出去：先回答或关掉它再发。"
+
+func draftMessage(draft string) string {
+	if r := []rune(draft); len(r) > 200 {
+		draft = string(r[:200]) + "…"
+	}
+	if draft == "" {
+		return "电脑上的输入框里有没发出去的内容，这条消息没有发出去，免得拼在一起。"
+	}
+	return "电脑上的输入框里有没发出去的内容：「" + draft + "」。这条消息没有发出去，免得拼在一起。"
+}
+
+// sentLog remembers the client_msg_id of recent sends (10 minutes) so a retry is not typed twice.
+type sentLog struct {
+	mu   sync.Mutex
+	sent map[string]*sendRecord
+}
+
+type sendRecord struct {
+	at   time.Time
+	done chan struct{}
+	err  error
+}
+
+const sentTTL = 10 * time.Minute
+
+// once runs send for a client_msg_id at most once: a retry waits for a send in flight and returns its outcome, or
+// succeeds at once after a delivered one. Refused sends (nothing typed) are forgotten, so their retry runs again.
+func (l *sentLog) once(id string, send func() error) error {
+	if id == "" {
+		return send()
+	}
+	l.mu.Lock()
+	if l.sent == nil {
+		l.sent = map[string]*sendRecord{}
+	}
+	for k, r := range l.sent {
+		if time.Since(r.at) > sentTTL {
+			delete(l.sent, k)
+		}
+	}
+	if r := l.sent[id]; r != nil {
+		l.mu.Unlock()
+		<-r.done
+		return r.err
+	}
+	r := &sendRecord{at: time.Now(), done: make(chan struct{})}
+	l.sent[id] = r
+	l.mu.Unlock()
+	r.err = send()
+	if r.err != nil && !maybeDelivered(r.err) {
+		l.mu.Lock()
+		delete(l.sent, id)
+		l.mu.Unlock()
+	}
+	close(r.done)
+	return r.err
+}
+
+// uncertain marks a failure while typing into the pane: the message may have arrived.
+func uncertain(err error) error {
+	if err == nil {
+		return nil
+	}
+	b, _ := json.Marshal(map[string]any{"delivered": deliveredUnknown})
+	return &rpc.Error{Message: err.Error(), Data: b}
+}
+
+func maybeDelivered(err error) bool {
+	e, ok := err.(*rpc.Error)
+	if !ok {
+		return false
+	}
+	var d struct {
+		Delivered string `json:"delivered"`
+	}
+	_ = json.Unmarshal(e.Data, &d)
+	return d.Delivered == deliveredUnknown
+}

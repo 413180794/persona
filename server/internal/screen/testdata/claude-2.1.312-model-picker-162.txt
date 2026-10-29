@@ -1,0 +1,45 @@
+
+ ▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Sonnet 5.5 · API Usage Billing
+ ▝▝   ▝▝   /private/tmp/project
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ Ctrl+Y to paste deleted text ▔
+   Select model
+   Switch between Claude models. Your pick becomes the default for new sessions. For other/previous model names, specify with --model.
+
+     1. Default (recommended)  Use the default model (currently Opus 5.5) · $4/$20 per Mtok
+     2. Opus                   Opus 5.5 · Best for everyday, complex tasks · $4/$20 per Mtok
+     3. Fable                  Fable 5 · Most capable for your hardest and longest-running tasks
+   ❯ 4. Sonnet ✔               Sonnet 5.5 · Efficient for routine tasks · $2/$10 per Mtok
+     5. Haiku                  Haiku 5.5 · Fastest for quick answers · $0.10/$0.50 per Mtok ($0.50/$2.50 for prompts over 100k)
+     6. Fable 5.1 (disabled)   Update to 2.1.255+ to use Fable 5.1
+
+   ◐ Medium effort (default) ←/→ to adjust
+
+   Use /fast to turn on Fast mode (Opus 5.5).
+
+   Enter to set as default · s to use this session only · Esc to cancel

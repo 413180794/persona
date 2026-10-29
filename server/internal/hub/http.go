@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 func (h *Hub) routes() http.Handler {
@@ -223,6 +224,21 @@ func callErr(w http.ResponseWriter, err error) {
 	code := http.StatusBadGateway
 	if errors.Is(err, errOffline) {
 		code = http.StatusServiceUnavailable
+	}
+	// A node error with a code (a refused send: dialog_open, input_draft) is a 409 the app acts on; its data
+	// (delivered, draft…) goes along as top-level fields next to error.
+	var re *rpc.Error
+	if errors.As(err, &re) && (re.Code != "" || len(re.Data) > 0) {
+		body := map[string]any{}
+		_ = json.Unmarshal(re.Data, &body)
+		body["error"] = re.Message
+		if re.Code != "" {
+			body["code"], code = re.Code, http.StatusConflict
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(body)
+		return
 	}
 	writeErr(w, code, err)
 }

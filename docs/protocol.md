@@ -75,7 +75,7 @@
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?}` → `{"session":Session}` |
 | GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页） |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
-| POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?}`；会话 offline 时先用原启动器 `--resume` 拉起 |
+| POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?}`；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
 | GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了） |
@@ -142,6 +142,24 @@
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
+
+### 发消息
+
+往别人的终端里打字是这个 App 风险最大的操作。node 在往正在跑的 Agent 窗格里打字之前先读一次屏幕（`server/internal/node/sendsafe.go`、
+`server/internal/screen`），以下情况**什么都不打**，返回 409：
+
+| `code` | 什么时候 | 其他字段 |
+| --- | --- | --- |
+| `dialog_open` | 有对话框占着键盘：权限确认、信任目录、模型选择、rewind…（底部有 `Esc to cancel` / `Enter to confirm`，或输入框下面有带光标的编号选项） | `delivered: "none"` |
+| `input_draft` | Claude 的输入框里有电脑上没发出去的字、bash 模式（`!`）、粘贴占位、被窗格截掉的长草稿 | `delivered: "none"`、`draft`（输入框里的字）、`clearable`（只有一行字时才有） |
+
+- 灰色的建议输入（Claude 预测的下一句、新会话的 `Try "…"`）不算草稿：要用带颜色的读屏（`pane.read` 的 `format: ansi`）看 SGR 2（dim），
+  纯文本里两者一模一样。读不到颜色时一律当草稿。规则移植自 Ovis 的 `claude-input.ts`（MIT）。夹具：`server/internal/screen/testdata`。
+- `clear_draft`：用户在 App 里看到草稿后选「清空并发送」，App 带上收到的 `clearable` 重发同一条（同一个 `client_msg_id`）；
+  node 只在输入框里**还是这段字**时按 `ctrl+k ctrl+u` 清掉，再读一次确认空了才发。多行草稿只能在电脑上处理（这两个键一次只清一行）。
+- `client_msg_id`：App 每条待发消息一个 UUID，重发沿用。node 记 10 分钟：已送达的重发直接回成功；被拒的（什么都没打）忘掉，可以再发；
+  打字过程中出错的回 502 + `delivered: "unknown"`（可能已经到了），同一个 id 再发也只回同样的错误，不会打第二遍。
+- Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择）。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 
 ## hub ↔ node RPC
 

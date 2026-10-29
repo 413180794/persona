@@ -350,8 +350,11 @@ final class AppModel {
         }
     }
 
-    /// Unsent composer text per chat (also where an edited queued message lands).
-    var drafts: [SessionKey: String] = [:]
+    /// Unsent composer text per chat (also where an edited queued message lands); kept across launches.
+    var drafts: [SessionKey: String] = AppModel.savedDrafts() { didSet { saveDrafts() } }
+    @ObservationIgnored let draftWriter = Debouncer()
+    /// A send the computer refused because its input box holds a draft (SendSafety.swift).
+    var sendRefusal: SendRefusal?
 
     /// Edit or delete one queued message: everything is pulled back out of claude and the others re-queued.
     func editQueued(_ key: SessionKey, index: Int, delete: Bool) async {
@@ -380,19 +383,19 @@ final class AppModel {
         deliver(key, msg)
     }
 
-    func retry(_ key: SessionKey, _ msg: PendingMessage) {
+    func retry(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
         chat(key).pending[i].state = .sending
-        deliver(key, msg)
+        deliver(key, msg, clearDraft: clearDraft)
     }
 
     func discard(_ key: SessionKey, _ msg: PendingMessage) {
         chat(key).pending.removeAll { $0.id == msg.id }
     }
 
-    private func deliver(_ key: SessionKey, _ msg: PendingMessage) {
+    private func deliver(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         Task {
-            let ok = await send(key, text: msg.text, images: msg.images, haptic: false)
+            let ok = await sendPending(key, msg, clearDraft: clearDraft)
             let store = chat(key)
             guard let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { return }
             store.pending[i].state = ok ? .sent : .failed

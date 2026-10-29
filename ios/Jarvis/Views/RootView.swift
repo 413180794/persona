@@ -42,6 +42,7 @@ struct RootView: View {
         } message: { c in
             Text(c.summary)
         }
+        .sendRefusalAlert(model)
     }
 }
 
