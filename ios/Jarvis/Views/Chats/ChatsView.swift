@@ -325,7 +325,7 @@ struct ChatsView: View {
                     if b.key == "idle" {
                         foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
-                        // 已屏蔽 mixes states: each row says its own. 待唤醒 rows show their loop / background badge.
+                        // 已屏蔽 mixes states: each row says its own. Loops and background work stay off the rows (the chat shows them).
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
@@ -551,16 +551,6 @@ struct SlotRow: View {
                     if !quiet && !hideState {
                         Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
                     }
-                    if let loop = session.loop { LoopBadge(loop: loop).fixedSize().opacity(muted ? 0.6 : 1) }
-                    if session.state != .working, session.state != .needsYou {
-                        if let bg = session.background, !bg.isEmpty {
-                            BackgroundBadge(count: bg.count).fixedSize().opacity(muted ? 0.6 : 1)
-                        }
-                        let agents = (session.subagents ?? []).filter(\.running).count
-                        if agents > 0 {
-                            BackgroundBadge(count: agents, label: "子 Agent", symbol: "person.2.fill").fixedSize().opacity(muted ? 0.6 : 1)
-                        }
-                    }
                     if muted {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
                     }
@@ -681,28 +671,6 @@ struct SessionRow: View {
     }
 }
 
-/// "⟳ 每 30 分钟 · 下次 11:57" on an agent driven by /loop.
-struct LoopBadge: View {
-    var loop: LoopInfo
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
-            Text(label).lineLimit(1)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Theme.done)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1.5)
-        .background(Theme.done.opacity(0.12), in: .capsule)
-        .accessibilityLabel("循环中，" + label)
-    }
-
-    private var label: String {
-        if let next = loop.nextAt, next > .now { return "下次 " + next.formatted(date: .omitted, time: .shortened) }
-        return loop.cadence ?? "循环"
-    }
-}
 
 /// Pin / mute a space: the ⋯ on its header in 开发, the menu of its page, the long press on a folded row.
 struct SpaceMenuItems: View {
@@ -779,28 +747,6 @@ private struct RenameSessionAlert: ViewModifier {
     }
 }
 
-/// "⚙ 后台 2" on an agent whose turn is over but whose background commands / subagents still run: it is not
-/// really finished yet, so it should not look like the agents that are.
-struct BackgroundBadge: View {
-    var count: Int
-    var label = "后台"
-    var symbol = "gearshape.2.fill"
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .bold))
-                .symbolEffect(.pulse, options: .repeat(.continuous))
-            Text("\(label) \(count)").lineLimit(1)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(Theme.busy)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1.5)
-        .background(Theme.busy.opacity(0.12), in: .capsule)
-        .accessibilityLabel("\(count) 个后台任务在运行")
-    }
-}
 
 /// A machine's section header in 开发 grouped by machine: its name, whether it is online, state counts.
 struct MachineSectionHeader: View {
