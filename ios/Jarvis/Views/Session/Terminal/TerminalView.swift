@@ -124,6 +124,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     private var metrics = CellMetrics(size: TerminalPrefs.defaultFontSize)
     private var laidOutHeight: CGFloat = 0
     private var lines: [DisplayLine] = []
+    private var lineLayout = TerminalLineLayout()
     private var maxCells = 0
     private var laidOutWidth: CGFloat = 0
     private var first = true
@@ -306,7 +307,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     private func relayout() {
         laidOutWidth = bounds.width
         let perLine = max(10, Int((bounds.width - inset.left - inset.right) / metrics.cell.width))
-        let out = TerminalWrap.lines(content.rows, cursor: content.cursor, perLine: perLine, wrap: wrap)
+        let out = lineLayout.lines(content.rows, cursor: content.cursor, perLine: perLine, wrap: wrap)
         defer { placeHandles() }
         maxCells = out.reduce(content.cols) { max($0, $1.to + $1.indent) }
         if out != lines { selection = nil }

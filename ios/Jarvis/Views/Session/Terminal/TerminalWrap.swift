@@ -9,6 +9,39 @@ nonisolated struct DisplayLine: Equatable, Sendable {
     var indent = 0
 }
 
+nonisolated struct TerminalLineLayout {
+    private var previous: [TermRow] = []
+    private var cursor: (row: Int, col: Int)?
+    private var perLine = 0
+    private var wrap = false
+    private var rendered: [[DisplayLine]] = []
+
+    mutating func lines(_ rows: [TermRow], cursor: (row: Int, col: Int)?, perLine: Int, wrap: Bool) -> [DisplayLine] {
+        let reset = self.perLine != perLine || self.wrap != wrap || previous.count != rows.count
+        if reset { rendered = Array(repeating: [], count: rows.count) }
+        var out: [DisplayLine] = []
+        out.reserveCapacity(rows.count + 16)
+        for index in rows.indices {
+            let oldColumn = self.cursor?.row == index ? self.cursor?.col : nil
+            let newColumn = cursor?.row == index ? cursor?.col : nil
+            if reset || previous[index] != rows[index] || oldColumn != newColumn {
+                rendered[index] = TerminalWrap.lines([rows[index]], cursor: newColumn.map { (row: 0, col: $0) },
+                                                     perLine: perLine, wrap: wrap).map {
+                    var line = $0
+                    line.row = index
+                    return line
+                }
+            }
+            out += rendered[index]
+        }
+        previous = rows
+        self.cursor = cursor
+        self.perLine = perLine
+        self.wrap = wrap
+        return out
+    }
+}
+
 /// Cutting the pane's rows (laid out for its width, often 170 cells) into lines for the phone's. Unwrapped, a row is
 /// one line. Wrapped, a row folds where a line may end — after a space, next to a Chinese character, never before
 /// closing punctuation — and only mid-word when a word fills most of a line; continuation lines hang under the row's

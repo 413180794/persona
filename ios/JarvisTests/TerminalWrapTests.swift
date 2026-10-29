@@ -273,3 +273,33 @@ struct TerminalKeyBytesTests {
         #expect(TerminalKeyBytes.text("a\nb\r\nc") == "\u{1B}[200~a\rb\rc\u{1B}[201~")
     }
 }
+
+extension TerminalWrapTests {
+    @Test(arguments: ["terminal-observe-mixed", "terminal-observe-permission"])
+    func incrementalLayoutMatchesFullLayoutForEveryFrame(_ name: String) throws {
+        let bundle = Bundle(for: FixtureBundle.self)
+        let file = try #require(bundle.url(forResource: name, withExtension: "jsonl"))
+        let frames = try String(contentsOf: file, encoding: .utf8).split(separator: "\n")
+        for width in [23, 40, 80] {
+            for wrap in [false, true] {
+                var layout = TerminalLineLayout()
+                let grid = TerminalGrid(cols: 1, rows: 1)
+                for raw in frames {
+                    struct Frame: Decodable { var full: Bool; var width: Int; var height: Int; var bytes: String }
+                    let frame = try JSONDecoder().decode(Frame.self, from: Data(raw.utf8))
+                    if frame.full { grid.reset(cols: frame.width, rows: frame.height) }
+                    grid.feed(try #require(Data(base64Encoded: frame.bytes)))
+                    let cursor: (row: Int, col: Int)? = grid.cursorVisible ? (grid.cursorRow, grid.cursorCol) : nil
+                    let expected = TerminalWrap.lines(grid.lines, cursor: cursor, perLine: width, wrap: wrap)
+                    #expect(layout.lines(grid.lines, cursor: cursor, perLine: width, wrap: wrap) == expected)
+                    #expect(layout.lines(grid.lines, cursor: cursor, perLine: width, wrap: wrap) == expected)
+                }
+                let history = [grid.lines[0]] + grid.lines
+                #expect(layout.lines(history, cursor: nil, perLine: width, wrap: wrap)
+                        == TerminalWrap.lines(history, cursor: nil, perLine: width, wrap: wrap))
+                #expect(layout.lines(history, cursor: (0, 90), perLine: width + 1, wrap: !wrap)
+                        == TerminalWrap.lines(history, cursor: (0, 90), perLine: width + 1, wrap: !wrap))
+            }
+        }
+    }
+}
