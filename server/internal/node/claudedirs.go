@@ -27,17 +27,26 @@ import (
 const claudeScanEvery = 30 * time.Second
 
 type claudeDirs struct {
-	mu      sync.Mutex
-	known   []string       // from the hub: configured and remembered
-	found   []string       // seen in running claude processes, in order of discovery
-	byPID   map[int]string // live claude pid -> its config directory
-	scanned time.Time
-	report  func(dirs []string) // tells the hub about newly found directories
-	scan    func() map[int]string
+	mu        sync.Mutex
+	known     []string           // from the hub: configured and remembered
+	found     []string           // seen in running claude processes, in order of discovery
+	byPID     map[int]string     // live claude pid -> its config directory
+	bySession map[string]procEnv // session a live claude runs (its sessions/<pid>.json) -> that claude's environment
+	scanned   time.Time
+	report    func(dirs []string) // tells the hub about newly found directories
+	scan      func() map[int]procEnv
+}
+
+// procEnv is what the scan keeps from a running claude's environment: its config directory, and the API endpoint
+// and model a launcher function exported (used to tell which launcher started a claude Jarvis did not start).
+type procEnv struct {
+	ConfigDir string // CLAUDE_CONFIG_DIR
+	BaseURL   string // ANTHROPIC_BASE_URL
+	Model     string // ANTHROPIC_MODEL
 }
 
 func newClaudeDirs() *claudeDirs {
-	return &claudeDirs{byPID: map[int]string{}, scan: scanClaudeProcesses}
+	return &claudeDirs{byPID: map[int]string{}, bySession: map[string]procEnv{}, scan: scanClaudeProcesses}
 }
 
 // defaultClaudeDir is where a claude started without CLAUDE_CONFIG_DIR keeps its files.
@@ -177,9 +186,28 @@ func (n *Node) refreshClaudeDirs() {
 	d.scanned = time.Now()
 	scan := d.scan
 	d.mu.Unlock()
-	byPID := scan()
+	envs := scan()
+	byPID := map[int]string{}
+	for pid, e := range envs {
+		if e.ConfigDir != "" {
+			byPID[pid] = e.ConfigDir
+		}
+	}
 	d.mu.Lock()
 	d.byPID = byPID
+	d.mu.Unlock()
+	// Which session each claude runs: its sessions/<pid>.json (found through the directory just scanned).
+	bySession := map[string]procEnv{}
+	for pid, e := range envs {
+		if e.BaseURL == "" && e.Model == "" {
+			continue
+		}
+		if id := readClaudeSessionID(n.claudeSessionFile(pid)); id != "" {
+			bySession[id] = e
+		}
+	}
+	d.mu.Lock()
+	d.bySession = bySession
 	added := false
 	for _, dir := range byPID {
 		if !slices.Contains(d.found, dir) {
@@ -204,12 +232,47 @@ func expandHome(p, home string) string {
 	return p
 }
 
-var claudeConfigEnvRe = regexp.MustCompile(`(?:^|[\x00\s])CLAUDE_CONFIG_DIR=([^\x00\s]+)`)
+// sessionEnv is the scanned environment of the live claude running session id (false when none was seen or it set
+// neither ANTHROPIC_BASE_URL nor ANTHROPIC_MODEL).
+func (n *Node) sessionEnv(id string) (procEnv, bool) {
+	d := n.cdirs
+	if d == nil {
+		return procEnv{}, false
+	}
+	n.refreshClaudeDirs()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	e, ok := d.bySession[id]
+	return e, ok
+}
 
-// scanClaudeProcesses maps this user's running claude processes to the CLAUDE_CONFIG_DIR in their environment
-// (processes without one are left out: they use the default). Linux reads /proc; macOS asks ps once for all.
-func scanClaudeProcesses() map[int]string {
-	out := map[int]string{}
+var (
+	claudeConfigEnvRe = envVarRe("CLAUDE_CONFIG_DIR")
+	anthropicBaseRe   = envVarRe("ANTHROPIC_BASE_URL")
+	anthropicModelRe  = envVarRe("ANTHROPIC_MODEL")
+)
+
+// envVarRe matches NAME=value in a NUL- (/proc/<pid>/environ) or space-separated (ps -E) environment.
+func envVarRe(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[\x00\s])` + name + `=([^\x00\s]+)`)
+}
+
+// parseProcEnv picks the variables procEnv keeps out of an environment listing.
+func parseProcEnv(env string) procEnv {
+	get := func(re *regexp.Regexp) string {
+		if m := re.FindStringSubmatch(env); m != nil {
+			return m[1]
+		}
+		return ""
+	}
+	return procEnv{ConfigDir: get(claudeConfigEnvRe), BaseURL: get(anthropicBaseRe), Model: get(anthropicModelRe)}
+}
+
+// scanClaudeProcesses maps this user's running claude processes to the variables procEnv keeps from their
+// environment (processes with none of them are left out: default directory, default endpoint). Linux reads /proc;
+// macOS asks ps once for all.
+func scanClaudeProcesses() map[int]procEnv {
+	out := map[int]procEnv{}
 	if runtime.GOOS == "linux" {
 		entries, _ := os.ReadDir("/proc")
 		for _, e := range entries {
@@ -222,8 +285,8 @@ func scanClaudeProcesses() map[int]string {
 				continue
 			}
 			env, _ := os.ReadFile("/proc/" + e.Name() + "/environ")
-			if m := claudeConfigEnvRe.FindSubmatch(env); m != nil {
-				out[pid] = string(m[1])
+			if pe := parseProcEnv(string(env)); pe != (procEnv{}) {
+				out[pid] = pe
 			}
 		}
 		return out
@@ -238,8 +301,8 @@ func scanClaudeProcesses() map[int]string {
 }
 
 // parsePSEnv reads `ps -E -o pid=,command=` output: the command line is followed by the environment.
-func parsePSEnv(s string) map[int]string {
-	out := map[int]string{}
+func parsePSEnv(s string) map[int]procEnv {
+	out := map[int]procEnv{}
 	for _, line := range strings.Split(s, "\n") {
 		f := strings.Fields(line)
 		if len(f) < 2 {
@@ -249,8 +312,8 @@ func parsePSEnv(s string) map[int]string {
 		if err != nil || !isClaudeCmd(f[1:]) {
 			continue
 		}
-		if m := claudeConfigEnvRe.FindStringSubmatch(line); m != nil {
-			out[pid] = m[1]
+		if pe := parseProcEnv(line); pe != (procEnv{}) {
+			out[pid] = pe
 		}
 	}
 	return out

@@ -450,6 +450,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.refresh(p.SessionID, f)
 		m := f.Meta()
 		st, _ := n.state.get(p.SessionID)
+		if st.Launcher == "" {
+			st.Launcher = n.inferLauncher(p.SessionID)
+		}
 		mode, effort := n.modesOf(p.SessionID)
 		if pane, err := n.paneFor(ctx, p.SessionID); err == nil && !n.isAssistantSession(p.SessionID) {
 			if screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {

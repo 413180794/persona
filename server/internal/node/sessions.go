@@ -536,6 +536,9 @@ func (n *Node) decorate(s *proto.Session) {
 			s.Cwd = st.Cwd
 		}
 	}
+	if s.Launcher == "" {
+		s.Launcher = n.inferLauncher(s.SessionID)
+	}
 	if s.Title == "" {
 		s.Title = filepath.Base(s.Cwd)
 	}
@@ -690,11 +693,20 @@ func (n *Node) sessionFromProcess(pane string) string {
 	if c.pid == 0 {
 		return ""
 	}
-	b, err := os.ReadFile(n.claudeSessionFile(c.pid))
-	if err != nil {
+	f := n.claudeSessionFile(c.pid)
+	if _, err := os.Stat(f); err != nil {
 		n.mu.Lock()
 		delete(n.panePIDs, pane) // claude exited / restarted: look again next time
 		n.mu.Unlock()
+		return ""
+	}
+	return readClaudeSessionID(f)
+}
+
+// readClaudeSessionID reads the session id out of a claude's sessions/<pid>.json ("" when missing or invalid).
+func readClaudeSessionID(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
 		return ""
 	}
 	var f struct {
@@ -841,17 +853,23 @@ func listKey(list []proto.Session) string {
 
 var launcherCache struct {
 	sync.Mutex
-	at   time.Time
-	list []proto.Launcher
+	at       time.Time
+	list     []proto.Launcher
+	fetch    sync.Mutex // one login shell at a time
+	fetching bool       // a background refresh (cachedLaunchers) is running
 }
 
 // launchers lists the claude wrapper functions defined in ~/.zshrc (via the `_claude_launchers` helper).
 func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
+	launcherCache.fetch.Lock()
+	defer launcherCache.fetch.Unlock()
 	launcherCache.Lock()
-	defer launcherCache.Unlock()
 	if time.Since(launcherCache.at) < time.Minute && launcherCache.list != nil {
-		return launcherCache.list, nil
+		list := launcherCache.list
+		launcherCache.Unlock()
+		return list, nil
 	}
+	launcherCache.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	out, err := loginShell(ctx, "_claude_launchers 2>/dev/null || true").Output()
@@ -862,8 +880,63 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	if len(list) == 0 {
 		list = []proto.Launcher{{Name: "claude", Model: "默认"}}
 	}
+	launcherCache.Lock()
 	launcherCache.at, launcherCache.list = time.Now(), list
+	launcherCache.Unlock()
 	return list, nil
+}
+
+// cachedLaunchers never waits for the login shell: it returns the last list (possibly stale, nil before the first
+// one) and starts a refresh in the background when the list is missing or old.
+func (n *Node) cachedLaunchers() []proto.Launcher {
+	launcherCache.Lock()
+	defer launcherCache.Unlock()
+	if (launcherCache.list == nil || time.Since(launcherCache.at) >= time.Minute) && !launcherCache.fetching {
+		launcherCache.fetching = true
+		go func() {
+			_, _ = n.launchers(context.Background())
+			launcherCache.Lock()
+			launcherCache.fetching = false
+			launcherCache.Unlock()
+		}()
+	}
+	return launcherCache.list
+}
+
+// inferLauncher names the launcher of a claude Jarvis did not start (typed in a terminal), from the
+// ANTHROPIC_BASE_URL / ANTHROPIC_MODEL the scan saw in its environment; "" when unknown.
+func (n *Node) inferLauncher(id string) string {
+	env, ok := n.sessionEnv(id)
+	if !ok {
+		return ""
+	}
+	return matchLauncher(n.cachedLaunchers(), env.BaseURL, env.Model)
+}
+
+// matchLauncher picks the launcher that exports this base URL and model. Several launchers can share one endpoint
+// (and a launcher whose model is chosen at run time shows a placeholder such as "(claude-choose)"), so: the one
+// launcher with both equal; else the one launcher with that base URL; else nothing, never a guess between several.
+func matchLauncher(list []proto.Launcher, baseURL, model string) string {
+	if baseURL == "" {
+		return "" // the default endpoint: nothing to tell launchers apart by
+	}
+	var byURL, byBoth []string
+	for _, l := range list {
+		if l.BaseURL != baseURL {
+			continue
+		}
+		byURL = append(byURL, l.Name)
+		if l.Model == model {
+			byBoth = append(byBoth, l.Name)
+		}
+	}
+	if len(byBoth) == 1 {
+		return byBoth[0]
+	}
+	if len(byURL) == 1 {
+		return byURL[0]
+	}
+	return ""
 }
 
 var nameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)

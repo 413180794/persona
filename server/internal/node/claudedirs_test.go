@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 func TestParsePSEnv(t *testing.T) {
@@ -15,8 +17,73 @@ func TestParsePSEnv(t *testing.T) {
 		"  103 node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js CLAUDE_CONFIG_DIR=/p/b\n" +
 		"  104 /bin/zsh -c run CLAUDE_CONFIG_DIR=/p/c\n" + // a shell a claude started: not claude
 		"garbage\n")
-	if len(out) != 2 || out[101] != "/p/a" || out[103] != "/p/b" {
+	if len(out) != 2 || out[101].ConfigDir != "/p/a" || out[103].ConfigDir != "/p/b" {
 		t.Fatalf("got %v", out)
+	}
+}
+
+func TestParsePSEnvLauncherVars(t *testing.T) {
+	out := parsePSEnv("" +
+		"  201 claude --resume x ANTHROPIC_BASE_URL=https://gw.example.com/api ANTHROPIC_MODEL=model-a HOME=/home/me\n" +
+		"  202 claude ANTHROPIC_BASE_URL=https://gw.example.com/api CLAUDE_CONFIG_DIR=/p/a\n" +
+		"  203 claude MY_ANTHROPIC_MODEL=nope HOME=/home/me\n" + // another variable's suffix: not ours
+		"  204 /bin/zsh ANTHROPIC_MODEL=model-a\n") // not claude
+	want := map[int]procEnv{
+		201: {BaseURL: "https://gw.example.com/api", Model: "model-a"},
+		202: {ConfigDir: "/p/a", BaseURL: "https://gw.example.com/api"},
+	}
+	if len(out) != len(want) || out[201] != want[201] || out[202] != want[202] {
+		t.Fatalf("got %v", out)
+	}
+	// /proc/<pid>/environ is NUL-separated.
+	if e := parseProcEnv("HOME=/h\x00ANTHROPIC_MODEL=model-b\x00ANTHROPIC_BASE_URL=https://other.example.com\x00"); e != (procEnv{BaseURL: "https://other.example.com", Model: "model-b"}) {
+		t.Fatalf("environ: %+v", e)
+	}
+}
+
+func TestSessionEnvFromSessionsFile(t *testing.T) {
+	n, profile := claudeHome(t)
+	id := "cccccccc-0000-0000-0000-000000000003"
+	_ = os.WriteFile(filepath.Join(profile, "sessions", "4242.json"), []byte(`{"pid":4242,"sessionId":"`+id+`"}`), 0o600)
+	n.cdirs.scan = func() map[int]procEnv {
+		return map[int]procEnv{4242: {ConfigDir: profile, BaseURL: "https://gw.example.com", Model: "model-a"}}
+	}
+	e, ok := n.sessionEnv(id)
+	if !ok || e.BaseURL != "https://gw.example.com" || e.Model != "model-a" {
+		t.Fatalf("session env %+v %v", e, ok)
+	}
+	if _, ok := n.sessionEnv("dddddddd-0000-0000-0000-000000000004"); ok {
+		t.Fatal("a session no live claude runs has no environment")
+	}
+}
+
+func TestMatchLauncher(t *testing.T) {
+	list := []proto.Launcher{
+		{Name: "claude", Model: "默认"},
+		{Name: "cc_a", BaseURL: "https://gw.example.com", Model: "model-a"},
+		{Name: "cc_b", BaseURL: "https://gw.example.com", Model: "model-b"},
+		{Name: "cc_pick", BaseURL: "https://gw.example.com", Model: "(claude-choose)"},
+		{Name: "cc_solo", BaseURL: "https://solo.example.com", Model: "(claude-choose)"},
+		{Name: "cc_x", BaseURL: "https://twin.example.com", Model: "model-x"},
+		{Name: "cc_y", BaseURL: "https://twin.example.com", Model: "model-x"},
+	}
+	for _, c := range []struct {
+		name, url, model, want string
+	}{
+		{"exact match among a shared endpoint", "https://gw.example.com", "model-b", "cc_b"},
+		{"shared endpoint, unknown model: no guess", "https://gw.example.com", "model-z", ""},
+		{"shared endpoint, no model: no guess", "https://gw.example.com", "", ""},
+		{"only launcher of its endpoint, dynamic model", "https://solo.example.com", "model-q", "cc_solo"},
+		{"two launchers equal on both: no guess", "https://twin.example.com", "model-x", ""},
+		{"unknown endpoint", "https://none.example.com", "model-a", ""},
+		{"default endpoint", "", "model-a", ""},
+	} {
+		if got := matchLauncher(list, c.url, c.model); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := matchLauncher(nil, "https://gw.example.com", "model-a"); got != "" {
+		t.Errorf("no launcher list yet: got %q", got)
 	}
 }
 
@@ -33,7 +100,7 @@ func claudeHome(t *testing.T) (*Node, string) {
 		_ = os.MkdirAll(filepath.Join(dir, "sessions"), 0o700)
 	}
 	n := &Node{home: home, paths: map[string]string{}, cdirs: newClaudeDirs()}
-	n.cdirs.scan = func() map[int]string { return map[int]string{4242: profile} }
+	n.cdirs.scan = func() map[int]procEnv { return map[int]procEnv{4242: {ConfigDir: profile}} }
 	return n, profile
 }
 
@@ -61,7 +128,7 @@ func TestTranscriptsInProfileDirs(t *testing.T) {
 
 func TestKnownDirsWithoutRunningClaude(t *testing.T) {
 	n, profile := claudeHome(t)
-	n.cdirs.scan = func() map[int]string { return nil }
+	n.cdirs.scan = func() map[int]procEnv { return nil }
 	if n.transcriptPath("bbbbbbbb-0000-0000-0000-000000000002") != "" {
 		t.Fatal("an unknown profile cannot be found")
 	}
