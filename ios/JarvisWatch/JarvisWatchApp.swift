@@ -173,10 +173,10 @@ struct WatchRootView: View {
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Label(ix.kind.watchTitle, systemImage: ix.kind.watchSymbol)
-                                            .font(.caption2.weight(.semibold))
+                                            .font(.footnote.weight(.semibold))
                                             .foregroundStyle(Theme.needsYou)
-                                        Text(ix.watchSummary).font(.footnote).lineLimit(3)
-                                        Text(ix.sessionTitle ?? "").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                        Text(ix.watchSummary).font(.headline).lineLimit(3)
+                                        Text(ix.sessionTitle ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                             }
@@ -185,27 +185,50 @@ struct WatchRootView: View {
                             }
                         }
                     }
+                    if let e = model.error {
+                        // Offline: say so first; what is below (if anything) is from the last refresh that worked.
+                        Section {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("连不上 hub").font(.headline)
+                                    if let t = model.lastUpdate {
+                                        Text("下面是 \(t.formatted(.relative(presentation: .named))) 的数据").font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                    Text(e).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                                }
+                            } icon: {
+                                Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.danger)
+                            }
+                            Button { Task { await model.refresh() } } label: { Text("重试").lineLimit(1) }
+                        }
+                    }
+                    if model.lastUpdate != nil || model.error == nil {
                     Section("运行中") {
-                        if model.sessions.isEmpty {
+                        if model.lastUpdate == nil {
+                            HStack(spacing: 8) {
+                                ProgressView().frame(width: 22, height: 22)
+                                Text("加载中").font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } else if model.sessions.isEmpty {
                             Text("没有运行中的 Claude").font(.footnote).foregroundStyle(.secondary)
                         }
                         ForEach(model.sessions) { s in
                             NavigationLink { WatchSessionView(session: s) } label: {
-                                HStack(spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    // On the title's first line (titles wrap to two), not centered on the row.
                                     Circle().fill(s.state.color).frame(width: 8, height: 8)
+                                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 2 }
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(s.displayTitle).font(.footnote.weight(.semibold)).lineLimit(2)
+                                        Text(s.displayTitle).font(.headline).lineLimit(2)
                                         Text([s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ").isEmpty
                                              ? (model.machine(s.machineID)?.name ?? s.machineID)
                                              : [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › "))
-                                            .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                            .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                             }
                         }
                     }
-                    if let e = model.error {
-                        Text(e).font(.caption2).foregroundStyle(Theme.danger)
                     }
                 }
                 .navigationTitle("Jarvis")
@@ -280,7 +303,7 @@ struct WatchInteractionView: View {
                 switch interaction.kind {
                 case .question:
                     ForEach(interaction.questions ?? []) { q in
-                        Text(q.question).font(.footnote.weight(.semibold))
+                        Text(q.question).font(.headline)
                         ForEach(q.options, id: \.label) { opt in
                             Button {
                                 if q.multiSelect {
@@ -304,7 +327,7 @@ struct WatchInteractionView: View {
                         Button("提交") { submit() }.buttonStyle(.borderedProminent)
                     }
                 case .plan:
-                    Text(interaction.plan ?? "").font(.caption2)
+                    Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
                     Button("批准并执行") { act(Resolution(approve: true, mode: "bypassPermissions")) }.buttonStyle(.borderedProminent)
                     Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) }
                 case .permission:
@@ -312,7 +335,7 @@ struct WatchInteractionView: View {
                     Button("允许") { act(Resolution(allow: true)) }.buttonStyle(.borderedProminent)
                     Button("拒绝") { act(Resolution(allow: false)) }
                 case .screen:
-                    Text(interaction.screen ?? "").font(.system(size: 9, design: .monospaced))
+                    Text(interaction.screen ?? "").font(.caption2.monospaced())
                     if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
                         ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
                             Button("\(opt.key). \(opt.label)") { act(Resolution(option: opt.key)) }.font(.caption2)
@@ -369,12 +392,14 @@ struct WatchSessionView: View {
                     Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
                 ForEach(items.suffix(6)) { it in
+                    // A bubble as wide as its words, the user's on the right, set off from the other edge.
                     Text(WatchText.shown(it.text ?? ""))
-                        .font(.caption2)
+                        .font(.footnote)
                         .lineLimit(8)
                         .padding(6)
-                        .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                         .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: 8))
+                        .padding(it.role == "user" ? .leading : .trailing, 14)
+                        .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                 }
                 TextField("回复（可听写）", text: $reply)
                     .onSubmit {
@@ -454,10 +479,10 @@ struct WatchInboxRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Label(item.isLark ? (item.kindLabel ?? "飞书") : "邮件", systemImage: item.isLark ? "bubble.left.fill" : "envelope.fill")
-                .font(.caption2.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(item.kind == "mention" ? Theme.danger : Theme.accent)
-            Text(item.title).font(.footnote.weight(.semibold)).lineLimit(1)
-            Text(item.summary?.isEmpty == false ? item.summary! : item.preview).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
+            Text(item.title).font(.headline).lineLimit(2)
+            Text(item.summary?.isEmpty == false ? item.summary! : item.preview).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
         }
     }
 }
@@ -476,13 +501,13 @@ struct WatchInboxItemView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 if let s = item.summary, !s.isEmpty {
-                    Text(s).font(.footnote.weight(.semibold))
+                    Text(s).font(.headline)
                 }
                 Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："))
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.footnote).foregroundStyle(.secondary)
                 if let draft {
                     Text(draft)
-                        .font(.caption2)
+                        .font(.footnote)
                         .padding(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.accent.opacity(0.25), in: .rect(cornerRadius: 8))

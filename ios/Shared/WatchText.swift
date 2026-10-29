@@ -2,7 +2,8 @@ import Foundation
 
 /// A message as the watch shows it: plain text without the markup the phone and Claude Code put into messages
 /// (`<jarvis-context>` blocks become their title, the note listing attached photos and Claude's `[Image #n]`
-/// placeholders become one 「图片」 mark, pasted-content tags go).
+/// placeholders become one 「图片」 mark, pasted-content tags go) and without Markdown's marks (`##`, `**`, backticks,
+/// fences, quotes, link targets; list dashes become •): the watch draws plain text, and the marks were shown as typed.
 nonisolated enum WatchText {
     private static let context = try! NSRegularExpression(
         pattern: #"<jarvis-context\b[^>]*?title="([^"]*)"[^>]*>[\s\S]*?</jarvis-context>\s*"#)
@@ -11,6 +12,18 @@ nonisolated enum WatchText {
         (#"\[Image #\d+\]\s*"#, "〔图片〕"),
         (#"</?pasted_content[^>]*>"#, ""),
         (#"(〔图片〕\s*)+"#, "〔图片〕 "),
+        // Markdown, line by line (?m): fences, headings, quotes, rules, then list dashes; inline marks after.
+        (#"(?m)^[ \t]*```.*\n?"#, ""),
+        (#"(?m)^#{1,6}[ \t]+"#, ""),
+        (#"(?m)^[ \t]*>[ \t]?"#, ""),
+        (#"(?m)^[ \t]*([-*_][ \t]*){3,}$"#, ""),
+        (#"(?m)^([ \t]*)[-*+][ \t]+"#, "$1• "),
+        (#"\*\*([^*\n]+)\*\*"#, "$1"),
+        (#"__([^_\n]+)__"#, "$1"),
+        (#"(?<![*A-Za-z0-9_])\*([^*\s][^*\n]*?)\*(?![*A-Za-z0-9_])"#, "$1"), // *italic*, also between CJK; not 2 * 3 or a*b*c
+        (#"`([^`\n]+)`"#, "$1"),
+        (#"\[([^\]\n]+)\]\([^)\s]+\)"#, "$1"),
+        (#"\n{3,}"#, "\n\n"),
     ]
 
     static func shown(_ text: String) -> String {

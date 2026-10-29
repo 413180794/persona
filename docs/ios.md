@@ -236,6 +236,8 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   （sendMessage 请求，iPhone 回复配对）；iPhone 设置里有「同步到 Apple Watch」。
 - 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互、收件箱里需要你的事）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
   回答 / 发消息 / 中断也直接调 hub。
+  界面层级：每行的主体（问什么、会话名、收件箱标题）用 headline，类型和位置用 footnote；消息和计划去掉 Markdown 标记再显示（`WatchText.shown`），
+  气泡跟着字宽、自己的靠右；没拿到过数据时显示「加载中」，连不上 hub 时最上面一行「连不上 hub」+「重试」（有旧数据就写明是多久前的）。
 
 ## 连接状态（弱网 / 断网）
 

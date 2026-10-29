@@ -350,6 +350,11 @@ struct TurnTests {
         #expect(WatchText.shown("[Image #1] [Image #2] 这个按钮歪了\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>") == "〔图片〕 这个按钮歪了\n〔图片〕")
         #expect(WatchText.shown("<pasted_content id=\"x\">长文本</pasted_content>") == "长文本")
         #expect(WatchText.shown("普通的话") == "普通的话")
+        // Markdown's marks go; the words stay.
+        #expect(WatchText.shown("## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG") == "支持 HEIC\n\n1. 用 sips 把 HEIC 转成 JPEG")
+        #expect(WatchText.shown("**粗体**和*斜体*，看[文档](https://example.com/d)") == "粗体和斜体，看文档")
+        #expect(WatchText.shown("- 一\n  - 二\n> 引用\n---\n```swift\nlet a = 1\n```") == "• 一\n  • 二\n引用\n\nlet a = 1")
+        #expect(WatchText.shown("2 * 3 = 6，snake_case_name") == "2 * 3 = 6，snake_case_name")
     }
 
     @Test func timeoutsAreNotShown() {
