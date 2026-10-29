@@ -14,6 +14,17 @@ nonisolated struct ToolCall: Identifiable, Hashable, Sendable {
     var isError: Bool { result?.isError ?? false }
 }
 
+nonisolated extension ChatRow {
+    /// A message from the user, or a picture sent with one.
+    var isUserInput: Bool {
+        switch self {
+        case .user: true
+        case .image(let i): i.role == "user" && i.toolUseID == nil
+        default: false
+        }
+    }
+}
+
 nonisolated enum ChatRow: Identifiable, Hashable, Sendable {
     case user(Item)
     case assistant(Item)
@@ -132,12 +143,13 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
         func length(_ i: Int) -> Int { if case .assistant(let a) = all[i] { a.text?.count ?? 0 } else { 0 } }
         var pick: Int?
         for c in candidates where pick == nil || length(c) >= length(pick!) { pick = c } // ties: the later one
+        // What the user sent stays with the exchange (their pictures too: they sit above the message they came with).
         if let first = all.firstIndex(where: { if case .notice(let n) = $0 { n.wake == true } else { false } }) {
-            afterWake = Array(all[first...]).filter { if case .user = $0 { false } else { true } }
+            afterWake = Array(all[first...]).filter { !$0.isUserInput }
         }
         guard let pick else { return }
-        tail = all[(pick + 1)...].filter { if case .user = $0 { false } else { true } }
-        ordered = Array(all[...pick]) + all[(pick + 1)...].filter { if case .user = $0 { true } else { false } }
+        tail = all[(pick + 1)...].filter { !$0.isUserInput }
+        ordered = Array(all[...pick]) + all[(pick + 1)...].filter(\.isUserInput)
         process = ordered.filter { if case .user = $0 { false } else { true } }
     }
 }

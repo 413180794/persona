@@ -179,6 +179,7 @@ func corpusOne(p string) (rec corpusRecord) {
 		return
 	}
 	rec.Size = st.Size()
+	defer shimWhole()()
 	f := openCorpusFile(p)
 	items, err := f.Refresh()
 	if err != nil {

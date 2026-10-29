@@ -396,6 +396,26 @@ struct TurnTests {
         #expect(ChatView.prefixCount(items) { ($0.seq, $0.part) <= (9, 0) } == 5)
     }
 
+    @Test func picturesSentAfterAWakeStayWithTheirMessage() {
+        // A turn a background task woke up again; then a message with a picture typed while the agent worked.
+        var img = item(5, .image, role: "user")
+        img.id = "m#1"
+        img.image = ImagePayload(mime: "image/png", data: "iVBORw0KGgo=")
+        img.queued = true
+        var wake = item(3, .notice, role: "system", text: "后台任务完成")
+        wake.wake = true
+        var msg = item(5, .text, role: "user", text: "看这个")
+        msg.id = "m#0"
+        msg.queued = true
+        let items = [item(1, .text, role: "user", text: "开始"), item(2, .text, text: "好的，在跑"), wake,
+                     item(4, .text, text: "跑完了，结果如下：……"), msg, img, item(6, .text, text: "收到")]
+        let blocks = ChatBlock.build(ChatStore.buildRows(items))
+        guard case .turn(let t) = blocks.last else { Issue.record("no turn"); return }
+        #expect(t.ordered.contains { if case .image(let i) = $0 { i.id == "m#1" } else { false } })
+        #expect(!t.tail.contains { if case .image = $0 { true } else { false } })
+        #expect(!t.afterWake.contains { if case .image = $0 { true } else { false } })
+    }
+
     @Test func contextTagRoundTrips() {
         let ref = ContextRef(kind: "edit", title: "A \"quoted\" <title>", url: "https://x.y/a?b=1&c=2", text: "选中的 <b>文字</b>")
         let msg = ref.xml + "\n\n按要求修改上面选中的内容：更短"
