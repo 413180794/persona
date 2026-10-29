@@ -276,6 +276,7 @@ struct ComposeView: View {
                 }
                 if let error { Text(error).foregroundStyle(Theme.danger).font(.footnote) }
             }
+            .themedPage()
             .navigationTitle("写邮件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -345,6 +346,7 @@ struct MailAccountsView: View {
                     Button { adding = true } label: { Label("添加邮箱", systemImage: "plus.circle.fill") }
                 }
             }
+            .themedPage()
             .navigationTitle("邮箱")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
@@ -446,6 +448,7 @@ struct AddMailAccountView: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) } }
             }
+            .themedPage()
             .navigationTitle("添加邮箱")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

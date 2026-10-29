@@ -212,11 +212,15 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |
   | --- | --- | --- | --- | --- |
   | 液态玻璃 | 系统蓝 `#007AFF` | Liquid Glass | 浅蓝 `#DCEAFF` 黑字（深色 `#1D3557`） | 系统 |
-  | Claude | 珊瑚 `#D4683F` | Liquid Glass | 珊瑚底白字 | 系统 |
-  | 黏土 | 薰衣草紫 `#7A5AF8` | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24 | 淡紫渐变白字 | 淡紫 `#EFEAF7` |
-  | Island | 青绿 `#0E9F8E` | 白色悬浮卡片 + 大而柔的阴影，圆角 26 | 墨黑底白字（深色反过来） | 雾青 `#E6F1EF` |
+  | Claude | 珊瑚 `#D4683F`（深色 `#CD6E45`） | Liquid Glass | 深珊瑚 `#B24C25` 白字 | 系统 |
+  | 黏土 | 薰衣草紫 `#7A5AF8`（深色 `#8979EB`） | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24 | 紫 `#6759D3` 白字 | 淡紫 `#EFEAF7`（深色 `#0A0510`） |
+  | Island | 青 `#27747F`（深色 `#2A9798`） | 白色悬浮卡片 + 大而柔的阴影，圆角 26 | 墨黑底白字（深色反过来） | 雾青 `#E6F1EF` |
   | 飞书 | 飞书蓝 `#3370FF` | 白卡片 + 发丝描边、无阴影，圆角 10，按钮 bordered | 浅蓝 `#D1E3FF` 黑字 | 浅灰 `#F5F6F7` |
 
+  各风格的可读性底线（2026-10-30 修过一轮，数字见 jarvis-p1 的 themes-fix 报告）：实心按钮和选中胶囊的白字 ≥ 3.5:1（所以深色主色不能太亮），
+  自己气泡的白字 ≥ 4.5:1，主色当链接对页面 ≥ 3:1；彩色气泡的渐变只往下压暗（`Theme.deepening`），不能提亮顶部。黏土 / Island 的实心按钮
+  （`SoftButtonStyle`）用当前 tint 填色、至少 44pt 高：调用处 `.tint(Theme.danger)` 的中断、关闭 Agent 在每套风格下都是红色。
+  自己画背景的滚动页用 `.themedGroupedPage()`，List / Form 用 `.themedPage()`，否则黏土 / Island / 飞书下切页时底色会跳。
   `Theme` 的颜色按当前风格取值（`Theme.accent(style)` 可取任意风格，设置里的预览卡用它）；面板用 `.surface(tint:interactive:in:)`、
   按钮用 `.themedButton(prominent:)`、列表页面 `.themedPage()`、plain 列表的行 `.themedRow()`，不要直接写 `glassEffect` / `.glass`。
   切换风格时 RootView 以风格为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色

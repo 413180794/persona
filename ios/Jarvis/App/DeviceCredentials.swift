@@ -72,6 +72,7 @@ struct DevicesView: View {
                                        description: Text(model.deviceID == nil ? "hub 更新后，这台 iPhone 会自动换成自己的凭据。" : ""))
             }
         }
+        .themedPage()
         .navigationTitle("设备")
         .task { await load() }
         .refreshable { await load() }

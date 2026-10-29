@@ -14,6 +14,12 @@ extension View {
         if AppStyle.current.usesGlass { self } else { listRowBackground(Color.clear) }
     }
 
+    /// A scroll page that paints its own background (not a List): the system's grouped gray in the glass styles, the
+    /// style's canvas otherwise (it used to stay system gray in 黏土 / Island / 飞书, and jumped against the next page).
+    @ViewBuilder func themedGroupedPage() -> some View {
+        if AppStyle.current.usesGlass { background(Color(.systemGroupedBackground)) } else { background(Theme.pageBackground) }
+    }
+
     /// The page behind a list / scroll view: the style's canvas; the glass styles keep the system's.
     @ViewBuilder func themedPage() -> some View {
         if AppStyle.current.usesGlass {

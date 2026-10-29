@@ -164,7 +164,7 @@ struct AssistantHome: View {
             .padding(.bottom, 20)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color(.systemGroupedBackground))
+        .themedGroupedPage()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -338,6 +338,7 @@ struct AssistantHistory: View {
                     }
                 }
             }
+            .themedPage()
             .navigationTitle("历史对话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }

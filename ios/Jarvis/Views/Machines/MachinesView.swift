@@ -17,7 +17,7 @@ struct MachinesView: View {
                 }
                 .padding(16)
             }
-        .background(Color(.systemGroupedBackground))
+        .themedGroupedPage()
         .navigationTitle("机器")
         // A large title stays below; the bar's middle is only for 连接中… and the like.
         .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle() } }
@@ -141,6 +141,7 @@ struct MachineDetailView: View {
                 }
             }
         }
+        .themedPage()
         .navigationTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
         .task { launchers = (try? await model.launchers(machineID)) ?? [] }

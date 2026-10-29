@@ -199,6 +199,7 @@ struct TerminalSettingsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
+            .themedPage()
             .navigationTitle("终端设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -138,6 +138,7 @@ struct FileViewer: View {
                             .foregroundStyle(Color.primary)
                     }
                 }
+                .themedPage()
             } else if let text = file.text {
                 if isMarkdown(file) && !raw {
                     ScrollView {

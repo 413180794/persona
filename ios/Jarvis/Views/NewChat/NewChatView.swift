@@ -136,6 +136,7 @@ struct NewChatView: View {
                     Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
                 }
             }
+            .themedPage()
             .navigationTitle("新对话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -281,6 +282,7 @@ struct LauncherPicker: View {
             }
         }
         .searchable(text: $query, prompt: "函数名或模型")
+        .themedPage()
         .navigationTitle("启动器")
     }
 }
@@ -329,6 +331,7 @@ struct DirectoryBrowser: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
+        .themedPage()
         .navigationTitle((path as NSString).lastPathComponent.isEmpty ? "目录" : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load(start) }

@@ -115,7 +115,7 @@ struct SpaceView: View {
             }
             .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
+        .themedGroupedPage()
         .navigationTitle(first?.spaceName ?? "空间")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

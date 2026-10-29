@@ -216,6 +216,7 @@ struct AssistantSettingsView: View {
                 Text("发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")
             }
         }
+        .themedPage()
         .navigationTitle("助手")
         .task {
             selection = model.assistantConfig?.launcher ?? "ccc"
@@ -303,6 +304,7 @@ struct PhoneDataView: View {
                 Text("Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
             }
         }
+        .themedPage()
         .navigationTitle("手机数据")
         .task {
             for s in PhoneDataSource.allCases { statuses[s] = PhoneAuthorization.status(s) }
@@ -416,6 +418,7 @@ struct PairView: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) } }
             }
+            .themedPage()
             .navigationTitle("连接 hub")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -501,6 +504,7 @@ struct ClaudeSettingsView: View {
                 ForEach(settings) { s in row(s) }
             }
         }
+        .themedPage()
         .navigationTitle("Claude Code 设置")
         .onAppear { if machineID.isEmpty { machineID = model.hubMachineID } } // first visit: the hub's machine
         .overlay { if loading && settings.isEmpty { ProgressView() } }
