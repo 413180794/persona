@@ -29,9 +29,19 @@ struct ChatView: View {
     @State private var menu = MessageMenu()
     /// Work lines the user tapped open (by line id; kept here so lazy rows coming back keep their state).
     @State private var openWork: Set<String> = []
-    /// While you read history, lines newer than this one wait (inserting at the newest end of the flipped list would
-    /// push what you read); history loaded at the far end still shows. Cleared when you are back at the newest.
-    @State private var frozenAt: String?
+    /// While you read history, the chat is drawn from the items it had when you left the newest end (inserting at the
+    /// newest end of the flipped list would push what you read); history loaded at the far end, and holes filled
+    /// behind it, still show. Cleared when you are back at the newest. It used to keep the lines up to the newest
+    /// line's id, but those ids change as a turn goes on (the answer folds into the work line, a finished turn's work
+    /// lines merge), and losing the id let everything in at once.
+    @State private var frozen: Frozen?
+
+    struct Frozen: Equatable {
+        var seq: Int
+        var part: Int
+        /// The turn that was running: its lines stay as they were drawn (live work line, answer not yet picked).
+        var live: String?
+    }
     /// The user dragged the list at least once: only then does reaching the top load older pages (a lazy stack may
     /// lay out the top row while settling at the bottom, which used to chain-load history on entry).
     @State private var userScrolled = false
@@ -207,17 +217,36 @@ struct ChatView: View {
     /// The chat's lines, rebuilt only when what they come from changed: the store's blocks, the running turn and
     /// which work lines are open. (Every re-render used to walk the whole history again.)
     private func currentLines() -> [ChatLine] {
-        let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: store.version,
-                                       live: liveTurnID, open: openWork)
+        let items = store.items
+        // Frozen: the items up to the snapshot (they are in transcript order); what comes after waits.
+        let cut = frozen.map { f in Self.prefixCount(items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? items.count
+        let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: frozen == nil ? store.version : cut,
+                                       first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
+                                       frozen: frozen)
         if scratch.linesKey == key { return scratch.lines }
-        let lines = unfoldWork(chatLines(Self.debugTrim(store.blocks)))
+        var blocks = store.blocks
+        if frozen != nil {
+            let built = ChatStore.rebuild(Array(items[..<cut]), settled: scratch.frozenSettled)
+            scratch.frozenSettled = built.settled
+            blocks = built.blocks
+        }
+        let lines = unfoldWork(chatLines(Self.debugTrim(blocks), live: key.live))
         scratch.lines = lines
         scratch.linesKey = key
         return lines
     }
 
-    private func chatLines(_ blocks: [ChatBlock]) -> [ChatLine] {
-        let liveID = liveTurnID
+    /// How many leading elements satisfy `pred` (true for a prefix, then false): a binary search.
+    static func prefixCount(_ items: [Item], _ pred: (Item) -> Bool) -> Int {
+        var lo = 0, hi = items.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if pred(items[mid]) { lo = mid + 1 } else { hi = mid }
+        }
+        return lo
+    }
+
+    private func chatLines(_ blocks: [ChatBlock], live liveID: String?) -> [ChatLine] {
         var out: [ChatLine] = []
         for block in blocks {
             switch block {
@@ -329,6 +358,44 @@ struct ChatView: View {
             toggleWork(w, fromHeader: false); await pause()
             await bring(w + "-end", to: 0.5)
         }
+    }
+    #endif
+
+    #if DEBUG
+    /// Scrolls into the history while the agent keeps working (`MOCK_STREAM=1`), then logs, every 2 s, where a line on
+    /// screen is and how many items have arrived (the line must not move); back at the newest, the new lines show.
+    private func freezeProbe() async {
+        try? await Task.sleep(for: .seconds(4))
+        userScrolled = true
+        followsEnd = false
+        scrollList(to: chrome.offset + 260)
+        try? await Task.sleep(for: .seconds(1.5))
+        var log: [String] = []
+        defer {
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                try? log.joined(separator: "\n").write(to: dir.appending(path: "freeze.txt"), atomically: true, encoding: .utf8)
+            }
+        }
+        let mid = scratch.listFrame.midY
+        guard let id = scratch.visibleLines.min(by: { abs((scratch.lineY[$0] ?? .infinity) - mid) < abs((scratch.lineY[$1] ?? .infinity) - mid) }),
+              let y0 = scratch.lineY[id] else {
+            log.append("no line on screen")
+            return
+        }
+        let n0 = store.items.count
+        log.append("watching \(id) at \(Int(y0)) with \(n0) items")
+        var moved = 0
+        for _ in 0..<8 {
+            try? await Task.sleep(for: .seconds(2))
+            let y = scratch.lineY[id] ?? .nan
+            moved = max(moved, Int(abs(y - y0)))
+            log.append("items \(store.items.count), line at \(Int(y)) (moved \(Int(y - y0)))")
+        }
+        followsEnd = true
+        scrollToEnd()
+        try? await Task.sleep(for: .seconds(2))
+        let newest = currentLines().last?.id ?? ""
+        log.append("RESULT: \(store.items.count - n0) items arrived while reading, line moved at most \(moved)pt; back at the newest: last line \(newest) on screen \(scratch.visibleLines.contains(newest))")
     }
     #endif
 
@@ -516,7 +583,14 @@ struct ChatView: View {
             // The line right after the last input: the start of what the agent did and said for it.
             if let i = lines.lastIndex(where: \.isInput), i + 1 < lines.count { id = lines[i + 1].id }
         case .line(let saved):
-            if lines.contains(where: { $0.id == saved }) { id = saved }
+            if lines.contains(where: { $0.id == saved }) {
+                id = saved
+            } else if store.loadedOnce {
+                // Not in the latest page either: stay at the newest. Left waiting, it used to yank the list there
+                // (and stop following) whenever paging up later happened to load that line.
+                entry = nil
+                return
+            }
         }
         guard let id else { return }
         entry = nil
@@ -723,15 +797,14 @@ struct ChatView: View {
         withAnimation(.snappy) { viewing = agent }
         if agent != nil { model.subscribe(shownKey, by: owner) }
         followsEnd = true
-        frozenAt = nil
+        frozen = nil
         scrollToEnd()
     }
 
     private func chatScroll() -> some View {
         let store = store
         let rows = store.rows
-        var lines = currentLines()
-        if let frozenAt, let i = lines.firstIndex(where: { $0.id == frozenAt }) { lines = Array(lines[...i]) }
+        let lines = currentLines()
         let queued = session?.queued ?? []
         let pending = store.pending.filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
         return ScrollView {
@@ -747,7 +820,9 @@ struct ChatView: View {
                 if let err = store.error {
                     Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger).flippedBack()
                 }
-                if style == .assistant {
+                // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
+                // history they wait with the rest.
+                if style == .assistant && frozen == nil {
                     let live = store.liveText
                     let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
                     if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
@@ -757,7 +832,7 @@ struct ChatView: View {
                     }
                 }
                 // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
-                ForEach(pending.reversed()) { msg in
+                ForEach(frozen == nil ? pending.reversed() : []) { msg in
                     PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
                         .flippedBack()
                         .id(msg.id.uuidString)
@@ -827,6 +902,7 @@ struct ChatView: View {
             if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
             if phase == .tracking || phase == .interacting {
                 menu.dismiss()
+                entry = nil // the user scrolls on their own: no landing on the saved place after this
                 userScrolled = true
                 followsEnd = false // the user has the list; nothing moves it until they return to the newest
             } else if phase == .idle, userScrolled, atBottom {
@@ -846,10 +922,15 @@ struct ChatView: View {
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: followsEnd) { _, follows in
-            frozenAt = follows ? nil : currentLines().last?.id
+            if follows {
+                frozen = nil
+            } else if let last = store.items.last {
+                frozen = Frozen(seq: last.seq, part: last.part, live: liveTurnID)
+            }
         }
         .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
+        .onChange(of: store.loadedOnce) { _, _ in landEntry(lines) }
         .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
@@ -1073,6 +1154,9 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showFoldProbe") { // folding keeps what you read in place: Documents/fold.txt
                 Task { await foldProbe() }
             }
+            if UserDefaults.standard.bool(forKey: "showFreezeProbe") { // reading history holds still: Documents/freeze.txt
+                Task { await freezeProbe() }
+            }
             if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
                 Task {
                     try? await Task.sleep(for: .seconds(12)) // the history loads (-loadAll) and the page settles
@@ -1176,7 +1260,7 @@ struct ChatView: View {
 
     /// Simulator automation: `-openWork YES` shows every work line unfolded (screenshots of the expanded state).
     #if DEBUG
-    static let foldProbe = UserDefaults.standard.bool(forKey: "showFoldProbe")
+    static let foldProbe = UserDefaults.standard.bool(forKey: "showFoldProbe") || UserDefaults.standard.bool(forKey: "showFreezeProbe")
     /// `-showAsUnread YES`: open the chat as if its answer had not been seen (where it lands).
     static let debugAsUnread = UserDefaults.standard.bool(forKey: "showAsUnread")
     #else
@@ -1951,9 +2035,13 @@ final class ChatScratch {
     struct LinesKey: Equatable {
         var store: String
         var version: Int
+        var first: String?
         var live: String?
         var open: Set<String>
+        var frozen: ChatView.Frozen?
     }
+    /// The frozen chat's rows up to its last exchange (`ChatStore.rebuild`).
+    var frozenSettled: ChatStore.SettledRows?
     /// Rows on screen (for remembering where you left off), written by the list as it scrolls.
     var visibleLines: [String] = []
     /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.

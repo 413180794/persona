@@ -351,6 +351,24 @@ struct TurnTests {
         #expect(ChatView.shownKey(main, viewing: agent) == SessionKey(machineID: "m", sessionID: agent.sessionID))
     }
 
+    @Test func watchShowsMessagesWithoutMarkup() {
+        let ref = ContextRef(kind: "context", title: "设计稿 \"v2\"", url: "https://example.com/d", text: "选中的文字")
+        #expect(WatchText.shown(ref.xml + "\n\n看看这个") == "〔设计稿 \"v2\"〕\n看看这个")
+        #expect(WatchText.shown("[Image #1] [Image #2] 这个按钮歪了\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>") == "〔图片〕 这个按钮歪了\n〔图片〕")
+        #expect(WatchText.shown("<pasted_content id=\"x\">长文本</pasted_content>") == "长文本")
+        #expect(WatchText.shown("普通的话") == "普通的话")
+    }
+
+    @Test func frozenChatCountsItemsUpToTheSnapshot() {
+        let items = [(1, 0), (2, 0), (2, 1), (3, 0), (5, 0)].map { seq, part in
+            Item(id: "i\(seq)#\(part)", seq: seq, ts: nil, role: "assistant", kind: .text, text: "x")
+        }
+        #expect(ChatView.prefixCount(items) { ($0.seq, $0.part) <= (2, 0) } == 2)
+        #expect(ChatView.prefixCount(items) { ($0.seq, $0.part) <= (4, 0) } == 4)
+        #expect(ChatView.prefixCount(items) { ($0.seq, $0.part) <= (0, 0) } == 0)
+        #expect(ChatView.prefixCount(items) { ($0.seq, $0.part) <= (9, 0) } == 5)
+    }
+
     @Test func contextTagRoundTrips() {
         let ref = ContextRef(kind: "edit", title: "A \"quoted\" <title>", url: "https://x.y/a?b=1&c=2", text: "选中的 <b>文字</b>")
         let msg = ref.xml + "\n\n按要求修改上面选中的内容：更短"

@@ -294,6 +294,10 @@ HISTORY = "mock-1"
 # MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
 # final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
 GAP = os.environ.get("MOCK_GAP") == "1"
+# MOCK_STREAM=1: the first conversation keeps working after it is opened: every 2 s a thought, a tool call or a reply
+# arrives (a reply then folds into the work line), 12 times. For checking that reading history holds still.
+STREAM = os.environ.get("MOCK_STREAM") == "1"
+STREAM_STATE = {"started": False}
 GAP_STATE = {"started": False, "grown": False}
 
 
@@ -483,6 +487,21 @@ class H(BaseHTTPRequestHandler):
                             LOG.write("  GAP: pushing %d items from seq %d, %d left out\n" % (len(tail), lost[-1]["seq"], len(lost))); LOG.flush()
                             send({"type": "items", "machine_id": mid, "session_id": sid, "items": tail, **span(tail, lost[-1]["seq"])})
                         threading.Thread(target=later_push, daemon=True).start()
+                    if STREAM and sid == SESSIONS[0]["session_id"] and not STREAM_STATE["started"]:
+                        STREAM_STATE["started"] = True
+
+                        def stream(sid=sid, mid=mid):
+                            import time
+                            for n in range(12):
+                                time.sleep(2)
+                                before = ITEMS[sid][-1]["seq"]
+                                new = ([it("assistant", "thinking", 0, text="再检查一遍第 %d 处。" % n)] if n % 3 == 0 else
+                                       tool("Read", {"file_path": "/Users/me/code/weather/WeatherWidget/Step%d.swift" % n}, "struct Step%d {}" % n, 0) if n % 3 == 1 else
+                                       [it("assistant", "text", 0, text="第 %d 步做完了，接着看下一处。" % n)])
+                                ITEMS[sid] = ITEMS[sid] + new
+                                LOG.write("  STREAM: push %d items after seq %d\n" % (len(new), before)); LOG.flush()
+                                send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+                        threading.Thread(target=stream, daemon=True).start()
                     if since:
                         newer = [x for x in items if x["seq"] > since]
                         send({"type": "items", "machine_id": mid, "session_id": sid, "items": newer, "backlog": True,

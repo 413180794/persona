@@ -335,7 +335,12 @@ struct WatchSessionView: View {
     @State private var reply = ""
     @State private var items: [Item] = []
 
+    /// The session as the latest refresh has it (the one this page was opened with goes stale): its state follows, and
+    /// a new rev (the transcript grew) reloads the messages.
+    private var current: Session { model.sessions.first { $0.key == session.key } ?? session }
+
     var body: some View {
+        let session = current
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
@@ -343,7 +348,7 @@ struct WatchSessionView: View {
                     Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.color)
                 }
                 ForEach(items.suffix(6)) { it in
-                    Text(it.text ?? "")
+                    Text(WatchText.shown(it.text ?? ""))
                         .font(.caption2)
                         .lineLimit(8)
                         .padding(6)
@@ -368,14 +373,16 @@ struct WatchSessionView: View {
         }
         .navigationTitle(session.displayTitle)
         .task {
-            await load()
             try? await model.api?.post("/api/v1/sessions/\(session.machineID)/\(session.sessionID)/seen")
         }
+        .task(id: session.rev) { await load() }
+        // The model refreshes every 8 s while the app is active; a session without a rev (older hub) still reloads.
+        .task(id: session.rev == nil ? model.lastUpdate : nil) { if session.rev == nil { await load() } }
     }
 
     private func load() async {
         guard let api = model.api, let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
-        items = res.items.filter { $0.kind == .text }
+        items = res.items.filter { $0.kind == .text && !WatchText.shown($0.text ?? "").isEmpty }
     }
 }
 
