@@ -235,7 +235,8 @@ struct TypingIndicator: View {
     }
 }
 
-/// Composer for a conversation that does not exist yet.
+/// Composer for a conversation that does not exist yet: the chat's input line (`ComposerRow`) with its own text, sent
+/// through `send` (it starts the conversation).
 struct StarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
@@ -254,51 +255,17 @@ struct StarterComposer: View {
     var body: some View {
         VStack(spacing: 8) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
-            if !images.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
-                            Image(uiImage: pair.0).resizable().scaledToFill().frame(width: 52, height: 52)
-                                .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                                .overlay(alignment: .topTrailing) {
-                                    Button { images.remove(at: idx) } label: {
-                                        Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
-                                            .foregroundStyle(.white, .black.opacity(0.6))
-                                    }
-                                    .offset(x: 5, y: -5)
-                                }
-                        }
-                    }
-                    .padding(.top, 6)
-                }
-            }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                    Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
-                    Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
-                } label: {
-                    Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: 36, height: 36)
-                }
-                .themedButton()
-                .clipShape(.circle)
-                TextField("问 Jarvis…", text: $text, selection: $selection, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($focused)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
-                Button {
-                    let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    send(t.isEmpty ? "请看图片" : t, images.map(\.1))
-                    text = ""
-                    images = []
-                } label: {
-                    Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                }
-                .themedButton(prominent: true)
-                .clipShape(.circle)
-                .disabled(!canSend)
+            if !images.isEmpty { ComposerImages(images: $images) }
+            ComposerRow(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
+                        send: {
+                            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            send(t.isEmpty ? "请看图片" : t, images.map(\.1))
+                            text = ""
+                            images = []
+                        }) {
+                // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
+                Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
             }
         }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
@@ -488,7 +455,7 @@ struct StarterModelChip: View {
                 }
             }
         } label: {
-            ModeChip(symbol: "cpu", text: current, tint: Theme.accent)
+            ModeChip(symbol: "cpu", text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
         }
         .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
     }

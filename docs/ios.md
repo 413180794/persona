@@ -97,7 +97,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
-- Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」，占位文字也换成这条建议；
+- 输入栏：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用一行 `ComposerRow`：[+] 菜单、玻璃胶囊输入框（至少 44pt 高）、发送；
+  三件一样高（约 44pt）。没东西可发时发送键变淡，Agent 工作中且没打字时换成红色的中断键。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里，
+  共用的只有这一行的样子。上方的模型、权限、思考强度标签都是中性的（只有「全部放行」红）。
+- Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」（✦ 是 AI 的紫色，不是主色），占位文字也换成这条建议；
   点一下填进输入框（可以改了再发），长按菜单「直接发送」。一打字就消失。无头助手没有 TUI，没有建议。截图：mock 加 `MOCK_SUGGESTION=1`，打开 review 会话。
 - 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
   （或进了排队列表）就换成真消息，失败变红可重发 / 删除。不等网络，任何地方发都不卡。

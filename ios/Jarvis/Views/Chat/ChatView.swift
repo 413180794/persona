@@ -1587,14 +1587,14 @@ struct SuggestionPill: View {
             fill()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                Image(systemName: "sparkles").font(.caption.weight(.semibold)).foregroundStyle(Theme.ai)
                 Text(text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
                 Text("采用").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .surface(tint: Theme.accent.opacity(0.06), interactive: true, in: .capsule)
+            .surface(tint: Theme.ai.opacity(0.06), interactive: true, in: .capsule)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -1669,98 +1669,39 @@ struct Composer: View {
             if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
-                            Image(uiImage: pair.0).resizable().scaledToFill().frame(width: 56, height: 56)
-                                .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                                .overlay(alignment: .bottomLeading) {
-                                    Image(systemName: "pencil.tip.crop.circle.fill").font(.caption).foregroundStyle(.white)
-                                        .shadow(radius: 2).padding(3)
-                                }
-                                .onTapGesture { editingIndex = idx } // mark it up before sending
-                                .accessibilityLabel("图片 \(idx + 1)，点按编辑")
-                                .overlay(alignment: .topTrailing) {
-                                    Button { images.remove(at: idx) } label: {
-                                        Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
-                                            .foregroundStyle(.white, .black.opacity(0.6))
-                                    }
-                                    .offset(x: 5, y: -5)
-                                }
-                        }
-                    }
-                    .padding(.top, 6)
-                }
+                ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                    Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
-                    }
-                    Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
-                    Section("快捷指令") {
-                        ForEach(SlashCommand.all) { cmd in
-                            Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
-                        }
-                        if canClear {
-                            Button(role: .destructive) { confirmClear = true } label: {
-                                Label("清空上下文 /clear", systemImage: "eraser")
-                            }
-                            .disabled(status.isActive || clearing)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 36, height: 36)
+            ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
+                        text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
+                        stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                        send: { Task { await sendText(text) } }) {
+                // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
+                Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
                 }
-                .themedButton()
-                .clipShape(.circle)
-
-                TextField(status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"), text: textBinding,
-                          selection: $selection, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($focused)
-                    #if DEBUG
-                    .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
-                        if UserDefaults.standard.bool(forKey: "focusComposer") {
-                            try? await Task.sleep(for: .seconds(6))
-                            focused = true
+                Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
+                Section("快捷指令") {
+                    ForEach(SlashCommand.all) { cmd in
+                        Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
+                    }
+                    if canClear {
+                        Button(role: .destructive) { confirmClear = true } label: {
+                            Label("清空上下文 /clear", systemImage: "eraser")
                         }
+                        .disabled(status.isActive || clearing)
                     }
-                    #endif
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
-
-                if canSend || !status.isActive {
-                    Button {
-                        Task { await sendText(text) }
-                    } label: {
-                        Group {
-                            Image(systemName: "arrow.up").font(.body.weight(.bold))
-                        }
-                        .frame(width: 36, height: 36)
-                    }
-                    .themedButton(prominent: true)
-                    .clipShape(.circle)
-                    .disabled(!canSend)
-                    .keyboardShortcut(.return, modifiers: .command)
-                } else {
-                    Button {
-                        Task { await model.interrupt(key) }
-                    } label: {
-                        Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                    }
-                    .themedButton(prominent: true)
-                    .tint(Theme.danger)
-                    .clipShape(.circle)
-                    .accessibilityLabel("中断")
                 }
             }
         }
+        #if DEBUG
+        .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
+            if UserDefaults.standard.bool(forKey: "focusComposer") {
+                try? await Task.sleep(for: .seconds(6))
+                focused = true
+            }
+        }
+        #endif
         .animation(.snappy, value: suggestion)
         #if DEBUG
         .task { // `-showClearConfirm YES`: the /clear confirmation, for screenshots
