@@ -49,6 +49,23 @@ struct SelectableText: Identifiable {
     var id: String { text }
 }
 
+/// UIKit swipe: it waits for a clear sideways flick and lets scroll views have everything else (a SwiftUI drag on the
+/// chat list would take its scrolling).
+struct SwipeTo: UIGestureRecognizerRepresentable {
+    var direction: UISwipeGestureRecognizer.Direction
+    var action: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UISwipeGestureRecognizer {
+        let g = UISwipeGestureRecognizer()
+        g.direction = direction
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UISwipeGestureRecognizer, context: Context) {
+        if recognizer.state == .ended { action() }
+    }
+}
+
 /// UIKit long press: SwiftUI's own gesture does not say where the finger is.
 struct LongPressAt: UIGestureRecognizerRepresentable {
     var changed: (UIGestureRecognizer.State) -> Void = { _ in }

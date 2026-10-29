@@ -105,7 +105,7 @@ struct ChatView: View {
     }
 
     var body: some View {
-        paneContent
+        swipeablePanes
         .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -700,15 +700,25 @@ struct ChatView: View {
 
     private var lastPromptID: String? { store.items.last { $0.role == "user" && $0.kind == .text }?.id }
 
+    /// A swipe to the left: from the chat to its files (and Git); to the right: back.
+    private var swipeablePanes: some View {
+        paneContent
+            .gesture(SwipeTo(direction: .left) { swipePane(forward: true) })
+            .gesture(SwipeTo(direction: .right) { swipePane(forward: false) })
+    }
+
     @ViewBuilder private var paneContent: some View {
         switch pane {
-        case .chat: chatPane
+        case .chat: chatPane.transition(.move(edge: .leading))
         case .terminal:
             TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
                 .padding(.horizontal, 12).padding(.bottom, 8)
                 .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
+        // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
+            .transition(.move(edge: .trailing))
         case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
+            .transition(.move(edge: .trailing))
         }
     }
 
@@ -1040,7 +1050,7 @@ struct ChatView: View {
     /// The chrome folded away: back, and where you are ("app › leader · 对话") — tap it for everything again.
     private var compactChrome: some View {
         HStack(spacing: 0) {
-            Button { dismissChat() } label: {
+            Button { back() } label: {
                 Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 34)
             }
             .buttonStyle(.plain)
@@ -1068,17 +1078,21 @@ struct ChatView: View {
             .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
                                 : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
-            // A loop or background work: a small mark on the right (it balances the back button either way).
-            Group {
+            // A loop or background work: a small mark; then the terminal, a tap away even with the header folded.
+            HStack(spacing: 0) {
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
+                        .frame(width: 34, height: 34)
                         .accessibilityLabel("循环与后台任务，点按查看")
-                } else {
-                    Color.clear
                 }
+                Button { Haptics.tap(); showTerminal = true } label: {
+                    Image(systemName: "terminal").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 34)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("终端")
             }
-            .frame(width: 44, height: 34)
         }
         .padding(.horizontal, 4)
         .frame(height: ChatChrome.compactHeight)
@@ -1101,7 +1115,15 @@ struct ChatView: View {
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
     @ViewBuilder private var moreMenuItems: some View {
             if style == .dev {
-                Button { withAnimation(.snappy) { pane = .terminal } } label: { Label("终端", systemImage: "terminal") }
+                Button { showTerminal = true } label: { Label("终端", systemImage: "terminal") }
+                if pane != .chat {
+                    Button { withAnimation(.snappy) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
+                }
+                ForEach(panes.filter { $0 == .files || $0 == .git }) { p in
+                    Button { withAnimation(.snappy) { pane = p } } label: {
+                        Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
+                    }
+                }
             }
             if status.isActive {
                 Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
@@ -1172,7 +1194,7 @@ struct ChatView: View {
         ChromeHeader(chrome: chrome, touched: { scratch.lastActivity = .now }) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Button { dismissChat() } label: {
+                    Button { back() } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
                             .contentShape(.circle)
                     }
@@ -1182,6 +1204,15 @@ struct ChatView: View {
                     Spacer(minLength: 0)
                     titleButton
                     Spacer(minLength: 0)
+                    // The terminal comes up from the bottom over the page (TerminalCover); files and Git are a swipe
+                    // to the left or the ··· menu away — no tab row (docs/ios.md).
+                    Button { Haptics.tap(); showTerminal = true } label: {
+                        Image(systemName: "terminal").font(.system(size: 16, weight: .semibold)).frame(width: 44, height: 44)
+                            .contentShape(.circle)
+                    }
+                    .buttonStyle(.plain)
+                    .surface(interactive: true, in: .circle)
+                    .accessibilityLabel("终端")
                     Menu { moreMenuItems } label: {
                         Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
                             .contentShape(.circle)
@@ -1192,7 +1223,6 @@ struct ChatView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 6)
                 SiblingStrip(current: key) { next in switchTo(next) }
-                SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges, openTerminal: { showTerminal = true })
                 // A /loop and background work: small chips here instead of strips over the composer; a tap opens them.
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     ActivityChips(loop: session?.loop, background: session?.background ?? []) { showActivity = true }
@@ -1215,6 +1245,22 @@ struct ChatView: View {
                 if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
             }
         }
+    }
+
+    /// Back: out of files / Git to the chat first, then off the page.
+    private func back() {
+        if pane != .chat { withAnimation(.snappy) { pane = .chat } } else { dismissChat() }
+    }
+
+    /// A swipe to the left goes from the chat to its files (then Git); to the right, back toward the chat.
+    private func swipePane(forward: Bool) {
+        guard style == .dev else { return }
+        let order = panes.filter { $0 != .terminal }
+        guard let i = order.firstIndex(of: pane) else { return }
+        let j = forward ? i + 1 : i - 1
+        guard order.indices.contains(j) else { return }
+        Haptics.tap()
+        withAnimation(.snappy) { pane = order[j] }
     }
 
     private var compactPlace: String {

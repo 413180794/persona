@@ -114,7 +114,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
     Jarvis 标记），浅色 / 深色可切，「保存图片」进相册（仅添加权限）、「分享图片」走系统分享，右边的按钮分享纯文字。
     `ImageRenderer` 画不出 ScrollView：卡片用单独的 Markdown 主题 `.card`（代码块折行、表格不横滑），否则表格和它后面的内容全是空白；
     渲染要设 `proposedSize` 宽度，不然高度按别的宽度量，卡片底下多出一大块空白。超过 3000 字截断。
-- 顶部自动收起（Agents 对话页，像 Safari 的工具栏）：标题行（返回 / 标题 / …）、同伴条、对话 / 终端 / Git / 文件 tab 是一个自绘的顶栏
+- 顶部自动收起（Agents 对话页，像 Safari 的工具栏）：标题行（返回 / 标题 / 终端 / …）、同伴条是一个自绘的顶栏
   （`ChromeHeader`，系统导航栏在 Agents 对话页隐藏），浮在列表上方；**跟手**：手指往新消息方向推，顶栏按同样的距离往上滑走、同时淡出，
   细条（返回 +「● app › leader · 对话」）在后半段淡入；往历史方向拉就一点点滑回来。松手后不会停在半截：在最新处收起，
   否则按离哪头近吸附到全开或全收（`.smooth` 0.3 秒）。跟着新内容自动滚动时也收起（用户动过列表之后）；点细条、切 tab 展开。
@@ -127,10 +127,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   实现照 TUI：↑ 把全部排队消息拉回输入框（transcript 记 popAll），清空输入框后把保留的重新排队（`POST …/queue {"keep":[…]}`）。
 - 开发列表：忙碌的空间里只显示需要你 / 工作中 / 完成未看的 agent，空闲的折成一行「还有 N 个空闲」，点开展开。
 - 「回到底部」箭头：用列表末尾的哨兵视图判断是否在底部（滚到底就隐藏）。
-- 会话页选项卡（开发会话，`Views/Session/`）：导航栏下一排「对话 · 终端 · Git · 文件」，Git 只在仓库里出现（角标是改动数），
-  文件在知道目录时出现；助手对话没有选项卡。
-  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。点「终端」不切换选项卡，
-    而是**从底部弹出盖住整页**（`TerminalCover`，2026-10-30 用户要求）：没有标题和选项卡，顶上只有一条细栏（左边尺寸、中间把手、右边设置），
+- 会话页的终端、文件、Git（开发会话，`Views/Session/`）：**没有选项卡**（2026-10-30 用户要求去掉「对话 · 终端 · Git · 文件」那一排）。
+  终端是顶栏右上角 ··· 左边的终端按钮（收起的细栏右边也有一个）；文件和 Git 从对话**往左划**进入（对话 → 文件 → Git，往右划回去），
+  或者 ··· 菜单里点「文件」「Git（改动数）」；在文件 / Git 里返回键先回到对话。Git 只在仓库里出现，文件在知道目录时出现；助手对话都没有。
+  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。点终端按钮**从底部弹出盖住整页**（`TerminalCover`，2026-10-30 用户要求）：没有标题和选项卡，顶上只有一条细栏（左边尺寸、中间把手、右边设置），
     按住细栏往下拖跟手、拖过 140pt 或快速下划就关掉（点把手也关）；终端的尺寸只随键盘变，不随页头变（换尺寸就是给接管的窗格改尺寸，Claude 要重排）。
     底下的键栏照 Moshi：一条矮的深色胶囊装下所有键（30pt 高的扁平小键，Ctrl / Esc / Tab 等宽小字，其余是图标），把高度留给终端。hub 有 `terminal_stream` 时订阅实时流
     （`TerminalFeed`：herdr observe 的帧套到窗格尺寸的网格 `TerminalGrid` 上，丢帧 / 换流就从整帧重来，重连带 epoch / seq 续上）；
@@ -265,7 +265,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
-`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
+`-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。
 
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
