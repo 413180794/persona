@@ -84,16 +84,27 @@ struct Chip: View {
     var look: Look = .neutral
 
     var body: some View {
-        HStack(spacing: 3) {
-            if let symbol { Image(systemName: symbol).font(.caption2.weight(.semibold)) }
-            Text(text).lineLimit(1)
+        Group {
+            if let symbol {
+                HStack(spacing: 3) {
+                    Image(systemName: symbol).font(.caption2.weight(.semibold))
+                    Text(text).lineLimit(1)
+                }
+            } else {
+                Text(text).lineLimit(1)
+            }
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(words)
         .padding(.horizontal, 7)
         .padding(.vertical, 2.5)
-        .background(fill, in: .capsule)
-        .overlay { if case .outline = look { Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 0.8) } }
+        .background {
+            if case .outline = look {
+                Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 0.8)
+            } else {
+                Capsule().fill(fill)
+            }
+        }
         .fixedSize()
     }
 
