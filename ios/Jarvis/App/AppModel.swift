@@ -167,14 +167,6 @@ final class AppModel {
     }
 
     /// Routes a notification / deep link to the right tab.
-    /// Bumped to show the Agents list at its root (ChatsView pops what is pushed).
-    var agentsListRequest = 0
-
-    func openAgentsList() {
-        selectedTab = .chats
-        agentsListRequest += 1
-    }
-
     func open(_ key: SessionKey) {
         if session(key)?.assistant == true {
             selectedTab = .assistant

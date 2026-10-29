@@ -265,7 +265,6 @@ struct ChatsView: View {
                 spaceAt = spaceAt.filter { $0.key < p.count }
                 if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
             }
-            .onChange(of: model.agentsListRequest) { _, _ in path = NavigationPath() }
             .onChange(of: model.openChat, initial: true) { _, key in
                 guard let key else { return }
                 path = NavigationPath([key])

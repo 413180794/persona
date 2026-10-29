@@ -11,6 +11,7 @@ enum ChatStyle {
 
 struct ChatView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     /// The session on screen; the sibling strip can switch it to another agent in the same space.
     @State private var key: SessionKey
     var style: ChatStyle = .dev
@@ -210,6 +211,9 @@ struct ChatView: View {
             return try await api.fullItem(shownKey, id: id).text ?? ""
         }
         .onAppear(perform: appeared)
+        // Going to the background is the last chance before iOS may end the app: a cold relaunch (the dev chat is
+        // restored, AppModel.rememberChat) then opens at the same line, not only after leaving the chat.
+        .onChange(of: scenePhase) { _, phase in if phase == .background { rememberReadPosition() } }
         .onDisappear {
             rememberReadPosition()
             if viewing != nil { model.unsubscribe(shownKey, by: owner) }

@@ -17,7 +17,6 @@ struct JarvisApp: App {
                         model.open(SessionKey(machineID: link.machine, sessionID: link.session))
                         return
                     }
-                    if FleetLink.isAgents(url) { model.openAgentsList(); return }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
                         do { try await model.pair(cfg); model.toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
