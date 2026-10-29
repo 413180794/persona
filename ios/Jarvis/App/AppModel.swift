@@ -15,7 +15,22 @@ final class AppModel {
     /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus
     private(set) var machines: [Machine] = [] { didSet { saveSnapshot() } }
-    private(set) var sessionsByMachine: [String: [Session]] = [:] { didSet { saveSnapshot() } }
+    private(set) var sessionsByMachine: [String: [Session]] = [:] {
+        didSet {
+            allSessions = sessionsByMachine.values.flatMap { $0 }
+            var index: [SessionKey: Session] = [:]
+            for (machine, sessions) in sessionsByMachine {
+                for session in sessions {
+                    let key = SessionKey(machineID: machine, sessionID: session.sessionID)
+                    if index[key] == nil { index[key] = session }
+                }
+            }
+            sessionIndex = index
+            saveSnapshot()
+        }
+    }
+    private(set) var allSessions: [Session] = []
+    private var sessionIndex: [SessionKey: Session] = [:]
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
     var toast: Toast?
     var openChat: SessionKey?
@@ -133,10 +148,8 @@ final class AppModel {
 
     // MARK: Derived
 
-    var allSessions: [Session] { sessionsByMachine.values.flatMap { $0 } }
-
     func session(_ key: SessionKey) -> Session? {
-        sessionsByMachine[key.machineID]?.first { $0.sessionID == key.sessionID }
+        sessionIndex[key]
     }
 
     /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
@@ -490,7 +503,7 @@ final class AppModel {
             }
         case .sessions(let machineID, let list):
             let old = sessionsByMachine[machineID] ?? []
-            sessionsByMachine[machineID] = list
+            if old != list { sessionsByMachine[machineID] = list }
             WatchSync.shared.push(summary: watchSummary())
             notifyTransitions(old: old, new: list)
             AgentSync.shared.sessions(list)
