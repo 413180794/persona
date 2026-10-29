@@ -352,6 +352,15 @@ struct TurnTests {
         #expect(WatchText.shown("普通的话") == "普通的话")
     }
 
+    @Test func timeoutsAreNotShown() {
+        #expect(URLError(.timedOut).shown == nil)
+        #expect(URLError(.cancelled).shown == nil)
+        #expect(APIError(status: 504, message: "gateway timeout").shown == nil)
+        #expect(APIError(status: 502, message: "node call: context deadline exceeded").shown == nil)
+        #expect(APIError(status: 502, message: "machine offline").shown == "machine offline")
+        #expect(URLError(.notConnectedToInternet).shown != nil)
+    }
+
     @Test func subagentItemsComeFromTheSubagentsTranscript() throws {
         let main = SessionKey(machineID: "m", sessionID: "s1")
         let agent = try JSON.decoder.decode(Subagent.self, from: Data(#"{"id":"a1","session_id":"s1/subagents/agent-a1","running":false}"#.utf8))

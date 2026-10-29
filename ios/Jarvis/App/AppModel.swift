@@ -449,6 +449,7 @@ final class AppModel {
         case .hookEvent:
             break
         case .error(let key, let message):
+            if APIError.isTimeoutText(message) { break } // retried by the next poll / push; not shown
             if let key { chat(key).error = message } else { toast = Toast(message, style: .error) }
         }
     }
@@ -835,7 +836,7 @@ final class AppModel {
     }
 
     func show(_ error: Error) {
-        guard !error.isCancellation else { return } // leaving a screen cancels its loads: not an error
+        guard !error.isQuiet else { return } // leaving a screen cancels its loads, a timeout gets retried: not shown
         toast = Toast(error.localizedDescription, style: .error)
         Haptics.error()
     }

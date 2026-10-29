@@ -35,6 +35,12 @@ nonisolated struct APIError: LocalizedError, Sendable {
     }
     var code: String? { fields["code"] }
 
+    /// The hub's words for a call that ran out of time (Go's context deadline, a node call's timeout).
+    static func isTimeoutText(_ message: String) -> Bool {
+        let m = message.lowercased()
+        return m.contains("deadline exceeded") || m.contains("timed out") || m.contains("timeout") || m.contains("超时")
+    }
+
     static func fields(in data: Data) -> [String: String] {
         guard case .object(let obj)? = try? JSON.decoder.decode(JSONValue.self, from: data) else { return [:] }
         return obj.compactMapValues { $0.string }
@@ -575,8 +581,21 @@ extension Error {
         return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
     }
 
-    /// The message to show, or nil for a cancellation.
-    nonisolated var shown: String? { isCancellation ? nil : localizedDescription }
+    /// A request that ran out of time: on the phone (URLError.timedOut) or behind the hub (a gateway timeout, a node
+    /// call past its deadline). Not shown (2026-10-29 user request): the next poll, push or retry takes over.
+    nonisolated var isTimeout: Bool {
+        if let u = self as? URLError, u.code == .timedOut { return true }
+        let ns = self as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorTimedOut { return true }
+        guard let api = self as? APIError else { return false }
+        return api.status == 504 || APIError.isTimeoutText(api.message)
+    }
+
+    /// Nothing for the user to act on: a cancellation or a timeout.
+    nonisolated var isQuiet: Bool { isCancellation || isTimeout }
+
+    /// The message to show, or nil for a cancellation or a timeout.
+    nonisolated var shown: String? { isQuiet ? nil : localizedDescription }
 }
 
 /// Spaces ("machine/space name") and agents ("machine/session") kept at the top of 开发.
