@@ -31,11 +31,12 @@ struct SpaceGroup: Identifiable {
             var g = g
             // Tab order, as in herdr: an agent keeps its place whatever its state (the state shows on the row).
             g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
-            return g
+            return (group: g, priority: g.state.priority, updatedAt: g.updatedAt)
         }
         .sorted { a, b in
-            a.state.priority != b.state.priority ? a.state.priority < b.state.priority : a.updatedAt > b.updatedAt
+            a.priority != b.priority ? a.priority < b.priority : a.updatedAt > b.updatedAt
         }
+        .map(\.group)
     }
 }
 
@@ -105,6 +106,7 @@ struct ChatsView: View {
     }
 
     var body: some View {
+        let filtered = filtered
         // A pinned agent shows once, under 置顶; every grouping below is built from the rest.
         let unpinned = filtered.filter { !model.isPinned($0.key) }
         let groups = SpaceGroup.build(unpinned)
@@ -116,7 +118,9 @@ struct ChatsView: View {
             + groups.filter { !$0.isQuiet && model.isMuted($0) }
         let quiet = groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
-            .sorted { a, b in (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: a.key)) ?? 0) < (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: b.key)) ?? 0) }
+            .map { (session: $0, order: model.pins.sessions.firstIndex(of: AppModel.pinKey(session: $0.key)) ?? 0) }
+            .sorted { $0.order < $1.order }
+            .map(\.session)
         let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
 
         NavigationStack(path: pushing) {
@@ -306,7 +310,7 @@ struct ChatsView: View {
     private func rank(_ s: Session) -> Int {
         if s.state == .needsYou { return 0 }
         let live = s.state == .working || s.state == .unread || s.isWaiting
-        if live && model.isMuted(s.key) { return 4 }
+        if live && model.isMuted(s) { return 4 }
         switch s.state {
         case .unread: return 1
         case .working: return 2
@@ -316,12 +320,13 @@ struct ChatsView: View {
 
     /// By rank, then the most recently updated (working: most recently started) first.
     private func ordered(_ list: [Session]) -> [Session] {
-        list.sorted { a, b in
-            let ra = rank(a), rb = rank(b)
-            if ra != rb { return ra < rb }
-            let ta = a.sortDate, tb = b.sortDate
-            return ta != tb ? ta > tb : a.sessionID < b.sessionID
+        list.map { session -> (session: Session, rank: Int, sortDate: Date) in
+            (session: session, rank: rank(session), sortDate: session.sortDate)
+        }.sorted { a, b in
+            if a.rank != b.rank { return a.rank < b.rank }
+            return a.sortDate != b.sortDate ? a.sortDate > b.sortDate : a.session.sessionID < b.session.sessionID
         }
+        .map(\.session)
     }
 
     /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background

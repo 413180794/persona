@@ -814,6 +814,10 @@ final class AppModel {
     /// Muted: the agent itself, or its space unless the agent was turned back on there (same rule as the hub).
     func isMuted(_ k: SessionKey) -> Bool { mutes.mutes(session: Self.pinKey(session: k), space: spaceKey(k)) }
 
+    func isMuted(_ s: Session) -> Bool {
+        mutes.mutes(session: Self.pinKey(session: s.key), space: s.spaceName.map { "\(s.machineID)/\($0)" })
+    }
+
     private func spaceKey(_ k: SessionKey) -> String? { session(k)?.spaceName.map { "\(k.machineID)/\($0)" } }
 
     func toggleMute(_ g: SpaceGroup) { updateMutes { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
