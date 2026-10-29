@@ -20,6 +20,15 @@ nonisolated enum FleetLink {
         return c.url
     }
 
+    /// A tap on the activity itself (not on one of its rows): the one agent when it shows only one, else the Agents
+    /// list — with several agents, landing in whichever came first was a guess.
+    static func whole(_ state: FleetState) -> URL? {
+        state.items.count == 1 ? url(state.items.first) : URL(string: "jarvis://agents")
+    }
+
+    /// `jarvis://agents`: the Agents list, nothing pushed.
+    static func isAgents(_ url: URL) -> Bool { url.scheme == "jarvis" && url.host == "agents" }
+
     /// The session a link opens, or nil for anything else (`jarvis://open` alone just opens the app).
     static func session(_ url: URL) -> (machine: String, session: String)? {
         guard url.scheme == "jarvis", url.host == "open",

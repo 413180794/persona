@@ -13,7 +13,7 @@ struct FleetLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JarvisActivityAttributes.self) { context in
             FleetLockScreen(state: context.state, stale: context.isStale)
-                .widgetURL(FleetLink.url(context.state.items.first))
+                .widgetURL(FleetLink.whole(context.state))
                 .activitySystemActionForegroundColor(FleetPalette.coral)
         } dynamicIsland: { context in
             let state = context.state
@@ -59,7 +59,7 @@ struct FleetLiveActivity: Widget {
             } minimal: {
                 IslandCellView(cell: IslandCell.minimal(state), small: true)
             }
-            .widgetURL(FleetLink.url(state.items.first))
+            .widgetURL(FleetLink.whole(state))
             .keylineTint(FleetPalette.coral)
         }
         .supplementalActivityFamilies([.small])
