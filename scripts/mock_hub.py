@@ -102,6 +102,54 @@ ASSISTANT = [
     assistant_sess(ASK3, "帮我约周五和韩梅梅吃饭", 60 * 28, "已经在日历里加好了。"),
 ]
 
+# ---------- the assistant's schedule (Jarvis › 资料 › 定时任务) ----------
+def next_at(hhmm, weekdays):
+    """The routine's next run after NOW, in UTC+8 (the screenshot simulators' zone)."""
+    tz = timezone(timedelta(hours=8))
+    h, m = map(int, hhmm.split(":"))
+    local = NOW.astimezone(tz)
+    for i in range(8):
+        d = (local + timedelta(days=i)).replace(hour=h, minute=m, second=0, microsecond=0)
+        if d > local and (not weekdays or d.isoweekday() in weekdays):
+            return d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+ROUTINES = [
+    {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "time": "09:00", "weekdays": [1, 2, 3, 4, 5],
+     "enabled": True, "last_run": ago(hours=3), "last_session_id": ASK2, "last_status": "ok", "next_run": next_at("09:00", [1, 2, 3, 4, 5])},
+    {"id": "rt_weekly", "title": "周报", "prompt": "帮我起草这周的周报，先给我草稿。", "time": "17:00", "weekdays": [5],
+     "enabled": True, "created_by": "assistant", "last_run": ago(days=7), "last_status": "failed",
+     "last_error": "assistant machine is offline", "next_run": next_at("17:00", [5])},
+    {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "time": "21:30", "weekdays": [1, 2, 3, 4, 5],
+     "enabled": False, "last_run": ago(days=2), "last_status": "skipped"},
+]
+FOLLOWUPS = [
+    {"id": "fu_review", "at": later(minutes=40), "title": "会前准备 · 产品评审", "prompt": "产品评审前 10 分钟：整理上次纪要和要点。",
+     "machine_id": "server", "session_id": ASK1, "created_at": ago(hours=1)},
+    {"id": "fu_ci", "at": later(hours=2), "title": "看看 CI 跑完没有", "prompt": "看一下 weather-app 的 CI，跑完把结果告诉我。",
+     "machine_id": "server", "created_at": ago(minutes=20)},
+]
+RUNS = [
+    {"id": "run_1", "kind": "routine", "ref_id": "morning", "title": "早报", "due": ago(hours=3), "at": ago(hours=3), "status": "ok",
+     "machine_id": "server", "session_id": ASK2},
+    {"id": "run_2", "kind": "followup", "ref_id": "fu_lunch", "title": "订午饭提醒", "due": ago(hours=5), "at": ago(hours=5),
+     "status": "ok", "machine_id": "server", "session_id": ASK1},
+    {"id": "run_3", "kind": "routine", "ref_id": "evening", "title": "晚间回顾", "due": ago(days=2), "at": ago(days=2, minutes=-45),
+     "status": "skipped", "error": "Jarvis 停机，错过了时间"},
+    {"id": "run_4", "kind": "routine", "ref_id": "morning", "title": "早报", "due": ago(days=1, hours=3), "at": ago(days=1, hours=3),
+     "status": "ok", "machine_id": "server", "session_id": ASK2},
+    {"id": "run_5", "kind": "routine", "ref_id": "rt_weekly", "title": "周报", "due": ago(days=7), "at": ago(days=7), "status": "failed",
+     "error": "assistant machine is offline"},
+]
+MEMORY = [
+    {"name": "MEMORY.md", "content": "- [早报格式](morning-format.md) — 一屏以内，结论先行", "updated_at": ago(days=1)},
+    {"name": "morning-format.md", "content": "---\nname: morning-format\ndescription: 早报一屏以内\nmetadata:\n  type: feedback\n---\n\n早报一屏以内，结论先行。",
+     "updated_at": ago(days=1)},
+    {"name": "weekly-report.md", "content": "---\nname: weekly-report\ndescription: 周报先给草稿\nmetadata:\n  type: feedback\n---\n\n周报先给草稿，不要直接发。",
+     "updated_at": ago(days=3)},
+]
+SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/schedule)
+
 # ---------- items ----------
 _seq = [0]
 
@@ -508,9 +556,13 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/assistant":
             return self.send_json({"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant",
                                    "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT})
-        if p == "/api/v1/assistant/routines": return self.send_json({"routines": []})
-        if p == "/api/v1/assistant/followups": return self.send_json({"followups": []})
-        if p == "/api/v1/assistant/memory": return self.send_json({"files": [], "dir": "/home/me/.jarvis/assistant/memory"})
+        if p == "/api/v1/assistant/routines": return self.send_json({"routines": ROUTINES})
+        if p == "/api/v1/assistant/followups": return self.send_json({"followups": FOLLOWUPS})
+        if p == "/api/v1/assistant/runs":
+            ref = parse_qs(urlparse(self.path).query).get("ref", [""])[0]
+            return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
+        if p == "/api/v1/assistant/memory": return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
+        if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
         if p == "/api/v1/inbox": return self.send_json({"items": INBOX})
         if p.startswith("/api/v1/inbox/"):
             iid = p[len("/api/v1/inbox/"):]
@@ -596,6 +648,26 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p == "/api/v1/assistant/routines" and self.command == "PUT":
+            old = {r["id"]: r for r in ROUTINES}
+            new = []
+            for r in json.loads(self.last_body or b"{}").get("routines", []):
+                r["id"] = r.get("id") or "rt_" + uuid.uuid4().hex[:8]
+                keep = {k: v for k, v in old.get(r["id"], {}).items() if k not in ("title", "prompt", "time", "weekdays", "enabled")}
+                new.append({**keep, **r})
+            ROUTINES[:] = new
+            return self.send_json({"routines": ROUTINES})
+        if p.startswith("/api/v1/assistant/routines/") and p.endswith("/run"):
+            SCHEDULE_RAN.append(p.split("/")[5])
+            return self.send_json({"session_id": ASK2, "machine_id": "server"})
+        if p.startswith("/api/v1/assistant/followups/") and p.endswith("/run"):
+            fid = p.split("/")[5]
+            SCHEDULE_RAN.append(fid)
+            FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != fid]
+            return self.send_json({"session_id": ASK1, "machine_id": "server"})
+        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
+            FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != p.split("/")[5]]
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
                 if t["id"] == p.split("/")[-1]:

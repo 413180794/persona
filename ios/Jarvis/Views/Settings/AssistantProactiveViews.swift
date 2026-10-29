@@ -22,6 +22,69 @@ enum AssistantScheduleText {
     /// "工作日 09:00".
     static func schedule(_ r: APIClient.Routine) -> String { "\(repeats(r.weekdays)) \(r.time)" }
 
+    /// The rule in words, as Reminders says it: "每个工作日 早上 9:00" / "每天 晚上 9:30" / "每周五 下午 5:00".
+    static func sentence(_ r: APIClient.Routine) -> String {
+        let d = Set(r.weekdays)
+        let days: String
+        if d.isEmpty || d.count == 7 { days = "每天" }
+        else if d == Set(workdays) { days = "每个工作日" }
+        else if d == [6, 7] { days = "每个周末" }
+        else { days = "每周" + d.sorted().map { dayNames[$0 - 1] }.joined(separator: "、") }
+        return "\(days) \(clock(r.time))"
+    }
+
+    /// "09:00" → "早上 9:00", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15".
+    static func clock(_ hhmm: String) -> String {
+        let parts = hhmm.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2 else { return hhmm }
+        let (h, m) = (parts[0], parts[1])
+        let part = switch h {
+        case 0..<5: "凌晨"
+        case 5..<9: "早上"
+        case 9..<12: "上午"
+        case 12..<13: "中午"
+        case 13..<18: "下午"
+        default: "晚上"
+        }
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        return String(format: "%@ %d:%02d", part, h12, m)
+    }
+
+    /// The day part of a moment: "今天" / "明天" / "昨天" / "周三" / "11月2日".
+    static func day(_ date: Date, now: Date = .now) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "今天" }
+        if cal.isDateInTomorrow(date) { return "明天" }
+        if cal.isDateInYesterday(date) { return "昨天" }
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
+        if abs(days) < 7 { return "周\(dayNames[(cal.component(.weekday, from: date) + 5) % 7])" }
+        return "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
+    }
+
+    /// The last run in a few words, nil when it never ran: "上次 今天 09:00 · 成功".
+    static func lastRun(_ r: APIClient.Routine) -> (text: String, failed: Bool)? {
+        guard let at = r.lastRun else { return nil }
+        let word = switch r.lastStatus {
+        case "failed": "失败"
+        case "skipped": "已跳过"
+        case "ok": "已运行"
+        default: "已运行"
+        }
+        return ("上次 \(moment(at)) · \(word)", r.lastStatus == "failed")
+    }
+
+    /// An SF Symbol for a routine, from its title.
+    static func symbol(_ r: APIClient.Routine) -> String {
+        let t = r.title
+        if t.contains("早") { return "sun.horizon" }
+        if t.contains("晚") || t.contains("回顾") { return "moon.stars" }
+        if t.contains("周报") || t.contains("报告") { return "doc.text" }
+        if t.contains("会") { return "person.2" }
+        if t.contains("盘点") || t.contains("待办") { return "checklist" }
+        if t.contains("巡检") || t.contains("检查") { return "binoculars" }
+        return "alarm"
+    }
+
     /// A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "3 天后".
     static func until(_ date: Date, now: Date = .now) -> String {
         let s = date.timeIntervalSince(now)
@@ -36,10 +99,19 @@ enum AssistantScheduleText {
         return "\(max(days, 1)) 天后"
     }
 
+    /// "17:05", always 24-hour: `.hour(.twoDigits(amPM: .omitted))` in a Chinese locale gives the 12-hour "05:05".
+    static func hm(_ date: Date) -> String { hmFormatter.string(from: date) }
+    private static let hmFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
     /// "今天 15:30" / "明天 09:00" / "周三 09:00" / "11月2日 09:00".
     static func moment(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
-        let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        let time = hm(date)
         if cal.isDateInToday(date) { return "今天 \(time)" }
         if cal.isDateInTomorrow(date) { return "明天 \(time)" }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
@@ -50,21 +122,58 @@ enum AssistantScheduleText {
 
 // MARK: - 定时任务
 
+/// Everything Jarvis does on its own, on one page: what runs next, the recurring routines (with their rule in words,
+/// next and last run, an on/off switch), the one-off follow-ups it scheduled, and the history of runs.
 struct AssistantRoutinesView: View {
     @Environment(AppModel.self) private var model
     @State private var routines: [APIClient.Routine] = []
+    @State private var followups: [APIClient.Followup] = []
+    @State private var lastRuns: [APIClient.ScheduleRun] = []
     @State private var loaded = false
     @State private var error: String?
     @State private var editing: APIClient.Routine?
     @State private var creating: APIClient.Routine?
 
+    private var upcoming: [AssistantUpcoming] {
+        Array(AssistantUpcoming.merge(routines: routines, followups: followups).prefix(4))
+    }
+
     var body: some View {
         List {
+            if !upcoming.isEmpty {
+                Section {
+                    ForEach(upcoming) { u in AssistantUpcomingRow(item: u) }
+                } header: {
+                    Text("接下来")
+                }
+            }
             if !routines.isEmpty {
                 Section {
                     ForEach(routines) { r in row(r) }
+                } header: {
+                    Text("定时任务")
                 } footer: {
                     Text("到点时 Jarvis 开一段新对话跑这段提示词，跑完推送到手机。时间按手机所在的时区。")
+                }
+            }
+            if !followups.isEmpty {
+                Section {
+                    ForEach(followups.prefix(5)) { f in AssistantFollowupRow(followup: f, run: { await runFollowup(f) }, cancel: { await cancel(f) }) }
+                    if followups.count > 5 {
+                        NavigationLink("全部 \(followups.count) 个跟进") { AssistantFollowupsView() }
+                    }
+                } header: {
+                    Text("已安排的跟进")
+                } footer: {
+                    Text("Jarvis 在对话里替自己安排的一次性跟进。左滑取消，长按可以立即运行。")
+                }
+            }
+            if !lastRuns.isEmpty {
+                Section {
+                    ForEach(lastRuns.prefix(3)) { r in AssistantRunRow(run: r) }
+                    NavigationLink { AssistantRunsView() } label: { Text("全部运行记录").lineLimit(1) }
+                } header: {
+                    Text("最近运行")
                 }
             }
         }
@@ -74,9 +183,9 @@ struct AssistantRoutinesView: View {
                 ProgressView()
             } else if let error, routines.isEmpty {
                 ContentUnavailableView("读不到定时任务", systemImage: "exclamationmark.triangle", description: Text(error))
-            } else if routines.isEmpty {
+            } else if routines.isEmpty && followups.isEmpty {
                 ContentUnavailableView("没有定时任务", systemImage: "alarm",
-                                       description: Text("点右上角的 ＋，让 Jarvis 每天定时做一件事，比如早报、下班前盘点。"))
+                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」，让 Jarvis 定时做一件事。"))
             }
         }
         .navigationTitle("定时任务")
@@ -107,26 +216,49 @@ struct AssistantRoutinesView: View {
 
     private func row(_ r: APIClient.Routine) -> some View {
         HStack(spacing: 12) {
+            Image(systemName: AssistantScheduleText.symbol(r))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background((r.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(r.title).font(.body.weight(.semibold)).lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(AssistantScheduleText.schedule(r)).monospacedDigit()
-                    if r.enabled, let next = r.nextRun {
-                        Text("·")
-                        Text("下次 \(AssistantScheduleText.until(next))")
-                    } else if !r.enabled {
-                        Text("·")
-                        Text("已关闭")
+                    Text(r.title).font(.body.weight(.semibold)).lineLimit(1)
+                    if r.createdBy == "assistant" {
+                        Text("Jarvis 建的").font(.caption2.weight(.medium)).foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Theme.accent.opacity(0.12), in: .capsule)
+                            .lineLimit(1)
                     }
                 }
-                .font(.subheadline)
+                Text(AssistantScheduleText.sentence(r))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Group {
+                    if !r.enabled {
+                        Text("已关闭")
+                    } else if let next = r.nextRun {
+                        Text("下次 \(AssistantScheduleText.moment(next)) · \(AssistantScheduleText.until(next))")
+                    }
+                }
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                if let last = AssistantScheduleText.lastRun(r) {
+                    Label(last.text, systemImage: last.failed ? "exclamationmark.triangle.fill" : "checkmark")
+                        .labelStyle(AssistantCompactLabel())
+                        .font(.caption)
+                        .foregroundStyle(last.failed ? Theme.danger : Color.secondary)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture { editing = r }
+            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("routine-\(r.id)")
             Toggle(r.title, isOn: Binding(get: { r.enabled }, set: { v in
                 var changed = r
                 changed.enabled = v
@@ -141,12 +273,16 @@ struct AssistantRoutinesView: View {
 
     private func load() async {
         guard let api = model.api else { return }
+        async let f = try? api.followups()
+        async let h = try? api.scheduleRuns()
         do {
             routines = try await api.routines()
             error = nil
         } catch {
             self.error = error.shown ?? self.error
         }
+        followups = (await f ?? []).sorted { $0.at < $1.at }
+        lastRuns = await h ?? []
         loaded = true
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "openAssistantPage") {
@@ -171,6 +307,32 @@ struct AssistantRoutinesView: View {
             model.show(error)
             if let fresh = try? await api.routines() { routines = fresh }
             return nil
+        }
+    }
+
+    private func runFollowup(_ f: APIClient.Followup) async {
+        guard let api = model.api else { return }
+        withAnimation { followups.removeAll { $0.id == f.id } }
+        do {
+            let key = try await api.runFollowup(f.id)
+            Haptics.success()
+            model.selectedTab = .assistant
+            model.assistantCurrent = key
+        } catch {
+            model.show(error)
+            await load()
+        }
+    }
+
+    private func cancel(_ f: APIClient.Followup) async {
+        guard let api = model.api else { return }
+        withAnimation { followups.removeAll { $0.id == f.id } }
+        do {
+            try await api.cancelFollowup(f.id)
+            Haptics.success()
+        } catch {
+            model.show(error)
+            await load()
         }
     }
 
@@ -218,6 +380,7 @@ struct AssistantRoutineEditor: View {
     @State private var running = false
     @State private var confirmDelete = false
     @State private var deleted = false
+    @State private var runs: [APIClient.ScheduleRun] = []
     /// Presented as the "new routine" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
     private let creating: Bool
     var save: (APIClient.Routine) async -> APIClient.Routine?
@@ -285,7 +448,21 @@ struct AssistantRoutineEditor: View {
                     }
                 }
             } footer: {
-                Text("立即运行会开一段新对话，跑完在「对话」里看结果。")
+                if saved?.lastStatus == "failed", let err = saved?.lastError {
+                    Text("上次没有跑起来：\(err)").foregroundStyle(Theme.danger)
+                } else {
+                    Text("立即运行会开一段新对话，跑完在「对话」里看结果。")
+                }
+            }
+            if !runs.isEmpty {
+                Section {
+                    ForEach(runs.prefix(5)) { r in AssistantRunRow(run: r, showTitle: false) }
+                    if runs.count > 5, let id = saved?.id {
+                        NavigationLink { AssistantRunsView(ref: id) } label: { Text("全部 \(runs.count) 次").lineLimit(1) }
+                    }
+                } header: {
+                    Text("历史记录")
+                }
             }
             if !creating {
                 Section {
@@ -320,6 +497,10 @@ struct AssistantRoutineEditor: View {
             Text("删除后不再定时运行，已经跑过的对话还在。")
         }
         .onDisappear { if !creating { Task { await persist(leaving: true) } } }
+        .task(id: saved?.id) {
+            guard let id = saved?.id, !id.isEmpty, let api = model.api else { return }
+            runs = (try? await api.scheduleRuns(ref: id)) ?? []
+        }
     }
 
     /// The DatePicker edits "HH:MM" through a date today.
@@ -452,9 +633,9 @@ struct AssistantFollowupsView: View {
         List {
             if !followups.isEmpty {
                 Section {
-                    ForEach(followups) { f in row(f) }
+                    ForEach(followups) { f in AssistantFollowupRow(followup: f, run: { await run(f) }, cancel: { await cancel(f) }) }
                 } footer: {
-                    Text("Jarvis 在对话里替自己安排的一次性跟进，到点自己醒来接着做。左滑可以取消。")
+                    Text("Jarvis 在对话里替自己安排的一次性跟进，到点自己醒来接着做。左滑取消，长按可以立即运行。")
                 }
             }
         }
@@ -474,7 +655,54 @@ struct AssistantFollowupsView: View {
         .refreshable { await load() }
     }
 
-    @ViewBuilder private func row(_ f: APIClient.Followup) -> some View {
+    private func load() async {
+        guard let api = model.api else { return }
+        do {
+            followups = try await api.followups().sorted { $0.at < $1.at }
+            error = nil
+        } catch {
+            self.error = error.shown ?? self.error
+        }
+        loaded = true
+    }
+
+    private func cancel(_ f: APIClient.Followup) async {
+        guard let api = model.api else { return }
+        withAnimation { followups.removeAll { $0.id == f.id } }
+        do {
+            try await api.cancelFollowup(f.id)
+            Haptics.success()
+        } catch {
+            model.show(error)
+            await load()
+        }
+    }
+
+    private func run(_ f: APIClient.Followup) async {
+        guard let api = model.api else { return }
+        withAnimation { followups.removeAll { $0.id == f.id } }
+        do {
+            let key = try await api.runFollowup(f.id)
+            Haptics.success()
+            model.selectedTab = .assistant
+            model.assistantCurrent = key
+        } catch {
+            model.show(error)
+            await load()
+        }
+    }
+}
+
+/// One follow-up: what, when, and where it goes (back into its conversation or a new one). Tapping opens the
+/// conversation it continues; swipe to cancel, long-press to run it now.
+struct AssistantFollowupRow: View {
+    @Environment(AppModel.self) private var model
+    var followup: APIClient.Followup
+    var run: () async -> Void
+    var cancel: () async -> Void
+
+    var body: some View {
+        let f = followup
         let firstLine = f.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? f.prompt
         let title = f.title.flatMap { $0.isEmpty ? nil : $0 } ?? firstLine
         let content = HStack(spacing: 10) {
@@ -510,31 +738,17 @@ struct AssistantFollowupsView: View {
                 content
             }
         }
+        .accessibilityIdentifier("followup-\(f.id)")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { Task { await cancel(f) } } label: { Label("取消", systemImage: "xmark") }
+            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消", systemImage: "xmark") }
         }
-    }
-
-    private func load() async {
-        guard let api = model.api else { return }
-        do {
-            followups = try await api.followups().sorted { $0.at < $1.at }
-            error = nil
-        } catch {
-            self.error = error.shown ?? self.error
+        .swipeActions(edge: .leading) {
+            Button { Task { await run() } } label: { Label("立即运行", systemImage: "play.fill") }
+                .tint(Theme.accent)
         }
-        loaded = true
-    }
-
-    private func cancel(_ f: APIClient.Followup) async {
-        guard let api = model.api else { return }
-        withAnimation { followups.removeAll { $0.id == f.id } }
-        do {
-            try await api.cancelFollowup(f.id)
-            Haptics.success()
-        } catch {
-            model.show(error)
-            await load()
+        .contextMenu {
+            Button { Task { await run() } } label: { Label("立即运行", systemImage: "play.fill") }
+            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消这个跟进", systemImage: "xmark") }
         }
     }
 }

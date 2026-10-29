@@ -41,7 +41,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink { AssistantSettingsView() } label: {
+                    NavigationLink { AssistantProfileView() } label: {
                         LabeledContent {
                             Text(model.assistantConfig?.launcher ?? "").font(.callout.monospaced())
                         } label: {
@@ -118,7 +118,7 @@ struct SettingsView: View {
             }
             #if DEBUG
             // `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about` (with `-tab settings`)
-            .navigationDestination(isPresented: $debugAssistant) { AssistantSettingsView() }
+            .navigationDestination(isPresented: $debugAssistant) { AssistantProfileView() }
             // `-openStorage YES` (with `-tab settings`): 存储空间.
             .navigationDestination(isPresented: $debugStorage) { StorageView() }
             .onAppear { if UserDefaults.standard.bool(forKey: "openStorage"), !debugOpened { debugOpened = true; debugStorage = true } }
@@ -138,119 +138,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPair) { PairView() }
         }
-    }
-}
-
-/// Which launcher (model) new assistant conversations use, and what the assistant can reach.
-struct AssistantSettingsView: View {
-    @Environment(AppModel.self) private var model
-    @State private var launchers: [Launcher] = []
-    @State private var selection = ""
-    @State private var routinesOn: Int?
-    @State private var followupCount: Int?
-    @State private var memoryCount: Int?
-    @State private var debugPage: String?
-
-    /// The machines the hub connects to, by name ("服务器、笔记本…"), from the hub's own list.
-    private var machinesLine: String {
-        let names = model.machines.map(\.name)
-        return names.isEmpty ? "hub 接入的各台电脑（ssh）" : names.joined(separator: "、") + "（ssh）"
-    }
-
-    var body: some View {
-        let machineID = model.assistantConfig?.machineID ?? model.hubMachineID
-        List {
-            Section {
-                NavigationLink {
-                    LauncherPicker(launchers: launchers, selection: $selection)
-                } label: {
-                    LabeledContent("启动器（模型）") {
-                        Text(selection).font(.callout.monospaced())
-                    }
-                }
-                LabeledContent("运行在", value: model.machine(machineID)?.name ?? machineID)
-                LabeledContent("工作目录", value: "~/.jarvis/assistant")
-            } footer: {
-                Text("每段对话在 \(model.machine(machineID)?.name ?? machineID) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器只影响新对话。")
-            }
-            Section {
-                NavigationLink { AssistantRoutinesView() } label: {
-                    LabeledContent {
-                        if let routinesOn { Text(routinesOn == 0 ? "未开启" : "\(routinesOn) 个开启") }
-                    } label: {
-                        Label("定时任务", systemImage: "alarm")
-                    }
-                }
-                NavigationLink { AssistantFollowupsView() } label: {
-                    LabeledContent {
-                        if let followupCount, followupCount > 0 { Text("\(followupCount)") }
-                    } label: {
-                        Label("已安排的跟进", systemImage: "calendar.badge.clock")
-                    }
-                }
-                NavigationLink { AssistantMemoryView() } label: {
-                    LabeledContent {
-                        if let memoryCount, memoryCount > 0 { Text("\(memoryCount) 条") }
-                    } label: {
-                        Label("记忆", systemImage: "brain")
-                    }
-                }
-                NavigationLink { AssistantNotesView() } label: {
-                    Label("关于我", systemImage: "person.text.rectangle")
-                }
-            } header: {
-                Text("主动做事和记忆")
-            } footer: {
-                Text("Jarvis 会按时自己开始工作，到点跟进它答应你的事，并记住你的偏好。")
-            }
-            Section {
-                Label(machinesLine, systemImage: "macbook.and.iphone")
-                Label("各台电脑上的 Agent：看状态、读对话、发消息、开新的", systemImage: "rectangle.stack.badge.person.crop")
-                Label("飞书：消息、日历、文档、会议纪要、任务、邮件", systemImage: "building.2")
-                Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: "iphone")
-                Label("你添加的所有邮箱", systemImage: "envelope")
-                Label("在手机上问你、给你推送", systemImage: "bell.badge")
-            } header: {
-                Text("能访问")
-            } footer: {
-                Text("发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")
-            }
-        }
-        .themedPage()
-        .navigationTitle("助手")
-        .task {
-            selection = model.assistantConfig?.launcher ?? "ccc"
-            launchers = (try? await model.launchers(machineID)) ?? []
-        }
-        .task { await loadCounts() }
-        #if DEBUG
-        .onAppear {
-            if debugPage == nil, let p = UserDefaults.standard.string(forKey: "openAssistantPage"), p != "assistant" { debugPage = p }
-        }
-        .navigationDestination(item: $debugPage) { p in
-            switch p {
-            case "routines", "routine", "newRoutine": AssistantRoutinesView()
-            case "followups": AssistantFollowupsView()
-            case "memory", "memoryFile", "memoryEdit": AssistantMemoryView()
-            default: AssistantNotesView()
-            }
-        }
-        #endif
-        .onChange(of: selection) { old, new in
-            guard !old.isEmpty, old != new else { return }
-            Task { await model.setAssistantLauncher(new) }
-        }
-    }
-
-    /// The counts on the rows; reloaded each time the page shows (coming back from a sub-page included).
-    private func loadCounts() async {
-        guard let api = model.api else { return }
-        async let routines = try? api.routines()
-        async let followups = try? api.followups()
-        async let memory = try? api.assistantMemory()
-        if let r = await routines { routinesOn = r.filter(\.enabled).count }
-        if let f = await followups { followupCount = f.count }
-        if let m = await memory { memoryCount = m.filter { $0.name != AssistantMemoryEntry.index }.count }
     }
 }
 

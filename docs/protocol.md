@@ -110,10 +110,12 @@
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?}`，存 Postgres settings（`docs/assistant.md`） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
 | POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 |
-| GET / PUT | `/api/v1/assistant/routines` | `{"routines":[{id,title,prompt,time:"HH:MM",weekdays:[1..7],enabled,last_run,last_session_id,next_run}]}`，PUT 整表替换 |
+| GET / PUT | `/api/v1/assistant/routines` | `{"routines":[{id,title,prompt,time:"HH:MM",weekdays:[1..7],enabled,created_by,last_run,last_session_id,last_status,last_error,next_run}]}`，PUT 整表替换（只看用户能改的字段，其余保留 hub 的）；`last_status` ok / failed / skipped，`created_by: "assistant"` 是助手在对话里建的 |
 | POST | `/api/v1/assistant/routines/{id}/run` | 立即运行 → `{"session_id","machine_id"}` |
 | GET | `/api/v1/assistant/followups` | `{"followups":[{id,at,title,prompt,machine_id,session_id}]}`（助手用 schedule_followup 安排的） |
 | DELETE | `/api/v1/assistant/followups/{id}` | 取消 |
+| POST | `/api/v1/assistant/followups/{id}/run` | 立即运行（从列表里拿掉）→ `{"session_id","machine_id"}` |
+| GET | `/api/v1/assistant/runs[?ref=<id>]` | 运行记录，新的在前：`{"runs":[{id,kind:"routine"\|"followup",ref_id,title,due,at,status,error,manual,machine_id,session_id}]}` |
 | GET | `/api/v1/assistant/memory` | `{"files":[{name,content,updated_at}],"dir"}` |
 | PUT / DELETE | `/api/v1/assistant/memory/{name}` | `{"content"}`；删除时顺带删 MEMORY.md 里的索引行 |
 | POST | `/api/v1/ai/mail-account` | `{"text"}` → `{"account":{…AddAccount},"missing":["password"],"note"}`（cc_ds 网关，hub.json `ai` 可改） |

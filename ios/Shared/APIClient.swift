@@ -418,10 +418,14 @@ nonisolated struct APIClient: Sendable {
         var enabled: Bool
         var lastRun: Date?        // read-only, set by the hub
         var lastSessionID: String?
+        var lastStatus: String?   // of the last run: ok / failed / skipped
+        var lastError: String?
         var nextRun: Date?
+        var createdBy: String?    // "assistant": Jarvis set it up from a conversation
         enum CodingKeys: String, CodingKey {
             case id, title, prompt, time, weekdays, enabled
             case lastRun = "last_run", lastSessionID = "last_session_id", nextRun = "next_run"
+            case lastStatus = "last_status", lastError = "last_error", createdBy = "created_by"
         }
         init(id: String = "", title: String, prompt: String, time: String, weekdays: [Int], enabled: Bool) {
             self.id = id; self.title = title; self.prompt = prompt; self.time = time; self.weekdays = weekdays; self.enabled = enabled
@@ -436,7 +440,10 @@ nonisolated struct APIClient: Sendable {
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
             lastRun = (try? c.decodeIfPresent(Date.self, forKey: .lastRun)).flatMap { $0.realDate }
             lastSessionID = try c.decodeIfPresent(String.self, forKey: .lastSessionID)
+            lastStatus = try c.decodeIfPresent(String.self, forKey: .lastStatus)
+            lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
             nextRun = (try? c.decodeIfPresent(Date.self, forKey: .nextRun)).flatMap { $0.realDate }
+            createdBy = try c.decodeIfPresent(String.self, forKey: .createdBy)
         }
         func encode(to e: Encoder) throws { // only what the user edits
             var c = e.container(keyedBy: CodingKeys.self)
@@ -473,6 +480,39 @@ nonisolated struct APIClient: Sendable {
     struct FollowupsBody: Decodable { var followups: [Followup] }
     func followups() async throws -> [Followup] { try await get("/api/v1/assistant/followups", as: FollowupsBody.self).followups }
     func cancelFollowup(_ id: String) async throws { try await delete("/api/v1/assistant/followups/\(id)") }
+    /// Runs a follow-up now instead of at its time; returns the conversation it went to.
+    func runFollowup(_ id: String) async throws -> SessionKey {
+        let r = try await post("/api/v1/assistant/followups/\(id)/run", body: [String: String](), timeout: 130, as: RoutineRun.self)
+        return SessionKey(machineID: r.machineID, sessionID: r.sessionID)
+    }
+
+    /// One entry of the schedule's history: a routine or follow-up that ran, failed to start, or was skipped.
+    struct ScheduleRun: Decodable, Identifiable, Hashable, Sendable {
+        var id: String
+        var kind: String          // routine / followup
+        var refID: String
+        var title: String
+        var due: Date
+        var at: Date
+        var status: String        // ok / failed / skipped
+        var error: String?
+        var manual: Bool?
+        var machineID: String?
+        var sessionID: String?
+        enum CodingKeys: String, CodingKey {
+            case id, kind, title, due, at, status, error, manual
+            case refID = "ref_id", machineID = "machine_id", sessionID = "session_id"
+        }
+        var key: SessionKey? {
+            guard let machineID, let sessionID, !sessionID.isEmpty else { return nil }
+            return SessionKey(machineID: machineID, sessionID: sessionID)
+        }
+    }
+    struct RunsBody: Decodable { var runs: [ScheduleRun] }
+    /// Newest first; `ref` limits it to one routine or follow-up.
+    func scheduleRuns(ref: String? = nil) async throws -> [ScheduleRun] {
+        try await get("/api/v1/assistant/runs", query: ["ref": ref ?? ""], as: RunsBody.self).runs
+    }
 
     /// One file of the assistant's memory (Claude Code auto-memory): frontmatter (name / description / type) + body.
     /// MEMORY.md is the index the assistant keeps itself.

@@ -579,16 +579,15 @@ func (h *Hub) recordRun(r ScheduleRun) {
 			}
 		}
 	}
-	runs := append([]ScheduleRun(nil), s.runs...)
 	h.saveLocked(s)
-	s.mu.Unlock()
-	if h.store != nil {
+	if h.store != nil { // under the lock: two runs finishing together must not save their lists out of order
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := h.store.PutSetting(ctx, runsKey, runs); err != nil {
+		if err := h.store.PutSetting(ctx, runsKey, s.runs); err != nil {
 			h.logf("save schedule runs: %v", err)
 		}
+		cancel()
 	}
+	s.mu.Unlock()
 	h.broadcastSchedule()
 }
 
@@ -715,7 +714,9 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 				rt.ID = "rt_" + randomHex(4)
 			}
 			prev := old[rt.ID]
-			rt.LastRun, rt.LastSessionID, rt.NextRun = prev.LastRun, prev.LastSessionID, time.Time{}
+			// The app sends only what the user edits; the rest is the hub's.
+			rt.LastRun, rt.LastSessionID, rt.LastStatus, rt.LastError, rt.NextRun = prev.LastRun, prev.LastSessionID, prev.LastStatus, prev.LastError, time.Time{}
+			rt.CreatedBy = prev.CreatedBy
 			out = append(out, rt)
 		}
 		s.routines = out

@@ -10,6 +10,10 @@ struct AssistantView: View {
     @State private var showHistory = false
     @State private var startError: String?
     @State private var starterLauncher: String?
+    @State private var showProfile = false
+    #if DEBUG
+    @State private var showAvatars = false
+    #endif
     /// Mode / effort for new conversations ("" = the launcher's own), remembered across launches.
     @AppStorage("assistant.newMode") private var starterMode = ""
     @AppStorage("assistant.newEffort") private var starterEffort = ""
@@ -56,8 +60,25 @@ struct AssistantView: View {
                             .tint(.primary)
                             .accessibilityLabel("新对话")
                     }
+                    Button { showProfile = true } label: { JarvisAvatar(size: 30, working: working) }
+                        .accessibilityLabel("Jarvis 的资料")
+                        .accessibilityIdentifier("jarvis-profile")
                 }
             }
+            .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
+            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root.
+            .onChange(of: model.assistantCurrent) { showProfile = false }
+            #if DEBUG
+            // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages.
+            .navigationDestination(isPresented: $showAvatars) { JarvisAvatarGallery() }
+            .onAppear {
+                switch UserDefaults.standard.string(forKey: "openAssistantPage") {
+                case "avatars": showAvatars = true
+                case .some(let p) where p != "assistant": showProfile = true
+                default: break
+                }
+            }
+            #endif
             .sheet(isPresented: $showHistory) {
                 AssistantHistory { key in
                     model.assistantCurrent = key
@@ -66,6 +87,12 @@ struct AssistantView: View {
             }
             .task { await model.refreshAssistant() }
         }
+    }
+
+    /// The conversation on screen is running a turn: the avatar looks around.
+    private var working: Bool {
+        guard let key = current else { return false }
+        return model.session(key)?.state == .working
     }
 
     private func start(_ text: String, _ images: [ImagePayload]) async {
@@ -192,7 +219,7 @@ struct AssistantHome: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            AppGlyph(size: 56).padding(.top, 28)
+            JarvisAvatar(size: 56).padding(.top, 28)
             Text(greeting).font(Theme.Font.greeting)
             Text(model.assistantMain == nil
                  ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
