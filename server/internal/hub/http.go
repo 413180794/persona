@@ -112,6 +112,7 @@ func (h *Hub) routes() http.Handler {
 	})
 	h.live.routes(api)
 	h.usageRoutes(api)
+	h.metricsRoutes(api)
 	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
 	api.HandleFunc("GET /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.prefsView(h.push.prefs(r.PathValue("id"))))

@@ -25,7 +25,19 @@
 // Machine
 {"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"laptop","online":true,"error":"",
  "hostname":"example-machine","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
- "last_seen":"..."}
+ "last_seen":"...",
+ // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
+ "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
+           "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
+           "memory":51539607552,"boot_time":1790000000}}
+
+// MetricSample：一次读数（每 10 秒）。没测到的字段缺省（第一次读数没有 cpu / net_*），不是 0；cores 只有 Linux 有
+{"t":1790003600,"cpu":42.5,"cores":[40,45],"load":3.1,"mem_used":34359738368,"mem_total":68719476736,
+ "swap_used":0,"swap_total":0,"net_rx":1024.5,"net_tx":512,"disk_used":10737418240,"disk_total":107374182400}
+
+// MetricPoint：历史里的一步（该步内的平均）；gap 表示这里断开了，画图不要连线。mem / swap / disk 是已用字节
+{"t":1790000000,"cpu":10.2,"load":1.25,"mem":34359738368,"swap":0,"rx":2048,"tx":512,"disk":10737418240}
+{"t":1790000240,"gap":true}
 
 // Launcher（来自 zsh 的 _claude_launchers）
 {"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
@@ -126,6 +138,8 @@
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|watch","apns_token"?,"apns_env"?}` |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
+| GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：机器监控的 Dashboard，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
+| GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
 | GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
 
@@ -259,7 +273,7 @@ hub → node 请求：
 
 | method | params → result |
 | --- | --- |
-| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version}` |
+| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system}`（`system` 见 Machine，node 启动时读一次） |
 | `launchers.list` | → `{launchers}` |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
@@ -286,7 +300,8 @@ node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows,
 `session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
-连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）。
+连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、
+`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；hub 存进 `machine_metrics`，`docs/machines.md`）。
 
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）

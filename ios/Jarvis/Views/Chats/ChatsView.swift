@@ -252,6 +252,8 @@ struct ChatsView: View {
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
             .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id) }
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+            .navigationDestination(for: MachineDashboardRoute.self) { _ in MachineDashboardView() }
+            .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
                     showNew = false
@@ -272,6 +274,10 @@ struct ChatsView: View {
                 #if DEBUG
                 // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
                 if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { path.append(MachineRoute(id: m)) }
+                // `-openMonitor all|<machine id>` (with `-tab dev`): 机器监控, or one machine's charts.
+                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMonitor") {
+                    if m == "all" { path.append(MachineDashboardRoute()) } else { path.append(MachineMonitorRoute(id: m)) }
+                }
                 #endif
                 if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
@@ -442,6 +448,11 @@ struct ChatsView: View {
                 Label("全部机器", systemImage: "square.grid.2x2").tag("")
                 ForEach(model.machines) { m in
                     Label(m.name, systemImage: m.symbol).tag(m.id)
+                }
+            }
+            Section {
+                Button { path.append(MachineDashboardRoute()) } label: {
+                    Label("机器监控", systemImage: "gauge.with.dots.needle.33percent")
                 }
             }
         } label: {

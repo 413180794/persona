@@ -1,0 +1,8 @@
+processor	: 0
+vendor_id	: AuthenticAMD
+cpu family	: 25
+model name	: AMD Ryzen 9 7950X 16-Core Processor
+flags		: fpu vme de pse
+
+processor	: 1
+model name	: AMD Ryzen 9 7950X 16-Core Processor

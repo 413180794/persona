@@ -20,11 +20,15 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var lastSeen: Date?
     /// The machine's jarvisd is not from the hub's build (newer hubs): some answers may be refused until it is deployed.
     var nodeMismatch: Bool?
+    /// The machine's jarvisd build.
+    var nodeVersion: String?
+    /// OS and hardware (docs/machines.md); nil from hubs before machine monitoring, or a machine never connected.
+    var system: MachineSystem?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
-        case nodeMismatch = "node_mismatch"
+        case nodeMismatch = "node_mismatch", nodeVersion = "node_version"
     }
 
     var symbol: String {

@@ -62,6 +62,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
 | `docs/assistant.md` | 「Jarvis」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
+| `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、Dashboard 和机器详情 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |
 | `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
@@ -263,5 +264,13 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 中文环境下 SwiftUI 的 `.dateTime.hour(.twoDigits(amPM: .omitted))` 是 12 小时制，17:00 显示成「05:00」：要 24 小时的时刻用固定 `HH:mm` 的格式（`AssistantScheduleText.hm`）。
 - 数据库迁移号按车道分段（00x1…），挑号前先看所有 worktree 的 `server/internal/db/migrations/` 和 `jarvis_test` 库的 `schema_migrations`：
   别的车道没合的迁移可能已经占了号（2026-10-30 0051 撞号，改用 0061）。
+- 机器监控（`docs/machines.md`）：darwin 的 jarvisd 是 `CGO_ENABLED=0` 交叉编译的，拿不到 `host_statistics` 等 Mach 调用，
+  `vm.page_*` sysctl 又没有匿名页和压缩器数字：macOS 的 CPU / 内存来自常驻的 `iostat -n 0 -w 10` / `vm_stat 10`（每 10 秒一行，别每次采集起进程），
+  其余是 sysctl、路由 socket（`NET_RT_IFLIST2`）和 statfs。手解 C 结构体（`if_msghdr2`、`struct loadavg`）前先用一个小 C 程序打印 `offsetof` 确认偏移（有 `#pragma pack(4)`）。
+  Linux 判断虚拟网卡看 `/sys/class/net/<名字>` 是否指向 `/sys/devices/virtual/`，比按名字猜可靠（TUN 代理的网卡名五花八门）。
+- Swift Charts 的线要在空档处断开：给每段一个不同的 `series:` 值（「指标#段号」），同一个 series 的点总会连起来。
+  `AxisValueLabel` 不显式给颜色时，日期刻度会染成 App 的 tint（蓝色），要写 `.foregroundStyle(Color(.secondaryLabel))`。
+  落在 `chartXScale(domain:)` 之外的点照样画（线会伸出纵轴、卡片边），要 `.chartPlotStyle { $0.clipped() }`。
+- `ios/Shared` 里的类型默认是 MainActor 隔离：新加的纯数据 enum（被 nonisolated 的 struct 用到）要标 `nonisolated`，否则报 isolated conformance 错。
 - 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
   别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。

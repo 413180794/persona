@@ -26,7 +26,13 @@ struct MachinesView: View {
         .themedGroupedPage()
         .navigationTitle("机器")
         // A large title stays below; the bar's middle is only for 连接中… and the like.
-        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle() } }
+        .toolbar {
+            ToolbarItem(placement: .principal) { ConnectionTitle() }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { MachineDashboardView() } label: { Image(systemName: "gauge.with.dots.needle.33percent") }
+                    .accessibilityLabel("机器监控")
+            }
+        }
         .refreshable { await model.refresh() }
     }
 }
@@ -41,14 +47,7 @@ struct MachineCard: View {
         let waiting = live.filter { $0.state == .needsYou }.count
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        .fill((machine.online ? Theme.accent : Color.secondary).opacity(0.12))
-                        .frame(width: 52, height: 52)
-                    Image(systemName: machine.symbol)
-                        .font(.title2.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                        .foregroundStyle(machine.online ? Theme.accent : Color.secondary)
-                }
+                OSBadge(system: machine.system, fallback: machine.symbol, size: 52, online: machine.online)
                 VStack(alignment: .leading, spacing: 3) {
                     // Color.primary / Color.secondary, not .primary / .secondary: as the details page's section header the
                     // list moves the hierarchical styles a step lighter (the name came out grey, the labels faint).
@@ -67,7 +66,8 @@ struct MachineCard: View {
                     stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
                 }
                 HStack(spacing: 6) {
-                    if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: "cpu") }
+                    if let sys = machine.system { Chip(text: sys.name, symbol: "cpu") }
+                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: "cpu") }
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
                     if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
                 }
@@ -124,6 +124,11 @@ struct MachineDetailView: View {
                     }
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
+                Section {
+                    NavigationLink { MachineMonitorView(machineID: machineID) } label: {
+                        Label("系统与监控", systemImage: "gauge.with.dots.needle.33percent")
+                    }
                 }
                 Section {
                     if !machine.online {

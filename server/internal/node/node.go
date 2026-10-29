@@ -53,6 +53,8 @@ type Node struct {
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
 	ups      uploads                   // files arriving from the phone (upload.go)
+	sysOnce  sync.Once                 // system: read once (metrics.go)
+	sys      proto.System
 
 	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
 	pushLocks map[string]*sync.Mutex
@@ -129,6 +131,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
+	go n.sampleMetrics(ctx)
 	return n.peer.Serve(ctx, os.Stdin)
 }
 
@@ -525,6 +528,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		HerdrVersion:  n.herdr.Version(ctx),
 		ClaudeVersion: claudeVersion(ctx),
 		Version:       n.Version,
+		System:        n.system(ctx),
 	}
 }
 

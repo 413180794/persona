@@ -57,6 +57,7 @@ type Hub struct {
 	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
 	live         *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
 	usage        usageBook            // token usage of every machine (usage.go)
+	metrics      metricsBook          // OS and load of every machine (metrics.go)
 
 	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox  inbox     // the unified inbox (inbox.go)
@@ -181,6 +182,7 @@ func Run(ctx context.Context, version string) error {
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
 	go h.inboxLoop(ctx)
+	go h.metricsLoop(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}

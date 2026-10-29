@@ -40,6 +40,103 @@ MACHINES = [
 if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
     MACHINES[2]["node_mismatch"] = True
 
+# ---------- machine monitoring (docs/machines.md) ----------
+# What each machine runs, and made-up but smooth 24-hour curves: the server is busy right now (CPU and memory
+# high), the Mac Studio was away for two hours this morning (a gap), the NAS has been offline for three hours.
+GB = 1 << 30
+SYSTEMS = {
+    "server": {"os": "linux", "distro": "ubuntu", "like": "debian", "name": "Ubuntu 24.04.1 LTS", "version": "24.04",
+               "kernel": "6.8.0-48-generic", "arch": "amd64", "model": "Standard PC (Q35 + ICH9, 2009)",
+               "cpu": "AMD EPYC 9354 32-Core Processor", "cores": 16, "memory": 64 * GB},
+    "macbook": {"os": "darwin", "distro": "macos", "name": "macOS 26.1", "version": "26.1", "build": "25B78",
+                "kernel": "Darwin 25.1.0", "arch": "arm64", "model": "MacBook Pro", "cpu": "Apple M4 Pro", "cores": 14,
+                "memory": 48 * GB},
+    "studio": {"os": "darwin", "distro": "macos", "name": "macOS 26.0.1", "version": "26.0.1", "build": "25A362",
+               "kernel": "Darwin 25.0.0", "arch": "arm64", "model": "Mac Studio", "cpu": "Apple M2 Ultra", "cores": 24,
+               "memory": 192 * GB},
+    "nas": {"os": "linux", "distro": "debian", "name": "Debian GNU/Linux 12 (bookworm)", "version": "12",
+            "kernel": "6.1.0-26-arm64", "arch": "arm64", "model": "Raspberry Pi 5 Model B Rev 1.0", "cpu": "", "cores": 4,
+            "memory": 8 * GB},
+}
+if not os.environ.get("MOCK_MACHINES"):  # that mode has its own offline machine (MachinePagesTests counts them)
+    MACHINES.append({"id": "nas", "name": "NAS", "kind": "ssh", "icon": "server", "ssh_host": "nas", "online": False,
+                     "error": "ssh: connect to host nas port 22: Operation timed out", "hostname": "nas", "os": "linux",
+                     "arch": "arm64", "home": "/home/me", "last_seen": ago(hours=3)})
+for _m in MACHINES:
+    _m["system"] = dict(SYSTEMS[_m["id"]], boot_time=int((NOW - timedelta(days=3, hours=4)).timestamp()))
+# Machines added later (MOCK_MACHINES) have no system and never sent a sample.
+T0 = int(NOW.timestamp())
+
+
+def metrics_present(mid, t):
+    """Whether the machine was sending at Unix time t."""
+    if mid not in SYSTEMS:
+        return False
+    if mid == "studio" and T0 - 7 * 3600 <= t < T0 - 5 * 3600:
+        return False
+    if mid == "nas" and t >= T0 - 3 * 3600:
+        return False
+    return True
+
+
+def metric_at(mid, t):
+    """A smooth made-up reading: a daily rhythm, a few slower waves and a little jitter, by machine."""
+    import math
+    sys_ = SYSTEMS[mid]
+    h = int(hashlib.md5(f"{mid}{t // 10}".encode()).hexdigest()[:6], 16) / 0xFFFFFF  # jitter 0…1
+    day = math.sin(2 * math.pi * (t % 86400) / 86400)
+    wave = math.sin(t / 1900) * 0.5 + math.sin(t / 530 + len(mid)) * 0.3
+    base = {"server": 38, "macbook": 18, "studio": 27, "nas": 6}[mid]
+    cpu = base + 10 * day + 12 * wave + 8 * h
+    if mid == "server" and t > T0 - 25 * 60:  # a build running since 25 minutes before the mock started
+        cpu = 92 + 6 * h  # always over the 90 % "critical" line
+    cpu = max(0.5, min(99.5, cpu))
+    mem_frac = {"server": 0.62, "macbook": 0.55, "studio": 0.31, "nas": 0.42}[mid] + 0.05 * day + 0.04 * wave
+    if mid == "server" and t > T0 - 25 * 60:
+        mem_frac = 0.88 + 0.02 * h
+    rx = max(0.0, {"server": 2.4e6, "macbook": 4.5e5, "studio": 1.2e6, "nas": 3e5}[mid] * (1 + 0.6 * wave + 0.5 * h))
+    tx = rx * {"server": 0.35, "macbook": 0.2, "studio": 0.6, "nas": 1.4}[mid] * (0.7 + 0.6 * h)
+    load = sys_["cores"] * cpu / 100 * (0.9 + 0.3 * h)
+    disk_frac = {"server": 0.64, "macbook": 0.71, "studio": 0.38, "nas": 0.93}[mid]
+    return {"cpu": round(cpu, 1), "load": round(load, 2), "mem": round(mem_frac * sys_["memory"]),
+            "swap": round({"server": 0.0, "macbook": 1.2, "studio": 0.0, "nas": 0.4}[mid] * GB),
+            "rx": round(rx, 1), "tx": round(tx, 1), "disk": round(disk_frac * {"nas": 4000, "studio": 2000}.get(mid, 1000) * GB)}
+
+
+def metric_series(mid, span, step):
+    """Like the hub: one point a step from span ago, a gap marker where the machine sent nothing for > 3 steps."""
+    out, missing = [], 0
+    now = int(time.time())  # live, like the hub: the charts end at now
+    start = (now - span) // step * step
+    for t in range(start, now + 1, step):
+        if not metrics_present(mid, t):
+            missing += 1
+            if missing * step > 3 * step and (not out or not out[-1].get("gap")):
+                out.append({"t": t - (missing - 1) * step, "gap": True})
+            continue
+        missing = 0
+        out.append({"t": t, **metric_at(mid, t)})
+    return out
+
+
+def metric_latest(mid):
+    now = int(time.time()) // 10 * 10
+    if not metrics_present(mid, now):
+        return None
+    v, sys_ = metric_at(mid, now), SYSTEMS[mid]
+    out = {"t": now, "cpu": v["cpu"], "load": v["load"], "mem_used": v["mem"], "mem_total": sys_["memory"],
+           "swap_used": v["swap"], "swap_total": 4 * GB if v["swap"] else 0, "net_rx": v["rx"], "net_tx": v["tx"],
+           "disk_used": v["disk"], "disk_total": {"nas": 4000, "studio": 2000}.get(mid, 1000) * GB}
+    if mid == "server":
+        out["cores"] = [round(min(100, max(1, v["cpu"] + 9 * ((i * 37) % 7 - 3))), 1) for i in range(sys_["cores"])]
+    return out
+
+
+def machine_metrics(mid, span, step):
+    m = next(x for x in MACHINES if x["id"] == mid)
+    return {"machine_id": mid, "online": m["online"], "system": m.get("system"), "latest": metric_latest(mid),
+            "points": metric_series(mid, span, step)}
+
 
 def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes, last, agent="claude", pending=0, **kw):
     s = {"machine_id": mid, "session_id": sid, "title": title, "cwd": cwd, "status": status, "state": state,
@@ -575,6 +672,12 @@ class H(BaseHTTPRequestHandler):
             return self.websocket()
         if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock"})
         if p == "/api/v1/machines": return self.send_json({"machines": MACHINES})
+        if p == "/api/v1/metrics":
+            return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES], "step": 60})
+        if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
+            r = q.get("range", ["1h"])[0]
+            span, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
+            return self.send_json({"metrics": machine_metrics(p.split("/")[4], span, step), "range": r, "step": step})
         if p == "/api/v1/sessions": return self.send_json({"sessions": all_sessions()})
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})

@@ -53,6 +53,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
   那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
   DEBUG：`-tab dev -openMachinePage <机器 id>`。
+- 机器监控（`docs/machines.md`）：Agents 列表左上角机器菜单最下面的「机器监控」是所有机器一屏的 Dashboard（系统图标、在线、CPU / 内存 / 网络
+  当前值和最近 1 小时迷你曲线、异常高亮），点卡片进机器的曲线页（1 / 6 / 24 小时，按住看某一时刻）；设置 › 机器 右上角、机器详情的「系统与监控」也能进。
+  机器卡片的图标换成了系统图标（`OSBadge`）。DEBUG：`-tab dev -openMonitor all|<机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
 - 展示逻辑（助手和开发统一，`chatLines` + `WorkLine`）：一轮按「消息」切成若干段，每条消息自成一段对话：
   你的消息 → 一行灰色的工作行「工具 5 · 思考 1 · 回复 1 · 4 分 17 秒 ›」（计数一律「名称 数字」）→ Agent 在下一条消息之前说的最后一段话 → 下一条消息……

@@ -54,6 +54,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
+		System: m.hub.metrics.system(m.cfg.ID),
 	}
 }
 
@@ -175,6 +176,7 @@ func (m *Machine) connect(ctx context.Context) error {
 	}
 	m.mu.Unlock()
 	m.hub.logf("[%s] connected: %s %s/%s herdr %s claude %s", m.cfg.ID, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
+	m.hub.onSystem(m.cfg.ID, info.System)
 	if nodeMismatch(m.hub.version, info.Version) {
 		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
 	}
@@ -419,6 +421,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.rememberClaudeDirs(params)
 	case "usage":
 		m.hub.usage.apply(m.cfg.ID, params, time.Now())
+	case "metrics":
+		m.hub.onMetrics(m.cfg.ID, params)
 	case "interaction.cancel":
 		var p struct {
 			ID string `json:"id"`

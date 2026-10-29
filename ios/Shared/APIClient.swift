@@ -175,6 +175,16 @@ nonisolated struct APIClient: Sendable {
         try await get("/api/v1/machines/\(machine)/dirs", query: ["path": path])
     }
     func reconnect(machine: String) async throws { try await post("/api/v1/machines/\(machine)/reconnect") }
+
+    /// Every machine's latest sample and its last hour by minute (docs/machines.md).
+    func metricsOverview() async throws -> [MachineMetrics] {
+        struct R: Decodable { var machines: [MachineMetrics] }
+        return try await get("/api/v1/metrics", as: R.self).machines
+    }
+    func machineMetrics(_ machine: String, range: MetricRange) async throws -> MachineMetrics {
+        struct R: Decodable { var metrics: MachineMetrics }
+        return try await get("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self).metrics
+    }
     func sessions() async throws -> [Session] { try await get("/api/v1/sessions", as: SessionsResponse.self).sessions }
 
     struct StartRequest: Encodable {

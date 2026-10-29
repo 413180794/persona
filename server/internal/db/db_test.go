@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities`); err != nil {
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -282,5 +282,80 @@ func TestKBEntities(t *testing.T) {
 	}
 	if list, _ := d.KBEntities(ctx, "", "发布", 10); len(list) != 2 {
 		t.Fatalf("tag filter: %+v", list)
+	}
+}
+
+func TestMachineMetrics(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.PutMachineSystem(ctx, "m1", proto.System{OS: "darwin", Distro: "macos", Cores: 8}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PutMachineSystem(ctx, "m1", proto.System{OS: "darwin", Distro: "macos", Cores: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if sys, err := d.MachineSystems(ctx); err != nil || sys["m1"].Cores != 10 {
+		t.Fatalf("systems = %+v, %v", sys, err)
+	}
+
+	// Two hours of samples every 10 s, CPU = the minute's index (so a minute's average is exact), with a 10-minute
+	// hole and a sample without CPU.
+	base := time.Date(2026, 10, 30, 8, 0, 0, 0, time.UTC)
+	f := func(v float64) *float64 { return &v }
+	for i := 0; i < 720; i++ {
+		ts := base.Add(time.Duration(i) * 10 * time.Second)
+		if ts.Sub(base) >= 30*time.Minute && ts.Sub(base) < 40*time.Minute {
+			continue
+		}
+		s := proto.MetricSample{T: ts.Unix(), CPU: f(float64(i / 6)), Load: f(1), MemUsed: 100, MemTotal: 1000,
+			NetRx: f(float64(10 * (i % 6))), DiskUsed: 5, DiskTotal: 50}
+		if i == 6 {
+			s.CPU = nil
+		}
+		if err := d.InsertMetric(ctx, "m1", s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = d.InsertMetric(ctx, "m2", proto.MetricSample{T: base.Unix(), CPU: f(99), MemTotal: 1})
+
+	// Roll up everything before 1:00:30 → only whole minutes before 1:00 move: 60 minutes minus the hole.
+	n, err := d.RollupMetrics(ctx, base.Add(time.Hour+30*time.Second))
+	if err != nil || n != 51 { // 50 minutes of m1, 1 of m2
+		t.Fatalf("rolled %d, %v", n, err)
+	}
+	if n, _ := d.RollupMetrics(ctx, base.Add(time.Hour+30*time.Second)); n != 0 {
+		t.Fatalf("rolled again: %d", n)
+	}
+	var raw, rolled int
+	_ = d.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE step = 10), count(*) FILTER (WHERE step = 60) FROM machine_metrics WHERE machine_id = 'm1'`).Scan(&raw, &rolled)
+	if raw != 360 || rolled != 50 {
+		t.Fatalf("raw %d rolled %d", raw, rolled)
+	}
+
+	// By minute over the whole two hours: rolled-up and raw minutes read the same.
+	series, err := d.MetricSeries(ctx, []string{"m1"}, base, base.Add(2*time.Hour), 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m1 := series["m1"]
+	if len(m1) != 110 || len(series) != 1 {
+		t.Fatalf("%d points, %d machines", len(m1), len(series))
+	}
+	if *m1[0].CPU != 0 || *m1[5].CPU != 5 || *m1[100].CPU != 110 || *m1[0].Rx != 25 || *m1[0].Mem != 100 {
+		t.Fatalf("points %+v %+v %+v", m1[0], m1[5], m1[100])
+	}
+	if m1[1].T-m1[0].T != 60 || m1[30].T != base.Add(40*time.Minute).Unix() {
+		t.Fatalf("times %d %d (the hole has no points)", m1[0].T, m1[30].T)
+	}
+	if *m1[1].CPU != 1 { // minute 1 had one sample without CPU: the average of the other five
+		t.Fatalf("minute 1 cpu = %v", *m1[1].CPU)
+	}
+	// Raw over the last hour: one point a sample.
+	series, _ = d.MetricSeries(ctx, nil, base.Add(time.Hour), base.Add(2*time.Hour), 10)
+	if len(series["m1"]) != 360 {
+		t.Fatalf("raw points %d", len(series["m1"]))
+	}
+
+	if n, err := d.PruneMetrics(ctx, base.Add(30*time.Minute)); err != nil || n != 31 {
+		t.Fatalf("pruned %d, %v", n, err)
 	}
 }
