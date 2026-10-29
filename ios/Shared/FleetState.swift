@@ -15,6 +15,41 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     var workingSince: Double?
     /// The lock screen may show agent names (设置 › 通知 › 锁屏显示详情); off, only counts.
     var details = false
+    /// The assistant (对话 tab) is answering; pushed only to devices whose island shows it.
+    var assistant = false
+    /// The compact Dynamic Island's sides (设置 › 通知 › 灵动岛, IslandPrefs).
+    var left: IslandSlot = .status
+    var right: IslandSlot = .status
+    /// The numbers the island shows, rounded to two significant digits by the hub.
+    var stats: Stats?
+
+    nonisolated struct Stats: Codable, Hashable, Sendable {
+        var tpm = 0
+        var tokens = 0
+        var requests = 0
+        var loads: [Load] = []
+
+        nonisolated struct Load: Codable, Hashable, Sendable {
+            var id: String
+            var name = ""
+            var percent = 0
+        }
+
+        init(tpm: Int = 0, tokens: Int = 0, requests: Int = 0, loads: [Load] = []) {
+            self.tpm = tpm
+            self.tokens = tokens
+            self.requests = requests
+            self.loads = loads
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tpm = try c.decodeIfPresent(Int.self, forKey: .tpm) ?? 0
+            tokens = try c.decodeIfPresent(Int.self, forKey: .tokens) ?? 0
+            requests = try c.decodeIfPresent(Int.self, forKey: .requests) ?? 0
+            loads = (try? c.decodeIfPresent([Load].self, forKey: .loads)) ?? []
+        }
+    }
 
     nonisolated enum Phase: String, Codable, Hashable, Sendable {
         case needsYou, working, done
@@ -74,7 +109,8 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         }
     }
 
-    init(phase: Phase = .none, needsYou: Int = 0, working: Int = 0, unread: Int = 0, items: [Item] = [], workingSince: Double? = nil, details: Bool = false) {
+    init(phase: Phase = .none, needsYou: Int = 0, working: Int = 0, unread: Int = 0, items: [Item] = [], workingSince: Double? = nil,
+         details: Bool = false, assistant: Bool = false, left: IslandSlot = .status, right: IslandSlot = .status, stats: Stats? = nil) {
         self.phase = phase
         self.needsYou = needsYou
         self.working = working
@@ -82,6 +118,10 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         self.items = items
         self.workingSince = workingSince
         self.details = details
+        self.assistant = assistant
+        self.left = left
+        self.right = right
+        self.stats = stats
     }
 
     init(from decoder: Decoder) throws {
@@ -93,6 +133,23 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
         workingSince = try c.decodeIfPresent(Double.self, forKey: .workingSince)
         details = try c.decodeIfPresent(Bool.self, forKey: .details) ?? false
+        assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
+        left = (try? c.decodeIfPresent(IslandSlot.self, forKey: .left)) ?? .status
+        right = (try? c.decodeIfPresent(IslandSlot.self, forKey: .right)) ?? .status
+        stats = try? c.decodeIfPresent(Stats.self, forKey: .stats)
+    }
+
+    /// The app's own copy for this device, like the hub's push (hub forDevice): its settings, the chosen load.
+    func tailored(island: IslandPrefs, details: Bool) -> FleetState {
+        var s = self
+        s.details = details
+        (s.left, s.right) = island.sides
+        if var stats = s.stats, !stats.loads.isEmpty {
+            let pick = stats.loads.first { $0.id == island.machine } ?? stats.loads.max { $0.percent < $1.percent }
+            stats.loads = pick.map { [$0] } ?? []
+            s.stats = stats
+        }
+        return s
     }
 
     var isEmpty: Bool { phase == .none }
@@ -139,4 +196,169 @@ nonisolated enum FleetText {
     }
 
     static func more(_ n: Int) -> String { "+\(n) 个" }
+
+    /// 980 / 1.2k / 12k / 4.2M / 42M: numbers that fit beside the camera.
+    static func short(_ n: Int) -> String {
+        func scaled(_ v: Double, _ unit: String) -> String {
+            v < 10 ? String(format: "%.1f", v).replacingOccurrences(of: ".0", with: "") + unit : "\(Int(v.rounded()))" + unit
+        }
+        switch n {
+        case ..<1000: return "\(n)"
+        case ..<1_000_000: return scaled(Double(n) / 1000, "k")
+        case ..<1_000_000_000: return scaled(Double(n) / 1_000_000, "M")
+        default: return scaled(Double(n) / 1_000_000_000, "B")
+        }
+    }
+
+    /// The words for a number on the expanded island / lock screen.
+    static func stat(_ cell: IslandCell) -> String? {
+        switch cell {
+        case let .tpm(n): "\(short(n))/分"
+        case let .tokens(n): "今日 \(short(n))"
+        case let .requests(n): "今日 \(short(n)) 次"
+        case let .assistant(on): on ? "助手在回答" : "助手空闲"
+        case let .load(name, p): name.isEmpty ? "负载 \(p)%" : "\(name) \(p)%"
+        default: nil
+        }
+    }
+}
+
+/// What one side of the compact Dynamic Island can show (hub notify.go, the same names).
+nonisolated enum IslandSlot: String, Codable, Hashable, Sendable, CaseIterable {
+    case status, tpm, tokens, requests, assistant, load, timer, none
+
+    init(from decoder: Decoder) throws {
+        self = IslandSlot(rawValue: (try? decoder.singleValueContainer().decode(String.self)) ?? "") ?? .status
+    }
+
+    var title: String {
+        switch self {
+        case .status: "状态数量"
+        case .tpm: "每分钟 token"
+        case .tokens: "今日 token"
+        case .requests: "今日请求数"
+        case .assistant: "Jarvis 助手"
+        case .load: "机器负载"
+        case .timer: "最久那一轮的计时"
+        case .none: "不显示"
+        }
+    }
+}
+
+/// 设置 › 通知 › 灵动岛, stored per device on the hub (prefs.island).
+nonisolated struct IslandPrefs: Codable, Hashable, Sendable {
+    enum Preset: String, Codable, CaseIterable, Sendable {
+        case a, b, c, custom
+
+        init(from decoder: Decoder) throws {
+            self = Preset(rawValue: (try? decoder.singleValueContainer().decode(String.self)) ?? "") ?? .a
+        }
+
+        var title: String {
+            switch self {
+            case .a: "状态"
+            case .b: "状态 + 速度"
+            case .c: "状态 + 今日 token"
+            case .custom: "自定义"
+            }
+        }
+    }
+
+    var preset: Preset = .a
+    var left: IslandSlot?
+    var right: IslandSlot?
+    /// Whose load `load` shows; nil: the busiest machine.
+    var machine: String?
+
+    enum CodingKeys: String, CodingKey { case preset, left, right, machine }
+
+    init(preset: Preset = .a, left: IslandSlot? = nil, right: IslandSlot? = nil, machine: String? = nil) {
+        self.preset = preset
+        self.left = left
+        self.right = right
+        self.machine = machine
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        preset = (try? c.decodeIfPresent(Preset.self, forKey: .preset)) ?? .a
+        left = try? c.decodeIfPresent(IslandSlot.self, forKey: .left)
+        right = try? c.decodeIfPresent(IslandSlot.self, forKey: .right)
+        machine = (try? c.decodeIfPresent(String.self, forKey: .machine)).flatMap { $0?.isEmpty == false ? $0 : nil }
+    }
+
+    /// Every field, empty when unset: the hub merges what is sent, so leaving one out would keep the old value.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(preset, forKey: .preset)
+        try c.encode(left?.rawValue ?? "", forKey: .left)
+        try c.encode(right?.rawValue ?? "", forKey: .right)
+        try c.encode(machine ?? "", forKey: .machine)
+    }
+
+    var sides: (left: IslandSlot, right: IslandSlot) {
+        switch preset {
+        case .a: (.status, .status)
+        case .b: (.status, .tpm)
+        case .c: (.status, .tokens)
+        case .custom: (left ?? .status, right ?? .status)
+        }
+    }
+}
+
+/// One side of the compact island, worked out from the state: "needs you" always takes the left side; a `status` side
+/// shows the most urgent count (left) or the next one (right).
+nonisolated enum IslandCell: Hashable, Sendable {
+    case needsYou(Int), working(Int), unread(Int)
+    case tpm(Int), tokens(Int), requests(Int)
+    case assistant(Bool)
+    case load(name: String, percent: Int)
+    case timer(Date)
+    case empty
+
+    var isStatus: Bool {
+        switch self {
+        case .needsYou, .working, .unread: true
+        default: false
+        }
+    }
+
+    static func sides(_ s: FleetState) -> (left: IslandCell, right: IslandCell) {
+        var counts: [IslandCell] = []
+        if s.needsYou > 0 { counts.append(.needsYou(s.needsYou)) }
+        if s.working > 0 { counts.append(.working(s.working)) }
+        if s.unread > 0 { counts.append(.unread(s.unread)) }
+        let left: IslandCell = s.needsYou > 0 ? counts[0] : cell(s.left, s, status: counts.first)
+        var right: IslandCell
+        if s.right == .status {
+            // The count after the one on the left; with a number on the left, the most urgent count.
+            let next = left.isStatus ? counts.firstIndex(of: left).map { $0 + 1 } ?? 0 : 0
+            right = next < counts.count ? counts[next] : .empty
+        } else {
+            right = cell(s.right, s, status: nil)
+        }
+        if right == left { right = .empty }
+        return (left, right)
+    }
+
+    /// The single circle when another app's activity shares the island: the most urgent count.
+    static func minimal(_ s: FleetState) -> IslandCell {
+        if s.needsYou > 0 { return .needsYou(s.needsYou) }
+        if s.working > 0 { return .working(s.working) }
+        if s.unread > 0 { return .unread(s.unread) }
+        return sides(s).left
+    }
+
+    static func cell(_ slot: IslandSlot, _ s: FleetState, status: IslandCell?) -> IslandCell {
+        switch slot {
+        case .status: status ?? .empty
+        case .tpm: .tpm(s.stats?.tpm ?? 0)
+        case .tokens: .tokens(s.stats?.tokens ?? 0)
+        case .requests: .requests(s.stats?.requests ?? 0)
+        case .assistant: .assistant(s.assistant)
+        case .load: s.stats?.loads.first.map { .load(name: $0.name, percent: $0.percent) } ?? .empty
+        case .timer: s.workingSinceDate.map { .timer($0) } ?? .empty
+        case .none: .empty
+        }
+    }
 }

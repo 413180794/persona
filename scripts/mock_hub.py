@@ -302,7 +302,8 @@ def terminal_frames(cols=96, rows=24, ticks=40):
                     "data": base64.b64encode(data.encode()).decode()})
     return out
 
-PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
+PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
+         "island": {"preset": "a", "left": "", "right": "", "machine": ""}}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
@@ -520,7 +521,9 @@ class H(BaseHTTPRequestHandler):
                                        "code": "prompt_changed", "delivered": "none"}, 409)
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
-            PREFS.update({k: v for k, v in json.loads(self.last_body or b"{}").items() if k in ("input", "done", "live_activity", "lock_details")})
+            body = json.loads(self.last_body or b"{}")
+            PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})
+            PREFS["island"].update({k: v for k, v in (body.get("island") or {}).items() if k in ("preset", "left", "right", "machine")})
             return self.send_json(PREFS)
         if p.startswith("/api/v1/sessions/") and p.endswith("/messages") and os.environ.get("MOCK_SEND_REFUSE"):
             # MOCK_SEND_REFUSE=input_draft|dialog_open: the computer refuses sends (SendSafety); clear_draft then succeeds

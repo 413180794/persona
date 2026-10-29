@@ -23,10 +23,10 @@ func TestNotifyConfigDefaults(t *testing.T) {
 }
 
 func TestDevicePrefs(t *testing.T) {
-	if p := devicePrefs(nil); p != (NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true}) {
+	if p := devicePrefs(nil); p != (NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("default %+v", p)
 	}
-	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always","live_activity":false,"lock_details":true}`)); p != (NotifyPrefs{Input: false, Done: DoneAlways, LockDetails: true}) {
+	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always","live_activity":false,"lock_details":true}`)); p != (NotifyPrefs{Input: false, Done: DoneAlways, LockDetails: true, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("stored %+v", p)
 	}
 	// Only what was stored changes; nonsense falls back.
@@ -187,7 +187,7 @@ func TestPusherPrefsSurviveRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.register(Device{DeviceID: "d1", APNSToken: "tok"})
-	if got := p.prefs("d1"); got != (NotifyPrefs{Input: false, Done: DoneOff}) {
+	if got := p.prefs("d1"); got != (NotifyPrefs{Input: false, Done: DoneOff, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("%+v", got)
 	}
 	if got := p.prefs("unknown"); got != defaultPrefs() {
@@ -231,13 +231,20 @@ func TestDevicePrefsAPI(t *testing.T) {
 		t.Fatalf("timings %+v", timings)
 	}
 	// A partial update keeps the other field.
-	if p := do("PUT", `{"done":"always"}`); p != (NotifyPrefs{Input: true, Done: DoneAlways, LiveActivity: true}) {
+	if p := do("PUT", `{"done":"always"}`); p != (NotifyPrefs{Input: true, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("put %+v", p)
 	}
-	if p := do("PUT", `{"input":false}`); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true}) {
+	if p := do("PUT", `{"input":false}`); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("put input %+v", p)
 	}
-	if p := do("GET", ""); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true}) {
+	if p := do("GET", ""); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}) {
 		t.Fatalf("get after put %+v", p)
+	}
+	// The island is merged field by field like the rest.
+	if p := do("PUT", `{"island":{"preset":"custom","left":"tpm"}}`); p.Island != (IslandPrefs{Preset: "custom", Left: "tpm"}) || p.Done != DoneAlways {
+		t.Fatalf("put island %+v", p)
+	}
+	if p := do("PUT", `{"island":{"right":"load"}}`); p.Island != (IslandPrefs{Preset: "custom", Left: "tpm", Right: "load"}) {
+		t.Fatalf("put island side %+v", p)
 	}
 }

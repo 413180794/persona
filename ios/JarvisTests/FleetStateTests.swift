@@ -60,4 +60,73 @@ struct FleetStateTests {
         #expect(FleetLink.session(URL(string: "jarvis://open")!) == nil)
         #expect(FleetLink.session(URL(string: "jarvis://pair?url=x&token=y")!) == nil)
     }
+
+    // MARK: Island
+
+    /// What hub forDevice pushes to a device with preset b, read with a plain decoder like ActivityKit does.
+    @Test func decodesIslandFields() throws {
+        let json = #"{"phase":"working","needsYou":0,"working":2,"unread":1,"items":[],"details":false,"assistant":true,"left":"status","right":"tpm","stats":{"tpm":12000,"loads":[{"id":"m","name":"M","percent":35}]}}"#
+        let s = try JSONDecoder().decode(FleetState.self, from: Data(json.utf8))
+        #expect(s.right == .tpm && s.assistant && s.stats?.tpm == 12000 && s.stats?.loads.first?.percent == 35)
+        let odd = try JSONDecoder().decode(FleetState.self, from: Data(#"{"left":"cost","stats":{"tpm":"x"}}"#.utf8))
+        #expect(odd.left == .status) // an unknown slot (newer hub) is status
+    }
+
+    @Test func statusSides() {
+        // Preset a: the most urgent count on the left, the next one on the right.
+        let working = FleetState(phase: .working, working: 3, unread: 1)
+        #expect(IslandCell.sides(working) == (.working(3), .unread(1)))
+        let needs = FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1)
+        #expect(IslandCell.sides(needs) == (.needsYou(2), .working(3)))
+        let done = FleetState(phase: .done, unread: 2)
+        #expect(IslandCell.sides(done) == (.unread(2), .empty))
+        #expect(IslandCell.minimal(needs) == .needsYou(2))
+    }
+
+    @Test func numberSides() {
+        let stats = FleetState.Stats(tpm: 12000, tokens: 42_000_000, requests: 220, loads: [.init(id: "a", name: "A", percent: 30)])
+        var s = FleetState(phase: .working, working: 3, unread: 1, assistant: true, right: .tpm, stats: stats)
+        #expect(IslandCell.sides(s) == (.working(3), .tpm(12000)))
+        // Needs you takes the left side whatever was chosen there; a status right side then shows the next count.
+        s = FleetState(phase: .needsYou, needsYou: 1, working: 3, left: .assistant, right: .status, stats: stats)
+        #expect(IslandCell.sides(s) == (.needsYou(1), .working(3)))
+        s.needsYou = 0
+        s.phase = .working
+        #expect(IslandCell.sides(s) == (.assistant(false), .working(3)))
+        s.left = .load
+        s.right = .tokens
+        #expect(IslandCell.sides(s) == (.load(name: "A", percent: 30), .tokens(42_000_000)))
+        s.right = .none
+        #expect(IslandCell.sides(s).right == .empty)
+    }
+
+    @Test func tailoredLikeTheHub() {
+        let stats = FleetState.Stats(tpm: 1, loads: [.init(id: "a", percent: 30), .init(id: "b", percent: 70)])
+        let s = FleetState(phase: .working, working: 1, stats: stats)
+        let busiest = s.tailored(island: IslandPrefs(preset: .custom, left: .status, right: .load), details: true)
+        #expect(busiest.right == .load && busiest.details && busiest.stats?.loads.map(\.id) == ["b"])
+        let chosen = s.tailored(island: IslandPrefs(preset: .custom, left: .status, right: .load, machine: "a"), details: false)
+        #expect(chosen.stats?.loads.map(\.id) == ["a"])
+        #expect(s.tailored(island: IslandPrefs(preset: .c), details: false).right == .tokens)
+    }
+
+    @Test func shortNumbers() {
+        #expect(FleetText.short(980) == "980")
+        #expect(FleetText.short(1000) == "1k")
+        #expect(FleetText.short(1200) == "1.2k")
+        #expect(FleetText.short(12000) == "12k")
+        #expect(FleetText.short(4_200_000) == "4.2M")
+        #expect(FleetText.short(42_000_000) == "42M")
+        #expect(FleetText.stat(.tpm(12000)) == "12k/分")
+        #expect(FleetText.stat(.tokens(42_000_000)) == "今日 42M")
+    }
+
+    /// The app sends every island field (empty when unset): the hub merges, so a left-out field would keep its old value.
+    @Test func islandPrefsCoding() throws {
+        let json = String(decoding: try JSONEncoder().encode(IslandPrefs(preset: .b)), as: UTF8.self)
+        #expect(json.contains(#""machine":"""#) && json.contains(#""left":"""#) && json.contains(#""preset":"b""#))
+        let p = try JSONDecoder().decode(NotifyPrefs.self, from: Data(#"{"input":true,"done":"long","island":{"preset":"custom","left":"assistant","right":"load","machine":""}}"#.utf8))
+        #expect(p.island.sides == (.assistant, .load) && p.island.machine == nil)
+        #expect(try JSONDecoder().decode(NotifyPrefs.self, from: Data("{}".utf8)).island.preset == .a)
+    }
 }

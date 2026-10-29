@@ -16,8 +16,12 @@ final class LiveActivityController {
     /// 设置 › 通知 › 实时活动. Mirrored from the hub prefs so the app can decide without asking.
     static let enabledKey = "liveActivity.enabled"
     static let detailsKey = "liveActivity.lockDetails"
+    static let islandKey = "liveActivity.island"
     var enabled: Bool { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true }
     var lockDetails: Bool { UserDefaults.standard.bool(forKey: Self.detailsKey) }
+    var island: IslandPrefs {
+        UserDefaults.standard.data(forKey: Self.islandKey).flatMap { try? JSONDecoder().decode(IslandPrefs.self, from: $0) } ?? IslandPrefs()
+    }
 
     private var watching: Set<String> = []
     private var endTask: Task<Void, Never>?
@@ -28,19 +32,24 @@ final class LiveActivityController {
     }
 
     /// The device's settings changed (or were loaded from the hub): remember them, and apply at once — off ends the
-    /// activity, the lock screen details flip on the running one, on starts one from the hub's current fleet.
-    func settings(enabled: Bool, lockDetails: Bool) {
-        let was = (self.enabled, self.lockDetails)
-        UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
-        UserDefaults.standard.set(lockDetails, forKey: Self.detailsKey)
-        guard was != (enabled, lockDetails) else { return }
-        if !enabled {
+    /// activity, the lock screen details and the island's sides change on the running one, on starts one from the hub's
+    /// current fleet.
+    func settings(_ prefs: NotifyPrefs) {
+        let was = (enabled, lockDetails, island)
+        UserDefaults.standard.set(prefs.liveActivity, forKey: Self.enabledKey)
+        UserDefaults.standard.set(prefs.lockDetails, forKey: Self.detailsKey)
+        UserDefaults.standard.set(try? JSONEncoder().encode(prefs.island), forKey: Self.islandKey)
+        guard was != (prefs.liveActivity, prefs.lockDetails, prefs.island) else { return }
+        if !prefs.liveActivity {
             endAll()
-        } else if let activity {
-            var state = activity.content.state
-            state.details = lockDetails
+            return
+        }
+        if let activity {
+            // At once from what is showing (another machine's load comes with the hub's fleet below).
+            let state = activity.content.state.tailored(island: prefs.island, details: prefs.lockDetails)
             Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate, relevanceScore: Self.relevance(state)))
-        } else if let api = AppModel.shared.api {
+        }
+        if let api = AppModel.shared.api {
             Task { if let fleet = try? await api.fleet() { apply(fleet) } }
         }
     }
@@ -62,8 +71,7 @@ final class LiveActivityController {
 
     /// The hub's current fleet (the `fleet` event, or GET /api/v1/fleet on becoming active).
     func apply(_ hubState: FleetState) {
-        var state = hubState
-        state.details = lockDetails
+        let state = hubState.tailored(island: island, details: lockDetails)
         guard enabled, ActivityAuthorizationInfo().areActivitiesEnabled else {
             endAll()
             return
@@ -165,10 +173,22 @@ final class LiveActivityController {
 
 #if DEBUG
 extension LiveActivityController {
-    /// `-showFleetSample needsYou|working|done` (`-fleetDetails YES` for names on the lock screen): starts the activity
-    /// with made-up agents, no hub needed, for screenshots.
-    func showSample(_ phase: String, details: Bool) {
+    /// `-showFleetSample needsYou|working|done` (`-fleetDetails YES` for names on the lock screen, `-fleetIsland b`,
+    /// `c` or `custom:assistant,load` for the island's sides): starts the activity with made-up agents, no hub needed,
+    /// for screenshots.
+    func showSample(_ phase: String, details: Bool, island spec: String?) {
         UserDefaults.standard.set(details, forKey: Self.detailsKey)
+        var island = IslandPrefs()
+        if let spec {
+            let parts = spec.split(separator: ":", maxSplits: 1)
+            island.preset = IslandPrefs.Preset(rawValue: String(parts[0])) ?? .a
+            if parts.count > 1 {
+                let sides = parts[1].split(separator: ",").map { IslandSlot(rawValue: String($0)) }
+                island.left = sides.first ?? nil
+                island.right = sides.count > 1 ? sides[1] : nil
+            }
+        }
+        UserDefaults.standard.set(try? JSONEncoder().encode(island), forKey: Self.islandKey)
         let now = Date.now.timeIntervalSince1970
         let ask = FleetState.Item(id: "macbook/s1", title: "补齐网络层的单元测试", place: "MacBook · weather", kind: .permission,
                                   detail: "Bash: swift test --parallel", interaction: "ix_sample", since: now - 90)
@@ -176,11 +196,14 @@ extension LiveActivityController {
                                    detail: "支持 HEIC", interaction: "ix_plan", since: now - 300)
         let work = FleetState.Item(id: "studio/s3", title: "重构设置页", place: "Studio · notes", kind: .working, since: now - 754)
         let done = FleetState.Item(id: "macbook/s4", title: "升级依赖", place: "MacBook · api", kind: .unread, detail: "全部测试通过，已提交", since: now - 60)
-        let state: FleetState = switch phase {
+        var state: FleetState = switch phase {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
         case "done": FleetState(phase: .done, unread: 1, items: [done])
         default: FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1, items: [ask, plan, work], workingSince: now - 754)
         }
+        state.assistant = phase != "done"
+        state.stats = .init(tpm: 12000, tokens: 42_000_000, requests: 1200,
+                            loads: [.init(id: "studio", name: "Studio", percent: 35), .init(id: "macbook", name: "MacBook", percent: 70)])
         Task {
             try? await Task.sleep(for: .seconds(1)) // the scene must be active to start one
             apply(state)

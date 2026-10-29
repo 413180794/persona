@@ -217,8 +217,8 @@ func TestLiveActivityFlush(t *testing.T) {
 
 	// Only a push-to-start token: start once per episode.
 	la.update("phone", func(v *db.LiveActivity) { v.PushToStartToken = "p2s" })
-	la.flush(working, false)
-	la.flush(working, false)
+	la.flush(working, false, false)
+	la.flush(working, false, false)
 	c := f.calls(t, 1)
 	if c[0].Token != "p2s" || c[0].Event != "start" || c[0].Type != "liveactivity" || c[0].Topic != "app.example.push-type.liveactivity" {
 		t.Fatalf("start %+v", c[0])
@@ -232,14 +232,14 @@ func TestLiveActivityFlush(t *testing.T) {
 	if err := h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, LockDetails: true}); err != nil {
 		t.Fatal(err)
 	}
-	la.flush(working, true)
+	la.flush(working, true, false)
 	c = f.calls(t, 2)
 	if c[1].Token != "acttok" || c[1].Event != "update" || c[1].Priority != "10" || !c[1].State.Details {
 		t.Fatalf("update %+v", c[1])
 	}
 
 	// Empty for a while: end, and forget the activity token.
-	la.flush(FleetState{}, false)
+	la.flush(FleetState{}, false, false)
 	la.mu.Lock()
 	la.emptyAt = time.Now().Add(-2 * fleetEndAfter)
 	la.mu.Unlock()
@@ -253,11 +253,11 @@ func TestLiveActivityFlush(t *testing.T) {
 	}
 
 	// A new episode starts again; turning the activity off stops everything.
-	la.flush(working, false)
+	la.flush(working, false, false)
 	f.calls(t, 4)
 	_ = h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: false})
-	la.flush(FleetState{}, false)
-	la.flush(working, false)
+	la.flush(FleetState{}, false, false)
+	la.flush(working, false, false)
 	time.Sleep(50 * time.Millisecond)
 	if n := len(f.calls(t, 4)); n != 4 {
 		t.Fatalf("activity off still pushed: %d", n)
@@ -268,7 +268,7 @@ func TestLiveActivityDeadToken(t *testing.T) {
 	h, f := testLive(t)
 	f.gone["acttok"] = true
 	h.live.update("phone", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act1", "acttok", time.Now() })
-	h.live.flush(FleetState{Phase: "working", Working: 1}, false)
+	h.live.flush(FleetState{Phase: "working", Working: 1}, false, false)
 	f.calls(t, 1)
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
@@ -361,4 +361,86 @@ func TestPrefsChangeResends(t *testing.T) {
 	if p := h.push.prefs("phone"); !p.LockDetails || !p.LiveActivity {
 		t.Fatalf("%+v", p)
 	}
+}
+
+func TestIslandSides(t *testing.T) {
+	cases := []struct {
+		p           IslandPrefs
+		left, right string
+	}{
+		{IslandPrefs{}, SlotStatus, SlotStatus},
+		{IslandPrefs{Preset: "a"}, SlotStatus, SlotStatus},
+		{IslandPrefs{Preset: "b"}, SlotStatus, SlotTPM},
+		{IslandPrefs{Preset: "c"}, SlotStatus, SlotTokens},
+		{IslandPrefs{Preset: "custom", Left: SlotAssistant, Right: SlotLoad}, SlotAssistant, SlotLoad},
+		{IslandPrefs{Preset: "custom", Left: "cost", Right: ""}, SlotStatus, SlotStatus},
+	}
+	for _, c := range cases {
+		if l, r := c.p.sides(); l != c.left || r != c.right {
+			t.Errorf("%+v: %s / %s, want %s / %s", c.p, l, r, c.left, c.right)
+		}
+	}
+	if p := devicePrefs(json.RawMessage(`{"island":{"preset":"zz"}}`)); p.Island.Preset != "a" {
+		t.Errorf("unknown preset kept: %+v", p.Island)
+	}
+	for in, want := range map[int64]int64{7: 7, 99: 99, 987: 990, 12345: 12000, 41614712: 42000000} {
+		if got := round2(in); got != want {
+			t.Errorf("round2(%d) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+func TestFleetForDevice(t *testing.T) {
+	stats := FleetStats{TPM: 12000, Tokens: 42000000, Requests: 220,
+		Loads: []FleetLoad{{ID: "a", Name: "A", Percent: 30}, {ID: "b", Name: "B", Percent: 70}}}
+	st := FleetState{Phase: "working", Working: 1, Assistant: true}
+	a := st.forDevice(defaultPrefs(), stats)
+	if a.Stats != nil || a.Assistant || a.Left != SlotStatus || a.Right != SlotStatus {
+		t.Fatalf("preset a: %+v", a)
+	}
+	b := st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "b"}, LockDetails: true}, stats)
+	if b.Stats == nil || b.Stats.TPM != 12000 || b.Stats.Tokens != 0 || !b.Details {
+		t.Fatalf("preset b: %+v %+v", b, b.Stats)
+	}
+	c := st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotAssistant, Right: SlotLoad}}, stats)
+	if !c.Assistant || c.Stats == nil || len(c.Stats.Loads) != 1 || c.Stats.Loads[0].ID != "b" {
+		t.Fatalf("custom without a machine shows the busiest: %+v %+v", c, c.Stats)
+	}
+	c = st.forDevice(NotifyPrefs{Island: IslandPrefs{Preset: "custom", Left: SlotStatus, Right: SlotLoad, Machine: "a"}}, stats)
+	if c.Stats.Loads[0].ID != "a" {
+		t.Fatalf("chosen machine: %+v", c.Stats)
+	}
+}
+
+func TestLiveActivityMetrics(t *testing.T) {
+	h, f := testLive(t)
+	la := h.live
+	now := time.Now()
+	report := func(out int64) {
+		b, _ := json.Marshal(map[string]any{"full": true, "cpus": 4, "load": 1.0, "buckets": []proto.UsageBucket{
+			{Minute: now.Unix() / 60 * 60, Model: "claude-opus-5-5", Output: out, Requests: 1}}})
+		h.usage.apply("m", b, now)
+	}
+	report(25000)
+	la.update("phone", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act1", "acttok", now })
+	_ = h.push.setPrefs("phone", NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "b"}})
+	working := FleetState{Phase: "working", Working: 1}
+	la.flush(working, false, false)
+	c := f.calls(t, 1)
+	if c[0].State.Right != SlotTPM || c[0].State.Stats == nil || c[0].State.Stats.TPM == 0 {
+		t.Fatalf("state carries the TPM: %+v", c[0].State)
+	}
+	// The assistant starting is not on this device's island: no push.
+	la.flush(FleetState{Phase: "working", Working: 1, Assistant: true}, false, false)
+	// Numbers alone: not before live_metrics_seconds, and not when the rounded value is the same.
+	report(50000)
+	la.metrics(working, now.Add(10*time.Second))
+	la.metrics(working, now.Add(61*time.Second))
+	c = f.calls(t, 2)
+	if c[1].Priority != "5" || c[1].State.Stats.TPM <= c[0].State.Stats.TPM {
+		t.Fatalf("metrics push %+v %+v", c[1], c[1].State.Stats)
+	}
+	la.metrics(working, now.Add(200*time.Second))
+	time.Sleep(50 * time.Millisecond)
+	f.calls(t, 2)
 }

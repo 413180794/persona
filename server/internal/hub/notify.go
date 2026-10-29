@@ -25,10 +25,16 @@ type NotifyConfig struct {
 	LongTurnSeconds int `json:"long_turn_seconds,omitempty"`
 	// BackgroundHoldMinutes: give up on a turn whose background work has not finished after this long. Default 120.
 	BackgroundHoldMinutes int `json:"background_hold_minutes,omitempty"`
+	// LiveMetricsSeconds: the least time between two Live Activity pushes to a device when only the numbers it shows
+	// (TPM, today's tokens, load…) changed. Default 60; state changes are not held back (docs/live-activity.md).
+	LiveMetricsSeconds int `json:"live_metrics_seconds,omitempty"`
 }
 
 func (c NotifyConfig) doneDelay() time.Duration { return secondsOr(c.DoneDelaySeconds, 60) }
 func (c NotifyConfig) longTurn() time.Duration  { return secondsOr(c.LongTurnSeconds, 60) }
+func (c NotifyConfig) liveMetrics() time.Duration {
+	return secondsOr(c.LiveMetricsSeconds, 60)
+}
 func (c NotifyConfig) backgroundHold() time.Duration {
 	if c.BackgroundHoldMinutes > 0 {
 		return time.Duration(c.BackgroundHoldMinutes) * time.Minute
@@ -53,6 +59,52 @@ type NotifyPrefs struct {
 	LiveActivity bool `json:"live_activity"`
 	// LockDetails: the activity may show agent names on the lock screen; off, it shows only counts.
 	LockDetails bool `json:"lock_details"`
+	// Island: what the compact Dynamic Island shows on each side.
+	Island IslandPrefs `json:"island"`
+}
+
+// IslandPrefs picks the two sides of the compact Dynamic Island (docs/live-activity.md). "Needs you" always takes the
+// left side when there is any, whatever is chosen.
+type IslandPrefs struct {
+	Preset  string `json:"preset"`            // a: status counts on both sides | b: status + TPM | c: status + today's tokens | custom
+	Left    string `json:"left,omitempty"`    // custom: an island slot
+	Right   string `json:"right,omitempty"`   // custom: an island slot
+	Machine string `json:"machine,omitempty"` // whose load "load" shows; empty: the busiest
+}
+
+// Island slots: what one side can show.
+const (
+	SlotStatus    = "status"    // left: the most urgent count (needs you > working > finished); right: the next one
+	SlotTPM       = "tpm"       // output tokens per minute, every machine
+	SlotTokens    = "tokens"    // today's tokens
+	SlotRequests  = "requests"  // today's model requests
+	SlotAssistant = "assistant" // whether the assistant (对话 tab) is answering
+	SlotLoad      = "load"      // a machine's load
+	SlotTimer     = "timer"     // how long the longest running turn has been going
+	SlotNone      = "none"
+)
+
+var islandSlots = map[string]bool{SlotStatus: true, SlotTPM: true, SlotTokens: true, SlotRequests: true,
+	SlotAssistant: true, SlotLoad: true, SlotTimer: true, SlotNone: true}
+
+// sides resolves the preset.
+func (p IslandPrefs) sides() (left, right string) {
+	switch p.Preset {
+	case "b":
+		return SlotStatus, SlotTPM
+	case "c":
+		return SlotStatus, SlotTokens
+	case "custom":
+		left, right = p.Left, p.Right
+		if !islandSlots[left] {
+			left = SlotStatus
+		}
+		if !islandSlots[right] {
+			right = SlotStatus
+		}
+		return left, right
+	}
+	return SlotStatus, SlotStatus
 }
 
 const (
@@ -61,7 +113,9 @@ const (
 	DoneAlways = "always"
 )
 
-func defaultPrefs() NotifyPrefs { return NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true} }
+func defaultPrefs() NotifyPrefs {
+	return NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "a"}}
+}
 
 // devicePrefs decodes what is stored for a device; anything missing or unknown is the default.
 func devicePrefs(raw json.RawMessage) NotifyPrefs {
@@ -73,6 +127,11 @@ func devicePrefs(raw json.RawMessage) NotifyPrefs {
 	case DoneOff, DoneLong, DoneAlways:
 	default:
 		p.Done = DoneLong
+	}
+	switch p.Island.Preset {
+	case "a", "b", "c", "custom":
+	default:
+		p.Island.Preset = "a"
 	}
 	return p
 }

@@ -9,6 +9,7 @@ struct NotificationSettingsView: View {
     @State private var prefs: NotifyPrefs?
     @State private var system: UNAuthorizationStatus?
     @State private var activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
+    @State private var debugIsland = false
 
     var body: some View {
         List {
@@ -79,6 +80,16 @@ struct NotificationSettingsView: View {
                     }
                 }
                 .disabled(prefs?.liveActivity == false)
+                NavigationLink {
+                    IslandSettingsView(island: binding(\.island))
+                } label: {
+                    LabeledContent {
+                        Text((prefs?.island ?? IslandPrefs()).preset.title).lineLimit(1)
+                    } label: {
+                        Label("灵动岛", systemImage: "capsule.fill")
+                    }
+                }
+                .disabled(prefs?.liveActivity == false)
                 if !activitiesAllowed {
                     Label {
                         Text("系统设置里关掉了 Jarvis 的实时活动").font(.footnote)
@@ -109,6 +120,16 @@ struct NotificationSettingsView: View {
         .disabled(prefs == nil)
         .overlay { if prefs == nil { ProgressView() } }
         .task { await load() }
+        #if DEBUG
+        // `-openIslandSettings YES` (with `-openNotificationSettings YES -tab settings`): 灵动岛.
+        .navigationDestination(isPresented: $debugIsland) { IslandSettingsView(island: binding(\.island)) }
+        .task {
+            if UserDefaults.standard.bool(forKey: "openIslandSettings") {
+                try? await Task.sleep(for: .milliseconds(600))
+                debugIsland = true
+            }
+        }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             Task { system = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
             activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
@@ -146,7 +167,7 @@ struct NotificationSettingsView: View {
         do {
             let p = try await api.notifyPrefs(device: PushRegistrar.deviceID)
             prefs = p
-            LiveActivityController.shared.settings(enabled: p.liveActivity, lockDetails: p.lockDetails)
+            LiveActivityController.shared.settings(p)
         } catch { model.show(error) }
     }
 
@@ -154,7 +175,7 @@ struct NotificationSettingsView: View {
     private func save(_ next: NotifyPrefs) {
         let before = prefs
         prefs = next
-        LiveActivityController.shared.settings(enabled: next.liveActivity, lockDetails: next.lockDetails)
+        LiveActivityController.shared.settings(next)
         guard let api = model.api else { return }
         Task {
             do {
@@ -162,7 +183,7 @@ struct NotificationSettingsView: View {
                 Haptics.success()
             } catch {
                 prefs = before
-                if let before { LiveActivityController.shared.settings(enabled: before.liveActivity, lockDetails: before.lockDetails) }
+                if let before { LiveActivityController.shared.settings(before) }
                 model.show(error)
             }
         }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"path"
 	"sort"
@@ -47,6 +48,104 @@ type FleetState struct {
 	WorkingSince float64 `json:"workingSince,omitempty"`
 	// Details: the lock screen may show titles (the device's lock_details setting); otherwise only counts.
 	Details bool `json:"details"`
+	// Assistant: the assistant (对话 tab) is answering. Pushed only to devices that show it.
+	Assistant bool `json:"assistant,omitempty"`
+	// Left / Right: the compact Dynamic Island's sides (the device's island setting, notify.go IslandPrefs);
+	// empty means status counts.
+	Left  string `json:"left,omitempty"`
+	Right string `json:"right,omitempty"`
+	// Stats: the numbers the device shows, rounded so that small changes do not cost a push (usage.go).
+	Stats *FleetStats `json:"stats,omitempty"`
+}
+
+// FleetStats are the island's numbers. A push carries only those the device shows; the app's own copy has them all.
+type FleetStats struct {
+	TPM      int64       `json:"tpm,omitempty"`
+	Tokens   int64       `json:"tokens,omitempty"`
+	Requests int         `json:"requests,omitempty"`
+	Loads    []FleetLoad `json:"loads,omitempty"`
+}
+
+// FleetLoad is a machine's 1-minute load average over its cores, in percent (rounded to 5).
+type FleetLoad struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Percent int    `json:"percent"`
+}
+
+// round2 keeps two significant digits: 12345 → 12000, 987 → 990. The island shows "12k", so finer changes would
+// only spend the push budget.
+func round2(n int64) int64 {
+	if n < 100 {
+		return n
+	}
+	p := int64(1)
+	for n/p >= 100 {
+		p *= 10
+	}
+	return (n + p/2) / p * p
+}
+
+// fleetStats turns the usage summary into the island's numbers.
+func (h *Hub) fleetStats() FleetStats {
+	u := h.usageSummary()
+	st := FleetStats{TPM: round2(u.TPM), Tokens: round2(u.Tokens), Requests: int(round2(int64(u.Requests)))}
+	for _, m := range u.Machines {
+		name := m.ID
+		if mm := h.byID[m.ID]; mm != nil && mm.cfg.Name != "" {
+			name = mm.cfg.Name
+		}
+		st.Loads = append(st.Loads, FleetLoad{ID: m.ID, Name: name, Percent: int(math.Round(m.Load*20)) * 5})
+	}
+	return st
+}
+
+// forDevice is what one device gets: its settings, and of the assistant and the numbers only what it shows (so a
+// change it does not show costs no push).
+func (s FleetState) forDevice(p NotifyPrefs, stats FleetStats) FleetState {
+	d := s
+	d.Details = p.LockDetails
+	d.Left, d.Right = p.Island.sides()
+	shows := func(slot string) bool { return d.Left == slot || d.Right == slot }
+	if !shows(SlotAssistant) {
+		d.Assistant = false
+	}
+	var ds FleetStats
+	if shows(SlotTPM) {
+		ds.TPM = stats.TPM
+	}
+	if shows(SlotTokens) {
+		ds.Tokens = stats.Tokens
+	}
+	if shows(SlotRequests) {
+		ds.Requests = stats.Requests
+	}
+	if shows(SlotLoad) {
+		ds.Loads = pickLoad(stats.Loads, p.Island.Machine)
+	}
+	if ds.TPM != 0 || ds.Tokens != 0 || ds.Requests != 0 || ds.Loads != nil {
+		d.Stats = &ds
+	} else {
+		d.Stats = nil
+	}
+	return d
+}
+
+// pickLoad: the chosen machine, or else the busiest.
+func pickLoad(loads []FleetLoad, machine string) []FleetLoad {
+	var best *FleetLoad
+	for i := range loads {
+		if loads[i].ID == machine {
+			return []FleetLoad{loads[i]}
+		}
+		if best == nil || loads[i].Percent > best.Percent {
+			best = &loads[i]
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	return []FleetLoad{*best}
 }
 
 type FleetItem struct {
@@ -127,6 +226,7 @@ func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
 			needs = append(needs, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: proto.IxScreen, Detail: "终端等你处理"})
 		case proto.StateWorking:
 			if s.Assistant {
+				st.Assistant = true
 				continue
 			}
 			since := a.TurnStart
@@ -256,12 +356,16 @@ type liveActivities struct {
 	lastPush  time.Time
 	emptyAt   time.Time // since when the fleet has been over (empty, or only finished agents for a while)
 	doneSince time.Time
-	episode   int            // bumps each time the fleet becomes active after being over
-	started   map[string]int // device -> episode it was push-started in (once per episode)
+	episode   int                  // bumps each time the fleet becomes active after being over
+	started   map[string]int       // device -> episode it was push-started in (once per episode)
+	sent      map[string][]byte    // device -> the content-state it last got
+	sentAt    map[string]time.Time // device -> when
+	stats     []byte               // last numbers broadcast to the open apps
 }
 
 func newLiveActivities(h *Hub) *liveActivities {
-	return &liveActivities{h: h, signal: make(chan struct{}, 1), rows: map[string]db.LiveActivity{}, started: map[string]int{}}
+	return &liveActivities{h: h, signal: make(chan struct{}, 1), rows: map[string]db.LiveActivity{}, started: map[string]int{},
+		sent: map[string][]byte{}, sentAt: map[string]time.Time{}}
 }
 
 func (la *liveActivities) load(ctx context.Context) {
@@ -318,7 +422,7 @@ func (la *liveActivities) run(ctx context.Context) {
 	la.load(ctx)
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
-	tick := time.NewTicker(30 * time.Second)
+	tick := time.NewTicker(15 * time.Second)
 	defer tick.Stop()
 	for {
 		select {
@@ -333,40 +437,92 @@ func (la *liveActivities) run(ctx context.Context) {
 			st := la.snapshot()
 			if b, _ := json.Marshal(st); !bytes.Equal(b, la.shown) { // the open app updates its activity itself
 				la.shown = b
-				la.h.broadcast(map[string]any{"type": "fleet", "fleet": st})
+				la.broadcast(st)
 			}
 			now, schedule := la.coal.offer(st)
 			switch {
 			case now:
-				la.flush(st, true)
+				la.flush(st, true, false)
 			case schedule:
 				timer.Reset(fleetCoalesce)
 			}
 		case <-timer.C:
-			la.flush(la.snapshot(), false)
+			la.flush(la.snapshot(), false, false)
 		case <-tick.C:
 			la.tick()
 		}
 	}
 }
 
-// tick: end an activity that has been over for a while, refresh one about to go stale.
+// broadcast sends the open apps the fleet with every number (each app picks what its own settings show).
+func (la *liveActivities) broadcast(st FleetState) {
+	stats := la.h.fleetStats()
+	st.Stats = &stats
+	la.stats, _ = json.Marshal(stats)
+	la.h.broadcast(map[string]any{"type": "fleet", "fleet": st})
+}
+
+// tick: end an activity that has been over for a while, refresh one about to go stale, update the numbers.
 func (la *liveActivities) tick() {
 	la.mu.Lock()
 	over := !la.emptyAt.IsZero() && time.Since(la.emptyAt) >= fleetEndAfter
 	stale := !la.last.empty() && time.Since(la.lastPush) >= fleetRefresh
 	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && time.Since(la.doneSince) >= fleetDoneLinger
+	last := la.last
 	la.mu.Unlock()
 	switch {
 	case over || doneLong:
 		la.endAll()
 	case stale:
-		la.flush(la.snapshot(), false)
+		la.flush(la.snapshot(), false, true)
+	case !last.empty():
+		la.metrics(last, time.Now())
 	}
 }
 
+// metrics pushes the numbers alone: low priority, at most every live_metrics_seconds per device, and only to devices
+// whose shown (rounded) numbers changed.
+func (la *liveActivities) metrics(last FleetState, now time.Time) {
+	stats := la.h.fleetStats()
+	if b, _ := json.Marshal(stats); !bytes.Equal(b, la.stats) {
+		la.broadcast(last)
+	}
+	every := la.h.cfg.Notify.liveMetrics()
+	la.mu.Lock()
+	rows := make([]db.LiveActivity, 0, len(la.rows))
+	for _, r := range la.rows {
+		if r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge && now.Sub(la.sentAt[r.DeviceID]) >= every {
+			rows = append(rows, r)
+		}
+	}
+	la.mu.Unlock()
+	for _, r := range rows {
+		d, ok := la.h.push.device(r.DeviceID)
+		if !ok || !devicePrefs(d.Prefs).LiveActivity {
+			continue
+		}
+		dst := last.forDevice(devicePrefs(d.Prefs), stats)
+		if la.markSent(r.DeviceID, dst, now, false) {
+			la.send(d, r, liveActivityPayload("update", dst, now), false)
+		}
+	}
+}
+
+// markSent records dst as the device's content-state and says whether it is new (always, when forced).
+func (la *liveActivities) markSent(device string, dst FleetState, now time.Time, force bool) bool {
+	b, _ := json.Marshal(dst)
+	la.mu.Lock()
+	defer la.mu.Unlock()
+	if !force && bytes.Equal(b, la.sent[device]) {
+		return false
+	}
+	la.sent[device], la.sentAt[device] = b, now
+	return true
+}
+
 // flush pushes st to every device that wants the activity: update a running one, or start one (once per episode).
-func (la *liveActivities) flush(st FleetState, urgent bool) {
+// A device whose own version did not change (the change was something it does not show) is skipped unless forced.
+func (la *liveActivities) flush(st FleetState, urgent, force bool) {
 	la.coal.sentState(st)
 	now := time.Now()
 	la.mu.Lock()
@@ -398,6 +554,7 @@ func (la *liveActivities) flush(st FleetState, urgent bool) {
 	if st.empty() {
 		return // ended by tick after fleetEndAfter, unless something comes back first
 	}
+	stats := la.h.fleetStats()
 	for _, r := range rows {
 		d, ok := la.h.push.device(r.DeviceID)
 		if !ok {
@@ -407,17 +564,19 @@ func (la *liveActivities) flush(st FleetState, urgent bool) {
 		if !prefs.LiveActivity {
 			continue
 		}
-		dst := st
-		dst.Details = prefs.LockDetails
+		dst := st.forDevice(prefs, stats)
 		switch {
 		case r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge:
-			la.send(d, r, liveActivityPayload("update", dst, now), urgent)
+			if la.markSent(r.DeviceID, dst, now, force) {
+				la.send(d, r, liveActivityPayload("update", dst, now), urgent)
+			}
 		case r.PushToStartToken != "" && st.Phase != "done":
 			la.mu.Lock()
 			already := la.started[r.DeviceID] == episode
 			la.started[r.DeviceID] = episode
 			la.mu.Unlock()
 			if !already {
+				la.markSent(r.DeviceID, dst, now, true)
 				la.sendStart(d, r, liveActivityPayload("start", dst, now))
 			}
 		}
@@ -436,6 +595,7 @@ func (la *liveActivities) endAll() {
 	la.emptyAt, la.doneSince = time.Time{}, time.Time{}
 	last := la.last
 	la.last = FleetState{}
+	la.sent, la.sentAt = map[string][]byte{}, map[string]time.Time{}
 	la.mu.Unlock()
 	for _, r := range rows {
 		if d, ok := la.h.push.device(r.DeviceID); ok {
@@ -552,6 +712,9 @@ func (la *liveActivities) routes(api *http.ServeMux) {
 	})
 	// The current state, for the app to start or refresh its activity while it is open.
 	api.HandleFunc("GET /api/v1/fleet", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"fleet": la.snapshot()})
+		st := la.snapshot()
+		stats := la.h.fleetStats()
+		st.Stats = &stats
+		writeJSON(w, map[string]any{"fleet": st})
 	})
 }

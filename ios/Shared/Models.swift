@@ -491,20 +491,23 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     var liveActivity: Bool = true
     /// Agent names on the lock screen activity; off, only counts.
     var lockDetails: Bool = false
+    /// The compact Dynamic Island's two sides (FleetState.swift).
+    var island = IslandPrefs()
     var longTurnSeconds: Int?
     var doneDelaySeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case input, done
-        case liveActivity = "live_activity", lockDetails = "lock_details"
+        case liveActivity = "live_activity", lockDetails = "lock_details", island
         case longTurnSeconds = "long_turn_seconds", doneDelaySeconds = "done_delay_seconds"
     }
 
-    init(input: Bool = true, done: Done = .long, liveActivity: Bool = true, lockDetails: Bool = false) {
+    init(input: Bool = true, done: Done = .long, liveActivity: Bool = true, lockDetails: Bool = false, island: IslandPrefs = IslandPrefs()) {
         self.input = input
         self.done = done
         self.liveActivity = liveActivity
         self.lockDetails = lockDetails
+        self.island = island
     }
 
     init(from decoder: Decoder) throws {
@@ -513,6 +516,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         done = (try? c.decodeIfPresent(Done.self, forKey: .done)) ?? .long
         liveActivity = try c.decodeIfPresent(Bool.self, forKey: .liveActivity) ?? true
         lockDetails = try c.decodeIfPresent(Bool.self, forKey: .lockDetails) ?? false
+        island = (try? c.decodeIfPresent(IslandPrefs.self, forKey: .island)) ?? IslandPrefs()
         longTurnSeconds = try c.decodeIfPresent(Int.self, forKey: .longTurnSeconds)
         doneDelaySeconds = try c.decodeIfPresent(Int.self, forKey: .doneDelaySeconds)
     }
@@ -523,6 +527,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         try c.encode(done, forKey: .done)
         try c.encode(liveActivity, forKey: .liveActivity)
         try c.encode(lockDetails, forKey: .lockDetails)
+        try c.encode(island, forKey: .island)
     }
 
     /// "1 分钟" / "90 秒": how the page words a duration from the hub.

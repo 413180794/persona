@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             Task { await AppDelegate.postTestNotification(kind) }
         }
         if let phase = d.string(forKey: "showFleetSample") {
-            LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"))
+            LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"))
         }
         let automation = d.string(forKey: "pairURL") != nil
         #else

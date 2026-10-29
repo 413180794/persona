@@ -8,19 +8,28 @@ final class LiveActivityShots: XCTestCase {
         guard let phase = env["JARVIS_FLEET_SAMPLE"] else { throw XCTSkip("set JARVIS_FLEET_SAMPLE=needsYou|working|done|current") }
         if phase != "current" { // "current": photograph whatever the activity shows now (after a real push)
             let app = XCUIApplication()
-            app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO", "-tab", "settings"]
+            app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
+                                   "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings"]
             app.launch()
             sleep(4)
         }
         XCUIDevice.shared.press(.home)
         sleep(2)
         shot("\(phase)-compact")
+        usleep(400_000)
+        shot("\(phase)-compact2") // compared with the first: does the working gear turn?
 
         // Long-press the island to expand it.
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         springboard.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 201, dy: 37)).press(forDuration: 1.5)
         sleep(2)
         shot("\(phase)-expanded")
+        // The long press does not always take: a second try, shown separately.
+        XCUIDevice.shared.press(.home)
+        sleep(1)
+        springboard.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 201, dy: 37)).press(forDuration: 2)
+        sleep(2)
+        shot("\(phase)-expanded2")
         XCUIDevice.shared.press(.home)
         sleep(1)
 
