@@ -349,6 +349,26 @@ struct GitCommitSheet: View {
 }
 
 /// A unified diff with old / new line numbers, colored lines, no wrapping (scroll sideways), rendered lazily.
+@MainActor private enum GitDiffMemo {
+    struct Content {
+        let lines: [DiffText.Line]
+        let text: NSAttributedString
+    }
+
+    private static var values: [String: Content] = [:]
+
+    static func content(_ diff: String) -> Content {
+        if let value = values[diff] { return value }
+        let lines = DiffText.parse(diff)
+        let value = Content(lines: lines, text: DiffText.attributed(lines))
+        if value.text.length <= 1_000_000 {
+            if values.count >= 8 { values.removeAll(keepingCapacity: true) }
+            values[diff] = value
+        }
+        return value
+    }
+}
+
 struct DiffText: View {
     var diff: String
     var truncated = false
@@ -363,12 +383,12 @@ struct DiffText: View {
     }
 
     var body: some View {
-        let lines = Self.parse(diff)
-        if lines.isEmpty {
+        let content = GitDiffMemo.content(diff)
+        if content.lines.isEmpty {
             ContentUnavailableView("没有文本改动", systemImage: "doc.text", description: Text("可能是二进制文件、只改了权限，或者改动已被撤销。"))
         } else {
             VStack(spacing: 0) {
-                MonoTextView(text: Self.attributed(lines), inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
+                MonoTextView(text: content.text, inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
                 if truncated {
                     Text("改动太大，只显示了前 512 KB").font(.caption).foregroundStyle(.secondary).padding(8)
                 }
