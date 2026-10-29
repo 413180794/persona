@@ -179,6 +179,27 @@ nonisolated enum Theme {
         static let greeting = SwiftUI.Font.largeTitle.bold()
     }
 
+    /// The watch's list rows: rounded cards with room around and inside them, like the system's lists (rows at least
+    /// 44 pt). The phone does not use these.
+    enum Watch {
+        /// Between two cards, as seen (it was 5).
+        static let cardGap: CGFloat = 10
+        /// What watchOS's List already leaves between two rows (measured on a 46 mm simulator): the cards add the rest.
+        static let listRowSpacing: CGFloat = 5
+        /// Inside a card, around its lines.
+        static let cardPadding = EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        /// Between a row's lines (kind, title, place).
+        static let lineSpacing: CGFloat = 4
+        static let minRowHeight: CGFloat = 44
+        static let cardRadius: CGFloat = 16
+        /// The system list rows' gray.
+        static let cardFill = Color(red: 0x22 / 255, green: 0x22 / 255, blue: 0x23 / 255)
+        /// Blocks on a detail page (the question, its options, the buttons).
+        static let blockSpacing: CGFloat = 10
+        /// Inside a message bubble.
+        static let bubblePadding: CGFloat = 8
+    }
+
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot and the work spinner,
     /// and those stop with Reduce Motion (the spinner is the system's).
     enum Motion {

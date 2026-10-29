@@ -157,8 +157,11 @@ struct WatchRootView: View {
     @State private var openedSession: Session?
     /// `-openWatchItem running`: the list without 需要你, so the running sessions are on screen (screenshots).
     private static let runningFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "running"
+    /// `-openWatchItem inbox`: 需要你 without the agents' requests, so the inbox rows are on screen (screenshots).
+    private static let inboxFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "inbox"
     #else
     private static let runningFirst = false
+    private static let inboxFirst = false
     #endif
 
     var body: some View {
@@ -169,9 +172,9 @@ struct WatchRootView: View {
                 List {
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
                         Section("需要你") {
-                            ForEach(model.interactions) { ix in
+                            ForEach(Self.inboxFirst ? [] : model.interactions) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
                                         Label(ix.kind.watchTitle, systemImage: ix.kind.watchSymbol)
                                             .font(.footnote.weight(.semibold))
                                             .foregroundStyle(Theme.needsYou)
@@ -179,9 +182,11 @@ struct WatchRootView: View {
                                         Text(ix.sessionTitle ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
+                                .watchCard()
                             }
                             ForEach(model.inbox) { it in
                                 NavigationLink { WatchInboxItemView(item: it) } label: { WatchInboxRow(item: it) }
+                                    .watchCard()
                             }
                         }
                     }
@@ -189,7 +194,7 @@ struct WatchRootView: View {
                         // Offline: say so first; what is below (if anything) is from the last refresh that worked.
                         Section {
                             Label {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
                                     Text("连不上 hub").font(.headline)
                                     if let t = model.lastUpdate {
                                         Text("下面是 \(t.formatted(.relative(presentation: .named))) 的数据").font(.footnote).foregroundStyle(.secondary)
@@ -199,7 +204,9 @@ struct WatchRootView: View {
                             } icon: {
                                 Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.danger)
                             }
+                            .watchCard()
                             Button { Task { await model.refresh() } } label: { Text("重试").lineLimit(1) }
+                                .watchCard()
                         }
                     }
                     if model.lastUpdate != nil || model.error == nil {
@@ -209,8 +216,10 @@ struct WatchRootView: View {
                                 ProgressView().frame(width: 22, height: 22)
                                 Text("加载中").font(.footnote).foregroundStyle(.secondary)
                             }
+                            .watchCard()
                         } else if model.sessions.isEmpty {
                             Text("没有运行中的 Claude").font(.footnote).foregroundStyle(.secondary)
+                                .watchCard()
                         }
                         ForEach(model.sessions) { s in
                             NavigationLink { WatchSessionView(session: s) } label: {
@@ -218,7 +227,7 @@ struct WatchRootView: View {
                                     // On the title's first line (titles wrap to two), not centered on the row.
                                     Circle().fill(s.state.color).frame(width: 8, height: 8)
                                         .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 2 }
-                                    VStack(alignment: .leading, spacing: 1) {
+                                    VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
                                         Text(s.displayTitle).font(.headline).lineLimit(2)
                                         Text([s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ").isEmpty
                                              ? (model.machine(s.machineID)?.name ?? s.machineID)
@@ -227,6 +236,7 @@ struct WatchRootView: View {
                                     }
                                 }
                             }
+                            .watchCard()
                         }
                     }
                     }
@@ -244,19 +254,34 @@ struct WatchRootView: View {
                     openedItem = model.inbox.first
                 }
                 // `-openWatchItem question|plan|permission|screen|session`: open the first request of that kind, or the
-                // first running session (screenshots). `running` is handled by `runningFirst`.
+                // first running session (screenshots). `running` and `inbox` are handled by `runningFirst` / `inboxFirst`.
                 .task {
                     guard let want = UserDefaults.standard.string(forKey: "openWatchItem") else { return }
                     for _ in 0..<20 where model.lastUpdate == nil { try? await Task.sleep(for: .milliseconds(500)) }
                     if want == "session" {
                         openedSession = model.sessions.first
-                    } else if want != "running" {
+                    } else if want != "running", want != "inbox" {
                         openedInteraction = model.interactions.first { $0.kind.rawValue == want }
                     }
                 }
                 #endif
             }
         }
+    }
+}
+
+extension View {
+    /// A row of the watch's lists as a card (`Theme.Watch`): its own rounded background with a gap to the next card,
+    /// padding inside, at least 44 pt tall, so a 1-line and a 3-line row have the same margins.
+    func watchCard() -> some View {
+        let p = Theme.Watch.cardPadding, half = max(0, Theme.Watch.cardGap - Theme.Watch.listRowSpacing) / 2
+        return frame(maxWidth: .infinity, minHeight: Theme.Watch.minRowHeight - p.top - p.bottom, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: p.top + half, leading: p.leading, bottom: p.bottom + half, trailing: p.trailing))
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: Theme.Watch.cardRadius, style: .continuous)
+                    .fill(Theme.Watch.cardFill)
+                    .padding(.vertical, half)
+            )
     }
 }
 
@@ -299,7 +324,7 @@ struct WatchInteractionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
                 switch interaction.kind {
                 case .question:
                     ForEach(interaction.questions ?? []) { q in
@@ -315,9 +340,17 @@ struct WatchInteractionView: View {
                                     if (interaction.questions ?? []).count == 1 { submit() }
                                 }
                             } label: {
-                                HStack {
-                                    Text(opt.label).font(.footnote)
-                                    Spacer()
+                                // One line, like every button: "(Recommended)" becomes the 推荐 tag the phone shows.
+                                let (text, recommended) = QuestionOption.display(opt.label)
+                                HStack(spacing: 6) {
+                                    Text(text).font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
+                                    if recommended {
+                                        Text("推荐").font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
+                                            .padding(.horizontal, 5).padding(.vertical, 1)
+                                            .background(Theme.ai.opacity(0.2), in: .capsule)
+                                            .fixedSize()
+                                    }
+                                    Spacer(minLength: 0)
                                     if picks[q.question, default: []].contains(opt.label) { Image(systemName: "checkmark") }
                                 }
                             }
@@ -338,11 +371,17 @@ struct WatchInteractionView: View {
                     Text(interaction.screen ?? "").font(.caption2.monospaced())
                     if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
                         ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
-                            Button("\(opt.key). \(opt.label)") { act(Resolution(option: opt.key)) }.font(.caption2)
+                            Button { act(Resolution(option: opt.key)) } label: {
+                                Text("\(opt.key). \(opt.label)").lineLimit(1).minimumScaleFactor(0.8)
+                            }
+                            .font(.caption2)
                         }
                     } else {
                         ForEach(ScreenParser.options(interaction.screen ?? ""), id: \.key) { opt in
-                            Button("\(opt.key). \(opt.label)") { act(Resolution(keys: [opt.key])) }.font(.caption2)
+                            Button { act(Resolution(keys: [opt.key])) } label: {
+                                Text("\(opt.key). \(opt.label)").lineLimit(1).minimumScaleFactor(0.8)
+                            }
+                            .font(.caption2)
                         }
                     }
                     HStack {
@@ -386,7 +425,7 @@ struct WatchSessionView: View {
     var body: some View {
         let session = current
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
                 HStack(spacing: 6) {
                     Circle().fill(session.state.color).frame(width: 7, height: 7)
                     Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
@@ -396,7 +435,7 @@ struct WatchSessionView: View {
                     Text(WatchText.shown(it.text ?? ""))
                         .font(.footnote)
                         .lineLimit(8)
-                        .padding(6)
+                        .padding(Theme.Watch.bubblePadding)
                         .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
                         .padding(it.role == "user" ? .leading : .trailing, 14)
                         .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
@@ -477,7 +516,7 @@ struct WatchInboxRow: View {
     var item: InboxItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
             Label(item.isLark ? (item.kindLabel ?? "飞书") : "邮件", systemImage: item.isLark ? "bubble.left.fill" : "envelope.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(item.kind == "mention" ? Theme.danger : Theme.accent)
@@ -499,7 +538,7 @@ struct WatchInboxItemView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
                 if let s = item.summary, !s.isEmpty {
                     Text(s).font(.headline)
                 }
@@ -508,7 +547,7 @@ struct WatchInboxItemView: View {
                 if let draft {
                     Text(draft)
                         .font(.footnote)
-                        .padding(6)
+                        .padding(Theme.Watch.bubblePadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.accent.opacity(0.25), in: .rect(cornerRadius: Theme.Radius.control))
                     Button {

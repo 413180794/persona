@@ -380,12 +380,7 @@ struct QuestionForm: View {
     // MARK: Logic
 
     /// "取最长的那段 (Recommended)" → ("取最长的那段", true). The answer sent back keeps the original label.
-    static func display(_ label: String) -> (String, Bool) {
-        for suffix in [" (Recommended)", "(Recommended)", "（推荐）", "(推荐)"] where label.hasSuffix(suffix) {
-            return (String(label.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces), true)
-        }
-        return (label, false)
-    }
+    static func display(_ label: String) -> (String, Bool) { QuestionOption.display(label) }
 
     private func pick(_ q: Question, _ opt: QuestionOption) {
         Haptics.tap()

@@ -402,6 +402,15 @@ nonisolated enum InteractionKind: String, Codable, Sendable {
 nonisolated struct QuestionOption: Codable, Hashable, Sendable {
     var label: String
     var description: String?
+
+    /// "取最长的那段 (Recommended)" → ("取最长的那段", true): the words to show and whether Claude recommends it.
+    /// The answer sent back keeps the original label. Phone and watch draw 「推荐」 instead of the suffix.
+    static func display(_ label: String) -> (String, Bool) {
+        for suffix in [" (Recommended)", "(Recommended)", "（推荐）", "(推荐)"] where label.hasSuffix(suffix) {
+            return (String(label.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces), true)
+        }
+        return (label, false)
+    }
 }
 
 nonisolated struct Question: Codable, Hashable, Sendable, Identifiable {
