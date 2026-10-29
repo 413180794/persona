@@ -319,4 +319,7 @@ Claude 默认模式下这就是终端接管以后的全部输出；shell 的历�
 - 现在照 Moshi：接管中点终端 = 在那一格左键单击（`terminal_input.click` → hub → node `terminal.click` → herdr `terminal.mouse` 按下 + 松开，列和行从 0 起；
   实测点「Jump to bottom」Claude 就回到底部）。链接照旧打开、双击照旧粘贴；键盘只从键栏右边的键盘按钮出来（双击它是回车），不会误触弹键盘。feature `terminal_click`。
 - 默认字号 15（Moshi 在 6.9 寸屏上一行约 46 个字；原来 13 是 56 个），键栏的键平时只有字和图标，按住 / 锁定时才有底色（同 Moshi）。
+- 选择 / 拷贝（同 Moshi）：长按选一个词，不松手拖动扩选；松手后两端有系统样式的把手（`SelectionHandle`：一根线 + 起点上方 / 终点下方的圆点，44pt 宽的触摸区），
+  拖哪个把手就移哪一端，菜单（拷贝 / 全选）在拖完后回来，摆在选区旁边不盖住它（`editMenuInteraction(_:targetRectFor:)` 返回整个选区）。
+  从把手开始的拖动既不滚视图、也不当成终端的滚轮（`gestureRecognizerShouldBegin`）。
 

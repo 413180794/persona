@@ -82,6 +82,22 @@ final class TerminalKeysTests: XCTestCase {
         XCTAssertTrue(copy.waitForExistence(timeout: 3), "no edit menu:\n\(app.debugDescription)")
         copy.tap()
         XCTAssertTrue(app.staticTexts["已拷贝"].waitForExistence(timeout: 3), "no copy toast") // the runner may not read the pasteboard
+
+        // The selection has handles: dragging the end one takes more of the row, the menu comes back after. (On the
+        // seventh row, "Build complete! (12.48s)": the menu goes above it, not over the handles.)
+        screen.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 30, dy: 14 + 6 * 21.8)).press(forDuration: 0.8)
+        let end = app.descendants(matching: .any)["selection-end"]
+        XCTAssertTrue(end.waitForExistence(timeout: 3), "no selection handles")
+        XCTAssertTrue(app.descendants(matching: .any)["selection-start"].exists)
+        let before = end.frame.midX
+        end.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.1, thenDragTo: end.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 140, dy: 0)))
+        XCTAssertGreaterThan(end.frame.midX, before + 60, "the end handle did not move")
+        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/selection.png"))
+        }
+        let copyAgain = app.menuItems["拷贝"].exists ? app.menuItems["拷贝"] : app.buttons["拷贝"]
+        XCTAssertTrue(copyAgain.waitForExistence(timeout: 3), "no menu after the drag")
     }
 
     /// A double tap on a shortcut sends it with return; typing offers completions from what the pane shows.

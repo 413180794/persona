@@ -130,7 +130,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     private let inset = UIEdgeInsets(top: 8, left: 10, bottom: 10, right: 10)
     private var cache: [CacheKey: LineRender] = [:]
     /// The selection, in display-line coordinates: anchor and focus cells (inclusive).
-    private var selection: (anchor: CellPoint, focus: CellPoint)?
+    private var selection: (anchor: CellPoint, focus: CellPoint)? { didSet { placeHandles() } }
+    /// The selection's ends, to drag (as the system's text selection; Moshi has them too).
+    private let startHandle = SelectionHandle(atTop: true)
+    private let endHandle = SelectionHandle(atTop: false)
     private lazy var editMenu = UIEditMenuInteraction(delegate: self)
 
     struct CellPoint: Comparable {
@@ -167,6 +170,11 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
         // One finger scrolls; two fingers are for swipes and the pinch.
         panGestureRecognizer.maximumNumberOfTouches = 1
+        for h in [startHandle, endHandle] {
+            h.isHidden = true
+            h.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleDragged(_:))))
+            addSubview(h)
+        }
         wheelPan.addTarget(self, action: #selector(wheelPanned(_:)))
         wheelPan.maximumNumberOfTouches = 1
         wheelPan.isEnabled = false
@@ -299,6 +307,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         laidOutWidth = bounds.width
         let perLine = max(10, Int((bounds.width - inset.left - inset.right) / metrics.cell.width))
         let out = TerminalWrap.lines(content.rows, cursor: content.cursor, perLine: perLine, wrap: wrap)
+        defer { placeHandles() }
         maxCells = out.reduce(content.cols) { max($0, $1.to + $1.indent) }
         if out != lines { selection = nil }
         lines = out
@@ -466,6 +475,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
 
     @objc private func tap(_ g: UITapGestureRecognizer) {
         if selection != nil {
+            if onHandle(g.location(in: self)) { return }
             selection = nil
             editMenu.dismissMenu()
             canvas.setNeedsDisplay()
@@ -533,6 +543,59 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         return p
     }
 
+    // MARK: Selection handles
+
+    /// Puts the handles at the selection's first and last cells (hidden without one).
+    private func placeHandles() {
+        guard let s = selection, !lines.isEmpty, lines.indices.contains(s.anchor.line), lines.indices.contains(s.focus.line) else {
+            startHandle.isHidden = true
+            endHandle.isHidden = true
+            return
+        }
+        let a = min(s.anchor, s.focus), b = max(s.anchor, s.focus)
+        let w = metrics.cell.width, h = metrics.cell.height
+        startHandle.place(x: inset.left + CGFloat(a.col + lines[a.line].indent) * w, y: inset.top + CGFloat(a.line) * h, lineHeight: h)
+        endHandle.place(x: inset.left + CGFloat(b.col + 1 + lines[b.line].indent) * w, y: inset.top + CGFloat(b.line) * h, lineHeight: h)
+        startHandle.isHidden = false
+        endHandle.isHidden = false
+        bringSubviewToFront(startHandle)
+        bringSubviewToFront(endHandle)
+    }
+
+    private func onHandle(_ p: CGPoint) -> Bool {
+        [startHandle, endHandle].contains { !$0.isHidden && $0.frame.insetBy(dx: -8, dy: -8).contains(p) }
+    }
+
+    /// A handle dragged: that end of the selection follows the finger (the other stays), the menu comes back after.
+    @objc private func handleDragged(_ g: UIPanGestureRecognizer) {
+        guard let s = selection, let handle = g.view as? SelectionHandle else { return }
+        // Where the finger points, at the text: the knob sits above the first line / below the last.
+        var p = g.location(in: self)
+        p.y += handle.atTop ? metrics.cell.height * 0.6 : -metrics.cell.height * 0.6
+        guard let c = cell(at: p) else { return }
+        switch g.state {
+        case .began:
+            editMenu.dismissMenu()
+            let a = min(s.anchor, s.focus), b = max(s.anchor, s.focus)
+            selection = handle.atTop ? (b, c) : (a, c) // the other end stays put
+        case .changed:
+            selection = (s.anchor, c)
+        case .ended, .cancelled:
+            let a = min(s.anchor, s.focus)
+            let at = CGPoint(x: inset.left + CGFloat(a.col + lines[a.line].indent) * metrics.cell.width,
+                             y: inset.top + CGFloat(a.line) * metrics.cell.height)
+            editMenu.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: at))
+        default: break
+        }
+        canvas.setNeedsDisplay()
+    }
+
+    /// A drag that starts on a handle moves the handle: it neither scrolls this view nor is the terminal's wheel.
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if g === panGestureRecognizer || g === wheelPan, onHandle(g.location(in: self)) { return false }
+        return super.gestureRecognizerShouldBegin(g)
+    }
+
     /// The selected text: lines of the same row join, rows end in a newline, trailing blanks go.
     func selectedText() -> String {
         guard let s = selection else { return "" }
@@ -554,6 +617,17 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             }
         }
         return out
+    }
+
+    /// The menu goes beside the whole selection (above it, or under it with no room), never over it or its handles.
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, targetRectFor configuration: UIEditMenuConfiguration) -> CGRect {
+        guard let s = selection, lines.indices.contains(s.anchor.line), lines.indices.contains(s.focus.line) else {
+            return CGRect(origin: configuration.sourcePoint, size: .zero)
+        }
+        let a = min(s.anchor, s.focus), b = max(s.anchor, s.focus)
+        let h = metrics.cell.height
+        let top = inset.top + CGFloat(a.line) * h - 14, bottom = inset.top + CGFloat(b.line + 1) * h + 14 // the knobs too
+        return CGRect(x: inset.left, y: top, width: bounds.width - inset.left - inset.right, height: bottom - top)
     }
 
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
@@ -771,3 +845,50 @@ private extension CGFloat {
         return (self * m).rounded() / m
     }
 }
+
+/// One end of a text selection, as the system draws it: a thin bar the height of a line with a knob above (start) or
+/// below (end); a finger-sized area around it takes the drag.
+final class SelectionHandle: UIView {
+    let atTop: Bool
+    private static let knob: CGFloat = 10
+    private static let hit: CGFloat = 44
+
+    init(atTop: Bool) {
+        self.atTop = atTop
+        super.init(frame: .zero)
+        isOpaque = false
+        backgroundColor = .clear
+        isAccessibilityElement = true
+        accessibilityLabel = atTop ? "选择开始" : "选择结束"
+        accessibilityIdentifier = atTop ? "selection-start" : "selection-end"
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// The bar at x from y, a line high (content coordinates of the terminal).
+    func place(x: CGFloat, y: CGFloat, lineHeight: CGFloat) {
+        let h = lineHeight + Self.knob + 4
+        frame = CGRect(x: x - Self.hit / 2, y: atTop ? y - Self.knob - 4 : y, width: Self.hit, height: h)
+        setNeedsDisplay()
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: 0, dy: -12).contains(point)
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        let color = tintColor ?? .systemBlue
+        ctx.setFillColor(color.cgColor)
+        let mid = bounds.midX
+        let knob = Self.knob
+        if atTop {
+            ctx.fillEllipse(in: CGRect(x: mid - knob / 2, y: 0, width: knob, height: knob))
+            ctx.fill(CGRect(x: mid - 1, y: knob / 2, width: 2, height: bounds.height - knob / 2))
+        } else {
+            ctx.fill(CGRect(x: mid - 1, y: 0, width: 2, height: bounds.height - knob / 2))
+            ctx.fillEllipse(in: CGRect(x: mid - knob / 2, y: bounds.height - knob, width: knob, height: knob))
+        }
+    }
+}
+
