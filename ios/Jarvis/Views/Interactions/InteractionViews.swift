@@ -129,24 +129,31 @@ struct InteractionPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: interaction.kind.symbol).foregroundStyle(Theme.attention)
-                Text(panelTitle).font(.subheadline.weight(.semibold))
+            HStack(spacing: 6) {
+                Image(systemName: interaction.kind.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.attention)
+                Text(panelTitle).font(.caption.weight(.semibold)).foregroundStyle(Theme.attention).lineLimit(1)
                 if collapsed {
-                    Text(previewText).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    Text(previewText).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(collapsed ? 180 : 0))
                 Menu {
                     Button { Task { await model.resolve(interaction, .dismissed) } } label: {
                         Label("交给电脑上的终端处理", systemImage: "desktopcomputer")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+                    Image(systemName: "ellipsis")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(.rect)
                 }
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsed ? 180 : 0))
+                    .frame(width: 28, height: 28)
             }
             .contentShape(.rect)
             .onTapGesture { withAnimation(.snappy) { collapsed.toggle() } }
@@ -155,11 +162,13 @@ struct InteractionPanel: View {
                     form.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .frame(height: formHeight == 0 ? nil : min(formHeight, UIScreen.main.bounds.height * 0.45))
+                .frame(height: formHeight == 0 ? nil : min(formHeight, UIScreen.main.bounds.height * 0.55))
                 .transition(.opacity)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 16)
         .surface(in: .rect(cornerRadius: 24, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -184,7 +193,9 @@ struct InteractionPanel: View {
 
     /// A terminal dialog that reads as a question is titled like one.
     private var panelTitle: String {
-        if interaction.kind == .screen, interaction.screenDialog != nil { return "终端在问你" }
+        if interaction.kind == .screen, interaction.screenDialog != nil {
+            return "\(model.session(interaction.sessionKey)?.agentLabel ?? "Claude") 在问你"
+        }
         return interaction.title
     }
 }
@@ -535,7 +546,9 @@ struct ScreenForm: View {
 
     private func dialog(_ d: ScreenParser.Dialog, screen: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let h = d.header, !h.isEmpty {
+            if !d.steps.isEmpty {
+                ScreenSteps(steps: d.steps)
+            } else if let h = d.header, !h.isEmpty {
                 Text(h).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             if !d.question.isEmpty {
@@ -702,6 +715,37 @@ struct ScreenForm: View {
     }
 }
 
+/// A multi-question dialog's questions, from the terminal's tab bar: done ones checked, the rest numbered.
+struct ScreenSteps: View {
+    var steps: [ScreenParser.Dialog.Step]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
+                    HStack(spacing: 4) {
+                        Group {
+                            if s.done { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                            else { Text("\(i + 1)").font(.system(size: 9, weight: .bold).monospacedDigit()) }
+                        }
+                        .foregroundStyle(s.done ? .white : .secondary)
+                        .frame(width: 15, height: 15)
+                        .background(s.done ? Theme.done : Color.primary.opacity(0.1), in: .circle)
+                        Text(s.label).lineLimit(1)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(s.done ? .secondary : .primary)
+                    .padding(.leading, 4).padding(.trailing, 8).padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.05), in: .capsule)
+                }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("共 \(steps.count) 个问题，已答 \(steps.filter(\.done).count) 个")
+    }
+}
+
 struct TerminalText: View {
     var text: String
     var maxLines: Int = 40
@@ -730,7 +774,7 @@ extension Interaction {
         let screen = [
             " Ran 1 shell command",
             "────────────────────────────────────────────────",
-            " ☐ 取消发布单",
+            " ←  ☐ 取消发布单  ☐ 推送代码  ✔ Submit  →",
             "",
             " │沙箱镜像第一次构建失败：SES 用 garble 混淆编译，而我选的 hertz-cli 版本",
             " │不支持，换版本后编译通过，修复也已推送（a7553e20）。但失败的那张发布单 37997",

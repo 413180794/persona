@@ -623,11 +623,51 @@ nonisolated enum ScreenParser {
             var detail: String?
             var kind: Kind = .plain
         }
+        /// A step of a multi-question AskUserQuestion: the TUI's tab bar "←  ☐ 审核策略  ✔ 推送代码  ✔ Submit  →".
+        struct Step: Equatable, Sendable {
+            var label: String
+            var done: Bool
+        }
         var header: String?
         var question: String
         /// Lines above the question that belong to it (the command a permission prompt is about).
         var detail: String?
         var options: [Option]
+        /// The questions of a multi-question dialog, from its tab bar (taken out of `detail`, where it read as text).
+        var steps: [Step] = []
+
+        init(header: String?, question: String, detail: String?, options: [Option]) {
+            self.header = header
+            self.question = question
+            self.options = options
+            let (steps, rest) = ScreenParser.steps(in: detail)
+            self.steps = steps
+            self.detail = rest
+        }
+    }
+
+    /// The tab bar of a multi-question dialog out of the lines above the question: its steps (Submit dropped), and the
+    /// lines left (nil when none).
+    static func steps(in detail: String?) -> ([Dialog.Step], String?) {
+        guard let detail, !detail.isEmpty else { return ([], nil) }
+        let marks: Set<Character> = ["☐", "□", "☒", "✔", "◻", "■", "✓"]
+        var steps: [Dialog.Step] = []
+        var rest: [String] = []
+        for line in detail.components(separatedBy: "\n") {
+            let count = line.filter { marks.contains($0) }.count
+            guard count >= 2 || (count >= 1 && (line.contains("←") || line.contains("→"))) else { rest.append(line); continue }
+            var label = "", mark: Character?
+            func flush() {
+                let t = label.trimmingCharacters(in: .whitespaces)
+                if let m = mark, !t.isEmpty, t.lowercased() != "submit" { steps.append(.init(label: t, done: m == "☒" || m == "✔" || m == "■" || m == "✓")) }
+                label = ""
+            }
+            for c in line where c != "←" && c != "→" {
+                if marks.contains(c) { flush(); mark = c } else { label.append(c) }
+            }
+            flush()
+        }
+        return (steps, rest.isEmpty ? nil : rest.joined(separator: "\n"))
     }
 
     /// The dialog at the bottom of the screen, or nil when there is none (plain options or none at all).

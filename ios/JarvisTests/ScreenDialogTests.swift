@@ -3,6 +3,32 @@ import Testing
 @testable import Jarvis
 
 struct ScreenDialogTests {
+    /// Several questions: the TUI's tab bar is steps, not text above the question (it showed as a grey code box).
+    @Test func readsTheTabBarOfSeveralQuestions() throws {
+        let screen = """
+        ────────────────────────────────────────────────
+         ←  ☐ 审核策略  ☒ 推送代码  ✔ Submit  →
+
+        这次「发布」想怎么处理审核？
+
+        ❯ 1. 回复问题 (Recommended)
+             先起草回复，确认后才发送。
+          2. 直接重新提交
+          3. Type something.
+        ────────────────────────────────────────────────
+          4. Chat about this
+        """
+        let d = try #require(ScreenParser.dialog(screen))
+        #expect(d.steps == [.init(label: "审核策略", done: false), .init(label: "推送代码", done: true)])
+        #expect(d.detail == nil)
+        #expect(d.question == "这次「发布」想怎么处理审核？")
+        // The hub's reading of the same dialog comes through `ScreenDialog.parsed`: the same steps.
+        let hub = ScreenDialog(header: nil, question: d.question, detail: "←  ☐ 审核策略  ☒ 推送代码  ✔ Submit  →", options: [], rev: "x")
+        #expect(hub.parsed.steps.count == 2)
+        #expect(hub.parsed.detail == nil)
+        #expect(ScreenParser.steps(in: "$ rm -rf build").0.isEmpty)
+    }
+
     @Test func readsAnAskUserQuestionDialog() throws {
         let screen = """
          Ran 1 shell command
