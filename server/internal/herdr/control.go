@@ -180,6 +180,17 @@ func (s *Control) Resize(cols, rows int) error {
 	return s.send(map[string]any{"type": "terminal.resize", "cols": cols, "rows": rows})
 }
 
+// Scroll is the mouse wheel over the terminal, lines up (back in history) or down: herdr gives it to a program that
+// takes the mouse (Claude Code's fullscreen renderer scrolls its conversation and draws "Jump to bottom") and scrolls
+// its own scrollback for one that does not (a shell) — what a herdr client does with the wheel.
+func (s *Control) Scroll(lines int, up bool) error {
+	dir := "down"
+	if up {
+		dir = "up"
+	}
+	return s.send(map[string]any{"type": "terminal.scroll", "lines": lines, "direction": dir})
+}
+
 // Done is closed when the session ended (released, taken over, the pane gone).
 func (s *Control) Done() <-chan struct{} { return s.done }
 

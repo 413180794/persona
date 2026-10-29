@@ -256,6 +256,8 @@ final class AppModel {
     var canStreamTerminal: Bool { hubFeatures.contains("terminal_stream") }
     /// The hub can let the phone drive a terminal at its own size (`terminal_control`).
     var canControlTerminal: Bool { hubFeatures.contains("terminal_control") }
+    /// The hub takes the wheel over a terminal the app drives (terminal_input scroll) to herdr.
+    var canScrollTerminal: Bool { hubFeatures.contains("terminal_scroll") }
     var isLive: Bool { live.state == .connected }
 
     /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream. grid: drive it at
@@ -277,6 +279,14 @@ final class AppModel {
         if !text.isEmpty { msg["text"] = text }
         if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
         live.send(msg)
+    }
+
+    /// The mouse wheel over a terminal the app drives, in lines (> 0 back in history): herdr gives it to a program
+    /// that takes the mouse (Claude Code scrolls its conversation) and scrolls its own scrollback for one that does
+    /// not — what a herdr client does with the wheel, as in Moshi.
+    func terminalScroll(_ key: SessionKey, lines: Int) {
+        guard lines != 0 else { return }
+        live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines])
     }
 
     func terminalUnsubscribe(_ key: SessionKey) {

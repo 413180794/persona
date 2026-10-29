@@ -648,6 +648,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Control  *termCtl `json:"control"`
 		Takeover bool     `json:"takeover"`
 		Text     string   `json:"text"`
+		// terminal_input: the wheel over a terminal the app drives, in lines (> 0 back in history, < 0 forward)
+		Scroll int `json:"scroll"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
@@ -656,7 +658,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	case "terminal_subscribe":
 		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
 	case "terminal_input":
-		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control)
+		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control, msg.Scroll)
 	case "terminal_unsubscribe":
 		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)
 	case "subscribe":

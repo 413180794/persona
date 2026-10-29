@@ -229,26 +229,28 @@ func TestTerminalControlDrivesAndGivesBack(t *testing.T) {
 	b := &client{out: make(chan []byte, 64)}
 	h.terminalSubscribe(ctx, a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
 	awaitStates(t, a, "active")
-	h.terminalInput(a, "m1", "s1", "ls\r", nil)
-	h.terminalInput(b, "m1", "s1", "whoami\r", nil)      // b does not drive it
-	h.terminalInput(a, "m1", "s1", "", &termCtl{44, 18}) // the keyboard came up
+	h.terminalInput(a, "m1", "s1", "ls\r", nil, 0)
+	h.terminalInput(b, "m1", "s1", "whoami\r", nil, 0)      // b does not drive it
+	h.terminalInput(a, "m1", "s1", "", &termCtl{44, 18}, 0) // the keyboard came up
+	h.terminalInput(a, "m1", "s1", "", nil, 3)              // a swipe down the screen: the wheel, back in history
+	h.terminalInput(b, "m1", "s1", "", nil, -2)
 	h.terminalSubscribe(ctx, b, "m1", "s1", "", 0, nil, false)
-	got := tn.await(t, 3)
+	got := tn.await(t, 4)
 	want := []string{"control 44x30 takeover=false", `terminal.input {"session_id":"s1","text":"ls\r"}`,
-		`terminal.resize {"cols":44,"rows":18,"session_id":"s1"}`}
+		`terminal.resize {"cols":44,"rows":18,"session_id":"s1"}`, `terminal.scroll {"lines":3,"session_id":"s1","up":true}`}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("node got %q, want %q", got, want)
 	}
 	h.terminalUnsubscribe(a, "m1", "s1") // b still watches: back to the pane's own size
-	if got := tn.await(t, 4); got[3] != "observe" {
+	if got := tn.await(t, 5); got[4] != "observe" {
 		t.Fatalf("after the driver left: %q", got)
 	}
 	h.terminalUnsubscribe(b, "m1", "s1")
-	if got := tn.await(t, 5); got[4] != "terminal.unwatch" {
+	if got := tn.await(t, 6); got[5] != "terminal.unwatch" {
 		t.Fatalf("after the last left: %q", got)
 	}
-	h.terminalInput(a, "m1", "s1", "x", nil) // gone: nothing reaches the node
-	if got := tn.await(t, 5); len(got) != 5 {
+	h.terminalInput(a, "m1", "s1", "x", nil, 0) // gone: nothing reaches the node
+	if got := tn.await(t, 6); len(got) != 6 {
 		t.Fatalf("typed into a terminal nobody drives: %q", got)
 	}
 }
@@ -283,7 +285,7 @@ func TestTerminalControlOnAnOldNodeOnlyWatches(t *testing.T) {
 	a := &client{out: make(chan []byte, 64)}
 	h.terminalSubscribe(context.Background(), a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
 	awaitStates(t, a, "unsupported")
-	h.terminalInput(a, "m1", "s1", "x", nil)
+	h.terminalInput(a, "m1", "s1", "x", nil, 0)
 	if got := tn.await(t, 1); len(got) != 1 {
 		t.Fatalf("node got %q", got)
 	}

@@ -254,6 +254,7 @@ func TestTerminalControlTypesResizesAndLetsGo(t *testing.T) {
 	}
 	_ = hub.Notify("terminal.input", map[string]any{"session_id": "s1", "text": "ab\r"})
 	_ = hub.Notify("terminal.resize", map[string]any{"session_id": "s1", "cols": 40, "rows": 20})
+	_ = hub.Notify("terminal.scroll", map[string]any{"session_id": "s1", "lines": 3, "up": true})
 	waitFor(t, "the resized frame", func() bool {
 		for _, e := range events() {
 			if e.Event == "terminal.frame" && e.Full && e.Cols == 40 {
@@ -263,7 +264,8 @@ func TestTerminalControlTypesResizesAndLetsGo(t *testing.T) {
 		return false
 	})
 	l := readLog(log)
-	if !strings.Contains(l, `{"text":"ab\r","type":"terminal.input"}`) || !strings.Contains(l, `{"cols":40,"rows":20,"type":"terminal.resize"}`) {
+	if !strings.Contains(l, `{"text":"ab\r","type":"terminal.input"}`) || !strings.Contains(l, `{"cols":40,"rows":20,"type":"terminal.resize"}`) ||
+		!strings.Contains(l, `{"direction":"up","lines":3,"type":"terminal.scroll"}`) {
 		t.Fatalf("herdr got %q", l)
 	}
 	n.terminalUnwatch("s1")

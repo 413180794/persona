@@ -289,6 +289,12 @@ App 收到 `unsupported`，只镜像（`TestTerminalControlOnAnOldNodeOnlyWatche
 另外：Claude Code 改尺寸时清掉终端的滚动历史、只重画当前屏（主会话实测），所以接管过的窗格回到电脑上也只剩一屏左右，对话本身不受影响。
 herdr 自己改尺寸时不丢历史（shell 窗格接管前后都是 300 行）。
 
+**更正（2026-10-30）**：同一个 lab 的 Claude（同一进程）后来就接滚轮了——用户在电脑的 herdr 里往上滚，Claude 自己画出钉在顶上的提问和「Jump to bottom (click) ↓」，
+手机这边经 herdr 的 `terminal.scroll` 也一样能滚它。Claude 2.1.312 有个「fullscreen trial」，不用用户配置就会切到全屏渲染（默认 profile 的 settings.json 里也早有 `"tui": "fullscreen"`），
+上面 23:00 那次没反应的原因没查清。Moshi 不用任何配置就能滚，是因为它里面跑的是 herdr 客户端：herdr 客户端一直接管鼠标，滚轮给 herdr，
+herdr 看程序有没有开鼠标上报，开了（Claude 全屏渲染）就转给程序、它自己往回画对话，没开（shell、经典渲染的 Claude）就滚 herdr 自己的历史。
+所以手机照 Moshi 做：接管时手指上下滑 = 滚轮，经 hub（`terminal_input.scroll`）→ node → herdr 的 `terminal.scroll`，由 herdr 决定给谁（feature `terminal_scroll`；旧 hub / node 没有就只滚手机自己的）。
+
 所以手机上的历史仍是手机自己攒的：每帧比对网格，滚出屏幕顶的行留在手机上（第十一节「手机上的滚动历史」，真实帧回放验证过）。
 Claude 默认模式下这就是终端接管以后的全部输出；shell 的历史 herdr 也有，但两边一起滚会互相打架（herdr 往回滚时帧里的画面往下走，手机会当成新内容），所以不往 pty 里发滚轮。
 以后要让 vim / less / fullscreen 的 Claude 这类自己处理鼠标的程序在手机上滚，再按 `terminal.scroll` 接（hub / node 要加转发）。

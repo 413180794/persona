@@ -238,7 +238,7 @@ func (h *Hub) terminalNotify(m *Machine, event string, params map[string]any) {
 
 // terminalInput forwards what the driving app typed: bytes for the terminal, as they are. From an app that does not
 // drive it, nothing.
-func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *termCtl) {
+func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *termCtl, scroll int) {
 	m := h.byID[machineID]
 	if m == nil {
 		return
@@ -266,6 +266,13 @@ func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *t
 	}
 	if text != "" && live {
 		_ = m.notify("terminal.input", map[string]any{"session_id": sessionID, "text": text})
+	}
+	if scroll != 0 && live {
+		lines := scroll
+		if lines < 0 {
+			lines = -lines
+		}
+		_ = m.notify("terminal.scroll", map[string]any{"session_id": sessionID, "lines": lines, "up": scroll > 0})
 	}
 }
 

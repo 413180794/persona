@@ -310,6 +310,8 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		Text       string   `json:"text"`
 		Cols       int      `json:"cols"`
 		Rows       int      `json:"rows"`
+		Lines      int      `json:"lines"`
+		Up         bool     `json:"up"`
 	}
 	if json.Unmarshal(params, &p) != nil {
 		return
@@ -325,6 +327,12 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		if s := n.termStreamOf(p.SessionID); s != nil {
 			if c := s.control(); c != nil && p.Cols > 0 && p.Rows > 0 {
 				_ = c.Resize(p.Cols, p.Rows)
+			}
+		}
+	case "terminal.scroll":
+		if s := n.termStreamOf(p.SessionID); s != nil {
+			if c := s.control(); c != nil && p.Lines > 0 {
+				_ = c.Scroll(p.Lines, p.Up)
 			}
 		}
 	case "terminal.keepalive":
