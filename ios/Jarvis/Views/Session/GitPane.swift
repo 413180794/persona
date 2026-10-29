@@ -173,6 +173,9 @@ struct GitBadge: View {
 
 struct GitFileRow: View {
     var file: GitFile
+    /// The working tree's changes say staged / partly staged; a commit's files have no stage (their `index` is only
+    /// the change kind, for the badge).
+    var showsStage = true
 
     var body: some View {
         HStack(spacing: 10) {
@@ -180,7 +183,7 @@ struct GitFileRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name).font(.subheadline.weight(.medium)).lineLimit(1)
                 HStack(spacing: 4) {
-                    if file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(Theme.done) }
+                    if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(Theme.done) }
                     if let orig = file.origPath { Text("← " + (orig as NSString).lastPathComponent) }
                     if !file.folder.isEmpty { Text(file.folder).truncationMode(.head) }
                 }
@@ -334,7 +337,7 @@ struct GitCommitSheet: View {
                                     .navigationTitle(f.name)
                                     .navigationBarTitleDisplayMode(.inline)
                             } label: {
-                                GitFileRow(file: f)
+                                GitFileRow(file: f, showsStage: false)
                             }
                         }
                     }
