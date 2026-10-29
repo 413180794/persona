@@ -27,7 +27,7 @@ struct SpaceGroup: Identifiable {
             }
             groups[key]!.sessions.append(s)
         }
-        return groups.values.map { g in
+        return groups.values.map { g -> (group: SpaceGroup, priority: Int, updatedAt: Date) in
             var g = g
             // Tab order, as in herdr: an agent keeps its place whatever its state (the state shows on the row).
             g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
