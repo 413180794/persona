@@ -99,13 +99,34 @@ struct FlowButtons: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(labels, id: \.self) { label in
-                    Button(label) { action(label) }
-                        .themedButton()
-                        .controlSize(.small)
+                    let (text, recommended) = QuestionForm.display(label)
+                    Button { action(label) } label: {
+                        HStack(spacing: 6) {
+                            Text(text).lineLimit(1)
+                            if recommended { RecommendedTag() }
+                        }
+                    }
+                    .themedButton()
+                    .controlSize(.small)
+                    .accessibilityLabel(text + (recommended ? "，推荐" : ""))
                 }
             }
         }
         .scrollClipDisabled()
+    }
+}
+
+/// 「推荐」 beside the option Claude suggests ("… (Recommended)", `QuestionForm.display`): the question panel, the
+/// terminal dialog and the quick answers on the Agents card draw the same tag.
+struct RecommendedTag: View {
+    var body: some View {
+        Text("推荐")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Theme.accent.opacity(0.12), in: .capsule)
+            .fixedSize()
     }
 }
 
@@ -283,15 +304,7 @@ struct QuestionForm: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(label).font(.body.weight(.medium)).foregroundStyle(.primary)
-                        if recommended {
-                            Text("推荐")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Theme.accent.opacity(0.12), in: .capsule)
-                                .fixedSize()
-                        }
+                        if recommended { RecommendedTag() }
                     }
                     if let d = opt.description, !d.isEmpty {
                         Text(d).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -611,15 +624,7 @@ struct ScreenForm: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(label).font(.body.weight(.medium)).foregroundStyle(.primary)
-                        if recommended {
-                            Text("推荐")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Theme.accent.opacity(0.12), in: .capsule)
-                                .fixedSize()
-                        }
+                        if recommended { RecommendedTag() }
                     }
                     if let d = opt.detail {
                         Text(d).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
