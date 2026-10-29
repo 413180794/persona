@@ -191,6 +191,8 @@ INTERACTIONS = [
      "plan": "## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过\n4. 补测试：竖拍、实况照片、没有 EXIF 的图"},
 ]
 
+RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
+
 INBOX = [
     {"id": "lark:f1:100", "source": "lark", "kind": "dm", "account": "lark", "account_name": "飞书", "title": "韩梅梅",
      "sender": "韩梅梅", "preview": "周五的发布能赶上吗？下午我要和客户确认时间", "count": 2, "started_at": ago(minutes=40),
@@ -262,6 +264,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/sessions": return self.send_json({"sessions": all_sessions()})
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
+        if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
         if p == "/api/v1/assistant":
@@ -310,6 +313,9 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
+            RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
             for s in all_sessions():

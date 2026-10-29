@@ -1,0 +1,45 @@
+import Foundation
+import Testing
+import UserNotifications
+@testable import Jarvis
+
+struct NotificationActionsTests {
+    /// The hub names categories "INTERACTION_" + upper-cased kind (push.go); every kind must have one registered.
+    @Test func categoriesMatchWhatTheHubSends() {
+        let ids = Set(NotificationActions.categories.map(\.identifier))
+        #expect(ids == ["INTERACTION_PERMISSION", "INTERACTION_PLAN", "INTERACTION_QUESTION", "INTERACTION_SCREEN"])
+    }
+
+    @Test func sayingYesNeedsUnlockSayingNoDoesNot() throws {
+        let cats = Dictionary(uniqueKeysWithValues: NotificationActions.categories.map { ($0.identifier, $0) })
+        let permission = try #require(cats["INTERACTION_PERMISSION"])
+        let allow = try #require(permission.actions.first { $0.identifier == NotificationActions.allow })
+        let deny = try #require(permission.actions.first { $0.identifier == NotificationActions.deny })
+        #expect(allow.options.contains(.authenticationRequired))
+        #expect(!deny.options.contains(.authenticationRequired))
+        #expect(!allow.options.contains(.foreground))
+        let plan = try #require(cats["INTERACTION_PLAN"])
+        #expect(plan.actions.allSatisfy { $0.options.contains(.authenticationRequired) })
+        #expect(plan.actions.contains { $0 is UNTextInputNotificationAction })
+        #expect(cats["INTERACTION_QUESTION"]?.actions.isEmpty == true)
+        #expect(cats["INTERACTION_SCREEN"]?.actions.isEmpty == true)
+    }
+
+    @Test func buttonsMapToResolutions() {
+        #expect(NotificationActions.resolution(action: NotificationActions.allow)?.allow == true)
+        #expect(NotificationActions.resolution(action: NotificationActions.deny)?.allow == false)
+        let approve = NotificationActions.resolution(action: NotificationActions.approvePlan)
+        #expect(approve?.approve == true)
+        // Never auto-run everything from a notification.
+        #expect(approve?.mode == "acceptEdits")
+        let reject = NotificationActions.resolution(action: NotificationActions.rejectPlan, text: "  先写测试 \n")
+        #expect(reject?.approve == false)
+        #expect(reject?.feedback == "先写测试")
+        #expect(NotificationActions.resolution(action: UNNotificationDefaultActionIdentifier) == nil)
+        #expect(NotificationActions.resolution(action: UNNotificationDismissActionIdentifier) == nil)
+    }
+
+    @Test func categoryNameIsUpperCasedKind() {
+        #expect(NotificationActions.category(.permission) == "INTERACTION_PERMISSION")
+    }
+}

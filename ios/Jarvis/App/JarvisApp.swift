@@ -36,6 +36,7 @@ struct JarvisApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
         #if DEBUG
         // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`
         if let s = UserDefaults.standard.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
@@ -68,6 +69,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if let tap = d.string(forKey: "simulateTap"), let slash = tap.firstIndex(of: "/") {
             let key = SessionKey(machineID: String(tap[..<slash]), sessionID: String(tap[tap.index(after: slash)...]))
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { AppDelegate.openFromNotification(key) }
+        }
+        // `-showTestNotification permission|plan`: posts what an interaction push looks like (category, ids), 3 s
+        // after the app goes to the background, so the UI test can exercise the notification buttons without APNs.
+        if let kind = d.string(forKey: "showTestNotification").flatMap(InteractionKind.init(rawValue:)) {
+            Task { await AppDelegate.postTestNotification(kind) }
         }
         let automation = d.string(forKey: "pairURL") != nil
         #else
@@ -116,13 +122,70 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
-        let key = Self.sessionKey(response.notification.request.content.userInfo)
+        let info = response.notification.request.content.userInfo
+        let key = Self.sessionKey(info)
+        let action = response.actionIdentifier
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+        let ixID = info["interaction_id"] as? String
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
-            MainActor.assumeIsolated { AppDelegate.openFromNotification(key) }
-            done()
+            MainActor.assumeIsolated {
+                if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
+                    // A button on the notification: settle it in the background, the app stays where it is.
+                    AppDelegate.resolveFromNotification(ixID, resolution, action: action, done: done)
+                    return
+                }
+                if action != UNNotificationDismissActionIdentifier { AppDelegate.openFromNotification(key) }
+                done()
+            }
         }
     }
+
+    /// Runs a notification button against the hub. iOS may have launched the app in the background just for this, so
+    /// hold a background task until the request is answered; a failure comes back as a local notification, because
+    /// the user is not looking at the app.
+    static func resolveFromNotification(_ id: String, _ resolution: Resolution, action: String, done: @escaping () -> Void) {
+        let app = UIApplication.shared
+        var task = UIBackgroundTaskIdentifier.invalid
+        task = app.beginBackgroundTask(withName: "resolve-interaction") {
+            app.endBackgroundTask(task)
+            task = .invalid
+        }
+        Task {
+            do {
+                guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
+                try await APIClient(config: config).resolve(id, resolution)
+            } catch {
+                let content = UNMutableNotificationContent()
+                content.title = NotificationActions.failureTitle(action: action)
+                content.body = IntentFailure.sentence(for: error, host: Keychain.serverConfig?.url.host())
+                try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "resolve-failed-\(id)", content: content, trigger: nil))
+            }
+            done()
+            if task != .invalid { app.endBackgroundTask(task) }
+        }
+    }
+
+    #if DEBUG
+    static func postTestNotification(_ kind: InteractionKind) async {
+        let center = UNUserNotificationCenter.current()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        // The answer can come back "not granted" while the alert is still being tapped: wait for the setting itself.
+        for _ in 0..<60 where await center.notificationSettings().authorizationStatus != .authorized {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        // Delivered while the app is in the background, like a real push.
+        for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) { break }
+        let content = UNMutableNotificationContent()
+        content.title = kind == .plan ? "计划等你审批" : "需要你授权"
+        content.subtitle = "测试会话 · 测试机器"
+        content.body = kind == .plan ? "支持 HEIC" : "Bash: swift test"
+        content.categoryIdentifier = NotificationActions.category(kind)
+        content.userInfo = ["interaction_id": "ix_test_\(kind.rawValue)", "machine_id": "test", "session_id": "test"]
+        try? await center.add(UNNotificationRequest(identifier: "test-\(kind.rawValue)", content: content,
+                                                     trigger: UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)))
+    }
+    #endif
 
     nonisolated static func sessionKey(_ info: [AnyHashable: Any]) -> SessionKey? {
         guard let machine = info["machine_id"] as? String, let session = info["session_id"] as? String,

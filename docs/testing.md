@@ -65,6 +65,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
+通知按钮（`NotificationActionTests`）不连真实 hub，连 `scripts/mock_hub.py`：
+`PORT=18791 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/NotificationActionTests`。
+它在 SpringBoard 上长按横幅、点「拒绝」，再读 mock 的 `GET /mock/resolved` 确认 hub 收到了 resolve。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
+授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
+
 ## 卡顿测量（掉帧统计）
 
 xctrace 在这台 Mac 上会卡在授权上，改用 App 自己统计：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，

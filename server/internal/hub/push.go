@@ -207,6 +207,13 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 }
 
 func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
+	p.send(interactionPayload(ix, machine), ix.ID)
+}
+
+// interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
+// registers (ios/Jarvis/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
+// buttons answer `interaction_id` through the resolve API.
+func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	title := map[string]string{
 		proto.IxQuestion: "Claude 在问你", proto.IxPlan: "计划等你审批", proto.IxPermission: "需要你授权", proto.IxScreen: "终端等你处理",
 	}[ix.Kind]
@@ -224,7 +231,7 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 	case proto.IxScreen:
 		body = "打开 Jarvis 查看屏幕并操作"
 	}
-	p.send(map[string]any{
+	return map[string]any{
 		"aps": map[string]any{
 			"alert":              map[string]any{"title": title, "subtitle": ix.SessionTitle + " · " + machine, "body": body},
 			"sound":              "default",
@@ -233,7 +240,7 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 			"interruption-level": "time-sensitive",
 		},
 		"interaction_id": ix.ID, "machine_id": ix.MachineID, "session_id": ix.SessionID,
-	}, ix.ID)
+	}
 }
 
 func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string) {

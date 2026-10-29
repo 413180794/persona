@@ -198,6 +198,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 手机工具：hub 推 `tool_call` → `PhoneToolRegistry.call`（写操作先弹确认）→ `tool_result`。连上就 `register_phone` 声明工具（`docs/phone-tools.md`）。
 - 推送：配对后申请通知权限并注册 APNs，`POST /api/v1/devices`；hub 有 `apns.json` 时对新交互和 agent 完成推送：会话从 working 变成 done / idle，4 秒后仍未恢复工作就推「✅ 标题」，
   副标题「机器 · 空间 › 标签」，正文是最后一条回复。前台且正在看该会话时不弹。模拟器自动化（`-pairURL`）不申请通知权限、不注册成手机。
+  交互推送带按钮（`NotificationActions`，类别名就是 hub 发的 `INTERACTION_<KIND>`）：授权「允许 / 拒绝」，计划「批准 / 打回修改」（打回可以直接输入意见）。
+  说「是」的按钮要先解锁（`.authenticationRequired`），「拒绝」不用；计划从通知批准用 `acceptEdits`（没看全计划，命令仍要逐个授权），
+  「批准并自动执行」只在 App 里。按钮在后台直接调 resolve，不打开 App；失败（已被处理、连不上 hub）发一条本地通知说明原因。提问、终端没有按钮，点开处理。
   点通知打开对应会话：`UNUserNotificationCenterDelegate` 用 completion handler 版本，切回主队列处理再回调（async 版本在后台执行器上返回，
   UIKit 在非主线程收到完成回调，点通知冷启动会崩）。
 - 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」
@@ -211,7 +214,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。
 
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
 
