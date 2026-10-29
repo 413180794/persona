@@ -665,10 +665,16 @@ struct ScreenForm: View {
             .frame(maxHeight: 220)
         TerminalKeyBar { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
         HStack {
-            TextField("输入文字发送到终端", text: $text)
-                .textFieldStyle(.plain)
-                .padding(10)
-                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            Group {
+                if interaction.secret == true {
+                    SecureField("输入密码（不会保存）", text: $text)
+                } else {
+                    TextField("输入文字发送到终端", text: $text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .padding(10)
+            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
             Button {
                 let t = text
                 text = ""

@@ -279,6 +279,7 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	ix := proto.Interaction{
 		ID: id, MachineID: m.cfg.ID, SessionID: s.SessionID, SessionTitle: s.Title, Cwd: s.Cwd, Kind: proto.IxScreen,
 		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(24 * time.Hour).UTC(), Screen: trimScreen(scr.Text), Dialog: d,
+		Secret: screen.SecretPrompt(scr.Text),
 	}
 	h.mu.Lock()
 	for _, p := range h.interactions {
@@ -507,7 +508,12 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		if err != nil {
 			status = "failed"
 		}
-		h.recordEnd(id, status, &r)
+		// What was typed into a terminal may be a password: the history keeps that something was, not what.
+		kept := r
+		if kept.Text != "" {
+			kept.Text = "<redacted>"
+		}
+		h.recordEnd(id, status, &kept)
 		h.finished(p)
 		return err
 	}

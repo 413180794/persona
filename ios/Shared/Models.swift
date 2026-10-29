@@ -426,6 +426,8 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var screen: String?
     /// The screen's dialog as the hub read it (newer hubs): answer with `Resolution.option`.
     var dialog: ScreenDialog?
+    /// The terminal asks for a password: typed into a password field, not kept anywhere.
+    var secret: Bool?
 
     var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
 
@@ -433,7 +435,7 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, questions, plan, summary, screen, cwd, dialog
+        case id, kind, questions, plan, summary, screen, cwd, dialog, secret
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
              toolInput = "tool_input"

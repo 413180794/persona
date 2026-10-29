@@ -74,3 +74,22 @@ func TestResolveScreenChanged(t *testing.T) {
 		}
 	}
 }
+
+func TestScreenAnswerTextNotStored(t *testing.T) {
+	h := newTestHub(t)
+	st := newMemStore()
+	h.store = st
+	var got proto.Resolution
+	h.interactions["scr_p"] = &pending{ix: proto.Interaction{ID: "scr_p", Kind: proto.IxScreen, Secret: true},
+		local: func(r proto.Resolution) error { got = r; return nil }}
+	st.status["scr_p"] = "pending"
+	if err := h.resolve("scr_p", proto.Resolution{Text: "hunter2", Keys: []string{"enter"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Text != "hunter2" {
+		t.Fatal("the terminal must get the text")
+	}
+	if _, res, _ := st.InteractionOutcome(nil, "scr_p"); res == nil || res.Text != "<redacted>" {
+		t.Fatalf("stored %+v", res)
+	}
+}
