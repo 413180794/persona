@@ -269,6 +269,7 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 			req.Header.Set("apns-collapse-id", collapseID)
 		}
 		go func(d Device) {
+			sent := time.Now()
 			resp, err := p.http.Do(req)
 			if err != nil {
 				p.logf("apns %s: %v", d.Name, err)
@@ -294,6 +295,8 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 						_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
 					}
 				}
+			} else if pushType != "liveactivity" { // when APNs took it: for measuring wake-up latency (docs/assistant.md)
+				p.logf("apns %s: %s push accepted in %d ms", d.Name, pushType, time.Since(sent).Milliseconds())
 			}
 		}(d)
 	}

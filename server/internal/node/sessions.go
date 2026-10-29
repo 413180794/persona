@@ -33,6 +33,8 @@ type sessionState struct {
 	Launcher  string    `json:"launcher"`
 	Cwd       string    `json:"cwd"`
 	StartedAt time.Time `json:"started_at"`
+	// Tasks: the assistant conversation's background tasks and monitors running right now (node/assistant.go).
+	Tasks []string `json:"tasks,omitempty"`
 }
 
 func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }

@@ -123,8 +123,12 @@ func TestNodeSessions(t *testing.T) {
 	_ = d.PutNodeSession(ctx, "server", "s1", NodeSession{Pane: "w1:p2", Launcher: "cc_ds", Cwd: "/x", StartedAt: start})
 	_ = d.PutNodeSession(ctx, "mac", "s2", NodeSession{Launcher: "ccc"})
 	got, err := d.NodeSessions(ctx, "server")
-	if err != nil || len(got) != 1 || got["s1"].Pane != "w1:p2" || !got["s1"].StartedAt.Equal(start) {
+	if err != nil || len(got) != 1 || got["s1"].Pane != "w1:p2" || !got["s1"].StartedAt.Equal(start) || len(got["s1"].Tasks) != 0 {
 		t.Fatalf("sessions = %+v, %v", got, err)
+	}
+	_ = d.PutNodeSession(ctx, "server", "s1", NodeSession{Launcher: "cc_ds", Cwd: "/x", StartedAt: start, Tasks: []string{"tail log", "sleep"}})
+	if got, _ = d.NodeSessions(ctx, "server"); len(got["s1"].Tasks) != 2 || got["s1"].Tasks[0] != "tail log" {
+		t.Fatalf("tasks = %v", got["s1"].Tasks)
 	}
 }
 

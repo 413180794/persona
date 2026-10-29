@@ -157,6 +157,12 @@ func (n *Node) loadState(ctx context.Context) {
 		return
 	}
 	n.state.merge(res.Sessions)
+	go n.recoverAssistantTasks(func(id, text string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_, err := n.assistantSend(ctx, id, "", "", text, nil, "", "")
+		return err
+	})
 	panes := n.state.panes()
 	n.mu.Lock()
 	for pane, id := range panes {

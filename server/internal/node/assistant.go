@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,15 @@ import (
 // tokens stream as they are generated, and switching the launcher (model) just restarts the process with --resume.
 
 const assistantIdleTimeout = 20 * time.Minute
+
+// A process with background tasks or monitors running is kept: they are its children, and their notifications are
+// what wakes the conversation up again. Past this long without a turn it is let go anyway (a forgotten `tail -f`).
+const assistantTaskMaxIdle = 12 * time.Hour
+
+// assistantAllowedTools run without asking: Jarvis's own tools (the hub asks the phone itself before the ones that
+// send something on the user's behalf — lark_send, mail_send, phone writes). Without this every notify_user or
+// schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
+const assistantAllowedTools = "mcp__jarvis"
 
 // A spare process started when the app opens the 对话 tab, so the first message skips claude's startup.
 // Its context snapshot is taken at spawn time, so it is only adopted while fresh.
@@ -47,6 +57,7 @@ type assistantProc struct {
 	lastActive time.Time
 	partial    strings.Builder // text of the assistant message being generated
 	lastDelta  time.Time
+	tasks      []string // running background tasks and monitors (descriptions), from background_tasks_changed
 }
 
 func (p *assistantProc) write(line []byte) error {
@@ -129,6 +140,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	n.mu.Unlock()
 	if p != nil && (!p.alive() || p.launcher != launcher) {
 		n.stopAssistant(id) // model switch or dead process: resume in a fresh one
+		n.rememberTasks(id, nil)
 		p = nil
 	}
 	if p == nil {
@@ -233,7 +245,8 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
-		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", string(mcp)}
+		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", string(mcp),
+		"--allowedTools", assistantAllowedTools}
 	if snap := n.assistantContext(id); snap != "" {
 		args = append(args, "--append-system-prompt", snap)
 	}
@@ -315,7 +328,11 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			continue
 		}
 		var ev struct {
-			Type     string `json:"type"`
+			Type    string `json:"type"`
+			Subtype string `json:"subtype"`
+			Tasks   []struct {
+				Description string `json:"description"`
+			} `json:"tasks"`
 			Response struct {
 				Subtype string `json:"subtype"`
 				Error   string `json:"error"`
@@ -332,6 +349,19 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			continue
 		}
 		switch ev.Type {
+		case "system":
+			if ev.Subtype != "background_tasks_changed" {
+				continue
+			}
+			tasks := make([]string, 0, len(ev.Tasks))
+			for _, t := range ev.Tasks {
+				tasks = append(tasks, t.Description)
+			}
+			p.mu.Lock()
+			p.tasks = tasks
+			p.lastActive = time.Now()
+			p.mu.Unlock()
+			n.rememberTasks(p.id, tasks)
 		case "control_response":
 			if ev.Response.Subtype == "error" {
 				n.logger.Printf("assistant %s: control request failed: %s", p.id[:8], ev.Response.Error)
@@ -404,6 +434,7 @@ func (n *Node) emitDelta(id, text string) {
 // the next message resumes the conversation from its transcript.
 func (n *Node) assistantInterrupt(id string) error {
 	n.stopAssistant(id)
+	n.rememberTasks(id, nil) // stopped on purpose, background tasks included
 	return nil
 }
 
@@ -428,6 +459,61 @@ func (p *assistantProc) stop() {
 				_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 			}
 		}()
+	}
+}
+
+// reapable: idle long enough to end; p.mu is held. Background tasks and monitors are children of the process
+// (killed with it) and wake it when they report, so a process waiting on them stays (2026-10-30: a 23-minute
+// background command was killed at minute 20 and the conversation never heard back).
+func (p *assistantProc) reapable(now time.Time) bool {
+	if p.busy {
+		return false
+	}
+	if len(p.tasks) > 0 {
+		return now.Sub(p.lastActive) > assistantTaskMaxIdle
+	}
+	return now.Sub(p.lastActive) > assistantIdleTimeout
+}
+
+// rememberTasks keeps a conversation's running background tasks in the session state (the hub's Postgres), so a
+// node restart — which kills them with their process — can tell the conversation what it lost (recoverAssistantTasks).
+func (n *Node) rememberTasks(id string, tasks []string) {
+	st, ok := n.state.get(id)
+	if !ok || slices.Equal(st.Tasks, tasks) || (len(st.Tasks) == 0 && len(tasks) == 0) {
+		return
+	}
+	st.Tasks = tasks
+	n.state.put(id, st)
+}
+
+// recoverAssistantTasks runs once the session state is loaded: conversations whose background tasks or monitors
+// were running when the node went down (a deploy restarts it, and systemd kills claude and its children with it)
+// get a message saying so, which wakes them up to re-arm what still matters. Without it they would wait forever
+// for a notification that cannot come. send delivers the message (assistantSend).
+func (n *Node) recoverAssistantTasks(send func(id, text string) error) {
+	n.state.mu.Lock()
+	lost := map[string][]string{}
+	for id, st := range n.state.Sessions {
+		if len(st.Tasks) > 0 && strings.HasSuffix(st.Cwd, "/.jarvis/assistant") {
+			lost[id] = st.Tasks
+		}
+	}
+	n.state.mu.Unlock()
+	for id, tasks := range lost {
+		n.mu.Lock()
+		_, running := n.procs[id]
+		n.mu.Unlock()
+		if running {
+			continue
+		}
+		n.rememberTasks(id, nil)
+		text := "⚠️ 运行你的 jarvisd 刚重启过（通常是部署），这段对话里还在跑的后台任务 / 监控随进程一起停了：\n- " +
+			strings.Join(tasks, "\n- ") + "\n还需要的就重新启动（命令可能只跑了一半，重跑前先看看输出）；不需要了就简短说一句，不用推送。"
+		if err := send(id, text); err != nil {
+			n.logger.Printf("assistant %s: tell it about lost background tasks: %v", id[:8], err)
+		} else {
+			n.logger.Printf("assistant %s: %d background tasks lost in the restart, told the conversation", id[:8], len(tasks))
+		}
 	}
 }
 
@@ -463,7 +549,7 @@ func (n *Node) reapAssistants(ctx context.Context) {
 		var idle []string
 		for id, p := range n.procs {
 			p.mu.Lock()
-			if !p.busy && time.Since(p.lastActive) > assistantIdleTimeout {
+			if p.reapable(time.Now()) {
 				idle = append(idle, id)
 			}
 			p.mu.Unlock()
@@ -471,6 +557,7 @@ func (n *Node) reapAssistants(ctx context.Context) {
 		n.mu.Unlock()
 		for _, id := range idle {
 			n.stopAssistant(id)
+			n.rememberTasks(id, nil) // let go on purpose: nothing to tell it after a restart
 		}
 		if stale != nil {
 			stale.stop()

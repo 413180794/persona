@@ -36,7 +36,14 @@ func assistantTools(withLark bool) []proto.Tool {
 			"meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) " +
 			"or relative (\"30m\", \"2h\", \"1d\").",
 			InputSchema: schema(`{"type":"object","required":["at","prompt"],"properties":{"at":{"type":"string"},"prompt":{"type":"string","description":"what to do then, self-contained"},"title":{"type":"string","description":"short label shown in the app"},"new_conversation":{"type":"boolean","description":"start a fresh conversation instead of continuing this one"}}}`)},
-		{Name: "list_followups", Description: "List the follow-ups scheduled with schedule_followup that have not run yet, and the user's daily routines.",
+		{Name: "schedule_routine", Description: "Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new " +
+			"conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". " +
+			"For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields " +
+			"you give change; `enabled: false` pauses it. Times are in the user's time zone.",
+			InputSchema: schema(`{"type":"object","properties":{"id":{"type":"string","description":"to change an existing routine"},"title":{"type":"string","description":"short name shown in the app, e.g. 早报"},"prompt":{"type":"string","description":"what to do each time, self-contained"},"time":{"type":"string","description":"HH:MM, 24-hour"},"weekdays":{"type":"array","items":{"type":"integer","minimum":1,"maximum":7},"description":"1 = Monday … 7 = Sunday; omit or empty = every day"},"enabled":{"type":"boolean"}}}`)},
+		{Name: "delete_routine", Description: "Delete a recurring routine by id (from list_followups). Confirm with the user first unless they asked for it.",
+			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
+		{Name: "list_followups", Description: "List the follow-ups scheduled with schedule_followup that have not run yet, and the recurring routines (with ids).",
 			InputSchema: schema(`{"type":"object","properties":{}}`)},
 		{Name: "cancel_followup", Description: "Cancel a scheduled follow-up by id (from list_followups).",
 			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
@@ -83,7 +90,7 @@ func assistantTools(withLark bool) []proto.Tool {
 
 func isAssistantTool(name string) bool {
 	switch name {
-	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup",
+	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup", "schedule_routine", "delete_routine",
 		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft":
 		return true
 	}
@@ -120,6 +127,15 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return h.toolScheduleFollowup(ctx, m, sessionID, args)
 	case "list_followups":
 		return h.describeSchedule(ctx), nil
+	case "schedule_routine":
+		return h.toolScheduleRoutine(ctx, args)
+	case "delete_routine":
+		var a struct{ ID string }
+		_ = json.Unmarshal(args, &a)
+		if !h.deleteRoutine(ctx, a.ID) {
+			return "", fmt.Errorf("no routine %q", a.ID)
+		}
+		return "Deleted.", nil
 	case "cancel_followup":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)

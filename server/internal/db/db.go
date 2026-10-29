@@ -254,22 +254,27 @@ type NodeSession struct {
 	Launcher  string    `json:"launcher"`
 	Cwd       string    `json:"cwd"`
 	StartedAt time.Time `json:"started_at"`
+	Tasks     []string  `json:"tasks,omitempty"` // an assistant conversation's running background tasks
 }
 
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
 	if s.StartedAt.IsZero() {
 		s.StartedAt = time.Now()
 	}
-	_, err := d.pool.Exec(ctx, `INSERT INTO node_sessions (machine_id, session_id, pane, launcher, cwd, started_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, now())
-		ON CONFLICT (machine_id, session_id) DO UPDATE SET pane = $3, launcher = $4, cwd = $5, started_at = $6, updated_at = now()`,
-		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt)
+	tasks := s.Tasks
+	if tasks == nil {
+		tasks = []string{}
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO node_sessions (machine_id, session_id, pane, launcher, cwd, started_at, tasks, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+		ON CONFLICT (machine_id, session_id) DO UPDATE SET pane = $3, launcher = $4, cwd = $5, started_at = $6, tasks = $7, updated_at = now()`,
+		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks)
 	return err
 }
 
 // NodeSessions returns a machine's sessions from the last 60 days.
 func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeSession, error) {
-	rows, err := d.pool.Query(ctx, `SELECT session_id, pane, launcher, cwd, started_at FROM node_sessions
+	rows, err := d.pool.Query(ctx, `SELECT session_id, pane, launcher, cwd, started_at, tasks FROM node_sessions
 		WHERE machine_id = $1 AND started_at > now() - interval '60 days'`, machine)
 	if err != nil {
 		return nil, err
@@ -279,7 +284,7 @@ func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeS
 	for rows.Next() {
 		var id string
 		var s NodeSession
-		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt); err != nil {
+		if err := rows.Scan(&id, &s.Pane, &s.Launcher, &s.Cwd, &s.StartedAt, &s.Tasks); err != nil {
 			return nil, err
 		}
 		out[id] = s

@@ -730,16 +730,19 @@ func (h *Hub) wakePhone(ctx context.Context) *client {
 	if !recent {
 		h.push.wake("tool")
 	}
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	t := time.NewTicker(300 * time.Millisecond)
 	defer t.Stop()
 	for {
 		if c := h.phoneClient(); c != nil {
+			h.logf("phone woke up for a tool call in %d ms", time.Since(start).Milliseconds())
 			return c
 		}
 		select {
 		case <-ctx.Done():
+			h.logf("phone did not wake up for a tool call within 20 s")
 			return nil
 		case <-t.C:
 		}

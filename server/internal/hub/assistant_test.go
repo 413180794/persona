@@ -3,10 +3,12 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -158,5 +160,145 @@ func TestCompactJSONPrunes(t *testing.T) {
 	out := compactJSON(json.RawMessage(`{"a":{"avatarUrl":"x","name":"n","empty":"","no":false},"list":[{"thumbnail":"t","v":1}]}`), 1000)
 	if strings.Contains(out, "avatar") || strings.Contains(out, "thumbnail") || strings.Contains(out, "empty") || !strings.Contains(out, `"name":"n"`) {
 		t.Fatalf("got %s", out)
+	}
+}
+
+func scheduleStore(t *testing.T) *db.DB {
+	t.Helper()
+	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on the hub machine)")
+	}
+	database, err := db.Open(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(database.Close)
+	for _, k := range []string{routinesKey, followupsKey, runsKey} {
+		if err := database.PutSetting(context.Background(), k, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return database
+}
+
+func waitRuns(t *testing.T, h *Hub, n int) []ScheduleRun {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s := h.loadSchedule(context.Background())
+		s.mu.Lock()
+		runs := append([]ScheduleRun(nil), s.runs...)
+		s.mu.Unlock()
+		if len(runs) >= n {
+			return runs
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %d runs, have %+v", n, runs)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// The schedule lives in Postgres: after a restart nothing runs twice, a follow-up missed while the hub was down runs
+// once (late), a routine missed by long is skipped, and the history keeps all of it.
+func TestScheduleAcrossHubRestart(t *testing.T) {
+	store := scheduleStore(t)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 26, h, m, 0, 0, loc) }
+	boot := func() *Hub {
+		h := newTestHub(t)
+		h.store = store
+		h.userTZ = "Asia/Shanghai"
+		return h
+	}
+	h1 := boot()
+	s := h1.loadSchedule(context.Background())
+	s.mu.Lock()
+	s.routines = []Routine{{ID: "r9", Title: "早报", Prompt: "x", Time: "09:00", Enabled: true, LastRun: at(9, 0).Add(-24 * time.Hour)},
+		{ID: "r11", Title: "午报", Prompt: "x", Time: "11:00", Enabled: true, LastRun: at(11, 0).Add(-24 * time.Hour)}}
+	s.followups = []Followup{{ID: "f1", At: at(9, 0), Prompt: "y"}, {ID: "f2", At: at(10, 0), Title: "看部署", Prompt: "z"}}
+	h1.saveLocked(s)
+	s.mu.Unlock()
+
+	h1.runDue(context.Background(), at(9, 0).Add(2*time.Second))
+	runs := waitRuns(t, h1, 2) // no assistant machine in tests: both runs fail to start, and say so
+	for _, r := range runs {
+		if r.Status != runFailed || r.Error == "" || !r.Due.Equal(at(9, 0)) {
+			t.Fatalf("run %+v", r)
+		}
+	}
+
+	// The hub restarts at 09:01 and stays down until 11:45.
+	h2 := boot()
+	h2.runDue(context.Background(), at(9, 1))
+	if n := len(h2.loadSchedule(context.Background()).runs); n != 2 {
+		t.Fatalf("after the restart nothing is due again, have %d runs", n)
+	}
+	h2.runDue(context.Background(), at(11, 45))
+	runs = waitRuns(t, h2, 4)
+	byRef := map[string]ScheduleRun{}
+	for _, r := range runs[2:] {
+		byRef[r.RefID] = r
+	}
+	if r := byRef["r11"]; r.Status != runSkipped || !r.Due.Equal(at(11, 0)) {
+		t.Fatalf("the 11:00 routine missed by 45 minutes is skipped: %+v", r)
+	}
+	if r := byRef["f2"]; r.Kind != "followup" || !r.Due.Equal(at(10, 0)) {
+		t.Fatalf("the missed follow-up still runs: %+v", r)
+	}
+	if p := followupPrompt(Followup{At: at(10, 0), Title: "看部署", Prompt: "z"}, at(11, 45), loc, false); !strings.Contains(p, "晚了 1 小时") ||
+		!strings.Contains(p, "10-26 10:00") {
+		t.Fatalf("a late follow-up is told so: %q", p)
+	}
+	if p := followupPrompt(Followup{At: at(10, 0), Prompt: "z"}, at(10, 0).Add(30*time.Second), loc, false); strings.Contains(p, "晚了") {
+		t.Fatalf("an on-time follow-up is not: %q", p)
+	}
+
+	// A third boot sees the same history and the routines' last status.
+	h3 := boot()
+	s3 := h3.loadSchedule(context.Background())
+	if len(s3.runs) != 4 || len(s3.followups) != 0 {
+		t.Fatalf("reloaded %d runs, %d follow-ups", len(s3.runs), len(s3.followups))
+	}
+	for _, r := range s3.routines {
+		if r.LastStatus == "" {
+			t.Fatalf("routine %s has no last status", r.ID)
+		}
+	}
+	if next := h3.nextDue(context.Background(), at(11, 46)); !next.Equal(at(9, 0).Add(24 * time.Hour)) {
+		t.Fatalf("next due %v, want tomorrow 09:00", next)
+	}
+}
+
+func TestScheduleRoutineTool(t *testing.T) {
+	h := newTestHub(t)
+	h.userTZ = "Asia/Shanghai"
+	out, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"周报","prompt":"起草周报","time":"17:00","weekdays":[5]}`))
+	if err != nil || !strings.Contains(out, "周五 17:00") {
+		t.Fatalf("create: %q, %v", out, err)
+	}
+	s := h.loadSchedule(context.Background())
+	r := s.routines[len(s.routines)-1]
+	if r.CreatedBy != "assistant" || !r.Enabled || r.Title != "周报" {
+		t.Fatalf("routine %+v", r)
+	}
+	if _, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"id":"`+r.ID+`","enabled":false,"weekdays":[1,2,3,4,5,6,7]}`)); err != nil {
+		t.Fatal(err)
+	}
+	if r2 := s.routines[len(s.routines)-1]; r2.Enabled || r2.Weekdays != nil || r2.Prompt != "起草周报" {
+		t.Fatalf("an update changes only the fields given: %+v", r2)
+	}
+	if _, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"x","prompt":"y","time":"9am"}`)); err == nil {
+		t.Fatal("a bad time is refused")
+	}
+	if _, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"x","prompt":"y","time":"09:00","weekdays":[0]}`)); err == nil {
+		t.Fatal("weekday 0 is refused")
+	}
+	if !strings.Contains(h.describeSchedule(context.Background()), r.ID) {
+		t.Fatal("list_followups shows routine ids")
+	}
+	if !h.deleteRoutine(context.Background(), r.ID) || h.deleteRoutine(context.Background(), r.ID) {
+		t.Fatal("delete once")
 	}
 }
