@@ -280,13 +280,21 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			return nil
 		}
 		var text string
+		var images []proto.Item // a message with pictures, sent while the agent worked: its prompt is blocks
 		if json.Unmarshal(a.Prompt, &text) != nil {
 			var blocks []block
 			if json.Unmarshal(a.Prompt, &blocks) == nil {
 				var parts []string
-				for _, b := range blocks {
-					if b.Type == "text" {
+				for i, b := range blocks {
+					switch b.Type {
+					case "text":
 						parts = append(parts, b.Text)
+					case "image":
+						if img := imageOf(b); img != nil {
+							it := mk(i, "user", proto.KindImage)
+							it.Image, it.Queued = img, true
+							images = append(images, it)
+						}
 					}
 				}
 				text = strings.Join(parts, "\n")
@@ -306,7 +314,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		if meta.FirstUser == "" && len(items) > 0 && items[0].Kind == proto.KindText {
 			meta.FirstUser = items[0].Text
 		}
-		return items
+		return append(items, images...) // the pictures dropped here once: the phone showed the message without them
 	case "system":
 		var text string
 		switch e.Subtype {

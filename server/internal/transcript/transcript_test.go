@@ -822,3 +822,15 @@ func TestLongToolOutputIsCutForPages(t *testing.T) {
 		t.Fatal("Full must fail when the line no longer holds the item")
 	}
 }
+
+// A message with a picture typed while the agent worked is absorbed mid-turn as a queued_command whose prompt is
+// blocks: the picture is part of the message (it used to be dropped, and the phone showed the text alone).
+func TestQueuedPromptKeepsItsImages(t *testing.T) {
+	line := `{"type":"attachment","uuid":"a1","attachment":{"type":"queued_command","commandMode":"prompt","prompt":[` +
+		`{"type":"text","text":"[Image #1]看这个"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]}}`
+	items, _ := parse(t, line)
+	if len(items) != 2 || items[0].Kind != proto.KindText || !items[0].Queued ||
+		items[1].Kind != proto.KindImage || !items[1].Queued || items[1].Image == nil || items[1].ID != "a1#1" {
+		t.Fatalf("items = %+v", items)
+	}
+}

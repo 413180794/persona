@@ -391,13 +391,14 @@ func TestFixtureWindowedEqualsFull(t *testing.T) {
 }
 
 // pageSuffix checks a page read by the end against the same page read whole: the same, or (its parse budget spent)
-// the end of it, saying more is older. "" when it is.
+// the end of it, saying more may be older — the budget can run out on lines that turn out to hold nothing, and then
+// the next page comes back empty. "" when it is.
 func pageSuffix(wi []proto.Item, wm bool, ws Span, fi []proto.Item, fm bool, fs Span) string {
 	a, _ := json.Marshal(wi)
 	if len(wi) == len(fi) {
 		b, _ := json.Marshal(fi)
-		if !bytes.Equal(a, b) || wm != fm || ws != fs {
-			return "differs"
+		if !bytes.Equal(a, b) || ws.To != fs.To || ws.History != fs.History || (fm && !wm) || (wm == fm && ws != fs) {
+			return fmt.Sprintf("differs (more %v %+v vs %v %+v)", wm, ws, fm, fs)
 		}
 		return ""
 	}

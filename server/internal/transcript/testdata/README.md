@@ -7,6 +7,7 @@
 | `claude-notifications.jsonl` | 真实会话 | 同一个后台任务的三次通知（内容不同，都是真事件，不能按 task-id 去重） |
 | `claude-subagent.jsonl` | 真实 subagent transcript 的开头 | 全是 sidechain 的行 |
 | `codex-0.163.jsonl` | 真实 Codex 0.163 rollout 的几段 | session_meta、response_item（跳过）、Extension（web.search）、McpToolCall、12 个文件的 FileChange、ImageView、compacted / ContextCompaction、turn_aborted |
+| `claude-queued-images.jsonl` | 真实会话的 6 行 | Claude 工作中从 App 发的带图消息：queue-operation + `attachment/queued_command`，prompt 是 [text, image] 块（图片以前被丢掉，气泡里看不到） |
 | `claude-synthetic.jsonl` | 手写（照真实行的结构） | 本机样本里没有的：api_error 重试、/loop 到点（scheduled_task_fire）、同一通知的两处记录、`/model` 的 local_command、continued-in |
 
 `*.golden.json` 是解析结果（全部 item + 会话级 Meta），`fixtures_test.go` 比对；改了解析就

@@ -36,7 +36,7 @@ DROP_KEYS = {"signature", "encrypted_content"}  # opaque blobs
 VOCAB = set("""
 bin usr env zsh bash sh lc c ls cat cd git go rg sed grep echo true false null none ok
 Request interrupted by user for tool use Async agent launched successfully agentId running in background with ID
-Command Output is being written to Next wakeup scheduled moved the disable recaps config
+Command Output is being written to Next wakeup scheduled moved the disable recaps config Image
 model clear compact loop help resume rename init cost status
 Bash Read Write Edit MultiEdit Glob Grep Agent Task TaskStop KillShell ScheduleWakeup CronCreate CronDelete TodoWrite
 WebFetch WebSearch AskUserQuestion ExitPlanMode NotebookEdit ToolSearch Skill Monitor SendMessage

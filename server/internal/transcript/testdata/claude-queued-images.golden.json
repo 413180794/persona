@@ -1,0 +1,63 @@
+{
+  "items": [
+    {
+      "id": "36f0a468-b093-236b-6253-3093d546af2e#0",
+      "seq": 3,
+      "ts": "2026-01-01T00:00:00.097Z",
+      "role": "user",
+      "kind": "text",
+      "text": "[Image #6]丁丁 background task 辛甲 vebg 庚丁庚丁壬己丁癸辛辛丙\n\u003cattached_images\u003e\n\u003c/attached_images\u003e",
+      "queued": true
+    },
+    {
+      "id": "36f0a468-b093-236b-6253-3093d546af2e#1",
+      "seq": 3,
+      "ts": "2026-01-01T00:00:00.097Z",
+      "role": "user",
+      "kind": "image",
+      "image": {
+        "mime": "image/jpeg",
+        "data": "",
+        "lazy": true,
+        "size": 72,
+        "width": 1,
+        "height": 1
+      },
+      "queued": true
+    },
+    {
+      "id": "dbfb02fc-7da9-0f9d-1fef-b884509eacd0#0",
+      "seq": 6,
+      "ts": "2026-01-01T00:04:14.555Z",
+      "role": "user",
+      "kind": "text",
+      "text": "[Image #7]ubmsmo 甲辛戊辛丙戊己戊丁庚丁戊庚，丁乙丁癸辛\n\u003cattached_images\u003e\n\u003c/attached_images\u003e",
+      "queued": true
+    },
+    {
+      "id": "dbfb02fc-7da9-0f9d-1fef-b884509eacd0#1",
+      "seq": 6,
+      "ts": "2026-01-01T00:04:14.555Z",
+      "role": "user",
+      "kind": "image",
+      "image": {
+        "mime": "image/jpeg",
+        "data": "",
+        "lazy": true,
+        "size": 72,
+        "width": 1,
+        "height": 1
+      },
+      "queued": true
+    }
+  ],
+  "meta": {
+    "first_user": "[Image #6]丁丁 background task 辛甲 vebg 庚丁庚丁壬己丁癸辛辛丙\n\u003cattached_images\u003e\n\u003c/attached_images\u003e",
+    "cwd": "/work/project/f1",
+    "turns": 2,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "last_activity": "2026-01-01T00:04:14.555Z"
+  }
+}
