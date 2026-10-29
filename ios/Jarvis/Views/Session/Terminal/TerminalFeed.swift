@@ -223,9 +223,13 @@ final class TerminalFeed {
     static func divider(_ text: String) -> TermRow {
         var style = TermStyle()
         style.dim = true
-        return Array("──── \(text) ────").map { ch in
-            TermCell(text: String(ch), width: ch.isASCII || ch == "─" ? 1 : 2, style: style)
-        }.flatMap { $0.width == 2 ? [$0, TermCell(text: "", width: 0, style: style)] : [$0] }
+        var row: TermRow = []
+        for ch in "──── \(text) ────" {
+            let wide = !(ch.isASCII || ch == "─")
+            row.append(TermCell(text: String(ch), width: wide ? 2 : 1, style: style))
+            if wide { row.append(TermCell(text: "", width: 0, style: style)) } // the right half of a wide character
+        }
+        return row
     }
 
     private func receive(_ event: TerminalEvent, _ model: AppModel) {
