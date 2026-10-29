@@ -2327,10 +2327,10 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chrome.height = $0 }
                 .offset(y: -c)
-                .opacity(1 - min(1, p * 1.5))
+                .opacity(Double(1 - min(1, p * 1.5)))
                 .allowsHitTesting(p < 0.5)
             compact()
-                .opacity(max(0, (p - 0.5) * 2))
+                .opacity(Double(max(0, (p - 0.5) * 2)))
                 .allowsHitTesting(p >= 0.5)
         }
         .frame(height: chrome.height > 0 ? max(chrome.height - c, ChatChrome.compactHeight) : nil, alignment: .top)
