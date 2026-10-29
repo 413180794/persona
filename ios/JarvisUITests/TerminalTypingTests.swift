@@ -4,6 +4,10 @@ import XCTest
 /// a tap brings the keyboard up on the terminal, keys go out in order (batched), the key bar's modifiers apply to them.
 final class TerminalTypingTests: XCTestCase {
     private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
+    /// TEST_RUNNER_JARVIS_TERMINAL_ENGINE picks the terminal's renderer (the Ghostty branch; empty: our own).
+    private var engine: [String] {
+        ProcessInfo.processInfo.environment["JARVIS_TERMINAL_ENGINE"].map { ["-terminalEngine", $0] } ?? []
+    }
 
     @MainActor func testKeyboardTypesIntoTheTerminal() throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
@@ -108,6 +112,45 @@ final class TerminalTypingTests: XCTestCase {
             usleep(200_000)
         }
         XCTAssertTrue(input().dropFirst(before).contains { $0["type"] as? String == "terminal_unsubscribe" }, "still driving after leaving")
+    }
+
+    /// Driving the terminal, a drag is its mouse wheel (as in Moshi): down the screen back in history, up forward —
+    /// herdr gives it to Claude Code, which scrolls its conversation itself. The view does not scroll or bounce.
+    @MainActor func testSwipingIsTheWheelWhileDriving() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
+                               "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
+        app.launchArguments += engine
+        app.launch()
+        func input() -> [[String: Any]] {
+            guard let data = try? Data(contentsOf: URL(string: hub + "/mock/terminal_input")!),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+            return obj["input"] as? [[String: Any]] ?? []
+        }
+        let size = app.descendants(matching: .any)["terminal-size"]
+        guard size.waitForExistence(timeout: 15), (size.label.contains("手机尺寸") || {
+            sleep(2); return size.label.contains("手机尺寸")
+        }()) else { throw XCTSkip("the mock does not drive terminals (MOCK_TERMINAL_CONTROL=1)") }
+        sleep(1)
+        let before = input().count
+        let screen = app.descendants(matching: .any)["terminal-screen"]
+        screen.swipeDown()
+        sleep(1)
+        screen.swipeUp()
+        var scrolls: [Int] = []
+        let deadline = Date.now.addingTimeInterval(8)
+        while Date.now < deadline {
+            scrolls = input().dropFirst(before).compactMap { $0["scroll"] as? Int }
+            if scrolls.contains(where: { $0 > 0 }), scrolls.contains(where: { $0 < 0 }) { break }
+            usleep(300_000)
+        }
+        XCTAssertTrue(scrolls.contains { $0 > 0 }, "no wheel back in history: \(scrolls)")
+        XCTAssertTrue(scrolls.contains { $0 < 0 }, "no wheel forward: \(scrolls)")
+        XCTAssertLessThan(scrolls.firstIndex { $0 > 0 } ?? .max, scrolls.firstIndex { $0 < 0 } ?? 0, "out of order: \(scrolls)")
     }
 
     /// The terminal tab opened once the app is connected (as on a phone: the session page first, then 终端):

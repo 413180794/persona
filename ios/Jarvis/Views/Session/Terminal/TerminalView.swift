@@ -37,6 +37,9 @@ struct TerminalView: UIViewRepresentable {
     /// Two fingers swiped: left / right / up / down.
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
+    /// Driving the terminal: a vertical drag is the mouse wheel for it, in rows (> 0 back), not a scroll of this view
+    /// (herdr gives it to the program — Claude Code scrolls its conversation — or scrolls its own history, as in Moshi).
+    var onWheel: ((Int) -> Void)?
     /// The cols × rows that fit the view at the font size (it changes with the keyboard, a rotation, a pinch).
     var onGrid: ((TerminalGridSize) -> Void)?
 
@@ -49,6 +52,7 @@ struct TerminalView: UIViewRepresentable {
         v.onFontSize = onFontSize
         v.onSwipe = onSwipe
         v.onDoubleTap = onDoubleTap
+        v.setWheel(onWheel)
         v.onInput = onInput
         v.onGrid = onGrid
         v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
@@ -75,6 +79,11 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onFontSize: ((CGFloat) -> Void)?
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
+    var onWheel: ((Int) -> Void)?
+    private let wheelPan = UIPanGestureRecognizer()
+    private var wheelRows: CGFloat = 0
+    private var glide: CADisplayLink?
+    private var glideVelocity: CGFloat = 0
     var onInput: ((TerminalInputEvent) -> Void)?
     var onFocus: ((Bool) -> Void)?
     var onGrid: ((TerminalGridSize) -> Void)?
@@ -149,6 +158,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:))))
         // One finger scrolls; two fingers are for swipes and the pinch.
         panGestureRecognizer.maximumNumberOfTouches = 1
+        wheelPan.addTarget(self, action: #selector(wheelPanned(_:)))
+        wheelPan.maximumNumberOfTouches = 1
+        wheelPan.isEnabled = false
+        addGestureRecognizer(wheelPan)
         for d: UISwipeGestureRecognizer.Direction in [.left, .right, .up, .down] {
             let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swipe(_:)))
             swipe.direction = d
@@ -370,6 +383,59 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         default: break
         }
         canvas.setNeedsDisplay()
+    }
+
+    // MARK: The wheel (driving)
+
+    /// Driving: drags go to the terminal as its wheel and this view stays at the end; otherwise it scrolls itself.
+    func setWheel(_ wheel: ((Int) -> Void)?) {
+        onWheel = wheel
+        let on = wheel != nil
+        guard on != wheelPan.isEnabled else { return }
+        wheelPan.isEnabled = on
+        isScrollEnabled = !on
+        if on { contentOffset.y = max(0, contentSize.height - bounds.height) } else { stopGlide() }
+    }
+
+    @objc private func wheelPanned(_ g: UIPanGestureRecognizer) {
+        switch g.state {
+        case .began:
+            stopGlide()
+            wheelRows = 0
+        case .changed:
+            let dy = g.translation(in: self).y
+            g.setTranslation(.zero, in: self)
+            wheel(by: dy)
+        case .ended:
+            glideVelocity = g.velocity(in: self).y / 60
+            guard abs(glideVelocity) > 1 else { return }
+            let link = CADisplayLink(target: self, selector: #selector(glided))
+            link.add(to: .main, forMode: .common)
+            glide = link
+        default:
+            stopGlide()
+        }
+    }
+
+    @objc private func glided() {
+        glideVelocity *= 0.94
+        if abs(glideVelocity) < 0.5 { stopGlide(); return }
+        wheel(by: glideVelocity)
+    }
+
+    private func stopGlide() {
+        glide?.invalidate()
+        glide = nil
+    }
+
+    /// Points dragged to whole rows of the font (the rest waits for the next move): down the screen is back in history.
+    private func wheel(by dy: CGFloat) {
+        guard let onWheel, metrics.cell.height > 0 else { return }
+        wheelRows += dy / metrics.cell.height
+        let n = Int(wheelRows)
+        guard n != 0 else { return }
+        wheelRows -= CGFloat(n)
+        onWheel(n)
     }
 
     @objc private func pinch(_ g: UIPinchGestureRecognizer) {

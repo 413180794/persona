@@ -325,6 +325,7 @@ struct TerminalPanel: View {
                          onFontSize: pinched,
                          onSwipe: swipe,
                          onDoubleTap: pasteClipboard,
+                         onWheel: feed.drives && model.canScrollTerminal ? { model.terminalScroll(key, lines: $0) } : nil,
                          onGrid: gridChanged)
         }
     }
