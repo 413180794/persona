@@ -135,10 +135,10 @@ struct AssistantProfileView: View {
                 .lineLimit(1)
             HStack(spacing: 8) {
                 let online = model.machine(machineID)?.online ?? false
-                Chip(text: online ? "在线" : "离线", symbol: online ? "checkmark.circle.fill" : "moon.zzz", tint: online ? Theme.idle : .secondary)
-                if working { Chip(text: "工作中", symbol: "ellipsis", tint: Theme.accent) }
+                Chip(text: online ? "在线" : "离线", symbol: online ? "checkmark.circle.fill" : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
+                if working { Chip(text: "工作中", symbol: "ellipsis", look: .tint(Theme.accent)) }
                 if let next = upcoming.first {
-                    Chip(text: "下一件 \(AssistantScheduleText.moment(next.at))", symbol: "alarm", tint: .secondary)
+                    Chip(text: "下一件 \(AssistantScheduleText.moment(next.at))", symbol: "alarm")
                 }
             }
         }
@@ -247,7 +247,7 @@ enum AssistantRunText {
 
     static func symbol(_ r: APIClient.ScheduleRun) -> (String, Color) {
         switch r.status {
-        case "ok": ("checkmark.circle.fill", Theme.idle)
+        case "ok": ("checkmark.circle.fill", Theme.positive)
         case "skipped": ("forward.end.circle.fill", .secondary)
         default: ("exclamationmark.octagon.fill", Theme.danger)
         }
