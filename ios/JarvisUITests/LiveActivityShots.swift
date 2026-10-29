@@ -38,9 +38,11 @@ final class LiveActivityShots: XCTestCase {
         sleep(2)
         XCUIDevice.shared.perform(NSSelectorFromString("pressLockButton"))
         sleep(3)
-        // First time only: the system asks whether Jarvis may show Live Activities (on the lock screen).
+        // First time only: the system asks whether Jarvis may show Live Activities (on the lock screen). Its 允许 is
+        // also the activity's own button: with the activity showing (拒绝 is there), do not tap it.
         let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
-        if allow.exists {
+        let ours = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拒绝")).firstMatch
+        if !ours.exists, allow.exists {
             allow.tap()
             sleep(2)
         }

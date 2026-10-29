@@ -20,10 +20,12 @@ final class LiveActivityActionTests: XCTestCase {
         sleep(2)
         XCUIDevice.shared.perform(NSSelectorFromString("pressLockButton"))
         sleep(2)
-        let allowActivities = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "Always Allow", "允许"])).firstMatch
-        if allowActivities.exists { allowActivities.tap(); sleep(1) }
-
         let deny = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拒绝")).firstMatch
+        // The system's "allow Live Activities" prompt, first time only. Its 允许 is also the activity's own button: with
+        // the activity showing (拒绝 is there), tapping "允许" would approve the sample request.
+        let allowActivities = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "Always Allow", "允许"])).firstMatch
+        if !deny.exists, allowActivities.exists { allowActivities.tap(); sleep(1) }
+
         defer { unlock(springboard) }
         XCTAssertTrue(deny.waitForExistence(timeout: 10), "no 拒绝 on the lock screen activity:\n\(springboard.debugDescription)")
         XCTAssertTrue(springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "允许")).firstMatch.exists)
