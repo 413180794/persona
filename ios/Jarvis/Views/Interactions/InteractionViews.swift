@@ -126,6 +126,8 @@ struct InteractionPanel: View {
     var interaction: Interaction
     @State private var collapsed = false
     @State private var formHeight: CGFloat = 0
+    /// The plan full screen. Its button sits in this header: floating over the plan it covered the last line.
+    @State private var showFullPlan = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -138,6 +140,17 @@ struct InteractionPanel: View {
                     Text(previewText).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
+                if interaction.kind == .plan && !collapsed {
+                    Button { showFullPlan = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("全屏查看计划")
+                }
                 Menu {
                     Button { Task { await model.resolve(interaction, .dismissed) } } label: {
                         Label("交给电脑上的终端处理", systemImage: "desktopcomputer")
@@ -176,7 +189,7 @@ struct InteractionPanel: View {
     @ViewBuilder private var form: some View {
         switch interaction.kind {
         case .question: QuestionForm(interaction: interaction)
-        case .plan: PlanForm(interaction: interaction)
+        case .plan: PlanForm(interaction: interaction, showFull: $showFullPlan)
         case .permission: PermissionForm(interaction: interaction)
         case .screen: ScreenForm(interaction: interaction)
         }
@@ -424,9 +437,9 @@ struct QuestionForm: View {
 struct PlanForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
+    @Binding var showFull: Bool
     @State private var feedback = ""
     @State private var rejecting = false
-    @State private var showFull = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -437,12 +450,6 @@ struct PlanForm: View {
             }
             .frame(maxHeight: 200)
             .scrollBounceBehavior(.basedOnSize)
-            .overlay(alignment: .bottomTrailing) {
-                Button { showFull = true } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                    .themedButton()
-                    .controlSize(.small)
-                    .padding(4)
-            }
             if rejecting {
                 TextField("告诉 Claude 要怎么改…", text: $feedback, axis: .vertical)
                     .lineLimit(2...6)
