@@ -138,7 +138,7 @@ struct MachineDetailView: View {
                         }
                     }
                 } footer: {
-                    Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入（example-machine 反向隧道）。")
+                    Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入。")
                 }
             }
         }

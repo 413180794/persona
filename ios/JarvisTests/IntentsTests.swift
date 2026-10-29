@@ -110,7 +110,7 @@ struct IntentsTests {
     @Test func failureSentences() {
         #expect(IntentFailure.notPaired.sentence.contains("还没配对"))
         #expect(IntentFailure.noMachine.sentence.contains("没有在线的机器"))
-        #expect(IntentFailure.offline("mac-home").sentence.contains("mac-home"))
+        #expect(IntentFailure.offline("desktop").sentence.contains("desktop"))
         #expect(IntentFailure.noSession("server").sentence.contains("没有运行中的会话"))
         #expect(IntentFailure.noLauncher("server").sentence.contains("新对话"))
         #expect(IntentFailure.noPending.sentence.contains("没有等你处理"))
@@ -151,7 +151,7 @@ struct IntentsTests {
             session("elsewhere", machine: "laptop", status: .working, updated: 42),
         ]
         #expect(IntentPicker.session(sessions, machine: "server")?.sessionID == "newest")
-        #expect(IntentPicker.session(sessions, machine: "mac-home") == nil)
+        #expect(IntentPicker.session(sessions, machine: "desktop") == nil)
         #expect(IntentPicker.session([session("dead", status: .offline)], machine: "server") == nil)
     }
 
