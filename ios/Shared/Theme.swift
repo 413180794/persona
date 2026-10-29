@@ -342,10 +342,14 @@ nonisolated enum Fmt {
     }
 
     /// Markdown → plain one-liner for previews.
+    private static let plainMemo = TextMemo<String>()
+
     static func plain(_ s: String) -> String {
-        var t = s
-        for token in ["**", "__", "`", "### ", "## ", "# ", "> "] { t = t.replacingOccurrences(of: token, with: "") }
-        return t
+        plainMemo(s) { s in
+            var t = s
+            for token in ["**", "__", "`", "### ", "## ", "# ", "> "] { t = t.replacingOccurrences(of: token, with: "") }
+            return t
+        }
     }
 
     /// Model names like "deepseek/v4.1-flash-chain" → "v4.1-flash-chain".
