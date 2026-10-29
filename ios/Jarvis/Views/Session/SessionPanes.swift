@@ -857,6 +857,8 @@ struct BackgroundTasksStrip: View {
 struct ActivityChips: View {
     var loop: LoopInfo?
     var background: [BackgroundTask]
+    /// Beside the agents menu in the header: the loop's next time and the task count only.
+    var compact = false
     var open: () -> Void
 
     var body: some View {
@@ -869,7 +871,7 @@ struct ActivityChips: View {
                     chip(Theme.loop, text: Theme.loop) {
                         Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                            Text(Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
+                            Text(compact ? Self.shortLoopLabel(loop, now: ctx.date) : Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
                         }
                     }
                 }
@@ -878,12 +880,12 @@ struct ActivityChips: View {
                         Image(systemName: "gearshape.2.fill").font(.system(size: 10, weight: .bold))
                             .symbolEffect(.rotate, options: .repeat(.continuous))
                         Text("后台 \(background.count)").lineLimit(1)
-                        if background.count == 1, let t = background.first {
+                        if !compact, background.count == 1, let t = background.first {
                             Text(t.title).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                 }
-                Spacer(minLength: 0)
+                if !compact { Spacer(minLength: 0) }
             }
             .contentShape(.rect)
         }
@@ -896,9 +898,15 @@ struct ActivityChips: View {
         HStack(spacing: 4) { content() }
             .font(.caption.weight(.semibold))
             .foregroundStyle(text)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.horizontal, compact ? 10 : 8)
+            .padding(.vertical, compact ? 10 : 3) // compact: as tall as the agents menu beside it
             .background(tint.opacity(0.12), in: .capsule)
+    }
+
+    /// The loop beside the arrows when room is short: the next time, or that it is running.
+    static func shortLoopLabel(_ loop: LoopInfo, now: Date) -> String {
+        if let next = loop.nextAt, next > now { return next.formatted(date: .omitted, time: .shortened) }
+        return loop.nextAt != nil ? "执行中" : "循环"
     }
 
     static func loopLabel(_ loop: LoopInfo, now: Date) -> String {

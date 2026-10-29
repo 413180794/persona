@@ -5,65 +5,49 @@ extension EnvironmentValues {
     @Entry var openSpace: ((String) -> Void)? = nil
 }
 
-/// Agents in the same space shown together: switch between them without leaving the chat.
-struct SiblingStrip: View {
+/// The other agents of the space, from the chat's header: a button under the title (how many; a red dot when another
+/// one needs you) whose menu switches to any of them or opens the space's page. It used to be a strip on a row of its own.
+struct SiblingMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSpace) private var openSpace
     var current: SessionKey
     var select: (SessionKey) -> Void
-    /// The strip's own scroll position (not ScrollViewReader: its scrollTo drags the page above along).
-    @State private var shown: SessionKey?
 
     var body: some View {
         let siblings = model.siblings(of: current)
         if siblings.count > 1 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    if let s = model.session(current), let name = s.spaceName {
-                        // The space's name opens its page: every agent in it at a glance.
-                        Button { if let k = s.spaceKey { openSpace?(k) } } label: {
-                            HStack(spacing: 3) {
-                                Label(name, systemImage: "square.stack.3d.up")
-                                if openSpace != nil { Image(systemName: "chevron.right").font(.caption2.weight(.bold)) }
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .padding(.trailing, 2)
-                            .contentShape(.rect)
+            let waiting = siblings.contains { $0.key != current && $0.state == .needsYou }
+            Menu {
+                if let s = model.session(current), let name = s.spaceName, let k = s.spaceKey, let openSpace {
+                    Button { openSpace(k) } label: { Label("空间 \(name) 的所有 Agent", systemImage: "square.stack.3d.up") }
+                    Divider()
+                }
+                ForEach(siblings) { s in
+                    Button { if s.key != current { select(s.key) } } label: {
+                        Label {
+                            Text(s.slotLabel ?? s.displayTitle)
+                            Text(s.state.label)
+                        } icon: {
+                            if s.key == current { Image(systemName: "checkmark") }
                         }
-                        .buttonStyle(.plain)
-                        .disabled(openSpace == nil || s.spaceKey == nil)
-                        .accessibilityLabel("空间 \(name) 的所有 Agent")
-                    }
-                    ForEach(siblings) { s in
-                        let on = s.key == current
-                        Button { select(s.key) } label: {
-                            HStack(spacing: 5) {
-                                StatusDot(state: s.state, size: 7)
-                                Text(s.slotLabel ?? s.displayTitle).lineLimit(1)
-                            }
-                            .font(.caption.weight(on ? .bold : .medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(on ? Theme.accent.opacity(0.16) : Color.primary.opacity(0.05), in: .capsule)
-                            .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.5) : .clear, lineWidth: 1))
-                            .foregroundStyle(on ? Theme.accent : Color.primary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
-                        .id(s.key)
                     }
                 }
-                .scrollTargetLayout()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.stack.3d.up").font(.system(size: 13, weight: .semibold))
+                    Text("\(siblings.count)").font(.footnote.weight(.semibold).monospacedDigit())
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .frame(height: 36)
+                .background(Color.primary.opacity(0.05), in: .capsule)
+                .overlay(alignment: .topTrailing) {
+                    if waiting { StatusDot(state: .needsYou, size: 8).offset(x: 1, y: -1) }
+                }
+                .contentShape(.capsule)
             }
-            // A space with many tabs opens on the current one, not the first few.
-            .scrollPosition(id: $shown, anchor: .center)
-            .onAppear { shown = current }
-            .onChange(of: current) { _, k in withAnimation(.snappy) { shown = k } }
-            .background(.bar)
+            .tint(.secondary) // neutral like the chips beside it, not the accent a menu label takes
+            .accessibilityLabel("同一空间的 \(siblings.count) 个 Agent" + (waiting ? "，有 Agent 需要你" : ""))
         }
     }
 }

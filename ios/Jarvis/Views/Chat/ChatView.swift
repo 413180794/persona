@@ -1169,7 +1169,7 @@ struct ChatView: View {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
                     } else {
                         HStack(spacing: 3) {
-                            Text(subtitle).lineLimit(1)
+                            if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 8, weight: .bold))
                                 .rotationEffect(.degrees(showInfo ? 180 : 0))
@@ -1189,7 +1189,42 @@ struct ChatView: View {
         .connectionDetails($showLink)
     }
 
-    /// The Agents header: title row, agent strip and tabs, folding into a slim bar as the list scrolls.
+    /// Agents: the title's second line — the state (and for how long it has worked this turn), then where it runs.
+    /// The state's words take its color; the place stays secondary. Short of room, the machine goes, then the place.
+    private func devSubtitle(_ s: Session) -> some View {
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            let words = stateWords(s, now: ctx.date)
+            let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
+            let machine = model.machine(s.machineID)?.name ?? s.machineID
+            HStack(spacing: 4) {
+                StatusDot(state: s.state, size: 7)
+                ViewThatFits(in: .horizontal) {
+                    subtitleLine(s, words, [machine, place])
+                    subtitleLine(s, words, [place.isEmpty ? machine : place])
+                    subtitleLine(s, words, [])
+                }
+            }
+        }
+    }
+
+    private func subtitleLine(_ s: Session, _ words: String, _ rest: [String]) -> some View {
+        let tail = rest.filter { !$0.isEmpty }.map { " · " + $0 }.joined()
+        return (Text(words).fontWeight(.semibold)
+            .foregroundStyle(s.state == .idle || s.state == .offline || s.state == .unknown ? Color.secondary : s.state.tone.text)
+            + Text(tail).foregroundStyle(.secondary))
+            .lineLimit(1) // ViewThatFits picks by the ideal (one-line) width; the last one truncates
+    }
+
+    /// "工作中 22 分" while a turn runs (minutes: the work line in the chat has the seconds), else the state's name.
+    private func stateWords(_ s: Session, now: Date) -> String {
+        guard s.state == .working, status.isActive, case .turn(let t)? = store.blocks.last, let start = t.startedAt else { return s.state.label }
+        let m = Int(now.timeIntervalSince(start)) / 60
+        if m < 1 { return s.state.label }
+        return s.state.label + " " + (m < 60 ? "\(m) 分" : "\(m / 60) 小时 \(m % 60) 分")
+    }
+
+    /// The Agents header: back, title (with the state), the terminal and ⋯; under them, when there are any, the other
+    /// agents of the space (a menu) and a /loop or background work. It folds into a slim bar as the list scrolls.
     private var devChrome: some View {
         ChromeHeader(chrome: chrome, touched: { scratch.lastActivity = .now }) {
             VStack(spacing: 0) {
@@ -1222,12 +1257,20 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 2)
                 .padding(.bottom, 6)
-                SiblingStrip(current: key) { next in switchTo(next) }
-                // A /loop and background work: small chips here instead of strips over the composer; a tap opens them.
-                if session?.loop != nil || !(session?.background ?? []).isEmpty {
-                    ActivityChips(loop: session?.loop, background: session?.background ?? []) { showActivity = true }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 6)
+                // Row two, only when there is something for it: the space's other agents and a /loop or background
+                // work (small chips; a tap opens them). Files and Git are a swipe or the ··· menu away.
+                let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
+                if model.siblings(of: key).count > 1 || hasActivity {
+                    HStack(spacing: 8) {
+                        SiblingMenu(current: key) { next in switchTo(next) }
+                        if hasActivity {
+                            ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
+                                .fixedSize()
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
                 // Only while subagents run (plus the one being read): finished ones stay reachable from their
                 // Agent call ("查看子 Agent") without taking a row here.

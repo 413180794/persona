@@ -41,9 +41,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，气泡里解析成引用卡片（点开回到那个链接），原始标签不显示。
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
-- 同空间同伴条（Agents 页）：同一 herdr workspace 的其他 tab 列在顶部，点了直接切换（`docs/agent-states.md`）。
-  tab 多时可以左右滑，打开时滚到当前 tab（居中），用横向 ScrollView 自己的 `scrollPosition`，不用 ScrollViewReader（会连带滚动外层）。
-  条最前面的空间名「jarvis ›」点进空间页（这个空间的所有 Agent），对话页「…」→「空间里的所有 Agent」同样（只有一个 Agent、没有同伴条时用它）。
+- 同空间的其他 Agent（Agents 页）：顶栏第二行最左边一个按钮（`SiblingMenu`：叠层图标 + 个数；别的 Agent 需要你时右上角一个红点），
+  点开的菜单列出同一 herdr workspace 的每个 tab（名字 + 状态，当前的打勾），点了直接切换（`docs/agent-states.md`）；菜单第一项「空间 X 的所有 Agent」
+  进空间页，对话页「…」→「空间里的所有 Agent」同样（只有一个 Agent、没有这个按钮时用它）。以前是单独一行的横滑条，占掉一行顶栏。
   对话本来就是从这个空间页点进来的，就直接返回，不再叠一层（ChatsView 记着哪一层是哪个空间页：`spaceAt`）。
   空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
   那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
@@ -117,7 +117,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
     Jarvis 标记），浅色 / 深色可切，「保存图片」进相册（仅添加权限）、「分享图片」走系统分享，右边的按钮分享纯文字。
     `ImageRenderer` 画不出 ScrollView：卡片用单独的 Markdown 主题 `.card`（代码块折行、表格不横滑），否则表格和它后面的内容全是空白；
     渲染要设 `proposedSize` 宽度，不然高度按别的宽度量，卡片底下多出一大块空白。超过 3000 字截断。
-- 顶部自动收起（Agents 对话页，像 Safari 的工具栏）：标题行（返回 / 标题 / 终端 / …）、同伴条是一个自绘的顶栏
+- 顶栏（Agents 对话页）：① 返回 / 标题 + 副标题 / 终端 / …，副标题是「● 状态（工作中带这一轮的用时，按分钟）· 机器 · 空间 › tab」，状态字用状态色，
+  放不下先省机器、再省位置；② 有同一空间的其他 Agent 或循环 / 后台任务时才有第二行：同伴菜单、循环和后台的小标签（只写下次时间和个数，点开看详情）。
+  原来标题、同伴条、tab、活动标签各占一行；文件和 Git 左滑或从 ··· 菜单打开。
+- 顶部自动收起（Agents 对话页，像 Safari 的工具栏）：这个顶栏是自绘的
   （`ChromeHeader`，系统导航栏在 Agents 对话页隐藏），浮在列表上方；**跟手**：手指往新消息方向推，顶栏按同样的距离往上滑走、同时淡出，
   细条（返回 +「● app › leader · 对话」）在后半段淡入；往历史方向拉就一点点滑回来。松手后不会停在半截：在最新处收起，
   否则按离哪头近吸附到全开或全收（`.smooth` 0.3 秒）。跟着新内容自动滚动时也收起（用户动过列表之后）；点细条、切 tab 展开。
