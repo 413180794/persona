@@ -307,12 +307,12 @@ struct ChatsView: View {
         }
     }
 
-    /// By rank, then the most recently updated first.
+    /// By rank, then the most recently updated (working: most recently started) first.
     private func ordered(_ list: [Session]) -> [Session] {
         list.sorted { a, b in
             let ra = rank(a), rb = rank(b)
             if ra != rb { return ra < rb }
-            let ta = a.updatedAt ?? .distantPast, tb = b.updatedAt ?? .distantPast
+            let ta = a.sortDate, tb = b.sortDate
             return ta != tb ? ta > tb : a.sessionID < b.sessionID
         }
     }

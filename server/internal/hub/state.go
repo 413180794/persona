@@ -34,6 +34,29 @@ func agentState(s proto.Session, seenAt time.Time) string {
 	return proto.StateUnknown
 }
 
+type stateMark struct {
+	state string
+	at    time.Time
+}
+
+// markStates fills in StateSince: the time an agent's state last changed, kept until it changes again.
+func (h *Hub) markStates(machine string, list []proto.Session, now time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.stateSince == nil {
+		h.stateSince = map[[2]string]stateMark{}
+	}
+	for i := range list {
+		k := [2]string{machine, list[i].SessionID}
+		mk, ok := h.stateSince[k]
+		if !ok || mk.state != list[i].State {
+			mk = stateMark{state: list[i].State, at: now}
+			h.stateSince[k] = mk
+		}
+		list[i].StateSince = mk.at
+	}
+}
+
 func (h *Hub) loadSeen(ctx context.Context) {
 	if h.store == nil {
 		return

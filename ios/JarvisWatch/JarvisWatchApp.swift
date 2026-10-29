@@ -55,7 +55,7 @@ final class WatchModel {
         let hadNew = interactions.contains { ix in !self.interactions.contains { $0.id == ix.id } }
         func rank(_ s: Session) -> Int { s.state.priority }
         self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }
-            .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.sortDate > $1.sortDate }
         self.interactions = interactions
         if !machines.isEmpty { self.machines = machines }
         lastUpdate = .now

@@ -567,3 +567,24 @@ func TestAgentState(t *testing.T) {
 		}
 	}
 }
+
+func TestMarkStates(t *testing.T) {
+	h := &Hub{}
+	t0 := time.Now()
+	list := []proto.Session{{SessionID: "a", State: proto.StateWorking}}
+	h.markStates("m", list, t0)
+	if !list[0].StateSince.Equal(t0) {
+		t.Fatalf("first sight: %v", list[0].StateSince)
+	}
+	// Still working a step later: the time it started working stays.
+	list = []proto.Session{{SessionID: "a", State: proto.StateWorking}}
+	h.markStates("m", list, t0.Add(time.Minute))
+	if !list[0].StateSince.Equal(t0) {
+		t.Fatalf("same state moved: %v", list[0].StateSince)
+	}
+	list = []proto.Session{{SessionID: "a", State: proto.StateNeedsYou}}
+	h.markStates("m", list, t0.Add(2*time.Minute))
+	if !list[0].StateSince.Equal(t0.Add(2 * time.Minute)) {
+		t.Fatalf("state change kept old time: %v", list[0].StateSince)
+	}
+}

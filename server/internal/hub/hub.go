@@ -48,6 +48,7 @@ type Hub struct {
 	phoneTools   []proto.Tool
 	calls        map[string]chan proto.ToolResult
 	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
+	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
 	userTZ       string                  // the phone's time zone (assistant settings)
 	snap         string                  // the assistant's last live snapshot (assistant_snapshot.go)
 	snapAt       time.Time
@@ -234,6 +235,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
 	}
+	h.markStates(m.cfg.ID, list, time.Now())
 	return list
 }
 

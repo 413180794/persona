@@ -154,6 +154,9 @@ type Session struct {
 	// computed by the hub from the host status, pending interactions and whether the user has seen the result.
 	State  string    `json:"state"`
 	SeenAt time.Time `json:"seen_at,omitempty"`
+	// StateSince is when the agent entered its current state, as the hub saw it (the hub restarting resets it):
+	// lists sort 工作中 by it, since updated_at moves on every step.
+	StateSince time.Time `json:"state_since,omitempty"`
 	// Queued is input typed while the agent works, waiting to be taken (shown above the composer, not in the chat).
 	Queued []string `json:"queued,omitempty"`
 	// Background lists commands / agents Claude started in the background that have not reported back yet

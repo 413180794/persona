@@ -111,6 +111,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var slotIndex: Int?
     var state: AgentState
     var seenAt: Date?
+    /// When the hub saw it enter its current state (`state_since`).
+    var stateSince: Date? = nil
     var queued: [String]?
     /// Shells / subagents Claude left running in the background.
     var background: [BackgroundTask]?
@@ -127,6 +129,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var suggestion: String?
 
     var id: String { machineID + "/" + sessionID }
+    /// What lists sort by, newest first: a working agent's updated_at moves on every step, so working ones keep
+    /// the time they started working and stay put.
+    var sortDate: Date { (state == .working ? stateSince : nil) ?? updatedAt ?? .distantPast }
     var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
@@ -143,7 +148,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop, subagents,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion
     }
 
@@ -173,6 +178,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         slotName = try c.decodeIfPresent(String.self, forKey: .slotName)
         slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
+        stateSince = try c.decodeIfPresent(Date.self, forKey: .stateSince)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
