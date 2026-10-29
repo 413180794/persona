@@ -52,6 +52,10 @@ type Chat struct {
 	Cursor   string    `json:"cursor,omitempty"`
 	LastAt   time.Time `json:"last_at,omitempty"`
 	Messages int       `json:"messages"`
+	Mine     bool      `json:"mine,omitempty"` // the owner wrote in it (a mail exchange, not just mail received)
+	// History backfill (Backfill): the oldest position read, and whether it reached the retention limit or the start.
+	Oldest       string `json:"oldest,omitempty"`
+	BackfillDone bool   `json:"backfill_done,omitempty"`
 	// Compression state: messages archived since the last summary, and the time of the last one it covered.
 	Pending      int       `json:"pending"`
 	CompressedAt time.Time `json:"compressed_at,omitempty"`
@@ -78,7 +82,7 @@ type Project struct {
 	Slug    string    `json:"slug"`
 	Name    string    `json:"name"`
 	Kind    string    `json:"kind"`   // short | long
-	Status  string    `json:"status"` // active | paused | done
+	Status  string    `json:"status"` // active | paused | done | ignored (not a project: never revived, hidden)
 	Aliases []string  `json:"aliases,omitempty"`
 	Goal    string    `json:"goal,omitempty"`
 	MyRole  string    `json:"my_role,omitempty"`
@@ -487,3 +491,56 @@ hub 自动维护的数据（说明见仓库 docs/knowledge.md）。可以直接�
 
 打标：importance P0–P3（重要级），relevance 0–100（与我相关性），tags（自动生成的标签）。
 `
+
+// PrependMessages writes lines older than what a chat's day files hold: each day file gets them before its own lines.
+func (s *Store) PrependMessages(c *Chat, lines []Line) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byDay := map[string][]Line{}
+	var days []string
+	for _, l := range lines {
+		d := l.At.Local().Format("2006-01-02")
+		if _, ok := byDay[d]; !ok {
+			days = append(days, d)
+		}
+		byDay[d] = append(byDay[d], l)
+	}
+	for _, d := range days {
+		ls := byDay[d]
+		sort.SliceStable(ls, func(i, j int) bool { return ls[i].At.Before(ls[j].At) })
+		p := s.path(KindChat, c.ID, "messages", d+".md")
+		header := fmt.Sprintf("# %s · %s\n\n", c.Name, d)
+		old, _ := os.ReadFile(p)
+		body := string(old)
+		if i := strings.Index(body, "\n\n"); strings.HasPrefix(body, "# ") && i >= 0 {
+			body = body[i+2:]
+		}
+		var b strings.Builder
+		b.WriteString(header)
+		for _, l := range ls {
+			b.WriteString(l.Format())
+		}
+		b.WriteString(body)
+		if err := writeFile(p, []byte(b.String())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FirstAt is the time of a chat's oldest archived line (zero when there is none).
+func (s *Store) FirstAt(chatID string) time.Time {
+	days := s.Days(chatID)
+	if len(days) == 0 {
+		return time.Time{}
+	}
+	raw, _ := os.ReadFile(s.path(KindChat, chatID, "messages", days[0]+".md"))
+	for _, l := range strings.Split(string(raw), "\n") {
+		if strings.HasPrefix(l, "- ") && len(l) >= 7 {
+			if t, err := time.ParseInLocation("2006-01-02 15:04", days[0]+" "+l[2:7], time.Local); err == nil {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}

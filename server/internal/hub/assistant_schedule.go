@@ -597,6 +597,9 @@ func (h *Hub) runRoutine(r Routine, due time.Time, manual bool) (string, error) 
 	defer cancel()
 	start := time.Now()
 	prompt := "⏰ " + r.Title + "（定时任务）\n\n" + r.Prompt
+	if h.kb.eng != nil {
+		prompt += "\n\n" + routineKBHint
+	}
 	run := ScheduleRun{Kind: "routine", RefID: r.ID, Title: r.Title, Due: due.UTC(), At: start.UTC(), Manual: manual, Status: runOK}
 	sess, err := h.startAssistant(ctx, prompt, nil, "", "", "")
 	if err != nil {
@@ -814,3 +817,8 @@ func (h *Hub) routinesView(ctx context.Context) []Routine {
 	}
 	return out
 }
+
+// routineKBHint goes under every routine run (saved routines keep their own wording; this way they all use the
+// knowledge base): projects first, and what the run concludes goes back into it.
+const routineKBHint = `（知识库 ~/.jarvis/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；
+相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）`

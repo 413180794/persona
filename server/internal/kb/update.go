@@ -27,6 +27,7 @@ func (e *Engine) Ingest(ctx context.Context, src Source, sc SourceChat, msgs []S
 		}
 		lines = append(lines, l)
 		e.notePerson(c, src.Name(), m)
+		c.Mine = c.Mine || m.Mine
 		if m.At.After(c.LastAt) {
 			c.LastAt = m.At
 		}
@@ -158,7 +159,7 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if u.Kind == "short" || u.Kind == "long" {
 			p.Kind = u.Kind
 		}
-		if u.Status == "active" || u.Status == "paused" || u.Status == "done" {
+		if u.Status == "active" || u.Status == "paused" || u.Status == "done" || u.Status == "ignored" {
 			p.Status = u.Status
 		}
 		if u.Goal != "" {

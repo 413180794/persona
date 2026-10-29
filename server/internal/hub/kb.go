@@ -86,6 +86,9 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		}
 	}
 	h.kb.eng, h.kb.cfg, h.kb.kick = e, cfg, make(chan struct{}, 1)
+	if n := e.IgnoreNoiseProjects(); n > 0 {
+		h.logf("kb: %d project(s) from notifications marked ignored", n)
+	}
 	go h.kbLoop(ctx)
 }
 
@@ -120,6 +123,13 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			}
 		}
 		e.RefreshProjects(ctx, 3)
+		run(ctx, func() {
+			if n, err := e.Backfill(ctx, textDays, 5, 3); err != nil {
+				h.logf("kb: backfill: %v", err)
+			} else if n > 0 {
+				h.logf("kb: backfilled %d line(s)", n)
+			}
+		})
 		if h.lark != nil && time.Since(lastItems) >= kbItemsPoll {
 			lastItems = time.Now()
 			if err := e.CollectItems(ctx, &larkItems{c: h.lark}); err != nil {
@@ -676,4 +686,54 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"hits": hits})
 	})
+}
+
+// kbAgentDone files an Agent's finished turn under the projects whose code directories it works in: one timeline
+// line with what it said last, at most one per agent and 30 minutes (a busy agent finishes many short turns).
+func (h *Hub) kbAgentDone(machine string, s proto.Session) {
+	e := h.kb.eng
+	if e == nil || strings.TrimSpace(s.LastText) == "" {
+		return
+	}
+	projects := e.ProjectsForDir(machine, s.Cwd)
+	if len(projects) == 0 {
+		return
+	}
+	key := machine + "/" + s.SessionID
+	h.mu.Lock()
+	if h.kbAgentLogged == nil {
+		h.kbAgentLogged = map[string]time.Time{}
+	}
+	if time.Since(h.kbAgentLogged[key]) < 30*time.Minute {
+		h.mu.Unlock()
+		return
+	}
+	h.kbAgentLogged[key] = time.Now()
+	h.mu.Unlock()
+	title := s.Title
+	if title == "" || title == "Claude Code" {
+		title = filepath.Base(s.Cwd)
+	}
+	line := clipRunes(strings.Join(strings.Fields(s.LastText), " "), 160)
+	for _, p := range projects {
+		if _, err := e.Apply(kb.KindProject, p.Slug, kb.Update{Log: line, Source: "Agent · " + title + " · " + machine}); err != nil {
+			h.logf("kb: agent log %s: %v", p.Slug, err)
+		}
+	}
+}
+
+func (s *larkSource) Older(ctx context.Context, c kb.SourceChat, before string, limit int) ([]kb.SourceMessage, string, bool, error) {
+	p, err := s.c.Messages(ctx, c.ID, lark.Window{Before: before}, limit, c.Topic)
+	if err != nil {
+		return nil, "", false, err
+	}
+	out := make([]kb.SourceMessage, 0, len(p.Messages))
+	for _, m := range p.Messages {
+		if m.Recalled {
+			continue
+		}
+		out = append(out, kb.SourceMessage{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
+			Mine: m.IsMine, Type: m.Type, Text: m.Text, At: m.CreatedAt})
+	}
+	return out, p.OlderCursor, p.HasOlder, nil
 }

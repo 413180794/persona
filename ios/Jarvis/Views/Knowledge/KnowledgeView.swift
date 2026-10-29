@@ -51,13 +51,21 @@ struct KnowledgeView: View {
                     }
                     .listRowBackground(Color.clear)
                 }
-                let active = list.items.filter { !$0.projectDone }
+                let active = list.items.filter { !$0.projectDone && !$0.projectIgnored }
                 let done = list.items.filter(\.projectDone)
+                let ignored = list.items.filter(\.projectIgnored)
                 Section {
                     ForEach(active) { e in row(e) }
                 }
                 if !done.isEmpty {
                     Section("已完成") { ForEach(done) { e in row(e) } }
+                }
+                if !ignored.isEmpty {
+                    Section {
+                        DisclosureGroup("不是项目 \(ignored.count)") { ForEach(ignored) { e in row(e) } }
+                    } footer: {
+                        Text("只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。")
+                    }
                 }
             } else if let error {
                 Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
@@ -402,6 +410,7 @@ struct KBTagEditor: View {
                             Text("进行中").tag("active")
                             Text("暂停").tag("paused")
                             Text("已完成").tag("done")
+                            Text("不是项目").tag("ignored")
                         }
                     }
                 }

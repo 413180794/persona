@@ -53,7 +53,7 @@ JSON 字段：
 - importance：P0（关键：老板 / 核心项目 / 线上事故 / 截止临近）、P1（重要）、P2（一般）、P3（可忽略：通知、闲聊、广告）。
 - relevance：0–100，与我相关性。直接找我、我负责、在等我 → 70 以上；我参与但不是主角 → 40–70；只是旁观 → 40 以下。
 - tags：2–6 个短标签，不预设；优先复用「已有标签」里意思相同的。
-- projects：会话里在推进的项目（需求、版本、活动、团队方向）。name 优先用「已知项目」里的原名；kind 是 short（有交付的短期项目）或 long
+- projects：会话里真人在推进的项目（需求、版本、活动、团队方向）。系统通知、营销、订阅、账单、自动提醒里提到的产品或服务**不是项目**，不要列。name 优先用「已知项目」里的原名；kind 是 short（有交付的短期项目）或 long
   （团队使命、长期方向）；aliases 是别称；update 一句话说这批新消息里这个项目有什么进展（没有就不要列这个项目）；my_role 是我在里面的角色（不知道就空）。
 - people：新消息里值得记住的人，name 用消息里的名字，note 一句话说他是谁、和我什么关系（不知道就不列）。
 不知道的不要编。`
@@ -112,9 +112,11 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	}
 	c.OneLine = oneLine(d.OneLine)
 	applyTags(&c.Tagging, d.Importance, d.Relevance, d.Tags, now)
-	for _, p := range d.Projects {
-		slug := e.evolveProject(p.Name, p.Kind, p.Aliases, p.MyRole, c, p.Update, now)
-		c.Projects = addUnique(c.Projects, slug)
+	if HasPeople(c) {
+		for _, p := range d.Projects {
+			slug := e.evolveProject(p.Name, p.Kind, p.Aliases, p.MyRole, c, p.Update, now)
+			c.Projects = addUnique(c.Projects, slug)
+		}
 	}
 	for _, p := range d.People {
 		e.notePersonNote(c, p.Name, p.Note)
@@ -140,6 +142,49 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 		e.WritePersonSummary(pid)
 	}
 	return nil
+}
+
+// automatedSender matches mail addresses of notifications and newsletters (only the inbox is read, so a reply of
+// the owner's rarely shows up: the sender is what tells).
+var automatedSender = regexp.MustCompile(`(?i)(^|[-_.@])(no[-_]?reply|do[-_]?not[-_]?reply|notifications?|notify|news(letter)?|marketing|mailer|info|support|service|billing|account|alerts?|updates?|hello|team)([-_.@]|$)`)
+
+// HasPeople reports whether real people talk in a chat: chats with bots and automated mail (notifications,
+// newsletters) do not make projects.
+func HasPeople(c *Chat) bool {
+	switch c.Kind {
+	case "bot":
+		return false
+	case "mail":
+		return c.Mine || !automatedSender.MatchString(c.SourceID[strings.Index(c.SourceID, "-")+1:])
+	}
+	return true
+}
+
+// IgnoreNoiseProjects marks projects that only come from chats without people as ignored (the AI once made a
+// project of every app named in store emails). Hand-tagged ones stay. Returns how many changed.
+func (e *Engine) IgnoreNoiseProjects() int {
+	n := 0
+	for _, p := range e.Store.Projects() {
+		if p.Locked || p.Status == "ignored" || len(p.Chats) == 0 {
+			continue
+		}
+		people := false
+		for _, cid := range p.Chats {
+			if c, ok := e.Store.Chat(cid); !ok || HasPeople(c) {
+				people = true
+				break
+			}
+		}
+		if !people {
+			p.Status = "ignored"
+			p.Dirty = false
+			if e.Store.PutProject(p) == nil {
+				e.index(KindProject, p.Slug, p.Name, p.Tagging, p.OneLine, p.Updated)
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func orNone(s string) string {
@@ -208,7 +253,7 @@ func (e *Engine) FindProject(name string) *Project {
 func (e *Engine) projectNames() string {
 	var names []string
 	for _, p := range e.Store.Projects() {
-		if p.Status == "done" {
+		if p.Status == "done" || p.Status == "ignored" {
 			continue
 		}
 		n := p.Name
@@ -236,6 +281,9 @@ func (e *Engine) evolveProject(name, kind string, aliases []string, myRole strin
 				break
 			}
 		}
+	}
+	if p != nil && p.Status == "ignored" {
+		return ""
 	}
 	if p == nil {
 		slug := Slug(name)
@@ -305,7 +353,7 @@ func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 	}
 	var dirty []*Project
 	for _, p := range e.Store.Projects() {
-		if p.Dirty {
+		if p.Dirty && p.Status != "ignored" {
 			dirty = append(dirty, p)
 		}
 	}
@@ -358,7 +406,7 @@ func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
 	if d.Kind == "short" || d.Kind == "long" {
 		p.Kind = d.Kind
 	}
-	if d.Status == "active" || d.Status == "paused" || d.Status == "done" {
+	if (d.Status == "active" || d.Status == "paused" || d.Status == "done") && p.Status != "ignored" {
 		p.Status = d.Status
 	}
 	applyTags(&p.Tagging, d.Importance, d.Relevance, d.Tags, now)

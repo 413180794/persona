@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/kb"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 func testKBHub(t *testing.T) *Hub {
@@ -97,5 +98,21 @@ func TestKBRoutes(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/kb/chats/missing", nil))
 	if rec.Code != 404 {
 		t.Fatalf("missing: %d", rec.Code)
+	}
+}
+
+func TestKBAgentDone(t *testing.T) {
+	h := testKBHub(t)
+	e := h.kb.eng
+	if _, err := e.Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"example-machine:/code/jarvis"}}); err != nil {
+		t.Fatal(err)
+	}
+	s := proto.Session{SessionID: "s1", Cwd: "/code/jarvis/ios", Title: "修排序", LastText: "改好了，\n测试通过"}
+	h.kbAgentDone("example-machine", s)
+	h.kbAgentDone("example-machine", s) // the same agent again right away: one line
+	h.kbAgentDone("laptop", proto.Session{SessionID: "s2", Cwd: "/code/jarvis", LastText: "x"})
+	log := e.Store.Log("jarvis", 10)
+	if len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · example-machine · 改好了， 测试通过") {
+		t.Fatalf("log: %v", log)
 	}
 }

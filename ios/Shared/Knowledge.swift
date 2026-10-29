@@ -49,6 +49,8 @@ nonisolated struct KBEntry: Codable, Identifiable, Hashable, Sendable {
         return extra.hasPrefix("long") ? "长期" : "短期"
     }
     var projectDone: Bool { kind == KBKind.projects.rawValue && (extra ?? "").hasSuffix("done") }
+    /// Marked "not a project" (by hand, or because it only came from notifications).
+    var projectIgnored: Bool { kind == KBKind.projects.rawValue && (extra ?? "").hasSuffix("ignored") }
 }
 
 nonisolated struct KBList: Decodable, Sendable {

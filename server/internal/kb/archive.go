@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -157,6 +158,7 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 			}
 			lines = append(lines, l)
 			e.notePerson(c, src.Name(), m)
+			c.Mine = c.Mine || m.Mine
 			if m.At.After(c.LastAt) {
 				c.LastAt = m.At
 			}
@@ -269,4 +271,100 @@ func (e *Engine) noteDoc(u, chatID string, at time.Time) {
 		return
 	}
 	_ = e.Store.PutItem(&Item{Kind: KindDoc, ID: id, URL: u, At: at, Where: chatID, Seen: time.Now().UTC()})
+}
+
+// Backfiller is a source that can read a chat backwards (history older than the first archive run).
+type Backfiller interface {
+	// Older returns messages before position before ("" = the newest page), oldest first, and the cursor to go further back.
+	Older(ctx context.Context, chat SourceChat, before string, limit int) (msgs []SourceMessage, older string, more bool, err error)
+}
+
+// Backfill reads older history of the most relevant chats into their day files, back to the text retention:
+// at most chats per run, pages per chat. The new lines are only archived (searchable), not compressed again.
+func (e *Engine) Backfill(ctx context.Context, textDays, chats, pages int) (int, error) {
+	limit := time.Now().AddDate(0, 0, -textDays)
+	var todo []*Chat
+	for _, c := range e.Store.Chats() {
+		if !c.BackfillDone && c.Source != "mail" {
+			todo = append(todo, c)
+		}
+	}
+	sort.SliceStable(todo, func(i, j int) bool { return todo[i].Relevance > todo[j].Relevance })
+	total := 0
+	for i, c := range todo {
+		if i >= chats || ctx.Err() != nil {
+			break
+		}
+		var src Backfiller
+		var name string
+		for _, s := range e.Sources {
+			if b, ok := s.(Backfiller); ok && s.Name() == c.Source {
+				src, name = b, s.Name()
+			}
+		}
+		if src == nil {
+			continue
+		}
+		sc := SourceChat{ID: c.SourceID, Name: c.Name, Kind: c.Kind}
+		first := e.Store.FirstAt(c.ID)
+		cursor := c.Oldest
+		for page := 0; page < pages; page++ {
+			msgs, older, more, err := src.Older(ctx, sc, cursor, 100)
+			if err != nil {
+				e.logf("backfill %s: %v", c.Name, err)
+				c.BackfillDone = true // do not retry every run; the recent text is there
+				break
+			}
+			var lines []Line
+			reached := false
+			for _, m := range msgs {
+				if m.At.Before(limit) {
+					reached = true
+					continue
+				}
+				// Only what is older than the oldest archived line (minute precision: equal minutes are already there).
+				if !first.IsZero() && !m.At.Before(first.Truncate(time.Minute)) {
+					continue
+				}
+				if l := e.line(ctx, sourceOf(e.Sources, name), c, m); l.Text != "" {
+					lines = append(lines, l)
+					e.notePerson(c, name, m)
+				}
+			}
+			if err := e.Store.PrependMessages(c, lines); err != nil {
+				return total, err
+			}
+			if len(lines) > 0 {
+				first = lines[0].At
+				for _, l := range lines {
+					if l.At.Before(first) {
+						first = l.At
+					}
+				}
+			}
+			total += len(lines)
+			c.Messages += len(lines)
+			if older != "" {
+				cursor = older
+			}
+			if reached || !more || older == "" {
+				c.BackfillDone = true
+				break
+			}
+		}
+		c.Oldest = cursor
+		if err := e.Store.PutChat(c); err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+func sourceOf(list []Source, name string) Source {
+	for _, s := range list {
+		if s.Name() == name {
+			return s
+		}
+	}
+	return nil
 }

@@ -42,22 +42,23 @@ type Hub struct {
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
-	mu           sync.Mutex
-	clients      map[*client]struct{}
-	interactions map[string]*pending
-	phoneTools   []proto.Tool
-	calls        map[string]chan proto.ToolResult
-	seen         map[[2]string]time.Time // (machine, session) -> when the user last looked at it
-	stateSince   map[[2]string]stateMark // (machine, session) -> its state and when it entered it
-	userTZ       string                  // the phone's time zone (assistant settings)
-	snap         string                  // the assistant's last live snapshot (assistant_snapshot.go)
-	snapAt       time.Time
-	wokeAt       time.Time            // last silent push to wake the phone for a tool call
-	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
-	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
-	live         *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
-	usage        usageBook            // token usage of every machine (usage.go)
-	metrics      metricsBook          // OS and load of every machine (metrics.go)
+	mu            sync.Mutex
+	clients       map[*client]struct{}
+	interactions  map[string]*pending
+	phoneTools    []proto.Tool
+	calls         map[string]chan proto.ToolResult
+	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
+	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
+	userTZ        string                  // the phone's time zone (assistant settings)
+	snap          string                  // the assistant's last live snapshot (assistant_snapshot.go)
+	snapAt        time.Time
+	wokeAt        time.Time            // last silent push to wake the phone for a tool call
+	notified      map[string]time.Time // assistant conversation -> when it last pushed with notify_user
+	kbAgentLogged map[string]time.Time // agent -> when its result last went into a project timeline (kb.go)
+	turns         *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
+	live          *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
+	usage         usageBook            // token usage of every machine (usage.go)
+	metrics       metricsBook          // OS and load of every machine (metrics.go)
 
 	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox  inbox     // the unified inbox (inbox.go)

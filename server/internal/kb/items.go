@@ -304,7 +304,7 @@ func (e *Engine) Prompt(projects, chats int) string {
 	ps := e.List(KindProject, "")
 	n := 0
 	for _, p := range ps {
-		if n >= projects || strings.HasSuffix(p.Extra, "done") {
+		if n >= projects || strings.HasSuffix(p.Extra, "done") || strings.HasSuffix(p.Extra, "ignored") {
 			continue
 		}
 		if n == 0 {
