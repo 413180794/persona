@@ -344,6 +344,14 @@ struct TurnTests {
         #expect(whole.fullSize == nil && whole.cutText == "a\nb")
     }
 
+    @Test func watchShowsMessagesWithoutMarkup() {
+        let ref = ContextRef(kind: "context", title: "设计稿 \"v2\"", url: "https://example.com/d", text: "选中的文字")
+        #expect(WatchText.shown(ref.xml + "\n\n看看这个") == "〔设计稿 \"v2\"〕\n看看这个")
+        #expect(WatchText.shown("[Image #1] [Image #2] 这个按钮歪了\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>") == "〔图片〕 这个按钮歪了\n〔图片〕")
+        #expect(WatchText.shown("<pasted_content id=\"x\">长文本</pasted_content>") == "长文本")
+        #expect(WatchText.shown("普通的话") == "普通的话")
+    }
+
     @Test func subagentItemsComeFromTheSubagentsTranscript() throws {
         let main = SessionKey(machineID: "m", sessionID: "s1")
         let agent = try JSON.decoder.decode(Subagent.self, from: Data(#"{"id":"a1","session_id":"s1/subagents/agent-a1","running":false}"#.utf8))
@@ -351,12 +359,31 @@ struct TurnTests {
         #expect(ChatView.shownKey(main, viewing: agent) == SessionKey(machineID: "m", sessionID: agent.sessionID))
     }
 
-    @Test func watchShowsMessagesWithoutMarkup() {
-        let ref = ContextRef(kind: "context", title: "设计稿 \"v2\"", url: "https://example.com/d", text: "选中的文字")
-        #expect(WatchText.shown(ref.xml + "\n\n看看这个") == "〔设计稿 \"v2\"〕\n看看这个")
-        #expect(WatchText.shown("[Image #1] [Image #2] 这个按钮歪了\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>") == "〔图片〕 这个按钮歪了\n〔图片〕")
-        #expect(WatchText.shown("<pasted_content id=\"x\">长文本</pasted_content>") == "长文本")
-        #expect(WatchText.shown("普通的话") == "普通的话")
+    @Test func aBatchFromTheFirstLineIsABaseline() {
+        let s = ChatStore(key: SessionKey(machineID: "t", sessionID: "baseline-\(UUID())"))
+        // A new session watched from its first line: pushes from 0, then one is lost.
+        #expect(s.apply([item(1, .text, role: "user", text: "hi")], span: ItemSpan(history: "h", from: 0, to: 1)) == .none)
+        #expect(s.covered == 1)
+        #expect(s.apply([item(4, .text, text: "x")], span: ItemSpan(history: "h", from: 3, to: 4)) == .fill)
+    }
+
+    @Test func aLostFirstPushOfANewSessionIsNoticed() {
+        let s = ChatStore(key: SessionKey(machineID: "t", sessionID: "first-\(UUID())"))
+        // Opened before the transcript existed: an empty backlog without a span. Then the first push is lost.
+        #expect(s.apply([], span: ItemSpan(), backlog: true, hasMore: false) == .none)
+        #expect(s.apply([item(5, .text, text: "x")], span: ItemSpan(history: "h", from: 4, to: 5)) == .reload)
+        // Before any backlog came, the one on its way sets the baseline: nothing to do yet.
+        let t = ChatStore(key: SessionKey(machineID: "t", sessionID: "first2-\(UUID())"))
+        #expect(t.apply([item(5, .text, text: "x")], span: ItemSpan(history: "h", from: 4, to: 5)) == .none)
+    }
+
+    @Test func theLatestPageKeepsPushesThatOvertookIt() {
+        let s = ChatStore(key: SessionKey(machineID: "t", sessionID: "replace-\(UUID())"))
+        _ = s.apply([item(1, .text, role: "user", text: "a")], span: ItemSpan(history: "h", from: 0, to: 1))
+        _ = s.apply([item(9, .text, text: "pushed meanwhile")], span: ItemSpan(history: "h", from: 8, to: 9))
+        let resets = s.resets
+        s.replace(with: [item(7, .text, role: "user", text: "b"), item(8, .text, text: "c")], hasMore: true, span: ItemSpan(history: "h", to: 8))
+        #expect(s.items.map(\.seq) == [7, 8, 9] && s.covered == 8 && s.resets == resets + 1)
     }
 
     @Test func frozenChatCountsItemsUpToTheSnapshot() {

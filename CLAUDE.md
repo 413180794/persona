@@ -192,6 +192,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   模拟器系统语言是英文时，系统授权弹窗的按钮叫「Allow」，UI 测试两种都要认。
 - 倒置聊天列表往上翻时的「冻结」不能按行 id 截：行 id 会随轮次推进变（答案收进工作行、多条消息的轮合并成 `wt-`），
   找不到 id 冻结就失效、可见内容被顶走（修前实测 319pt）。按「离开最新端时的 item 快照」重建行（`ChatView.Frozen`），验证用 `-showFreezeProbe`。
+- 改 transcript 解析或同步协议，用真实语料验证（`docs/lanes/msg-render-verification.md`）：`corpus_test.go` 让新旧解析器逐文件对比，
+  `continuity_corpus_test.go` 按 App 的规则模拟丢推送 / 补洞 / 重写。语料只放 `~/jarvis-corpus`；活跃会话的文件会一边读一边长，对比前先拷一份快照。
+  模拟器里的 App 看真实会话用本机的测试 hub（假 HOME、不连 herdr、独立数据库），别连线上 hub。
 - `URLSessionWebSocketTask.sendPing` 的回调只在两个条件都满足时才来：对端的 pong 原样带回 ping 的负载（空 pong 不算），
   而且当时有一个挂着的 `receive`。`scripts/mock_hub.py` 曾回空 pong，App 的心跳就每分钟判一次连接已死、重连（hub 用的 coder/websocket 没问题）。
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。

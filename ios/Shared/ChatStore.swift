@@ -261,6 +261,9 @@ final class ChatStore {
     /// Every image in the conversation (the viewer pages through them), rebuilt with `blocks`: a view that derived it
     /// from `items` in its body redrew on every item.
     private(set) var images: [ImagePayload] = []
+    /// Bumped when the items start over (another history, or the latest page replacing what was here): a frozen view
+    /// of the old items (`ChatView.Frozen`) means nothing any more.
+    private(set) var resets = 0
     /// Bumped whenever `blocks` is rebuilt: views key derived data (the chat's lines) on it instead of diffing blocks.
     @ObservationIgnored private(set) var version = 0
     private(set) var hasMore = false
@@ -323,7 +326,11 @@ final class ChatStore {
         }
         if let from = span.from {
             merge(new, backlog: backlog, hasMore: hasMore)
-            if covered == 0 { return .none } // no baseline yet: the backlog from the end sets one
+            // No baseline yet: the backlog from the end sets one. A batch from line 0 (a new session watched from its
+            // first line) is its own baseline: without it, holes after it went unnoticed. If the backlog already came
+            // and set none (the transcript did not exist yet) and the first lines' push was lost, only the latest
+            // page tells where we are.
+            if covered == 0 && from > 0 { return loadedOnce ? .reload : .none }
             guard from <= covered else { return .fill }
             covered = max(covered, to)
             return moreAfter ? .fill : .none
@@ -340,6 +347,7 @@ final class ChatStore {
     }
 
     private func reset() {
+        resets += 1
         items = []
         ids = []
         covered = 0
@@ -471,11 +479,16 @@ final class ChatStore {
 
     /// Starts over from the latest page: what came in between was too much to fetch, and a hole would never fill.
     func replace(with latest: [Item], hasMore: Bool, span: ItemSpan = ItemSpan()) {
+        // Pushes that came in while the page was on its way, past what it holds, stay (the next push finds the hole
+        // between, if any). Not after another history: those seqs belong to the old file.
+        let keep = span.history == nil || span.history == history ? items.filter { $0.seq > (span.to ?? .max) } : []
+        resets += 1
         items = []
         ids = []
         self.hasMore = hasMore
         if let h = span.history { history = h }
         merge(latest)
+        merge(keep)
         covered = span.to ?? lastSeq
         scheduleRebuild() // also when the page is empty
     }

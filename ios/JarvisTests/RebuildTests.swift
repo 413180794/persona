@@ -93,4 +93,40 @@ struct RebuildTests {
         print("REBUILD-COST \(items.count) items: full \(full), incremental \(incremental)")
         #expect(built?.rows == ChatStore.buildRows(items))
     }
+
+    /// Real sessions (exported by the server's TestCorpusDumpItems; `TEST_RUNNER_JARVIS_ITEMS_DIR=<dir> xcodebuild test`):
+    /// the last 200 items arrive one by one; the incremental rebuild must equal the full one at every step. Prints
+    /// the cost of both per event. Skipped without the directory.
+    @Test func realSessionsRebuildIncrementally() throws {
+        guard let dir = ProcessInfo.processInfo.environment["JARVIS_ITEMS_DIR"] else { return }
+        let files = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasSuffix(".json") }.sorted()
+        var lines: [String] = []
+        for name in files {
+            let items = try JSON.decoder.decode([Item].self, from: Data(contentsOf: URL(fileURLWithPath: dir).appending(path: name)))
+            let start = max(0, items.count - 200)
+            var settled = ChatStore.rebuild(Array(items[..<start]), settled: nil).settled
+            var full: [Duration] = [], inc: [Duration] = []
+            var mismatches = 0
+            let clock = ContinuousClock()
+            for n in (start + 1)...items.count {
+                let now = Array(items[..<n])
+                var rows: [ChatRow] = [], blocks: [ChatBlock] = []
+                full.append(clock.measure { rows = ChatStore.buildRows(now); blocks = ChatBlock.build(rows) })
+                var built: (rows: [ChatRow], blocks: [ChatBlock], settled: ChatStore.SettledRows?)?
+                inc.append(clock.measure { built = ChatStore.rebuild(now, settled: settled) })
+                if built?.rows != rows || built?.blocks != blocks { mismatches += 1 }
+                settled = built?.settled
+            }
+            func p(_ d: [Duration], _ q: Double) -> String {
+                let s = d.sorted()
+                let v = s[min(s.count - 1, Int(Double(s.count) * q))]
+                return String(format: "%.2f", Double(v.components.attoseconds) / 1e15 + Double(v.components.seconds) * 1000)
+            }
+            lines.append("\(name)\t\(items.count)\t\(p(full, 0.5))\t\(p(full, 0.99))\t\(p(inc, 0.5))\t\(p(inc, 0.99))\t\(mismatches)")
+            #expect(mismatches == 0, "\(name): incremental rebuild differs from the full one \(mismatches) times")
+        }
+        let out = "file\titems\tfull p50 ms\tfull p99 ms\tincremental p50 ms\tincremental p99 ms\tmismatches\n" + lines.joined(separator: "\n")
+        try out.write(to: URL(fileURLWithPath: dir).appending(path: "rebuild-cost.tsv"), atomically: true, encoding: .utf8)
+        print("REBUILD-REAL\n" + out)
+    }
 }

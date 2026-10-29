@@ -387,6 +387,13 @@ struct FullOutputSheet: View {
         .task {
             guard text == nil, let load else { return }
             do { text = try await load(itemID) } catch { if let msg = error.shown { self.error = msg } }
+            #if DEBUG
+            if ResultBlock.debugFull, let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                // What 看全文 got, for checking against the transcript (`-showFullOutput sheet`).
+                try? (text ?? "ERROR: \(error ?? "")").write(to: dir.appending(path: "full-output.txt"), atomically: true, encoding: .utf8)
+                try? itemID.write(to: dir.appending(path: "full-output-id.txt"), atomically: true, encoding: .utf8)
+            }
+            #endif
         }
     }
 }

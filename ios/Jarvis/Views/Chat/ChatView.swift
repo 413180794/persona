@@ -365,7 +365,7 @@ struct ChatView: View {
     /// Scrolls into the history while the agent keeps working (`MOCK_STREAM=1`), then logs, every 2 s, where a line on
     /// screen is and how many items have arrived (the line must not move); back at the newest, the new lines show.
     private func freezeProbe() async {
-        try? await Task.sleep(for: .seconds(4))
+        try? await Task.sleep(for: .seconds(8)) // a big chat takes a moment to load and lay out
         userScrolled = true
         followsEnd = false
         scrollList(to: chrome.offset + 260)
@@ -377,9 +377,11 @@ struct ChatView: View {
             }
         }
         let mid = scratch.listFrame.midY
-        guard let id = scratch.visibleLines.min(by: { abs((scratch.lineY[$0] ?? .infinity) - mid) < abs((scratch.lineY[$1] ?? .infinity) - mid) }),
+        // The measured line nearest the middle of the list (rows report their position while on screen).
+        let onScreen = scratch.lineY.filter { scratch.listFrame.minY < $0.value && $0.value < scratch.listFrame.maxY }.map(\.key)
+        guard let id = onScreen.min(by: { abs((scratch.lineY[$0] ?? .infinity) - mid) < abs((scratch.lineY[$1] ?? .infinity) - mid) }),
               let y0 = scratch.lineY[id] else {
-            log.append("no line on screen")
+            log.append("no line on screen (visible \(scratch.visibleLines.count), measured \(scratch.lineY.count), list \(scratch.listFrame), lines \(currentLines().count))")
             return
         }
         let n0 = store.items.count
@@ -395,7 +397,8 @@ struct ChatView: View {
         scrollToEnd()
         try? await Task.sleep(for: .seconds(2))
         let newest = currentLines().last?.id ?? ""
-        log.append("RESULT: \(store.items.count - n0) items arrived while reading, line moved at most \(moved)pt; back at the newest: last line \(newest) on screen \(scratch.visibleLines.contains(newest))")
+        let newestY = scratch.lineY[newest] ?? .nan
+        log.append("RESULT: \(store.items.count - n0) items arrived while reading, line moved at most \(moved)pt; back at the newest: last line \(newest) on screen \(scratch.listFrame.minY < newestY && newestY < scratch.listFrame.maxY)")
     }
     #endif
 
@@ -921,6 +924,7 @@ struct ChatView: View {
             .environment(menu)
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
+        .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
         .onChange(of: followsEnd) { _, follows in
             if follows {
                 frozen = nil
@@ -935,9 +939,20 @@ struct ChatView: View {
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
         .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
-        // Your own message always brings you to the newest.
-        .onChange(of: lastPromptID) { old, _ in if old != nil { followsEnd = true; scrollToEnd() } }
-        .onChange(of: store.pending.count) { old, new in if new > old { followsEnd = true; scrollToEnd(animated: true) } }
+        // Your own message always brings you to the newest — only yours: one typed on the computer (or sent by another
+        // session) used to pull you out of the history you were reading too.
+        .onChange(of: lastPromptID) { old, new in
+            guard old != nil, let new, let text = store.items.last(where: { $0.id == new })?.text,
+                  scratch.sentHere.contains(where: { PendingMessage.same(text, $0) }) else { return }
+            followsEnd = true
+            scrollToEnd()
+        }
+        .onChange(of: store.pending.count) { old, new in
+            guard new > old else { return }
+            scratch.sentHere = Array((scratch.sentHere + store.pending.map(\.text)).suffix(20))
+            followsEnd = true
+            scrollToEnd(animated: true)
+        }
     }
 
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
@@ -1156,6 +1171,21 @@ struct ChatView: View {
             }
             if UserDefaults.standard.bool(forKey: "showFreezeProbe") { // reading history holds still: Documents/freeze.txt
                 Task { await freezeProbe() }
+            }
+            if UserDefaults.standard.bool(forKey: "showChatDump") { // what the chat holds, every 2 s: Documents/chat-dump.json
+                Task {
+                    let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    while !Task.isCancelled {
+                        let s = model.chat(shownKey)
+                        let dump: [String: Any] = ["session": shownKey.sessionID, "covered": s.covered, "history": s.history ?? "",
+                                                   "has_more": s.hasMore, "lines": currentLines().count, "visible": scratch.visibleLines.count,
+                                                   "items": s.items.map { [$0.id, $0.seq, $0.kind.rawValue, $0.fullSize ?? 0] as [Any] }]
+                        if let data = try? JSONSerialization.data(withJSONObject: dump) {
+                            try? data.write(to: dir.appending(path: "chat-dump.json"), options: .atomic)
+                        }
+                        try? await Task.sleep(for: .seconds(2))
+                    }
+                }
             }
             if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
                 Task {
@@ -2040,6 +2070,8 @@ final class ChatScratch {
         var open: Set<String>
         var frozen: ChatView.Frozen?
     }
+    /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
+    var sentHere: [String] = []
     /// The frozen chat's rows up to its last exchange (`ChatStore.rebuild`).
     var frozenSettled: ChatStore.SettledRows?
     /// Rows on screen (for remembering where you left off), written by the list as it scrolls.
