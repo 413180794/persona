@@ -209,6 +209,7 @@ func (m *Machine) connect(ctx context.Context) error {
 }
 
 func (m *Machine) setOffline(err error) {
+	m.hub.terminalsOffline(m.cfg.ID)
 	m.mu.Lock()
 	m.peer = nil
 	m.online = false
@@ -368,6 +369,16 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "screen", "machine_id": m.cfg.ID, "session_id": p.SessionID,
 			"text": p.Text, "status": p.Status, "ts": time.Now().UTC()})
+	case "terminal.frame":
+		m.hub.onTerminalFrame(m.cfg.ID, params)
+	case "terminal.end":
+		var p struct {
+			SessionID string `json:"session_id"`
+			Error     string `json:"error"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.hub.terminalEnded(m.cfg.ID, p.SessionID, p.Error, nil)
+		}
 	case "session.delta":
 		var p struct {
 			SessionID string `json:"session_id"`

@@ -46,6 +46,7 @@ type Node struct {
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
 	panePIDs map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
 	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
+	terms    map[string]*termStream    // session id -> its terminal streaming to the hub (terminal.go)
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
@@ -202,6 +203,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Limit           int             `json:"limit"`
 		SinceSeq        int             `json:"since_seq"`
 		Source          string          `json:"source"`
+		Format          string          `json:"format"`
 		Staged          bool            `json:"staged"`
 		Hash            string          `json:"hash"`
 		Skip            int             `json:"skip"`
@@ -297,14 +299,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			Anchor    []string `json:"anchor"`
 			Lines     int      `json:"lines"`
 			Loaded    int      `json:"loaded"`
+			Format    string   `json:"format"`
 		}
 		if err := json.Unmarshal(params, &a); err != nil {
 			return nil, err
 		}
-		return n.screenBefore(ctx, a.SessionID, a.Anchor, a.Lines, a.Loaded)
+		return n.screenBefore(ctx, a.SessionID, a.Anchor, a.Lines, a.Loaded, a.Format == "ansi")
 	case "session.screen":
-		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source)
+		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source, p.Format == "ansi")
 		return map[string]any{"text": text, "status": status}, err
+	case "terminal.watch":
+		return n.terminalWatch(ctx, p.SessionID)
+	case "terminal.unwatch":
+		n.terminalUnwatch(p.SessionID)
+		return ok(nil)
 	case "session.image":
 		var a struct {
 			ItemID string `json:"item_id"`

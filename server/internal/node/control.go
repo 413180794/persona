@@ -351,8 +351,9 @@ func (n *Node) keys(ctx context.Context, id string, keys []string, text string) 
 }
 
 // screen reads the session's terminal. source "visible" is the screen; "recent" also reaches back into the pane's
-// scrollback (the phone pages it: ask for more lines until fewer come back than were asked for).
-func (n *Node) screen(ctx context.Context, id string, lines int, source string) (string, string, error) {
+// scrollback (the phone pages it: ask for more lines until fewer come back than were asked for). ansi keeps the colors
+// (SGR escapes; rows end in \r\n).
+func (n *Node) screen(ctx context.Context, id string, lines int, source string, ansi bool) (string, string, error) {
 	if n.isAssistantSession(id) {
 		return "", proto.StatusIdle, nil // headless: no terminal; live text arrives as session.delta
 	}
@@ -368,6 +369,10 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string) 
 			return "", proto.StatusOffline, nil
 		}
 		a, _ = n.agent(id)
+	}
+	if ansi {
+		text, err := n.herdr.PaneReadANSI(ctx, a.PaneID, source, lines)
+		return text, a.AgentStatus, err
 	}
 	text, err := n.herdr.PaneRead(ctx, a.PaneID, source, lines)
 	return text, a.AgentStatus, err
@@ -630,7 +635,8 @@ const herdrScrollbackLines = 1000
 // already shows). Located by content, not by offset from the end, so output arriving meanwhile shifts nothing.
 // loaded is how many lines the phone already has (from the end): Claude's redraws push the same screens into the
 // scrollback again and again, so the anchor can match in several places — the one nearest len-loaded is ours.
-func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lines, loaded int) (map[string]any, error) {
+// With ansi the page keeps its colors; the anchor is still matched on the plain text.
+func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lines, loaded int, ansi bool) (map[string]any, error) {
 	if lines <= 0 || lines > 500 {
 		lines = 200
 	}
@@ -651,8 +657,19 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 		return map[string]any{"text": "", "has_more": false, "at_limit": len(all) >= herdrScrollbackLines-20}, nil
 	}
 	start := max(at-lines, 0)
+	page := all[start:at]
+	if ansi {
+		// The same rows with their colors: herdr reads both from one grid, so row i is row i — unless output arrived
+		// between the two reads, then the plain page is still right.
+		if colored, err := n.herdr.PaneReadANSI(ctx, a.PaneID, "recent", herdrScrollbackLines); err == nil {
+			rows := strings.Split(strings.TrimRight(strings.ReplaceAll(colored, "\r\n", "\n"), "\n"), "\n")
+			if len(rows) == len(all) {
+				page = rows[start:at]
+			}
+		}
+	}
 	return map[string]any{
-		"text":     strings.Join(all[start:at], "\n"),
+		"text":     strings.Join(page, "\n"),
 		"has_more": start > 0,
 		// The start of what herdr keeps: older output was dropped (long panes) or never existed (short ones).
 		"at_limit": start == 0 && len(all) >= herdrScrollbackLines-20,

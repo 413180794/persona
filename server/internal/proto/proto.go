@@ -44,6 +44,7 @@ var Features = []string{
 	"resumable_interactions", // hook questions survive hub / node restarts
 	"secret_prompts",         // interaction.secret
 	"request_id",             // X-Request-Id
+	"terminal_stream",        // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
 }
 
 type NodeInfo struct {

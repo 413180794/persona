@@ -92,3 +92,29 @@ func TestLiveSubscribe(t *testing.T) {
 		t.Fatal("no tab.closed event")
 	}
 }
+
+// An observer of a live pane gets a whole frame at the pane's size first, and the pane keeps its size.
+func TestLiveObserve(t *testing.T) {
+	ctx := context.Background()
+	c := New()
+	snap, err := c.Snapshot(ctx)
+	if err != nil || len(snap.Agents) == 0 {
+		t.Skip("no agent pane to observe")
+	}
+	pane := snap.Agents[0].PaneID
+	cols, rows, err := c.PaneSize(ctx, pane)
+	if err != nil {
+		t.Fatal(err)
+	}
+	octx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+	var got []Frame
+	_ = c.Observe(octx, pane, cols, rows, func(f Frame) { got = append(got, f) })
+	if len(got) == 0 || !got[0].Full || got[0].Width != cols || got[0].Height != rows {
+		t.Fatalf("frames from %s (%d×%d): %+v", pane, cols, rows, got)
+	}
+	if c2, r2, _ := c.PaneSize(ctx, pane); c2 != cols || r2 != rows {
+		t.Fatalf("observing resized %s: %d×%d → %d×%d", pane, cols, rows, c2, r2)
+	}
+	t.Logf("%s %d×%d: %d frames in 1.5 s, first %d bytes (base64)", pane, cols, rows, len(got), len(got[0].Data))
+}

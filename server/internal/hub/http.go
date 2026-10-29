@@ -79,7 +79,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/screen/before", h.proxyBody("session.screen.before"))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/screen", h.proxy("session.screen", func(r *http.Request) any {
 		q := r.URL.Query()
-		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source")}
+		return map[string]any{"session_id": r.PathValue("sid"), "lines": atoi(q.Get("lines")), "source": q.Get("source"), "format": q.Get("format")}
 	}))
 	api.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"interactions": h.pendingInteractions()})
@@ -578,6 +578,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 				m.removeWatcher(k[1])
 			}
 		}
+		h.terminalDrop(c)
 		conn.CloseNow()
 	}()
 
@@ -639,11 +640,17 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		CallID     string          `json:"call_id"`
 		Content    []proto.Content `json:"content"`
 		IsError    bool            `json:"is_error"`
+		Epoch      string          `json:"epoch"`
+		AfterSeq   int             `json:"after_seq"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
 	}
 	switch msg.Type {
+	case "terminal_subscribe":
+		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq)
+	case "terminal_unsubscribe":
+		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)
 	case "subscribe":
 		m := h.byID[msg.MachineID]
 		if m == nil {

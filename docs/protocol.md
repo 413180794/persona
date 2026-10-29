@@ -93,8 +93,8 @@
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?}`；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了） |
-| POST | `/api/v1/sessions/{mid}/{sid}/screen/before` | `{"anchor":["屏幕上最上面几行"],"lines":200}` → `{"text","has_more","at_limit"}`：锚点之前的一段滚动历史（按内容定位；herdr 只保留约 1000 行，`at_limit` 表示到头） |
+| GET | `/api/v1/sessions/{mid}/{sid}/screen?lines=60&source=visible` | `{"text":"…","status":"working"}`；`source=recent` 连同窗格滚动缓冲一起读（lines 最多 20000，返回行数少于 lines 说明到头了）；`format=ansi` 带颜色（SGR，行尾 `\r\n`；旧 node 不认，照旧回纯文本） |
+| POST | `/api/v1/sessions/{mid}/{sid}/screen/before` | `{"anchor":["屏幕上最上面几行"],"lines":200,"format"?:"ansi"}` → `{"text","has_more","at_limit"}`：锚点之前的一段滚动历史（按内容定位，锚点按纯文本比；herdr 只保留约 1000 行，`at_limit` 表示到头） |
 | POST | `/api/v1/machines/{mid}/spaces/{wid}/rename` | `{"name"}`：`herdr workspace rename`，并把置顶 / 屏蔽里的「机器/旧名」改成新名 |
 | POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?}`：改在跑的会话的权限模式 / 思考强度（`docs/ios.md`「思考强度和权限模式」）；会话列表里的 `permission_mode`、`effort` 是当前值。`POST /api/v1/sessions` 和 `POST /api/v1/assistant/conversations` 也收这两个字段，作为启动时的值 |
 | POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`：tab 用 `herdr tab rename`；会话名给在跑的 claude 发 `/rename <名字>`（它写 `custom-title`），没在跑就直接往 transcript 追加同样的 `custom-title` 行 |
@@ -145,6 +145,7 @@
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束） |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
+| `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id` |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 的 iPhone） |
@@ -156,6 +157,8 @@
 | --- | --- |
 | `subscribe` | `machine_id`, `session_id`, `since_seq`（可选，App 传本地的 `covered`；有则补发其后的全部 items——每页一条 `items`（`backlog: true`），最多 8 页 / 4000 条，超出时最后一条带 `more_after: true`；否则补发最后两轮），`lazy_images`（可选；true 后这个连接收到的 items 都不带图片数据） |
 | `unsubscribe` | `machine_id`, `session_id` |
+| `terminal_subscribe` | `machine_id`, `session_id`, `epoch`（可选）, `after_seq`（可选）：开始收这个会话终端的实时帧（hub `features` 里有 `terminal_stream` 才发） |
+| `terminal_unsubscribe` | `machine_id`, `session_id` |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
@@ -208,6 +211,20 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
 - 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
 
+### 终端流
+
+终端 tab 的实时画面（`docs/terminal.md`）。node 用 `herdr terminal session observe` 按窗格本身的尺寸镜像 herdr 画好的网格，
+每帧是一段 VT 字节：`full` 的帧是整屏（`ESC[2J` 开头），其余只重画变了的格子，最后是光标位置和显隐。App 用一个 `cols × rows`
+的网格依次套用即可；网格永远等于电脑上窗格的尺寸，手机的尺寸不回传。
+
+- `epoch` 标识一条流：node 每次（重新）开 observe 都换一个，第一帧一定是 `full`；窗格变大小、herdr 中断、整帧之后的增量超过 256 KB 时 node 会重开。
+  同一 `epoch` 里 `seq` 从 1 连续递增。
+- hub 给每个被看的终端留「最近一个整帧 + 之后的增量」。`terminal_subscribe` 带上 App 手里的 `epoch` 和最后的 `seq`：
+  还在同一条流、而且留着的帧能接上，就只补之后的帧；否则从整帧开始重放。之后的新帧实时推。
+- App 收到的帧 `seq` 不连续（中间丢了）或者 `epoch` 变了却不是 `full`，就丢掉本地网格、重新 `terminal_subscribe`（不带 epoch）。
+- 收到 `error`：hub 已经丢掉这条流；`unsupported` 时改用 `/screen` 轮询，否则过几秒再订阅。WebSocket 断了重连后重新订阅（带 epoch / seq 续上）。
+- 第一个订阅的 App 让 hub 发 `terminal.watch`，最后一个退订（或断开）时发 `terminal.unwatch`。旧 App 不发这些消息，照旧轮询 `/screen`。
+
 ## hub ↔ node RPC
 
 `ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
@@ -226,7 +243,8 @@ hub → node 请求：
 | `session.send` | `{session_id, text, images?}` |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |
-| `session.screen` | `{session_id, lines, source}` → `{text, status}` |
+| `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
+| `terminal.watch` / `terminal.unwatch` | `{session_id}`；watch → `{cols, rows}`，之后 node 推 `terminal.frame`；已经在推时 watch 会重开一条流（新 epoch、从整帧开始）。herdr 没有 observe 时报 `unsupported: …` |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
 | `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images}` → `{items, has_more, more_after, history, to_seq, from_seq}`（`from_seq` 只在 `after_seq` 请求里有；不带 `lazy_images: true` 时 node 把图片数据读回来，兼容旧 hub） |
 | `session.image` | `{session_id, item_id}` → `Image{mime, data}`（node 的 item 不常驻图片数据，按记下的行偏移重读那一行） |
@@ -235,7 +253,8 @@ hub → node 请求：
 | `session.close` | `{session_id}` |
 | `interaction.resolve` | `{id, resolution}` |
 
-node → hub 事件：`session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
+node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`、`terminal.end {session_id, error}`（流停了且起不来：会话不在跑、herdr 一直拒绝）、
+`session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）。
 
 node → hub 请求：

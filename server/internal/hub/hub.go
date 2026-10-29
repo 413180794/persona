@@ -35,6 +35,8 @@ type Hub struct {
 	ai       *ai.Client
 	lark     *lark.Client
 
+	terms terminals // the terminal tab's live streams (terminal.go)
+
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
