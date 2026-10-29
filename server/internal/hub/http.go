@@ -109,6 +109,7 @@ func (h *Hub) routes() http.Handler {
 		h.push.register(d)
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	h.live.routes(api)
 	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
 	api.HandleFunc("GET /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.prefsView(h.push.prefs(r.PathValue("id"))))
@@ -125,6 +126,7 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		h.live.settingsChanged()
 		writeJSON(w, h.prefsView(prefs))
 	})
 	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
@@ -430,6 +432,12 @@ func (h *Hub) broadcast(v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
+	}
+	if m, ok := v.(map[string]any); ok {
+		switch m["type"] {
+		case "sessions", "interaction", "interaction_resolved": // what the Fleet activity is made of
+			h.live.changed()
+		}
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

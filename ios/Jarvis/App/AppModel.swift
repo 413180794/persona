@@ -284,6 +284,8 @@ final class AppModel {
             LarkSync.shared.received(feedIDs)
         case .inbox:
             InboxStore.shared.reload()
+        case .fleet(let state):
+            LiveActivityController.shared.apply(state)
         case .items(let key, let items, let backlog, let hasMore):
             chat(key).merge(items, backlog: backlog, hasMore: hasMore)
         case .screen(let key, let text, let status):
@@ -645,6 +647,7 @@ final class AppModel {
     func refresh() async {
         guard let api else { return }
         Task { await loadPins() }
+        Task { if let fleet = try? await api.fleet() { LiveActivityController.shared.apply(fleet) } }
         do {
             async let m = api.machines()
             async let s = api.sessions()

@@ -23,14 +23,14 @@ func TestNotifyConfigDefaults(t *testing.T) {
 }
 
 func TestDevicePrefs(t *testing.T) {
-	if p := devicePrefs(nil); p != (NotifyPrefs{Input: true, Done: DoneLong}) {
+	if p := devicePrefs(nil); p != (NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true}) {
 		t.Fatalf("default %+v", p)
 	}
-	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always"}`)); p != (NotifyPrefs{Input: false, Done: DoneAlways}) {
+	if p := devicePrefs(json.RawMessage(`{"input":false,"done":"always","live_activity":false,"lock_details":true}`)); p != (NotifyPrefs{Input: false, Done: DoneAlways, LockDetails: true}) {
 		t.Fatalf("stored %+v", p)
 	}
 	// Only what was stored changes; nonsense falls back.
-	if p := devicePrefs(json.RawMessage(`{"done":"sometimes"}`)); p != (NotifyPrefs{Input: true, Done: DoneLong}) {
+	if p := devicePrefs(json.RawMessage(`{"done":"sometimes"}`)); p != defaultPrefs() {
 		t.Fatalf("unknown done %+v", p)
 	}
 	long := time.Minute
@@ -231,13 +231,13 @@ func TestDevicePrefsAPI(t *testing.T) {
 		t.Fatalf("timings %+v", timings)
 	}
 	// A partial update keeps the other field.
-	if p := do("PUT", `{"done":"always"}`); p != (NotifyPrefs{Input: true, Done: DoneAlways}) {
+	if p := do("PUT", `{"done":"always"}`); p != (NotifyPrefs{Input: true, Done: DoneAlways, LiveActivity: true}) {
 		t.Fatalf("put %+v", p)
 	}
-	if p := do("PUT", `{"input":false}`); p != (NotifyPrefs{Input: false, Done: DoneAlways}) {
+	if p := do("PUT", `{"input":false}`); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true}) {
 		t.Fatalf("put input %+v", p)
 	}
-	if p := do("GET", ""); p != (NotifyPrefs{Input: false, Done: DoneAlways}) {
+	if p := do("GET", ""); p != (NotifyPrefs{Input: false, Done: DoneAlways, LiveActivity: true}) {
 		t.Fatalf("get after put %+v", p)
 	}
 }

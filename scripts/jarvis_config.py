@@ -93,6 +93,8 @@ def export_options(cfg: dict, out: str, destination: str = "upload"):
 		<string>Jarvis App Store</string>
 		<key>{bid}.watchkitapp</key>
 		<string>Jarvis Watch App Store</string>
+		<key>{bid}.liveactivity</key>
+		<string>Jarvis Live Activity App Store</string>
 	</dict>
 	<key>teamID</key>
 	<string>{get(cfg, "app.team_id", "")}</string>

@@ -49,6 +49,10 @@ type NotifyPrefs struct {
 	Input bool `json:"input"`
 	// Done: finished turns. "off", "long" (turns of at least LongTurnSeconds) or "always".
 	Done string `json:"done"`
+	// LiveActivity: keep the Fleet activity on the lock screen / Dynamic Island (liveactivity.go).
+	LiveActivity bool `json:"live_activity"`
+	// LockDetails: the activity may show agent names on the lock screen; off, it shows only counts.
+	LockDetails bool `json:"lock_details"`
 }
 
 const (
@@ -57,7 +61,7 @@ const (
 	DoneAlways = "always"
 )
 
-func defaultPrefs() NotifyPrefs { return NotifyPrefs{Input: true, Done: DoneLong} }
+func defaultPrefs() NotifyPrefs { return NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true} }
 
 // devicePrefs decodes what is stored for a device; anything missing or unknown is the default.
 func devicePrefs(raw json.RawMessage) NotifyPrefs {
@@ -120,6 +124,16 @@ func (t *turnTracker) working(key string, now time.Time) {
 		t.turns[key] = tr
 	}
 	tr.gen++
+}
+
+// startOf: when the session's current (or last held) turn started; zero when not tracked.
+func (t *turnTracker) startOf(key string) time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if tr := t.turns[key]; tr != nil {
+		return tr.start
+	}
+	return time.Time{}
 }
 
 // ended: working → done / idle. Returns the generation the delayed check must still see.

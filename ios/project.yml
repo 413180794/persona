@@ -41,8 +41,10 @@ targets:
       - path: Jarvis
         excludes: ["**/*.md"]
       - path: Shared
+      - path: LiveActivity
     dependencies:
       - target: JarvisWatch
+      - target: JarvisWidgets
       - package: MarkdownUI
     entitlements:
       path: Jarvis/Resources/Jarvis.entitlements
@@ -77,6 +79,8 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [remote-notification]
+        # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
+        NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -93,6 +97,34 @@ targets:
         NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
         NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
         NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+  # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
+  JarvisWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: JarvisWidgets
+      - path: LiveActivity
+      - path: Shared/FleetState.swift
+    info:
+      path: JarvisWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Jarvis
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).liveactivity
+        PRODUCT_NAME: JarvisWidgets
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        # Code shared with the app that must not call into it (the intents run in the app process).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
   JarvisWatch:
     type: application
     platform: watchOS

@@ -64,6 +64,8 @@
 	<string>Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

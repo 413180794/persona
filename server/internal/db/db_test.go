@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items`); err != nil {
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -76,6 +76,24 @@ func TestDevicePrefs(t *testing.T) {
 		if v.DeviceID == "b" && v.Prefs != nil {
 			t.Fatalf("b has prefs %s", v.Prefs)
 		}
+	}
+}
+
+func TestLiveActivities(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.SaveLiveActivity(ctx, LiveActivity{DeviceID: "a", PushToStartToken: "s1"}); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	if err := d.SaveLiveActivity(ctx, LiveActivity{DeviceID: "a", ActivityID: "act", PushToken: "p1", PushToStartToken: "s1", StartedAt: started}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.LiveActivities(ctx)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("%+v %v", list, err)
+	}
+	if v := list[0]; v.ActivityID != "act" || v.PushToken != "p1" || v.PushToStartToken != "s1" || !v.StartedAt.Equal(started) {
+		t.Fatalf("%+v", v)
 	}
 }
 

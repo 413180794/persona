@@ -41,6 +41,8 @@ type Pusher struct {
 	key   *ecdsa.PrivateKey
 	http  *http.Client
 
+	base string // tests: APNs host instead of Apple's
+
 	mu      sync.Mutex
 	devices map[string]Device
 	jwt     string
@@ -126,6 +128,65 @@ func (p *Pusher) token() (string, error) {
 // send alerts every device whose settings take it (nil: all of them).
 func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
 	p.sendAs(payload, collapseID, "alert", "10", wants)
+}
+
+func apnsHost(d Device) string {
+	if d.APNSEnv == "sandbox" {
+		return "https://api.sandbox.push.apple.com"
+	}
+	return "https://api.push.apple.com"
+}
+
+func (p *Pusher) device(id string) (Device, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	d, ok := p.devices[id]
+	return d, ok
+}
+
+// sendLiveActivity pushes to a Live Activity token (an activity's own, or the push-to-start one): its own push type and
+// topic, the device's APNs environment. gone runs when APNs says the token is dead.
+func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any, priority string, gone func()) {
+	if p == nil || p.key == nil || token == "" {
+		return
+	}
+	jwt, err := p.token()
+	if err != nil {
+		p.logf("apns jwt: %v", err)
+		return
+	}
+	host := apnsHost(d)
+	if p.base != "" {
+		host = p.base
+	}
+	topic := d.Topic
+	if topic == "" {
+		topic = p.cfg.Topic
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", host+"/3/device/"+token, bytes.NewReader(body))
+	req.Header.Set("authorization", "bearer "+jwt)
+	req.Header.Set("apns-topic", topic+".push-type.liveactivity")
+	req.Header.Set("apns-push-type", "liveactivity")
+	req.Header.Set("apns-priority", priority)
+	go func() {
+		resp, err := p.http.Do(req)
+		if err != nil {
+			p.logf("apns live activity %s: %v", d.Name, err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			var e struct {
+				Reason string `json:"reason"`
+			}
+			_ = json.NewDecoder(resp.Body).Decode(&e)
+			p.logf("apns live activity %s: %d %s", d.Name, resp.StatusCode, e.Reason)
+			if resp.StatusCode == 410 || e.Reason == "BadDeviceToken" || e.Reason == "Unregistered" {
+				gone()
+			}
+		}
+	}()
 }
 
 // prefs is a device's notification settings (defaults when it never set any).

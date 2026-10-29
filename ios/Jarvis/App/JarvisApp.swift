@@ -13,6 +13,10 @@ struct JarvisApp: App {
             RootView()
                 .environment(model)
                 .onOpenURL { url in
+                    if let link = FleetLink.session(url) { // tapped the Live Activity
+                        model.open(SessionKey(machineID: link.machine, sessionID: link.session))
+                        return
+                    }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
                         do { try await model.pair(cfg); model.toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
@@ -75,12 +79,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if let kind = d.string(forKey: "showTestNotification").flatMap(InteractionKind.init(rawValue:)) {
             Task { await AppDelegate.postTestNotification(kind) }
         }
+        if let phase = d.string(forKey: "showFleetSample") {
+            LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"))
+        }
         let automation = d.string(forKey: "pairURL") != nil
         #else
         let automation = false
         #endif
         WatchSync.shared.activate()
         AppModel.shared.start()
+        LiveActivityController.shared.start()
         if !automation { PushRegistrar.shared.registerIfPossible() }
         return true
     }

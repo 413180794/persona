@@ -455,6 +455,23 @@ nonisolated struct APIClient: Sendable {
     }
     func register(device: DeviceBody) async throws { try await post("/api/v1/devices", body: device) }
 
+    /// The Fleet Live Activity's tokens, or that it ended (hub: liveactivity.go).
+    struct LiveActivityReport: Encodable {
+        var activityID: String?
+        var pushToken: String?
+        var pushToStartToken: String?
+        var ended: Bool?
+        enum CodingKeys: String, CodingKey {
+            case ended
+            case activityID = "activity_id", pushToken = "push_token", pushToStartToken = "push_to_start_token"
+        }
+    }
+    func reportLiveActivity(device: String, _ body: LiveActivityReport) async throws {
+        try await post("/api/v1/devices/\(device)/live-activity", body: body)
+    }
+    struct FleetResponse: Decodable { var fleet: FleetState }
+    func fleet() async throws -> FleetState { try await get("/api/v1/fleet", as: FleetResponse.self).fleet }
+
     /// Which pushes this device wants (hub: notify.go).
     func notifyPrefs(device: String) async throws -> NotifyPrefs { try await get("/api/v1/devices/\(device)/prefs") }
     func setNotifyPrefs(device: String, _ prefs: NotifyPrefs) async throws -> NotifyPrefs {

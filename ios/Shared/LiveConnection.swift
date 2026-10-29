@@ -19,6 +19,8 @@ nonisolated enum ServerEvent: Sendable {
     case lark(feedIDs: [String])
     /// The unified inbox changed (hub/inbox.go): pull it.
     case inbox
+    /// The Fleet Live Activity's content changed (hub/liveactivity.go).
+    case fleet(FleetState)
     case error(SessionKey?, String)
 
     private struct Envelope: Decodable {
@@ -43,9 +45,10 @@ nonisolated enum ServerEvent: Sendable {
         var error: String?
         var revs: [String: Int64]?
         var feedIDs: [String]?
+        var fleet: FleetState?
 
         enum CodingKeys: String, CodingKey {
-            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs
+            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
         }
@@ -83,6 +86,7 @@ nonisolated enum ServerEvent: Sendable {
             return .revs(machineID: m, revs)
         case "lark": return .lark(feedIDs: e.feedIDs ?? [])
         case "inbox": return .inbox
+        case "fleet": return e.fleet.map { .fleet($0) }
         default: return nil
         }
     }

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Prepares App Store signing through the App Store Connect API (idempotent).
 
-- registers the iPhone and Apple Watch bundle ids,
+- registers the iPhone, Apple Watch and Live Activity extension bundle ids,
 - enables PUSH_NOTIFICATIONS and HEALTHKIT on the iPhone App ID,
-- creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" provisioning profiles
+- creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" profiles
   with the team's distribution certificate and installs them where Xcode looks.
 
 The API key's role (App Manager) can't use cloud-managed signing, so release builds sign manually with
@@ -12,6 +12,7 @@ the "Apple Distribution" identity in the login keychain (see docs/release.md).
   python3 scripts/asc_signing.py                 # App Store profiles
   python3 scripts/asc_signing.py --dev           # also development profiles for registered devices
   python3 scripts/asc_signing.py --check         # only report what is there, change nothing
+  python3 scripts/asc_signing.py --only <bundle id>  # just that target (the others' profiles stay untouched)
 """
 import base64
 import os
@@ -22,10 +23,12 @@ from asc import BUNDLE_ID, APIError, create, get_all, request  # noqa: E402
 
 APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
+LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / Dynamic Island activity
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
     APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "HEALTHKIT"]),
     WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
+    LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", []),
 }
 PROFILE_DIR = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
 
@@ -104,7 +107,10 @@ def main():
     cert = certificate("dist")
     print("distribution certificate", cert)
     ids = {}
+    only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
     for identifier, (name, profile_name, capabilities) in TARGETS.items():
+        if only and identifier != only:
+            continue
         print(identifier)
         bid = bundle_id(identifier, name, check_only)
         ids[identifier] = bid
@@ -114,6 +120,8 @@ def main():
     if "--dev" in sys.argv:
         dev = certificate("dev")
         for identifier, (name, profile_name, _) in TARGETS.items():
+            if identifier not in ids:
+                continue
             profile(ids[identifier], profile_name.replace("App Store", "Development"), dev,
                     "IOS_APP_DEVELOPMENT", check_only)
     if not check_only:

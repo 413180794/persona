@@ -188,12 +188,14 @@ func newTestHub(t *testing.T) *Hub {
 	cfg := defaultConfig()
 	cfg.Machines = nil
 	cfg.dir = t.TempDir()
-	return &Hub{
+	h := &Hub{
 		cfg: cfg, version: "test", logger: log.New(io.Discard, "", 0),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
 		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		push: newPusher(cfg.dir, nil, func(string, ...any) {}),
 	}
+	h.live = newLiveActivities(h)
+	return h
 }
 
 func TestWaitInteractionResolved(t *testing.T) {

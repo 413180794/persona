@@ -50,6 +50,7 @@ type Hub struct {
 	wokeAt       time.Time            // last silent push to wake the phone for a tool call
 	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
 	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
+	live         *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
 
 	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox inbox    // the unified inbox (inbox.go)
@@ -77,6 +78,8 @@ type Store interface {
 	Devices(ctx context.Context) ([]db.Device, error)
 	DeleteDevice(ctx context.Context, id string) error
 	SetDevicePrefs(ctx context.Context, id string, prefs json.RawMessage) error
+	LiveActivities(ctx context.Context) ([]db.LiveActivity, error)
+	SaveLiveActivity(ctx context.Context, v db.LiveActivity) error
 	InsertInteraction(ctx context.Context, ix proto.Interaction) error
 	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
 	InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error)
@@ -118,6 +121,7 @@ func Run(ctx context.Context, version string) error {
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 	}
+	h.live = newLiveActivities(h)
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -153,6 +157,7 @@ func Run(ctx context.Context, version string) error {
 		go m.run(ctx)
 	}
 	go h.expireLoop(ctx)
+	go h.live.run(ctx)
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
 	go h.inboxLoop(ctx)

@@ -171,6 +171,44 @@ func (d *DB) DeleteDevice(ctx context.Context, id string) error {
 	return err
 }
 
+// LiveActivity is a device's Fleet activity (hub/liveactivity.go).
+type LiveActivity struct {
+	DeviceID         string
+	ActivityID       string
+	PushToken        string
+	PushToStartToken string
+	StartedAt        time.Time
+}
+
+func (d *DB) LiveActivities(ctx context.Context) ([]LiveActivity, error) {
+	rows, err := d.pool.Query(ctx, `SELECT device_id, activity_id, push_token, push_to_start_token, started_at FROM live_activities`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (LiveActivity, error) {
+		var v LiveActivity
+		var started *time.Time
+		err := r.Scan(&v.DeviceID, &v.ActivityID, &v.PushToken, &v.PushToStartToken, &started)
+		if started != nil {
+			v.StartedAt = *started
+		}
+		return v, err
+	})
+}
+
+// SaveLiveActivity writes the whole row (the hub keeps the current state in memory and saves it on every change).
+func (d *DB) SaveLiveActivity(ctx context.Context, v LiveActivity) error {
+	var started *time.Time
+	if !v.StartedAt.IsZero() {
+		started = &v.StartedAt
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO live_activities (device_id, activity_id, push_token, push_to_start_token, started_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, now())
+		ON CONFLICT (device_id) DO UPDATE SET activity_id = $2, push_token = $3, push_to_start_token = $4, started_at = $5, updated_at = now()`,
+		v.DeviceID, v.ActivityID, v.PushToken, v.PushToStartToken, started)
+	return err
+}
+
 // ---- phone tools ----
 
 // ReplacePhoneTools stores the iPhone's current tool list, dropping tools it no longer offers.
