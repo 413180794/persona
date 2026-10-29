@@ -66,7 +66,12 @@ ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
 
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
-         "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits"),
+         "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits",
+         loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
+               "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 3},
+         background=[{"id": "b1", "kind": "shell", "description": "跑小组件快照测试",
+                      "command": "xcodebuild test -scheme WeatherWidget -only-testing:SnapshotTests",
+                      "output_file": "/tmp/claude/b1.output", "started_at": ago(minutes=4)}]),
     sess("macbook", TESTS, "补齐网络层的单元测试", "/Users/me/code/weather", "blocked", "needs_you", "weather", 1, "tests", 2, 2,
          "开始写测试前想确认一下用哪个测试框架。", pending=1),
     sess("macbook", REVIEW, "检查 PR #42 的改动", "/Users/me/code/weather", "idle", "idle", "weather", 1, "review", 3, 95,

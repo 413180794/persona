@@ -459,7 +459,7 @@ struct TerminalLinkStatus: View {
 struct BackgroundTasksStrip: View {
     var tasks: [BackgroundTask]
     var openOutput: (BackgroundTask) -> Void
-    @State private var expanded = false
+    @State var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -540,13 +540,97 @@ struct BackgroundTasksStrip: View {
     }
 }
 
+// MARK: - Activity chips
+
+/// "⟳ 下次 11:57" and "⚙ 后台 2" under the chat's tabs: what keeps an agent going, in one small row.
+struct ActivityChips: View {
+    var loop: LoopInfo?
+    var background: [BackgroundTask]
+    var open: () -> Void
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            open()
+        } label: {
+            HStack(spacing: 6) {
+                if let loop {
+                    chip(Theme.done) {
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
+                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                            Text(Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
+                        }
+                    }
+                }
+                if !background.isEmpty {
+                    chip(Theme.busy) {
+                        Image(systemName: "gearshape.2.fill").font(.system(size: 10, weight: .bold))
+                            .symbolEffect(.rotate, options: .repeat(.continuous))
+                        Text("后台 \(background.count)").lineLimit(1)
+                        if background.count == 1, let t = background.first {
+                            Text(t.title).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel([loop.map { "循环中，" + Self.loopLabel($0, now: .now) },
+                             background.isEmpty ? nil : "\(background.count) 个后台任务"].compactMap { $0 }.joined(separator: "，") + "，点按查看")
+    }
+
+    private func chip(_ tint: Color, @ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 4) { content() }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.12), in: .capsule)
+    }
+
+    static func loopLabel(_ loop: LoopInfo, now: Date) -> String {
+        if let next = loop.nextAt, next > now { return "下次 " + next.formatted(date: .omitted, time: .shortened) }
+        if loop.nextAt != nil { return "循环执行中" }
+        return loop.cadence ?? "循环中"
+    }
+}
+
+/// The chips opened: the loop (with its stop button) and every background task (with its output).
+struct ActivitySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var loop: LoopInfo?
+    var background: [BackgroundTask]
+    var stopLoop: () -> Void
+    var openOutput: (BackgroundTask) -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let loop { LoopStrip(loop: loop, stop: stopLoop, expanded: true) }
+                    if !background.isEmpty { BackgroundTasksStrip(tasks: background, openOutput: openOutput, expanded: true) }
+                }
+                .padding(16)
+            }
+            .background(Theme.pageBackground)
+            .navigationTitle(loop != nil && background.isEmpty ? "循环" : loop == nil ? "后台任务" : "循环与后台任务")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 // MARK: - Loops
 
 /// The /loop driving this agent: what it repeats, how often, when it wakes next — and a way to stop it.
 struct LoopStrip: View {
     var loop: LoopInfo
     var stop: () -> Void
-    @State private var expanded = false
+    @State var expanded = false
     @State private var confirming = false
 
     var body: some View {

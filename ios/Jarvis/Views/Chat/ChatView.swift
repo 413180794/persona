@@ -22,6 +22,7 @@ struct ChatView: View {
     @State private var settled = false
     @State private var showTerminal = false
     @State private var file: FileRef?
+    @State private var showActivity = false
     @State private var debugImages: [ImagePayload]?
     @State private var showInfo = false
     @State private var pane: SessionPane = .chat
@@ -770,14 +771,6 @@ struct ChatView: View {
                     InteractionPanel(interaction: ix) // `-showSampleScreen YES`: a terminal dialog, for screenshots
                 }
                 #endif
-                if let loop = session?.loop, style == .dev {
-                    LoopStrip(loop: loop) { model.stopLoop(key) }
-                }
-                if let bg = session?.background, !bg.isEmpty, style == .dev {
-                    BackgroundTasksStrip(tasks: bg) { t in
-                        if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
-                    }
-                }
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
@@ -1043,10 +1036,34 @@ struct ChatView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
-            Color.clear.frame(width: 44, height: 34) // balances the back button: the place stays centered
+            // A loop or background work: a small mark on the right (it balances the back button either way).
+            Group {
+                if session?.loop != nil || !(session?.background ?? []).isEmpty {
+                    Button { Haptics.tap(); showActivity = true } label: { activityMark }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("循环与后台任务，点按查看")
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 44, height: 34)
         }
         .padding(.horizontal, 4)
         .frame(height: ChatChrome.compactHeight)
+    }
+
+    /// The folded header's sign of a loop / background tasks: a turning gear with the count, or the loop arrows.
+    private var activityMark: some View {
+        let bg = session?.background?.count ?? 0
+        return HStack(spacing: 2) {
+            Image(systemName: bg > 0 ? "gearshape.2.fill" : "arrow.triangle.2.circlepath")
+                .font(.system(size: 11, weight: .bold))
+                .symbolEffect(.rotate, options: .repeat(.continuous), isActive: bg > 0)
+            if bg > 0 { Text("\(bg)").font(.caption2.weight(.bold).monospacedDigit()) }
+        }
+        .foregroundStyle(bg > 0 ? Theme.busy : Theme.done)
+        .frame(width: 44, height: 34)
+        .contentShape(.rect)
     }
 
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
@@ -1132,6 +1149,12 @@ struct ChatView: View {
                 .padding(.bottom, 6)
                 SiblingStrip(current: key) { next in switchTo(next) }
                 SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
+                // A /loop and background work: small chips here instead of strips over the composer; a tap opens them.
+                if session?.loop != nil || !(session?.background ?? []).isEmpty {
+                    ActivityChips(loop: session?.loop, background: session?.background ?? []) { showActivity = true }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 6)
+                }
                 // Only while subagents run (plus the one being read): finished ones stay reachable from their
                 // Agent call ("查看子 Agent") without taking a row here.
                 let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
@@ -1141,6 +1164,12 @@ struct ChatView: View {
             }
         } compact: {
             compactChrome
+        }
+        .sheet(isPresented: $showActivity) {
+            ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
+                showActivity = false
+                if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
+            }
         }
     }
 
