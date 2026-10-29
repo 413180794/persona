@@ -133,7 +133,26 @@ func TestFrameGateMergesBurstsOnly(t *testing.T) {
 	g.put(herdr.Frame{Full: true, Data: b("F")})
 	g.put(herdr.Frame{Data: b("a")})
 	g.put(herdr.Frame{Data: b("b")})
-	time.Sleep(80 * time.Millisecond)
+	// Quiet is counted from the last frame sent: wait for the burst to go out (late, on a loaded machine), then
+	// three gaps past it — not a fixed time from the start, which a slow timer eats into.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := len(at)
+		var last time.Time
+		if n > 0 {
+			last = at[n-1]
+		}
+		mu.Unlock()
+		if n >= 2 {
+			time.Sleep(time.Until(last.Add(3 * termMinGap)))
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the burst never went out")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	// Quiet again: at once. Then held, and a whole frame replaces the diffs before it; the last size wins.
 	g.put(herdr.Frame{Data: b("c")})
 	g.put(herdr.Frame{Data: b("d")})
@@ -151,8 +170,8 @@ func TestFrameGateMergesBurstsOnly(t *testing.T) {
 	if want := []string{"true:F", "false:ab", "false:c", "true:Ge"}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("sent %v, want %v", got, want)
 	}
-	if at[0].Sub(start) > 10*time.Millisecond || at[2].Sub(start) < 80*time.Millisecond {
-		t.Fatalf("first frames held: %v %v", at[0].Sub(start), at[2].Sub(start))
+	if at[0].Sub(start) > termMinGap/2 || at[2].Sub(at[1]) < 3*termMinGap {
+		t.Fatalf("first frames held: %v, then %v", at[0].Sub(start), at[2].Sub(at[1]))
 	}
 	if gap := at[1].Sub(at[0]); gap < 35*time.Millisecond {
 		t.Fatalf("burst went out %v after the frame before it", gap)
@@ -297,7 +316,7 @@ func TestTerminalControlAsksBeforeTakingOver(t *testing.T) {
 }
 
 func TestTerminalControlEndsWhenTakenOrForgotten(t *testing.T) {
-	bin, _, _ := fakeControlHerdr(t)
+	bin, log, _ := fakeControlHerdr(t)
 	n, hub, events := controlNode(t, bin)
 	if _, err := n.terminalWatch(context.Background(), "s1", &termControl{Cols: 44, Rows: 30}); err != nil {
 		t.Fatal(err)
@@ -331,4 +350,7 @@ func TestTerminalControlEndsWhenTakenOrForgotten(t *testing.T) {
 		}
 		return false
 	})
+	// The node reports the end as it closes stdin; the fake herdr is still writing its log in the test's directory
+	// until it has said so (the directory cannot be removed under it).
+	waitFor(t, "the fake herdr to let go", func() bool { return strings.Contains(readLog(log), "released") })
 }
