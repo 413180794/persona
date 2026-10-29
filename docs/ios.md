@@ -231,6 +231,32 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 手表：iPhone 经 WatchConnectivity 把配对信息和摘要（运行中会话、待处理交互、收件箱里需要你的事）同步给手表；手表打开时每 8 秒直接请求 hub 刷新，
   回答 / 发消息 / 中断也直接调 hub。
 
+## 连接状态（弱网 / 断网）
+
+参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的
+`ConnectionBanner` 横幅已删掉）。
+
+- 三种状态（`Jarvis/App/ConnectionStatus.swift`）：**等待网络**（`NWPathMonitor` 说手机没网）、**连接中…**（有网但 WebSocket 没连上、
+  正在重连，或者连着但 ping 5 秒没回 / 回得比 5 秒还慢 = 弱网）、**更新中…**（刚连上，正在补拉：待处理交互和打开着的对话的 backlog 都到了才算完，
+  最多 8 秒）。没配对、App 在后台（socket 是主动断开的）不算问题。
+- 去抖：从正常变成有问题后要持续 1.5 秒才显示，回到前台、切网络这种一秒内完成的重连什么都不显示；恢复时立刻换回标题。
+- 弱网：只有及时回来的 pong 能解除「连接中…」（晚到的 pong 也算慢），慢的时候每 5 秒 ping 一次，好了很快就能看出来；
+  否则标题会每 20 秒闪一下（实测过）。socket 照旧 45 秒没任何消息才判死重连。
+- 网络恢复（path 从没网变成有网）立刻重连，不等退避（最长 20 秒）；切换网络（Wi-Fi ↔ 蜂窝）时马上 ping 一次，旧接口上的死连接几秒内就会显示出来。
+- 显示位置（`ConnectionTitle` / `ConnectionLabel`）：Agents 列表（平时没有标题，标题位留空）、助手首页「Jarvis」、收件箱、设置 › 机器
+  的导航栏中间（`.principal`）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
+  点状态弹出说明（`ConnectionDetails`：原因、上次失败、几秒后重试、上次连上、几条消息在等、「立即重试」）。
+- 断网时的操作：
+  - **发消息**：连不上时不发请求，气泡带时钟和「连上后自动发送」（点时钟可「现在重试 / 不发了」）；请求因为没网 / 超时失败也一样转成等待，
+    不弹错。重连且「更新中…」结束后按写的顺序自动发出（没打开的对话先拉一页最新消息，已经送到的会在 transcript 里出现、自动去掉）。
+    同一条消息重发带同一个 `client_msg_id`，不会打两遍。等待中的消息存盘（`Outbox.swift`），App 被杀掉也不丢。
+  - **批准 / 回答 / 其他一次性操作**：不排队（电脑上的状态可能已经变了）。没网时卡片原样不动；失败时卡片放回去，
+    弹一条蓝色提示「连不上 hub / 没有网络，刚才的操作没有生效」（4 秒内最多一条），不用红色报错。
+  - 没网 / 连不上 hub 的错误（`Error.isOffline`）和超时一样不显示在页面里（`Error.shown` 为 nil）；后台刷新、往上翻历史失败什么都不弹，标题已经在说了。
+    手表没有这个标题，手表上照旧显示。
+- 调试：`-showConnection waiting|connecting|updating` 固定显示某个状态，再加 `-openConnectionDetails YES` 打开说明；
+  `-simulateOffline YES` 让 NWPathMonitor 视为没网（模拟器总是有 Mac 的网）。mock 的断网 / 弱网开关见 `docs/testing.md`。
+
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、

@@ -210,7 +210,7 @@ nonisolated enum Fmt {
         guard let date, date.isMeaningful else { return "" }
         let s = now.timeIntervalSince(date)
         if s < 45 { return "刚刚" }
-        if s < 3600 { return "\(Int(s / 60)) 分钟前" }
+        if s < 3600 { return "\(max(1, Int(s / 60))) 分钟前" }
         let cal = Calendar.current
         if cal.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
         if cal.isDateInYesterday(date) { return "昨天" }

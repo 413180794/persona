@@ -168,6 +168,7 @@ struct AssistantHome: View {
         }
         .navigationTitle("Jarvis")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle(title: "Jarvis") } }
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
     }
 

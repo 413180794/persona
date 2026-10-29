@@ -7,7 +7,6 @@ struct MachinesView: View {
     var body: some View {
         ScrollView {
                 VStack(spacing: 14) {
-                    ConnectionBanner()
                     ForEach(model.machines) { m in
                         NavigationLink(value: m.id) { MachineCard(machine: m) }
                             .buttonStyle(.plain)
@@ -20,6 +19,8 @@ struct MachinesView: View {
             }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("机器")
+        // A large title stays below; the bar's middle is only for 连接中… and the like.
+        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle() } }
         .refreshable { await model.refresh() }
     }
 }

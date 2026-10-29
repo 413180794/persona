@@ -170,7 +170,8 @@ struct PeerMessage: View {
 }
 
 /// A message just sent from this phone, before the transcript has it: drawn like a sent bubble right away, with a
-/// quiet clock while the request runs and a red "重发" when it failed.
+/// quiet clock while the request runs, the clock and 连上后自动发送 while it waits for the network (Outbox.swift),
+/// and a red "重发" when it failed.
 struct PendingBubble: View {
     var msg: PendingMessage
     var retry: () -> Void
@@ -194,6 +195,16 @@ struct PendingBubble: View {
                 switch msg.state {
                 case .sending: Image(systemName: "clock").font(.caption2).foregroundStyle(.tertiary)
                 case .sent: EmptyView()
+                case .waiting:
+                    Menu {
+                        Button(action: retry) { Label("现在重试", systemImage: "arrow.clockwise") }
+                        Button(role: .destructive, action: discard) { Label("不发了", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "clock").font(.footnote).foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(.rect)
+                    }
+                    .accessibilityLabel("等网络，连上后自动发送")
                 case .failed:
                     Menu {
                         Button(action: retry) { Label("重发", systemImage: "arrow.clockwise") }
@@ -209,7 +220,11 @@ struct PendingBubble: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
-                    .opacity(msg.state == .failed ? 0.6 : 1)
+                    .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
+            }
+            if msg.state == .waiting {
+                Text("连上后自动发送").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

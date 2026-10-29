@@ -829,8 +829,9 @@ nonisolated enum ChatCache {
 }
 
 /// A message on its way: shown at once, the request runs in the background.
-nonisolated struct PendingMessage: Identifiable, Hashable, Sendable {
-    enum State: Hashable, Sendable { case sending, sent, failed }
+nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
+    /// waiting: no network or no hub; it goes by itself once the app is connected and caught up (AppModel.flushOutbox).
+    enum State: Hashable, Codable, Sendable { case sending, sent, failed, waiting }
     var id = UUID()
     var text: String
     var images: [ImagePayload]

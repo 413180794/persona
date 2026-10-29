@@ -81,7 +81,7 @@ final class WatchModel {
             if let xx = try? await x { applyInbox(xx) }
             error = nil
         } catch {
-            self.error = error.shown
+            self.error = error.watchShown
         }
     }
 
@@ -99,7 +99,7 @@ final class WatchModel {
             interactions.removeAll { $0.id == ix.id }
             WKInterfaceDevice.current().play(.success)
         } catch {
-            self.error = error.shown
+            self.error = error.watchShown
             WKInterfaceDevice.current().play(.failure)
         }
     }
@@ -110,7 +110,7 @@ final class WatchModel {
             try await api.send(key, text: text)
             WKInterfaceDevice.current().play(.success)
         } catch {
-            self.error = error.shown
+            self.error = error.watchShown
             WKInterfaceDevice.current().play(.failure)
         }
     }
@@ -122,7 +122,7 @@ final class WatchModel {
             inbox.removeAll { $0.id == item.id }
             WKInterfaceDevice.current().play(.success)
         } catch {
-            self.error = error.shown
+            self.error = error.watchShown
             WKInterfaceDevice.current().play(.failure)
         }
     }
@@ -135,7 +135,7 @@ final class WatchModel {
             WKInterfaceDevice.current().play(.success)
             return true
         } catch {
-            self.error = error.shown
+            self.error = error.watchShown
             WKInterfaceDevice.current().play(.failure)
             return false
         }
@@ -501,4 +501,9 @@ struct WatchInboxItemView: View {
         .navigationTitle(item.title)
         .onAppear { if draft == nil { draft = item.agentDraft } } // the AI 分身's, ready to send
     }
+}
+
+private extension Error {
+    /// The watch has no connection title (the phone's 等待网络 / 连接中…): no network is still worth a line here.
+    var watchShown: String? { isOffline ? localizedDescription : shown }
 }

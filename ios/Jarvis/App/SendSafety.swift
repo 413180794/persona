@@ -17,23 +17,27 @@ struct SendRefusal: Identifiable {
 
 extension AppModel {
     /// Sends a pending message, telling apart why it failed: a draft on the computer (an alert offers to clear it), an
-    /// open dialog, or a failure after typing began (it may have arrived; a retry with the same id cannot double it).
-    func sendPending(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) async -> Bool {
-        guard let api else { return false }
+    /// open dialog, a failure after typing began (it may have arrived; a retry with the same id cannot double it), or
+    /// no answer at all (no network, the hub out of reach, a timeout): then it waits and goes again by itself, which
+    /// the same id makes safe too.
+    func sendPending(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) async -> SendOutcome {
+        guard let api else { return .failed }
         do {
             try await api.send(key, text: msg.text, images: msg.images, launcher: assistantLaunchers[key],
                                clientMsgID: msg.id.uuidString, clearDraft: clearDraft)
-            return true
+            return .sent
         } catch let e as APIError where e.code == "input_draft" {
             Haptics.attention()
             sendRefusal = SendRefusal(key: key, messageID: msg.id, draft: e.fields["draft"] ?? "", clearable: e.fields["clearable"])
-            return false
+            return .failed
         } catch let e as APIError where e.fields["delivered"] == "unknown" {
             toast = Toast("可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发", style: .error)
-            return false
+            return .failed
+        } catch where error.isOffline || error.isTimeout {
+            return .waiting
         } catch {
             show(error)
-            return false
+            return .failed
         }
     }
 

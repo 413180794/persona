@@ -11,7 +11,9 @@ final class AppModel {
 
     /// Set by pair / unpair and when the phone gets its own credential (DeviceCredentials.swift).
     var config: ServerConfig?
-    let live = LiveConnection()
+    let live: LiveConnection
+    /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
+    let connection: ConnectionStatus
     private(set) var machines: [Machine] = [] { didSet { saveSnapshot() } }
     private(set) var sessionsByMachine: [String: [Session]] = [:] { didSet { saveSnapshot() } }
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
@@ -40,16 +42,21 @@ final class AppModel {
     }
     var debugShowNewChat = false
 
-    @ObservationIgnored private var chats: [SessionKey: ChatStore] = [:]
+    @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
+    @ObservationIgnored var flushingOutbox = false
+    @ObservationIgnored let outboxWriter = Debouncer(.milliseconds(300))
     @ObservationIgnored private(set) var launcherCache: [String: [Launcher]] = [:]
 
     var api: APIClient? { config.map { APIClient(config: $0) } }
     var isPaired: Bool { config != nil }
 
     init() {
+        let live = LiveConnection()
+        self.live = live
+        connection = ConnectionStatus(live: live)
         config = Keychain.serverConfig
         // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
-        if config != nil { restoreSnapshot() }
+        if config != nil { restoreSnapshot(); restoreOutbox() }
         if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
             selectedTab = tab
         }
@@ -67,6 +74,8 @@ final class AppModel {
             WatchSync.shared.push(summary: self.watchSummary())
         }
         live.onConnected = { [weak self] in self?.didConnect() }
+        live.onChange = { [weak self] in self?.connection.update() }
+        connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
     }
 
     #if DEBUG
@@ -111,6 +120,7 @@ final class AppModel {
         chats = [:]
         subscribers = [:]
         shown = []
+        saveOutbox()
     }
 
     // MARK: Derived
@@ -198,7 +208,10 @@ final class AppModel {
     @ObservationIgnored private var chatTick = 0
 
     private func evictChats() {
-        let idle = chats.keys.filter { k in subscribers[k] == nil && !shown.contains { $0.key == k } && k != visibleSession }
+        // A chat with messages still going out stays (its pending list is the outbox).
+        let idle = chats.keys.filter { k in
+            subscribers[k] == nil && !shown.contains { $0.key == k } && k != visibleSession && chats[k]?.pending.isEmpty != false
+        }
         guard idle.count > Self.keptChats else { return }
         for k in idle.sorted(by: { chatUse[$0, default: 0] < chatUse[$1, default: 0] }).prefix(idle.count - Self.keptChats) {
             chats[k] = nil
@@ -294,7 +307,7 @@ final class AppModel {
     /// The chat's store if one is in memory (never creates one: background sync writes to the disk cache instead).
     func existingChat(_ key: SessionKey) -> ChatStore? { chats[key] }
 
-    private func loadInitial(_ key: SessionKey) async {
+    func loadInitial(_ key: SessionKey) async {
         guard let api else { return }
         do {
             let res = try await api.items(key, beforeSeq: nil)
@@ -352,7 +365,7 @@ final class AppModel {
             let res = try await api.items(key, beforeSeq: first.seq)
             store.prepend(res.items, hasMore: res.hasMore)
         } catch {
-            show(error)
+            if !error.isOffline { show(error) } // scrolling up while offline: the title says why nothing comes
         }
     }
 
@@ -363,17 +376,22 @@ final class AppModel {
         AgentSync.shared.schedule()
         LarkSync.shared.reconnected()
         InboxStore.shared.reload()
+        // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus).
+        connection.startCatchUp(["interactions"] + subscribed.map(Self.catchUpPart))
         for key in subscribed {
             chat(key).liveText = "" // a delta that cleared it may have been lost with the old socket
             live.send(subscribeMessage(key))
         }
         // Questions answered on the computer while the socket was down are gone from the hub: drop their cards.
         Task {
+            defer { connection.caughtUp("interactions") }
             guard let ixs = try? await api?.interactions() else { return }
             interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             WatchSync.shared.push(summary: watchSummary())
         }
     }
+
+    private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.machineID)/\(key.sessionID)" }
 
     func registerPhone() {
         #if DEBUG
@@ -423,6 +441,7 @@ final class AppModel {
         case .fleet(let state):
             LiveActivityController.shared.apply(state)
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
+            if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
             settle(key, store.apply(items, span: span, backlog: backlog, hasMore: hasMore, moreAfter: moreAfter))
             // The streamed message landed in the transcript: stop drawing its live copy.
@@ -449,6 +468,7 @@ final class AppModel {
         case .hookEvent:
             break
         case .error(let key, let message):
+            if let key { connection.caughtUp(Self.catchUpPart(key)) }
             if APIError.isTimeoutText(message) { break } // retried by the next poll / push; not shown
             if let key { chat(key).error = message } else { toast = Toast(message, style: .error) }
         }
@@ -484,6 +504,8 @@ final class AppModel {
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
         guard let api else { return }
+        // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
+        guard connection.networkUp else { notDone(); return }
         interactions[ix.id] = nil
         do {
             try await api.resolve(ix.id, r)
@@ -527,6 +549,7 @@ final class AppModel {
     func sendNow(_ key: SessionKey, text: String, images: [ImagePayload] = []) {
         let msg = PendingMessage(text: text, images: images)
         chat(key).pending.append(msg)
+        saveOutbox()
         Haptics.tap()
         deliver(key, msg)
     }
@@ -554,21 +577,16 @@ final class AppModel {
 
     func discard(_ key: SessionKey, _ msg: PendingMessage) {
         chat(key).pending.removeAll { $0.id == msg.id }
+        saveOutbox()
     }
 
     private func deliver(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         Task {
-            let ok = await sendPending(key, msg, clearDraft: clearDraft)
-            let store = chat(key)
-            guard let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { return }
-            store.pending[i].state = ok ? .sent : .failed
-            guard ok else { return }
-            // Normally the transcript shows it within a second or two (or it lands in the queue); never linger.
-            try? await Task.sleep(for: .seconds(60))
-            store.pending.removeAll { $0.id == msg.id }
+            // The hub is out of reach: the message waits (clock, 连上后自动发送) instead of failing after a timeout.
+            let outcome: SendOutcome = isLive && !live.stalled ? await sendPending(key, msg, clearDraft: clearDraft) : .waiting
+            settleSend(key, msg.id, outcome)
         }
     }
-
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
         guard let api else { return false }
         do {
@@ -831,14 +849,26 @@ final class AppModel {
             interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             live.ensureConnected()
         } catch {
-            show(error)
+            if !error.isOffline { show(error) } // the title says 等待网络 / 连接中…
         }
     }
 
     func show(_ error: Error) {
+        if error.isOffline { notDone(); return }
         guard !error.isQuiet else { return } // leaving a screen cancels its loads, a timeout gets retried: not shown
         toast = Toast(error.localizedDescription, style: .error)
         Haptics.error()
+    }
+
+    @ObservationIgnored private var lastNotDone = Date.distantPast
+
+    /// Something the user did needed the hub while it is out of reach: one calm line, at most every few seconds (the
+    /// title already says why), instead of a red error per tap.
+    func notDone() {
+        guard Date.now.timeIntervalSince(lastNotDone) > 4 else { return }
+        lastNotDone = .now
+        toast = Toast(connection.networkUp ? "连不上 hub，刚才的操作没有生效" : "没有网络，刚才的操作没有生效", style: .info)
+        Haptics.attention()
     }
 
     func watchSummary() -> WatchSummary {

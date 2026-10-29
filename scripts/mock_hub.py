@@ -357,7 +357,7 @@ TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
 ]
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 UPLOADS = []  # files received (GET /mock/uploads)
-SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
+SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
 
 INBOX = [
     {"id": "lark:f1:100", "source": "lark", "kind": "dm", "account": "lark", "account_name": "飞书", "title": "韩梅梅",
@@ -434,9 +434,40 @@ def span(items, frm=None, to=None):
     return out
 
 
+# ---------- a bad network, on demand ----------
+# MOCK_DELAY=<seconds>: every request and pong is that late (a weak network). At runtime, for UI tests:
+#   GET /mock/delay?s=3   the same, from now on (0 turns it off)
+#   GET /mock/down?s=8    the hub is gone for that long: open WebSockets drop, new connections are closed unanswered
+NET = {"delay": float(os.environ.get("MOCK_DELAY", "0")), "down_until": 0.0}
+SOCKETS = set()
+
+
+def net_control(path, q):
+    """Handles /mock/delay and /mock/down; True if it was one of them."""
+    if path == "/mock/delay":
+        NET["delay"] = float(q.get("s", ["0"])[0])
+        return True
+    if path == "/mock/down":
+        NET["down_until"] = time.time() + float(q.get("s", ["5"])[0])
+        for sock in list(SOCKETS):
+            try: sock.shutdown(2)
+            except OSError: pass
+        return True
+    return False
+
+
 # ---------- HTTP ----------
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    def bad_network(self):
+        """True when the hub is "down" (the connection is closed without an answer); otherwise waits out the delay."""
+        if time.time() < NET["down_until"]:
+            self.close_connection = True
+            return True
+        if NET["delay"] > 0:
+            time.sleep(NET["delay"])
+        return False
 
     def log_message(self, fmt, *a):
         LOG.write("%s %s\n" % (self.command, self.path)); LOG.flush()
@@ -456,6 +487,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
+        if net_control(p, q): return self.send_json({"ok": True, **NET})
+        if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
         if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock"})
@@ -556,6 +589,12 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
+        if self.bad_network(): return
+        if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
+            body = json.loads(self.last_body or b"{}")
+            if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
+                SENT.append(body)
+            return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
@@ -621,6 +660,7 @@ class H(BaseHTTPRequestHandler):
             with lock:
                 self.wfile.write(hdr + data); self.wfile.flush()
 
+        SOCKETS.add(self.connection)
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
               "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
@@ -640,6 +680,7 @@ class H(BaseHTTPRequestHandler):
                 payload = bytes(b ^ mask[i % 4] for i, b in enumerate(r.read(n)))
                 if op == 8: break
                 if op == 9:  # a pong carries the ping's payload back (URLSession ignores an empty one)
+                    if NET["delay"] > 0: time.sleep(NET["delay"])
                     with lock: self.wfile.write(bytes([0x8A, len(payload)]) + payload); self.wfile.flush()
                     continue
                 if op != 1: continue
@@ -744,6 +785,7 @@ class H(BaseHTTPRequestHandler):
                               "has_more": False, **span(items)})
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
+        SOCKETS.discard(self.connection)
         self.close_connection = True
 
 

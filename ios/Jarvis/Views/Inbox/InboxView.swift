@@ -49,6 +49,7 @@ struct InboxView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(text: $query, prompt: "搜索标题、发件人、内容")
                 .toolbar {
+                    ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: "square.and.pencil") }

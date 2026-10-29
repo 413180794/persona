@@ -1,0 +1,100 @@
+import Foundation
+
+// Messages written while the hub is out of reach (docs/ios.md「连接状态」): they stay in their chat as pending bubbles
+// with a clock (连上后自动发送) and go out by themselves once the app is connected and caught up, in the order they
+// were written. Kept on disk too, so quitting the app (or iOS ending it in the background) does not lose them.
+
+enum SendOutcome: Equatable {
+    case sent, failed, waiting
+
+    var state: PendingMessage.State {
+        switch self {
+        case .sent: .sent
+        case .failed: .failed
+        case .waiting: .waiting
+        }
+    }
+}
+
+extension AppModel {
+    /// Messages still going out (written offline, or being sent).
+    var outboxCount: Int {
+        chats.values.reduce(0) { n, s in n + s.pending.count { $0.state == .waiting || $0.state == .sending } }
+    }
+
+    /// Records how a send went; a sent bubble stays until its transcript copy arrives (a minute at most).
+    func settleSend(_ key: SessionKey, _ id: UUID, _ outcome: SendOutcome) {
+        let store = chat(key)
+        guard let i = store.pending.firstIndex(where: { $0.id == id }) else { return }
+        store.pending[i].state = outcome.state
+        saveOutbox()
+        switch outcome {
+        case .sent:
+            Task {
+                // Normally the transcript shows it within a second or two (or it lands in the queue); never linger.
+                try? await Task.sleep(for: .seconds(60))
+                store.pending.removeAll { $0.id == id }
+            }
+        case .waiting where isLive && !live.stalled:
+            // The socket looks fine but the request got no answer (a weak network): try again shortly.
+            Task {
+                try? await Task.sleep(for: .seconds(10))
+                flushOutbox()
+            }
+        default: break
+        }
+    }
+
+    /// Sends what waited for the network, chat by chat and in order. A chat that is not open first fetches its latest
+    /// messages: one that did arrive before the link broke is in the transcript and drops out (ChatStore.apply).
+    func flushOutbox() {
+        guard isLive, !flushingOutbox else { return }
+        let keys = chats.filter { $0.value.pending.contains { $0.state == .waiting } }.map(\.key)
+        guard !keys.isEmpty else { return }
+        flushingOutbox = true
+        Task {
+            defer { flushingOutbox = false }
+            for key in keys {
+                let store = chat(key)
+                if !isSubscribed(key) {
+                    if store.loadedOnce { await fill(key) } else { await loadInitial(key) }
+                }
+                for msg in store.pending where msg.state == .waiting {
+                    guard isLive, let i = store.pending.firstIndex(where: { $0.id == msg.id }) else { break }
+                    store.pending[i].state = .sending
+                    let outcome = await sendPending(key, msg)
+                    settleSend(key, msg.id, outcome)
+                    if outcome == .waiting { break } // keep the order: the rest go after it
+                }
+            }
+        }
+    }
+
+    private static let outboxName = "outbox"
+
+    func saveOutbox() {
+        outboxWriter.run { [weak self] in // one write at a time, the latest last
+            guard let self else { return }
+            let list = self.chats.flatMap { key, store in
+                store.pending.filter { $0.state == .waiting || $0.state == .sending }.map { OutboxEntry(key: key, message: $0) }
+            }
+            StateCache.save(Self.outboxName, list)
+        }
+    }
+
+    /// At launch: what was still going out comes back as waiting (a resend carries the same id, so one that did
+    /// arrive is not typed twice).
+    func restoreOutbox() {
+        for e in StateCache.load(Self.outboxName, as: [OutboxEntry].self) ?? [] {
+            var msg = e.message
+            msg.state = .waiting
+            let store = chat(e.key)
+            if !store.pending.contains(where: { $0.id == msg.id }) { store.pending.append(msg) }
+        }
+    }
+}
+
+private nonisolated struct OutboxEntry: Codable, Sendable {
+    var key: SessionKey
+    var message: PendingMessage
+}

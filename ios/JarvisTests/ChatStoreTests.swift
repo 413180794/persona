@@ -358,7 +358,10 @@ struct TurnTests {
         #expect(APIError(status: 504, message: "gateway timeout").shown == nil)
         #expect(APIError(status: 502, message: "node call: context deadline exceeded").shown == nil)
         #expect(APIError(status: 502, message: "machine offline").shown == "machine offline")
-        #expect(URLError(.notConnectedToInternet).shown != nil)
+        #expect(URLError(.notConnectedToInternet).shown == nil)
+        #expect(URLError(.cannotConnectToHost).isOffline)
+        #expect(!URLError(.timedOut).isOffline)
+        #expect(URLError(.badServerResponse).shown != nil)
     }
 
     @Test func subagentItemsComeFromTheSubagentsTranscript() throws {

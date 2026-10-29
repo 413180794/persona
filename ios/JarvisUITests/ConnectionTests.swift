@@ -1,0 +1,96 @@
+import XCTest
+
+/// The title turns into 连接中… while the hub is out of reach and back afterwards, a short drop shows nothing, and a
+/// message written meanwhile waits and goes by itself (docs/ios.md「连接状态」). Against scripts/mock_hub.py, whose
+/// /mock/down?s=<seconds> takes the hub away (TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<port>).
+final class ConnectionTests: XCTestCase {
+    private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
+
+    private func hub() throws -> String {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        return hub
+    }
+
+    private func launch(_ hub: String, _ args: [String]) -> XCUIApplication {
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair] + args
+        app.launch()
+        return app
+    }
+
+    private func mock(_ hub: String, _ path: String) -> [String: Any] {
+        guard let data = try? Data(contentsOf: URL(string: hub + path)!),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return obj
+    }
+
+    private func status(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "查看连接详情")).firstMatch
+    }
+
+    /// Whether the status showed at any point within `seconds` (checked every 0.1 s).
+    private func shows(_ el: XCUIElement, within seconds: TimeInterval) -> Bool {
+        let deadline = Date.now.addingTimeInterval(seconds)
+        while Date.now < deadline {
+            if el.exists { return true }
+            usleep(100_000)
+        }
+        return false
+    }
+
+    private func shot(_ name: String) {
+        let s = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        s.name = name
+        s.lifetime = .keepAlways
+        add(s)
+    }
+
+    /// The hub goes away for a while: 连接中… in the title, then the title comes back on its own.
+    @MainActor func testOutageShowsConnectingThenRecovers() throws {
+        let hub = try hub()
+        let app = launch(hub, ["-tab", "dev", "-dev.openChat", ""]) // not the chat an earlier test left open
+        XCTAssertTrue(app.buttons["新建会话"].waitForExistence(timeout: 15))
+        sleep(3)
+        XCTAssertFalse(status(app).exists, "a status while connected")
+        _ = mock(hub, "/mock/down?s=10")
+        XCTAssertTrue(status(app).waitForExistence(timeout: 6), "no 连接中… while the hub is down:\n\(app.debugDescription)")
+        XCTAssertTrue(status(app).label.hasPrefix("连接中…"), status(app).label)
+        shot("connecting")
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: status(app))
+        waitForExpectations(timeout: 30) // back up after 10 s, plus the backoff
+    }
+
+    /// A drop shorter than the delay (coming back to the app, switching networks) shows nothing at all.
+    @MainActor func testShortDropDoesNotFlash() throws {
+        let hub = try hub()
+        let app = launch(hub, ["-tab", "dev", "-dev.openChat", ""]) // not the chat an earlier test left open
+        XCTAssertTrue(app.buttons["新建会话"].waitForExistence(timeout: 15))
+        sleep(3)
+        _ = mock(hub, "/mock/down?s=0.2")
+        XCTAssertFalse(shows(status(app), within: 4), "the title flashed for a reconnect that took about a second")
+    }
+
+    /// Written while the hub is down: the bubble says 连上后自动发送, and the message reaches the hub once it is back.
+    @MainActor func testMessageWaitsForTheHub() throws {
+        let hub = try hub()
+        let text = "断网时写的消息 \(Int.random(in: 1000...9999))"
+        let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
+        sleep(4)
+        _ = mock(hub, "/mock/down?s=14")
+        let waiting = app.staticTexts["连上后自动发送"]
+        XCTAssertTrue(waiting.waitForExistence(timeout: 12), "no waiting bubble:\n\(app.debugDescription)")
+        shot("waiting")
+        let deadline = Date.now.addingTimeInterval(40)
+        var sent: [[String: Any]] = []
+        while Date.now < deadline {
+            sent = (mock(hub, "/mock/sent")["sent"] as? [[String: Any]] ?? []).filter { $0["text"] as? String == text }
+            if !sent.isEmpty { break }
+            usleep(500_000)
+        }
+        XCTAssertEqual(sent.count, 1, "the waiting message should reach the hub once, after it is back")
+    }
+}

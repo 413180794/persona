@@ -591,10 +591,25 @@ extension Error {
         return api.status == 504 || APIError.isTimeoutText(api.message)
     }
 
-    /// Nothing for the user to act on: a cancellation or a timeout.
-    nonisolated var isQuiet: Bool { isCancellation || isTimeout }
+    /// The request never got an answer because the phone has no network or cannot reach the hub (it may still have
+    /// arrived when the link broke midway: networkConnectionLost). The title already says 等待网络 / 连接中….
+    nonisolated var isOffline: Bool {
+        let ns = self as NSError
+        guard ns.domain == NSURLErrorDomain else { return false }
+        return Self.offlineCodes.contains(ns.code)
+    }
 
-    /// The message to show, or nil for a cancellation or a timeout.
+    nonisolated private static var offlineCodes: Set<Int> {
+        [NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost, NSURLErrorCannotConnectToHost,
+         NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed, NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff,
+         NSURLErrorCallIsActive, NSURLErrorSecureConnectionFailed]
+    }
+
+    /// Nothing for the user to act on in a message: a cancellation, a timeout, or no network (2026-10-29: the title
+    /// says it, a toast or a red line per failed request was noise).
+    nonisolated var isQuiet: Bool { isCancellation || isTimeout || isOffline }
+
+    /// The message to show, or nil for a cancellation, a timeout or no network.
     nonisolated var shown: String? { isQuiet ? nil : localizedDescription }
 }
 

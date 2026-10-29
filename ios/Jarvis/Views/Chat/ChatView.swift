@@ -26,6 +26,7 @@ struct ChatView: View {
     @State private var showActivity = false
     @State private var debugImages: [ImagePayload]?
     @State private var showInfo = false
+    @State private var showLink = false
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
     @State private var menu = MessageMenu()
@@ -1047,9 +1048,16 @@ struct ChatView: View {
             Spacer(minLength: 0)
             Button { Haptics.tap(); showChrome() } label: {
                 HStack(spacing: 6) {
-                    if let s = session { StatusDot(state: s.state, size: 7) }
-                    Text(compactPlace).lineLimit(1).truncationMode(.middle)
+                    // Out of reach: the slim bar says so too (the open header's subtitle explains on a tap).
+                    if model.connection.shown != .online {
+                        ProgressView().controlSize(.mini)
+                        Text(model.connection.shown.title).lineLimit(1)
+                    } else {
+                        if let s = session { StatusDot(state: s.state, size: 7) }
+                        Text(compactPlace).lineLimit(1).truncationMode(.middle)
+                    }
                 }
+                .animation(.snappy, value: model.connection.shown)
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 28)
@@ -1057,7 +1065,8 @@ struct ChatView: View {
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(compactPlace)，显示标题和标签")
+            .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
+                                : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
             // A loop or background work: a small mark on the right (it balances the back button either way).
             Group {
@@ -1123,27 +1132,39 @@ struct ChatView: View {
     }
 
     /// A custom title: tapping it toggles the developer info card (instead of the system scroll-to-top).
+    /// While the hub is out of reach the subtitle turns into a spinner and 连接中… (Telegram keeps the name and
+    /// swaps the "online" line the same way); a tap then explains the link instead of opening the session info.
     private var titleButton: some View {
-        Button {
+        let link = model.connection.shown
+        return Button {
             Haptics.tap()
-            withAnimation(.snappy) { showInfo.toggle() }
+            if link != .online { showLink = true } else { withAnimation(.snappy) { showInfo.toggle() } }
         } label: {
             VStack(spacing: 1) {
                 Text(title).font(.headline).lineLimit(1)
-                HStack(spacing: 3) {
-                    Text(subtitle).lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .rotationEffect(.degrees(showInfo ? 180 : 0))
+                ZStack {
+                    if link != .online {
+                        ConnectionLabel(phase: link, compact: true).transition(.opacity)
+                    } else {
+                        HStack(spacing: 3) {
+                            Text(subtitle).lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .rotationEffect(.degrees(showInfo ? 180 : 0))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                    }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .animation(.snappy, value: link)
             }
             .frame(maxWidth: 260)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title)，\(showInfo ? "收起" : "查看")会话信息")
+        .accessibilityLabel(link != .online ? "\(title)，\(link.title)，查看连接详情" : "\(title)，\(showInfo ? "收起" : "查看")会话信息")
+        .connectionDetails($showLink)
     }
 
     /// The Agents header: title row, agent strip and tabs, folding into a slim bar as the list scrolls.
@@ -1317,7 +1338,9 @@ struct ChatView: View {
             }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
             if let t = UserDefaults.standard.string(forKey: "openSendMessage") { // `-openSendMessage <text>`: refusals (SendSafety)
-                Task { try? await Task.sleep(for: .seconds(3)); model.sendNow(key, text: t) }
+                // `-openSendDelay <s>`: later (ConnectionTests sends while the hub is down)
+                let delay = UserDefaults.standard.object(forKey: "openSendDelay") != nil ? UserDefaults.standard.double(forKey: "openSendDelay") : 3
+                Task { try? await Task.sleep(for: .seconds(delay)); model.sendNow(key, text: t) }
             }
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }

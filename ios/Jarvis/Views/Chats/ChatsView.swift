@@ -121,11 +121,6 @@ struct ChatsView: View {
 
         NavigationStack(path: pushing) {
             List {
-                Section { ConnectionBanner() }
-                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-
                 if !interactions.isEmpty && query.isEmpty {
                     Section {
                         ForEach(interactions) { ix in
@@ -236,13 +231,14 @@ struct ChatsView: View {
             .listStyle(.insetGrouped)
             .themedPage()
             .navigationTitle("Agents")
-            // No title over the list (the tab says it); the name stays for the back button. Removing the title only
-            // works inline: a large title ignores toolbar(removing:).
+            // No title over the list (the tab says it); the name stays for the back button. The principal item below
+            // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
+            // (toolbar(removing: .title) would hide that too).
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(removing: .title)
             .searchable(text: $query, isPresented: $searching, prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
             .toolbar {
+                ToolbarItem(placement: .principal) { ConnectionTitle() }
                 ToolbarItem(placement: .topBarLeading) { machineMenu }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showNew = true } label: { Image(systemName: "square.and.pencil") }

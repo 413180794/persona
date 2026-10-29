@@ -140,8 +140,19 @@ final class LiveConnection {
         case failed(String)
     }
 
-    private(set) var state: State = .idle
+    private(set) var state: State = .idle { didSet { if state != oldValue { onChange?() } } }
+    /// Connected, but a ping has gone unanswered for `slowAfter`, or its pong came that late: a weak or stalled
+    /// network. Only a prompt pong clears it (a late one alone made the title flip every ping), and pings go every
+    /// `slowPingEvery` meanwhile. The socket is only declared dead after `deadAfter`; until then the app says
+    /// 连接中… (ConnectionStatus).
+    private(set) var stalled = false { didSet { if stalled != oldValue { onChange?() } } }
+    /// Round trip of the last answered ping.
+    private(set) var rtt: TimeInterval?
+    /// When the next attempt starts while the hub is out of reach.
+    private(set) var nextTry: Date?
     @ObservationIgnored var onEvent: ((ServerEvent) -> Void)?
+    /// The state or `stalled` changed.
+    @ObservationIgnored var onChange: (() -> Void)?
     @ObservationIgnored var onConnected: (() -> Void)?
 
     @ObservationIgnored private var config: ServerConfig?
@@ -154,6 +165,9 @@ final class LiveConnection {
     @ObservationIgnored private var lastHeard = Date.distantPast
     static let pingEvery: Duration = .seconds(20)
     static let deadAfter: TimeInterval = 45
+    static let slowAfter: TimeInterval = 5
+    static let slowPingEvery: Duration = .seconds(5)
+    @ObservationIgnored private var lastPong = Date.distantPast
 
     func connect(_ config: ServerConfig) {
         self.config = config
@@ -166,12 +180,29 @@ final class LiveConnection {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         state = .idle
+        stalled = false
+        nextTry = nil
     }
 
     /// Reconnect now if the socket is down (e.g. app came to foreground).
     func ensureConnected() {
         guard config != nil else { return }
         if state != .connected && state != .connecting { backoff = 1; open() }
+    }
+
+    /// The network came back or the user asked: try right away instead of after the backoff (up to 20 s), and also
+    /// replace an attempt that hangs. A socket that works is left alone.
+    func reconnectNow() {
+        guard config != nil else { return }
+        backoff = 1
+        if state != .connected || stalled { open() }
+    }
+
+    /// The network path changed (Wi-Fi to cellular): a socket on the old interface goes quiet without failing. Ping
+    /// now, so a dead one shows as stalled in seconds instead of at the next heartbeat.
+    func probe() {
+        guard let task, state == .connected else { return }
+        ping(task, generation)
     }
 
     private func open() {
@@ -188,6 +219,8 @@ final class LiveConnection {
         t.maximumMessageSize = 64 << 20
         task = t
         state = .connecting
+        stalled = false
+        nextTry = nil
         t.resume()
         receive(t, gen)
         heartbeat(t, gen)
@@ -196,18 +229,37 @@ final class LiveConnection {
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {
         Task { @MainActor [weak self] in
             while true {
-                try? await Task.sleep(for: Self.pingEvery)
+                try? await Task.sleep(for: self?.stalled == true ? Self.slowPingEvery : Self.pingEvery)
                 guard let self, gen == self.generation else { return }
                 guard self.state == .connected else { continue }
                 if Date.now.timeIntervalSince(self.lastHeard) > Self.deadAfter {
                     t.cancel(with: .goingAway, reason: nil) // its receive fails and schedules the reconnect
                     return
                 }
-                t.sendPing { [weak self] error in
-                    guard error == nil else { return }
-                    Task { @MainActor in if gen == self?.generation { self?.lastHeard = .now } }
-                }
+                self.ping(t, gen)
             }
+        }
+    }
+
+    /// One ping: its pong refreshes `lastHeard` and the round trip, and decides `stalled`; no answer within
+    /// `slowAfter` marks the link stalled.
+    private func ping(_ t: URLSessionWebSocketTask, _ gen: Int) {
+        let sent = Date.now
+        t.sendPing { [weak self] error in
+            guard error == nil else { return }
+            Task { @MainActor in
+                guard let self, gen == self.generation else { return }
+                let rtt = Date.now.timeIntervalSince(sent)
+                self.lastHeard = .now
+                self.lastPong = .now
+                self.rtt = rtt
+                self.stalled = rtt > Self.slowAfter
+            }
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.slowAfter))
+            guard let self, gen == self.generation, self.state == .connected, self.lastPong < sent else { return }
+            self.stalled = true
         }
     }
 
@@ -234,6 +286,7 @@ final class LiveConnection {
                     self.receive(t, gen)
                 case .failure(let err):
                     self.state = .failed(err.localizedDescription)
+                    self.stalled = false
                     self.scheduleReconnect(gen)
                 }
             }
@@ -243,6 +296,7 @@ final class LiveConnection {
     private func scheduleReconnect(_ gen: Int) {
         let delay = backoff
         backoff = min(backoff * 2, 20)
+        nextTry = .now + delay
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
             guard gen == self.generation else { return }

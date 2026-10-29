@@ -118,60 +118,6 @@ struct EmptyStateView: View {
     }
 }
 
-struct ConnectionBanner: View {
-    @Environment(AppModel.self) private var model
-    /// Shown only after the hub has been out of reach for 5 s in a row: reconnects after a network blip or coming
-    /// back to the app finish well within that, and the banner just flashed.
-    @State private var due = false
-
-    private var isUp: Bool {
-        switch model.live.state {
-        case .connected, .idle: true
-        default: false
-        }
-    }
-
-    var body: some View {
-        content
-            .task(id: isUp) {
-                guard !isUp else { due = false; return }
-                try? await Task.sleep(for: .seconds(5))
-                if !Task.isCancelled { withAnimation(.snappy) { due = true } }
-            }
-    }
-
-    @ViewBuilder private var content: some View {
-        switch model.live.state {
-        case _ where !due:
-            EmptyView()
-        case .connected, .idle:
-            EmptyView()
-        case .connecting:
-            banner(symbol: "antenna.radiowaves.left.and.right", text: "正在连接 hub…", tint: Theme.attention, spinning: true)
-        case .failed(let msg):
-            Button {
-                model.live.ensureConnected()
-                Task { await model.refresh() }
-            } label: {
-                banner(symbol: "wifi.exclamationmark", text: "连不上 hub：\(msg)", tint: Theme.danger, spinning: false)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func banner(symbol: String, text: String, tint: Color, spinning: Bool) -> some View {
-        HStack(spacing: 8) {
-            if spinning { ProgressView().controlSize(.small) } else { Image(systemName: symbol).foregroundStyle(tint) }
-            Text(text).font(.footnote.weight(.medium)).lineLimit(2)
-            Spacer(minLength: 0)
-            if !spinning { Text("重试").font(.footnote.weight(.semibold)).foregroundStyle(tint) }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(tint.opacity(0.1), in: .rect(cornerRadius: 14, style: .continuous))
-    }
-}
-
 extension View {
     /// Rounded card surface used across lists.
     func card(padding: CGFloat = 14, radius: CGFloat = 18) -> some View {

@@ -24,7 +24,7 @@ struct SettingsView: View {
                             Text(model.config?.url.absoluteString ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                             HStack(spacing: 5) {
                                 Circle().fill(model.live.state == .connected ? Theme.idle : Theme.attention).frame(width: 7, height: 7)
-                                Text(model.live.state == .connected ? "已连接 hub" : "未连接").font(.caption).foregroundStyle(.secondary)
+                                Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
