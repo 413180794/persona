@@ -2263,10 +2263,12 @@ struct WorkCardSlice: View {
 
     var body: some View {
         let r = Self.radius
-        UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
-                               bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0, style: .continuous)
-            .fill(Theme.Fill.well)
-            .overlay { WorkCardEdges(top: top, bottom: bottom, radius: r).stroke(Theme.cardStroke, lineWidth: 0.5) }
+        let fill = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
+                                          bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0,
+                                          style: .continuous).fill(Theme.Fill.well)
+        StrokeShapeView(shape: WorkCardEdges(top: top, bottom: bottom, radius: r),
+                        style: Theme.cardStroke, strokeStyle: StrokeStyle(lineWidth: 0.5),
+                        isAntialiased: true, background: fill)
             .padding(.top, top ? 0 : -Self.bridge)
             .padding(.bottom, bottom ? 0 : -Self.bridge)
     }
