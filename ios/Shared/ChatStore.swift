@@ -395,6 +395,7 @@ final class ChatStore {
     }
 
     @ObservationIgnored private var rebuildScheduled = false
+    @ObservationIgnored private var rebuildRevision = 0
     @ObservationIgnored private var settled: SettledRows?
 
     /// The rows and blocks of everything before the last exchange, reused while items only grow at the end (a live
@@ -410,7 +411,7 @@ final class ChatStore {
     /// `buildRows` + `ChatBlock.build`, redoing only what comes after `settled` when that still holds. An exchange
     /// starts at a prompt and nothing before it changes when items are appended — unless a tool result (or a tool's
     /// image) arrives for a call before it; then everything is built again.
-    static func rebuild(_ items: [Item], settled: SettledRows?) -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
+    nonisolated static func rebuild(_ items: [Item], settled: SettledRows?) -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
         func full() -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
             let rows = buildRows(items)
             return (rows, ChatBlock.build(rows), nil)
@@ -436,7 +437,7 @@ final class ChatStore {
     }
 
     /// Every tool result and tool image in the slice belongs to a call in it.
-    private static func standsAlone(_ items: ArraySlice<Item>) -> Bool {
+    nonisolated private static func standsAlone(_ items: ArraySlice<Item>) -> Bool {
         var calls = Set<String>()
         for it in items {
             guard let tid = it.toolUseID else { continue }
@@ -445,21 +446,28 @@ final class ChatStore {
         return true
     }
 
-    /// Rows and blocks are rebuilt from all items; a burst of events (a tool call, its result, the next thought)
-    /// is rebuilt and redrawn once, on the next turn of the main actor, instead of once per event.
+    /// Coalesces events into one background worker; only a current snapshot is published on the main actor.
     private func scheduleRebuild() {
+        rebuildRevision += 1
         guard !rebuildScheduled else { return }
         rebuildScheduled = true
         Task { [weak self] in
             guard let self else { return }
-            self.rebuildScheduled = false
-            let built = ChatStore.rebuild(self.items, settled: self.settled)
-            self.rows = built.rows
-            self.blocks = built.blocks
-            self.settled = built.settled
-            let images = self.items.compactMap(\.image)
-            if images.map(\.identity) != self.images.map(\.identity) { self.images = images }
-            self.version += 1
+            while true {
+                let revision = self.rebuildRevision
+                let items = self.items, settled = self.settled
+                let (built, images) = await Task.detached(priority: .userInitiated) {
+                    (ChatStore.rebuild(items, settled: settled), items.compactMap(\.image))
+                }.value
+                guard revision == self.rebuildRevision else { continue }
+                self.rows = built.rows
+                self.blocks = built.blocks
+                self.settled = built.settled
+                if images.map(\.identity) != self.images.map(\.identity) { self.images = images }
+                self.version += 1
+                self.rebuildScheduled = false
+                return
+            }
         }
     }
 
@@ -519,7 +527,7 @@ final class ChatStore {
     var livePreview: [String] { ScreenParser.activity(screen) }
     var spinnerLine: String? { ScreenParser.spinner(screen) }
 
-    static func buildRows(_ items: [Item]) -> [ChatRow] {
+    nonisolated static func buildRows(_ items: [Item]) -> [ChatRow] {
         var results: [String: Item] = [:]
         var images: [String: [ImagePayload]] = [:]
         for it in items {

@@ -130,3 +130,25 @@ struct RebuildTests {
         print("REBUILD-REAL\n" + out)
     }
 }
+
+extension RebuildTests {
+    @Test func backgroundRebuildConvergesAfterBurstsAndReplacement() async throws {
+        let store = ChatStore(key: SessionKey(machineID: "rebuild-tests", sessionID: UUID().uuidString))
+        let first = Self.session(8, count: 1800)
+        for end in stride(from: 30, through: first.count, by: 30) {
+            store.merge(Array(first[(end - 30)..<end]))
+            await Task.yield()
+        }
+        var replacement = Self.session(91, count: 400)
+        for index in replacement.indices { replacement[index].id = "replacement-" + replacement[index].id }
+        store.replace(with: replacement, hasMore: false, span: ItemSpan(history: "new", from: nil, to: 400))
+        let expected = ChatStore.buildRows(store.items)
+        let deadline = ContinuousClock.now + .seconds(5)
+        while store.rows != expected && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(store.rows == expected)
+        #expect(store.blocks == ChatBlock.build(expected))
+        #expect(store.items.allSatisfy { $0.id.hasPrefix("replacement-") })
+    }
+}
