@@ -453,24 +453,35 @@ struct ChatView: View {
         let frame = scratch.listFrame
         let wasOpen = isOpen(id)
         let y = scratch.workHeadY[headLine(id, open: wasOpen)]
+        let anchor: UnitPoint?
+        if fromHeader, let y, frame.height > 0 {
+            let v = (y - frame.minY) / frame.height
+            anchor = (0...1).contains(v) ? UnitPoint(x: 0.5, y: 1 - v) : nil
+        } else {
+            anchor = nil
+        }
         var t = Transaction()
         t.disablesAnimations = true // hundreds of rows animating out left blank frames behind
         withTransaction(t) {
             if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) }
+            if let anchor { position.scrollTo(id: headLine(id, open: !wasOpen), anchor: anchor) }
         }
-        guard fromHeader, let y, frame.height > 0 else { return }
-        let v = (y - frame.minY) / frame.height // 0 = top of the list on screen
-        guard (0...1).contains(v) else { return }
+        #if PERF_SIGNPOST
+        PerfTrace.event("Work toggle", "open=\(!wasOpen) anchored=\(anchor != nil)")
+        #endif
+        guard anchor != nil, let y else { return }
         let head = headLine(id, open: !wasOpen)
         // The scroll view is flipped: its own top is the bottom on screen. Rows not drawn yet only have estimated
         // heights, so this lands near; the header's measured position then corrects the rest.
-        withTransaction(t) { position.scrollTo(id: head, anchor: UnitPoint(x: 0.5, y: 1 - v)) }
         Task { @MainActor in
             for _ in 0..<4 {
                 try? await Task.sleep(for: .milliseconds(16))
                 guard let now = scratch.workHeadY[head] else { continue }
                 let off = y - now // > 0: the header sits too high; the flipped list scrolls toward older to lower it
                 if abs(off) < 0.5 { break }
+                #if PERF_SIGNPOST
+                PerfTrace.event("Work scroll correction", "offset=\(off)")
+                #endif
                 withTransaction(t) { scrollList(to: chrome.offset + off) }
             }
         }
