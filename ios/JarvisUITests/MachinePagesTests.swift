@@ -115,8 +115,10 @@ final class MachinePagesTests: XCTestCase {
         see(text("运行中的 Claude"), "running agents header")
         see(text("启动器 2"), "launchers header")
         see(text("claude"), "a launcher")
-        see(text("ssh macbook"), "how the hub reaches it")
         shot("machine-detail")
+        for _ in 0..<6 where !text("ssh macbook").isHittable { app.swipeUp() }
+        see(text("ssh macbook"), "how the hub reaches it")
+        for _ in 0..<6 where !button("补齐网络层的单元测试").isHittable { app.swipeDown() }
         let row = see(button("补齐网络层的单元测试"), "a running agent")
         row.tap()
         see(app.textFields.firstMatch.exists ? app.textFields.firstMatch : app.textViews.firstMatch, "the agent's chat composer")
