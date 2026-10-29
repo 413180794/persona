@@ -123,7 +123,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 }
 
 extension APIClient {
-    private struct InboxList: Decodable, Sendable { var items: [InboxItem] }
+    private nonisolated struct InboxList: Decodable, Sendable { var items: [InboxItem] }
 
     private static func decodeInbox(_ data: Data) async throws -> [InboxItem] {
         try await Task.detached(priority: .userInitiated) {
