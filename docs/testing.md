@@ -66,7 +66,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
-  UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
+  （App 的终端从 2026-10-29 起只看不接管，这个 mock 只在调 hub 的接管接口时有用。）
 - 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 jarvisd，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、
   单独的库 `jarvis_termlab` 经 SSH 隧道、`machines` 只有一台 `kind: local`），模拟器配对它，开 lab 窗格的终端（`docs/terminal.md` 第十一节的实测就是这么量的）。
 - 终端断线：`MOCK_SCREEN_FAIL_AFTER=3:14` 启动 mock（第一次读终端 3 秒后每次都 503，再过 14 秒恢复），
@@ -90,12 +90,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `LiveActivityActionTests` 同样连 mock：开一个示例实时活动、锁屏、点活动上的「拒绝」。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
 授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
 
-终端直接打字（`TerminalTypingTests`：点终端弹出键盘、打的字和回车按顺序发出且被合并成少数几个请求、键栏的 ctrl 作用于键盘打的下一个字、键盘按钮收起键盘）同样连 mock。
-`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=ios/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
-（中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
-终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
-`PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
-（mock 的 `GET /mock/keys` 回放收到的按键）。
+截终端的样子：`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=ios/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
+（中英混排长回答）或 `-permission.jsonl`（权限框）。终端打字和键栏的 UI 测试（`TerminalTypingTests`、`TerminalKeysTests`）随功能一起删了（2026-10-29）。
 
 从搜索结果打开会话只有一行标题、返回后搜索结果还在（`SearchOpenTests`，另有不搜索的对照）连普通 mock：
 `PORT=18793 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
