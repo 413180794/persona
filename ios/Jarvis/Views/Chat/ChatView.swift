@@ -907,13 +907,7 @@ struct ChatView: View {
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
                 // history they wait with the rest.
                 if style == .assistant && frozen == nil {
-                    let live = store.liveText
-                    let lastText: String? = { if case .assistant(let i) = rows.last { return i.text } else { return nil } }()
-                    if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
-                        StreamingText(text: live).id("live").flippedBack()
-                    } else if status == .working && live.isEmpty {
-                        TypingIndicator(text: "Jarvis 正在思考…").id("typing").flippedBack()
-                    }
+                    ChatLiveText(store: store, status: status)
                 }
                 // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
                 ForEach(frozen == nil ? pending.reversed() : []) { msg in
@@ -1019,7 +1013,9 @@ struct ChatView: View {
         .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
-        .onChange(of: store.liveText.count / 40) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
+        .modifier(ChatStreamFollow(store: store) {
+            if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } }
+        })
         // Your own message always brings you to the newest — only yours: one typed on the computer (or sent by another
         // session) used to pull you out of the history you were reading too.
         .onChange(of: lastPromptID) { old, new in
@@ -2415,6 +2411,36 @@ private struct ListScroll: Equatable {
     var offset: CGFloat
     var height: CGFloat
     var x: CGFloat
+}
+
+private struct ChatLiveText: View {
+    let store: ChatStore
+    let status: SessionStatus
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("ChatLiveText.body")
+        #endif
+        let live = store.liveText
+        let lastText: String? = {
+            if case .assistant(let item) = store.rows.last { return item.text }
+            return nil
+        }()
+        if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
+            StreamingText(text: live).id("live").flippedBack()
+        } else if status == .working && live.isEmpty {
+            TypingIndicator(text: "Jarvis 正在思考…").id("typing").flippedBack()
+        }
+    }
+}
+
+private struct ChatStreamFollow: ViewModifier {
+    let store: ChatStore
+    let follow: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onChange(of: store.liveText.count / 40) { _, _ in follow() }
+    }
 }
 
 /// How far the Agents header is folded (0 = open, maxCollapse = just the slim bar). Written on every scroll frame,
