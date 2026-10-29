@@ -256,3 +256,19 @@ herdr 接管期间没有历史，帧又是原地重画，所以历史只能手�
 | 恢复 | 离开 tab 立即；App 进后台约 5 s；杀 App 约 2 s；手机不断开连接地消失 27 s（hub ping 超时）；hub `kill -9` 0.1 s；node `kill -9` 立即 |
 | 被占 / 抢占 | 占着时 `busy`、镜像着看；`takeover` 后原客户端退出、窗格变手机尺寸 |
 
+部署 c6bec7b 以后经线上 hub 复测（同日 10:50 以后，本机 macstudio 的 lab 窗格 w9:p5，各两轮、每轮 12 次）：
+
+| 项 | 结果 |
+| --- | --- |
+| 接管耗时（订阅 → `active`） | 75 / 95 ms |
+| 回显，接管后经 WebSocket 打字 | 中位 46 / 40 ms，最慢 80 / 83 ms |
+| 回显，`POST /keys`（keep-alive） | 中位 44 / 47 ms，最慢 157 / 147 ms |
+
+中位差不多（大头是 herdr 16 ms 一帧的出帧节奏和 hub 来回），慢的那头减半：打字不再排在一个个 HTTP 请求和 herdr 进程后面。
+本机到 hub 是局域网、连接常驻；手机上蜂窝网络、请求要重新排队时差别会更大，等 TestFlight 后真机再量。
+
+herdr 版本：六台机器（0.9.5 一台，0.9.3 五台）都有 `terminal session control`，参数一样（`--takeover`、`--cols`、`--rows`）。
+0.9.5 上按窗格原尺寸开一次 control（不改尺寸、不抢槽位）：整帧、同尺寸 resize 回整帧、关 stdin 得 `detached`，和 0.9.3 一致；
+接管改尺寸、恢复、被占和抢占的完整测试都在 0.9.3（本机）上做过。没有 `session control` 的 herdr：node 照样 observe 并回 `control: false`，
+App 收到 `unsupported`，只镜像（`TestTerminalControlOnAnOldNodeOnlyWatches`）。
+
