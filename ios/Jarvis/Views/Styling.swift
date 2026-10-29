@@ -97,7 +97,9 @@ private struct DimWhenDisabled: ViewModifier {
     }
 }
 
-/// A raised pill for the clay / island styles.
+/// A raised pill for the clay / island styles, at least 44 pt tall (it was 34). Colored by the current tint, as the
+/// system styles are: the accent, or what the call site sets — 中断 and 关闭 Agent are red here too (they were the
+/// accent: purple in 黏土, teal in Island).
 private struct SoftButtonStyle: ButtonStyle {
     var prominent: Bool
     @Environment(\.isEnabled) private var enabled
@@ -106,12 +108,21 @@ private struct SoftButtonStyle: ButtonStyle {
         configuration.label
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .foregroundStyle(prominent ? Color.white : Theme.accent)
+            .frame(minHeight: 44)
+            .foregroundStyle(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint))
             .background {
-                Capsule()
-                    .fill(prominent ? AnyShapeStyle(Theme.accent.gradient) : AnyShapeStyle(Theme.card))
-                    .shadow(color: AppStyle.current == .clay ? Color(light: 0x6B54D6, dark: 0x000000).opacity(0.25) : .black.opacity(0.12),
-                            radius: configuration.isPressed ? 2 : 6, y: configuration.isPressed ? 1 : 3)
+                ZStack {
+                    if prominent {
+                        Capsule().fill(.tint)
+                        // Depth that only darkens: a lighter top (Color.gradient) took the white words under 3:1.
+                        Capsule().fill(LinearGradient(colors: [.clear, .black.opacity(0.12)], startPoint: .top, endPoint: .bottom))
+                    } else {
+                        Capsule().fill(Theme.card)
+                    }
+                }
+                .compositingGroup()
+                .shadow(color: AppStyle.current == .clay ? Color(light: 0x6B54D6, dark: 0x000000).opacity(0.25) : .black.opacity(0.12),
+                        radius: configuration.isPressed ? 2 : 6, y: configuration.isPressed ? 1 : 3)
             }
             .opacity(enabled ? 1 : 0.45)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
