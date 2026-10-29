@@ -24,11 +24,7 @@ final class LarkMedia {
     @ObservationIgnored private var emojiImages: [String: UIImage] = [:]
     @ObservationIgnored private var emojiLoading = Set<String>()
     @ObservationIgnored private var catalogTask: Task<Void, Never>?
-    @ObservationIgnored private let dir: URL = {
-        let d = URL.cachesDirectory.appending(path: "lark-media", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
-        return d
-    }()
+    @ObservationIgnored private let dir = URL.cachesDirectory.appending(path: "lark-media", directoryHint: .isDirectory)
 
     private init() { images.totalCostLimit = 120 << 20 }
 
@@ -41,7 +37,7 @@ final class LarkMedia {
     func data(_ url: String, size: Int? = nil) async throws -> Data {
         let key = cacheKey(url, size: size)
         let file = dir.appending(path: key)
-        if let d = try? Data(contentsOf: file) { return d }
+        if let d = await Task.detached(priority: .userInitiated, operation: { try? Data(contentsOf: file) }).value { return d }
         let d: Data
         if url.hasPrefix("http://") || url.hasPrefix("https://") {
             guard let u = URL(string: url) else { throw URLError(.badURL) }
@@ -60,7 +56,11 @@ final class LarkMedia {
             if let size { query["size"] = String(size) }
             d = try await api.request("GET", path, query: query, timeout: 120)
         }
-        try? d.write(to: file, options: .atomic)
+        let dir = dir
+        await Task.detached(priority: .utility) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try? d.write(to: file, options: .atomic)
+        }.value
         return d
     }
 
@@ -68,10 +68,12 @@ final class LarkMedia {
     func file(_ url: String, name: String) async throws -> URL {
         let d = try await data(url)
         let folder = URL.temporaryDirectory.appending(path: "lark-" + cacheKey(url, size: nil), directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let safe = name.replacingOccurrences(of: "/", with: "_")
         let f = folder.appending(path: safe.isEmpty ? "file" : safe)
-        if !FileManager.default.fileExists(atPath: f.path) { try d.write(to: f) }
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: f.path) { try d.write(to: f) }
+        }.value
         return f
     }
 
