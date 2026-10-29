@@ -160,9 +160,21 @@ struct ChatView: View {
             }
         }
         // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
-        .task(id: store.version) {
-            let items = store.items
-            await Task.detached(priority: .utility) { RowMemo.prewarm(items) }.value
+        .task(id: "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)|\(store.version)") {
+            let source = "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)"
+            if scratch.prewarmSource != source {
+                scratch.prewarmSource = source
+                scratch.prewarmedIDs = []
+            }
+            let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
+            guard !items.isEmpty else { return }
+            let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
+            await withTaskCancellationHandler {
+                await warm.value
+            } onCancel: {
+                warm.cancel()
+            }
+            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(items.map(\.id)) }
         }
         .onChange(of: pane) { _, p in
             showChrome()
@@ -2425,6 +2437,8 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
 /// Per-chat bookkeeping that must not redraw the page when it changes. A plain class held in @State: SwiftUI keeps
 /// the same instance across renders but does not observe it.
 final class ChatScratch {
+    var prewarmSource = ""
+    var prewarmedIDs = Set<String>()
     struct LinesKey: Equatable {
         var store: String
         var version: Int
