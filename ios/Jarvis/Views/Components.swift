@@ -1,23 +1,26 @@
 import SwiftUI
 
-/// Agent state dot: breathes while working, pulses red when it needs you, solid green when finished-unseen,
-/// muted gray once seen (docs/agent-states.md).
+/// Agent state dot (docs/agent-states.md): needs you breathes — the one dot that moves, and not with Reduce Motion;
+/// working has a still ring around it (its spinner is in the work and tool rows); finished-unseen solid green, seen
+/// muted gray.
 struct StatusDot: View {
     var state: AgentState
     var size: CGFloat = 9
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Circle()
             .fill(state.color)
             .frame(width: size, height: size)
             .overlay {
-                if state.animates {
+                if state == .working {
+                    Circle().stroke(state.color.opacity(0.45), lineWidth: 1.5).scaleEffect(1.7)
+                } else if state == .needsYou, !reduceMotion {
                     // The ring's size comes from the clock, not from a repeatForever animation on a @State flag:
                     // that animation's transaction leaked into other changes of the row (re-layout, a state change,
                     // the row coming back in a lazy list) and the ring sometimes grew far past 2.2×.
-                    let period = state == .needsYou ? 1.0 : 1.4
                     TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                        let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+                        let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.0)
                         let eased = 1 - (1 - p) * (1 - p) // ease out
                         Circle()
                             .stroke(state.color.opacity(0.6), lineWidth: 1.5)
@@ -51,7 +54,6 @@ struct SessionAvatar: View {
                     Image(systemName: symbol ?? machine?.symbol ?? "terminal")
                         .font(.system(size: size * 0.42, weight: .medium))
                         .foregroundStyle(tint)
-                        .symbolEffect(.pulse, options: .repeating, isActive: state == .working)
                 }
             if dot, state != .offline {
                 StatusDot(state: state, size: size * 0.24)
@@ -125,6 +127,7 @@ struct CountBadge: View {
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
             .font(.caption2.weight(.bold).monospacedDigit())
+            .contentTransition(.numericText(value: Double(count)))
             .foregroundStyle(words)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

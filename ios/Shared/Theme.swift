@@ -177,6 +177,13 @@ nonisolated enum Theme {
         static let greeting = SwiftUI.Font.largeTitle.bold()
     }
 
+    /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot and the work spinner,
+    /// and those stop with Reduce Motion (the spinner is the system's).
+    enum Motion {
+        static let state = Animation.snappy(duration: 0.25)
+        static let layout = Animation.smooth(duration: 0.3)
+    }
+
     /// Categories with no meaning beyond telling them apart (memory types).
     enum Hue {
         static let blue = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
@@ -264,8 +271,6 @@ extension AgentState {
     }
 
     var color: Color { tone.dot }
-
-    var animates: Bool { self == .working || self == .needsYou }
 }
 
 extension SessionStatus {

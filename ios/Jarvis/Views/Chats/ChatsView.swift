@@ -512,6 +512,7 @@ struct StateCounts: View {
                     HStack(spacing: 3) {
                         Circle().fill(st.color).frame(width: 6, height: 6)
                         Text("\(n)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
+                            .contentTransition(.numericText(value: Double(n)))
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(n) 个\(st.label)")
@@ -523,6 +524,7 @@ struct StateCounts: View {
                 HStack(spacing: 3) {
                     Circle().fill(Color.secondary.opacity(0.45)).frame(width: 6, height: 6)
                     Text("\(idle)").font(.caption2.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                        .contentTransition(.numericText(value: Double(idle)))
                 }
                 .accessibilityLabel("\(idle) 个空闲")
             }

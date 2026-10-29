@@ -1103,13 +1103,13 @@ struct ChatView: View {
         .frame(height: ChatChrome.compactHeight)
     }
 
-    /// The folded header's sign of a loop / background tasks: a turning gear with the count, or the loop arrows.
+    /// The folded header's sign of a loop / background tasks: a gear with the count, or the loop arrows (still: only
+    /// 需要你 and the work spinner move).
     private var activityMark: some View {
         let bg = session?.background?.count ?? 0
         return HStack(spacing: 2) {
             Image(systemName: bg > 0 ? "gearshape.2.fill" : "arrow.triangle.2.circlepath")
                 .font(.caption2.weight(.bold))
-                .symbolEffect(.rotate, options: .repeat(.continuous), isActive: bg > 0)
             if bg > 0 { Text("\(bg)").font(.caption2.weight(.bold).monospacedDigit()) }
         }
         .foregroundStyle(bg > 0 ? Theme.busy : Theme.loop)
@@ -1233,31 +1233,34 @@ struct ChatView: View {
     private var devChrome: some View {
         ChromeHeader(chrome: chrome, touched: { scratch.lastActivity = .now }) {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Button { back() } label: {
-                        Image(systemName: "chevron.left").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
-                            .contentShape(.circle)
+                // One container for the row's glass (back, the terminal, ⋯): drawn together instead of as separate glasses.
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Button { back() } label: {
+                            Image(systemName: "chevron.left").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                                .contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .surface(interactive: true, in: .circle)
+                        .accessibilityLabel("返回")
+                        Spacer(minLength: 0)
+                        titleButton
+                        Spacer(minLength: 0)
+                        // The terminal comes up from the bottom over the page (TerminalCover); files and Git are a swipe
+                        // to the left or the ··· menu away — no tab row (docs/ios.md).
+                        Button { Haptics.tap(); showTerminal = true } label: {
+                            Image(systemName: "terminal").font(.callout.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                                .contentShape(.circle)
+                        }
+                        .buttonStyle(.plain)
+                        .surface(interactive: true, in: .circle)
+                        .accessibilityLabel("终端")
+                        Menu { moreMenuItems } label: {
+                            Image(systemName: "ellipsis").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                                .contentShape(.circle)
+                        }
+                        .surface(interactive: true, in: .circle)
                     }
-                    .buttonStyle(.plain)
-                    .surface(interactive: true, in: .circle)
-                    .accessibilityLabel("返回")
-                    Spacer(minLength: 0)
-                    titleButton
-                    Spacer(minLength: 0)
-                    // The terminal comes up from the bottom over the page (TerminalCover); files and Git are a swipe
-                    // to the left or the ··· menu away — no tab row (docs/ios.md).
-                    Button { Haptics.tap(); showTerminal = true } label: {
-                        Image(systemName: "terminal").font(.callout.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
-                            .contentShape(.circle)
-                    }
-                    .buttonStyle(.plain)
-                    .surface(interactive: true, in: .circle)
-                    .accessibilityLabel("终端")
-                    Menu { moreMenuItems } label: {
-                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
-                            .contentShape(.circle)
-                    }
-                    .surface(interactive: true, in: .circle)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 2)
@@ -1608,6 +1611,7 @@ struct ChatView: View {
 }
 
 struct ChatSkeleton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var on = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1618,7 +1622,7 @@ struct ChatSkeleton: View {
                     .frame(maxWidth: .infinity, alignment: i == 0 ? .trailing : .leading)
             }
         }
-        .onAppear { withAnimation(.easeInOut(duration: 0.9).repeatForever()) { on = true } }
+        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 0.9).repeatForever()) { on = true } } }
     }
 }
 

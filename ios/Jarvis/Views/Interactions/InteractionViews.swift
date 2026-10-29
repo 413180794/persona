@@ -38,7 +38,6 @@ struct InteractionPreviewCard: View {
                 // Every interaction is 需要你: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
                     .foregroundStyle(StatusPalette.needsYou.dot)
-                    .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(interaction.title).font(.subheadline.weight(.semibold))
                     Text([interaction.sessionTitle, model.machine(interaction.machineID)?.name].compactMap { $0 }.joined(separator: " · "))

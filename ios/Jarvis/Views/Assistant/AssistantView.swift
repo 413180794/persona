@@ -215,6 +215,7 @@ struct AssistantHome: View {
 
 struct TypingIndicator: View {
     var text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = 0.0
 
     var body: some View {
@@ -230,6 +231,7 @@ struct TypingIndicator: View {
             Text(text).font(.subheadline).foregroundStyle(.secondary).contentTransition(.opacity)
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) { phase = .pi * 2 }
         }
     }

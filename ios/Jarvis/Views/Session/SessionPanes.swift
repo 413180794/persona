@@ -692,8 +692,7 @@ struct TerminalTips: View {
         }
         .padding(14)
         .frame(maxWidth: 380, alignment: .leading)
-        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
 
     private func tip(_ symbol: String, _ text: String) -> some View {
@@ -782,7 +781,6 @@ struct BackgroundTasksStrip: View {
                     Image(systemName: "gearshape.2")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.busy)
-                        .symbolEffect(.rotate, options: .repeat(.continuous))
                     Text("\(tasks.count) 个后台任务").font(.footnote.weight(.semibold)).lineLimit(1)
                     if !expanded, let first = tasks.first {
                         Text(first.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
@@ -878,7 +876,6 @@ struct ActivityChips: View {
                 if !background.isEmpty {
                     chip(Theme.busy, text: StatusPalette.working.text) {
                         Image(systemName: "gearshape.2.fill").font(.caption2.weight(.bold))
-                            .symbolEffect(.rotate, options: .repeat(.continuous))
                         Text("后台 \(background.count)").lineLimit(1)
                         if !compact, background.count == 1, let t = background.first {
                             Text(t.title).foregroundStyle(.secondary).lineLimit(1)
@@ -958,7 +955,6 @@ struct LoopStrip: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Theme.loop)
-                    .symbolEffect(.rotate, options: .repeat(.periodic(delay: 2)))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(.footnote.weight(.semibold)).lineLimit(1)
                     if let next = loop.nextAt {

@@ -79,8 +79,7 @@ struct ShortcutsPanel: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 360)
-        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
 }
 

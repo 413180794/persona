@@ -230,6 +230,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（和用户气泡的 body 一样，MarkdownUI 自己按动态字体缩放）。
   例外：终端网格（用户自己调字号）、灵动岛格子、导出的分享卡片（固定版式的图片）、飞书消息卡片和文档（照搬 lark-connector 的样子）。
   锁屏实时活动限到 `.large`（高度约 160pt，超出会被裁掉）。
+- 动效（`Theme.Motion`：状态切换 `.snappy` 0.25、布局 `.smooth` 0.3）：一直在动的只有「需要你」圆点的呼吸和工作中的系统转圈，
+  打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。
+  不再有图标摆动、齿轮旋转、头像脉冲、待办转圈。计数用 `.numericText` 过渡。`.surface` 外面不再加 `.shadow`（玻璃自己有，
+  黏土 / Island 风格的实心面也有，叠上去成了双层阴影）；相邻的玻璃（终端键栏的每个键、顶栏的返回和 ⋯）放进一个 `GlassEffectContainer`。
 - 标签和计数各只有一种画法（`Components.swift`）：`Chip` 是不能点的小标签，三种样子——中性（次要灰字 + 浅灰底：模型、版本、tab 名、私聊）、
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。

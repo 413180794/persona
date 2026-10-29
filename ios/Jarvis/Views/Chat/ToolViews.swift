@@ -513,7 +513,6 @@ struct TodoList: View {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: status == "completed" ? "checkmark.circle.fill" : status == "in_progress" ? "circle.dotted.circle" : "circle")
                         .foregroundStyle(status == "completed" ? Theme.positive : status == "in_progress" ? Theme.busy : .secondary)
-                        .symbolEffect(.rotate, options: .repeating, isActive: status == "in_progress")
                     Text(status == "in_progress" ? (t["activeForm"]?.string ?? t["content"]?.string ?? "") : (t["content"]?.string ?? ""))
                         .font(.footnote)
                         .strikethrough(status == "completed", color: .secondary)
