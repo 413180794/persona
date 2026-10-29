@@ -62,10 +62,10 @@ final class WatchSync: NSObject, WCSessionDelegate {
     #endif
 
     /// Throttled: application context is meant for state, not a stream.
-    func push(summary: WatchSummary) {
+    func push(summary: @autoclosure () -> WatchSummary) {
         #if os(iOS)
         guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled else { return }
-        pendingSummary = summary
+        pendingSummary = summary()
         let wait = 2 - Date.now.timeIntervalSince(lastSummaryPush)
         if wait <= 0 { flushSummary() } else {
             Task { @MainActor in
