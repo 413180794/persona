@@ -339,9 +339,18 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 		case "stream_event":
 			switch ev.Event.Type {
 			case "message_start":
+				// A turn can start without a message from us: claude takes up a finished background task's
+				// notification on its own, and a message sent meanwhile waits behind it. The result of that turn
+				// cleared busy while claude went on working, so the phone showed the chat as finished.
 				p.mu.Lock()
 				p.partial.Reset()
+				resumed := !p.busy
+				p.busy = true
+				p.lastActive = time.Now()
 				p.mu.Unlock()
+				if resumed {
+					n.notifySessions()
+				}
 			case "content_block_delta":
 				if ev.Event.Delta.Type != "text_delta" {
 					continue
