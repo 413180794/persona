@@ -2234,7 +2234,7 @@ struct WorkCardSlice: View {
 }
 
 /// The card's outline for one slice: the sides, and the rounded top or bottom where the card starts or ends.
-private struct WorkCardEdges: Shape {
+private nonisolated struct WorkCardEdges: Shape {
     var top: Bool
     var bottom: Bool
     var radius: CGFloat
