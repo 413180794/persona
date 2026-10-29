@@ -264,7 +264,26 @@ def all_sessions():
 
 
 def find_items(sid):
-    return ITEMS.get(sid, [])
+    items = ITEMS.get(sid, [])
+    if GAP and sid == SESSIONS[0]["session_id"] and not GAP_STATE["grown"]:
+        return items[:-6]  # what the transcript held before the lines whose push gets lost
+    return items
+
+
+# Every items batch says where it sits in the transcript (docs/protocol.md): one history per session here, to_seq the
+# last seq, from_seq for batches that continue from a seq.
+HISTORY = "mock-1"
+# MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
+# final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
+GAP = os.environ.get("MOCK_GAP") == "1"
+GAP_STATE = {"started": False, "grown": False}
+
+
+def span(items, frm=None, to=None):
+    out = {"history": HISTORY, "to_seq": to if to is not None else (items[-1]["seq"] if items else 0)}
+    if frm is not None:
+        out["from_seq"] = frm
+    return out
 
 
 # ---------- HTTP ----------
@@ -326,12 +345,14 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
             sid = p.split("/")[5]
             items = find_items(sid)
+            last = items[-1]["seq"] if items else 0
             if "after_seq" in q:
                 a = int(q["after_seq"][0] or 0)
-                return self.send_json({"items": [x for x in items if x["seq"] > a]})
+                LOG.write("  items after_seq=%d\n" % a); LOG.flush()
+                return self.send_json({"items": [x for x in items if x["seq"] > a], "more_after": False, **span(items, a, max(a, last))})
             b = q.get("before_seq", [""])[0]
             if b: items = [x for x in items if x["seq"] < int(b)]
-            return self.send_json({"items": items, "has_more": False})
+            return self.send_json({"items": items, "has_more": False, **span(items, None, int(b) - 1 if b else last)})
         if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's 开发信息 card
             s = next((s for s in all_sessions() if s["session_id"] == p.split("/")[5]), {})
             return self.send_json({"session_id": s.get("session_id", ""), "cwd": s.get("cwd"), "model": "claude-opus-5",
@@ -417,16 +438,36 @@ class H(BaseHTTPRequestHandler):
                 mask = r.read(4) if h[1] & 0x80 else b"\0\0\0\0"
                 payload = bytes(b ^ mask[i % 4] for i, b in enumerate(r.read(n)))
                 if op == 8: break
-                if op == 9:
-                    with lock: self.wfile.write(bytes([0x8A, 0])); self.wfile.flush()
+                if op == 9:  # a pong carries the ping's payload back (URLSession ignores an empty one)
+                    with lock: self.wfile.write(bytes([0x8A, len(payload)]) + payload); self.wfile.flush()
                     continue
                 if op != 1: continue
                 msg = json.loads(payload or b"{}")
                 LOG.write("  WS %s\n" % msg.get("type")); LOG.flush()
                 if msg.get("type") == "subscribe":
-                    sid = msg.get("session_id")
-                    send({"type": "items", "machine_id": msg.get("machine_id"), "session_id": sid,
-                          "items": find_items(sid), "backlog": True})
+                    sid, mid = msg.get("session_id"), msg.get("machine_id")
+                    items = find_items(sid)
+                    since = msg.get("since_seq") or 0
+                    if GAP and sid == SESSIONS[0]["session_id"] and not GAP_STATE["started"]:
+                        # The backlog below holds the head; then 6 more items are written, only the last 2 get pushed.
+                        GAP_STATE["started"] = True
+
+                        def later_push(sid=sid, mid=mid):
+                            import time
+                            time.sleep(2)
+                            full = ITEMS[sid]
+                            lost, tail = full[-6:-2], full[-2:]
+                            GAP_STATE["grown"] = True
+                            LOG.write("  GAP: pushing %d items from seq %d, %d left out\n" % (len(tail), lost[-1]["seq"], len(lost))); LOG.flush()
+                            send({"type": "items", "machine_id": mid, "session_id": sid, "items": tail, **span(tail, lost[-1]["seq"])})
+                        threading.Thread(target=later_push, daemon=True).start()
+                    if since:
+                        newer = [x for x in items if x["seq"] > since]
+                        send({"type": "items", "machine_id": mid, "session_id": sid, "items": newer, "backlog": True,
+                              **span(items, since, max(since, items[-1]["seq"] if items else 0))})
+                    else:
+                        send({"type": "items", "machine_id": mid, "session_id": sid, "items": items, "backlog": True,
+                              "has_more": False, **span(items)})
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         self.close_connection = True

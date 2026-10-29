@@ -338,16 +338,25 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		var p struct {
 			SessionID string       `json:"session_id"`
 			Items     []proto.Item `json:"items"`
+			itemSpan
 		}
-		if json.Unmarshal(params, &p) != nil || len(p.Items) == 0 {
+		// A batch without items still matters when it has a span: it moves the apps' "complete up to" forward.
+		if json.Unmarshal(params, &p) != nil || (len(p.Items) == 0 && p.ToSeq == nil) {
 			return
 		}
+		last := 0
+		if len(p.Items) > 0 {
+			last = p.Items[len(p.Items)-1].Seq
+		}
+		if p.ToSeq != nil {
+			last = max(last, *p.ToSeq)
+		}
 		m.mu.Lock()
-		if last := p.Items[len(p.Items)-1].Seq; last > m.lastSeq[p.SessionID] {
+		if last > m.lastSeq[p.SessionID] {
 			m.lastSeq[p.SessionID] = last
 		}
 		m.mu.Unlock()
-		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items)
+		m.hub.itemsToSubscribers(m.cfg.ID, p.SessionID, p.Items, p.itemSpan)
 	case "session.screen":
 		var p struct {
 			SessionID string `json:"session_id"`

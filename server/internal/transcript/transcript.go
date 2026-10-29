@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -134,10 +136,10 @@ type Meta struct {
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
 	// as a queued_command attachment). The same task reporting again with other content is a new event and shows.
 	notified map[string]bool
-	Cwd       string
-	Model     string
-	LastText  string
-	Updated   time.Time
+	Cwd      string
+	Model    string
+	LastText string
+	Updated  time.Time
 }
 
 // pastedRe matches the wrapper Claude Code puts around long pasted input (also what herdr's bracketed paste from
@@ -898,6 +900,21 @@ type File struct {
 	partial []byte
 	items   []proto.Item
 	meta    Meta
+	// History identity (Span.History): the file's inode, a hash of its first line, and how many times it was found
+	// rewritten while this process read it.
+	ino       uint64
+	firstHash uint32
+	gen       int
+}
+
+// Span says where a batch of items sits in the transcript, so a client can tell whether it continues what it has.
+// History names this version of the file: it changes when the file is replaced or rewritten (seqs start over), and
+// stays the same across node restarts. From is the line the batch continues from (it holds lines From+1..To), To the
+// last line it accounts for — lines without items (titles, modes, attachments) count too, so To is often past the last
+// item's seq.
+type Span struct {
+	History  string
+	From, To int
 }
 
 func NewFile(path string) *File { return &File{Path: path} }
@@ -905,31 +922,49 @@ func NewFile(path string) *File { return &File{Path: path} }
 // NewSubagentFile reads a subagent's transcript (<session>/subagents/agent-<id>.jsonl, every line a sidechain).
 func NewSubagentFile(path string) *File { return &File{Path: path, meta: Meta{Sidechain: true}} }
 
+func (f *File) history() string {
+	if f.lines == 0 {
+		return "" // nothing read yet: no identity to compare
+	}
+	return fmt.Sprintf("%x.%08x.%d", f.ino, f.firstHash, f.gen)
+}
+
 // Refresh reads newly appended complete lines and returns the new items.
 func (f *File) Refresh() ([]proto.Item, error) {
+	fresh, _, err := f.RefreshSpan()
+	return fresh, err
+}
+
+// RefreshSpan is Refresh that also says which lines it read (From == To: none).
+func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	fh, err := os.Open(f.Path)
 	if err != nil {
-		return nil, err
+		return nil, Span{}, err
 	}
 	defer fh.Close()
 	st, err := fh.Stat()
 	if err != nil {
-		return nil, err
+		return nil, Span{}, err
 	}
-	if st.Size() < f.offset { // truncated or replaced: start over
-		f.offset, f.lines, f.partial, f.items, f.meta = 0, 0, nil, nil, Meta{}
+	ino := inode(st)
+	if st.Size() < f.offset || (f.ino != 0 && ino != 0 && ino != f.ino) { // truncated or replaced: start over
+		f.offset, f.lines, f.partial, f.items, f.meta = 0, 0, nil, nil, Meta{Sidechain: f.meta.Sidechain}
+		f.firstHash = 0
+		f.gen++
 	}
+	f.ino = ino
+	from := f.lines
 	if st.Size() == f.offset {
-		return nil, nil
+		return nil, Span{f.history(), from, from}, nil
 	}
 	if _, err := fh.Seek(f.offset, io.SeekStart); err != nil {
-		return nil, err
+		return nil, Span{}, err
 	}
 	data, err := io.ReadAll(fh)
 	if err != nil {
-		return nil, err
+		return nil, Span{}, err
 	}
 	f.offset += int64(len(data))
 	data = append(f.partial, data...)
@@ -942,6 +977,9 @@ func (f *File) Refresh() ([]proto.Item, error) {
 		line := data[:i]
 		data = data[i+1:]
 		f.lines++
+		if f.lines == 1 {
+			f.firstHash = crc32.ChecksumIEEE(line)
+		}
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
@@ -949,41 +987,61 @@ func (f *File) Refresh() ([]proto.Item, error) {
 	}
 	f.partial = append([]byte(nil), data...)
 	f.items = append(f.items, fresh...)
-	return fresh, nil
+	return fresh, Span{f.history(), from, f.lines}, nil
+}
+
+// inode is the file's inode number (0 where the platform does not say).
+func inode(st os.FileInfo) uint64 {
+	if sys, ok := st.Sys().(*syscall.Stat_t); ok {
+		return uint64(sys.Ino)
+	}
+	return 0
+}
+
+// before returns the index of the first item with seq >= beforeSeq (0 = len, the end). Callers hold f.mu.
+func (f *File) before(beforeSeq int) int {
+	if beforeSeq <= 0 {
+		return len(f.items)
+	}
+	end := 0
+	for end < len(f.items) && f.items[end].Seq < beforeSeq {
+		end++
+	}
+	return end
+}
+
+// pageSpan is the span of items[start:end] counted back from beforeSeq. Callers hold f.mu.
+func (f *File) pageSpan(start, beforeSeq int) Span {
+	sp := Span{History: f.history(), To: f.lines}
+	if beforeSeq > 0 {
+		sp.To = beforeSeq - 1
+	}
+	if start > 0 {
+		sp.From = f.items[start].Seq - 1
+	}
+	return sp
 }
 
 // Page returns items with seq < beforeSeq (0 = from the end), newest `limit`, in ascending order.
-func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool) {
+func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool, Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	end := len(f.items)
-	if beforeSeq > 0 {
-		end = 0
-		for end < len(f.items) && f.items[end].Seq < beforeSeq {
-			end++
-		}
-	}
+	end := f.before(beforeSeq)
 	start := max(end-limit, 0)
 	// Never split a transcript line across pages.
 	for start > 0 && f.items[start].Seq == f.items[start-1].Seq {
 		start--
 	}
 	out := append([]proto.Item(nil), f.items[start:end]...)
-	return out, start > 0
+	return out, start > 0, f.pageSpan(start, beforeSeq)
 }
 
 // PageTurns returns the items before beforeSeq (0 = the end) going back far enough to hold `turns` whole exchanges:
 // it starts at a user prompt, so a page never opens in the middle of a turn. maxItems caps one enormous turn.
-func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool) {
+func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool, Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	end := len(f.items)
-	if beforeSeq > 0 {
-		end = 0
-		for end < len(f.items) && f.items[end].Seq < beforeSeq {
-			end++
-		}
-	}
+	end := f.before(beforeSeq)
 	start, seen := end, 0
 	for start > 0 && seen < turns && end-start < maxItems {
 		start--
@@ -995,7 +1053,7 @@ func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool) {
 		start--
 	}
 	out := append([]proto.Item(nil), f.items[start:end]...)
-	return out, start > 0
+	return out, start > 0, f.pageSpan(start, beforeSeq)
 }
 
 // Item finds one item by id (an image a client fetches on demand).
@@ -1012,10 +1070,12 @@ func (f *File) Item(id string) (proto.Item, bool) {
 
 // After returns items with seq > afterSeq, oldest first: at least limit of them unless fewer exist, and never part of
 // a line (a Codex tool call is its call and its result on one line; a client resuming from the last seq it got would
-// never see the rest). more says items are left after the last one returned.
-func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool) {
+// never see the rest). more says items are left after the last one returned. The span runs from afterSeq to the last
+// line read when nothing is left, else to the last item's line.
+func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool, span Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	span = Span{History: f.history(), From: afterSeq, To: max(f.lines, afterSeq)}
 	i := 0
 	for i < len(f.items) && f.items[i].Seq <= afterSeq {
 		i++
@@ -1025,9 +1085,13 @@ func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool) {
 		end++
 	}
 	if end == i {
-		return nil, false
+		return nil, false, span
 	}
-	return append([]proto.Item(nil), f.items[i:end]...), end < len(f.items)
+	more = end < len(f.items)
+	if more {
+		span.To = f.items[end-1].Seq
+	}
+	return append([]proto.Item(nil), f.items[i:end]...), more, span
 }
 
 func (f *File) Meta() Meta {

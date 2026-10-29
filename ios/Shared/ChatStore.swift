@@ -233,6 +233,24 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Where a batch of items sits in the transcript (the hub's `history` / `from_seq` / `to_seq`; nil from older hubs).
+nonisolated struct ItemSpan: Sendable, Equatable {
+    /// The version of the transcript file; another one means it was replaced and its seqs started over.
+    var history: String?
+    /// The seq the batch continues from (catch-up, live pushes, after_seq pages); nil for pages from the end.
+    var from: Int?
+    /// The last line the batch accounts for: lines without items count, so it is often past its last item.
+    var to: Int?
+}
+
+nonisolated extension Item {
+    /// The block within its transcript line (ids end in "#<n>").
+    var part: Int {
+        guard let hash = id.lastIndex(of: "#") else { return 0 }
+        return Int(id[id.index(after: hash)...]) ?? 0
+    }
+}
+
 /// Transcript items and live state of one session, shared by every view showing it.
 @Observable
 final class ChatStore {
@@ -255,6 +273,12 @@ final class ChatStore {
     var pending: [PendingMessage] = []
 
     @ObservationIgnored private var ids = Set<String>()
+    /// The version of the transcript the items come from (`ItemSpan.history`). Another one means the file was replaced
+    /// and its seqs started over: everything here is stale.
+    @ObservationIgnored private(set) var history: String?
+    /// Everything from the first item through this seq is here, without holes (lines without items count). Catch-ups
+    /// ask for what comes after it; 0 = no baseline yet (nothing loaded from the end of the transcript).
+    @ObservationIgnored private(set) var covered = 0
 
     init(key: SessionKey) {
         self.key = key
@@ -263,6 +287,8 @@ final class ChatStore {
             items = cached.items
             ids = Set(cached.items.map(\.id))
             hasMore = cached.hasMore
+            history = cached.history
+            covered = cached.covered ?? (cached.items.last?.seq ?? 0)
             rows = ChatStore.buildRows(items)
             blocks = ChatBlock.build(rows)
             version += 1
@@ -271,12 +297,60 @@ final class ChatStore {
 
     var lastSeq: Int { items.last?.seq ?? 0 }
 
+    /// What a batch left to do: nothing, fetch what comes after `covered` (a hole, or a catch-up the hub capped), or
+    /// start over from the latest page (the transcript was replaced under a continuing batch).
+    enum Gap: Equatable { case none, fill, reload }
+
+    /// Takes a batch of items with its place in the transcript. Batches that continue from a seq must start inside
+    /// what is here (`span.from <= covered`) — one that does not reveals a hole, which `fill` fetches; its items are
+    /// kept meanwhile. A page counted back from the end that does not reach what is here replaces it (an old disk
+    /// cache, several exchanges behind). Without a span (an older hub) batches are trusted, as before.
+    @discardableResult
+    func apply(_ new: [Item], span: ItemSpan, backlog: Bool = false, hasMore: Bool? = nil, moreAfter: Bool = false) -> Gap {
+        if let h = span.history, let mine = history, h != mine {
+            reset()
+            history = h
+            if let from = span.from, from > 0 { return .reload } // the rest of a file we never saw from its start
+        }
+        if let h = span.history { history = h }
+        guard let to = span.to else {
+            merge(new, backlog: backlog, hasMore: hasMore)
+            covered = max(covered, lastSeq)
+            return moreAfter ? .reload : .none
+        }
+        if let from = span.from {
+            merge(new, backlog: backlog, hasMore: hasMore)
+            if covered == 0 { return .none } // no baseline yet: the backlog from the end sets one
+            guard from <= covered else { return .fill }
+            covered = max(covered, to)
+            return moreAfter ? .fill : .none
+        }
+        // A page from the end.
+        if covered > 0, let first = new.first?.seq, first > covered + 1 {
+            replace(with: new, hasMore: hasMore ?? true, span: span)
+            if backlog { loadedOnce = true }
+            return .none
+        }
+        merge(new, backlog: backlog, hasMore: hasMore)
+        covered = max(covered, to)
+        return .none
+    }
+
+    private func reset() {
+        items = []
+        ids = []
+        covered = 0
+        hasMore = false
+        loadedOnce = false
+        scheduleRebuild()
+    }
+
     func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = false
         var inOrder = true
         for it in Self.withImageRefs(new, key) where !ids.contains(it.id) {
-            if let last = items.last, (it.seq, it.id) < (last.seq, last.id) { inOrder = false }
+            if let last = items.last, (it.seq, it.part) < (last.seq, last.part) { inOrder = false }
             ids.insert(it.id)
             items.append(it)
             changed = true
@@ -292,7 +366,7 @@ final class ChatStore {
             pending.removeAll { p in typed.contains { PendingMessage.same($0, p.text) } }
         }
         // Streamed items arrive in order: only older pages / reconnect backlogs need the sort.
-        if !inOrder { items.sort { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq } }
+        if !inOrder { items = Self.ordered(items) }
         scheduleRebuild()
         scheduleSave()
     }
@@ -324,7 +398,8 @@ final class ChatStore {
             guard !Task.isCancelled, let self else { return }
             let tail = ChatCache.tail(self.items, turns: 2)
             let more = self.hasMore || tail.count < self.items.count
-            Task.detached(priority: .utility) { ChatCache.save(key, items: tail, hasMore: more) }
+            let history = self.history, covered = self.covered
+            Task.detached(priority: .utility) { ChatCache.save(key, items: tail, hasMore: more, history: history, covered: covered) }
         }
     }
 
@@ -339,11 +414,19 @@ final class ChatStore {
     }
 
     /// Starts over from the latest page: what came in between was too much to fetch, and a hole would never fill.
-    func replace(with latest: [Item], hasMore: Bool) {
+    func replace(with latest: [Item], hasMore: Bool, span: ItemSpan = ItemSpan()) {
         items = []
         ids = []
         self.hasMore = hasMore
+        if let h = span.history { history = h }
         merge(latest)
+        covered = span.to ?? lastSeq
+        scheduleRebuild() // also when the page is empty
+    }
+
+    /// Items in transcript order: by line, then by block within the line (ids end in "#<block>"; "#10" after "#2").
+    nonisolated static func ordered(_ items: [Item]) -> [Item] {
+        items.sorted { ($0.seq, $0.part) < ($1.seq, $1.part) }
     }
 
     func prepend(_ older: [Item], hasMore: Bool) {
@@ -574,7 +657,12 @@ nonisolated enum ScreenParser {
 /// On-disk copy of each conversation's last exchanges (Caches/chats), so opening or switching to a chat never
 /// shows a blank page while the hub catches up.
 nonisolated enum ChatCache {
-    private struct Entry: Codable { var items: [Item]; var hasMore: Bool }
+    private struct Entry: Codable {
+        var items: [Item]
+        var hasMore: Bool
+        var history: String?
+        var covered: Int?
+    }
     private static let maxBytes = 6 << 20
 
     private static func url(_ key: SessionKey) -> URL? {
@@ -584,15 +672,15 @@ nonisolated enum ChatCache {
         return base.appending(path: "chats-v2").appending(path: String(safe) + ".json")
     }
 
-    static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool)? {
+    static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool, history: String?, covered: Int?)? {
         guard let url = url(key), let data = try? Data(contentsOf: url),
               let e = try? JSON.decoder.decode(Entry.self, from: data) else { return nil }
-        return (e.items, e.hasMore)
+        return (e.items, e.hasMore, e.history, e.covered)
     }
 
-    static func save(_ key: SessionKey, items: [Item], hasMore: Bool) {
+    static func save(_ key: SessionKey, items: [Item], hasMore: Bool, history: String? = nil, covered: Int? = nil) {
         guard let url = url(key), !items.isEmpty else { return }
-        var entry = Entry(items: items, hasMore: hasMore)
+        var entry = Entry(items: items, hasMore: hasMore, history: history, covered: covered)
         guard var data = try? JSON.encoder.encode(entry) else { return }
         if data.count > maxBytes { // screenshots make turns huge: keep the words, drop the pictures
             entry.items = items.filter { $0.kind != .image }
@@ -603,12 +691,17 @@ nonisolated enum ChatCache {
         try? data.write(to: url, options: .atomic)
     }
 
-    /// Items from the start of the `turns`-th last user prompt on.
+    /// Items from the start of the `turns`-th last user prompt on (never half a transcript line: what a page before
+    /// its first seq would bring back leaves out the rest of that line).
     static func tail(_ items: [Item], turns: Int) -> [Item] {
         var seen = 0
         for i in items.indices.reversed() where items[i].role == "user" && items[i].kind == .text && items[i].queued != true {
             seen += 1
-            if seen == turns { return Array(items[i...]) }
+            if seen == turns {
+                var start = i
+                while start > 0 && items[start - 1].seq == items[start].seq { start -= 1 }
+                return Array(items[start...])
+            }
         }
         return items
     }
@@ -633,11 +726,12 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Sendable {
     }
 
     /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:
-    /// Claude adds placeholders and the phone adds notes).
+    /// Claude adds placeholders and the phone adds notes). Containing only counts for longer texts: a pending "好"
+    /// was taken for any message with 好 in it.
     static func same(_ a: String, _ b: String) -> Bool {
         let x = normalize(a), y = normalize(b)
         guard !x.isEmpty, !y.isEmpty else { return false }
-        return x == y || x.contains(y) || y.contains(x)
+        return x == y || (min(x.count, y.count) >= 8 && (x.contains(y) || y.contains(x)))
     }
 }
 

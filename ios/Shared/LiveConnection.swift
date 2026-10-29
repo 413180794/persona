@@ -5,8 +5,9 @@ nonisolated enum ServerEvent: Sendable {
     case hello
     case machines([Machine])
     case sessions(machineID: String, [Session])
-    /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell.
-    case items(SessionKey, [Item], backlog: Bool, hasMore: Bool?)
+    /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell. moreAfter:
+    /// the hub capped a catch-up, more came after these.
+    case items(SessionKey, [Item], backlog: Bool, hasMore: Bool?, span: ItemSpan, moreAfter: Bool)
     case screen(SessionKey, text: String, status: SessionStatus)
     case delta(SessionKey, text: String)
     case interaction(Interaction)
@@ -32,6 +33,10 @@ nonisolated enum ServerEvent: Sendable {
         var items: [Item]?
         var backlog: Bool?
         var hasMore: Bool?
+        var moreAfter: Bool?
+        var history: String?
+        var fromSeq: Int?
+        var toSeq: Int?
         var text: String?
         var status: SessionStatus?
         var interaction: Interaction?
@@ -48,8 +53,9 @@ nonisolated enum ServerEvent: Sendable {
         var fleet: FleetState?
 
         enum CodingKeys: String, CodingKey {
-            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet
+            case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
+                 moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
         }
     }
@@ -65,7 +71,8 @@ nonisolated enum ServerEvent: Sendable {
             return .sessions(machineID: m, (e.sessions ?? []).map { var s = $0; s.machineID = m; return s })
         case "items":
             guard let key else { return nil }
-            return .items(key, e.items ?? [], backlog: e.backlog ?? false, hasMore: e.hasMore)
+            return .items(key, e.items ?? [], backlog: e.backlog ?? false, hasMore: e.hasMore,
+                          span: ItemSpan(history: e.history, from: e.fromSeq, to: e.toSeq), moreAfter: e.moreAfter ?? false)
         case "screen":
             guard let key else { return nil }
             return .screen(key, text: e.text ?? "", status: e.status ?? .unknown)
@@ -109,6 +116,11 @@ final class LiveConnection {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var backoff: TimeInterval = 1
     @ObservationIgnored private let session = URLSession(configuration: .default)
+    /// When the hub last answered (any message or a pong): a socket that went quiet on a network change can sit
+    /// "connected" forever, and the chat would silently stop updating.
+    @ObservationIgnored private var lastHeard = Date.distantPast
+    static let pingEvery: Duration = .seconds(20)
+    static let deadAfter: TimeInterval = 45
 
     func connect(_ config: ServerConfig) {
         self.config = config
@@ -145,6 +157,25 @@ final class LiveConnection {
         state = .connecting
         t.resume()
         receive(t, gen)
+        heartbeat(t, gen)
+    }
+
+    private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {
+        Task { @MainActor [weak self] in
+            while true {
+                try? await Task.sleep(for: Self.pingEvery)
+                guard let self, gen == self.generation else { return }
+                guard self.state == .connected else { continue }
+                if Date.now.timeIntervalSince(self.lastHeard) > Self.deadAfter {
+                    t.cancel(with: .goingAway, reason: nil) // its receive fails and schedules the reconnect
+                    return
+                }
+                t.sendPing { [weak self] error in
+                    guard error == nil else { return }
+                    Task { @MainActor in if gen == self?.generation { self?.lastHeard = .now } }
+                }
+            }
+        }
     }
 
     private func receive(_ t: URLSessionWebSocketTask, _ gen: Int) {
@@ -160,6 +191,7 @@ final class LiveConnection {
                 guard let self, gen == self.generation else { return }
                 switch result {
                 case .success:
+                    self.lastHeard = .now
                     if self.state != .connected {
                         self.state = .connected
                         self.backoff = 1

@@ -342,7 +342,10 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				// A turn can start without a message from us: claude takes up a finished background task's
 				// notification on its own, and a message sent meanwhile waits behind it. The result of that turn
 				// cleared busy while claude went on working, so the phone showed the chat as finished.
+				// A new message: the last one's text is in the transcript by now. Clear the app's live text, or a
+				// message that went on to call tools stays on screen twice (its item, and the live copy) meanwhile.
 				p.mu.Lock()
+				had := p.partial.Len() > 0
 				p.partial.Reset()
 				resumed := !p.busy
 				p.busy = true
@@ -350,6 +353,9 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				p.mu.Unlock()
 				if resumed {
 					n.notifySessions()
+				}
+				if had {
+					n.emitDelta(p.id, "")
 				}
 			case "content_block_delta":
 				if ev.Event.Delta.Type != "text_delta" {

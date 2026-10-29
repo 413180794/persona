@@ -310,7 +310,7 @@ func pageFixture(t *testing.T) *File {
 
 func TestPageFromTheEnd(t *testing.T) {
 	f := pageFixture(t)
-	items, more := f.Page(0, 2)
+	items, more, _ := f.Page(0, 2)
 	if !more {
 		t.Fatal("has_more should be true when older items exist")
 	}
@@ -324,7 +324,7 @@ func TestPageFromTheEnd(t *testing.T) {
 
 func TestPageBeforeSeq(t *testing.T) {
 	f := pageFixture(t)
-	items, more := f.Page(4, 2)
+	items, more, _ := f.Page(4, 2)
 	if len(items) != 2 || items[0].Seq != 2 || items[1].Seq != 3 {
 		t.Fatalf("before_seq is exclusive: %+v", items)
 	}
@@ -332,7 +332,7 @@ func TestPageBeforeSeq(t *testing.T) {
 		t.Fatal("seq 1 is still older")
 	}
 
-	items, more = f.Page(2, 2)
+	items, more, _ = f.Page(2, 2)
 	if len(items) != 1 || items[0].Seq != 1 || items[0].Text != "one" {
 		t.Fatalf("unexpected page %+v", items)
 	}
@@ -343,21 +343,21 @@ func TestPageBeforeSeq(t *testing.T) {
 
 func TestAfterSeq(t *testing.T) {
 	f := pageFixture(t)
-	items, more := f.After(5, 10)
+	items, more, _ := f.After(5, 10)
 	if len(items) != 2 || more {
 		t.Fatalf("want both items of line 6 and nothing more, got %+v more %v", items, more)
 	}
 	if items[0].Seq != 6 || items[1].Seq != 6 {
 		t.Fatalf("unexpected seqs %+v", items)
 	}
-	if got, more := f.After(0, 3); len(got) != 3 || got[2].Seq != 3 || !more {
+	if got, more, _ := f.After(0, 3); len(got) != 3 || got[2].Seq != 3 || !more {
 		t.Fatalf("limit not honoured: %+v more %v", got, more)
 	}
-	if got, more := f.After(6, 10); len(got) != 0 || more {
+	if got, more, _ := f.After(6, 10); len(got) != 0 || more {
 		t.Fatalf("nothing after the last line, got %+v", got)
 	}
 	// The limit falls inside line 6 (two items): the page takes the whole line.
-	if got, _ := f.After(4, 2); len(got) != 3 || got[2].Seq != 6 {
+	if got, _, _ := f.After(4, 2); len(got) != 3 || got[2].Seq != 6 {
 		t.Fatalf("a line was split: %+v", got)
 	}
 }
@@ -556,11 +556,11 @@ func TestPageTurnsStartsAtAPrompt(t *testing.T) {
 	if _, err := f.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	items, more := f.PageTurns(0, 2, 2000)
+	items, more, _ := f.PageTurns(0, 2, 2000)
 	if !more || len(items) != 12 || items[0].Text != "question 2" {
 		t.Fatalf("last two turns: more=%v n=%d first=%q", more, len(items), items[0].Text)
 	}
-	older, more := f.PageTurns(items[0].Seq, 2, 2000)
+	older, more, _ := f.PageTurns(items[0].Seq, 2, 2000)
 	if more || len(older) != 6 || older[0].Text != "question 1" {
 		t.Fatalf("older page: more=%v n=%d", more, len(older))
 	}
@@ -717,5 +717,63 @@ func TestLocalCommandLines(t *testing.T) {
 	}
 	if want := "user:/model opus|system:Set model to Opus"; strings.Join(got, "|") != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestHistoryIdentity(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	write := func(p string, lines ...string) {
+		t.Helper()
+		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first := `{"type":"user","uuid":"u1","message":{"role":"user","content":"one"}}`
+	write(path, first, `{"type":"user","uuid":"u2","message":{"role":"user","content":"two"}}`)
+	f := NewFile(path)
+	_, sp, err := f.RefreshSpan()
+	if err != nil || sp.History == "" || sp.From != 0 || sp.To != 2 {
+		t.Fatalf("first read: %+v %v", sp, err)
+	}
+	// Another reader of the same file (a restarted node) sees the same history.
+	g := NewFile(path)
+	if _, sp2, _ := g.RefreshSpan(); sp2.History != sp.History {
+		t.Fatalf("history changed across readers: %q vs %q", sp.History, sp2.History)
+	}
+	// Replaced by another file (new inode): a new history, seqs from 1 again.
+	other := filepath.Join(dir, "other.jsonl")
+	write(other, first)
+	if err := os.Rename(other, path); err != nil {
+		t.Fatal(err)
+	}
+	_, sp3, _ := f.RefreshSpan()
+	if sp3.History == sp.History || sp3.From != 0 || sp3.To != 1 {
+		t.Fatalf("after replace: %+v (was %q)", sp3, sp.History)
+	}
+	// Truncated in place and rewritten with the same first line: the read count tells it apart.
+	fh, _ := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0)
+	fh.Close()
+	_, _, _ = f.RefreshSpan()
+	write(path, first)
+	_, sp4, _ := f.RefreshSpan()
+	if sp4.History == sp3.History {
+		t.Fatalf("a truncated file kept its history %q", sp4.History)
+	}
+	// Nothing new: an empty span at the end.
+	if fresh, sp5, _ := f.RefreshSpan(); len(fresh) != 0 || sp5.From != sp5.To || sp5.To != 1 {
+		t.Fatalf("idle refresh: %d items %+v", len(fresh), sp5)
+	}
+}
+
+func TestSubagentFileKeepsSidechainAfterRewrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-x.jsonl")
+	line := `{"type":"assistant","isSidechain":true,"uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}`
+	_ = os.WriteFile(path, []byte(line+"\n"+line+"\n"), 0o600)
+	f := NewSubagentFile(path)
+	_, _ = f.Refresh()
+	_ = os.WriteFile(path, []byte(line+"\n"), 0o600) // shorter: start over
+	if items, _ := f.Refresh(); len(items) != 1 {
+		t.Fatalf("a rewritten subagent transcript lost its lines: %d items", len(items))
 	}
 }

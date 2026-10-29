@@ -41,7 +41,6 @@ final class AppModel {
     var debugShowNewChat = false
 
     @ObservationIgnored private var chats: [SessionKey: ChatStore] = [:]
-    @ObservationIgnored private var subscribed = Set<SessionKey>()
     @ObservationIgnored private(set) var launcherCache: [String: [Launcher]] = [:]
 
     var api: APIClient? { config.map { APIClient(config: $0) } }
@@ -110,7 +109,8 @@ final class AppModel {
         sessionsByMachine = [:]
         interactions = [:]
         chats = [:]
-        subscribed = []
+        subscribers = [:]
+        shown = []
     }
 
     // MARK: Derived
@@ -190,32 +190,101 @@ final class AppModel {
 
     // MARK: Subscriptions
 
-    func subscribe(_ key: SessionKey) {
-        subscribed.insert(key)
+    /// Who keeps each chat subscribed (one id per chat view): two views of the same session — opened again from its
+    /// space page, or from a notification — must not end each other's subscription when one goes away.
+    @ObservationIgnored private var subscribers: [SessionKey: Set<UUID>] = [:]
+    /// Chat views on screen, newest last: `visibleSession` is the top one.
+    @ObservationIgnored private var shown: [(owner: UUID, key: SessionKey)] = []
+    @ObservationIgnored private var filling = Set<SessionKey>()
+
+    func subscribe(_ key: SessionKey, by owner: UUID) {
+        let first = subscribers[key, default: []].isEmpty
+        subscribers[key, default: []].insert(owner)
+        guard first else { return }
         let store = chat(key)
-        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
-        if store.lastSeq > 0 { msg["since_seq"] = store.lastSeq }
-        live.send(msg)
+        live.send(subscribeMessage(key))
         if live.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
     }
 
-    func isSubscribed(_ key: SessionKey) -> Bool { subscribed.contains(key) }
-    /// The chat's store if one is in memory (never creates one: background sync writes to the disk cache instead).
-    func existingChat(_ key: SessionKey) -> ChatStore? { chats[key] }
-
-    func unsubscribe(_ key: SessionKey) {
-        subscribed.remove(key)
+    func unsubscribe(_ key: SessionKey, by owner: UUID) {
+        guard var owners = subscribers[key], owners.remove(owner) != nil else { return }
+        guard owners.isEmpty else { subscribers[key] = owners; return }
+        subscribers[key] = nil
         live.send(["type": "unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
     }
+
+    func isSubscribed(_ key: SessionKey) -> Bool { subscribers[key] != nil }
+    private var subscribed: [SessionKey] { Array(subscribers.keys) }
+
+    /// A chat view shows `key` (its completion pings are suppressed while it does).
+    func show(_ key: SessionKey, by owner: UUID) {
+        shown.removeAll { $0.owner == owner }
+        shown.append((owner, key))
+        visibleSession = key
+    }
+
+    func hide(by owner: UUID) {
+        shown.removeAll { $0.owner == owner }
+        visibleSession = shown.last?.key
+    }
+
+    /// Asks for everything after what the chat holds without holes (`covered`), or the last exchanges if nothing.
+    private func subscribeMessage(_ key: SessionKey) -> [String: Any] {
+        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
+        let covered = chat(key).covered
+        if covered > 0 { msg["since_seq"] = covered }
+        return msg
+    }
+    /// The chat's store if one is in memory (never creates one: background sync writes to the disk cache instead).
+    func existingChat(_ key: SessionKey) -> ChatStore? { chats[key] }
 
     private func loadInitial(_ key: SessionKey) async {
         guard let api else { return }
         do {
             let res = try await api.items(key, beforeSeq: nil)
-            chat(key).merge(res.items, backlog: true, hasMore: res.hasMore)
+            settle(key, chat(key).apply(res.items, span: res.span, backlog: true, hasMore: res.hasMore))
         } catch {
             chat(key).error = error.shown
         }
+    }
+
+    /// Follows up on what a batch left to do (`ChatStore.Gap`).
+    private func settle(_ key: SessionKey, _ gap: ChatStore.Gap) {
+        switch gap {
+        case .none: break
+        case .reload: Task { await reload(key) }
+        case .fill:
+            // A live push can overtake the backlog asked for at subscribe time, and the backlog closes the hole
+            // itself: give it a moment before fetching.
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                await fill(key)
+            }
+        }
+    }
+
+    /// Fetches what comes after the chat's `covered`, page by page, until it is whole; past 8 pages it starts over from
+    /// the latest page instead.
+    func fill(_ key: SessionKey) async {
+        guard let api, !filling.contains(key) else { return }
+        filling.insert(key)
+        defer { filling.remove(key) }
+        let store = chat(key)
+        for _ in 0..<8 {
+            guard let r = try? await api.items(key, afterSeq: store.covered) else { return }
+            switch store.apply(r.items, span: r.span, moreAfter: r.moreAfter == true) {
+            case .none: return
+            case .fill: continue
+            case .reload: await reload(key); return
+            }
+        }
+        await reload(key)
+    }
+
+    /// Starts the chat over from the latest page (the hole was too big, or the transcript was replaced).
+    func reload(_ key: SessionKey) async {
+        guard let api, let page = try? await api.items(key, beforeSeq: nil) else { return }
+        chat(key).replace(with: page.items, hasMore: page.hasMore, span: page.span)
     }
 
     func loadOlder(_ key: SessionKey) async {
@@ -239,10 +308,14 @@ final class AppModel {
         LarkSync.shared.reconnected()
         InboxStore.shared.reload()
         for key in subscribed {
-            var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
-            let seq = chat(key).lastSeq
-            if seq > 0 { msg["since_seq"] = seq }
-            live.send(msg)
+            chat(key).liveText = "" // a delta that cleared it may have been lost with the old socket
+            live.send(subscribeMessage(key))
+        }
+        // Questions answered on the computer while the socket was down are gone from the hub: drop their cards.
+        Task {
+            guard let ixs = try? await api?.interactions() else { return }
+            interactions = Dictionary(ixs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            WatchSync.shared.push(summary: watchSummary())
         }
     }
 
@@ -273,9 +346,7 @@ final class AppModel {
             for m in list where m.online && wasOffline.contains(m.id) {
                 for key in subscribed where key.machineID == m.id {
                     chat(key).error = nil
-                    var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
-                    if chat(key).lastSeq > 0 { msg["since_seq"] = chat(key).lastSeq }
-                    live.send(msg)
+                    live.send(subscribeMessage(key))
                 }
             }
         case .sessions(let machineID, let list):
@@ -292,8 +363,13 @@ final class AppModel {
             InboxStore.shared.reload()
         case .fleet(let state):
             LiveActivityController.shared.apply(state)
-        case .items(let key, let items, let backlog, let hasMore):
-            chat(key).merge(items, backlog: backlog, hasMore: hasMore)
+        case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
+            let store = chat(key)
+            settle(key, store.apply(items, span: span, backlog: backlog, hasMore: hasMore, moreAfter: moreAfter))
+            // The streamed message landed in the transcript: stop drawing its live copy.
+            if !store.liveText.isEmpty, items.contains(where: { $0.role == "assistant" && $0.kind == .text && ($0.text ?? "").hasPrefix(store.liveText) }) {
+                store.liveText = ""
+            }
         case .screen(let key, let text, let status):
             let c = chat(key)
             c.screen = text

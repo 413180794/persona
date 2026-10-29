@@ -302,6 +302,7 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 		Items     []proto.Item `json:"items"`
 		HasMore   bool         `json:"has_more"`
 		MoreAfter bool         `json:"more_after,omitempty"`
+		itemSpan
 	}
 	if err := m.call(ctx, "session.items", params, &res); err != nil {
 		callErr(w, err)
@@ -479,9 +480,12 @@ func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
 }
 
 // itemsToSubscribers fans new items out, without image data to clients that load images on demand.
-func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item) {
+func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item, span itemSpan) {
+	if items == nil {
+		items = []proto.Item{}
+	}
 	msg := func(items []proto.Item) []byte {
-		b, _ := json.Marshal(map[string]any{"type": "items", "machine_id": machineID, "session_id": sessionID, "items": items})
+		b, _ := json.Marshal(span.into(map[string]any{"type": "items", "machine_id": machineID, "session_id": sessionID, "items": items}))
 		return b
 	}
 	var full, lazy []byte
@@ -691,6 +695,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 			Items     []proto.Item `json:"items"`
 			HasMore   bool         `json:"has_more"`
 			MoreAfter bool         `json:"more_after"`
+			itemSpan
 		}
 		if err := m.call(ctx, "session.items", params, &res); err != nil {
 			c.sendJSON(map[string]any{"type": "error", "machine_id": m.cfg.ID, "session_id": sid, "error": err.Error()})
@@ -699,7 +704,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 		if lazy {
 			res.Items = proto.WithoutImageData(res.Items)
 		}
-		out := map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true}
+		out := res.itemSpan.into(map[string]any{"type": "items", "machine_id": m.cfg.ID, "session_id": sid, "items": res.Items, "backlog": true})
 		if since == 0 {
 			// Only a page counted back from the end knows whether older items exist. A catch-up after since_seq does
 			// not: sending false there told the app the history was complete, and scrolling up stopped at its oldest.
@@ -716,5 +721,31 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 			return
 		}
 		after = res.Items[len(res.Items)-1].Seq
+		if res.ToSeq != nil && *res.ToSeq > after {
+			after = *res.ToSeq
+		}
 	}
+}
+
+// itemSpan is where a batch of items sits in the transcript (node: transcript.Span), passed through to the apps:
+// history names the version of the file (it changes when the file is replaced and seqs start over), from_seq the seq
+// the batch continues from (only for batches that continue: catch-up, live pushes, after_seq), to_seq the last line it
+// accounts for. Older nodes send none of it.
+type itemSpan struct {
+	History string `json:"history,omitempty"`
+	FromSeq *int   `json:"from_seq,omitempty"`
+	ToSeq   *int   `json:"to_seq,omitempty"`
+}
+
+func (sp itemSpan) into(m map[string]any) map[string]any {
+	if sp.History != "" {
+		m["history"] = sp.History
+	}
+	if sp.FromSeq != nil {
+		m["from_seq"] = *sp.FromSeq
+	}
+	if sp.ToSeq != nil {
+		m["to_seq"] = *sp.ToSeq
+	}
+	return m
 }

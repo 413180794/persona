@@ -227,6 +227,101 @@ struct TurnTests {
         #expect(store.hasMore)
     }
 
+    private func store() -> ChatStore { ChatStore(key: SessionKey(machineID: "test", sessionID: UUID().uuidString)) }
+    private func texts(_ seqs: ClosedRange<Int>) -> [Item] { seqs.map { item($0, .text, text: "m\($0)") } }
+
+    @Test func aBatchThatDoesNotContinueRevealsAHole() {
+        let s = store()
+        #expect(s.apply(texts(1...10), span: ItemSpan(history: "h", from: nil, to: 12), backlog: true, hasMore: false) == .none)
+        #expect(s.covered == 12) // lines 11-12 had no items, still covered
+        // Continues from 12: fine, and covered moves to its end.
+        #expect(s.apply(texts(13...14), span: ItemSpan(history: "h", from: 12, to: 15)) == .none)
+        #expect(s.covered == 15)
+        // Starts after 20: lines 16-20 never came. Kept, but covered stays and the hole is to be fetched.
+        #expect(s.apply(texts(21...22), span: ItemSpan(history: "h", from: 20, to: 22)) == .fill)
+        #expect(s.covered == 15 && s.lastSeq == 22)
+        // The fill: everything after 15, through 22.
+        #expect(s.apply(texts(16...22), span: ItemSpan(history: "h", from: 15, to: 22)) == .none)
+        #expect(s.covered == 22 && s.items.map(\.seq) == Array(1...10) + [13, 14] + Array(16...22)) // 11, 12, 15: no items
+    }
+
+    @Test func emptyBatchesMoveCoveredForward() {
+        let s = store()
+        s.apply(texts(1...3), span: ItemSpan(history: "h", from: nil, to: 3), backlog: true, hasMore: false)
+        #expect(s.apply([], span: ItemSpan(history: "h", from: 3, to: 5)) == .none) // a title line, a mode line
+        #expect(s.apply(texts(6...6), span: ItemSpan(history: "h", from: 5, to: 6)) == .none)
+        #expect(s.covered == 6)
+    }
+
+    @Test func aCappedCatchUpAsksForTheRest() {
+        let s = store()
+        s.apply(texts(1...3), span: ItemSpan(history: "h", from: nil, to: 3), backlog: true, hasMore: false)
+        #expect(s.apply(texts(4...9), span: ItemSpan(history: "h", from: 3, to: 9), backlog: true, moreAfter: true) == .fill)
+        #expect(s.covered == 9)
+    }
+
+    @Test func anotherHistoryStartsOver() {
+        let s = store()
+        s.apply(texts(1...30), span: ItemSpan(history: "old", from: nil, to: 30), backlog: true, hasMore: false)
+        // A page from the end of the replaced file: it is all there is.
+        #expect(s.apply(texts(1...4), span: ItemSpan(history: "new", from: nil, to: 4), backlog: true, hasMore: false) == .none)
+        #expect(s.items.map(\.seq) == Array(1...4) && s.covered == 4 && s.history == "new")
+        // A continuing batch from yet another file: nothing here fits it, start from the latest page.
+        #expect(s.apply(texts(9...9), span: ItemSpan(history: "newer", from: 8, to: 9)) == .reload)
+        #expect(s.covered == 0)
+    }
+
+    @Test func aLatestPageThatDoesNotReachTheCacheReplacesIt() {
+        let s = store()
+        s.apply(texts(1...10), span: ItemSpan(history: "h", from: nil, to: 10), backlog: true, hasMore: true) // the old cache
+        // Opened cold after several more exchanges: the latest page starts at 40, nothing in between is here.
+        s.apply(texts(40...45), span: ItemSpan(history: "h", from: nil, to: 46), backlog: true, hasMore: true)
+        #expect(s.items.map(\.seq) == Array(40...45))
+        #expect(s.covered == 46 && s.hasMore)
+        // One that overlaps is merged.
+        s.apply(texts(44...48), span: ItemSpan(history: "h", from: nil, to: 48), backlog: true, hasMore: true)
+        #expect(s.items.map(\.seq) == Array(40...48))
+    }
+
+    @Test func noFillBeforeABaseline() {
+        let s = store()
+        // A live push overtakes the subscribe backlog of an empty chat: no hole to fill from 0.
+        #expect(s.apply(texts(50...51), span: ItemSpan(history: "h", from: 49, to: 51)) == .none)
+        #expect(s.covered == 0)
+        s.apply(texts(45...51), span: ItemSpan(history: "h", from: nil, to: 51), backlog: true, hasMore: true)
+        #expect(s.covered == 51 && s.items.map(\.seq) == Array(45...51))
+    }
+
+    @Test func olderHubsWithoutSpansWorkAsBefore() {
+        let s = store()
+        #expect(s.apply(texts(1...3), span: ItemSpan(), backlog: true, hasMore: false) == .none)
+        #expect(s.apply(texts(7...8), span: ItemSpan()) == .none)
+        #expect(s.covered == 8)
+        #expect(s.apply(texts(9...9), span: ItemSpan(), moreAfter: true) == .reload)
+    }
+
+    @Test func blocksOfALineSortNumerically() {
+        let a = Item(id: "u#10", seq: 5, ts: nil, role: "user", kind: .image, text: nil, toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)
+        let b = Item(id: "u#2", seq: 5, ts: nil, role: "user", kind: .text, text: "x", toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)
+        #expect(ChatStore.ordered([a, b]).map(\.id) == ["u#2", "u#10"])
+    }
+
+    @Test func cacheTailKeepsWholeLines() {
+        func it(_ id: String, _ seq: Int, _ role: String, _ kind: ItemKind) -> Item {
+            Item(id: id, seq: seq, ts: nil, role: role, kind: kind, text: "t", toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)
+        }
+        // Line 3 is an image and then the user's words: the tail starts at the image, not halfway through the line.
+        let items = [it("a#0", 1, "user", .text), it("b#0", 2, "assistant", .text), it("c#0", 3, "user", .image), it("c#1", 3, "user", .text),
+                     it("d#0", 4, "assistant", .text)]
+        #expect(ChatCache.tail(items, turns: 1).map(\.id) == ["c#0", "c#1", "d#0"])
+    }
+
+    @Test func shortPendingMessagesNeedTheirOwnCopy() {
+        #expect(PendingMessage.same("好", "好"))
+        #expect(!PendingMessage.same("好", "好的，我先看看日志再说"))
+        #expect(PendingMessage.same("帮我看一下这个构建为什么失败", "帮我看一下这个构建为什么失败 [Image #1]"))
+    }
+
     @Test func wakeSummaryReadsInChinese() {
         #expect(NoticeRow.wakeSummary("Background command \"Release master\" completed (exit code 0)") == ("后台命令完成 · Release master", false))
         #expect(NoticeRow.wakeSummary("Background command \"Build\" failed with exit code 65").failed)

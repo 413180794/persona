@@ -73,7 +73,7 @@ type goldenMeta struct {
 
 func snapshot(f *File) golden {
 	m := f.Meta()
-	items, _ := f.Page(0, 1<<30)
+	items, _, _ := f.Page(0, 1<<30)
 	return golden{Items: items, Meta: goldenMeta{
 		Title: m.Title, FirstUser: m.FirstUser, LastText: m.LastText, Model: m.Model, Cwd: m.Cwd,
 		PermissionMode: m.PermissionMode, Effort: m.Effort, Turns: m.Turns, Compactions: m.Compactions,
@@ -154,7 +154,7 @@ func TestFixtureIncrementalEqualsCold(t *testing.T) {
 				if got := marshal(t, snapshot(f)); !bytes.Equal(got, want) {
 					t.Fatalf("step %d: incremental read differs from a cold read", step)
 				}
-				all, _ := f.Page(0, 1<<30)
+				all, _, _ := f.Page(0, 1<<30)
 				if !bytes.Equal(marshal(t, streamed), marshal(t, all)) {
 					t.Fatalf("step %d: the items Refresh returned are not the items the file holds", step)
 				}
@@ -171,7 +171,7 @@ func TestFixturePagingCoversEverything(t *testing.T) {
 			if _, err := f.Refresh(); err != nil {
 				t.Fatal(err)
 			}
-			all, _ := f.Page(0, 1<<30)
+			all, _, _ := f.Page(0, 1<<30)
 			walk := func(name string, page func(before int) ([]proto.Item, bool)) {
 				var got []proto.Item
 				before := 0
@@ -193,14 +193,20 @@ func TestFixturePagingCoversEverything(t *testing.T) {
 					t.Fatalf("%s: pages hold %d items, the file %d", name, len(got), len(all))
 				}
 			}
-			walk("Page", func(before int) ([]proto.Item, bool) { return f.Page(before, 3) })
-			walk("PageTurns", func(before int) ([]proto.Item, bool) { return f.PageTurns(before, 1, 2000) })
+			walk("Page", func(before int) ([]proto.Item, bool) { items, more, _ := f.Page(before, 3); return items, more })
+			walk("PageTurns", func(before int) ([]proto.Item, bool) {
+				items, more, _ := f.PageTurns(before, 1, 2000)
+				return items, more
+			})
 			// Forward, the way catch-up and background sync go: resume after the last seq received.
 			for _, limit := range []int{1, 3} {
 				var got []proto.Item
 				after := 0
 				for {
-					items, more := f.After(after, limit)
+					items, more, span := f.After(after, limit)
+					if span.From != after || span.To < after {
+						t.Fatalf("After(%d) span %+v", after, span)
+					}
 					got = append(got, items...)
 					if len(items) > 0 {
 						after = items[len(items)-1].Seq

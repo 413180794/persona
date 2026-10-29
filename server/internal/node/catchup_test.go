@@ -20,8 +20,21 @@ import (
 
 // hubEnd wires n.peer to a fake hub that records every session.items event.
 type hubEnd struct {
-	mu    sync.Mutex
-	items []proto.Item
+	mu      sync.Mutex
+	items   []proto.Item
+	batches []pushed
+}
+
+type pushed struct {
+	n              int
+	history        string
+	fromSeq, toSeq int
+}
+
+func (h *hubEnd) spans() []pushed {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]pushed(nil), h.batches...)
 }
 
 func (h *hubEnd) got() []proto.Item {
@@ -43,11 +56,15 @@ func withHub(t *testing.T, n *Node) *hubEnd {
 			return
 		}
 		var p struct {
-			Items []proto.Item `json:"items"`
+			Items   []proto.Item `json:"items"`
+			History string       `json:"history"`
+			FromSeq int          `json:"from_seq"`
+			ToSeq   int          `json:"to_seq"`
 		}
 		_ = json.Unmarshal(params, &p)
 		end.mu.Lock()
 		end.items = append(end.items, p.Items...)
+		end.batches = append(end.batches, pushed{len(p.Items), p.History, p.FromSeq, p.ToSeq})
 		end.mu.Unlock()
 	}
 	go func() { _ = hub.Serve(ctx, n2hR) }()
@@ -121,6 +138,39 @@ func TestWatchCatchUpSendsEverything(t *testing.T) {
 		if want := 11 + i/2; it.Seq != want {
 			t.Fatalf("item %d has seq %d, want %d", i, it.Seq, want)
 		}
+	}
+	covered := 10
+	for _, b := range hub.spans() {
+		if b.fromSeq != covered || b.history == "" {
+			t.Fatalf("batch %+v does not continue from %d", b, covered)
+		}
+		covered = b.toSeq
+	}
+	if covered != 710 {
+		t.Fatalf("batches cover through %d, want 710", covered)
+	}
+}
+
+// Lines without items (an ai-title after a turn) still go out as an empty batch: the apps learn they are complete
+// through it, and the next batch does not look like it skipped lines.
+func TestWatchPushesItemlessLines(t *testing.T) {
+	n, home := testNode(t)
+	const id = "11111111-2222-3333-4444-555555555557"
+	dir := filepath.Join(home, ".claude", "projects", "-work")
+	_ = os.MkdirAll(dir, 0o700)
+	path := filepath.Join(dir, id+".jsonl")
+	writeCodexToolLines(t, path, 0, 3)
+	hub := withHub(t, n)
+	if err := n.watch(id, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer n.unwatch(id)
+	fh, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = fh.WriteString(`{"type":"ai-title","aiTitle":"t"}` + "\n")
+	fh.Close()
+	waitFor(t, "an empty batch", func() bool { return len(hub.spans()) >= 1 })
+	if b := hub.spans()[0]; b.n != 0 || b.fromSeq != 3 || b.toSeq != 4 {
+		t.Fatalf("want an empty batch for line 4, got %+v", b)
 	}
 }
 

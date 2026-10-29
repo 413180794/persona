@@ -84,9 +84,9 @@ type codexItem struct {
 	// ImageView
 	Path string `json:"path"`
 	// Extension (kind web.search): what was searched or opened, and what came back
-	Kind    string `json:"kind"`
-	Query   string `json:"query"`
-	Action  *struct {
+	Kind   string `json:"kind"`
+	Query  string `json:"query"`
+	Action *struct {
 		Type    string   `json:"type"`
 		Queries []string `json:"queries"`
 		URL     string   `json:"url"`

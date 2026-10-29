@@ -50,6 +50,9 @@ type Node struct {
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
+
+	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
+	pushLocks map[string]*sync.Mutex
 }
 
 func New(version string) (*Node, error) {
@@ -328,15 +331,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if p.AfterSeq != nil {
 			// more_after: the 500 cap cut it short; the caller asks again after the last seq (or takes the latest page).
-			items, more := f.After(*p.AfterSeq, 500)
-			return map[string]any{"items": nonNil(items), "has_more": false, "more_after": more}, nil
+			items, more, span := f.After(*p.AfterSeq, 500)
+			return withSpan(map[string]any{"items": nonNil(items), "has_more": false, "more_after": more}, span, true), nil
 		}
 		if p.Turns > 0 { // the phone pages by exchanges (user prompt + answer), not by rows
-			items, more := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
-			return map[string]any{"items": nonNil(items), "has_more": more}, nil
+			items, more, span := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
+			return withSpan(map[string]any{"items": nonNil(items), "has_more": more}, span, false), nil
 		}
-		items, more := f.Page(p.BeforeSeq, limit)
-		return map[string]any{"items": nonNil(items), "has_more": more}, nil
+		items, more, span := f.Page(p.BeforeSeq, limit)
+		return withSpan(map[string]any{"items": nonNil(items), "has_more": more}, span, false), nil
 	case "session.watch":
 		return ok(n.watch(p.SessionID, p.SinceSeq))
 	case "session.unwatch":
@@ -433,6 +436,19 @@ func ok(err error) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"ok": true}, nil
+}
+
+// withSpan says where a batch of items sits in the transcript (transcript.Span): history, to_seq, and from_seq for
+// batches that continue from a seq (catch-up, live pushes, after_seq) rather than pages counted back from the end.
+func withSpan(m map[string]any, sp transcript.Span, continues bool) map[string]any {
+	if sp.History != "" {
+		m["history"] = sp.History
+	}
+	m["to_seq"] = sp.To
+	if continues {
+		m["from_seq"] = sp.From
+	}
+	return m
 }
 
 func nonNil(items []proto.Item) []proto.Item {

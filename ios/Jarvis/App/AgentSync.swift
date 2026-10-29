@@ -104,12 +104,11 @@ final class AgentSync {
         guard let api = model.api else { return false }
         do {
             if let store = model.existingChat(key), !store.items.isEmpty {
-                let r = try await api.items(key, afterSeq: store.lastSeq)
-                if r.moreAfter == true {
-                    let page = try await api.items(key, beforeSeq: nil)
-                    store.replace(with: page.items, hasMore: page.hasMore)
-                } else if !r.items.isEmpty {
-                    store.merge(r.items)
+                let r = try await api.items(key, afterSeq: store.covered)
+                switch store.apply(r.items, span: r.span, moreAfter: r.moreAfter == true) {
+                case .none: break
+                case .fill: await model.fill(key)
+                case .reload: await model.reload(key)
                 }
                 return true
             }
@@ -121,25 +120,29 @@ final class AgentSync {
     }
 
     /// No store in memory: update the disk cache the chat will open from (decoding and writing off the main thread).
+    /// What comes after the cache's `covered` is added when it continues it; anything else (a capped catch-up, a
+    /// replaced transcript) writes the latest page instead.
     private nonisolated static func pullToDisk(_ key: SessionKey, _ api: APIClient) async throws {
         let cached = await Task.detached(priority: .utility) { ChatCache.load(key) }.value
-        if let cached, let last = cached.items.last?.seq {
-            let r = try await api.items(key, afterSeq: last)
-            if r.items.isEmpty { return }
-            if r.moreAfter != true {
+        if let cached, let covered = cached.covered ?? cached.items.last?.seq {
+            let r = try await api.items(key, afterSeq: covered)
+            let sameFile = r.history == nil || cached.history == nil || r.history == cached.history
+            if sameFile && r.moreAfter != true && (r.fromSeq ?? covered) <= covered {
+                if r.items.isEmpty && r.toSeq == nil { return }
                 await Task.detached(priority: .utility) {
                     let have = Set(cached.items.map(\.id))
-                    let all = (cached.items + ChatStore.withImageRefs(r.items, key).filter { !have.contains($0.id) })
-                        .sorted { $0.seq == $1.seq ? $0.id < $1.id : $0.seq < $1.seq }
+                    let all = ChatStore.ordered(cached.items + ChatStore.withImageRefs(r.items, key).filter { !have.contains($0.id) })
                     let tail = ChatCache.tail(all, turns: 2)
-                    ChatCache.save(key, items: tail, hasMore: cached.hasMore || tail.count < all.count)
+                    ChatCache.save(key, items: tail, hasMore: cached.hasMore || tail.count < all.count,
+                                   history: r.history ?? cached.history, covered: max(covered, r.toSeq ?? all.last?.seq ?? covered))
                 }.value
                 return
             }
         }
         let page = try await api.items(key, beforeSeq: nil)
         await Task.detached(priority: .utility) {
-            ChatCache.save(key, items: ChatStore.withImageRefs(page.items, key), hasMore: page.hasMore)
+            ChatCache.save(key, items: ChatStore.withImageRefs(page.items, key), hasMore: page.hasMore,
+                           history: page.history, covered: page.toSeq)
         }.value
     }
 }

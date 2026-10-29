@@ -33,7 +33,11 @@ func fakeNode(t *testing.T, n int) *Machine {
 			items = append(items, proto.Item{ID: fmt.Sprintf("i%d", s), Seq: s, Role: "assistant", Kind: proto.KindText})
 		}
 		more := len(items) > 0 && items[len(items)-1].Seq < n
-		return map[string]any{"items": items, "has_more": false, "more_after": more}, nil
+		to := n
+		if more {
+			to = items[len(items)-1].Seq
+		}
+		return map[string]any{"items": items, "has_more": false, "more_after": more, "history": "h1", "from_seq": *p.AfterSeq, "to_seq": to}, nil
 	}
 	go func() { _ = hubSide.Serve(ctx, n2hR) }()
 	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
@@ -47,6 +51,9 @@ type batch struct {
 	Items     []proto.Item `json:"items"`
 	MoreAfter bool         `json:"more_after"`
 	HasMore   *bool        `json:"has_more"`
+	History   string       `json:"history"`
+	FromSeq   *int         `json:"from_seq"`
+	ToSeq     *int         `json:"to_seq"`
 }
 
 func drain(t *testing.T, c *client) []batch {
@@ -71,11 +78,16 @@ func TestBacklogCatchUpSendsEverything(t *testing.T) {
 	c := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}}
 	(&Hub{}).sendBacklog(context.Background(), c, m, "s1", 10)
 	batches := drain(t, c)
-	next := 11
+	next, covered := 11, 10
 	for _, b := range batches {
 		if b.MoreAfter || b.HasMore != nil {
 			t.Fatalf("a complete catch-up says more_after %v / has_more %v", b.MoreAfter, b.HasMore)
 		}
+		// Every batch carries its span, and continues exactly where the previous one ended.
+		if b.History != "h1" || b.FromSeq == nil || b.ToSeq == nil || *b.FromSeq != covered {
+			t.Fatalf("batch span history %q from %v to %v, want from %d", b.History, b.FromSeq, b.ToSeq, covered)
+		}
+		covered = *b.ToSeq
 		for _, it := range b.Items {
 			if it.Seq != next {
 				t.Fatalf("got seq %d, want %d", it.Seq, next)

@@ -138,9 +138,9 @@
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
 | `session` | `session`（单个状态变化） |
-| `items` | `machine_id`, `session_id`, `items`（只推给订阅了该会话的客户端） |
+| `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束） |
-| `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（订阅中且 agent working/blocked 时约 400ms 一次，内容不变不推） |
+| `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id` |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 的 iPhone） |
@@ -150,7 +150,7 @@
 
 | type | 字段 |
 | --- | --- |
-| `subscribe` | `machine_id`, `session_id`, `since_seq`（可选；有则补发其后的全部 items——每页一条 `items`（`backlog: true`），最多 8 页 / 4000 条，超出时最后一条带 `more_after: true`；否则补发最后两轮），`lazy_images`（可选；true 后这个连接收到的 items 都不带图片数据） |
+| `subscribe` | `machine_id`, `session_id`, `since_seq`（可选，App 传本地的 `covered`；有则补发其后的全部 items——每页一条 `items`（`backlog: true`），最多 8 页 / 4000 条，超出时最后一条带 `more_after: true`；否则补发最后两轮），`lazy_images`（可选；true 后这个连接收到的 items 都不带图片数据） |
 | `unsubscribe` | `machine_id`, `session_id` |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
@@ -194,6 +194,16 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   打字过程中出错的回 502 + `delivered: "unknown"`（可能已经到了），同一个 id 再发也只回同样的错误，不会打第二遍。
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择）。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 
+### items 的连续性
+
+每批 items（WebSocket `items` 事件、HTTP 的 `/items` 响应、node 的 `session.items`）都说明自己在 transcript 里的位置：
+
+- `history`：这份 transcript 的身份（inode + 第一行的 crc32 + 被改写的次数）。变了说明文件被替换 / 截短重写，App 丢掉本地内容重新取。
+- `to_seq`：这批读到的最后一行（包括没有 item 的行）；`from_seq`：这批接在哪一行之后（只有接续的批次——补发、实时推送、`after_seq`——才有）。
+- App 记 `covered`（本地从头连续拿到的最后一行）：`from_seq <= covered` 就把 `covered` 推到 `to_seq`；`from_seq > covered` 说明中间丢了一批，
+  稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
+- 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
+
 ## hub ↔ node RPC
 
 `ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
@@ -214,13 +224,13 @@ hub → node 请求：
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source}` → `{text, status}` |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
-| `session.items` | `{session_id, before_seq, limit}` → `{items, has_more}` |
+| `session.items` | `{session_id, before_seq, limit, turns, after_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}`（`from_seq` 只在 `after_seq` 请求里有） |
 | `session.image` | `{session_id, item_id}` → `Image{mime, data}` |
-| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 推 `session.items` / `session.screen` 事件 |
+| `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
 | `interaction.resolve` | `{id, resolution}` |
 
-node → hub 事件：`session.items {session_id, items}`、`session.screen {session_id, text, status}`、`sessions.changed {sessions}`、
+node → hub 事件：`session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）。
 
 node → hub 请求：

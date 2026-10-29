@@ -71,6 +71,8 @@ struct ChatView: View {
 
     /// A subagent of this session being looked at instead of the main agent (read-only, same message UI).
     @State private var viewing: Subagent?
+    /// This view's claim on its subscriptions and on `visibleSession` (another view of the same chat has its own).
+    @State private var owner = UUID()
 
     /// What the chat shows: the main agent, or the subagent picked in the agent strip.
     private var shownKey: SessionKey { viewing.map { SessionKey(machineID: key.machineID, sessionID: $0.sessionID) } ?? key }
@@ -180,9 +182,9 @@ struct ChatView: View {
         .onAppear(perform: appeared)
         .onDisappear {
             rememberReadPosition()
-            if viewing != nil { model.unsubscribe(shownKey) }
-            model.unsubscribe(key)
-            if model.visibleSession == key { model.visibleSession = nil }
+            if viewing != nil { model.unsubscribe(shownKey, by: owner) }
+            model.unsubscribe(key, by: owner)
+            model.hide(by: owner)
         }
         .onChange(of: session?.state) { _, st in
             if st == .unread && model.visibleSession == key { model.markSeen(key) }
@@ -706,9 +708,9 @@ struct ChatView: View {
     private func view(_ agent: Subagent?) {
         guard agent?.id != viewing?.id else { return }
         Haptics.tap()
-        if viewing != nil { model.unsubscribe(shownKey) }
+        if viewing != nil { model.unsubscribe(shownKey, by: owner) }
         withAnimation(.snappy) { viewing = agent }
-        if agent != nil { model.subscribe(shownKey) }
+        if agent != nil { model.subscribe(shownKey, by: owner) }
         followsEnd = true
         frozenAt = nil
         scrollToEnd()
@@ -1024,8 +1026,8 @@ struct ChatView: View {
                 }
                 settleAtEnd()
             }
-            model.subscribe(key)
-            model.visibleSession = key
+            model.subscribe(key, by: owner)
+            model.show(key, by: owner)
             model.markSeen(key)
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
@@ -1220,8 +1222,8 @@ struct ChatView: View {
         guard next != key else { return }
         Haptics.tap()
         rememberReadPosition()
-        if viewing != nil { model.unsubscribe(shownKey); viewing = nil }
-        model.unsubscribe(key)
+        if viewing != nil { model.unsubscribe(shownKey, by: owner); viewing = nil }
+        model.unsubscribe(key, by: owner)
         key = next
         userScrolled = false
         settled = false
@@ -1233,8 +1235,8 @@ struct ChatView: View {
         if pane == .git || pane == .files { pane = .chat } // the next agent may live in another directory
         git = nil
         position = ScrollPosition(edge: .top)
-        model.subscribe(next)
-        model.visibleSession = next
+        model.subscribe(next, by: owner)
+        model.show(next, by: owner)
         model.markSeen(next)
         if style == .dev { AppModel.rememberChat(next) }
     }

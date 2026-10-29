@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
@@ -392,10 +393,9 @@ func (n *Node) close(ctx context.Context, id string) error {
 	return n.herdr.TabClose(ctx, a.TabID)
 }
 
-// watch streams new transcript items and the live screen of a session to the hub.
+// watch streams new transcript items of a session to the hub.
 type watch struct {
-	cancel     context.CancelFunc
-	lastScreen string
+	cancel context.CancelFunc
 }
 
 func (n *Node) watch(id string, since int) error {
@@ -413,9 +413,12 @@ func (n *Node) watch(id string, since int) error {
 				if err != nil {
 					continue
 				}
+				mu := n.pushLock(id)
+				mu.Lock()
 				if _, err := f.Refresh(); err == nil {
 					since = n.catchUp(id, f, since)
 				}
+				mu.Unlock()
 				_ = n.watch(id, since)
 				return
 			}
@@ -428,22 +431,24 @@ func (n *Node) watch(id string, since int) error {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	w := &watch{cancel: cancel}
-	n.watches[id] = w
+	n.watches[id] = &watch{cancel: cancel}
 	n.mu.Unlock()
 
 	// Catch up on lines appended after the hub's last seen seq, then stream. Without a seq (the hub has not seen this
 	// session since it started) the lines this Refresh appends still go out — watchLoop only pushes what later
 	// Refreshes find — unless it is the first read of the file: that is the whole history, the subscriber's backlog.
+	mu := n.pushLock(id)
+	mu.Lock()
 	readBefore := f.LastSeq() > 0
-	if fresh, err := f.Refresh(); err == nil {
+	if fresh, span, err := f.RefreshSpan(); err == nil {
 		if since > 0 {
 			n.catchUp(id, f, since)
-		} else if readBefore && len(fresh) > 0 {
-			_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": fresh})
+		} else if readBefore && span.To > span.From {
+			n.pushItems(id, fresh, span)
 		}
 	}
-	go n.watchLoop(ctx, id, f, w)
+	mu.Unlock()
+	go n.watchLoop(ctx, id, f)
 	return nil
 }
 
@@ -451,15 +456,35 @@ func (n *Node) watch(id string, since int) error {
 // returns the last seq sent.
 func (n *Node) catchUp(id string, f *transcript.File, since int) int {
 	for {
-		items, more := f.After(since, 500)
-		if len(items) > 0 {
-			_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": items})
-			since = items[len(items)-1].Seq
-		}
+		items, more, span := f.After(since, 500)
+		n.pushItems(id, items, span)
+		since = span.To
 		if !more {
 			return since
 		}
 	}
+}
+
+func (n *Node) pushItems(id string, items []proto.Item, span transcript.Span) {
+	if n.peer == nil {
+		return
+	}
+	_ = n.peer.Notify("session.items", withSpan(map[string]any{"session_id": id, "items": nonNil(items)}, span, true))
+}
+
+// pushLock serializes reading a session's new lines with pushing them, so its batches reach the hub in order.
+func (n *Node) pushLock(id string) *sync.Mutex {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.pushLocks == nil {
+		n.pushLocks = map[string]*sync.Mutex{}
+	}
+	mu := n.pushLocks[id]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		n.pushLocks[id] = mu
+	}
+	return mu
 }
 
 func (n *Node) unwatch(id string) {
@@ -472,49 +497,36 @@ func (n *Node) unwatch(id string) {
 	}
 }
 
-// refresh parses new transcript lines and pushes them to the hub when the session is watched.
+// refresh parses new transcript lines and pushes them to the hub when the session is watched — also when the new
+// lines hold no items (titles, modes): the batch still tells clients they have everything up to its to_seq, so the
+// next one does not look like it skipped something.
 func (n *Node) refresh(id string, f *transcript.File) {
-	fresh, err := f.Refresh()
-	if err != nil || len(fresh) == 0 {
+	mu := n.pushLock(id)
+	mu.Lock()
+	defer mu.Unlock()
+	fresh, span, err := f.RefreshSpan()
+	if err != nil || span.To == span.From {
 		return
 	}
 	n.mu.Lock()
 	_, watched := n.watches[id]
 	n.mu.Unlock()
-	if watched && n.peer != nil {
-		_ = n.peer.Notify("session.items", map[string]any{"session_id": id, "items": fresh})
+	if watched {
+		n.pushItems(id, fresh, span)
 	}
 }
 
-func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File, w *watch) {
-	items := time.NewTicker(250 * time.Millisecond)
-	screen := time.NewTicker(400 * time.Millisecond)
-	defer items.Stop()
-	defer screen.Stop()
+// watchLoop pushes new transcript lines four times a second. (It used to read the pane's screen every 400 ms too, a
+// herdr call per watched session, for a live preview no view showed; the terminal pane reads the screen itself.)
+func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File) {
+	t := time.NewTicker(250 * time.Millisecond)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-items.C:
+		case <-t.C:
 			n.refresh(id, f)
-		case <-screen.C:
-			a, ok := n.agent(id)
-			if !ok {
-				continue
-			}
-			active := a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked
-			if !active && w.lastScreen == "" {
-				continue
-			}
-			text, err := n.herdr.PaneRead(ctx, a.PaneID, "visible", 60)
-			if err != nil || text == w.lastScreen {
-				continue
-			}
-			w.lastScreen = text
-			if !active {
-				w.lastScreen = "" // send one final frame after work ends, then stop sampling
-			}
-			_ = n.peer.Notify("session.screen", map[string]any{"session_id": id, "text": text, "status": a.AgentStatus})
 		}
 	}
 }

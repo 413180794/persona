@@ -123,7 +123,11 @@ nonisolated struct APIClient: Sendable {
     struct ItemsResponse: Decodable, Sendable {
         var items: [Item]
         var hasMore: Bool
-        enum CodingKeys: String, CodingKey { case items; case hasMore = "has_more" }
+        var history: String?
+        var toSeq: Int?
+        /// A page counted back from the end (no from: it does not continue anything).
+        var span: ItemSpan { ItemSpan(history: history, from: nil, to: toSeq) }
+        enum CodingKeys: String, CodingKey { case items, history; case hasMore = "has_more", toSeq = "to_seq" }
     }
     struct ScreenResponse: Decodable { var text: String; var status: SessionStatus? }
     struct InteractionsResponse: Decodable { var interactions: [Interaction] }
@@ -197,9 +201,16 @@ nonisolated struct APIClient: Sendable {
 
     struct NewerResponse: Decodable, Sendable {
         var items: [Item]
-        /// The hub stopped at its cap: more came after these, so a gap would remain (take the latest page instead).
+        /// The hub stopped at its cap: more came after these (ask again after `toSeq`, or take the latest page).
         var moreAfter: Bool?
-        enum CodingKeys: String, CodingKey { case items; case moreAfter = "more_after" }
+        var history: String?
+        var fromSeq: Int?
+        var toSeq: Int?
+        var span: ItemSpan { ItemSpan(history: history, from: fromSeq, to: toSeq) }
+        enum CodingKeys: String, CodingKey {
+            case items, history
+            case moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq"
+        }
     }
 
     /// Everything after `afterSeq` (background sync of a session the app has not opened).
