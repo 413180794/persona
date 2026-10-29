@@ -84,6 +84,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 - hub 只能装在 Linux 上（部署脚本用 systemd 和 docker）。
 - 界面只有中文。
 - 只能通过自己编译或自己的 TestFlight 安装，没有上架 App Store。
+- Android 版目前只有 Agents 这一块（看、发消息、回答、审批、授权、通知），助手、收件箱、手机数据工具还没做（`docs/android.md`）。
 
 ## 文档
 
@@ -93,6 +94,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 | [docs/architecture.md](docs/architecture.md) | 架构和设计取舍 |
 | [docs/server.md](docs/server.md) | 服务端的几种模式、部署和运维 |
 | [docs/ios.md](docs/ios.md) | App 的界面和交互 |
+| [docs/android.md](docs/android.md) | Android App（Agents、交互卡片、不用推送的后台通知） |
 | [docs/assistant.md](docs/assistant.md) | 「对话」里的助手 |
 | [docs/inbox.md](docs/inbox.md) | 收件箱 |
 | [docs/mail.md](docs/mail.md) | 邮箱接入（含 Gmail 登录的准备） |

@@ -105,6 +105,7 @@
 | `machines[]` | `deploy.sh` 要装 `jarvisd` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh） |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
+| `android.application_id` | Android App 的 application id（`scripts/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 
 `python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `ios/Config.xcconfig`；
 `sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/jarvis_config.py xcconfig`。

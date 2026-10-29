@@ -31,5 +31,8 @@
     { "id": "laptop", "ssh": "laptop", "os": "darwin", "hostnames": ["MyMacBook"] }
   ],
   "simulator": "",
-  "xcode": ""
+  "xcode": "",
+  "android": {
+    "application_id": "com.example.jarvis"
+  }
 }
