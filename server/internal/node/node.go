@@ -51,6 +51,7 @@ type Node struct {
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
+	ups      uploads                   // files arriving from the phone (upload.go)
 
 	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
 	pushLocks map[string]*sync.Mutex
@@ -399,6 +400,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		list, err := n.getClaudeSettings()
 		return map[string]any{"settings": list}, err
+	case "file.upload.begin", "file.upload.chunk", "file.upload.end", "file.upload.abort":
+		return n.uploadCall(method, params)
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd)
 	case "space.rename":

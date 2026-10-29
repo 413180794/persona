@@ -88,6 +88,10 @@ nonisolated struct APIClient: Sendable {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let (data, resp) = try await session.data(for: req)
+        return try checked(data, resp, requestID: requestID)
+    }
+
+    private func checked(_ data: Data, _ resp: URLResponse, requestID: String) throws -> Data {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status),
@@ -95,6 +99,26 @@ nonisolated struct APIClient: Sendable {
                            requestID: (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Request-Id") ?? requestID)
         }
         return data
+    }
+
+    nonisolated struct UploadedFile: Codable, Sendable {
+        var path: String
+        var name: String
+        var size: Int64
+    }
+
+    /// Sends a file to the machine's temp directory (docs/protocol.md「发送文件」), streamed from disk; progress gets
+    /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
+    func upload(file: URL, name: String, machine: String,
+                progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
+        var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: ["name": name]), timeoutInterval: 120)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let requestID = String(UUID().uuidString.prefix(8)).lowercased()
+        req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        let (data, resp) = try await Self.uncachedSession.upload(for: req, fromFile: file, delegate: UploadProgress(progress))
+        return try JSON.decoder.decode(UploadedFile.self, from: try checked(data, resp, requestID: requestID))
     }
 
     func get<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
@@ -625,4 +649,13 @@ extension APIClient {
 extension Date {
     /// nil for Go's zero time and other placeholder dates the hub sends for "never".
     nonisolated var realDate: Date? { timeIntervalSince1970 > 946_684_800 ? self : nil }
+}
+
+private nonisolated final class UploadProgress: NSObject, URLSessionTaskDelegate, Sendable {
+    let report: @Sendable (Int64) -> Void
+    init(_ report: @escaping @Sendable (Int64) -> Void) { self.report = report }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64,
+                    totalBytesExpectedToSend: Int64) {
+        report(totalBytesSent)
+    }
 }

@@ -201,6 +201,23 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   打字过程中出错的回 502 + `delivered: "unknown"`（可能已经到了），同一个 id 再发也只回同样的错误，不会打第二遍。
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择）。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 
+### 发送文件
+
+App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的助手都有）：选的文件传到**会话所在那台电脑**的临时目录（node 的
+`os.TempDir()`：Linux 一般 `/tmp`，macOS 是 `$TMPDIR`，ssh 进来的 node 没有这个变量时也是 `/tmp`），把绝对路径插到输入框的光标处，
+**不自动发送**。助手跑在它所在的机器上（默认 hub 机器），文件就传到那台。图片照旧走图片附件。
+
+- `POST /api/v1/machines/{mid}/files?name=<原文件名>`，body 是文件本身（必须有 `Content-Length`）→ `{path, name, size}`。
+  上限 200 MB（`proto.MaxUploadBytes`）：超过回 413 `code: too_large`（App 选完就先查大小，不会传）。
+- hub 边读 body 边转：每 1 MB 一个 `file.upload.chunk`（base64 在一行 JSON 里），整个文件不进内存、也不塞进一条 RPC。
+  App 取消上传（或断线）时 hub 发 `file.upload.abort`，node 删掉写了一半的文件；node 2 分钟收不到块也自己删。
+- node 先写 `.jarvis-upload-*` 隐藏文件（0600），收齐后核对字节数，再改名为 `原名-YYYYMMDD-HHMMSS.扩展名`（`.tar.gz` 这类整体算扩展名），
+  同一秒重名再加 `-xxxx` 随机串。文件名里的 `/`、`\`、控制字符换成 `_`，超长的截短。
+- 旧 node 不认 `file.upload.*`：409 `code: node_outdated`（「<机器> 上的 jarvisd 太旧…需要重新部署」）；旧 hub 没有这个接口（404），
+  hello 的 `features` 里也没有 `file_upload`：App 提示更新 hub。
+- 路径带空格或引号时 App 用单引号包起来，多个路径空格分隔。输入框没在编辑时插到末尾（未聚焦的 TextField 报的选区不可靠）。
+- 前面挡着反向代理时注意它的请求体上限（有的 CDN 免费版只放 100 MB）。
+
 ### items 的连续性
 
 每批 items（WebSocket `items` 事件、HTTP 的 `/items` 响应、node 的 `session.items`）都说明自己在 transcript 里的位置：
@@ -251,6 +268,9 @@ hub → node 请求：
 | `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
+| `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}`（超过上限报 `too_large`） |
+| `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |
+| `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |
 | `interaction.resolve` | `{id, resolution}` |
 
 node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`、`terminal.end {session_id, error}`（流停了且起不来：会话不在跑、herdr 一直拒绝）、

@@ -1496,6 +1496,9 @@ struct Composer: View {
     @State private var showCamera = false
     @State private var images: [(UIImage, ImagePayload)] = []
     @State private var editingIndex: Int?
+    @State private var showFiles = false
+    @State private var uploads = FileUploads()
+    @State private var selection: TextSelection?
     @FocusState private var focused: Bool
 
     private var canSend: Bool {
@@ -1509,6 +1512,7 @@ struct Composer: View {
     var body: some View {
         VStack(spacing: 8) {
             if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
+            if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -1540,6 +1544,7 @@ struct Composer: View {
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
                     }
+                    Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
                     Section("快捷指令") {
                         ForEach(SlashCommand.all) { cmd in
                             Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
@@ -1553,7 +1558,8 @@ struct Composer: View {
                 .themedButton()
                 .clipShape(.circle)
 
-                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding, axis: .vertical)
+                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding,
+                          selection: $selection, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     #if DEBUG
@@ -1595,6 +1601,19 @@ struct Composer: View {
             }
         }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .fileUploadPicker(isPresented: $showFiles) { urls in
+            uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }
+        }
+        #if DEBUG
+        .task { // `-openUploadDemo <name>`: a made-up 24 MB file uploading, for screenshots of the progress bar
+            if let name = UserDefaults.standard.string(forKey: "openUploadDemo") {
+                try? await Task.sleep(for: .seconds(3))
+                let url = FileManager.default.temporaryDirectory.appending(path: name)
+                try? Data(count: 24 << 20).write(to: url)
+                uploads.start([url], machine: key.machineID, model: model) { insertPath($0) }
+            }
+        }
+        #endif
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { img in add(img) }.ignoresSafeArea()
         }
@@ -1632,6 +1651,11 @@ struct Composer: View {
         if raw == text { text = "" }
         images = []
         model.composerContexts[key] = nil
+    }
+
+    /// A file's path on the machine, at the cursor; not sent.
+    private func insertPath(_ path: String) {
+        text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
     }
 
     private func load(_ items: [PhotosPickerItem]) async {

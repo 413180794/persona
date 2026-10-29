@@ -221,16 +221,23 @@ struct TypingIndicator: View {
 
 /// Composer for a conversation that does not exist yet.
 struct StarterComposer: View {
+    @Environment(AppModel.self) private var model
     var disabled: Bool
     var send: (String, [ImagePayload]) -> Void
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
     @State private var images: [(UIImage, ImagePayload)] = []
+    @State private var showPhotos = false
+    @State private var showFiles = false
+    @State private var uploads = FileUploads()
+    @State private var selection: TextSelection?
+    @FocusState private var focused: Bool
 
     private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) }
 
     var body: some View {
         VStack(spacing: 8) {
+            if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -250,13 +257,18 @@ struct StarterComposer: View {
                 }
             }
             HStack(alignment: .bottom, spacing: 8) {
-                PhotosPicker(selection: $picks, maxSelectionCount: 4, matching: .images) {
-                    Image(systemName: "photo").font(.body.weight(.semibold)).frame(width: 36, height: 36)
+                Menu {
+                    // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
+                    Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                    Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
+                } label: {
+                    Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: 36, height: 36)
                 }
                 .themedButton()
                 .clipShape(.circle)
-                TextField("问 Jarvis…", text: $text, axis: .vertical)
+                TextField("问 Jarvis…", text: $text, selection: $selection, axis: .vertical)
                     .lineLimit(1...6)
+                    .focused($focused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
@@ -271,6 +283,13 @@ struct StarterComposer: View {
                 .themedButton(prominent: true)
                 .clipShape(.circle)
                 .disabled(!canSend)
+            }
+        }
+        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .fileUploadPicker(isPresented: $showFiles) { urls in
+            // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
+            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+                text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
         .onChange(of: picks) { _, items in

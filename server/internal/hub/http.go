@@ -53,6 +53,7 @@ func (h *Hub) routes() http.Handler {
 		q := r.URL.Query()
 		return map[string]any{"cwd": q.Get("cwd"), "skip": atoi(q.Get("skip")), "limit": atoi(q.Get("limit"))}
 	}))
+	api.HandleFunc("POST /api/v1/machines/{mid}/files", h.withMachine(h.uploadFile))
 	api.HandleFunc("GET /api/v1/machines/{mid}/claude-settings", h.proxy("claude.settings", nil))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/claude-settings", h.proxyBody("claude.settings.set"))
 	api.HandleFunc("GET /api/v1/sessions", h.listSessions)

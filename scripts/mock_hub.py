@@ -7,7 +7,7 @@ Pair the app with it: -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760
 It serves machines, agents, conversations, interactions and the inbox, enough for the main screens; requests it
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
-import base64, hashlib, json, os, struct, sys, threading, uuid
+import base64, hashlib, json, os, struct, sys, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -311,6 +311,7 @@ TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
      "revoked_at": ago(days=2)},
 ]
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
+UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
 
 INBOX = [
@@ -410,6 +411,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
+        if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
@@ -469,7 +471,33 @@ class H(BaseHTTPRequestHandler):
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
 
+    def upload(self):
+        """POST /api/v1/machines/{mid}/files?name=…: the body read slowly enough to watch the progress bar
+        (MOCK_UPLOAD_KBPS, default 2048); MOCK_UPLOAD_OLD_NODE=1 answers like a node from before uploads."""
+        q = parse_qs(urlparse(self.path).query)
+        name = (q.get("name") or ["file"])[0]
+        n = int(self.headers.get("Content-Length") or 0)
+        if n > 200 << 20:
+            return self.send_json({"error": "文件超过 200 MB", "code": "too_large", "limit": 200 << 20}, 413)
+        if os.environ.get("MOCK_UPLOAD_OLD_NODE"):
+            self.body()
+            return self.send_json({"error": "MacBook 上的 jarvisd 太旧，不能接收文件，需要重新部署", "code": "node_outdated"}, 409)
+        kbps = int(os.environ.get("MOCK_UPLOAD_KBPS", "2048"))
+        left = n
+        while left > 0:
+            got = self.rfile.read(min(left, 64 << 10))
+            if not got: return
+            left -= len(got)
+            time.sleep(len(got) / 1024 / kbps)
+        stem, dot, ext = name.rpartition(".")
+        if not stem: stem, dot, ext = ext, "", ""
+        path = "/tmp/%s-%s%s%s" % (stem, datetime.now().strftime("%Y%m%d-%H%M%S"), dot, ext)
+        UPLOADS.append({"name": name, "size": n, "path": path})
+        return self.send_json({"path": path, "name": path.rsplit("/", 1)[1], "size": n})
+
     def do_POST(self):
+        if self.command == "POST" and urlparse(self.path).path.startswith("/api/v1/machines/") and urlparse(self.path).path.endswith("/files"):
+            return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
@@ -536,7 +564,7 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.write(hdr + data); self.wfile.flush()
 
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
-              **({"features": ["terminal_stream"]} if TERMINAL_STREAM else {})})
+              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else [])})
         send({"type": "machines", "machines": MACHINES})
         by = {}
         for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)

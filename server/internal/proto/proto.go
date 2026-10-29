@@ -45,6 +45,23 @@ var Features = []string{
 	"secret_prompts",         // interaction.secret
 	"request_id",             // X-Request-Id
 	"terminal_stream",        // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
+	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
+}
+
+// Files sent from the phone (POST /api/v1/machines/{mid}/files): the hub streams the body to the node in chunks.
+const (
+	MaxUploadBytes   = 200 << 20
+	UploadChunkBytes = 1 << 20
+	// CodeTooLarge: over MaxUploadBytes (413); CodeNodeOutdated: the machine's node predates the feature (409).
+	CodeTooLarge     = "too_large"
+	CodeNodeOutdated = "node_outdated"
+)
+
+// UploadedFile is where an upload landed on the machine.
+type UploadedFile struct {
+	Path string `json:"path"` // absolute
+	Name string `json:"name"`
+	Size int64  `json:"size"`
 }
 
 type NodeInfo struct {
