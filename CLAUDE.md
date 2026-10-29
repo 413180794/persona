@@ -213,6 +213,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   改终端解析一律用录制的真实帧回放，和 `herdr pane read` 逐行比（`TerminalWrapTests`）。
 - 自定义视图直接收键盘（`UITextInput`）时，`hasText` 要恒为 true，否则空文档时键盘会自动切大写；拼音靠 marked text。
   选定候选时可能来 `insertText`，也可能来 `setMarkedText` + `unmarkText`，两种都要当提交处理（`TerminalInput.swift`）。
+- 终端流的帧率上限是 Agent 自己的重画节奏，不在我们的链路上。Claude Code 2.1.312 流式时约 110 ms 重画一次（主要是转圈那一行），
+  正文分几次大块整屏出；herdr observe 最快每 16 ms 一帧；node / hub 原样转发，只把 30 ms 内的帧合成一帧（`termMinGap`）。
+  分段实测见 `docs/terminal.md` 第十节。
 - XCUITest 在键盘弹起的动画中点键栏会点空（键栏正跟着键盘移动）：先等键盘出现、停一下再点。
 - herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。

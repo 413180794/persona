@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -26,6 +27,67 @@ const (
 	// termGiveUp: failed starts in a row before the stream ends (the app falls back to reading the screen).
 	termGiveUp = 4
 )
+
+// termMinGap: frames closer together than this go out as one. herdr emits a frame per change up to every ~16 ms
+// (60 a second: a build log, vim scrolling); the phone takes ~12 ms a frame, so it gets at most ~33. Claude Code
+// redraws about every 110 ms while it streams, which passes untouched; the first frame after a quiet spell goes out
+// at once (typing echoes are not held back).
+var termMinGap = 30 * time.Millisecond
+
+// frameGate merges frames that come within termMinGap of the last one sent: the diffs' bytes run on (they are VT
+// output, applied in order), a whole frame drops the diffs before it. What is held goes out when the gap is up.
+type frameGate struct {
+	mu      sync.Mutex
+	send    func(herdr.Frame)
+	last    time.Time
+	pending *herdr.Frame
+	timer   *time.Timer
+}
+
+func (g *frameGate) put(f herdr.Frame) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.pending == nil {
+		if wait := termMinGap - time.Since(g.last); wait > 0 {
+			g.pending = &f
+			g.timer = time.AfterFunc(wait, g.flush)
+			return
+		}
+		g.last = time.Now()
+		g.send(f)
+		return
+	}
+	if f.Full {
+		*g.pending = f
+		return
+	}
+	g.pending.Data = joinFrameData(g.pending.Data, f.Data)
+	g.pending.Width, g.pending.Height = f.Width, f.Height
+}
+
+// flush sends what is held (when the gap is up, and when the stream ends).
+func (g *frameGate) flush() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.timer != nil {
+		g.timer.Stop()
+		g.timer = nil
+	}
+	if g.pending != nil {
+		g.last = time.Now()
+		g.send(*g.pending)
+		g.pending = nil
+	}
+}
+
+func joinFrameData(a, b string) string {
+	x, err1 := base64.StdEncoding.DecodeString(a)
+	y, err2 := base64.StdEncoding.DecodeString(b)
+	if err1 != nil || err2 != nil {
+		return a + b // not ours to fix; keep both
+	}
+	return base64.StdEncoding.EncodeToString(append(x, y...))
+}
 
 type termStream struct {
 	cancel context.CancelFunc
@@ -161,7 +223,7 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 	}()
 	epoch := strconv.FormatInt(time.Now().UnixNano(), 36)
 	frames, replay := 0, 0
-	err = n.herdr.Observe(octx, pane, cols, rows, func(f herdr.Frame) {
+	gate := &frameGate{send: func(f herdr.Frame) {
 		frames++
 		if f.Full {
 			replay = 0
@@ -175,6 +237,11 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 		if replay > termReplayLimit {
 			cancel()
 		}
-	})
-	return frames, err
+	}}
+	err = n.herdr.Observe(octx, pane, cols, rows, gate.put)
+	gate.flush()
+	gate.mu.Lock() // a flush the timer started may still be sending
+	sent := frames
+	gate.mu.Unlock()
+	return sent, err
 }

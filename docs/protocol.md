@@ -274,7 +274,7 @@ hub → node 请求：
 | `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |
 | `interaction.resolve` | `{id, resolution}` |
 
-node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`、`terminal.end {session_id, error}`（流停了且起不来：会话不在跑、herdr 一直拒绝）、
+node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error}`（流停了且起不来：会话不在跑、herdr 一直拒绝）、
 `session.items {session_id, items, history, from_seq, to_seq}`、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，

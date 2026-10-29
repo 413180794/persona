@@ -2,7 +2,9 @@ package node
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -82,7 +84,7 @@ func TestTerminalWatchStreamsFramesAndStartsOver(t *testing.T) {
 		mu.Lock()
 		k := len(got)
 		mu.Unlock()
-		if k >= 6 || time.Now().After(deadline) {
+		if k >= 4 || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -90,12 +92,14 @@ func TestTerminalWatchStreamsFramesAndStartsOver(t *testing.T) {
 	n.terminalUnwatch("s1")
 	mu.Lock()
 	defer mu.Unlock()
-	if len(got) < 6 {
+	if len(got) < 4 {
 		t.Fatalf("events = %+v", got)
 	}
-	a, b := got[0], got[3]
-	if a.Event != "terminal.frame" || !a.Full || a.Seq != 1 || a.Cols != 80 || a.Data != "RlVMTA==" || got[2].Seq != 3 || got[2].Full {
-		t.Fatalf("first stream = %+v", got[:3])
+	// The two diffs come right after the whole frame: they go out as one (termMinGap), "d1" + "d2".
+	a, b := got[0], got[2]
+	if a.Event != "terminal.frame" || !a.Full || a.Seq != 1 || a.Cols != 80 || a.Data != "RlVMTA==" ||
+		got[1].Seq != 2 || got[1].Full || got[1].Data != base64.StdEncoding.EncodeToString([]byte("d1d2")) {
+		t.Fatalf("first stream = %+v", got[:2])
 	}
 	if !b.Full || b.Seq != 1 || b.Epoch == a.Epoch {
 		t.Fatalf("second stream = %+v (first epoch %s)", b, a.Epoch)
@@ -107,5 +111,49 @@ func TestTerminalWatchNeedsARunningSession(t *testing.T) {
 		herdr: &herdr.Client{Bin: fakeObserveHerdr(t)}}
 	if _, err := n.terminalWatch(context.Background(), "gone"); err == nil {
 		t.Fatal("watched a session that is not running")
+	}
+}
+
+func TestFrameGateMergesBurstsOnly(t *testing.T) {
+	old := termMinGap
+	termMinGap = 40 * time.Millisecond
+	t.Cleanup(func() { termMinGap = old })
+	var mu sync.Mutex
+	var sent []herdr.Frame
+	var at []time.Time
+	g := &frameGate{send: func(f herdr.Frame) { mu.Lock(); sent = append(sent, f); at = append(at, time.Now()); mu.Unlock() }}
+	b := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	start := time.Now()
+
+	// After a quiet spell: at once. Then a burst: held, merged.
+	g.put(herdr.Frame{Full: true, Data: b("F")})
+	g.put(herdr.Frame{Data: b("a")})
+	g.put(herdr.Frame{Data: b("b")})
+	time.Sleep(80 * time.Millisecond)
+	// Quiet again: at once. Then held, and a whole frame replaces the diffs before it; the last size wins.
+	g.put(herdr.Frame{Data: b("c")})
+	g.put(herdr.Frame{Data: b("d")})
+	g.put(herdr.Frame{Full: true, Width: 90, Data: b("G")})
+	g.put(herdr.Frame{Width: 91, Data: b("e")})
+	g.flush() // the stream ended: what is held goes now
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got []string
+	for _, f := range sent {
+		d, _ := base64.StdEncoding.DecodeString(f.Data)
+		got = append(got, fmt.Sprintf("%v:%s", f.Full, d))
+	}
+	if want := []string{"true:F", "false:ab", "false:c", "true:Ge"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("sent %v, want %v", got, want)
+	}
+	if at[0].Sub(start) > 10*time.Millisecond || at[2].Sub(start) < 80*time.Millisecond {
+		t.Fatalf("first frames held: %v %v", at[0].Sub(start), at[2].Sub(start))
+	}
+	if gap := at[1].Sub(at[0]); gap < 35*time.Millisecond {
+		t.Fatalf("burst went out %v after the frame before it", gap)
+	}
+	if sent[3].Width != 91 {
+		t.Fatalf("merged frame keeps the last size: %+v", sent[3])
 	}
 }
