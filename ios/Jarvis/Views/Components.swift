@@ -17,6 +17,7 @@ struct StatusDot: View {
             } else if state == .needsYou, !reduceMotion {
                 Circle().fill(state.color)
                     .overlay {
+                        // The clock drives the ring; a repeating state animation leaked into row layout changes.
                         TimelineView(.animation(minimumInterval: 1 / 30)) { context in
                             let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.0)
                             let eased = 1 - (1 - p) * (1 - p)
@@ -102,7 +103,7 @@ struct Chip: View {
         .padding(.vertical, 2.5)
         .background {
             if case .outline = look {
-                Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 0.8)
+                Capsule().fill(fill).stroke(Color.secondary.opacity(0.4), lineWidth: 0.8)
             } else {
                 Capsule().fill(fill)
             }
