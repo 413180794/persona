@@ -4,7 +4,7 @@ import Testing
 
 @MainActor struct TerminalTests {
     @Test func backsOffToFifteenSeconds() {
-        #expect([1, 2, 3, 4, 5, 9].map(TerminalPanel.backoff) == [1, 2, 4, 8, 15, 15])
+        #expect([1, 2, 3, 4, 5, 9].map(TerminalFeed.backoff) == [1, 2, 4, 8, 15, 15])
     }
 
     @Test func saysHowOldTheScreenIs() {

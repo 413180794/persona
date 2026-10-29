@@ -232,6 +232,29 @@ final class AppModel {
     }
 
     func isSubscribed(_ key: SessionKey) -> Bool { subscribers[key] != nil }
+
+    // MARK: Terminal streams
+
+    /// What the hub listed in its hello: `terminal_stream` means the terminal tab can subscribe to live frames.
+    private(set) var hubFeatures: Set<String> = []
+    /// The terminal views streaming each session (one at a time; a newer one replaces the handler).
+    @ObservationIgnored private var terminalHandlers: [SessionKey: (TerminalEvent) -> Void] = [:]
+
+    var canStreamTerminal: Bool { hubFeatures.contains("terminal_stream") }
+    var isLive: Bool { live.state == .connected }
+
+    /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream.
+    func terminalSubscribe(_ key: SessionKey, epoch: String?, after: Int, handler: @escaping (TerminalEvent) -> Void) {
+        terminalHandlers[key] = handler
+        var msg: [String: Any] = ["type": "terminal_subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
+        if let epoch { msg["epoch"] = epoch; msg["after_seq"] = after }
+        live.send(msg)
+    }
+
+    func terminalUnsubscribe(_ key: SessionKey) {
+        guard terminalHandlers.removeValue(forKey: key) != nil else { return }
+        live.send(["type": "terminal_unsubscribe", "machine_id": key.machineID, "session_id": key.sessionID])
+    }
     private var subscribed: [SessionKey] { Array(subscribers.keys) }
 
     /// A chat view shows `key` (its completion pings are suppressed while it does).
@@ -355,8 +378,11 @@ final class AppModel {
 
     private func handle(_ ev: ServerEvent) {
         switch ev {
-        case .hello:
-            break
+        case .hello(let features):
+            hubFeatures = Set(features)
+            for handler in terminalHandlers.values { handler(.reconnected) }
+        case .terminal(let key, let event):
+            terminalHandlers[key]?(event)
         case .machines(let list):
             // A machine that just came back: re-subscribe its open chats (their backlog failed while it was down).
             let wasOffline = Set(machines.filter { !$0.online }.map(\.id))

@@ -1,8 +1,19 @@
 import Foundation
 import Observation
 
+/// One message of a terminal stream (docs/protocol.md「终端流」).
+nonisolated enum TerminalEvent: Sendable {
+    /// VT bytes for a cols × rows grid; a full one is the whole screen.
+    case frame(epoch: String, seq: Int, full: Bool, cols: Int, rows: Int, data: Data)
+    /// The hub dropped the stream; unsupported: read the screen instead of subscribing again.
+    case ended(String, unsupported: Bool)
+    /// The WebSocket connected again: subscribe again (continuing from the last frame).
+    case reconnected
+}
+
 nonisolated enum ServerEvent: Sendable {
-    case hello
+    /// features: what the hub supports beyond the first protocol (proto.Features).
+    case hello(features: [String])
     case machines([Machine])
     case sessions(machineID: String, [Session])
     /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell. moreAfter:
@@ -22,6 +33,7 @@ nonisolated enum ServerEvent: Sendable {
     case inbox
     /// The Fleet Live Activity's content changed (hub/liveactivity.go).
     case fleet(FleetState)
+    case terminal(SessionKey, TerminalEvent)
     case error(SessionKey?, String)
 
     private struct Envelope: Decodable {
@@ -51,9 +63,18 @@ nonisolated enum ServerEvent: Sendable {
         var revs: [String: Int64]?
         var feedIDs: [String]?
         var fleet: FleetState?
+        var features: [String]?
+        var epoch: String?
+        var seq: Int?
+        var full: Bool?
+        var cols: Int?
+        var rows: Int?
+        var data: String?
+        var unsupported: Bool?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
+            case features, epoch, seq, full, cols, rows, data, unsupported
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
@@ -64,7 +85,7 @@ nonisolated enum ServerEvent: Sendable {
         guard let e = try? JSON.decoder.decode(Envelope.self, from: data) else { return nil }
         let key = e.machineID.flatMap { m in e.sessionID.map { SessionKey(machineID: m, sessionID: $0) } }
         switch e.type {
-        case "hello": return .hello
+        case "hello": return .hello(features: e.features ?? [])
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":
             guard let m = e.machineID else { return nil }
@@ -94,6 +115,11 @@ nonisolated enum ServerEvent: Sendable {
         case "lark": return .lark(feedIDs: e.feedIDs ?? [])
         case "inbox": return .inbox
         case "fleet": return e.fleet.map { .fleet($0) }
+        case "terminal":
+            guard let key else { return nil }
+            if let error = e.error { return .terminal(key, .ended(error, unsupported: e.unsupported ?? false)) }
+            guard let epoch = e.epoch, let seq = e.seq, let data = e.data.flatMap({ Data(base64Encoded: $0) }) else { return nil }
+            return .terminal(key, .frame(epoch: epoch, seq: seq, full: e.full ?? false, cols: e.cols ?? 0, rows: e.rows ?? 0, data: data))
         default: return nil
         }
     }

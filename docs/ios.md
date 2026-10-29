@@ -127,11 +127,17 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 「回到底部」箭头：用列表末尾的哨兵视图判断是否在底部（滚到底就隐藏）。
 - 会话页选项卡（开发会话，`Views/Session/`）：导航栏下一排「对话 · 终端 · Git · 文件」，Git 只在仓库里出现（角标是改动数），
   文件在知道目录时出现；助手对话没有选项卡。
-  - 终端（`TerminalPanel`）：任何状态都能看。最后 200 行每秒刷新；往上滑到顶附近自动加载前一段 200 行（瀑布式，不一次取全量），
+  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。hub 有 `terminal_stream` 时订阅实时流
+    （`TerminalFeed`：herdr observe 的帧套到窗格尺寸的网格 `TerminalGrid` 上，丢帧 / 换流就从整帧重来，重连带 epoch / seq 续上）；
+    hub / node / herdr 不能推流时每秒读一次带颜色的屏幕（`format=ansi`）。画面由 `TerminalView` 按格子画：每个字符画在自己的格子里
+    （宽字符两格），框线和块字符画成线和矩形，所以中文和框线永远对齐；屏幕只画到最后一行有字的地方或光标处。默认按手机宽度折行，
+    右上角「换行 / 不换行 · 左右滑」切换（`@AppStorage("terminalWrap")`）；配色跟随浅 / 深色（`TerminalTheme`：Jarvis、Solarized、深夜），
+    字号 `terminalFontSize`。长按选词、拖动扩选，菜单「拷贝 / 全选」；点 OSC 8 链接或行里的网址在 App 内打开。
+    往上滑到顶附近自动加载前一段 200 行（带颜色，瀑布式，不一次取全量），
     一直到 herdr 保留的最前面。每段用「当前最上面 20 行 + 已加载行数」去服务端缓冲里定位（`POST …/screen/before`）：Claude 重绘会把同一屏幕反复推进滚动历史，同样的内容可能出现多处，取离「末尾往前已加载行数」最近的那处；终端仍在输出也不会错位；
-    看历史时暂停实时刷新，「回到最新」恢复。herdr 每个窗格只能读出约 1000 行（`pane read` 不管 --lines 多少都封顶，也没有偏移 / 滚动接口），
+    看历史时屏幕停住，「回到最新」恢复（上面没有历史——全屏的 Claude——就不停）。herdr 每个窗格只能读出约 1000 行（`pane read` 不管 --lines 多少都封顶，也没有偏移 / 滚动接口），
     到头提示「herdr 只保留最近约 1000 行，更早的过程在「对话」里」——完整历史在 transcript。新版 Claude（Mac）是全屏界面，窗格本身没有滚动历史。
-    刷新失败或超过 4 秒没拿到新屏幕时，终端顶部出现状态条（`TerminalLinkStatus`）：「上次更新 N 秒前」+「N 秒后重试 · 原因」+「重试」，
+    连不上 hub、流停了、读屏失败或超过 4 秒没拿到新屏幕时，终端顶部出现状态条（`TerminalLinkStatus`）：「上次更新 N 秒前」+「N 秒后重试 · 原因」+「重试」，
     失败后按 1、2、4、8 秒退避，之后每 15 秒一次；恢复后状态条自动消失。旧内容不能看起来像还在实时刷新。
     按键栏（`TerminalKeyBar`）：ctrl / alt / ⇧ 三个修饰键照搬 Moshi——单击粘滞（只作用于下一个键）、快速双击锁定（再点一下解锁，键上填满色并带一道横线）、
     按住期间一直按着（松手时没按别的键就变成粘滞）；修饰键也作用于下面输入框里打的字：按下修饰键时打的下一个字符立刻作为组合键发出
@@ -219,7 +225,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme solarized|midnight`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的某个选项卡；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。

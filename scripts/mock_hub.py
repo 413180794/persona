@@ -247,6 +247,55 @@ TERMINAL = "\n".join(
      " M Sources/Weather/Client.swift", " M Tests/WeatherTests/NetworkTests.swift", "$ "])
 SCREEN_FIRST = []
 
+# MOCK_TERMINAL_STREAM=1: the hub says terminal_stream and answers terminal_subscribe with frames of a made-up Claude
+# Code screen (96×24) as herdr's observer sends them: a whole frame, then the spinner ticking once a second.
+TERMINAL_STREAM = bool(os.environ.get("MOCK_TERMINAL_STREAM"))
+
+
+def terminal_frames(cols=96, rows=24, ticks=40):
+    if os.environ.get("MOCK_TERMINAL_FIXTURE"):  # frames recorded from herdr (ios/JarvisTests/Fixtures/terminal-observe.jsonl)
+        recorded = [json.loads(l) for l in open(os.environ["MOCK_TERMINAL_FIXTURE"]) if l.startswith("{")]
+        return [{"seq": i + 1, "full": f["full"], "cols": f["width"], "rows": f["height"], "data": f["bytes"]}
+                for i, f in enumerate(recorded)]
+    E = "\x1b["
+    o, g, d, b, p, r = E + "38;5;209m", E + "32m", E + "2m", E + "1m", E + "38;5;141m", E + "0m"
+    box = "─" * (cols - 2)
+    screen = [
+        o + "✻" + r + " " + b + "Welcome to Claude Code" + r,
+        "",
+        b + "> " + r + "给天气 App 加主屏幕小组件，显示当前温度和未来 3 小时的预报",
+        "",
+        "⏺ 我先看一下现有的 Widget 扩展和数据来源。",
+        "",
+        "⏺ " + b + "Read" + r + "(WeatherWidget/Provider.swift)",
+        "  ⎿  Read " + b + "84" + r + " lines",
+        "",
+        "⏺ " + b + "Bash" + r + "(swift test --filter WidgetTests)",
+        "  ⎿  " + g + "Test Suite 'WidgetTests' passed" + r + " at 2026-10-29 10:02:11.660.",
+        "     Executed 6 tests, with 0 failures (0 unexpected) in 0.412 (0.418) seconds; the timeline provider returns 4 entries",
+        "",
+        "⏺ 小组件已经能显示当前温度和未来 3 小时的预报，" + E + "4m" + "小号" + r + "和" + E + "4m" + "中号" + r + "两种尺寸都做了。",
+        "",
+        o + "✻ Brewing… " + r + d + "(%ds · ↓ 1.2k tokens · esc to interrupt)" + r,
+        "",
+        d + "╭" + box + "╮" + r,
+        d + "│" + r + " > " + " " * (cols - 5) + d + "│" + r,
+        d + "╰" + box + "╯" + r,
+        "  " + p + "⏵⏵ accept edits on" + r + d + " (shift+tab to cycle)" + r,
+    ]
+    out = []
+    for n in range(ticks):
+        rows_now = [line % (12 + n) if "%d" in line else line for line in screen]
+        if n == 0:
+            body = E + "2J" + "".join(E + "%d;1H" % (i + 1) + line for i, line in enumerate(rows_now))
+        else:
+            i = 15
+            body = E + "%d;1H" % (i + 1) + rows_now[i] + E + "K"
+        data = E + "?2026h" + E + "?25l" + body + E + "19;4H" + E + "?25h" + E + "?2026l"
+        out.append({"seq": n + 1, "full": n == 0, "cols": cols, "rows": rows,
+                    "data": base64.b64encode(data.encode()).decode()})
+    return out
+
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
@@ -444,6 +493,12 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "电脑上的输入框里有没发出去的内容：「顺便把 README 也更新一下」。这条消息没有发出去，免得拼在一起。",
                                    "code": "input_draft", "delivered": "none", "draft": "顺便把 README 也更新一下",
                                    "clearable": "顺便把 README 也更新一下"}, 409)
+        if p.startswith("/api/v1/sessions/") and p.endswith("/screen/before"):  # the terminal's scrollback, one page
+            E = "\x1b["
+            return self.send_json({"has_more": False, "at_limit": False, "text": "\r\n".join(
+                ["$ git log --oneline -3", E + "33m3f9a1c2" + E + "0m Widget: hourly timeline",
+                 E + "33m8b20e7d" + E + "0m Widget: small and medium sizes", E + "33m1c4d5a9" + E + "0m Forecast client",
+                 "$ swift build", E + "32mBuild complete!" + E + "0m (8.31s)"])})
         if p.startswith("/api/v1/sessions/") and p.endswith("/keys"):
             KEYS.append(json.loads(self.last_body or b"{}"))
             return self.send_json({"ok": True})
@@ -474,7 +529,8 @@ class H(BaseHTTPRequestHandler):
             with lock:
                 self.wfile.write(hdr + data); self.wfile.flush()
 
-        send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8]})
+        send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
+              **({"features": ["terminal_stream"]} if TERMINAL_STREAM else {})})
         send({"type": "machines", "machines": MACHINES})
         by = {}
         for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
@@ -496,6 +552,18 @@ class H(BaseHTTPRequestHandler):
                 if op != 1: continue
                 msg = json.loads(payload or b"{}")
                 LOG.write("  WS %s\n" % msg.get("type")); LOG.flush()
+                if msg.get("type") == "terminal_subscribe" and TERMINAL_STREAM:
+                    sid, mid = msg.get("session_id"), msg.get("machine_id")
+
+                    def term(sid=sid, mid=mid, after=msg.get("after_seq") or 0, epoch=msg.get("epoch")):
+                        import time
+                        frames = terminal_frames()
+                        start = after if epoch == "mock" else 0
+                        for f in frames[start:]:
+                            send({"type": "terminal", "machine_id": mid, "session_id": sid, "epoch": "mock", **f})
+                            time.sleep(1)
+                    threading.Thread(target=term, daemon=True).start()
+                    continue
                 if msg.get("type") == "subscribe":
                     sid, mid = msg.get("session_id"), msg.get("machine_id")
                     items = find_items(sid)

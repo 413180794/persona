@@ -84,40 +84,38 @@ private struct PaneSegment: View {
 
 // MARK: - Terminal
 
-/// The session's terminal at any time (not only while Claude works). The latest 200 lines refresh live; scrolling up
-/// loads the 200 before them, again and again, back to the start of what herdr keeps (about 1000 lines — older output
-/// lives in the chat). Each page is found by the lines it must end before, so output arriving meanwhile shifts
-/// nothing; reading history pauses the live refresh, 回到最新 resumes it. A refresh that fails or hangs never leaves
-/// old output looking live: a bar says how old it is and when the next try is, with a button to try now.
+/// The session's terminal at any time (not only while Claude works), live: the hub streams herdr's frames of the pane
+/// (docs/terminal.md) — colors, cursor, wide characters — or, where it cannot, the colored screen is read once a
+/// second. Long rows fold at the phone's width unless 不换行 is on (for TUI boxes). Scrolling up loads the 200 rows
+/// before, again and again, back to the start of what herdr keeps (about 1000 lines — older output lives in the chat);
+/// each page is found by the lines it must end before, so output arriving meanwhile shifts nothing. Reading history
+/// holds the screen still, 回到最新 lets it follow again. A link that fails never leaves old output looking live: a
+/// bar says how old it is and when the next try is, with a button to try now.
 struct TerminalPanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var scheme
     let key: SessionKey
-    @State private var tail = ""
-    @State private var older: [String] = []
-    @State private var hasOlder = true
-    @State private var atLimit = false
-    @State private var paused = false
-    @State private var loading = false
-    @State private var loaded = false
-    @State private var offline = false
-    @State private var error: String?
+    @State private var feed: TerminalFeed
     @State private var input = ""
     /// The key bar's ctrl / alt / shift: they also apply to what is typed in the text field (ctrl, then c → ctrl+c).
     @State private var mods = TerminalModifiers()
     /// The last send: each waits for the one before, so keys pressed quickly reach the terminal in order.
     @State private var sending: Task<Void, Never>?
-    /// When the screen last came back, the latest refresh's failure and how many in a row, and when to try next
-    /// (backing off to every 15 seconds while it keeps failing).
-    @State private var lastOK: Date?
-    @State private var failure: String?
-    @State private var failures = 0
-    @State private var nextTry = Date.distantPast
+    @AppStorage("terminalWrap") private var wrap = true
+    @AppStorage("terminalFontSize") private var fontSize = 11.0
+    @AppStorage("terminalTheme") private var themeID = TerminalTheme.jarvis.id
 
-    static let page = 200
-    /// Older than this without a fresh screen counts as stale even before the request fails (it may hang for a minute).
+    /// Older than this without a fresh screen counts as stale even before anything fails (a request may hang).
     static let staleAfter: TimeInterval = 4
 
-    private var text: String { older.isEmpty ? tail : older.joined(separator: "\n") + "\n" + tail }
+    init(key: SessionKey) {
+        self.key = key
+        _feed = State(initialValue: TerminalFeed(key: key))
+    }
+
+    private var theme: TerminalTheme { .named(themeID) }
+    private var side: TerminalTheme.Side { theme.side(scheme == .dark) }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -142,50 +140,64 @@ struct TerminalPanel: View {
             }
         }
         .task(id: key) {
-            tail = ""; older = []; hasOlder = true; atLimit = false; paused = false; loaded = false
-            lastOK = nil; failure = nil; failures = 0; nextTry = .distantPast
+            if feed.key != key { feed = TerminalFeed(key: key) }
             #if DEBUG
-            // `-terminalPages N`: load N pages of history after the first refresh (what scrolling up does).
+            // `-terminalPages N`: load N pages of history once the screen is there (what scrolling up does).
             let pages = UserDefaults.standard.integer(forKey: "terminalPages")
-            if pages > 0 {
-                await refresh()
-                for _ in 0..<pages { await loadOlder() }
-            }
+            var paged = pages == 0, ticks = 0
             #endif
             while !Task.isCancelled {
-                if !paused, Date() >= nextTry { await refresh() }
+                await feed.tick(model)
+                #if DEBUG
+                if !paged, feed.loaded {
+                    ticks += 1
+                    if ticks >= 8 { // after the hub's hello: the stream replaces the first reads
+                        paged = true
+                        for _ in 0..<pages { await feed.loadOlder(model) }
+                    }
+                }
+                #endif
                 try? await Task.sleep(for: .milliseconds(250))
             }
+            feed.stop(model)
         }
     }
 
     @ViewBuilder private var screen: some View {
-        if offline && tail.isEmpty {
+        if feed.offline && feed.screen.isEmpty {
             ContentUnavailableView("没有终端", systemImage: "terminal",
                                    description: Text("这个会话没有在 herdr 里运行，恢复会话后就能看到终端。"))
                 .frame(maxHeight: .infinity)
-        } else if !loaded {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
+        } else if !feed.loaded {
+            ProgressView().tint(Color(hex: side.foreground)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(hex: side.background), in: .rect(cornerRadius: 12, style: .continuous))
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                if !paused {
-                    TerminalLinkStatus(lastOK: lastOK, failure: failure, nextTry: nextTry) { retryNow() }
+                if !feed.paused {
+                    TerminalLinkStatus(lastOK: feed.lastOK, failure: feed.failure, nextTry: feed.nextTry) {
+                        Haptics.tap()
+                        feed.retryNow(model)
+                    }
                 }
-                historyStatus.padding(.horizontal, 10).padding(.top, 8)
-                // Unwrapped and scrollable both ways; keeps its distance from the end, so pages added on top and
-                // output added below never move what you read.
-                MonoTextView(text: MonoText.plain(text, color: UIColor(Theme.terminalText)), followsEnd: true) {
-                    Task { await loadOlder() }
+                HStack(spacing: 8) {
+                    historyStatus
+                    Spacer(minLength: 8)
+                    wrapToggle
                 }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                TerminalView(content: feed.content, wrap: wrap, fontSize: fontSize, theme: theme,
+                             onNearTop: { Task { await feed.loadOlder(model) } },
+                             onOpenURL: { openURL($0) },
+                             onCopy: { model.toast = Toast("已拷贝", style: .success) })
             }
-            .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Color(hex: side.background), in: .rect(cornerRadius: 12, style: .continuous))
+            .clipShape(.rect(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .bottom) {
-                if paused {
+                if feed.paused {
                     Button {
                         Haptics.tap()
-                        older = []; hasOlder = true; atLimit = false; paused = false
-                        Task { await refresh() }
+                        feed.resume()
                     } label: {
                         Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(.footnote.weight(.semibold))
                     }
@@ -195,78 +207,49 @@ struct TerminalPanel: View {
                 }
             }
             .overlay(alignment: .top) {
-                if let error {
+                if let error = feed.error {
                     Text(error).font(.caption).foregroundStyle(.white).padding(8)
                         .background(Theme.danger.opacity(0.85), in: .capsule).padding(8)
                 }
             }
-            .animation(.snappy, value: paused)
+            .animation(.snappy, value: feed.paused)
         }
     }
 
     @ViewBuilder private var historyStatus: some View {
         Group {
-            if loading {
-                HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Theme.terminalText); Text("加载更早的输出…").lineLimit(1) }
-            } else if atLimit {
-                Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.8)
-            } else if !hasOlder {
-                Text("— 已到最前面 —")
+            if feed.loading {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
+            } else if feed.atLimit {
+                Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
+            } else if !feed.hasOlder {
+                Text("— 已到最前面 —").lineLimit(1)
             } else {
                 Text("上滑加载更早的输出").lineLimit(1)
             }
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(Theme.terminalText.opacity(0.55))
+        .foregroundStyle(Color(hex: side.foreground).opacity(0.55))
     }
 
-    private func refresh() async {
-        guard let api = model.api else { return }
-        do {
-            let r = try await api.screen(key, lines: Self.page, recent: true)
-            offline = r.status == .offline
-            if r.text != tail { tail = r.text }
-            if Self.lines(r.text).count < Self.page - 1 { hasOlder = false }
-            lastOK = Date(); failure = nil; failures = 0
-            nextTry = Date().addingTimeInterval(1)
-        } catch {
-            guard !error.isCancellation else { return }
-            failure = error.shown
-            failures += 1
-            nextTry = Date().addingTimeInterval(Self.backoff(failures))
+    /// 换行 (rows fold at the phone's width) or 不换行 · 左右滑 (the pane's width, for TUI boxes).
+    private var wrapToggle: some View {
+        Button {
+            Haptics.tap()
+            wrap.toggle()
+        } label: {
+            Label(wrap ? "换行" : "不换行 · 左右滑", systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
         }
-        loaded = true
-    }
-
-    /// 1, 2, 4, 8 and then every 15 seconds.
-    static func backoff(_ failures: Int) -> TimeInterval { min(15, pow(2, Double(max(0, failures - 1)))) }
-
-    private func retryNow() {
-        Haptics.tap()
-        nextTry = .distantPast
-        Task { await refresh() }
-    }
-
-    /// The page before the first lines on screen.
-    private func loadOlder() async {
-        guard !loading, hasOlder, loaded, let api = model.api else { return }
-        loading = true
-        paused = true // the tail must stay put while pages are placed above it
-        defer { loading = false }
-        let all = Self.lines(text)
-        let anchor = Array(all.prefix(20))
-        do {
-            let r = try await api.screen(key, before: anchor, loaded: all.count, lines: Self.page)
-            if !r.text.isEmpty { older = Self.lines(r.text) + older }
-            hasOlder = r.hasMore
-            atLimit = r.atLimit
-        } catch {
-            self.error = error.shown
-        }
-    }
-
-    private static func lines(_ s: String) -> [String] {
-        s.isEmpty ? [] : s.trimmingCharacters(in: CharacterSet(charactersIn: "\n")).components(separatedBy: "\n")
+        .buttonStyle(.plain)
+        .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
+        .accessibilityLabel("长行换行")
+        .accessibilityValue(wrap ? "开" : "关，左右滑动看")
     }
 
     /// The return after the text takes the modifiers that are down (shift+enter: a new line in Claude's box).
@@ -285,7 +268,7 @@ struct TerminalPanel: View {
         sending = Task {
             await before?.value
             await model.keys(key, keys, text: text)
-            nextTry = .distantPast
+            feed.nudge()
         }
     }
 

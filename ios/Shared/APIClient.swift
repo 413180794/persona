@@ -284,19 +284,22 @@ nonisolated struct APIClient: Sendable {
     func keys(_ k: SessionKey, keys: [String], text: String = "") async throws {
         try await post(sp(k) + "/keys", body: KeysBody(keys: keys, text: text))
     }
-    /// `recent` also reaches back into the pane's scrollback (page by asking for more lines).
-    func screen(_ k: SessionKey, lines: Int = 60, recent: Bool = false) async throws -> ScreenResponse {
-        try await get(sp(k) + "/screen", query: ["lines": String(lines), "source": recent ? "recent" : "visible"])
+    /// `recent` also reaches back into the pane's scrollback (page by asking for more lines); `ansi` keeps the colors
+    /// (SGR escapes; an older node sends plain text either way).
+    func screen(_ k: SessionKey, lines: Int = 60, recent: Bool = false, ansi: Bool = false) async throws -> ScreenResponse {
+        var q = ["lines": String(lines), "source": recent ? "recent" : "visible"]
+        if ansi { q["format"] = "ansi" }
+        return try await get(sp(k) + "/screen", query: q)
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
 
     struct ScreenBefore: Decodable { var text: String; var hasMore: Bool; var atLimit: Bool
         enum CodingKeys: String, CodingKey { case text; case hasMore = "has_more", atLimit = "at_limit" } }
-    private struct ScreenBeforeBody: Encodable { var anchor: [String]; var lines: Int; var loaded: Int }
+    private struct ScreenBeforeBody: Encodable { var anchor: [String]; var lines: Int; var loaded: Int; var format: String? }
     /// The pane's scrollback just before `anchor` (the first lines already shown, `loaded` lines in all), at most
-    /// `lines` lines.
-    func screen(_ k: SessionKey, before anchor: [String], loaded: Int, lines: Int = 200) async throws -> ScreenBefore {
-        try await post(sp(k) + "/screen/before", body: ScreenBeforeBody(anchor: anchor, lines: lines, loaded: loaded),
+    /// `lines` lines; `ansi`: with its colors.
+    func screen(_ k: SessionKey, before anchor: [String], loaded: Int, lines: Int = 200, ansi: Bool = false) async throws -> ScreenBefore {
+        try await post(sp(k) + "/screen/before", body: ScreenBeforeBody(anchor: anchor, lines: lines, loaded: loaded, format: ansi ? "ansi" : nil),
                        as: ScreenBefore.self)
     }
 
