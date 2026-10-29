@@ -30,7 +30,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
   不一定送得到，以连接关闭为准重连（指数退避到 30 秒），重连后先取一次 snapshot 补齐。推来的事件名用下划线（`tab_created`），
   订阅时的类型用点（`tab.created`）。
 - 本机实测（herdr 0.9.3，7 个 Agent）：稳定时 30 秒内零事件；tab 改名到 `sessions.changed` 发出 80–140ms（原来最多 1 秒）。
-  联调：`go test -tags herdrlive ./internal/herdr/` 对着本机的 herdr 跑（会建一个 tab 再关掉）。
+  联调：`./scripts/test-herdr.sh`（独立的 herdr 会话，见 `docs/testing.md`「herdr 联调」）。
 
 ## 部署
 
