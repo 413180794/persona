@@ -75,7 +75,13 @@ struct ChatView: View {
     @State private var owner = UUID()
 
     /// What the chat shows: the main agent, or the subagent picked in the agent strip.
-    private var shownKey: SessionKey { viewing.map { SessionKey(machineID: key.machineID, sessionID: $0.sessionID) } ?? key }
+    private var shownKey: SessionKey { Self.shownKey(key, viewing: viewing) }
+
+    /// The session whose items are on screen: the subagent's own transcript while one is open (its items, images and
+    /// full texts are fetched from it, not from the main session).
+    static func shownKey(_ key: SessionKey, viewing: Subagent?) -> SessionKey {
+        viewing.map { SessionKey(machineID: key.machineID, sessionID: $0.sessionID) } ?? key
+    }
     private var store: ChatStore { model.chat(shownKey) }
     private var session: Session? { model.session(key) }
     /// The latest state of the subagent being viewed (the list refreshes with the session).
@@ -179,9 +185,10 @@ struct ChatView: View {
             guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
             return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
         }
-        .environment(\.loadFullText) { [model, key] id in
+        // The session on screen: a subagent's items live in its own transcript.
+        .environment(\.loadFullText) { [model, shownKey] id in
             guard let api = model.api else { throw CancellationError() }
-            return try await api.fullItem(key, id: id).text ?? ""
+            return try await api.fullItem(shownKey, id: id).text ?? ""
         }
         .onAppear(perform: appeared)
         .onDisappear {

@@ -344,6 +344,13 @@ struct TurnTests {
         #expect(whole.fullSize == nil && whole.cutText == "a\nb")
     }
 
+    @Test func subagentItemsComeFromTheSubagentsTranscript() throws {
+        let main = SessionKey(machineID: "m", sessionID: "s1")
+        let agent = try JSON.decoder.decode(Subagent.self, from: Data(#"{"id":"a1","session_id":"s1/subagents/agent-a1","running":false}"#.utf8))
+        #expect(ChatView.shownKey(main, viewing: nil) == main)
+        #expect(ChatView.shownKey(main, viewing: agent) == SessionKey(machineID: "m", sessionID: agent.sessionID))
+    }
+
     @Test func contextTagRoundTrips() {
         let ref = ContextRef(kind: "edit", title: "A \"quoted\" <title>", url: "https://x.y/a?b=1&c=2", text: "选中的 <b>文字</b>")
         let msg = ref.xml + "\n\n按要求修改上面选中的内容：更短"

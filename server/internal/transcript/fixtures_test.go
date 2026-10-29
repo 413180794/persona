@@ -257,11 +257,11 @@ func TestFixtureFullRestoresWhatPagesLeaveOut(t *testing.T) {
 					continue
 				}
 				cuts++
-				if it.FullSize > 0 && (it.FullSize != len(want.Text) || !strings.Contains(it.Text, "已截断，点开看全文")) {
+				if it.FullSize > 0 && (it.FullSize != len(want.Text) || !strings.Contains(it.Text, "已截断")) {
 					t.Fatalf("%s: cut text says full_size %d (whole %d): %q", it.ID, it.FullSize, len(want.Text), it.Text[max(len(it.Text)-80, 0):])
 				}
-				full, ok := f.Full(it.ID)
-				if !ok || full.Text != want.Text || full.FullSize != 0 || !sameImage(full.Image, want.Image) {
+				full, err := f.Full(it.ID)
+				if err != nil || full.Text != want.Text || full.FullSize != 0 || !sameImage(full.Image, want.Image) {
 					t.Fatalf("%s: Full does not give back the parsed item", it.ID)
 				}
 				if !sameImage(withImages[i].Image, want.Image) || withImages[i].Text != it.Text {

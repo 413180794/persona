@@ -315,8 +315,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)
-		it, ok := f.Full(a.ItemID)
-		if !ok || it.Image == nil {
+		it, err := f.Full(a.ItemID)
+		if err != nil {
+			return nil, fmt.Errorf("session %s: %w", p.SessionID, err)
+		}
+		if it.Image == nil {
 			return nil, fmt.Errorf("no image %s in session %s", a.ItemID, p.SessionID)
 		}
 		return it.Image, nil
@@ -330,9 +333,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)
-		it, ok := f.Full(a.ItemID)
-		if !ok {
-			return nil, fmt.Errorf("no item %s in session %s", a.ItemID, p.SessionID)
+		it, err := f.Full(a.ItemID)
+		if err != nil {
+			return nil, fmt.Errorf("session %s: %w", p.SessionID, err)
 		}
 		it.Image = nil // images come from session.image
 		return it, nil

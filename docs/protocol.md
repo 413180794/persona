@@ -52,7 +52,8 @@
  "tool_name":"Bash", "tool_input":{...},              // 仅 tool_use
  "is_error":false,                                    // 仅 tool_result
  "full_size":4874,                                    // text 被截断了（页和推送里工具输出最多 4 KB、其他文字 24 KB），全文的字节数；
-                                                      // 截断的 text 末尾是一行「…（已截断，点开看全文，共 N 字节）」，旧 App 照样能看懂
+                                                      // 截断的 text 末尾是一行说明：工具输出是「…（已截断，点开看全文，共 N 字节）」（App 有「看全文」按钮），
+                                                      // 其他文字是「…（已截断，共 N 字节）」；旧 App 照样能看懂
  "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）

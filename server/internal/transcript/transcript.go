@@ -882,10 +882,11 @@ func clipTo(s string, n int) string {
 
 // light is the copy of an item that pages and pushes carry; cut says something was left out (fetch it with Full).
 // Long text ends in a line that says it was cut, so apps that do not know FullSize still show it truncated, not whole.
+// Only a tool's output has a "看全文" button in the app, so only its note says to tap for the whole.
 func light(it proto.Item, keepImage bool) (_ proto.Item, cut bool) {
-	limit := pageTextLen
+	limit, note := pageTextLen, "\n…（已截断，共 %d 字节）"
 	if it.Kind == proto.KindToolResult {
-		limit = pageOutputLen
+		limit, note = pageOutputLen, "\n…（已截断，点开看全文，共 %d 字节）"
 	}
 	if len(it.Text) > limit {
 		end := limit
@@ -896,7 +897,7 @@ func light(it proto.Item, keepImage bool) (_ proto.Item, cut bool) {
 			end = nl
 		}
 		it.FullSize = len(it.Text)
-		it.Text = it.Text[:end] + fmt.Sprintf("\n…（已截断，点开看全文，共 %d 字节）", len(it.Text))
+		it.Text = it.Text[:end] + fmt.Sprintf(note, len(it.Text))
 		cut = true
 	}
 	if it.Image != nil && it.Image.Data != "" && !keepImage {
@@ -1112,8 +1113,9 @@ func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool, Sp
 }
 
 // Full returns an item whole: all of its text and its image data (pages and pushes carry a light copy). The line it
-// came from is read and parsed again.
-func (f *File) Full(id string) (proto.Item, bool) {
+// came from is read and parsed again; if that no longer gives the item (the file changed under it), it says so
+// rather than pass the cut copy off as whole.
+func (f *File) Full(id string) (proto.Item, error) {
 	f.mu.Lock()
 	var it proto.Item
 	found := false
@@ -1126,13 +1128,18 @@ func (f *File) Full(id string) (proto.Item, bool) {
 	ref, cut := f.cut[it.Seq]
 	scratch := Meta{Sidechain: f.meta.Sidechain, Codex: f.meta.Codex}
 	f.mu.Unlock()
-	if !found || !cut {
-		return it, found
+	if !found {
+		return it, fmt.Errorf("no item %s", id)
 	}
-	if full, ok := f.reparse(it.Seq, ref, &scratch)[id]; ok {
-		it.Text, it.FullSize, it.Image = full.Text, 0, full.Image
+	if !cut {
+		return it, nil
 	}
-	return it, true
+	full, ok := f.reparse(it.Seq, ref, &scratch)[id]
+	if !ok {
+		return it, fmt.Errorf("item %s: line %d of the transcript changed, reload the chat", id, it.Seq)
+	}
+	it.Text, it.FullSize, it.Image = full.Text, 0, full.Image
+	return it, nil
 }
 
 // WithImages puts the image data back into items (for callers that did not ask for lazy images).

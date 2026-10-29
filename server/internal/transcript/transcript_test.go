@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -805,11 +806,19 @@ func TestLongToolOutputIsCutForPages(t *testing.T) {
 			t.Fatal("the cut should end on a whole line")
 		}
 	}
-	full, ok := f.Full("u1#0")
-	if !ok || full.Text != out || full.FullSize != 0 {
+	full, err := f.Full("u1#0")
+	if err != nil || full.Text != out || full.FullSize != 0 {
 		t.Fatalf("Full gave %d bytes, full_size %d", len(full.Text), full.FullSize)
 	}
-	if _, ok := f.Full("nope"); ok {
+	if _, err := f.Full("nope"); err == nil {
 		t.Fatal("unknown id")
+	}
+	// The line changed under it (rewritten in place, same size): an error, not the cut copy passed off as whole.
+	data, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, bytes.Replace(data, []byte(`"uuid":"u1"`), []byte(`"uuid":"u9"`), 1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Full("u1#0"); err == nil {
+		t.Fatal("Full must fail when the line no longer holds the item")
 	}
 }
