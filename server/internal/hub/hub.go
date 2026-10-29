@@ -60,6 +60,7 @@ type Hub struct {
 
 	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox  inbox     // the unified inbox (inbox.go)
+	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
 	devtok devTokens // device token lookups (devicetokens.go)
 }
 
@@ -180,6 +181,7 @@ func Run(ctx context.Context, version string) error {
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
 	go h.inboxLoop(ctx)
+	h.startKB(ctx, cfg.KB, cfg.dir)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
 	go func() {

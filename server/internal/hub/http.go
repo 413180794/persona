@@ -147,6 +147,7 @@ func (h *Hub) routes() http.Handler {
 	h.assistantRoutes(api)
 	h.pinRoutes(api)
 	h.aiRoutes(api)
+	h.kbRoutes(api)
 	h.larkRoutes(api)
 	h.inboxRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)

@@ -1,0 +1,222 @@
+package kb
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+	"time"
+)
+
+type fakeSource struct {
+	chats []SourceChat
+	msgs  map[string][]SourceMessage // by chat, oldest first; positions are indexes
+}
+
+func (f *fakeSource) Name() string                                     { return "lark" }
+func (f *fakeSource) Chats(context.Context, int) ([]SourceChat, error) { return f.chats, nil }
+func (f *fakeSource) Messages(_ context.Context, c SourceChat, after string, limit int) ([]SourceMessage, string, bool, error) {
+	all := f.msgs[c.ID]
+	start := 0
+	if after == "" {
+		start = max(0, len(all)-limit)
+	} else {
+		for i, m := range all {
+			if m.Position == after {
+				start = i + 1
+			}
+		}
+	}
+	end := min(len(all), start+limit)
+	page := all[start:end]
+	newer := after
+	if len(page) > 0 {
+		newer = page[len(page)-1].Position
+	}
+	return page, newer, end < len(all), nil
+}
+func (f *fakeSource) Download(_ context.Context, _, dst string) error {
+	return writeFile(dst, []byte("img"))
+}
+
+// fakeModel answers compression and project prompts with canned JSON.
+type fakeModel struct{ calls []string }
+
+func (m *fakeModel) JSONMax(_ context.Context, system, user string, _ int, out any) error {
+	m.calls = append(m.calls, user)
+	var reply string
+	switch {
+	case strings.Contains(system, "项目档案"):
+		reply = `{"summary":"## 目标\n上线","one_line":"灰度中","goal":"把 X 上线","kind":"short","status":"active","importance":"P1","relevance":80,"tags":["发布"]}`
+	case strings.Contains(system, "文档、会议、日程打标"):
+		reply = `{"items":[{"id":"events/e1","importance":"P2","relevance":50,"tags":["会议"],"project":"X 上线","note":"周会"}]}`
+	default:
+		reply = `{"summary":"## 这是什么\n讨论 X","one_line":"在推 X 上线","importance":"P1","relevance":75,"tags":["发布","#后端"],
+"projects":[{"name":"X 上线","kind":"short","aliases":["X launch"],"update":"定了周五灰度","my_role":"负责人"}],
+"people":[{"name":"张三","note":"后端负责人"}]}`
+	}
+	return json.Unmarshal([]byte(reply), out)
+}
+
+func msg(pos int, sender, text string, at time.Time) SourceMessage {
+	return SourceMessage{ID: "m" + string(rune('a'+pos)), Position: string(rune('a' + pos)), SenderID: "u-" + sender,
+		SenderName: sender, Type: "TEXT", Text: text, At: at}
+}
+
+func TestPipeline(t *testing.T) {
+	dir := t.TempDir()
+	st, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	src := &fakeSource{
+		chats: []SourceChat{{ID: "f1", Name: "X 项目群", Kind: "group", UpdatedAt: t0.Add(2 * time.Minute)}},
+		msgs: map[string][]SourceMessage{"f1": {
+			msg(0, "张三", "周五灰度", t0),
+			msg(1, "李四", "好的\n第二行", t0.Add(time.Minute)),
+			{ID: "mc", Position: "c", Mine: true, Type: "IMAGE", At: t0.Add(2 * time.Minute), Media: []string{"/api/media/k1"}},
+		}},
+	}
+	model := &fakeModel{}
+	var indexed []string
+	e := &Engine{Store: st, Sources: []Source{src}, Model: model, Owner: "我",
+		Index: func(kind, id, _ string, _ Tagging, _ string, _ time.Time) { indexed = append(indexed, kind+"/"+id) }}
+
+	changed, err := e.Archive(context.Background())
+	if err != nil || len(changed) != 1 || changed[0] != "lark-f1" {
+		t.Fatalf("archive: %v %v", changed, err)
+	}
+	day := t0.Local().Format("2006-01-02")
+	raw, _ := os.ReadFile(st.Path(KindChat, "lark-f1", "messages", day+".md"))
+	text := string(raw)
+	for _, want := range []string{"# X 项目群 · " + day, "张三: 周五灰度", "李四: 好的\n  第二行", "我: [附件](attachments/"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("day file lacks %q:\n%s", want, text)
+		}
+	}
+	c, _ := st.Chat("lark-f1")
+	if c.Pending != 3 || c.Cursor != "c" || len(c.People) != 2 {
+		t.Fatalf("chat meta: %+v", c)
+	}
+
+	// Nothing new: no second copy.
+	if changed, _ := e.Archive(context.Background()); len(changed) != 0 {
+		t.Fatalf("re-archived: %v", changed)
+	}
+	// One more message after the cursor.
+	src.msgs["f1"] = append(src.msgs["f1"], msg(3, "张三", "灰度完成", t0.Add(3*time.Minute)))
+	src.chats[0].UpdatedAt = t0.Add(3 * time.Minute)
+	if changed, _ := e.Archive(context.Background()); len(changed) != 1 {
+		t.Fatalf("new message not archived")
+	}
+	raw, _ = os.ReadFile(st.Path(KindChat, "lark-f1", "messages", day+".md"))
+	if strings.Count(string(raw), "周五灰度") != 1 || !strings.Contains(string(raw), "灰度完成") {
+		t.Fatalf("append: %s", raw)
+	}
+
+	// Compression: the chat is quiet for long enough.
+	due := e.DueForCompression(time.Now())
+	if len(due) != 1 {
+		t.Fatalf("due: %d", len(due))
+	}
+	if err := e.Compress(context.Background(), due[0]); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(model.calls[0], "灰度完成") || !strings.Contains(model.calls[0], "周五灰度") {
+		t.Fatalf("model input lacks the messages: %s", model.calls[0])
+	}
+	c, _ = st.Chat("lark-f1")
+	if c.Pending != 0 || c.Importance != "P1" || c.Relevance != 75 || strings.Join(c.Tags, ",") != "发布,后端" || c.OneLine != "在推 X 上线" {
+		t.Fatalf("tags: %+v", c)
+	}
+	if !strings.Contains(st.Summary(KindChat, "lark-f1"), "讨论 X") {
+		t.Fatal("chat summary not written")
+	}
+	p, ok := st.Project("x-上线")
+	if !ok || len(p.Chats) != 1 || !p.Dirty || p.MyRole != "负责人" || len(p.People) != 2 || p.Aliases[0] != "X launch" {
+		t.Fatalf("project: %+v %v", p, ok)
+	}
+	if log := st.Log("x-上线", 5); len(log) != 1 || !strings.Contains(log[0], "定了周五灰度") {
+		t.Fatalf("log: %v", log)
+	}
+	per, _ := st.Person("lark-u-张三")
+	if per.Note != "后端负责人" || len(per.Projects) != 1 {
+		t.Fatalf("person: %+v", per)
+	}
+	if s := st.Summary(KindPerson, "lark-u-张三"); !strings.Contains(s, "X 上线") || !strings.Contains(s, "X 项目群") {
+		t.Fatalf("person summary: %s", s)
+	}
+	// The alias finds the same project.
+	if e.FindProject("x launch") == nil {
+		t.Fatal("alias not matched")
+	}
+
+	if n := e.RefreshProjects(context.Background(), 5); n != 1 {
+		t.Fatalf("refreshed %d", n)
+	}
+	p, _ = st.Project("x-上线")
+	if p.Dirty || p.OneLine != "灰度中" || p.Goal != "把 X 上线" || p.Relevance != 80 {
+		t.Fatalf("project after refresh: %+v", p)
+	}
+
+	// Items get tagged and linked to the project.
+	_ = st.PutItem(&Item{Kind: KindEvent, ID: "e1", Title: "X 周会", At: t0})
+	if err := e.TagItems(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	it, _ := st.Item(KindEvent, "e1")
+	if it.Importance != "P2" || len(it.Projects) != 1 {
+		t.Fatalf("item: %+v", it)
+	}
+	p, _ = st.Project("x-上线")
+	if len(p.Items) != 1 || p.Items[0] != "events/e1" {
+		t.Fatalf("project items: %v", p.Items)
+	}
+
+	if hits := e.Search("灰度 完成", true, 10); len(hits) == 0 || !strings.Contains(hits[0].Line, "灰度完成") {
+		t.Fatalf("search: %+v", hits)
+	}
+	if list := e.List(KindProject, "发布"); len(list) != 1 || list[0].Name != "X 上线" {
+		t.Fatalf("list: %+v", list)
+	}
+	if pr := e.Prompt(5, 5); !strings.Contains(pr, "X 上线") || !strings.Contains(pr, "X 项目群") {
+		t.Fatalf("prompt: %s", pr)
+	}
+	if len(indexed) == 0 {
+		t.Fatal("index not called")
+	}
+}
+
+func TestLockedTagsStay(t *testing.T) {
+	tg := Tagging{Importance: "P0", Relevance: 90, Locked: true}
+	applyTags(&tg, "P3", 10, []string{"x"}, time.Now())
+	if tg.Importance != "P0" || tg.Relevance != 90 || tg.Tags[0] != "x" {
+		t.Fatalf("%+v", tg)
+	}
+}
+
+func TestPrune(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	now := time.Now()
+	c := &Chat{ID: "lark-a", Name: "a"}
+	old, recent := now.AddDate(0, 0, -400), now.AddDate(0, 0, -40)
+	_ = st.AppendMessages(c, []Line{{At: old, Sender: "x", Text: "old"}, {At: recent, Sender: "x", Text: "recent"}})
+	_ = writeFile(st.Path(KindChat, "lark-a", "attachments", recent.Local().Format("2006-01-02"), "f.jpg"), []byte("x"))
+	if n := st.Prune(now, 365, 30); n != 2 {
+		t.Fatalf("removed %d", n)
+	}
+	if days := st.Days("lark-a"); len(days) != 1 || days[0] != recent.Local().Format("2006-01-02") {
+		t.Fatalf("days: %v", days)
+	}
+}
+
+func TestSlug(t *testing.T) {
+	if s := Slug("Jarvis 2.0 发布!"); s != "jarvis-2-0-发布" {
+		t.Fatal(s)
+	}
+	if s := SafeID("../a/b c"); s != "a_b_c" {
+		t.Fatal(s)
+	}
+}

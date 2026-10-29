@@ -25,6 +25,8 @@ type AssistantConfig struct {
 	Timezone string `json:"timezone,omitempty"`
 	// Notes, once edited in the app, replace hub.json's assistant.notes.
 	Notes *string `json:"notes,omitempty"`
+	// Main is the main conversation (the Jarvis tab opens it): one long-running conversation, the others are side ones.
+	Main string `json:"main,omitempty"`
 }
 
 func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
@@ -53,7 +55,7 @@ func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
 			if saved.Launcher != "" {
 				cfg.Launcher = saved.Launcher
 			}
-			cfg.Timezone, cfg.Notes = saved.Timezone, saved.Notes
+			cfg.Timezone, cfg.Notes, cfg.Main = saved.Timezone, saved.Notes, saved.Main
 		}
 	}
 	return cfg
@@ -130,6 +132,10 @@ const assistantPrompt = `# Jarvis 助手
   - 一次执行一条非交互命令，带超时（` + "`timeout 20 …`" + `）；Claude 会话记录在 ` + "`~/.claude/projects/<目录>/<id>.jsonl`" + `。
 - **工作数据**：这台机器上装好的 skills 和 CLI（具体有哪些见文末「关于他」，没写就先 ` + "`ls ~/.claude/skills`" + ` 看看）。
 - **网络**：可以联网搜索、抓网页。
+- **知识库** ` + "`~/.jarvis/data`" + `（hub 自动维护，**先查这里**）：每个飞书会话 / 邮件往来的全量文字（` + "`chats/<id>/messages/日期.md`" + `）和压缩上下文
+  （` + "`summary.md`" + `），每个人（` + "`people/`" + `）、每个项目（` + "`projects/<slug>/summary.md`" + `、` + "`log.md`" + ` 时间线）的档案，文档 / 会议 / 日程（` + "`docs/ meetings/ events/`" + `）；
+  都带打标：importance P0–P3（重要级）、relevance 0–100（与{{owner}}的相关性）、tags。工具：` + "`kb_search`" + `（全文搜）、` + "`kb_list`" + `（按重要级排好的项目 / 会话 / 人…）、
+  ` + "`kb_get`" + `（某个实体的档案 + 最近消息）、` + "`kb_update`" + `（建项目、改档案、打标、建关联、记进展）。也可以直接 ` + "`rg 关键词 ~/.jarvis/data`" + `。
 
 ## 和他互动
 
@@ -138,6 +144,15 @@ const assistantPrompt = `# Jarvis 助手
 - 他说「提醒我…」「过一小时再看看」「等 X 跑完告诉我」：用 ` + "`schedule_followup`" + ` 安排自己到时候回来接着做，做完他会收到推送；
   要立刻提醒他用 ` + "`notify_user`" + `（App 关着也能收到）。` + "`list_followups`" + ` / ` + "`cancel_followup`" + ` 管理已安排的。
 - 消息以「⏰」开头的是定时任务 / 你之前安排的跟进，不是他刚发的：直接把事做完，结果写成他扫一眼就懂的一屏；他会收到推送。
+
+## 主对话和上下文
+
+- 「Jarvis」tab 有一个常驻的**主对话**（首条消息以「【主对话】」开头的那段）：{{owner}}平时都在这里找你，像一个一直在线的同事。
+  在主对话里要记得之前聊过的事；其他对话是一次性的。
+- **让上下文流动**：在一段对话里得出了某个项目 / 人 / 会话的新结论（决定、进展、分工、截止时间），用 ` + "`kb_update`" + ` 写回知识库
+  （项目进展写 ` + "`log`" + `，项目的代码目录写 ` + "`dirs`" + `，这样 Agents 也能对上项目）；给 Agent 派活前先 ` + "`kb_get`" + ` 相关项目，把背景带进 prompt；
+  Agent 做完的结论再记回项目。
+- 你的目标是**替{{owner}}上班**：主动看重点项目和会话里有什么在等{{owner}}，能自己处理的先查清楚、起草好，再请{{owner}}一键确认。
 
 ## 做事方式
 
@@ -189,6 +204,12 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		if in.Launcher != "" {
 			cfg.Launcher = in.Launcher
+		}
+		if in.Main != "" {
+			cfg.Main = in.Main
+			if in.Main == "-" { // clear
+				cfg.Main = ""
+			}
 		}
 		if in.Timezone != "" {
 			if _, err := time.LoadLocation(in.Timezone); err != nil {
@@ -261,6 +282,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			Launcher       string        `json:"launcher"`
 			PermissionMode string        `json:"permission_mode"`
 			Effort         string        `json:"effort"`
+			Main           bool          `json:"main"` // becomes the main conversation
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -272,6 +294,13 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		if err != nil {
 			callErr(w, err)
 			return
+		}
+		if in.Main && h.store != nil {
+			cfg := h.assistantConfig(ctx)
+			cfg.Main = s.SessionID
+			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
+				h.logf("assistant: save main: %v", err)
+			}
 		}
 		writeJSON(w, map[string]any{"session": s})
 	})

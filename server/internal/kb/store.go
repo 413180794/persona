@@ -1,0 +1,489 @@
+// Package kb is Jarvis' knowledge base under ~/.jarvis/data (docs/knowledge.md): every chat's full text by day,
+// AI-compressed context per chat, person and project, and the tags (importance, relevance, free tags) that rank them.
+// Files are the source of truth so that Claude Code (the assistant, the inbox agent, any herdr agent) can read and
+// grep them directly; the hub keeps only an index in Postgres.
+package kb
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Kinds of entities, also the directory names under the data dir.
+const (
+	KindChat    = "chats"
+	KindPerson  = "people"
+	KindProject = "projects"
+	KindDoc     = "docs"
+	KindMeeting = "meetings"
+	KindEvent   = "events"
+)
+
+// Tagging ranks anything in the knowledge base. The AI fills it in; Locked ones were set by hand (the app or a
+// kb_update call) and the AI no longer overrides importance / relevance.
+type Tagging struct {
+	Importance string    `json:"importance,omitempty"` // P0 (critical) … P3 (ignorable)
+	Relevance  int       `json:"relevance"`            // 0–100: how much it concerns the owner
+	Tags       []string  `json:"tags,omitempty"`
+	Locked     bool      `json:"locked,omitempty"`
+	TaggedAt   time.Time `json:"tagged_at,omitempty"`
+}
+
+// Chat is one conversation: a Feishu chat (lark-<feedId>) or the mail exchanged with one address (mail-<account>-<addr>).
+type Chat struct {
+	ID       string   `json:"id"`
+	Source   string   `json:"source"` // lark | mail
+	SourceID string   `json:"source_id"`
+	Kind     string   `json:"kind"` // dm | group | bot | mail
+	Name     string   `json:"name"`
+	People   []string `json:"people,omitempty"`
+	Projects []string `json:"projects,omitempty"`
+	Tagging
+	// Archive state: the newest position read, when the newest archived message was written, how many lines so far.
+	Cursor   string    `json:"cursor,omitempty"`
+	LastAt   time.Time `json:"last_at,omitempty"`
+	Messages int       `json:"messages"`
+	// Compression state: messages archived since the last summary, and the time of the last one it covered.
+	Pending      int       `json:"pending"`
+	CompressedAt time.Time `json:"compressed_at,omitempty"`
+	CoveredUntil time.Time `json:"covered_until,omitempty"`
+	OneLine      string    `json:"one_line,omitempty"` // the summary's first line, for lists
+	Created      time.Time `json:"created"`
+}
+
+// Person is someone the owner talks to: lark-<userId> or mail-<address>.
+type Person struct {
+	ID       string    `json:"id"`
+	Source   string    `json:"source"`
+	SourceID string    `json:"source_id"`
+	Name     string    `json:"name"`
+	Note     string    `json:"note,omitempty"` // who they are to the owner, one line (AI)
+	Chats    []string  `json:"chats,omitempty"`
+	Projects []string  `json:"projects,omitempty"`
+	LastSeen time.Time `json:"last_seen,omitempty"`
+	Tagging
+}
+
+// Project is what a set of people and chats work towards: a short one (a feature, a launch) or a long one (a team's mission).
+type Project struct {
+	Slug    string    `json:"slug"`
+	Name    string    `json:"name"`
+	Kind    string    `json:"kind"`   // short | long
+	Status  string    `json:"status"` // active | paused | done
+	Aliases []string  `json:"aliases,omitempty"`
+	Goal    string    `json:"goal,omitempty"`
+	MyRole  string    `json:"my_role,omitempty"`
+	People  []string  `json:"people,omitempty"`
+	Chats   []string  `json:"chats,omitempty"`
+	Items   []string  `json:"items,omitempty"` // "<kind>/<id>" of docs, meetings, events
+	Dirs    []string  `json:"dirs,omitempty"`  // code directories ("<machine>:<path>"): Agents working there belong to it
+	Dirty   bool      `json:"dirty,omitempty"` // has news its summary does not reflect yet
+	OneLine string    `json:"one_line,omitempty"`
+	Created time.Time `json:"created"`
+	Updated time.Time `json:"updated"`
+	Tagging
+}
+
+// Item is a document, meeting or calendar event the owner came across.
+type Item struct {
+	Kind     string    `json:"kind"` // docs | meetings | events
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	URL      string    `json:"url,omitempty"`
+	At       time.Time `json:"at,omitempty"`
+	Where    string    `json:"where,omitempty"` // where it came from (a chat id, "calendar"…)
+	Projects []string  `json:"projects,omitempty"`
+	Note     string    `json:"note,omitempty"`
+	Seen     time.Time `json:"seen"`
+	Tagging
+}
+
+// Store reads and writes the data dir. Writes of one entity are serialized; files are replaced atomically.
+type Store struct {
+	Dir string
+	mu  sync.Mutex
+}
+
+func NewStore(dir string) (*Store, error) {
+	for _, k := range []string{KindChat, KindPerson, KindProject, KindDoc, KindMeeting, KindEvent} {
+		if err := os.MkdirAll(filepath.Join(dir, k), 0o700); err != nil {
+			return nil, err
+		}
+	}
+	s := &Store{Dir: dir}
+	_ = writeIfMissing(filepath.Join(dir, "README.md"), readme)
+	return s, nil
+}
+
+var unsafeID = regexp.MustCompile(`[^\p{L}\p{N}._@+-]+`)
+
+// SafeID turns a source id into a directory name.
+func SafeID(s string) string {
+	s = unsafeID.ReplaceAllString(s, "_")
+	s = strings.Trim(s, "._")
+	if len(s) > 120 {
+		s = s[:120]
+	}
+	return s
+}
+
+func (s *Store) path(kind, id string, parts ...string) string {
+	return filepath.Join(append([]string{s.Dir, kind, SafeID(id)}, parts...)...)
+}
+
+func (s *Store) Path(kind, id string, parts ...string) string { return s.path(kind, id, parts...) }
+
+// --- JSON entities ---
+
+func readJSON(p string, out any) (bool, error) {
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, json.Unmarshal(raw, out)
+}
+
+func writeJSON(p string, v any) error {
+	raw, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFile(p, append(raw, '\n'))
+}
+
+func writeFile(p string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return err
+	}
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
+}
+
+func writeIfMissing(p, content string) error {
+	if _, err := os.Stat(p); err == nil {
+		return nil
+	}
+	return writeFile(p, []byte(content))
+}
+
+func (s *Store) Chat(id string) (*Chat, bool) {
+	var c Chat
+	ok, err := readJSON(s.path(KindChat, id, "meta.json"), &c)
+	if !ok || err != nil {
+		return nil, false
+	}
+	return &c, true
+}
+
+func (s *Store) PutChat(c *Chat) error { return writeJSON(s.path(KindChat, c.ID, "meta.json"), c) }
+
+func (s *Store) Person(id string) (*Person, bool) {
+	var p Person
+	ok, err := readJSON(s.path(KindPerson, id, "meta.json"), &p)
+	if !ok || err != nil {
+		return nil, false
+	}
+	return &p, true
+}
+
+func (s *Store) PutPerson(p *Person) error {
+	return writeJSON(s.path(KindPerson, p.ID, "meta.json"), p)
+}
+
+func (s *Store) Project(slug string) (*Project, bool) {
+	var p Project
+	ok, err := readJSON(s.path(KindProject, slug, "meta.json"), &p)
+	if !ok || err != nil {
+		return nil, false
+	}
+	return &p, true
+}
+
+func (s *Store) PutProject(p *Project) error {
+	p.Updated = time.Now().UTC()
+	return writeJSON(s.path(KindProject, p.Slug, "meta.json"), p)
+}
+
+func (s *Store) Item(kind, id string) (*Item, bool) {
+	var it Item
+	ok, err := readJSON(filepath.Join(s.Dir, kind, SafeID(id)+".json"), &it)
+	if !ok || err != nil {
+		return nil, false
+	}
+	return &it, true
+}
+
+func (s *Store) PutItem(it *Item) error {
+	return writeJSON(filepath.Join(s.Dir, it.Kind, SafeID(it.ID)+".json"), it)
+}
+
+// IDs lists the entities of a kind (directory names, or file names without .json for items).
+func (s *Store) IDs(kind string) []string {
+	entries, _ := os.ReadDir(filepath.Join(s.Dir, kind))
+	var out []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			out = append(out, name)
+		} else if id, ok := strings.CutSuffix(name, ".json"); ok {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Store) Chats() []*Chat {
+	var out []*Chat
+	for _, id := range s.IDs(KindChat) {
+		if c, ok := s.Chat(id); ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (s *Store) People() []*Person {
+	var out []*Person
+	for _, id := range s.IDs(KindPerson) {
+		if p, ok := s.Person(id); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (s *Store) Projects() []*Project {
+	var out []*Project
+	for _, id := range s.IDs(KindProject) {
+		if p, ok := s.Project(id); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (s *Store) Items(kind string) []*Item {
+	var out []*Item
+	for _, id := range s.IDs(kind) {
+		if it, ok := s.Item(kind, id); ok {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// --- text files ---
+
+// Summary is the compressed context of a chat, person or project ("" when there is none yet).
+func (s *Store) Summary(kind, id string) string {
+	raw, _ := os.ReadFile(s.path(kind, id, "summary.md"))
+	return string(raw)
+}
+
+func (s *Store) PutSummary(kind, id, text string) error {
+	return writeFile(s.path(kind, id, "summary.md"), []byte(strings.TrimSpace(text)+"\n"))
+}
+
+// AppendLog adds a line to a project's timeline.
+func (s *Store) AppendLog(slug string, at time.Time, source, line string) error {
+	return appendFile(s.path(KindProject, slug, "log.md"), "# 时间线\n\n",
+		fmt.Sprintf("- %s · %s · %s\n", at.Local().Format("2006-01-02 15:04"), source, oneLine(line)))
+}
+
+// Log returns the last n lines of a project's timeline.
+func (s *Store) Log(slug string, n int) []string {
+	raw, _ := os.ReadFile(s.path(KindProject, slug, "log.md"))
+	var lines []string
+	for _, l := range strings.Split(string(raw), "\n") {
+		if strings.HasPrefix(l, "- ") {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
+}
+
+func appendFile(p, header, text string) error {
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err == nil && st.Size() == 0 && header != "" {
+		if _, err := f.WriteString(header); err != nil {
+			return err
+		}
+	}
+	_, err = f.WriteString(text)
+	return err
+}
+
+// Line is one archived message.
+type Line struct {
+	At     time.Time
+	Sender string
+	Text   string
+}
+
+// Format renders a message line: "- 14:03 张三: text", continuation lines indented.
+func (l Line) Format() string {
+	text := strings.TrimSpace(l.Text)
+	text = strings.ReplaceAll(text, "\n", "\n  ")
+	return fmt.Sprintf("- %s %s: %s\n", l.At.Local().Format("15:04"), l.Sender, text)
+}
+
+// AppendMessages writes lines to their day files (messages/YYYY-MM-DD.md, local time).
+func (s *Store) AppendMessages(c *Chat, lines []Line) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, l := range lines {
+		day := l.At.Local().Format("2006-01-02")
+		header := fmt.Sprintf("# %s · %s\n\n", c.Name, day)
+		if err := appendFile(s.path(KindChat, c.ID, "messages", day+".md"), header, l.Format()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Days lists a chat's day files, oldest first ("2006-01-02").
+func (s *Store) Days(chatID string) []string {
+	entries, _ := os.ReadDir(s.path(KindChat, chatID, "messages"))
+	var out []string
+	for _, e := range entries {
+		if d, ok := strings.CutSuffix(e.Name(), ".md"); ok {
+			out = append(out, d)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Since returns the message lines written at or after t (minute precision, as stored), at most max characters,
+// the newest kept when it has to cut.
+func (s *Store) Since(chatID string, t time.Time, max int) string {
+	from := t.Local().Format("2006-01-02")
+	var b strings.Builder
+	for _, d := range s.Days(chatID) {
+		if d < from {
+			continue
+		}
+		raw, _ := os.ReadFile(s.path(KindChat, chatID, "messages", d+".md"))
+		var keep []string
+		cur := ""
+		flush := func() {
+			if cur != "" {
+				keep = append(keep, cur)
+			}
+			cur = ""
+		}
+		for _, l := range strings.Split(string(raw), "\n") {
+			switch {
+			case strings.HasPrefix(l, "- "):
+				flush()
+				if len(l) >= 7 {
+					if at, err := time.ParseInLocation("2006-01-02 15:04", d+" "+l[2:7], time.Local); err == nil && at.Before(t.Truncate(time.Minute)) {
+						continue
+					}
+				}
+				cur = l
+			case strings.HasPrefix(l, "  ") && cur != "":
+				cur += "\n" + l
+			default:
+				flush()
+			}
+		}
+		flush()
+		if len(keep) > 0 {
+			fmt.Fprintf(&b, "## %s\n%s\n", d, strings.Join(keep, "\n"))
+		}
+	}
+	out := b.String()
+	if len(out) > max {
+		out = "…\n" + out[len(out)-max:]
+	}
+	return out
+}
+
+// Prune deletes message days older than textDays and attachment days older than attachmentDays.
+func (s *Store) Prune(now time.Time, textDays, attachmentDays int) (removed int) {
+	textCut := now.AddDate(0, 0, -textDays).Local().Format("2006-01-02")
+	attCut := now.AddDate(0, 0, -attachmentDays).Local().Format("2006-01-02")
+	for _, id := range s.IDs(KindChat) {
+		for _, d := range s.Days(id) {
+			if d < textCut && os.Remove(s.path(KindChat, id, "messages", d+".md")) == nil {
+				removed++
+			}
+		}
+		entries, _ := os.ReadDir(s.path(KindChat, id, "attachments"))
+		for _, e := range entries {
+			if e.IsDir() && e.Name() < attCut && os.RemoveAll(s.path(KindChat, id, "attachments", e.Name())) == nil {
+				removed++
+			}
+		}
+	}
+	return removed
+}
+
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:200]) + "…"
+	}
+	return s
+}
+
+// addUnique appends v to list unless it is there already.
+func addUnique(list []string, v ...string) []string {
+	for _, x := range v {
+		if x == "" {
+			continue
+		}
+		found := false
+		for _, y := range list {
+			if y == x {
+				found = true
+				break
+			}
+		}
+		if !found {
+			list = append(list, x)
+		}
+	}
+	return list
+}
+
+const readme = `# Jarvis 知识库
+
+hub 自动维护的数据（说明见仓库 docs/knowledge.md）。可以直接读、grep；改 summary.md 也可以，下次压缩会接着用。
+
+- chats/<id>/messages/YYYY-MM-DD.md  每个会话每天的全量文字（保留 365 天）
+- chats/<id>/attachments/            附件（保留 30 天）
+- chats/<id>/summary.md              压缩后的上下文；meta.json 里是名称、成员、关联项目、打标
+- people/<id>/                       人：summary.md（是谁、和我的关系）、meta.json
+- projects/<slug>/                   项目：summary.md（目标、现状、下一步）、log.md（时间线）、meta.json
+- docs/ meetings/ events/            文档、会议、日程，各一个 json，带打标和关联项目
+
+打标：importance P0–P3（重要级），relevance 0–100（与我相关性），tags（自动生成的标签）。
+`

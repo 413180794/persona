@@ -66,6 +66,8 @@ type Config struct {
 	Inbox InboxConfig `json:"inbox"`
 	// Notify tunes when "finished" pushes go out (notify.go); which ones a device gets is its own setting.
 	Notify NotifyConfig `json:"notify,omitempty"`
+	// KB is the knowledge base under ~/.jarvis/data: chat archives, compressed context, projects, tags (docs/knowledge.md).
+	KB KBConfig `json:"kb,omitempty"`
 
 	dir string
 }

@@ -198,7 +198,7 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	now := time.Now().UTC()
 	for _, it := range queued {
 		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
-		jobs = append(jobs, job{it, inboxAgentPrompt(it, h.ownerName())})
+		jobs = append(jobs, job{it, inboxAgentPrompt(it, h.ownerName()) + h.kbContextFor(it)})
 	}
 	h.inbox.mu.Unlock()
 	for _, j := range jobs {

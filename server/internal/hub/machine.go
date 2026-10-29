@@ -479,7 +479,16 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
 	case "assistant.context":
-		return map[string]any{"text": m.hub.assistantSnapshot(ctx)}, nil
+		var p struct {
+			SessionID string `json:"session_id"`
+		}
+		_ = json.Unmarshal(params, &p)
+		text := m.hub.assistantSnapshot(ctx)
+		if p.SessionID != "" && p.SessionID == m.hub.assistantConfig(ctx).Main {
+			text = "**这是主对话**：{{owner}}平时都在这里找你，接着之前聊过的事往下做。\n\n" + text
+			text = strings.ReplaceAll(text, "{{owner}}", m.hub.ownerName())
+		}
+		return map[string]any{"text": text}, nil
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
 }

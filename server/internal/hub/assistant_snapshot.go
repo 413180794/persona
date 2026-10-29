@@ -60,6 +60,11 @@ func (h *Hub) assistantSnapshot(ctx context.Context) string {
 	b.WriteString("\n")
 	b.WriteString(h.snapshotAgents())
 	b.WriteString(h.snapshotPhone())
+	if e := h.kb.eng; e != nil {
+		if kbs := e.Prompt(6, 8); kbs != "" {
+			b.WriteString("- 知识库（kb_get 看详情）：\n" + indent(kbs, "  "))
+		}
+	}
 
 	wg.Wait()
 	b.WriteString(chats)
@@ -216,4 +221,12 @@ func (h *Hub) snapshotSchedule(ctx context.Context, loc *time.Location) string {
 		return ""
 	}
 	return "- 已安排的跟进：" + strings.Join(parts, "；") + "\n"
+}
+
+func indent(s, by string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = by + l
+	}
+	return strings.Join(lines, "\n") + "\n"
 }

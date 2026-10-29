@@ -207,7 +207,12 @@ func (c *Client) respond(ctx context.Context, key, system, user string) (string,
 
 // JSON asks for a JSON object and decodes the first one in the reply into out.
 func (c *Client) JSON(ctx context.Context, system, user string, out any) error {
-	text, err := c.Complete(ctx, system+"\n\nReply with a single JSON object only, no prose, no code fences.", user, 1024)
+	return c.JSONMax(ctx, system, user, 1024, out)
+}
+
+// JSONMax is JSON with room for a longer answer (summaries).
+func (c *Client) JSONMax(ctx context.Context, system, user string, maxTokens int, out any) error {
+	text, err := c.Complete(ctx, system+"\n\nReply with a single JSON object only, no prose, no code fences.", user, maxTokens)
 	if err != nil {
 		return err
 	}

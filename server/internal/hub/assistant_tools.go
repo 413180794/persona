@@ -55,6 +55,7 @@ func assistantTools(withLark bool) []proto.Tool {
 			InputSchema: schema(`{"type":"object","required":["machine","cwd","prompt"],"properties":{"machine":{"type":"string"},"cwd":{"type":"string","description":"absolute path or ~/…"},"prompt":{"type":"string"},"launcher":{"type":"string","description":"shell command that starts claude (default: the machine's default)"}}}`)},
 		inboxDraftTool,
 	}
+	tools = append(tools, kbTools...)
 	if withLark {
 		tools = append(tools,
 			proto.Tool{Name: "lark_chats", Description: "The user's Feishu (Lark) chats from their own account: unread ones by default, or the ones " +
@@ -86,7 +87,7 @@ func isAssistantTool(name string) bool {
 		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft":
 		return true
 	}
-	return strings.HasPrefix(name, "lark_")
+	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_")
 }
 
 // callAssistantTool runs one assistant tool for the conversation sessionID on machine m.
@@ -128,6 +129,8 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return "Cancelled.", nil
 	case "inbox_draft":
 		return h.toolInboxDraft(ctx, sessionID, args)
+	case "kb_search", "kb_list", "kb_get", "kb_update":
+		return h.runKBTool(name, args)
 	case "agents_list":
 		var a struct{ State, Machine, Query string }
 		_ = json.Unmarshal(args, &a)

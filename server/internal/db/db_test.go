@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items`); err != nil {
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -259,5 +259,24 @@ func TestDeviceTokens(t *testing.T) {
 	list, _ := d.DeviceTokens(ctx)
 	if len(list) != 2 || list[0].ID != "dt1" || list[1].RevokedAt == nil || list[1].LastSeen == nil {
 		t.Fatalf("%+v", list)
+	}
+}
+
+func TestKBEntities(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	_ = d.PutKBEntity(ctx, "projects", "a", "A", "P2", 50, []string{"发布"}, "", now)
+	_ = d.PutKBEntity(ctx, "projects", "b", "B", "P0", 10, nil, "", now)
+	_ = d.PutKBEntity(ctx, "chats", "c", "C", "", 90, []string{"发布"}, "x", time.Time{})
+	if err := d.PutKBEntity(ctx, "projects", "a", "A2", "P1", 60, []string{"发布", "后端"}, "y", now); err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.KBEntities(ctx, "projects", "", 10)
+	if err != nil || len(list) != 2 || list[0].ID != "b" || list[1].Name != "A2" || list[1].Importance != "P1" {
+		t.Fatalf("%+v %v", list, err)
+	}
+	if list, _ := d.KBEntities(ctx, "", "发布", 10); len(list) != 2 {
+		t.Fatalf("tag filter: %+v", list)
 	}
 }

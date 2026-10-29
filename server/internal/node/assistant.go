@@ -207,7 +207,7 @@ func (n *Node) assistantWarm(cwd, launcher string) error {
 
 // assistantContext asks the hub for the live snapshot (time, agents waiting, unread chats, today's meetings…)
 // that goes into the system prompt of a starting process.
-func (n *Node) assistantContext() string {
+func (n *Node) assistantContext(id string) string {
 	if n.peer == nil {
 		return ""
 	}
@@ -216,7 +216,7 @@ func (n *Node) assistantContext() string {
 	var res struct {
 		Text string `json:"text"`
 	}
-	if err := n.peer.Call(ctx, "assistant.context", map[string]any{}, &res); err != nil {
+	if err := n.peer.Call(ctx, "assistant.context", map[string]any{"session_id": id}, &res); err != nil {
 		n.logger.Printf("assistant context: %v", err)
 		return ""
 	}
@@ -234,7 +234,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
 		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", string(mcp)}
-	if snap := n.assistantContext(); snap != "" {
+	if snap := n.assistantContext(id); snap != "" {
 		args = append(args, "--append-system-prompt", snap)
 	}
 	if resume {

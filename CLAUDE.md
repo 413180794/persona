@@ -19,6 +19,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   （`<hub 地址>`、`me@example.com`）；具体值只写配置或 `CLAUDE.local.md`。Jarvis 支持的产品 / 工具名（飞书、TRAEX、removed 等）不算。
 - **密钥绝不入库**：hub token、数据库密码只存在 hub 机器的 `~/.jarvis/hub.json`（0600）；邮箱凭据 AES-GCM 加密后存 Postgres，密钥文件不进数据库。
 - 服务端状态全部在 hub 机器的 Postgres 容器 `jarvis-postgres`（`docs/server.md`），不要再往 `~/.jarvis/` 写 JSON 状态文件。
+  例外是知识库 `~/.jarvis/data`（2026-10-30 用户要求：所有数据最终沉淀在 `.jarvis`，文件为主、库做索引，`docs/knowledge.md`）。
 - **所有按钮的文字都不能换行**：按钮标签一律单行（`.lineLimit(1)`，空间紧时 `.minimumScaleFactor` 或缩短文案 / 改成图标），
   按键栏这类横排按钮用图标或短词，放不下就收进菜单 / 浮层，不能挤成两行。
 - **链接在 App 内打开**（2026-10-26 用户要求）：会话里出现的任何链接（飞书文档、removed、网页……）都在当前 App 里打开，参考 Telegram：
@@ -63,6 +64,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |
 | `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
+| `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
 
 ## 构建与验证
 
