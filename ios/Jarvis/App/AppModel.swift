@@ -598,7 +598,18 @@ final class AppModel {
     /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order.
     func siblings(of key: SessionKey) -> [Session] {
         guard let s = session(key), let space = s.spaceKey else { return [] }
-        return allSessions.filter { $0.spaceKey == space && $0.state.isLive }
+        // One per pane: a pane can briefly be listed under two session ids (/clear, a resume, a stale entry) and
+        // showed up twice in the strip. The open one wins, then the latest.
+        var byPane: [String: Session] = [:]
+        var rest: [Session] = []
+        for c in allSessions where c.spaceKey == space && c.state.isLive {
+            guard let pane = c.paneID else { rest.append(c); continue }
+            if let had = byPane[pane], had.key == key || (c.key != key && (had.updatedAt ?? .distantPast) >= (c.updatedAt ?? .distantPast)) {
+                continue
+            }
+            byPane[pane] = c
+        }
+        return (Array(byPane.values) + rest)
             .sorted { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
     }
 

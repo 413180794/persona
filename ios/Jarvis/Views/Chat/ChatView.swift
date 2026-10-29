@@ -114,6 +114,14 @@ struct ChatView: View {
         }
         .overlay(alignment: .top) {
             if showInfo {
+                // A tap anywhere outside the card closes it (the title toggles it too).
+                Color.clear.contentShape(.rect).ignoresSafeArea()
+                    .onTapGesture { withAnimation(.snappy) { showInfo = false } }
+                    .accessibilityHidden(true)
+            }
+        }
+        .overlay(alignment: .top) {
+            if showInfo {
                 DevInfoCard(key: key, session: session)
                     .padding(.horizontal, 12)
                     .padding(.top, (style == .dev ? chrome.height : 0) + 6)
@@ -1933,7 +1941,7 @@ struct DevInfoCard: View {
                     row("text.bubble", "对话", "\(info.turns) 轮 · 共生成 \(Self.tokens(info.outputTokens)) tokens")
                     row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode) ?? "—")
                     row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort) ?? "—")
-                    row("shippingbox", "Claude Code", info.version ?? "—")
+                    row("shippingbox", agent, info.version ?? "—")
                     if let started = info.startedAt, started.isMeaningful {
                         row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))
                     }
@@ -1945,7 +1953,7 @@ struct DevInfoCard: View {
                         model.toast = Toast("已拷贝 session id", style: .success)
                     } label: { Label("拷贝 ID", systemImage: "number").lineLimit(1) }
                     Button {
-                        UIPasteboard.general.string = "cd \(info.cwd ?? "") && claude --resume \(info.sessionID)"
+                        UIPasteboard.general.string = "cd \(info.cwd ?? "") && " + resume(info.sessionID)
                         Haptics.success()
                         model.toast = Toast("已拷贝恢复命令", style: .success)
                     } label: { Label("拷贝恢复命令", systemImage: "terminal").lineLimit(1) }
@@ -1964,6 +1972,15 @@ struct DevInfoCard: View {
         .task(id: key) {
             do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
         }
+    }
+
+    /// The coding agent in the pane: Claude Code unless the session says Codex / TRAEX.
+    private var agent: String { session?.isCodex == true || session?.isTraex == true ? session!.agentLabel : "Claude Code" }
+
+    private func resume(_ id: String) -> String {
+        if session?.isCodex == true { return "codex resume \(id)" }
+        if session?.isTraex == true { return "traex resume \(id)" }
+        return "claude --resume \(id)"
     }
 
     private func row(_ symbol: String, _ label: String, _ value: String) -> some View {
