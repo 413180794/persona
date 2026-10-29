@@ -123,11 +123,12 @@ struct AssistantHome: View {
                             if pending.imageCount > 0 {
                                 Label("\(pending.imageCount) 张图片", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
                             }
+                            // The same bubble as a sent message (white on the light-blue bubble was 1.2:1).
                             Text(pending.text)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Theme.userBubbleText)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
-                                .background(Theme.userBubble.gradient, in: .rect(cornerRadius: 20, style: .continuous))
+                                .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
                         }
                     }
                     .padding(.top, 12)

@@ -78,12 +78,22 @@ extension View {
     @ViewBuilder func themedButton(prominent: Bool = false) -> some View {
         switch AppStyle.current {
         case .glass, .claude:
-            if prominent { buttonStyle(.glassProminent) } else { buttonStyle(.glass) }
+            // .glassProminent keeps its full color when disabled (iOS 26.0): an empty composer's send looked tappable.
+            if prominent { buttonStyle(.glassProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.glass) }
         case .lark:
             if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
         case .clay, .island:
             buttonStyle(SoftButtonStyle(prominent: prominent))
         }
+    }
+}
+
+/// Fades a control whose style does not show "disabled" by itself.
+private struct DimWhenDisabled: ViewModifier {
+    @Environment(\.isEnabled) private var enabled
+
+    func body(content: Content) -> some View {
+        content.opacity(enabled ? 1 : 0.4)
     }
 }
 
