@@ -61,6 +61,8 @@ type Config struct {
 	Assistant AssistantProfile `json:"assistant"`
 	// Inbox tunes the 收件箱's AI triage (docs/inbox.md).
 	Inbox InboxConfig `json:"inbox"`
+	// Notify tunes when "finished" pushes go out (notify.go); which ones a device gets is its own setting.
+	Notify NotifyConfig `json:"notify,omitempty"`
 
 	dir string
 }

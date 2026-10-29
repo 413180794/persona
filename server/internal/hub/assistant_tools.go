@@ -109,7 +109,7 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
 			return "", fmt.Errorf("title and body are required")
 		}
-		h.push.notifyDone(m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body)
+		h.push.notifyDone(m.cfg.ID, "Jarvis", sessionID, a.Title, a.Body, nil) // asked for explicitly: every device
 		h.mu.Lock()
 		h.notified[sessionID] = time.Now()
 		h.mu.Unlock()

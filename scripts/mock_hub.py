@@ -191,6 +191,7 @@ INTERACTIONS = [
      "plan": "## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过\n4. 补测试：竖拍、实况照片、没有 EXIF 的图"},
 ]
 
+PREFS = {"input": True, "done": "long", "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 
 INBOX = [
@@ -265,6 +266,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
+        if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
         if p == "/api/v1/assistant":
@@ -316,6 +318,9 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
             RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
+            PREFS.update({k: v for k, v in json.loads(self.last_body or b"{}").items() if k in ("input", "done")})
+            return self.send_json(PREFS)
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
             for s in all_sessions():

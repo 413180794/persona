@@ -107,6 +107,7 @@
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|watch","apns_token"?,"apns_env"?}` |
+| GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
 
 邮件见下文「邮件 API」。错误统一 `{"error":"…"}` + 4xx/5xx。
 

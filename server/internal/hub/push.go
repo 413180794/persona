@@ -92,6 +92,7 @@ func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
 func (p *Pusher) register(d Device) {
 	d.UpdatedAt = time.Now().UTC()
 	p.mu.Lock()
+	d.Prefs = p.devices[d.DeviceID].Prefs // registration carries the token, not the settings
 	p.devices[d.DeviceID] = d
 	p.mu.Unlock()
 	if p.store != nil {
@@ -122,8 +123,33 @@ func (p *Pusher) token() (string, error) {
 	return p.jwt, nil
 }
 
-func (p *Pusher) send(payload map[string]any, collapseID string) {
-	p.sendAs(payload, collapseID, "alert", "10")
+// send alerts every device whose settings take it (nil: all of them).
+func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
+	p.sendAs(payload, collapseID, "alert", "10", wants)
+}
+
+// prefs is a device's notification settings (defaults when it never set any).
+func (p *Pusher) prefs(id string) NotifyPrefs {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return devicePrefs(p.devices[id].Prefs)
+}
+
+// setPrefs stores a device's notification settings (also for a device that has not registered a token yet).
+func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error {
+	raw, _ := json.Marshal(prefs)
+	p.mu.Lock()
+	d, ok := p.devices[id]
+	if !ok {
+		d = Device{DeviceID: id}
+	}
+	d.Prefs = raw
+	p.devices[id] = d
+	p.mu.Unlock()
+	if p.store != nil {
+		return p.store.SetDevicePrefs(context.Background(), id, raw)
+	}
+	return nil
 }
 
 // ready reports whether pushes can go anywhere (APNs key loaded and a device registered).
@@ -139,17 +165,17 @@ func (p *Pusher) ready() bool {
 // wake sends a silent background push: iOS gives the app ~30 s to connect and run a pending phone_* call.
 // Best effort: the system throttles these and never delivers them to a force-quit app.
 func (p *Pusher) wake(reason string) {
-	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5")
+	p.sendAs(map[string]any{"aps": map[string]any{"content-available": 1}, "jarvis_wake": reason}, "", "background", "5", nil)
 }
 
-func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string) {
+func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, wants func(NotifyPrefs) bool) {
 	if p == nil || p.key == nil {
 		return
 	}
 	p.mu.Lock()
 	devices := make([]Device, 0, len(p.devices))
 	for _, d := range p.devices {
-		if d.APNSToken != "" {
+		if d.APNSToken != "" && (wants == nil || wants(devicePrefs(d.Prefs))) {
 			devices = append(devices, d)
 		}
 	}
@@ -207,7 +233,7 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 }
 
 func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
-	p.send(interactionPayload(ix, machine), ix.ID)
+	p.send(interactionPayload(ix, machine), ix.ID, func(p NotifyPrefs) bool { return p.Input })
 }
 
 // interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
@@ -243,7 +269,7 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	}
 }
 
-func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string) {
+func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, wants func(NotifyPrefs) bool) {
 	if text == "" {
 		text = "已完成"
 	}
@@ -254,7 +280,7 @@ func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string) {
 			"thread-id": sessionID,
 		},
 		"machine_id": machineID, "session_id": sessionID,
-	}, "")
+	}, "", wants)
 }
 
 func (p *Pusher) clear(string) {}

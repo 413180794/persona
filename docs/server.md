@@ -51,7 +51,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 | 表 | 内容 |
 | --- | --- |
-| `devices` | 推送设备（APNs token），APNs 返回 410 / BadDeviceToken 时自动删除 |
+| `devices` | 推送设备（APNs token），APNs 返回 410 / BadDeviceToken 时自动删除；`prefs`（jsonb）是这台设备要哪些推送（App 设置 › 通知），注册时不覆盖 |
 | `phone_tools` | iPhone 最近一次声明的 phone_* 工具（手机离线时 Claude 也能看到） |
 | `node_sessions` | 每台机器上 Jarvis 启动过的会话：pane、启动器、目录（node 经 hub RPC `state.load` / `state.put` 读写，Mac 不直连数据库） |
 | `mail_accounts` | 邮箱账号：非敏感字段 jsonb + AES-GCM 密文；密钥 `~/.jarvis/secret.key` 不进数据库 |
@@ -67,13 +67,25 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 | 文件 | 内容 |
 | --- | --- |
-| `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md` |
+| `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`notify`（推送时机，`docs/config.md`） |
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；没有就关闭推送 |
 
 每台机器 `~/.jarvis/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
 
 配对：example-machine 上 `~/.jarvis/bin/jarvisd hub pair` 打印地址、token 和二维码（`jarvis://pair?url=…&token=…`）。
+
+## 推送策略（`hub/push.go`、`hub/notify.go`）
+
+- 需要你（提问 / 计划 / 授权 / 终端）：立即推，`time-sensitive`，带 `category: INTERACTION_<KIND>`（App 注册了对应按钮）。
+  hook 拦下的对话框电脑上的 TUI 不显示，人在电脑前也答不了，所以不等。
+- 做完了：照 Ovis（`github.com/devswha/ovis` 的 `server/push.ts`，MIT）的思路，推送是给不在电脑前的人的：
+  - working → done / idle 后等 `notify.done_delay_seconds`（60 秒）再决定；期间恢复工作就当同一轮（开始时间不变），
+    变成 idle（在 herdr 里看过）或在 App 里看过（`seen_at`）就不推；
+  - 还有后台命令 / 子 Agent 在跑：先不推，等它们回报、Claude 处理完回报的那一轮结束后推一次（`WokeByTask` 的轮次单独出现时不推）；
+  - 一轮的时长 = 第一次进入 working 到最后一次结束；每台设备按自己的设置（`prefs.done`：`off` / `long` / `always`）决定收不收，
+    `long` 只收不短于 `long_turn_seconds` 的；`prefs.input` 关掉就不收「需要你」。
+  - 屏蔽的 Agent、助手这一轮已经用 `notify_user` 推过的，都不推。hub 重启后进行中的轮次从重启后第一次看到它算起。
 
 ## 运维
 

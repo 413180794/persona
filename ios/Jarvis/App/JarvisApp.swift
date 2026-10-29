@@ -226,12 +226,13 @@ final class PushRegistrar {
         #else
         let env = "production"
         #endif
-        let body = APIClient.DeviceBody(deviceID: deviceID, name: UIDevice.current.name, kind: "iphone", apnsToken: hex,
+        let body = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: "iphone", apnsToken: hex,
                                         apnsEnv: env, topic: Bundle.main.bundleIdentifier)
         Task { try? await api.register(device: body) }
     }
 
-    private var deviceID: String {
+    /// This iPhone's id at the hub: its push token and its notification settings hang off it.
+    static var deviceID: String {
         if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: "deviceID")

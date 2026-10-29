@@ -191,7 +191,7 @@ func newTestHub(t *testing.T) *Hub {
 	return &Hub{
 		cfg: cfg, version: "test", logger: log.New(io.Discard, "", 0),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
-		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{},
+		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		push: newPusher(cfg.dir, nil, func(string, ...any) {}),
 	}
 }

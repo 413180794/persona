@@ -457,6 +457,47 @@ nonisolated struct Resolution: Codable, Sendable {
     static let dismissed = Resolution(dismiss: true)
 }
 
+/// One device's push settings, kept by the hub per device (设置 › 通知). The timings come back from the hub's
+/// hub.json "notify" so the page can say what "long" means; they are not sent back.
+nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
+    enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
+    var input: Bool = true
+    var done: Done = .long
+    var longTurnSeconds: Int?
+    var doneDelaySeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case input, done
+        case longTurnSeconds = "long_turn_seconds", doneDelaySeconds = "done_delay_seconds"
+    }
+
+    init(input: Bool = true, done: Done = .long) {
+        self.input = input
+        self.done = done
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        input = try c.decodeIfPresent(Bool.self, forKey: .input) ?? true
+        done = (try? c.decodeIfPresent(Done.self, forKey: .done)) ?? .long
+        longTurnSeconds = try c.decodeIfPresent(Int.self, forKey: .longTurnSeconds)
+        doneDelaySeconds = try c.decodeIfPresent(Int.self, forKey: .doneDelaySeconds)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(input, forKey: .input)
+        try c.encode(done, forKey: .done)
+    }
+
+    /// "1 分钟" / "90 秒": how the page words a duration from the hub.
+    static func duration(_ seconds: Int?) -> String {
+        let s = seconds ?? 60
+        if s >= 60, s % 60 == 0 { return "\(s / 60) 分钟" }
+        return "\(s) 秒"
+    }
+}
+
 nonisolated struct ToolSpec: Codable, Sendable {
     var name: String
     var description: String

@@ -104,6 +104,24 @@ func (h *Hub) routes() http.Handler {
 		h.push.register(d)
 		writeJSON(w, map[string]any{"ok": true})
 	})
+	// Which pushes this device wants (notify.go NotifyPrefs); the app's 设置 › 通知.
+	api.HandleFunc("GET /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, h.prefsView(h.push.prefs(r.PathValue("id"))))
+	})
+	api.HandleFunc("PUT /api/v1/devices/{id}/prefs", func(w http.ResponseWriter, r *http.Request) {
+		prefs := h.push.prefs(r.PathValue("id"))
+		if err := json.NewDecoder(r.Body).Decode(&prefs); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		raw, _ := json.Marshal(prefs)
+		prefs = devicePrefs(raw) // normalizes an unknown "done"
+		if err := h.push.setPrefs(r.PathValue("id"), prefs); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, h.prefsView(prefs))
+	})
 	api.HandleFunc("GET /api/v1/interactions/history", func(w http.ResponseWriter, r *http.Request) {
 		if h.store == nil {
 			writeJSON(w, map[string]any{"interactions": []any{}})

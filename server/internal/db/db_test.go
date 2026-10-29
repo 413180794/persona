@@ -56,6 +56,38 @@ func TestDevices(t *testing.T) {
 	}
 }
 
+// Prefs survive re-registration (the app posts its token on every launch) and can be set before the device has a token.
+func TestDevicePrefs(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if err := d.SetDevicePrefs(ctx, "a", json.RawMessage(`{"done":"off"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "a", Name: "iPhone", APNSToken: "t1"}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.Devices(ctx)
+	if err != nil || len(list) != 1 || list[0].APNSToken != "t1" || string(list[0].Prefs) != `{"done": "off"}` {
+		t.Fatalf("devices = %+v (%s), %v", list, list[0].Prefs, err)
+	}
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "b", Name: "iPad"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range mustDevices(t, d) {
+		if v.DeviceID == "b" && v.Prefs != nil {
+			t.Fatalf("b has prefs %s", v.Prefs)
+		}
+	}
+}
+
+func mustDevices(t *testing.T, d *DB) []Device {
+	t.Helper()
+	list, err := d.Devices(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
+}
+
 func TestPhoneToolsReplace(t *testing.T) {
 	d, ctx := open(t), context.Background()
 	_ = d.ReplacePhoneTools(ctx, []proto.Tool{{Name: "b"}, {Name: "a", InputSchema: json.RawMessage(`{"type":"object"}`)}})

@@ -46,6 +46,7 @@ type Hub struct {
 	snapAt       time.Time
 	wokeAt       time.Time            // last silent push to wake the phone for a tool call
 	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
+	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
 
 	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox inbox    // the unified inbox (inbox.go)
@@ -72,6 +73,7 @@ type Store interface {
 	UpsertDevice(ctx context.Context, d db.Device) error
 	Devices(ctx context.Context) ([]db.Device, error)
 	DeleteDevice(ctx context.Context, id string) error
+	SetDevicePrefs(ctx context.Context, id string, prefs json.RawMessage) error
 	InsertInteraction(ctx context.Context, ix proto.Interaction) error
 	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
 	InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error)
@@ -110,7 +112,7 @@ func Run(ctx context.Context, version string) error {
 	h := &Hub{
 		cfg: cfg, version: version, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
-		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{},
+		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 	}
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {

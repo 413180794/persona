@@ -240,10 +240,15 @@ func (m *Machine) setSessions(list []proto.Session) {
 	for _, s := range m.sessions {
 		before[s.SessionID] = s.Status
 	}
+	now := time.Now()
 	for _, s := range list {
-		// Any agent (herdr or headless, started by Jarvis or not) finishing a turn notifies the phone.
-		if before[s.SessionID] == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle) {
-			go m.notifyFinished(s.SessionID)
+		// Any agent (herdr or headless, started by Jarvis or not) finishing a turn may notify the phone (notify.go).
+		prev, key := before[s.SessionID], m.cfg.ID+"/"+s.SessionID
+		switch {
+		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:
+			m.hub.turns.working(key, now)
+		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
+			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
 		}
 	}
 	m.sessions = list
@@ -432,20 +437,20 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 	return nil, fmt.Errorf("unknown method %s", method)
 }
 
-// notifyFinished pushes "finished" once the agent has stayed done for a moment (status flickers between tool calls).
-func (m *Machine) notifyFinished(id string) {
-	time.Sleep(4 * time.Second)
+// notifyFinished decides, after the delay, whether this end of a turn is worth a push (notify.go) and to which devices.
+func (m *Machine) notifyFinished(id string, gen int) {
+	ncfg := m.hub.cfg.Notify
+	time.Sleep(ncfg.doneDelay())
 	s, ok := m.session(id)
-	if !ok || (s.Status != proto.StatusDone && s.Status != proto.StatusIdle) || m.hub.muted(m.cfg.ID, id) {
-		return
-	}
-	if s.WokeByTask { // a background task's report and what the agent said about it: no ping
+	if !ok {
 		return
 	}
 	m.hub.mu.Lock()
-	pushed := time.Since(m.hub.notified[id]) < 3*time.Minute
+	pushed := time.Since(m.hub.notified[id]) < 3*time.Minute // the assistant already pushed what matters (notify_user)
 	m.hub.mu.Unlock()
-	if pushed { // the assistant already pushed what matters this turn (notify_user)
+	seen := agentState(s, m.hub.seenAt(m.cfg.ID, id)) == proto.StateIdle
+	verdict, took := m.hub.turns.settle(m.cfg.ID+"/"+id, gen, s, seen, m.hub.muted(m.cfg.ID, id), pushed, time.Now(), ncfg.backgroundHold())
+	if verdict != finishPush {
 		return
 	}
 	title := s.Title
@@ -463,5 +468,6 @@ func (m *Machine) notifyFinished(id string) {
 	if text == "" {
 		text = "完成了"
 	}
-	m.hub.push.notifyDone(m.cfg.ID, place, id, "✅ "+title, text)
+	long := ncfg.longTurn()
+	m.hub.push.notifyDone(m.cfg.ID, place, id, "✅ "+title, text, func(p NotifyPrefs) bool { return p.wantsDone(took, long) })
 }

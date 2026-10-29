@@ -127,6 +127,9 @@ type Device struct {
 	APNSEnv   string    `json:"apns_env,omitempty"`
 	Topic     string    `json:"topic,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Prefs is the device's notification settings as JSON (hub decodes it); empty = defaults. Registration
+	// (UpsertDevice) never touches it, only SetDevicePrefs does.
+	Prefs json.RawMessage `json:"-"`
 }
 
 func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
@@ -138,15 +141,28 @@ func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
 }
 
 func (d *DB) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, updated_at FROM devices ORDER BY updated_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Device, error) {
 		var v Device
-		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.UpdatedAt)
+		var prefs []byte
+		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.UpdatedAt, &prefs)
+		if len(prefs) > 0 {
+			v.Prefs = prefs
+		}
 		return v, err
 	})
+}
+
+// SetDevicePrefs stores a device's notification settings. The device may not have registered for push yet (no
+// permission, the simulator): the row is created then and filled in when it does.
+func (d *DB) SetDevicePrefs(ctx context.Context, id string, prefs json.RawMessage) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, updated_at, prefs)
+		VALUES ($1, '', '', '', '', '', now(), $2)
+		ON CONFLICT (device_id) DO UPDATE SET prefs = $2`, id, []byte(prefs))
+	return err
 }
 
 // DeleteDevice forgets a device (e.g. APNs says the token is no longer valid).

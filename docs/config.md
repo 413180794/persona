@@ -140,6 +140,9 @@
   `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；
   `base_url` 拼上 `/v1/messages` 或 `/v1/responses`；`api_key_file` 是 hub 机器上的 key 文件（0600，调用时才读）；`model`；
   `reasoning_effort` 只对 `responses` 生效（比如 `low`）。
+- `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
+  `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）。
+  每台设备要哪些推送是 App 里各自设置的（设置 › 通知，存在 hub 的 `devices.prefs`），不在这里。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
 
 ## 给写代码的人

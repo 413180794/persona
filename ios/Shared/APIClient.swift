@@ -424,6 +424,12 @@ nonisolated struct APIClient: Sendable {
         }
     }
     func register(device: DeviceBody) async throws { try await post("/api/v1/devices", body: device) }
+
+    /// Which pushes this device wants (hub: notify.go).
+    func notifyPrefs(device: String) async throws -> NotifyPrefs { try await get("/api/v1/devices/\(device)/prefs") }
+    func setNotifyPrefs(device: String, _ prefs: NotifyPrefs) async throws -> NotifyPrefs {
+        try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: prefs))
+    }
 }
 
 nonisolated struct AnyEncodable: Encodable {

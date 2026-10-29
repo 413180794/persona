@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var debugOpened = false
     @State private var storage: Int64?
     @State private var debugStorage = false
+    @State private var debugNotifications = false
 
     var body: some View {
         NavigationStack {
@@ -61,8 +62,8 @@ struct SettingsView: View {
                     NavigationLink { PhoneDataView() } label: {
                         Label("手机数据", systemImage: "iphone.gen3")
                     }
-                    Button { UIApplication.shared.open(URL(string: UIApplication.openNotificationSettingsURLString)!) } label: {
-                        Label { Text("通知").foregroundStyle(Color.primary) } icon: { Image(systemName: "bell.badge") }
+                    NavigationLink { NotificationSettingsView() } label: {
+                        Label("通知", systemImage: "bell.badge")
                     }
                 } footer: {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
@@ -116,6 +117,9 @@ struct SettingsView: View {
             // `-openStorage YES` (with `-tab settings`): 存储空间.
             .navigationDestination(isPresented: $debugStorage) { StorageView() }
             .onAppear { if UserDefaults.standard.bool(forKey: "openStorage"), !debugOpened { debugOpened = true; debugStorage = true } }
+            // `-openNotificationSettings YES` (with `-tab settings`): 通知.
+            .navigationDestination(isPresented: $debugNotifications) { NotificationSettingsView() }
+            .onAppear { if UserDefaults.standard.bool(forKey: "openNotificationSettings"), !debugOpened { debugOpened = true; debugNotifications = true } }
             .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
