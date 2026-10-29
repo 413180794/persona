@@ -162,23 +162,6 @@ struct ChatView: View {
                 }
             }
         }
-        // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
-        .task(id: "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)|\(store.version)") {
-            let source = "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)"
-            if scratch.prewarmSource != source {
-                scratch.prewarmSource = source
-                scratch.prewarmedIDs = []
-            }
-            let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
-            guard !items.isEmpty else { return }
-            let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
-            await withTaskCancellationHandler {
-                await warm.value
-            } onCancel: {
-                warm.cancel()
-            }
-            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(items.map(\.id)) }
-        }
         .onChange(of: pane) { _, p in
             showChrome()
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
@@ -789,9 +772,11 @@ struct ChatView: View {
             // inset — at the wrong end once flipped. Not touching it, the list gets no safe area at all (the
             // composer below keeps it off the bottom and the keyboard).
             Color.clear.frame(height: 1)
-            chatScroll()
-                .overlay(alignment: .bottomTrailing) { jumpArrow }
-            footer
+            ChatRegion(name: "ChatTranscript.body") {
+                chatScroll()
+                    .overlay(alignment: .bottomTrailing) { jumpArrow }
+            }
+            ChatRegion(name: "ChatFooter.body") { footer }
         }
         .environment(\.openSubagent) { toolUseID in
             if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
@@ -1029,6 +1014,23 @@ struct ChatView: View {
             scratch.sentHere = Array((scratch.sentHere + store.pending.map(\.text)).suffix(20))
             followsEnd = true
             scrollToEnd(animated: true)
+        }
+        // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
+        .task(id: "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)|\(store.version)") {
+            let source = "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)"
+            if scratch.prewarmSource != source {
+                scratch.prewarmSource = source
+                scratch.prewarmedIDs = []
+            }
+            let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
+            guard !items.isEmpty else { return }
+            let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
+            await withTaskCancellationHandler {
+                await warm.value
+            } onCancel: {
+                warm.cancel()
+            }
+            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(items.map(\.id)) }
         }
     }
 
@@ -2419,6 +2421,18 @@ private struct ListScroll: Equatable {
     var offset: CGFloat
     var height: CGFloat
     var x: CGFloat
+}
+
+private struct ChatRegion<Content: View>: View {
+    let name: StaticString
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event(name)
+        #endif
+        content()
+    }
 }
 
 private struct ChatLiveText: View {
