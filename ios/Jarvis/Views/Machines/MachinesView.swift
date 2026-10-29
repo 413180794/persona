@@ -104,15 +104,20 @@ struct MachineDetailView: View {
         List {
             if let machine {
                 Section {
-                    MachineCard(machine: machine).listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                }
-                Section("运行中的 Claude") {
                     if sessions.isEmpty {
                         Text("没有运行中的会话").foregroundStyle(.secondary)
                     }
                     ForEach(sessions) { s in
                         NavigationLink(value: s.key) { SessionRow(session: s, machine: machine, showMachine: false) }
                     }
+                } header: {
+                    // The card is the header, not a row: as a row it was tappable and pushed this page again.
+                    VStack(alignment: .leading, spacing: 16) {
+                        MachineCard(machine: machine).foregroundStyle(.primary)
+                        Text("运行中的 Claude").padding(.leading, 16) // where the header text sits by default
+                    }
+                    .textCase(nil)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
                 Section {
                     ForEach(launchers) { l in
