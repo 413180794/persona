@@ -117,17 +117,10 @@ struct FlowButtons: View {
 }
 
 /// 「推荐」 beside the option Claude suggests ("… (Recommended)", `QuestionForm.display`): the question panel, the
-/// terminal dialog and the quick answers on the Agents card draw the same tag.
+/// terminal dialog and the quick answers on the Agents card draw the same tag, in the AI's color (it is Claude's
+/// suggestion; the accent would read as something to tap).
 struct RecommendedTag: View {
-    var body: some View {
-        Text("推荐")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Theme.accent.opacity(0.12), in: .capsule)
-            .fixedSize()
-    }
+    var body: some View { Chip(text: "推荐", look: .tint(Theme.ai)) }
 }
 
 enum PlanText {

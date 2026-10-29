@@ -267,7 +267,7 @@ struct InboxRow: View {
                 HStack(spacing: 6) {
                     Text(item.title).font(item.isDone ? .body : .headline).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
-                        Chip(text: label, tint: item.kind == "mention" ? Theme.danger : .secondary).fixedSize()
+                        Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
                     }
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(.footnote).foregroundStyle(.secondary).fixedSize()
@@ -285,11 +285,7 @@ struct InboxRow: View {
                     Spacer(minLength: 0)
                     if item.count > 1 && !item.isDone {
                         // @我 is the accent (it is about you); any other count is neutral.
-                        Text(item.count > 99 ? "99+" : "\(item.count)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(item.kind == "mention" ? Theme.accent : Theme.countBadge, in: .capsule)
+                        CountBadge(count: item.count, look: .solid(item.kind == "mention" ? Theme.accent : Theme.countBadge))
                     }
                 }
                 if showAccount && !item.isLark {

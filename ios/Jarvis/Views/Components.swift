@@ -63,21 +63,87 @@ struct SessionAvatar: View {
     }
 }
 
+/// The app's one small label (not a control): a fact beside other text. Three looks —
+/// `.neutral`: secondary words on a soft gray (a model, a version, a tab, 私聊);
+/// `.tint`: a meaning's words on its soft fill (a state's tone, @我, 推荐 in the AI's color);
+/// `.outline`: secondary words in a hairline (which agent: Claude / Codex).
 struct Chip: View {
+    enum Look {
+        case neutral
+        /// `text` defaults to the color itself; a state passes its tone (`.tone(_:)`).
+        case tint(Color, text: Color? = nil)
+        case outline
+
+        static func tone(_ t: StatusTone) -> Look { .tint(t.tint, text: t.text) }
+    }
+
     var text: String
     var symbol: String?
-    var tint: Color = .secondary
+    var look: Look = .neutral
 
     var body: some View {
         HStack(spacing: 3) {
-            if let symbol { Image(systemName: symbol).font(.system(size: 9, weight: .semibold)) }
+            if let symbol { Image(systemName: symbol).font(.caption2.weight(.semibold)) }
             Text(text).lineLimit(1)
         }
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(tint)
-        .padding(.horizontal, 6)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(words)
+        .padding(.horizontal, 7)
         .padding(.vertical, 2.5)
-        .background(tint.opacity(0.12), in: .capsule)
+        .background(fill, in: .capsule)
+        .overlay { if case .outline = look { Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 0.8) } }
+        .fixedSize()
+    }
+
+    private var words: Color {
+        switch look {
+        case .neutral, .outline: .secondary
+        case .tint(let c, let text): text ?? c
+        }
+    }
+
+    private var fill: Color {
+        switch look {
+        case .neutral: Color.primary.opacity(0.06)
+        case .tint(let c, let text): text == nil ? c.opacity(0.12) : c // a tone's tint is already soft
+        case .outline: .clear
+        }
+    }
+}
+
+/// A count on a row or a section header: bold digits on a capsule, "99+" past 99. `.solid` is white on a color —
+/// `Theme.countBadge` gray, the accent when it is about you (@我); `.tone` is a state's words on its tint.
+struct CountBadge: View {
+    enum Look {
+        case solid(Color)
+        case tone(StatusTone)
+    }
+
+    var count: Int
+    var look: Look = .solid(Theme.countBadge)
+
+    var body: some View {
+        Text(count > 99 ? "99+" : "\(count)")
+            .font(.caption2.weight(.bold).monospacedDigit())
+            .foregroundStyle(words)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(fill, in: .capsule)
+            .fixedSize()
+    }
+
+    private var words: Color {
+        switch look {
+        case .solid: .white
+        case .tone(let t): t.text
+        }
+    }
+
+    private var fill: Color {
+        switch look {
+        case .solid(let c): c
+        case .tone(let t): t.tint
+        }
     }
 }
 

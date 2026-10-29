@@ -49,14 +49,7 @@ struct MachineCard: View {
                     Text(machine.hostname ?? machine.sshHost ?? machine.id).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
                 Spacer()
-                HStack(spacing: 5) {
-                    Circle().fill(machine.online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 8, height: 8)
-                    Text(machine.online ? "在线" : "离线").font(.caption.weight(.semibold))
-                        .foregroundStyle(machine.online ? Theme.positive : .secondary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.05), in: .capsule)
+                Chip(text: machine.online ? "在线" : "离线", symbol: "circle.fill", look: machine.online ? .tint(Theme.positive) : .neutral)
             }
             if machine.online {
                 HStack(spacing: 0) {
@@ -69,7 +62,7 @@ struct MachineCard: View {
                 HStack(spacing: 6) {
                     if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: "cpu") }
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
-                    if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)", tint: Theme.accent) }
+                    if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
                 }
                 if machine.nodeMismatch == true {
                     Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: "exclamationmark.triangle.fill")

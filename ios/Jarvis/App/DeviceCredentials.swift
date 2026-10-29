@@ -92,7 +92,7 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(t.name).lineLimit(1)
-                    if t.id == current { Chip(text: "本机", tint: Theme.accent) }
+                    if t.id == current { Chip(text: "本机", look: .outline) }
                     if t.role == "answer" { Chip(text: "只能回答") }
                 }
                 Text(detail(t)).font(.caption).foregroundStyle(.secondary).lineLimit(1)

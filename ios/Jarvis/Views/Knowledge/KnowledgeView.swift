@@ -122,7 +122,7 @@ struct KBRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(entry.name).font(.body.weight(.semibold)).lineLimit(1)
-                    if let k = entry.projectKind { Chip(text: k, tint: k == "长期" ? Theme.Hue.blue : Theme.accent) }
+                    if let k = entry.projectKind { Chip(text: k, look: k == "长期" ? .tint(Theme.Hue.blue) : .neutral) }
                 }
                 if let line = entry.oneLine, !line.isEmpty {
                     Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
@@ -202,7 +202,7 @@ struct KnowledgeDetailView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         ImportanceBadge(importance: e.importance)
-                        if let k = e.projectKind { Chip(text: k + "项目", tint: k == "长期" ? Theme.Hue.blue : Theme.accent) }
+                        if let k = e.projectKind { Chip(text: k + "项目", look: k == "长期" ? .tint(Theme.Hue.blue) : .neutral) }
                         RelevanceMeter(value: e.relevance)
                         Spacer()
                     }

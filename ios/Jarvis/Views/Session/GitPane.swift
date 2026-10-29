@@ -65,12 +65,7 @@ struct GitPane: View {
     }
 
     private func sync(_ symbol: String, _ n: Int, _ color: Color) -> some View {
-        Label("\(n)", systemImage: symbol)
-            .font(.caption.weight(.bold).monospacedDigit())
-            .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.12), in: .capsule)
+        Chip(text: "\(n)", symbol: symbol, look: color == .secondary ? .neutral : .tint(color)).monospacedDigit()
     }
 
     @ViewBuilder private func changes(_ s: GitStatus) -> some View {
@@ -224,15 +219,8 @@ struct GitCommitRow: View {
             if !refs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
-                        ForEach(refs, id: \.self) { r in
-                            Text(r)
-                                .font(.caption2.weight(.semibold))
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background((r.contains("/") ? Color.secondary : Theme.accent).opacity(0.13), in: .capsule)
-                                .foregroundStyle(r.contains("/") ? Color.secondary : Theme.accent)
-                        }
+                        // A local branch outlined, a remote one (origin/…) plain: refs are facts, not buttons.
+                        ForEach(refs, id: \.self) { r in Chip(text: r, look: r.contains("/") ? .neutral : .outline) }
                     }
                 }
             }

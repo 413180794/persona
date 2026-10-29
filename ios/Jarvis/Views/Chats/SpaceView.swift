@@ -149,14 +149,8 @@ struct SlotCard: View {
         let tone = session.state.tone
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(session.slotLabel ?? "—")
-                    .font(.caption.weight(.bold).monospaced())
-                    .foregroundStyle(tone.text)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(tone.tint, in: .capsule)
-                    .lineLimit(1)
-                AgentTag(label: session.agentLabel)
+                Chip(text: session.slotLabel ?? "—", look: .tone(tone))
+                Chip(text: session.agentLabel, look: .outline)
                 Spacer(minLength: 4)
                 StatusDot(state: session.state, size: 9)
             }

@@ -196,9 +196,9 @@ struct AssistantHome: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ForEach(model.machines.filter(\.online)) { m in
-                    Chip(text: m.name, symbol: m.symbol, tint: .secondary)
+                    Chip(text: m.name, symbol: m.symbol)
                 }
-                Chip(text: "iPhone", symbol: model.live.state == .connected ? "iphone" : "iphone.slash", tint: .secondary)
+                Chip(text: "iPhone", symbol: model.live.state == .connected ? "iphone" : "iphone.slash")
             }
         }
     }
@@ -311,7 +311,7 @@ struct AssistantHistory: View {
                     Button { open(s.key) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                if s.key == model.assistantMain { Chip(text: "主对话", symbol: "house.fill", tint: Theme.accent) }
+                                if s.key == model.assistantMain { Chip(text: "主对话", symbol: "house.fill") }
                                 Text(s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title)
                                     .font(.body.weight(.semibold))
                                     .foregroundStyle(Color.primary)

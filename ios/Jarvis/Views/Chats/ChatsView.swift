@@ -471,14 +471,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
-            if let count {
-                Text("\(count)")
-                    .font(.caption2.weight(.bold).monospacedDigit())
-                    .foregroundStyle(tone.text)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(tone.tint, in: .capsule)
-            }
+            if let count { CountBadge(count: count, look: .tone(tone)) }
         }
     }
 }
@@ -618,15 +611,7 @@ struct IdleFoldRow: View {
                 .fixedSize()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(sessions.prefix(6)) { s in
-                        Text(s.slotLabel ?? s.displayTitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.primary.opacity(0.05), in: .capsule)
-                    }
+                    ForEach(sessions.prefix(6)) { s in Chip(text: s.slotLabel ?? s.displayTitle) }
                 }
             }
             .allowsHitTesting(false)
@@ -767,22 +752,5 @@ struct MachineSectionHeader: View {
             Spacer(minLength: 4)
             StateCounts(group: group)
         }
-    }
-}
-
-
-/// Which coding agent a row is (Claude / Codex): the same quiet outline for every one.
-struct AgentTag: View {
-    var label: String
-
-    var body: some View {
-        Text(label)
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .overlay(Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 0.8))
-            .lineLimit(1)
-            .fixedSize()
     }
 }

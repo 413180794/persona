@@ -268,7 +268,7 @@ struct LauncherPicker: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(l.name).font(.body.weight(.medium).monospaced()).foregroundStyle(.primary)
                             HStack(spacing: 6) {
-                                if let m = l.model, !m.isEmpty { Chip(text: m, tint: Theme.accent) }
+                                if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {
                                     Text(host).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                                 }
@@ -318,7 +318,7 @@ struct DirectoryBrowser: View {
                                 Image(systemName: e.isGit ? "folder.badge.gearshape" : "folder").foregroundStyle(e.isGit ? Theme.accent : .secondary)
                                 Text(e.name).foregroundStyle(.primary)
                                 Spacer()
-                                if e.isGit { Chip(text: "git", tint: Theme.accent) }
+                                if e.isGit { Chip(text: "git") }
                             }
                         }
                     }
