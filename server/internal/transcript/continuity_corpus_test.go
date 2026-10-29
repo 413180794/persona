@@ -34,6 +34,9 @@ var (
 	// simBug puts back a rule the apps had, to show the simulation catches it: "covered0" — a batch continuing from
 	// line 0 (a new session watched from its first line) set no baseline, so holes after it went unnoticed.
 	simBug = flag.String("simbug", "", "")
+	// simRestart: the node restarts once in half the runs (a deploy): the file is opened cold again, by its end when
+	// it is over twice this many bytes, and the clients catch up from what they have.
+	simRestart = flag.Int64("simwindow", 256<<10, "continuity simulation: window size for the restarted node's cold read")
 )
 
 type simClient struct {
@@ -262,6 +265,8 @@ type simResult struct {
 	Steps      int      `json:"steps"`
 	Items      int      `json:"items"`
 	Rewrites   int      `json:"rewrites"`
+	Restarts   int      `json:"restarts"`
+	Windowed   int      `json:"windowed"` // restarts whose cold read was by the end
 	Dropped    int      `json:"dropped"`
 	Fills      int      `json:"fills"`
 	Reloads    int      `json:"reloads"`
@@ -329,7 +334,7 @@ func simulate(t *testing.T, src string, seed int64) (res simResult) {
 	r := &simRun{t: t, f: openCorpusFile(path), rng: rng}
 
 	a, b := newClient("a"), newClient("b")
-	r.subscribe(a) // A opens the chat before the first line is written (a new session)
+	r.subscribe(a)           // A opens the chat before the first line is written (a new session)
 	a.lossless = seed%3 == 0 // one run in three: nothing lost, no rewrite; the stream itself must be the file
 	dropRate := 0.0
 	if !a.lossless {
@@ -341,6 +346,10 @@ func simulate(t *testing.T, src string, seed int64) (res simResult) {
 	rewriteAt := -1.0
 	if !a.lossless && rng.Intn(2) == 0 {
 		rewriteAt = rng.Float64()
+	}
+	restartAt := -1.0
+	if !a.lossless && rng.Intn(2) == 0 {
+		restartAt = rng.Float64()
 	}
 	// Pieces: mostly small (a line being written), sometimes big (a burst after a long tool), sometimes mid-line.
 	steps := max(200, min(3000, len(data)/4096))
@@ -398,6 +407,25 @@ func simulate(t *testing.T, src string, seed int64) (res simResult) {
 				push(b, sent, sp, true)
 			}
 		}
+		if restartAt >= 0 && frac >= restartAt {
+			restartAt = -1
+			res.Restarts++
+			saved := windowBytes
+			windowBytes = *simRestart
+			r.f = openCorpusFile(path)
+			if _, _, err := r.f.RefreshSpan(); err != nil {
+				res.Fails = append(res.Fails, err.Error())
+				return
+			}
+			windowBytes = saved
+			if r.f.base > 0 {
+				res.Windowed++
+			}
+			r.subscribe(a)
+			if bJoined {
+				r.subscribe(b)
+			}
+		}
 		if !bJoined && bCache == nil && frac >= bJoinsAt/2 {
 			// What B's disk cache will hold: A's state at this point.
 			bCache = &simClient{name: "b", history: a.history, covered: a.covered, items: map[string]proto.Item{}}
@@ -421,8 +449,12 @@ func simulate(t *testing.T, src string, seed int64) (res simResult) {
 		r.subscribe(c)
 		r.scrollToStart(c)
 	}
+	saved := windowBytes
+	windowBytes = 1 << 50 // the reference: the whole file read at once (a page of a file read by its end stops early)
 	cold := openCorpusFile(path)
-	if _, err := cold.Refresh(); err != nil {
+	_, err = cold.Refresh()
+	windowBytes = saved
+	if err != nil {
 		res.Fails = append(res.Fails, err.Error())
 		return
 	}
@@ -463,7 +495,7 @@ func mustJSON(items []proto.Item) []byte {
 
 func firstDiff(got, want []proto.Item) string {
 	for i := range min(len(got), len(want)) {
-		if !bytes.Equal(mustJSON(got[i : i+1]), mustJSON(want[i : i+1])) {
+		if !bytes.Equal(mustJSON(got[i:i+1]), mustJSON(want[i:i+1])) {
 			return fmt.Sprintf("#%d got %s/%d want %s/%d", i, got[i].ID, got[i].Seq, want[i].ID, want[i].Seq)
 		}
 	}
@@ -487,4 +519,161 @@ func TestCorpusDumpItems(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+var windowSizes = flag.String("windows", "1048576,8388608", "TestCorpusWindowed: window sizes to try, in bytes")
+
+type windowResult struct {
+	Path     string  `json:"path"`
+	Size     int64   `json:"size"`
+	Window   int64   `json:"window"`
+	Base     int     `json:"base"`
+	Lines    int     `json:"lines"`
+	Items    int     `json:"items"`
+	FullMS   float64 `json:"full_ms"`
+	WindowMS float64 `json:"window_ms"`
+	// FirstPage / FullFirstPage: items on the first page read by the end and read whole (shorter: its budget ran out).
+	FirstPage     int      `json:"first_page"`
+	FullFirstPage int      `json:"full_first_page"`
+	Fails         []string `json:"fails,omitempty"`
+}
+
+// TestCorpusWindowed opens every big corpus file by its end (window.go) and checks it against a full read: the first
+// page, the cold read's own items, full texts of items not parsed yet, every page back to the first line, after_seq
+// forward from a random line, and Meta. It times both cold opens (parse + the first page).
+func TestCorpusWindowed(t *testing.T) {
+	if *corpusDirs == "" {
+		t.Skip("-corpus")
+	}
+	defer func(w int64) { windowBytes = w }(windowBytes)
+	var sizes []int64
+	for _, s := range strings.Split(*windowSizes, ",") {
+		var n int64
+		fmt.Sscan(s, &n)
+		sizes = append(sizes, n)
+	}
+	out, err := os.Create(*corpusOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	enc := json.NewEncoder(out)
+	failed := 0
+	for _, p := range corpusFiles(t) {
+		for _, w := range sizes {
+			st, _ := os.Stat(p)
+			if st.Size() <= 2*w {
+				continue
+			}
+			res := windowedOne(p, w)
+			if len(res.Fails) > 0 {
+				failed++
+			}
+			_ = enc.Encode(res)
+		}
+	}
+	if failed > 0 {
+		t.Errorf("%d windowed reads differ from full ones (see %s)", failed, *corpusOut)
+	}
+}
+
+func windowedOne(p string, w int64) (res windowResult) {
+	res = windowResult{Path: p, Window: w}
+	defer func() {
+		if r := recover(); r != nil {
+			res.Fails = append(res.Fails, fmt.Sprintf("panic: %v", r))
+		}
+	}()
+	fail := func(format string, a ...any) { res.Fails = append(res.Fails, fmt.Sprintf(format, a...)) }
+	open := func(window int64) (*File, []proto.Item, Span, time.Duration) {
+		windowBytes = window
+		t0 := time.Now()
+		f := openCorpusFile(p)
+		fresh, sp, err := f.RefreshSpan()
+		if err != nil {
+			fail("%v", err)
+		}
+		f.PageTurns(0, 2, 2000)
+		return f, fresh, sp, time.Since(t0)
+	}
+	full, _, _, tf := open(1 << 50)
+	f, fresh, sp, tw := open(w)
+	res.FullMS, res.WindowMS = float64(tf.Microseconds())/1000, float64(tw.Microseconds())/1000
+	res.Base, res.Lines = f.base, f.lines
+	st, _ := os.Stat(p)
+	res.Size = st.Size()
+	all, _, _ := full.Page(0, 1<<30)
+	res.Items = len(all)
+	rng := rand.New(rand.NewSource(int64(len(p)) + w))
+	same := func(what string, a, b []byte) {
+		if !bytes.Equal(a, b) {
+			fail("%s differs", what)
+		}
+	}
+	var tail []proto.Item
+	for _, it := range all {
+		if it.Seq > sp.From {
+			tail = append(tail, it)
+		}
+	}
+	same("the cold read's items", mustJSON(proto.WithoutImageData(fresh)), mustJSON(tail))
+	wi, wm, ws := f.PageTurns(0, 2, 2000)
+	fi, fm, fs := full.PageTurns(0, 2, 2000)
+	if msg := pageSuffix(wi, wm, ws, fi, fm, fs); msg != "" {
+		fail("the first page: %s", msg)
+	}
+	res.FirstPage, res.FullFirstPage = len(wi), len(fi)
+	// Full texts / images of items before the window, in a fresh windowed read.
+	if f.base > 0 && len(all) > 0 {
+		g, _, _, _ := open(w)
+		for k := 0; k < 3; k++ {
+			it := all[rng.Intn(len(all))]
+			a, errA := g.Full(it.ID)
+			b, errB := full.Full(it.ID)
+			if (errA == nil) != (errB == nil) || !bytes.Equal(mustJSON([]proto.Item{a}), mustJSON([]proto.Item{b})) {
+				fail("Full(%s) differs", it.ID)
+			}
+		}
+	}
+	// Every page back to the first line.
+	g, _, _, _ := open(w)
+	var got []proto.Item
+	for before := 0; ; {
+		items, more, _ := g.Page(before, 1+rng.Intn(400))
+		got = append(append([]proto.Item(nil), items...), got...)
+		if !more || len(items) == 0 {
+			break
+		}
+		before = items[0].Seq
+	}
+	same("paging back", mustJSON(got), mustJSON(all))
+	// after_seq from a random line (a phone catching up after a node restart).
+	h, _, _, _ := open(w)
+	after := rng.Intn(max(1, res.Lines))
+	got = nil
+	for a := after; ; {
+		items, more, span := h.After(a, 1+rng.Intn(600))
+		if span.From != a {
+			fail("After(%d) span %+v", a, span)
+		}
+		got = append(got, items...)
+		if len(items) > 0 {
+			a = items[len(items)-1].Seq
+		}
+		if !more {
+			break
+		}
+	}
+	var want []proto.Item
+	for _, it := range all {
+		if it.Seq > after {
+			want = append(want, it)
+		}
+	}
+	same(fmt.Sprintf("after_seq %d", after), mustJSON(got), mustJSON(want))
+	// Meta of the whole file.
+	am, _ := json.Marshal(f.Meta())
+	bm, _ := json.Marshal(full.Meta())
+	same("Meta", am, bm)
+	return res
 }

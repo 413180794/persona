@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,4 +281,132 @@ func sameImage(a, b *proto.Image) bool {
 		return a == b
 	}
 	return a.Mime == b.Mime && a.Data == b.Data
+}
+
+// A file opened by its end (window.go) gives exactly what a full read gives: the first page, every page back to the
+// first line, every after_seq page, full texts of items not parsed yet, Meta, and the lines appended after.
+func TestFixtureWindowedEqualsFull(t *testing.T) {
+	defer func(w int64) { windowBytes = w }(windowBytes)
+	windowed := 0
+	for _, fx := range fixtures(t) {
+		data, err := os.ReadFile(fx.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, w := range []int64{int64(len(data)) / 12, int64(len(data)) / 6, int64(len(data)) / 3} {
+			t.Run(fmt.Sprintf("%s/%d", fx.name, w), func(t *testing.T) {
+				// Most of the file, opened cold; then the rest appended.
+				cut := bytes.LastIndexByte(data[:len(data)*3/4], '\n') + 1
+				p := filepath.Join(t.TempDir(), "t.jsonl")
+				if err := os.WriteFile(p, data[:cut], 0o600); err != nil {
+					t.Fatal(err)
+				}
+				windowBytes = 1 << 40
+				full := fx.open(p)
+				if _, err := full.Refresh(); err != nil {
+					t.Fatal(err)
+				}
+				windowBytes = w
+				f := fx.open(p)
+				fresh, sp, err := f.RefreshSpan()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if f.base > 0 {
+					windowed++
+				}
+				all, _, _ := full.Page(0, 1<<30)
+				var tail []proto.Item
+				for _, it := range all {
+					if it.Seq > sp.From {
+						tail = append(tail, it)
+					}
+				}
+				if !bytes.Equal(marshal(t, proto.WithoutImageData(fresh)), marshal(t, tail)) {
+					t.Fatalf("the cold read's items are not the file's after line %d", sp.From)
+				}
+				same := func(what string, a, b any) {
+					t.Helper()
+					if !bytes.Equal(marshal(t, a), marshal(t, b)) {
+						t.Fatalf("%s differs between a windowed and a full read", what)
+					}
+				}
+				wi, wm, ws := f.PageTurns(0, 2, 2000)
+				fi, fm, fs := full.PageTurns(0, 2, 2000)
+				if msg := pageSuffix(wi, wm, ws, fi, fm, fs); msg != "" {
+					t.Fatalf("the first page: %s", msg)
+				}
+				if f.base > 0 && len(all) > 0 { // an item before the window, whole
+					a, errA := f.Full(all[0].ID)
+					b, errB := full.Full(all[0].ID)
+					same("Full of the first item", []any{a, errA == nil}, []any{b, errB == nil})
+				}
+				g := fx.open(p) // again cold, paged back to the first line
+				if _, err := g.Refresh(); err != nil {
+					t.Fatal(err)
+				}
+				var got []proto.Item
+				before := 0
+				for {
+					items, more, _ := g.Page(before, 3)
+					got = append(append([]proto.Item(nil), items...), got...)
+					if !more || len(items) == 0 {
+						break
+					}
+					before = items[0].Seq
+				}
+				same("paging back", got, all)
+				h := fx.open(p) // again cold, read forward from the first line
+				if _, err := h.Refresh(); err != nil {
+					t.Fatal(err)
+				}
+				got = nil
+				for after := 0; ; {
+					items, more, _ := h.After(after, 3)
+					got = append(got, items...)
+					if len(items) > 0 {
+						after = items[len(items)-1].Seq
+					}
+					if !more {
+						break
+					}
+				}
+				same("after_seq", got, all)
+				// The rest of the file arrives; Meta of the whole.
+				fh, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+				_, _ = fh.Write(data[cut:])
+				fh.Close()
+				for _, x := range []*File{f, full} {
+					if _, err := x.Refresh(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				same("the whole file and its Meta", snapshot(f), snapshot(full))
+			})
+		}
+	}
+	if windowed == 0 {
+		t.Fatal("no fixture was opened by its end: the test checks nothing")
+	}
+}
+
+// pageSuffix checks a page read by the end against the same page read whole: the same, or (its parse budget spent)
+// the end of it, saying more is older. "" when it is.
+func pageSuffix(wi []proto.Item, wm bool, ws Span, fi []proto.Item, fm bool, fs Span) string {
+	a, _ := json.Marshal(wi)
+	if len(wi) == len(fi) {
+		b, _ := json.Marshal(fi)
+		if !bytes.Equal(a, b) || wm != fm || ws != fs {
+			return "differs"
+		}
+		return ""
+	}
+	if len(wi) == 0 || len(wi) > len(fi) || !wm || ws.To != fs.To || ws.History != fs.History {
+		return fmt.Sprintf("%d items (more %v, %+v) for %d (%+v)", len(wi), wm, ws, len(fi), fs)
+	}
+	b, _ := json.Marshal(fi[len(fi)-len(wi):])
+	if !bytes.Equal(a, b) {
+		return "not the end of the whole page"
+	}
+	return ""
 }

@@ -943,6 +943,11 @@ type File struct {
 	// cut: where the lines whose stored items were cut down (light) sit in the file, by seq; Full reads them again.
 	// Images used to stay in memory for every session ever opened.
 	cut map[int]lineRef
+	// A big file opened cold is parsed from a window at its end (window.go): lines 1..base are not parsed yet, win
+	// says where they are, and meta covers only the parsed lines (partialMeta) until Meta works it out for the file.
+	base        int
+	win         *window
+	partialMeta bool
 }
 
 type lineRef struct {
@@ -994,6 +999,7 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	ino := inode(st)
 	if st.Size() < f.offset || (f.ino != 0 && ino != 0 && ino != f.ino) { // truncated or replaced: start over
 		f.offset, f.lines, f.partial, f.items, f.cut, f.meta = 0, 0, nil, nil, nil, Meta{Sidechain: f.meta.Sidechain}
+		f.base, f.win, f.partialMeta = 0, nil, false
 		f.firstHash = 0
 		f.gen++
 	}
@@ -1001,6 +1007,16 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	from := f.lines
 	if st.Size() == f.offset {
 		return nil, Span{f.history(), from, from}, nil
+	}
+	if f.offset == 0 && st.Size() > 2*windowBytes {
+		// A big file read cold: its end only (the batch continues from the lines not parsed).
+		fresh, ok, err := f.openWindow(fh, st.Size())
+		if err != nil {
+			return nil, Span{}, err
+		}
+		if ok {
+			return fresh, Span{f.history(), f.base, f.lines}, nil
+		}
 	}
 	if _, err := fh.Seek(f.offset, io.SeekStart); err != nil {
 		return nil, Span{}, err
@@ -1011,6 +1027,7 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	}
 	f.offset += int64(len(data))
 	data = append(f.partial, data...)
+	f.seeNotifications(data)
 	pos := f.offset - int64(len(data)) // where data starts in the file
 	var fresh []proto.Item
 	for {
@@ -1072,7 +1089,7 @@ func (f *File) pageSpan(start, beforeSeq int) Span {
 	if beforeSeq > 0 {
 		sp.To = beforeSeq - 1
 	}
-	if start > 0 {
+	if (start > 0 || f.base > 0) && start < len(f.items) {
 		sp.From = f.items[start].Seq - 1
 	}
 	return sp
@@ -1082,6 +1099,7 @@ func (f *File) pageSpan(start, beforeSeq int) Span {
 func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool, Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ensureItems(beforeSeq, limit)
 	end := f.before(beforeSeq)
 	start := max(end-limit, 0)
 	// Never split a transcript line across pages.
@@ -1089,7 +1107,7 @@ func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool, Span) {
 		start--
 	}
 	out := append([]proto.Item(nil), f.items[start:end]...)
-	return out, start > 0, f.pageSpan(start, beforeSeq)
+	return out, start > 0 || f.base > 0, f.pageSpan(start, beforeSeq)
 }
 
 // PageTurns returns the items before beforeSeq (0 = the end) going back far enough to hold `turns` whole exchanges:
@@ -1097,6 +1115,7 @@ func (f *File) Page(beforeSeq, limit int) ([]proto.Item, bool, Span) {
 func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool, Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ensureTurns(beforeSeq, turns, maxItems)
 	end := f.before(beforeSeq)
 	start, seen := end, 0
 	for start > 0 && seen < turns && end-start < maxItems {
@@ -1109,7 +1128,7 @@ func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool, Sp
 		start--
 	}
 	out := append([]proto.Item(nil), f.items[start:end]...)
-	return out, start > 0, f.pageSpan(start, beforeSeq)
+	return out, start > 0 || f.base > 0, f.pageSpan(start, beforeSeq)
 }
 
 // Full returns an item whole: all of its text and its image data (pages and pushes carry a light copy). The line it
@@ -1119,9 +1138,14 @@ func (f *File) Full(id string) (proto.Item, error) {
 	f.mu.Lock()
 	var it proto.Item
 	found := false
-	for i := len(f.items) - 1; i >= 0; i-- {
-		if f.items[i].ID == id {
-			it, found = f.items[i], true
+	for {
+		for i := len(f.items) - 1; i >= 0; i-- {
+			if f.items[i].ID == id {
+				it, found = f.items[i], true
+				break
+			}
+		}
+		if found || f.loadOlder() == 0 { // an item in lines not parsed yet: parse back to it
 			break
 		}
 	}
@@ -1198,6 +1222,7 @@ func (f *File) reparse(seq int, ref lineRef, scratch *Meta) map[string]proto.Ite
 func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool, span Span) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.ensureAfter(afterSeq)
 	span = Span{History: f.history(), From: afterSeq, To: max(f.lines, afterSeq)}
 	i := 0
 	for i < len(f.items) && f.items[i].Seq <= afterSeq {
@@ -1217,11 +1242,8 @@ func (f *File) After(afterSeq, limit int) (items []proto.Item, more bool, span S
 	return append([]proto.Item(nil), f.items[i:end]...), more, span
 }
 
-func (f *File) Meta() Meta {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.meta
-}
+// Meta is the session-level information of the whole file (for a file opened by its end, worked out on first call).
+func (f *File) Meta() Meta { return f.fullMeta() }
 
 func (f *File) LastSeq() int {
 	f.mu.Lock()

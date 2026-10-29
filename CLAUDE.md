@@ -196,6 +196,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - 改 transcript 解析或同步协议，用真实语料验证（`docs/lanes/msg-render-verification.md`）：`corpus_test.go` 让新旧解析器逐文件对比，
   `continuity_corpus_test.go` 按 App 的规则模拟丢推送 / 补洞 / 重写。语料只放 `~/jarvis-corpus`；活跃会话的文件会一边读一边长，对比前先拷一份快照。
   模拟器里的 App 看真实会话用本机的测试 hub（假 HOME、不连 herdr、独立数据库），别连线上 hub。
+- 大 transcript 冷打开只解析末尾窗口（`transcript/window.go`）。一行解析成什么只通过三样东西依赖前面的行：已显示过的后台任务通知
+  （重复的丢掉）、上一个「! cmd」输入、Codex 同一 item 记两次。改解析器时如果新加了「跨行状态」，必须同时让窗口的起点能重建它
+  （`seeded` / `seeNotifications`），否则窗口读和整份读会不一样；`TestFixtureWindowedEqualsFull` 和语料的 `TestCorpusWindowed` 会抓到。
 - `URLSessionWebSocketTask.sendPing` 的回调只在两个条件都满足时才来：对端的 pong 原样带回 ping 的负载（空 pong 不算），
   而且当时有一个挂着的 `receive`。`scripts/mock_hub.py` 曾回空 pong，App 的心跳就每分钟判一次连接已死、重连（hub 用的 coder/websocket 没问题）。
 - 要分清单击 / 快速双击 / 按住的键（终端键栏的修饰键）别用 `DragGesture(minimumDistance: 0)` 记按下松开：快速双击的第二下它收不到

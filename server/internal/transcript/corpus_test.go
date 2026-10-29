@@ -64,9 +64,9 @@ func openCorpusFile(p string) *File {
 // What a line is, read independently of the parser: for counting the lines that gave no items.
 func lineType(line []byte) string {
 	var e struct {
-		Type       string `json:"type"`
-		Subtype    string `json:"subtype"`
-		Payload    *struct {
+		Type    string `json:"type"`
+		Subtype string `json:"subtype"`
+		Payload *struct {
 			Type string `json:"type"`
 			Item *struct {
 				Type string `json:"type"`
