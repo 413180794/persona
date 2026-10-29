@@ -170,6 +170,9 @@ type Session struct {
 	// it sends no push (the user did not ask for anything).
 	WokeByTask          bool `json:"woke_by_task,omitempty"`
 	PendingInteractions int  `json:"pending_interactions"`
+	// Suggestion is the next message Claude Code proposes after a turn (grey in its empty input box), read off the
+	// screen; gone once the agent works again or a message is sent.
+	Suggestion string `json:"suggestion,omitempty"`
 }
 
 // Item kinds.

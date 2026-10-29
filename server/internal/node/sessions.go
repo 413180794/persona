@@ -393,6 +393,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Status = proto.StatusIdle
 		}
 		n.mu.Unlock()
+		s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
@@ -824,7 +825,7 @@ func (n *Node) revsChanged(list []proto.Session) map[string]int64 {
 func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
-		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued)
+		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}

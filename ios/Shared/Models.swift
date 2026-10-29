@@ -123,6 +123,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var pendingInteractions: Int
     /// Changes whenever the transcript does: the app pulls sessions whose rev it has not synced (`AgentSync`).
     var rev: Int64?
+    /// The next message Claude Code proposes after a turn (grey in its input box on the computer), until it works again.
+    var suggestion: String?
 
     var id: String { machineID + "/" + sessionID }
     var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
@@ -142,7 +144,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", queued, background, loop, subagents,
-             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev
+             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion
     }
 
     init(from decoder: Decoder) throws {
@@ -180,6 +182,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
         rev = try c.decodeIfPresent(Int64.self, forKey: .rev)
+        suggestion = try c.decodeIfPresent(String.self, forKey: .suggestion)
     }
 }
 

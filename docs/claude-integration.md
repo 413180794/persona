@@ -149,3 +149,13 @@ node 的 `session.start`：
 
 后台任务唤醒的那一轮结束时不推「已完成」通知：node 解析时记下最近一轮是不是唤醒开始的（`Meta.LastTurnWake` → `Session.woke_by_task`），
 hub 的 `notifyFinished` 看到就跳过；会话照样变成「完成未看」，只是不弹 iOS 通知（2026-10-26 用户要求）。
+
+## 建议的下一条消息（composer hint）
+
+一轮结束后 Claude Code 可能在空输入框里用灰字（SGR 2）画一条建议的下一句：Tab 采用、Enter 直接发。它**不在 transcript 里**，只在屏幕上：
+`pane read --format ansi` 里是 `❯` 后紧跟 `ESC[2m` 的文字（光标在时第一个字符是反显）。用户打的草稿不是 dim；新会话的 `Try "…"` 也是灰字，不算建议。
+
+- 解析：`server/internal/screen` 的 `ClaudeInput(...).Suggestion`（多行按空格连起来），夹具 `claude-2.1.312-suggestion-171.*`。
+- node（`node/suggestion.go`）：Claude 会话从 working / blocked 变成 idle / done 时，在 0 / 2 / 5 / 10 秒读可见屏（2.1.312 实测一般几秒内出现），
+  读到就停、记在会话上（`proto.Session.Suggestion`）；有草稿就停；再 working、或者从 Jarvis 发消息 / 按键时清掉。不额外高频读屏。
+- 一条简短的回答（「ok」）后不一定有建议；给出几个下一步的回答后基本都有（实测「add all three to the README」）。

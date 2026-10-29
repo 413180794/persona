@@ -241,6 +241,7 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 }
 
 func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, opts sendOpts) error {
+	n.dropSuggestion(id)
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
 		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
@@ -335,6 +336,7 @@ func (n *Node) saveImages(images []proto.Image) ([]string, error) {
 }
 
 func (n *Node) keys(ctx context.Context, id string, keys []string, text string) error {
+	n.dropSuggestion(id) // whatever goes in replaces or sends it
 	pane, err := n.paneFor(ctx, id)
 	if err != nil {
 		return err

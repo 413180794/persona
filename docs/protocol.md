@@ -138,7 +138,7 @@
 | --- | --- |
 | `hello` | `server_version`, `client_id` |
 | `machines` | `machines` |
-| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容） |
+| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
 | `session` | `session`（单个状态变化） |

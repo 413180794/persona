@@ -97,6 +97,8 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
+- Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」，占位文字也换成这条建议；
+  点一下填进输入框（可以改了再发），长按菜单「直接发送」。一打字就消失。无头助手没有 TUI，没有建议。截图：mock 加 `MOCK_SUGGESTION=1`，打开 review 会话。
 - 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
   （或进了排队列表）就换成真消息，失败变红可重发 / 删除。不等网络，任何地方发都不卡。
 - 发的图片：hub 把路径用 `<attached_images>` 标签附在消息后面，App 解析出来在文字上方显示方形缩略图（经 file 接口从会话所在机器读，

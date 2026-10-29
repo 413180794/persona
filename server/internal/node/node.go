@@ -47,6 +47,7 @@ type Node struct {
 	panePIDs map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
 	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
 	terms    map[string]*termStream    // session id -> its terminal streaming to the hub (terminal.go)
+	suggests map[string]*suggestState  // session id -> Claude's suggested next message (suggestion.go)
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)

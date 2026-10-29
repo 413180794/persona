@@ -158,6 +158,9 @@ type Input struct {
 	Text string
 	// Clearable is the draft a single-row box holds, which ctrl+k ctrl+u empty; "" when it cannot be cleared that way.
 	Clearable string
+	// Suggestion is the next message Claude proposes after a turn (grey in an otherwise empty box: Tab takes it,
+	// Enter sends it); rows it wraps onto are joined with a space. Not the new-session tip (`Try "…"`).
+	Suggestion string
 }
 
 // ClaudeInput reads the live input box. ansi is the same screen read with colors ("" when it could not be read):
@@ -197,6 +200,9 @@ func ClaudeInput(ansi string) Input {
 		return in // the tip under NO_COLOR
 	}
 	in.Draft = typed(b, after)
+	if !in.Draft {
+		in.Suggestion = suggestion(b, after)
+	}
 	if in.Draft && len(b.plain) == 1 {
 		row := Plain(b.raw[0])
 		a := strings.TrimPrefix(row, "❯")
@@ -243,6 +249,45 @@ func typed(b *box, after string) bool {
 		}
 	}
 	return cursor && !grey // a cursor over a typed character has nothing grey after it
+}
+
+// suggestion is the grey text after the ❯ of a box with nothing typed (Claude's cursor may sit inverse on its first
+// character), each row trimmed and the rows joined with a space; "" for the new-session tip.
+func suggestion(b *box, after string) string {
+	pill := len([]rune(idePillRE.FindString(after)))
+	prompt, first := false, true
+	var rows []string
+	for _, row := range b.raw {
+		var sb strings.Builder
+		for _, r := range sgrRuns(row) {
+			for _, c := range r.text {
+				if !prompt {
+					prompt = c == '❯'
+					continue
+				}
+				if pill > 0 {
+					pill--
+					continue
+				}
+				if blank(c) {
+					sb.WriteRune(' ')
+					continue
+				}
+				if r.dim || (first && r.inverse) {
+					sb.WriteRune(c)
+				}
+				first = false
+			}
+		}
+		if t := strings.TrimSpace(sb.String()); t != "" {
+			rows = append(rows, t)
+		}
+	}
+	s := strings.Join(rows, " ")
+	if tipRowRE.MatchString(s) {
+		return ""
+	}
+	return s
 }
 
 // ClearKeys empty a one-row Claude input box: the row after the cursor, then before it (Ovis, measured on 2.1.295).

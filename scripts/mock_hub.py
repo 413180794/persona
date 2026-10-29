@@ -348,6 +348,13 @@ MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
 
 
+# MOCK_SUGGESTION=1: the idle review session has Claude's suggested next message (grey in its input box).
+if os.environ.get("MOCK_SUGGESTION"):
+    for s in SESSIONS:
+        if s["session_id"] == REVIEW:
+            s["suggestion"] = "把命名问题修完再跑一遍测试，然后推到 review/naming"
+
+
 def all_sessions():
     return SESSIONS + ASSISTANT
 

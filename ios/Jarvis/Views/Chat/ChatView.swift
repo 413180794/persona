@@ -1481,6 +1481,41 @@ struct ChatSkeleton: View {
 }
 
 /// Message input: text, photos, quick slash commands; turns into a stop button while Claude works.
+/// Claude's suggested next message over the composer: a tap puts it in the box to edit, 直接发送 (long press) sends it.
+struct SuggestionPill: View {
+    var text: String
+    var fill: () -> Void
+    var send: () -> Void
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            fill()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
+                Text(text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 4)
+                Text("采用").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .surface(tint: Theme.accent.opacity(0.06), interactive: true, in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button { Haptics.success(); send() } label: { Label("直接发送", systemImage: "arrow.up.circle") }
+            Button(action: fill) { Label("填入输入框", systemImage: "text.cursor") }
+        } preview: {
+            Text(text).font(.body).padding(16).frame(maxWidth: 320, alignment: .leading)
+        }
+        .accessibilityLabel("Claude 建议：\(text)")
+        .accessibilityHint("填入输入框；长按可直接发送")
+        .accessibilityAction(named: "直接发送", send)
+    }
+}
+
 struct Composer: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
@@ -1505,12 +1540,28 @@ struct Composer: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty
     }
 
+    /// Claude's suggested next message, while the box is empty and the agent waits.
+    private var suggestion: String? {
+        guard !status.isActive, text.isEmpty, images.isEmpty, let s = model.session(key)?.suggestion, !s.isEmpty else { return nil }
+        return s
+    }
+
     private var contexts: Binding<[ContextRef]> {
         Binding(get: { model.composerContexts[key] ?? [] }, set: { model.composerContexts[key] = $0.isEmpty ? nil : $0 })
     }
 
     var body: some View {
         VStack(spacing: 8) {
+            if let suggestion {
+                SuggestionPill(text: suggestion) {
+                    text = suggestion
+                    selection = TextSelection(insertionPoint: suggestion.endIndex) // keep typing after it
+                    focused = true
+                } send: {
+                    Task { await sendText(suggestion) }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if !(model.composerContexts[key] ?? []).isEmpty { ContextChips(refs: contexts) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty {
@@ -1558,7 +1609,7 @@ struct Composer: View {
                 .themedButton()
                 .clipShape(.circle)
 
-                TextField(status.isActive ? "补充说明（会排队发送）" : (placeholder ?? "给 Claude 发消息"), text: textBinding,
+                TextField(status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"), text: textBinding,
                           selection: $selection, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
@@ -1600,6 +1651,7 @@ struct Composer: View {
                 }
             }
         }
+        .animation(.snappy, value: suggestion)
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }

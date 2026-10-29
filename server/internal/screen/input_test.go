@@ -80,3 +80,27 @@ func TestSGRColorIsNotDim(t *testing.T) {
 		t.Fatalf("%+v", runs)
 	}
 }
+
+func TestSuggestion(t *testing.T) {
+	for _, c := range []struct{ name, want string }{
+		{"claude-2.1.312-suggestion-171.ansi", "add all three to the README"},
+		{"claude-2.1.312-suggestion-typed-171.ansi", ""}, // typed over it: a draft, no suggestion
+		{"claude-2.1.312-empty-162.ansi", ""},            // the new-session tip is not one
+		{"claude-2.1.312-cleared-162.ansi", ""},
+		{"claude-2.1.312-typed-162.ansi", ""},
+		{"claude-2.1.312-suggestion-171.txt", ""}, // without colors it cannot be told from a draft
+	} {
+		if got := ClaudeInput(fixture(t, c.name)).Suggestion; got != c.want {
+			t.Errorf("%s: suggestion %q, want %q", c.name, got, c.want)
+		}
+	}
+	if code, in := CheckClaude(fixture(t, "claude-2.1.312-suggestion-171.ansi")); code != "" || in.Draft {
+		t.Fatalf("a suggestion is not a draft: %q", code)
+	}
+	rule := "\x1b[0m\x1b[38;2;136;136;136m" + "────────────────────" + "\x1b[0m"
+	// Under Claude's cursor, wrapped onto a second row.
+	wrapped := rule + "\n❯\u00a0\x1b[7mr\x1b[0m\x1b[2mun the whole test suite again and then\x1b[0m\n  \x1b[2mcommit the fix\x1b[0m\n" + rule + "\n  footer"
+	if in := ClaudeInput(wrapped); in.Draft || in.Suggestion != "run the whole test suite again and then commit the fix" {
+		t.Fatalf("wrapped: %+v", in)
+	}
+}
