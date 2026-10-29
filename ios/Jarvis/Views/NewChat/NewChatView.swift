@@ -192,8 +192,8 @@ struct NewChatView: View {
             }
             .frame(width: 120, alignment: .leading)
             .padding(12)
-            .background(selected ? Theme.accent.opacity(0.14) : Color.primary.opacity(0.04), in: .rect(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
+            .background(selected ? Theme.accent.opacity(0.14) : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
             .opacity(m.online ? 1 : 0.55)
         }
         .buttonStyle(.plain)

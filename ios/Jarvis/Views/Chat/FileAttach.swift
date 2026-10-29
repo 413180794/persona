@@ -192,7 +192,7 @@ struct UploadsBar: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .surface(in: .rect(cornerRadius: 14, style: .continuous))
+                .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
         }
     }

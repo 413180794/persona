@@ -104,7 +104,7 @@ struct Chip: View {
 
     private var fill: Color {
         switch look {
-        case .neutral: Color.primary.opacity(0.06)
+        case .neutral: Theme.Fill.chip
         case .tint(let c, let text): text == nil ? c.opacity(0.12) : c // a tone's tint is already soft
         case .outline: .clear
         }
@@ -190,7 +190,7 @@ struct EmptyStateView: View {
 
 extension View {
     /// Rounded card surface used across lists.
-    func card(padding: CGFloat = 14, radius: CGFloat = 18) -> some View {
+    func card(padding: CGFloat = 14, radius: CGFloat = Theme.Radius.card) -> some View {
         self.padding(padding)
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
@@ -266,7 +266,7 @@ struct CloseAgentSheet: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 16, style: .continuous))
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .padding(.horizontal, 20)
             .padding(.top, 20)
 

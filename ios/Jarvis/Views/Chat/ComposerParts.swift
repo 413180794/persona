@@ -32,7 +32,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
                 .frame(minHeight: 44)
-                .surface(interactive: true, in: .rect(cornerRadius: 22, style: .continuous))
+                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
             if let stop, !canSend {
                 Button(action: stop) {
@@ -66,7 +66,7 @@ struct ComposerImages: View {
             HStack {
                 ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
                     Image(uiImage: pair.0).resizable().scaledToFill().frame(width: 56, height: 56)
-                        .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                        .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         .overlay(alignment: .bottomLeading) {
                             if edit != nil {
                                 Image(systemName: "pencil.tip.crop.circle.fill").font(.caption).foregroundStyle(.white)

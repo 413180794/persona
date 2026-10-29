@@ -95,7 +95,7 @@ struct FilesPane: View {
                 .foregroundStyle(current ? Color.primary : Color.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(current ? Color.primary.opacity(0.07) : .clear, in: .capsule)
+                .background(current ? Theme.Fill.chip : .clear, in: .capsule)
         }
         .buttonStyle(.plain)
         .id(level)

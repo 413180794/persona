@@ -58,7 +58,7 @@ struct MessageShareCard: View {
             .padding(.top, 2)
         }
         .padding(22)
-        .background(dark ? Color(white: 0.11) : .white, in: .rect(cornerRadius: 22, style: .continuous))
+        .background(dark ? Color(white: 0.11) : .white, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .shadow(color: .black.opacity(dark ? 0.4 : 0.08), radius: 16, y: 6)
         .padding(24)
         .frame(width: Self.width)
@@ -107,7 +107,7 @@ extension MarkdownUI.Theme {
                 .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(0.8)) }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+                .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .markdownMargin(top: 4, bottom: 12)
         }
         .table { config in
@@ -137,7 +137,7 @@ struct MessageShareSheet: View {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
-                            .clipShape(.rect(cornerRadius: 18, style: .continuous))
+                            .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                             .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
                     } else {
                         ProgressView().frame(maxWidth: .infinity, minHeight: 240)

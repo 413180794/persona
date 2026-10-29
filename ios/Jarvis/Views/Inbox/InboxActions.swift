@@ -90,7 +90,7 @@ struct InboxDraftSheet: View {
                     TextField("让 AI 改：语气、要点…", text: $instruction, axis: .vertical)
                         .lineLimit(1...3)
                         .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color.secondary.opacity(0.12), in: .rect(cornerRadius: 18))
+                        .background(Color.secondary.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.card))
                         .onSubmit { Task { await load() } }
                     Button { Task { await load() } } label: {
                         Label("重写", systemImage: "arrow.clockwise").labelStyle(.titleAndIcon).lineLimit(1)

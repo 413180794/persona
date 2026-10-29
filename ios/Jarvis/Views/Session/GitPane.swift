@@ -153,7 +153,7 @@ struct GitBadge: View {
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .foregroundStyle(color)
             .frame(width: 20, height: 20)
-            .background(color.opacity(0.14), in: .rect(cornerRadius: 5, style: .continuous))
+            .background(color.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
     }
 
     var color: Color {

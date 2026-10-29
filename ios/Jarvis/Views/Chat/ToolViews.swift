@@ -114,7 +114,7 @@ struct ToolGroupView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.primary.opacity(0.04), in: .capsule)
+                    .background(Theme.Fill.well, in: .capsule)
                 }
                 .buttonStyle(.plain)
                 // Always show the last call: it is what Claude is doing right now.
@@ -203,7 +203,7 @@ struct ToolCallRow: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(grouped ? Color.clear : Color.primary.opacity(0.035), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(grouped ? Color.clear : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private var pad: CGFloat { grouped ? WorkCardSlice.inset : 10 }
@@ -323,7 +323,7 @@ struct CodeBlock: View {
                     .padding(10)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
+            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             if clipped {
                 Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(.caption.weight(.medium))
             }
@@ -477,7 +477,7 @@ struct DiffView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground)
-            .clipShape(.rect(cornerRadius: 10, style: .continuous))
+            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             if clipped {
                 Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(.caption.weight(.medium)).lineLimit(1)
             }
@@ -545,8 +545,8 @@ struct Base64Image: View {
         Group {
             if let image {
                 Image(uiImage: image).resizable().scaledToFit()
-                    .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
+                    .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
                     .frame(maxHeight: 280)
                     .contentShape(.rect)
                     .onTapGesture { showViewer = true }
@@ -554,12 +554,12 @@ struct Base64Image: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("图片，点按查看大图")
             } else if let aspect = payload.aspect { // lazy: hold the image's shape while it downloads
-                RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05))
+                RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well)
                     .aspectRatio(aspect, contentMode: .fit)
                     .frame(maxHeight: 280)
                     .overlay { ProgressView().controlSize(.small) }
             } else {
-                RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)).frame(height: 120)
+                RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well).frame(height: 120)
             }
         }
         .fullScreenCover(isPresented: $showViewer) {

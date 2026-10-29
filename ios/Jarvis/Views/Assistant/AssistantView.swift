@@ -128,7 +128,7 @@ struct AssistantHome: View {
                                 .foregroundStyle(Theme.userBubbleText)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
-                                .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+                                .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                         }
                     }
                     .padding(.top, 12)
@@ -153,7 +153,7 @@ struct AssistantHome: View {
                                     Text(s.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
                                 }
                                 .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
-                                .card(padding: 14, radius: 18)
+                                .card(padding: 14)
                             }
                             .buttonStyle(.plain)
                         }
@@ -376,7 +376,7 @@ struct AssistantToolsRow: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(Color.primary.opacity(0.04), in: .capsule)
+                .background(Theme.Fill.well, in: .capsule)
             }
             .buttonStyle(.plain)
             if open {

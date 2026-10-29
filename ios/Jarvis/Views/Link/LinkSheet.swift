@@ -280,7 +280,7 @@ struct ContextCards: View {
                     }
                     .padding(10)
                     .frame(maxWidth: 300, alignment: .leading)
-                    .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 12, style: .continuous))
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                     .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: 3).padding(.vertical, 8) }
                 }
                 .buttonStyle(.plain)

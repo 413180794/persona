@@ -129,7 +129,7 @@ struct MailDetailView: View {
                                     .font(.footnote)
                             }
                         }
-                        .card(padding: 12, radius: 14)
+                        .card(padding: 12)
                     }
                 } else if let error {
                     Text(error).foregroundStyle(Theme.danger)

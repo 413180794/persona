@@ -1076,7 +1076,7 @@ struct ChatView: View {
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 28)
-                .background(Color.primary.opacity(0.06), in: .capsule)
+                .background(Theme.Fill.chip, in: .capsule)
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
@@ -1612,8 +1612,8 @@ struct ChatSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(0..<5, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.primary.opacity(on ? 0.08 : 0.04))
+                RoundedRectangle(cornerRadius: Theme.Radius.control)
+                    .fill(on ? Theme.Fill.chip : Theme.Fill.well)
                     .frame(width: [220, 300, 180, 260, 140][i], height: 14)
                     .frame(maxWidth: .infinity, alignment: i == 0 ? .trailing : .leading)
             }
@@ -1947,13 +1947,13 @@ struct QueueStrip: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
-                    .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 }
                 .disabled(busy)
             }
         }
         .padding(10)
-        .surface(in: .rect(cornerRadius: 18, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -2042,7 +2042,7 @@ struct DevInfoCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .surface(in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .task(id: key) {
             do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
         }
@@ -2197,7 +2197,7 @@ struct WorkCardSlice: View {
     var bottom: Bool
     /// Half the list's spacing (`LazyVStack(spacing: 14)`).
     static let bridge: CGFloat = 7
-    static let radius: CGFloat = 14
+    static let radius = Theme.Radius.card
     /// The rows' side padding inside the card.
     static let inset: CGFloat = 12
     /// Where a tool row's words start (inset + 24 pt icon + 10): separators start there.
@@ -2207,7 +2207,7 @@ struct WorkCardSlice: View {
         let r = Self.radius
         UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
                                bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0, style: .continuous)
-            .fill(Color.primary.opacity(0.04))
+            .fill(Theme.Fill.well)
             .overlay { WorkCardEdges(top: top, bottom: bottom, radius: r).stroke(Theme.cardStroke, lineWidth: 0.5) }
             .padding(.top, top ? 0 : -Self.bridge)
             .padding(.bottom, bottom ? 0 : -Self.bridge)

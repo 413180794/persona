@@ -32,7 +32,7 @@ extension MarkdownUI.Theme {
                     .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(0.8)) }
                     .padding(12)
             }
-            .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .markdownMargin(top: 4, bottom: 12)
         }
         .blockquote { config in
@@ -118,7 +118,7 @@ struct UserBubble: View {
                         .foregroundStyle(Theme.userBubbleText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+                        .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                         .messageLongPress(id: item.id)
                 }
             }
@@ -186,8 +186,8 @@ struct PeerMessage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
-        .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
         .padding(.trailing, 32)
         .messageLongPress(id: item.id)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
@@ -208,10 +208,10 @@ struct PendingBubble: View {
                 HStack(spacing: 6) {
                     Spacer(minLength: 48)
                     ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
-                        Color.primary.opacity(0.06)
+                        Theme.Fill.chip
                             .frame(width: msg.images.count == 1 ? 120 : 76, height: msg.images.count == 1 ? 120 : 76)
                             .overlay { ChatThumbnail(payload: p) }
-                            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     }
                 }
             }
@@ -244,7 +244,7 @@ struct PendingBubble: View {
                     .foregroundStyle(Theme.userBubbleText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+                    .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {
@@ -276,7 +276,7 @@ struct MergedUserBubble: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Theme.userBubbleFill, in: .rect(cornerRadius: 20, style: .continuous))
+            .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
             .messageLongPress(id: items.first?.id ?? "")
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -299,11 +299,11 @@ struct SentPhotos: View {
             ForEach(Array(images.enumerated()), id: \.offset) { i, p in
                 let side: CGFloat = images.count == 1 ? 140 : 84
                 Button { viewer = i } label: {
-                    Color.primary.opacity(0.06)
+                    Theme.Fill.chip
                         .frame(width: side, height: side)
                         .overlay { ChatThumbnail(payload: p) }
-                        .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+                        .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("图片 \(i + 1)，点按查看大图")
@@ -352,7 +352,7 @@ struct AttachedImages: View {
 
     private func thumb(_ path: String) -> some View {
         let side: CGFloat = paths.count == 1 ? 120 : 76
-        return Color.primary.opacity(0.06)
+        return Theme.Fill.chip
             .frame(width: side, height: side)
             .overlay { // the square sets the size; the photo fills and is cropped to it
                 if let p = loaded[path] {
@@ -361,8 +361,8 @@ struct AttachedImages: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            .clipShape(.rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
             .contentShape(.rect)
     }
 }
@@ -460,7 +460,7 @@ struct NoticeRow: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Color.primary.opacity(0.05), in: .capsule)
+            .background(Theme.Fill.well, in: .capsule)
             .frame(maxWidth: .infinity)
     }
 
@@ -475,7 +475,7 @@ struct NoticeRow: View {
         .font(.caption)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.primary.opacity(0.05), in: .capsule)
+        .background(Theme.Fill.well, in: .capsule)
         .frame(maxWidth: .infinity)
     }
 
@@ -527,7 +527,7 @@ struct WakeChip: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.primary.opacity(0.05), in: .capsule)
+            .background(Theme.Fill.well, in: .capsule)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -581,7 +581,7 @@ struct RecapCard: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.primary.opacity(0.05), in: .capsule)
+            .background(Theme.Fill.well, in: .capsule)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -606,7 +606,7 @@ struct RecapStrip: View {
             close()
         } label: {
             HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent).frame(width: 3)
+                Capsule().fill(Theme.accent).frame(width: 3)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
@@ -628,8 +628,8 @@ struct RecapStrip: View {
             .fixedSize(horizontal: false, vertical: true) // as tall as the text: the bar would take all the room
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Theme.accent.opacity(0.08), in: .rect(cornerRadius: 14, style: .continuous))
-            .contentShape(.rect(cornerRadius: 14))
+            .background(Theme.accent.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(.rect(cornerRadius: Theme.Radius.card))
         }
         .buttonStyle(.plain)
         .contextMenu { CopyButton(text: item.text ?? "") }

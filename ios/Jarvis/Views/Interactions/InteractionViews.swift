@@ -196,7 +196,7 @@ struct InteractionPanel: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 16)
-        .surface(in: .rect(cornerRadius: 24, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -277,7 +277,7 @@ struct QuestionForm: View {
             Divider().padding(.leading, 50)
             otherRow(q)
         }
-        .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 16, style: .continuous))
+        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private func option(_ q: Question, _ opt: QuestionOption, number: Int) -> some View {
@@ -286,7 +286,7 @@ struct QuestionForm: View {
         return Button { pick(q, opt) } label: {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
-                    Circle().fill(selected ? Theme.accent : Color.primary.opacity(0.08))
+                    Circle().fill(selected ? Theme.accent : Theme.Fill.chip)
                     if selected {
                         Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                     } else {
@@ -324,7 +324,7 @@ struct QuestionForm: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
-                .background(Color.primary.opacity(0.08), in: .circle)
+                .background(Theme.Fill.chip, in: .circle)
             if writing {
                 TextField("写下你的回答", text: text, axis: .vertical)
                     .lineLimit(1...4)
@@ -460,7 +460,7 @@ struct PlanForm: View {
                 TextField("告诉 Claude 要怎么改…", text: $feedback, axis: .vertical)
                     .lineLimit(2...6)
                     .padding(12)
-                    .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 14, style: .continuous))
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 HStack {
                     Button("取消") { withAnimation { rejecting = false } }.themedButton()
                     Button {
@@ -512,7 +512,7 @@ struct PermissionForm: View {
                 .font(.system(.footnote, design: .monospaced))
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+                .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .textSelection(.enabled)
             HStack {
                 Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
@@ -573,7 +573,7 @@ struct ScreenForm: View {
                     .foregroundStyle(.secondary)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 12, style: .continuous))
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
             let choices = d.options.filter { $0.kind != .chat }
             VStack(spacing: 0) {
@@ -582,7 +582,7 @@ struct ScreenForm: View {
                     if opt.kind == .typeSomething { typeRow(opt) } else { choice(opt) }
                 }
             }
-            .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 16, style: .continuous))
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             HStack(spacing: 16) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
                     Button { send(chat.key, answer(chat)) } label: {
@@ -606,7 +606,7 @@ struct ScreenForm: View {
         return Button { send(opt.key, answer(opt)) } label: {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
-                    Circle().fill(sending == opt.key ? Theme.accent : Color.primary.opacity(0.08))
+                    Circle().fill(sending == opt.key ? Theme.accent : Theme.Fill.chip)
                     if sending == opt.key {
                         ProgressView().controlSize(.mini).tint(.white)
                     } else {
@@ -643,7 +643,7 @@ struct ScreenForm: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
-                .background(Color.primary.opacity(0.08), in: .circle)
+                .background(Theme.Fill.chip, in: .circle)
             if writing {
                 TextField("写下你的回答", text: $text, axis: .vertical)
                     .lineLimit(1...4)
@@ -692,7 +692,7 @@ struct ScreenForm: View {
             }
             .textFieldStyle(.plain)
             .padding(10)
-            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             Button {
                 let t = text
                 text = ""
@@ -767,7 +767,7 @@ struct TerminalText: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .defaultScrollAnchor(.bottomLeading)
-        .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
+        .background(Theme.terminalBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
 

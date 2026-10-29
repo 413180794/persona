@@ -37,7 +37,7 @@ struct MachineCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                         .fill((machine.online ? Theme.accent : Color.secondary).opacity(0.12))
                         .frame(width: 52, height: 52)
                     Image(systemName: machine.symbol)
@@ -73,7 +73,7 @@ struct MachineCard: View {
                 Text(err).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             }
         }
-        .card(padding: 16, radius: 22)
+        .card(padding: 16)
     }
 
     private func stat(_ value: String, _ label: String, tint: Color? = nil) -> some View {

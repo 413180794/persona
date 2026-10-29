@@ -171,7 +171,7 @@ struct MessageActionBar: View {
         }
         .padding(.horizontal, 6)
         .frame(height: Self.height)
-        .background(Color(white: 0.17), in: .rect(cornerRadius: 12, style: .continuous))
+        .background(Color(white: 0.17), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
         .environment(\.colorScheme, .dark)
     }

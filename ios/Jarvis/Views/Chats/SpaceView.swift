@@ -40,7 +40,7 @@ struct SiblingMenu: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .frame(height: 36)
-                .background(Color.primary.opacity(0.05), in: .capsule)
+                .background(Theme.Fill.well, in: .capsule)
                 .overlay(alignment: .topTrailing) {
                     if waiting { StatusDot(state: .needsYou, size: 8).offset(x: 1, y: -1) }
                 }
@@ -106,8 +106,8 @@ struct SpaceView: View {
                         }
                         .foregroundStyle(Theme.accent)
                         .frame(maxWidth: .infinity, minHeight: 150)
-                        .background(Theme.accent.opacity(0.06), in: .rect(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
+                        .background(Theme.accent.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Theme.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
                     }
                     .buttonStyle(.plain)
                     .disabled(first == nil)
@@ -165,7 +165,7 @@ struct SlotCard: View {
             if let m = Fmt.model(session.model) { Text(m).font(.caption2).foregroundStyle(.tertiary).lineLimit(1) }
         }
         .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .card(padding: 12, radius: 18)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(session.state == .needsYou ? Theme.needsYou.opacity(0.5) : .clear, lineWidth: 1.5))
+        .card(padding: 12)
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(session.state == .needsYou ? Theme.needsYou.opacity(0.5) : .clear, lineWidth: 1.5))
     }
 }

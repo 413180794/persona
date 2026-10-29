@@ -109,6 +109,74 @@ nonisolated enum Theme {
         static let changed = Color(light: 0x8A6A00, dark: 0xE3B341)
     }
 
+    /// Corner radii: five, plus capsules and circles. Static: the styles differ in color and surface, not in corners
+    /// (`AppStyle.corner` only draws the style previews in 设置).
+    enum Radius {
+        /// Badges, inline code, small marks.
+        static let badge: CGFloat = 6
+        /// Code blocks, thumbnails, segmented controls, small tiles.
+        static let control: CGFloat = 10
+        /// Cards, groups, an open work line, option rows.
+        static let card: CGFloat = 14
+        /// Message bubbles.
+        static let bubble: CGFloat = 20
+        /// Floating panels over the chat (interactions, strips, the key bar), the terminal card, the composer's field.
+        static let panel: CGFloat = 22
+    }
+
+    /// Spacing steps. Pages and the terminal card keep 16 from the screen's edges.
+    enum Space {
+        static let xxs: CGFloat = 2
+        static let xs: CGFloat = 4
+        static let s: CGFloat = 8
+        static let m: CGFloat = 12
+        static let l: CGFloat = 16
+        static let xl: CGFloat = 20
+        static let xxl: CGFloat = 24
+        static let xxxl: CGFloat = 32
+    }
+
+    /// Three grays for backgrounds instead of `Color.primary.opacity(…)`: they are the system fills, so they read in
+    /// dark mode too (5 % white on black was all but invisible). `well` behind icons and quiet rows, `chip` behind
+    /// labels and small controls, `pressed` for a selected or pressed state.
+    enum Fill {
+        #if os(watchOS)
+        static let well = Color.white.opacity(0.08)
+        static let chip = Color.white.opacity(0.12)
+        static let pressed = Color.white.opacity(0.18)
+        #else
+        static let well = Color(uiColor: .quaternarySystemFill)
+        static let chip = Color(uiColor: .tertiarySystemFill)
+        static let pressed = Color(uiColor: .secondarySystemFill)
+        #endif
+    }
+
+    /// Type roles, all Dynamic Type text styles (the size at the default setting in the comment). The terminal grid
+    /// (its own size setting) and the Live Activity (system limits) are the exceptions.
+    enum Font {
+        /// Panels and sheets (20).
+        static let panelTitle = SwiftUI.Font.title3.weight(.semibold)
+        /// A row's title (17); bold for 完成未看.
+        static let rowTitle = SwiftUI.Font.headline
+        /// Messages, Markdown and the user's bubble (17).
+        static let body = SwiftUI.Font.body
+        /// Text in cards (16).
+        static let cardBody = SwiftUI.Font.callout
+        /// A row's preview, tool rows (15).
+        static let preview = SwiftUI.Font.subheadline
+        /// Times, machines, state words (13).
+        static let meta = SwiftUI.Font.footnote
+        /// Labels and counts (12).
+        static let chip = SwiftUI.Font.caption.weight(.medium)
+        /// The smallest, for badges only (11).
+        static let micro = SwiftUI.Font.caption2
+        /// Code, diffs, paths (13 / 12).
+        static let code = SwiftUI.Font.footnote.monospaced()
+        static let codeSmall = SwiftUI.Font.caption.monospaced()
+        /// The assistant's greeting (34).
+        static let greeting = SwiftUI.Font.largeTitle.bold()
+    }
+
     /// Categories with no meaning beyond telling them apart (memory types).
     enum Hue {
         static let blue = Color(light: 0x2E6FD0, dark: 0x5B9BFF)

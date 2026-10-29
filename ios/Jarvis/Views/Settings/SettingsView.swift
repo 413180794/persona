@@ -267,7 +267,7 @@ struct PhoneDataView: View {
                             .font(.body.weight(.medium))
                             .foregroundStyle(.white)
                             .frame(width: 30, height: 30)
-                            .background(Theme.accent.gradient, in: .rect(cornerRadius: 8, style: .continuous))
+                            .background(Theme.accent.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(s.title)
                             Text(s.detail).font(.caption).foregroundStyle(.secondary)
@@ -404,7 +404,7 @@ struct PairView: View {
                             }
                         }
                         .frame(height: 280)
-                        .clipShape(.rect(cornerRadius: 16, style: .continuous))
+                        .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .listRowInsets(EdgeInsets())
                     } footer: {
                         Text("扫描 `jarvisd hub pair` 打印的二维码。")
@@ -610,7 +610,7 @@ private struct StyleCard: View {
         let bubble = Theme.userBubble(style), corner = style.corner * 0.45
         VStack(spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
                 VStack(alignment: .leading, spacing: 6) {
                     RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
                         .frame(height: 16)
@@ -626,7 +626,7 @@ private struct StyleCard: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 120)
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
             VStack(spacing: 1) {
                 HStack(spacing: 3) {
                     if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(accent) }

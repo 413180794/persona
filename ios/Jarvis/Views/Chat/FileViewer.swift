@@ -240,7 +240,7 @@ struct CodeText: View {
 
     var body: some View {
         MonoTextView(text: MonoText.numbered(text))
-            .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
 

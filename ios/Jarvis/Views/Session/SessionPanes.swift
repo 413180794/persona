@@ -50,7 +50,7 @@ struct SessionPaneBar: View {
             }
         }
         .padding(3)
-        .background(Color.primary.opacity(0.05), in: .capsule)
+        .background(Theme.Fill.well, in: .capsule)
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
     }
@@ -81,7 +81,7 @@ private struct PaneSegment: View {
             .font(.system(size: 10, weight: .bold).monospacedDigit())
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(on ? Theme.accent.opacity(0.18) : Color.primary.opacity(0.08), in: .capsule)
+            .background(on ? Theme.accent.opacity(0.18) : Theme.Fill.chip, in: .capsule)
     }
 }
 
@@ -158,7 +158,7 @@ struct TerminalPanel: View {
             screen
             controls
         }
-        .background(Color(hex: side.background), in: .rect(cornerRadius: 16, style: .continuous))
+        .background(Color(hex: side.background), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         // The controls on the terminal take its look: dark keys on the dark theme whatever the app's appearance.
         .environment(\.colorScheme, side.isDark ? .dark : .light)
         .animation(.snappy, value: typing)
@@ -261,8 +261,8 @@ struct TerminalPanel: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(10)
-                .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .stroke(mods.active ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
                 .onSubmit(sendInput)
                 .onChange(of: input) { old, new in
@@ -300,7 +300,7 @@ struct TerminalPanel: View {
 
     private var live: some View {
         liveContent
-            .clipShape(.rect(cornerRadius: 16, style: .continuous))
+            .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(alignment: .bottom) { bottomOverlay }
             .overlay { pinchOverlay }
             .overlay(alignment: .top) {
@@ -692,7 +692,7 @@ struct TerminalTips: View {
         }
         .padding(14)
         .frame(maxWidth: 380, alignment: .leading)
-        .surface(in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
     }
 
@@ -740,7 +740,7 @@ struct TerminalLinkStatus: View {
                 .padding(.leading, 12)
                 .padding(.trailing, 8)
                 .padding(.vertical, 7)
-                .background(tint, in: .rect(cornerRadius: 10, style: .continuous))
+                .background(tint, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .padding([.horizontal, .top], 6)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -803,7 +803,7 @@ struct BackgroundTasksStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .surface(tint: Theme.busy.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(tint: Theme.busy.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 
     private func row(_ t: BackgroundTask) -> some View {
@@ -834,7 +834,7 @@ struct BackgroundTasksStrip: View {
                 }
             }
             .padding(10)
-            .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -987,7 +987,7 @@ struct LoopStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .surface(tint: Theme.loop.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(tint: Theme.loop.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .confirmationDialog("停止这个循环？", isPresented: $confirming, titleVisibility: .visible) {
             Button("停止循环", role: .destructive, action: stop)
         } message: {
@@ -1019,7 +1019,7 @@ struct LoopTickRow: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Color.primary.opacity(0.04), in: .capsule)
+        .background(Theme.Fill.well, in: .capsule)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
@@ -1077,7 +1077,7 @@ struct AgentStrip: View {
             .font(.caption.weight(on ? .semibold : .medium))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(on ? Theme.accent.opacity(0.15) : Color.primary.opacity(0.05), in: .capsule)
+            .background(on ? Theme.accent.opacity(0.15) : Theme.Fill.well, in: .capsule)
             .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.45) : .clear, lineWidth: 1))
             .foregroundStyle(on ? Theme.accent : Color.primary)
         }
@@ -1109,7 +1109,7 @@ struct SubagentFooter: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .surface(in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }
 

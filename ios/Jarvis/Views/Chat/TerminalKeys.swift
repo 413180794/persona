@@ -323,7 +323,7 @@ struct DirectionPad: View {
             }
         }
         .padding(10)
-        .surface(in: .rect(cornerRadius: 28, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
     }
 

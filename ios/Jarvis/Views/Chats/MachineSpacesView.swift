@@ -62,7 +62,7 @@ struct MachineSpacesView: View {
                 .font(.title2)
                 .foregroundStyle(m.online ? Theme.accent : .secondary)
                 .frame(width: 44, height: 44)
-                .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: 12, style: .continuous))
+                .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Circle().fill(m.online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)

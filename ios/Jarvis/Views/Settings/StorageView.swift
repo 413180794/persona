@@ -218,11 +218,11 @@ struct StorageView: View {
                         kind.color.frame(width: max(2, geo.size.width * CGFloat(bytes) / CGFloat(total)))
                     }
                 }
-                if total == 0 { Color.primary.opacity(0.08) }
+                if total == 0 { Theme.Fill.chip }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.08))
-            .clipShape(.rect(cornerRadius: 5, style: .continuous))
+            .background(Theme.Fill.chip)
+            .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
         }
         .frame(height: 12)
         .animation(.snappy, value: usage)
@@ -235,7 +235,7 @@ struct StorageView: View {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(kind == .appData ? Color.gray : kind.color, in: .rect(cornerRadius: 7, style: .continuous))
+                .background(kind == .appData ? Color.gray : kind.color, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(kind.title).lineLimit(1)
                 Text(kind.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)

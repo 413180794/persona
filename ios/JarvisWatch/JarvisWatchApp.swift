@@ -397,7 +397,7 @@ struct WatchSessionView: View {
                         .font(.footnote)
                         .lineLimit(8)
                         .padding(6)
-                        .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: 8))
+                        .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
                         .padding(it.role == "user" ? .leading : .trailing, 14)
                         .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                 }
@@ -510,7 +510,7 @@ struct WatchInboxItemView: View {
                         .font(.footnote)
                         .padding(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.accent.opacity(0.25), in: .rect(cornerRadius: 8))
+                        .background(Theme.accent.opacity(0.25), in: .rect(cornerRadius: Theme.Radius.control))
                     Button {
                         sending = true
                         Task {

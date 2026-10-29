@@ -79,7 +79,7 @@ struct ShortcutsPanel: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 360)
-        .surface(in: .rect(cornerRadius: 22, style: .continuous))
+        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
     }
 }
@@ -329,7 +329,7 @@ struct SuggestionStrip: View {
                     Button { Haptics.tap(); pick(s) } label: {
                         Text(s).font(.system(.footnote, design: .monospaced)).lineLimit(1)
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color.primary.opacity(0.07), in: .capsule)
+                            .background(Theme.Fill.chip, in: .capsule)
                     }
                     .buttonStyle(.plain)
                 }
