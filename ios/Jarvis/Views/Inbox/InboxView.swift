@@ -28,7 +28,6 @@ struct InboxView: View {
     }
 
     private var openItems: [InboxItem] { store.items.filter { !$0.isDone && matches($0) } }
-    private func openItems(_ tier: InboxItem.Tier) -> [InboxItem] { openItems.filter { $0.triage == tier } }
 
     /// Agents (and the assistant) waiting for an answer, an approval or a plan review: they need the user too, so they
     /// head 需要你. Opening one goes to its chat; the Agents tab stays as it is.
@@ -37,9 +36,6 @@ struct InboxView: View {
         return model.pendingInteractions.filter { ix in
             !model.isMuted(ix.sessionKey) && (query.isEmpty || [ix.sessionTitle ?? "", ix.summary ?? "", ix.title].contains { $0.localizedCaseInsensitiveContains(query) })
         }
-    }
-    private var doneItems: [InboxItem] {
-        store.items.filter { $0.isDone && matches($0) }.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
     }
 
     var body: some View {
@@ -85,7 +81,14 @@ struct InboxView: View {
     }
 
     private var list: some View {
-        List {
+        let partition = Dictionary(grouping: store.items.filter(matches), by: \.isDone)
+        let openItems = partition[false] ?? []
+        let byTier = Dictionary(grouping: openItems, by: \.triage)
+        let doneItems = partition[true] ?? []
+        let shownDone = expanded.contains("done")
+            ? doneItems.sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) } : []
+        let waitingAgents = waitingAgents
+        return List {
             filters
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
                 .listRowSeparator(.hidden)
@@ -102,7 +105,7 @@ struct InboxView: View {
             }
             // The AI's triage: 需要你 (and what it has not looked at yet), 知悉即可, 已折叠 (noise).
             ForEach(InboxItem.Tier.allCases, id: \.self) { tier in
-                let items = kind == "agent" ? [] : openItems(tier)
+                let items = kind == "agent" ? [] : byTier[tier] ?? []
                 let agents = tier == .action ? waitingAgents : []
                 if !items.isEmpty || !agents.isEmpty {
                     Section {
@@ -118,7 +121,7 @@ struct InboxView: View {
             }
             if !doneItems.isEmpty {
                 Section {
-                    if expanded.contains("done") { ForEach(doneItems) { row($0) } }
+                    if expanded.contains("done") { ForEach(shownDone) { row($0) } }
                 } header: {
                     sectionHeader("已处理", count: doneItems.count, key: "done", clear: nil)
                 }
