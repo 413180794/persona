@@ -255,6 +255,7 @@ TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_ipad", "name": "iPad", "kind": "phone", "role": "full", "created_at": ago(days=40), "last_seen": ago(days=20),
      "revoked_at": ago(days=2)},
 ]
+KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
 
 INBOX = [
@@ -354,6 +355,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
+        if p == "/mock/keys": return self.send_json({"keys": KEYS})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
@@ -442,6 +444,9 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "电脑上的输入框里有没发出去的内容：「顺便把 README 也更新一下」。这条消息没有发出去，免得拼在一起。",
                                    "code": "input_draft", "delivered": "none", "draft": "顺便把 README 也更新一下",
                                    "clearable": "顺便把 README 也更新一下"}, 409)
+        if p.startswith("/api/v1/sessions/") and p.endswith("/keys"):
+            KEYS.append(json.loads(self.last_body or b"{}"))
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
             for s in all_sessions():

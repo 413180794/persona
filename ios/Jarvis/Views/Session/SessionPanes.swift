@@ -102,6 +102,10 @@ struct TerminalPanel: View {
     @State private var offline = false
     @State private var error: String?
     @State private var input = ""
+    /// The key bar's ctrl / alt / shift: they also apply to what is typed in the text field (ctrl, then c → ctrl+c).
+    @State private var mods = TerminalModifiers()
+    /// The last send: each waits for the one before, so keys pressed quickly reach the terminal in order.
+    @State private var sending: Task<Void, Never>?
     /// When the screen last came back, the latest refresh's failure and how many in a row, and when to try next
     /// (backing off to every 15 seconds while it keeps failing).
     @State private var lastOK: Date?
@@ -118,14 +122,17 @@ struct TerminalPanel: View {
     var body: some View {
         VStack(spacing: 10) {
             screen
-            TerminalKeyBar { keys in Task { await model.keys(key, keys); await refresh() } }
+            TerminalKeyBar(mods: $mods) { keys in send(keys) }
             HStack(spacing: 8) {
-                TextField("发送文字到终端", text: $input)
+                TextField(Self.placeholder(mods), text: $input)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(10)
                     .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(mods.active ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
                     .onSubmit(sendInput)
+                    .onChange(of: input) { old, new in typed(old: old, new: new) }
                 Button(action: sendInput) {
                     Image(systemName: "return").frame(width: 24, height: 24)
                 }
@@ -262,11 +269,42 @@ struct TerminalPanel: View {
         s.isEmpty ? [] : s.trimmingCharacters(in: CharacterSet(charactersIn: "\n")).components(separatedBy: "\n")
     }
 
+    /// The return after the text takes the modifiers that are down (shift+enter: a new line in Claude's box).
     private func sendInput() {
         let t = input
         guard !t.isEmpty else { return }
         input = ""
-        Task { await model.keys(key, ["enter"], text: t); await refresh() }
+        let enter = mods.apply("enter")
+        mods.pressed()
+        send([enter], text: t)
+    }
+
+    /// Keys (and text typed before them) in the order they were pressed; the screen refreshes right after.
+    private func send(_ keys: [String], text: String = "") {
+        let before = sending
+        sending = Task {
+            await before?.value
+            await model.keys(key, keys, text: text)
+            nextTry = .distantPast
+        }
+    }
+
+    /// With a modifier down, a character typed in the field goes out as that key at once (ctrl, c → ctrl+c) instead of
+    /// joining the text; the rest of a paste stays in the field.
+    private func typed(old: String, new: String) {
+        guard mods.active, new.count > old.count, new.hasPrefix(old), let ch = new.dropFirst(old.count).first else { return }
+        let (k, text) = mods.typed(ch)
+        mods.pressed()
+        let rest = String(new.dropFirst(old.count + 1))
+        input = old + rest
+        Haptics.tap()
+        if let k { send([k]) } else if let text { send([], text: text) }
+    }
+
+    static func placeholder(_ mods: TerminalModifiers) -> String {
+        guard mods.active else { return "发送文字到终端" }
+        let down = mods.apply("").dropLast()
+        return "下一个字符按 \(down) 发送"
     }
 }
 

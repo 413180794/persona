@@ -21,3 +21,62 @@ import Testing
         #expect(TerminalLinkStatus.detail(failure: "连不上 hub", nextTry: now.addingTimeInterval(-1), now: now) == "正在重试… · 连不上 hub")
     }
 }
+
+@MainActor struct TerminalModifierTests {
+    @Test func tapArmsForOneKey() {
+        var m = TerminalModifiers()
+        m.tap(.ctrl, quick: false)
+        #expect(m.ctrl == .once && m.apply("c") == "ctrl+c")
+        m.pressed()
+        #expect(m.ctrl == .off && !m.active && m.apply("c") == "c")
+    }
+
+    @Test func doubleTapLocksUntilTappedAgain() {
+        var m = TerminalModifiers()
+        m.tap(.ctrl, quick: false)
+        m.tap(.ctrl, quick: true)
+        #expect(m.ctrl == .locked)
+        m.pressed(); m.pressed()
+        #expect(m.ctrl == .locked)
+        m.tap(.ctrl, quick: false)
+        #expect(m.ctrl == .off)
+    }
+
+    @Test func slowSecondTapDisarms() {
+        var m = TerminalModifiers()
+        m.tap(.alt, quick: false)
+        m.tap(.alt, quick: false)
+        #expect(m.alt == .off)
+    }
+
+    @Test func holdingKeepsItDownUntilLetGo() {
+        var m = TerminalModifiers()
+        m.hold(.ctrl)
+        m.pressed(); m.pressed()
+        #expect(m.ctrl == .held)
+        m.release(.ctrl)
+        #expect(m.ctrl == .off)
+        // Let go without pressing anything: armed for the next key.
+        m.hold(.shift)
+        m.release(.shift)
+        #expect(m.shift == .once)
+    }
+
+    @Test func combinesInHerdrOrder() {
+        var m = TerminalModifiers()
+        m.tap(.shift, quick: false); m.tap(.ctrl, quick: false); m.tap(.alt, quick: false)
+        #expect(m.apply("x") == "ctrl+alt+shift+x")
+        #expect(m.apply("esc") == "esc")
+    }
+
+    @Test func typedCharacters() {
+        var m = TerminalModifiers()
+        m.ctrl = .once
+        #expect(m.typed("C") == ("ctrl+c", nil))
+        #expect(m.typed(" ") == ("ctrl+space", nil))
+        #expect(m.typed("[") == ("ctrl+[", nil))
+        #expect(m.typed("中") == (nil, "中"))
+        m.ctrl = .off; m.shift = .once
+        #expect(m.typed("a") == (nil, "A"))
+    }
+}
