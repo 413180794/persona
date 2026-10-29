@@ -72,7 +72,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	if cfg.AI != nil {
 		model = ai.New(cfg.AI.Over(h.cfg.AI))
 	}
-	e := &kb.Engine{Store: st, Model: model, Owner: h.ownerName(), Logf: h.logf}
+	e := &kb.Engine{Store: st, Model: model, Owner: h.ownerName(), Logf: h.logf, AttachmentDays: cfg.AttachmentDays}
 	if h.lark != nil {
 		e.Sources = append(e.Sources, &larkSource{c: h.lark})
 	}

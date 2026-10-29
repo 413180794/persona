@@ -53,10 +53,13 @@ type Engine struct {
 	Index func(kind, id, name string, t Tagging, oneLine string, updated time.Time)
 
 	// Limits (zero: defaults).
-	ChatsPerRun     int // how many recently active chats an archive run looks at (100)
-	FirstPage       int // how many messages a chat seen for the first time starts with (100)
-	PagesPerChat    int // pages read per chat and run (10)
-	AttachmentBytes int64
+	ChatsPerRun  int // how many recently active chats an archive run looks at (100)
+	FirstPage    int // how many messages a chat seen for the first time starts with (100)
+	PagesPerChat int // pages read per chat and run (10)
+	// AttachmentDays: attachments of older messages are not downloaded (they would be pruned anyway; 30).
+	AttachmentDays int
+
+	failed int // attachment downloads that failed this run (logged once per chat)
 }
 
 func (e *Engine) logf(f string, a ...any) {
@@ -97,7 +100,11 @@ func (e *Engine) Archive(ctx context.Context) ([]string, error) {
 			if ctx.Err() != nil {
 				return changed, ctx.Err()
 			}
+			e.failed = 0
 			n, err := e.archiveChat(ctx, src, sc)
+			if e.failed > 0 {
+				e.logf("%s: %d attachment(s) not downloaded", sc.Name, e.failed)
+			}
 			if err != nil {
 				e.logf("archive %s %s: %v", src.Name(), sc.ID, err)
 				continue
@@ -139,8 +146,10 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 		}
 		var lines []Line
 		for _, m := range msgs {
-			if m.Position != "" && m.Position == cursor {
-				continue // the cursor's own message, if the source includes it
+			// Already archived: the cursor's own message, or (topic groups, read from the newest page each time) anything
+			// not newer than the last archived message.
+			if m.Position != "" && m.Position == cursor || c.Messages > 0 && !m.At.After(c.LastAt) {
+				continue
 			}
 			l := e.line(ctx, src, c, m)
 			if l.Text == "" {
@@ -193,11 +202,18 @@ func (e *Engine) line(ctx context.Context, src Source, c *Chat, m SourceMessage)
 		return Line{}
 	}
 	day := m.At.Local().Format("2006-01-02")
+	if time.Since(m.At) > time.Duration(or(e.AttachmentDays, 30))*24*time.Hour {
+		if len(m.Media) > 0 {
+			text += " [附件]"
+		}
+		return Line{At: m.At, Sender: sender, Text: strings.TrimSpace(text)}
+	}
 	for i, media := range m.Media {
 		name := fmt.Sprintf("%s-%d%s", SafeID(m.ID), i, extOf(media, m.Type))
 		dst := e.Store.path(KindChat, c.ID, "attachments", day, name)
 		if err := src.Download(ctx, media, dst); err != nil {
-			e.logf("attachment %s: %v", m.ID, err)
+			e.failed++
+			text += " [附件]"
 			continue
 		}
 		rel, _ := filepath.Rel(e.Store.path(KindChat, c.ID), dst)

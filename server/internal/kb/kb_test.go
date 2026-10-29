@@ -220,3 +220,37 @@ func TestSlug(t *testing.T) {
 		t.Fatal(s)
 	}
 }
+
+func TestTopicChatNoDuplicates(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	t0 := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	src := &topicSource{msgs: []SourceMessage{msg(0, "a", "one", t0), msg(1, "b", "two", t0.Add(time.Minute))}}
+	e := &Engine{Store: st, Sources: []Source{src}}
+	_, _ = e.Archive(context.Background())
+	src.msgs = append(src.msgs, msg(2, "a", "three", t0.Add(2*time.Minute)))
+	src.at = t0.Add(2 * time.Minute)
+	_, _ = e.Archive(context.Background())
+	c, _ := st.Chat("lark-t")
+	if c.Messages != 3 {
+		t.Fatalf("archived %d lines, want 3", c.Messages)
+	}
+}
+
+// topicSource always returns the newest page and no cursor, like a topic group.
+type topicSource struct {
+	msgs []SourceMessage
+	at   time.Time
+}
+
+func (s *topicSource) Name() string { return "lark" }
+func (s *topicSource) Chats(context.Context, int) ([]SourceChat, error) {
+	at := s.at
+	if at.IsZero() {
+		at = s.msgs[len(s.msgs)-1].At
+	}
+	return []SourceChat{{ID: "t", Name: "话题群", Kind: "group", Topic: true, UpdatedAt: at}}, nil
+}
+func (s *topicSource) Messages(context.Context, SourceChat, string, int) ([]SourceMessage, string, bool, error) {
+	return s.msgs, "", false, nil
+}
+func (s *topicSource) Download(context.Context, string, string) error { return nil }
