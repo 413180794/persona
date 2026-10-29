@@ -30,10 +30,13 @@ struct AssistantView: View {
                 }
             }
             .toolbar {
+                // Plain icons in the text color: the accent is for the page's main action (send), not for the bar.
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
+                        .tint(.primary)
                         .accessibilityLabel("历史对话")
                     NavigationLink { KnowledgeView() } label: { Image(systemName: "books.vertical") }
+                        .tint(.primary)
                         .accessibilityLabel("知识库")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -42,6 +45,7 @@ struct AssistantView: View {
                             withAnimation(.snappy) { model.assistantCurrent = main }
                             Haptics.tap()
                         } label: { Image(systemName: "house") }
+                            .tint(.primary)
                             .accessibilityLabel("回到主对话")
                     }
                     if current != nil {
@@ -49,6 +53,7 @@ struct AssistantView: View {
                             withAnimation(.snappy) { model.assistantCurrent = nil }
                             Haptics.tap()
                         } label: { Image(systemName: "square.and.pencil") }
+                            .tint(.primary)
                             .accessibilityLabel("新对话")
                     }
                 }
@@ -406,10 +411,16 @@ struct AssistantToolsRow: View {
     }
 }
 
-/// Switch the model (launcher) of an assistant conversation: the next message restarts claude with --resume.
-struct AssistantModelMenu: View {
+/// The assistant chat's title: the conversation's name over "launcher · model ⌄", and the menu behind it — which
+/// launcher the next message uses (it used to be a monospaced "claude" chip beside ⋯, repeating the subtitle and
+/// squeezing the title to four characters) and the session info card (what tapping the title did before).
+struct AssistantTitleMenu: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
+    var title: String
+    var subtitle: String
+    var infoShown: Bool
+    var toggleInfo: () -> Void
     @State private var launchers: [Launcher] = []
 
     var body: some View {
@@ -422,20 +433,34 @@ struct AssistantModelMenu: View {
                         Haptics.tap()
                         model.toast = Toast("已切换到 \(l.name)，下一条消息生效", style: .success)
                     } label: {
-                        if l.name == current { Label(title(l), systemImage: "checkmark") } else { Text(title(l)) }
+                        if l.name == current { Label(name(l), systemImage: "checkmark") } else { Text(name(l)) }
                     }
                 }
             }
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: "cpu")
-                Text(current).font(.caption.monospaced()).lineLimit(1)
+            Button(action: toggleInfo) {
+                Label(infoShown ? "收起会话信息" : "会话信息", systemImage: "info.circle")
             }
+        } label: {
+            VStack(spacing: 1) {
+                Text(title).font(.headline).foregroundStyle(.primary).lineLimit(1)
+                HStack(spacing: 3) {
+                    Text(subtitle).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).imageScale(.small)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 260)
+            .contentShape(.rect)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title)，\(subtitle)")
+        .accessibilityHint("切换启动器，或查看会话信息")
         .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? key.machineID)) ?? [] }
     }
 
-    private func title(_ l: Launcher) -> String {
+    private func name(_ l: Launcher) -> String {
         [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
     }
 }

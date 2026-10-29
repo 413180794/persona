@@ -132,10 +132,17 @@ struct ChatView: View {
         }
         .toolbar {
             if style == .assistant {
-                ToolbarItem(placement: .principal) { titleButton }
-                ToolbarItem(placement: .topBarTrailing) { AssistantModelMenu(key: key) }
+                // The title is the menu for the launcher (and the session info); the bar keeps two plain icons,
+                // 新对话 (AssistantView) and ⋯, in the text color: nothing here is the page's main action.
+                ToolbarItem(placement: .principal) {
+                    AssistantTitleMenu(key: key, title: title, subtitle: subtitle, infoShown: showInfo) {
+                        withAnimation(.snappy) { showInfo.toggle() }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu { moreMenuItems } label: { Image(systemName: "ellipsis") }
+                        .tint(.primary)
+                        .accessibilityLabel("更多")
                 }
             }
         }
