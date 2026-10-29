@@ -25,7 +25,7 @@ nonisolated enum StorageKind: String, CaseIterable, Identifiable, Sendable {
         case .agentChats: "每个对话最近两轮，打开时先显示，后台同步也写在这里"
         case .chatImages: "截图等图片，看过一次就不再下载"
         case .feishuMedia: "飞书消息里的图片、视频和文件"
-        case .pageState: "Agents、信息列表和飞书会话最近的消息"
+        case .pageState: "Agents、收件箱列表和飞书会话最近的消息"
         case .web: "App 内打开的网页（不含登录状态）"
         case .network: "系统为网络请求保存的副本"
         case .other: "临时文件和其他缓存"

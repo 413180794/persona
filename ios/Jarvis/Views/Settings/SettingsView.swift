@@ -37,7 +37,7 @@ struct SettingsView: View {
                 } header: {
                     Text("界面风格")
                 } footer: {
-                    Text("整个 App 一起换，包括信息里的飞书页面。")
+                    Text("整个 App 一起换，包括收件箱里的飞书页面。")
                 }
 
                 Section {
@@ -576,28 +576,28 @@ struct ClaudeSettingsView: View {
     }
 }
 
-/// Five looks side by side, each drawn as a tiny screen in its own colors; tap to switch the whole app.
+/// The five looks in a grid, each drawn as a tiny screen in its own colors; tap to switch the whole app. A grid, not a
+/// row: side by side they were 560 pt wide and the last two were off a 402 pt screen with nothing saying so.
 struct StylePicker: View {
     @Environment(AppModel.self) private var model
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3)
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(AppStyle.allCases) { s in
-                    Button {
-                        guard s != model.style else { return }
-                        Haptics.success()
-                        withAnimation(.snappy) { model.style = s }
-                    } label: {
-                        StyleCard(style: s, selected: s == model.style)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(s.title)，\(s.subtitle)")
-                    .accessibilityAddTraits(s == model.style ? .isSelected : [])
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(AppStyle.allCases) { s in
+                Button {
+                    guard s != model.style else { return }
+                    Haptics.success()
+                    withAnimation(.snappy) { model.style = s }
+                } label: {
+                    StyleCard(style: s, selected: s == model.style)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(s.title)，\(s.subtitle)")
+                .accessibilityAddTraits(s == model.style ? .isSelected : [])
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 16)
     }
 }
 
@@ -624,7 +624,8 @@ private struct StyleCard: View {
                 }
                 .padding(10)
             }
-            .frame(width: 92, height: 120)
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
             VStack(spacing: 1) {
                 HStack(spacing: 3) {
@@ -634,7 +635,7 @@ private struct StyleCard: View {
                 Text(style.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .frame(width: 96)
+        .frame(maxWidth: .infinity)
     }
 }
 
