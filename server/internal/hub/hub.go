@@ -53,6 +53,7 @@ type Hub struct {
 	notified     map[string]time.Time // assistant conversation -> when it last pushed with notify_user
 	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
 	live         *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
+	usage        usageBook            // token usage of every machine (usage.go)
 
 	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
 	inbox  inbox     // the unified inbox (inbox.go)

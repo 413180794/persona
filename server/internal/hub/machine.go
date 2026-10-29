@@ -399,6 +399,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 	case "claude.dirs":
 		m.rememberClaudeDirs(params)
+	case "usage":
+		m.hub.usage.apply(m.cfg.ID, params, time.Now())
 	case "interaction.cancel":
 		var p struct {
 			ID string `json:"id"`
