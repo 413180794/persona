@@ -45,13 +45,38 @@ extension MarkdownUI.Theme {
             ScrollView(.horizontal, showsIndicators: false) {
                 config.label
                     .markdownTableBorderStyle(.init(color: Color.primary.opacity(0.12)))
-                    .markdownTableBackgroundStyle(.alternatingRows(Color.clear, Color.primary.opacity(0.03)))
+                    .markdownTableBackgroundStyle(.alternatingRows(Color.clear, Color.primary.opacity(0.03), header: Color.primary.opacity(0.06)))
             }
             .markdownMargin(top: 4, bottom: 12)
         }
         .tableCell { config in
-            config.label.markdownTextStyle { FontSize(.em(0.88)) }.padding(.horizontal, 8).padding(.vertical, 5)
+            // In the horizontal scroll a cell would get unlimited width and run on in one line: wrap at 280 pt.
+            MaxWidthLayout(max: 280) {
+                config.label
+                    .markdownTextStyle {
+                        FontSize(.em(0.88))
+                        if config.row == 0 { FontWeight(.semibold) }
+                    }
+                    .relativeLineSpacing(.em(0.15))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
         }
+}
+
+/// Offers its content at most `max` points of width (the whole `max` when the parent leaves width open), so text wraps
+/// there and narrower content keeps its own size.
+struct MaxWidthLayout: Layout {
+    var max: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let s = subviews.first else { return .zero }
+        return s.sizeThatFits(.init(width: min(proposal.width ?? max, max), height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: .init(width: bounds.width, height: bounds.height))
+    }
 }
 
 extension EnvironmentValues {
