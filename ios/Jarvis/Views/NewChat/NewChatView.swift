@@ -25,6 +25,8 @@ struct NewChatView: View {
     @State private var launchers: [Launcher] = []
     @State private var recent: [RecentDir] = []
     @State private var loading = false
+    /// Machine whose saved defaults were applied; `.task` re-runs when a pushed picker pops, which must not clobber picks.
+    @State private var defaultsFor = ""
     @State private var starting = false
     @State private var error: String?
     @FocusState private var promptFocused: Bool
@@ -209,15 +211,17 @@ struct NewChatView: View {
             let (ls, dirs) = try await (l, d)
             launchers = ls
             recent = dirs.recent ?? []
-            let saved = UserDefaults.standard.string(forKey: "launcher.\(machineID)")
-            mode = UserDefaults.standard.string(forKey: "mode.\(machineID)") ?? ""
-            effort = UserDefaults.standard.string(forKey: "effort.\(machineID)") ?? ""
-            if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
-            else if !ls.contains(where: { $0.name == launcher }) { launcher = ls.first?.name ?? "" }
-            if let preset { cwd = preset.cwd } else {
-                let savedDir = UserDefaults.standard.string(forKey: "cwd.\(machineID)")
-                cwd = savedDir ?? recent.first?.path ?? ""
+            if defaultsFor != machineID {
+                defaultsFor = machineID
+                let saved = UserDefaults.standard.string(forKey: "launcher.\(machineID)")
+                mode = UserDefaults.standard.string(forKey: "mode.\(machineID)") ?? ""
+                effort = UserDefaults.standard.string(forKey: "effort.\(machineID)") ?? ""
+                if let saved, ls.contains(where: { $0.name == saved }) { launcher = saved }
+                if let preset { cwd = preset.cwd } else {
+                    cwd = UserDefaults.standard.string(forKey: "cwd.\(machineID)") ?? recent.first?.path ?? ""
+                }
             }
+            if !ls.contains(where: { $0.name == launcher }) { launcher = ls.first?.name ?? "" }
         } catch {
             self.error = error.shown
         }
