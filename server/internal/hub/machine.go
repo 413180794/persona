@@ -176,6 +176,7 @@ func (m *Machine) connect(ctx context.Context) error {
 	m.hub.logf("[%s] connected: %s %s/%s herdr %s claude %s", m.cfg.ID, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
 	m.hub.broadcastMachines()
 
+	m.configureNode(ctx, peer)
 	var list struct {
 		Sessions []proto.Session `json:"sessions"`
 	}
@@ -372,6 +373,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 				m.hub.logf("[%s] save session state: %v", m.cfg.ID, err)
 			}
 		}
+	case "claude.dirs":
+		m.rememberClaudeDirs(params)
 	case "interaction.cancel":
 		var p struct {
 			ID string `json:"id"`

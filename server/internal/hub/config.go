@@ -24,6 +24,9 @@ type MachineConfig struct {
 	Icon    string `json:"icon,omitempty"`
 	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
 	RemoteBin string `json:"remote_bin,omitempty"`
+	// ClaudeConfigDirs are Claude Code config directories (CLAUDE_CONFIG_DIR of launchers) besides ~/.claude to look
+	// in for sessions; those of running claudes are found by themselves. "~/" is the remote home.
+	ClaudeConfigDirs []string `json:"claude_config_dirs,omitempty"`
 }
 
 // GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy

@@ -36,7 +36,17 @@ func (n *Node) memoryDir(cwd string) string {
 	if real, err := filepath.EvalSymlinks(cwd); err == nil {
 		cwd = real
 	}
-	return filepath.Join(n.projectsDir(), projectKeyRe.ReplaceAllString(cwd, "-"), "memory")
+	key := projectKeyRe.ReplaceAllString(cwd, "-")
+	dirs := n.projectDirs()
+	for _, p := range dirs { // the config directory the assistant's claude actually writes to
+		if _, err := os.Stat(filepath.Join(p, key)); err == nil {
+			return filepath.Join(p, key, "memory")
+		}
+	}
+	if len(dirs) == 0 {
+		return filepath.Join(n.defaultClaudeDir(), "projects", key, "memory")
+	}
+	return filepath.Join(dirs[0], key, "memory")
 }
 
 func (n *Node) assistantMemory(a memoryOp) (any, error) {

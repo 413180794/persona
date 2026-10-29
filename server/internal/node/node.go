@@ -48,6 +48,7 @@ type Node struct {
 	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
+	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 }
 
 func New(version string) (*Node, error) {
@@ -88,6 +89,7 @@ func New(version string) (*Node, error) {
 		modes:    map[string]sessionModes{},
 		driving:  map[string]bool{},
 		events:   newHerdrEvents(),
+		cdirs:    newClaudeDirs(),
 	}
 	n.state = newState()
 	return n, nil
@@ -102,6 +104,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	}
 	n.peer = rpc.New("n", os.Stdout)
 	n.peer.OnRequest = n.handle
+	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
 	go n.loadState(ctx)
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
@@ -209,6 +212,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	switch method {
 	case "node.info":
 		return n.info(ctx), nil
+	case "node.configure":
+		var c struct {
+			ClaudeDirs []string `json:"claude_dirs"`
+		}
+		if err := json.Unmarshal(params, &c); err != nil {
+			return nil, err
+		}
+		n.setKnownClaudeDirs(c.ClaudeDirs)
+		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
 		return map[string]any{"launchers": ls}, err

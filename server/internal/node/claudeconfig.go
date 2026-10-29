@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // ClaudeSetting is one Claude Code /config option the app may change. Only these keys are read or written;
-// everything else in ~/.claude/settings.json is preserved as is.
+// everything else in settings.json (of each config directory, claudedirs.go) is preserved as is.
 type ClaudeSetting struct {
 	Key     string   `json:"key"`
 	Title   string   `json:"title"`
@@ -30,8 +31,23 @@ var claudeSettings = []ClaudeSetting{
 	{Key: "autoUpdatesChannel", Title: "更新渠道", Detail: "Claude Code 自动更新跟随的版本线", Type: "enum", Options: []string{"latest", "stable"}, Default: "latest"},
 }
 
-func (n *Node) claudeSettingsPath() string {
-	p := filepath.Join(n.home, ".claude", "settings.json")
+// claudeSettingsPath is settings.json of the config directory most running claudes use (claudedirs.go).
+func (n *Node) claudeSettingsPath() string { return settingsFile(n.primaryClaudeDir()) }
+
+// claudeSettingsPaths: settings.json of every config directory, each file once. A machine setting applies to all of
+// them, whichever profile a claude runs with.
+func (n *Node) claudeSettingsPaths() []string {
+	var out []string
+	for _, d := range n.claudeConfigDirs() {
+		if p := settingsFile(d); !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func settingsFile(dir string) string {
+	p := filepath.Join(dir, "settings.json")
 	if real, err := filepath.EvalSymlinks(p); err == nil {
 		return real // the file may be a symlink into a dotfiles repo; edit the target
 	}
@@ -39,14 +55,18 @@ func (n *Node) claudeSettingsPath() string {
 }
 
 func (n *Node) readClaudeSettings() (map[string]any, error) {
+	return readSettingsFile(n.claudeSettingsPath())
+}
+
+func readSettingsFile(path string) (map[string]any, error) {
 	raw := map[string]any{}
-	b, err := os.ReadFile(n.claudeSettingsPath())
+	b, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	if len(b) > 0 {
 		if err := json.Unmarshal(b, &raw); err != nil {
-			return nil, fmt.Errorf("~/.claude/settings.json is not valid JSON: %w", err)
+			return nil, fmt.Errorf("%s is not valid JSON: %w", path, err)
 		}
 	}
 	return raw, nil
@@ -98,7 +118,16 @@ func (n *Node) setClaudeSetting(key string, value any) error {
 			}
 		}
 	}
-	raw, err := n.readClaudeSettings()
+	for _, path := range n.claudeSettingsPaths() {
+		if err := writeSetting(path, key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeSetting(path, key string, value any) error {
+	raw, err := readSettingsFile(path)
 	if err != nil {
 		return err
 	}
@@ -111,7 +140,6 @@ func (n *Node) setClaudeSetting(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	path := n.claudeSettingsPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

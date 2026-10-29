@@ -8,6 +8,7 @@ import (
 )
 
 func TestClaudeSettingsKeepOtherKeys(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	home := t.TempDir()
 	n := &Node{home: home}
 	_ = os.MkdirAll(filepath.Join(home, ".claude"), 0o700)

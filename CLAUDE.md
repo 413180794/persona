@@ -169,7 +169,11 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   要精确停在某处就跳过去后按实测位置再修正一两次。倒置列表里的行，XCUITest 拿到的 frame 不对（报在屏幕外），量位置用 App 内的 DEBUG 探针。
 - herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
   加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。
-- node 只认 `~/.claude`（`projects/` 找 transcript、`sessions/<pid>.json` 认窗格、`settings.json` 是「机器设置」改的文件）。启动器要是设了 `CLAUDE_CONFIG_DIR`（多套 profile），重启后 node 找不到 transcript：助手续聊报「Session ID … is already in use」、App 里显示 transcript not found（重启前靠 hook 报来的路径缓存还能用，所以平时看不出来）。在那台机器上把 `~/.claude/projects`、`~/.claude/sessions` 软链到 profile 里对应的目录。
+- Claude Code 的配置目录不一定是 `~/.claude`：启动器设了 `CLAUDE_CONFIG_DIR`（多套 profile）时 transcript、`sessions/<pid>.json`、`settings.json`
+  都在那个目录。node 每 30 秒扫一次正在跑的 claude 进程的环境变量（Linux 读 `/proc`，macOS 一次 `ps -E`），所有目录一起找，
+  找到的目录记进数据库；平时不跑的 profile 写进 `hub.json` 的 `machines[].claude_config_dirs`（`server/internal/node/claudedirs.go`）。
+  以前靠把 `~/.claude/projects`、`sessions` 软链到 profile 绕过，软链留着也没事（按真实路径去重），不用再加。
+  漏掉目录的症状：助手续聊报「Session ID … is already in use」、App 里 transcript not found、herdr 里的 Agent 认不出会话。
 - Claude Code 默认清理 30 天前的 transcript（`cleanupPeriodDays`，启动时做，2026-10-29 一次删掉了这台机器 200 多个会话）：
   想留作解析样本的会话要及时脱敏存成 fixture（`server/internal/transcript/testdata/README.md`）。脱敏只能白名单式，
   「短数字原样保留」这种放行会把 IP 的每一段都放过去（踩过）。

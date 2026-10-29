@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -124,8 +123,6 @@ type quickMeta struct {
 
 const offlineWindow = 7 * 24 * time.Hour
 
-func (n *Node) projectsDir() string { return filepath.Join(n.home, ".claude", "projects") }
-
 func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	n.mu.Lock()
 	m, ok := n.metas[path]
@@ -233,7 +230,7 @@ func (n *Node) transcriptPath(id string) string {
 	if !validID(id) {
 		return ""
 	}
-	matches, _ := filepath.Glob(filepath.Join(n.projectsDir(), "*", id+".jsonl"))
+	matches := n.globProjects("*", id+".jsonl")
 	if len(matches) == 0 {
 		if p := n.codexPath(id); p != "" {
 			matches = []string{p}
@@ -386,7 +383,7 @@ func (n *Node) offline(live map[string]bool) []proto.Session {
 
 func (n *Node) scanOffline() []proto.Session {
 	var out []proto.Session
-	files, _ := filepath.Glob(filepath.Join(n.projectsDir(), "*", "*.jsonl"))
+	files := n.globProjects("*", "*.jsonl")
 	type cand struct {
 		path string
 		st   os.FileInfo
@@ -630,10 +627,6 @@ type panePID struct {
 	checked time.Time
 }
 
-func (n *Node) claudeSessionFile(pid int) string {
-	return filepath.Join(n.home, ".claude", "sessions", strconv.Itoa(pid)+".json")
-}
-
 // bindPane records which session runs in a pane (from start() and from hook events).
 func (n *Node) bindPane(pane, id string) {
 	if pane == "" || !validID(id) {
@@ -653,8 +646,7 @@ func (n *Node) guessSession(a herdr.Agent, taken map[string]herdr.Agent) string 
 	if a.Cwd == "" {
 		return ""
 	}
-	dir := filepath.Join(n.projectsDir(), nonAlnum.ReplaceAllString(a.Cwd, "-"))
-	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	files := n.globProjects(nonAlnum.ReplaceAllString(a.Cwd, "-"), "*.jsonl")
 	title := strings.TrimSpace(a.Title)
 	best, bestT := "", time.Time{}
 	for _, p := range files {

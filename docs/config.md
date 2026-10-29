@@ -133,6 +133,9 @@
 ```
 
 - 第一次运行只写本机一台（`kind: local`，id 是主机名），对外地址是 `http://<主机名>:18660`；其他机器、域名自己加。
+- `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
+  比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
+  这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。
 - `assistant.owner`：「对话」tab 的助手称呼你什么；`assistant.notes`：附在助手说明（`~/.jarvis/assistant/CLAUDE.md`）最后的
   Markdown，写只有你这套环境才有的东西：代码在哪、用哪些 skills / CLI 访问工作数据、哪些目录不能碰。
 - `assistant.machine` / `assistant.launcher`：助手默认跑在哪台机器、用哪个启动器（默认 hub 自己那台、`claude`）；App 设置里改过以后以 App 为准。
