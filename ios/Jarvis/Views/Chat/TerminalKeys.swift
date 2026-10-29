@@ -276,7 +276,7 @@ struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).frame(width: 36)
+                Image(systemName: symbol).font(.subheadline.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.large).frame(width: 36)
             } else {
                 Text(label)
                     .font(Font(TerminalFont.jetbrains.font(size: 14, bold: false))) // the terminal's own JetBrains Mono

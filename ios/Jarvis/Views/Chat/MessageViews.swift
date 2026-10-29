@@ -3,8 +3,10 @@ import SwiftUI
 
 extension MarkdownUI.Theme {
     /// Reading-first markdown: system body text, roomy lists, quiet code blocks.
+    /// The base size is body's (17); MarkdownUI scales it with Dynamic Type (a ScaledMetric relative to .body), so a
+    /// reply and the user's bubble are one size at every setting.
     @MainActor static let jarvis = MarkdownUI.Theme()
-        .text { FontSize(16) }
+        .text { FontSize(17) }
         .code {
             FontFamilyVariant(.monospaced)
             FontSize(.em(0.88))

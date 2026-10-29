@@ -13,6 +13,8 @@ struct FleetLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JarvisActivityAttributes.self) { context in
             FleetLockScreen(state: context.state, stale: context.isStale)
+                // The lock screen is cut at about 160 pt: larger text would push the rows off it.
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .widgetURL(FleetLink.whole(context.state))
                 .activitySystemActionForegroundColor(FleetPalette.accent)
         } dynamicIsland: { context in

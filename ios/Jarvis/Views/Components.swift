@@ -169,7 +169,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: symbol)
-                .font(.system(size: 44, weight: .light))
+                .font(.largeTitle.weight(.light)).imageScale(.large)
                 .foregroundStyle(Theme.accent.gradient)
                 .symbolEffect(.bounce, value: title)
             Text(title).font(.title3.weight(.semibold))

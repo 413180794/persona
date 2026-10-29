@@ -171,7 +171,7 @@ struct ToolCallRow: View {
                             ProgressView().controlSize(.mini).tint(tint)
                         } else {
                             Image(systemName: ToolPresentation.symbol(call.name))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.caption2.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
                                 .foregroundStyle(tint)
                         }
                     }
@@ -318,7 +318,7 @@ struct CodeBlock: View {
         VStack(alignment: .leading, spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(clipped ? lines.prefix(maxLines).joined(separator: "\n") : text)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.caption.monospaced())
                     .textSelection(.enabled)
                     .padding(10)
             }

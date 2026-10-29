@@ -34,7 +34,7 @@ struct SiblingMenu: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "square.stack.3d.up").font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "square.stack.3d.up").font(.footnote.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     Text("\(siblings.count)").font(.footnote.weight(.semibold).monospacedDigit())
                 }
                 .foregroundStyle(.secondary)

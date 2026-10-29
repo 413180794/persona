@@ -336,7 +336,7 @@ struct WelcomeView: View {
                 .scaleEffect(appear ? 1 : 0.8)
                 .opacity(appear ? 1 : 0)
             Text("Jarvis")
-                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .font(.largeTitle.bold())
                 .padding(.top, 24)
             Text("把每台电脑上的 Claude 装进口袋")
                 .font(.title3)

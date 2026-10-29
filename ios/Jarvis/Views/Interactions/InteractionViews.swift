@@ -288,7 +288,7 @@ struct QuestionForm: View {
                 ZStack {
                     Circle().fill(selected ? Theme.accent : Theme.Fill.chip)
                     if selected {
-                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        Image(systemName: "checkmark").font(.caption2.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).foregroundStyle(.white)
                     } else {
                         Text("\(number)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
                     }
@@ -321,7 +321,7 @@ struct QuestionForm: View {
         let text = Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 })
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "pencil")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .background(Theme.Fill.chip, in: .circle)
@@ -640,7 +640,7 @@ struct ScreenForm: View {
     private func typeRow(_ opt: ScreenParser.Dialog.Option) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "pencil")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .background(Theme.Fill.chip, in: .circle)
@@ -760,7 +760,7 @@ struct TerminalText: View {
         let shown = lines.suffix(maxLines).joined(separator: "\n")
         ScrollView([.vertical, .horizontal]) {
             Text(shown)
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.caption2.monospaced())
                 .foregroundStyle(Theme.terminalText)
                 .textSelection(.enabled)
                 .padding(10)

@@ -717,7 +717,7 @@ struct ChatView: View {
         case .chat: chatPane.transition(.move(edge: .leading))
         case .terminal:
             TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
-                .padding(.horizontal, 12).padding(.bottom, 8)
+                .padding(.horizontal, Theme.Space.l).padding(.bottom, 8)
                 .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
@@ -1056,7 +1056,7 @@ struct ChatView: View {
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 34)
+                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
@@ -1092,7 +1092,7 @@ struct ChatView: View {
                         .accessibilityLabel("循环与后台任务，点按查看")
                 }
                 Button { Haptics.tap(); showTerminal = true } label: {
-                    Image(systemName: "terminal").font(.system(size: 15, weight: .semibold)).frame(width: 44, height: 34)
+                    Image(systemName: "terminal").font(.subheadline.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -1108,7 +1108,7 @@ struct ChatView: View {
         let bg = session?.background?.count ?? 0
         return HStack(spacing: 2) {
             Image(systemName: bg > 0 ? "gearshape.2.fill" : "arrow.triangle.2.circlepath")
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: bg > 0)
             if bg > 0 { Text("\(bg)").font(.caption2.weight(.bold).monospacedDigit()) }
         }
@@ -1176,7 +1176,7 @@ struct ChatView: View {
                         HStack(spacing: 3) {
                             if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.caption2.weight(.bold)).imageScale(.small)
                                 .rotationEffect(.degrees(showInfo ? 180 : 0))
                         }
                         .font(.caption)
@@ -1235,7 +1235,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Button { back() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
+                        Image(systemName: "chevron.left").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                             .contentShape(.circle)
                     }
                     .buttonStyle(.plain)
@@ -1247,14 +1247,14 @@ struct ChatView: View {
                     // The terminal comes up from the bottom over the page (TerminalCover); files and Git are a swipe
                     // to the left or the ··· menu away — no tab row (docs/ios.md).
                     Button { Haptics.tap(); showTerminal = true } label: {
-                        Image(systemName: "terminal").font(.system(size: 16, weight: .semibold)).frame(width: 44, height: 44)
+                        Image(systemName: "terminal").font(.callout.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                             .contentShape(.circle)
                     }
                     .buttonStyle(.plain)
                     .surface(interactive: true, in: .circle)
                     .accessibilityLabel("终端")
                     Menu { moreMenuItems } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
+                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                             .contentShape(.circle)
                     }
                     .surface(interactive: true, in: .circle)

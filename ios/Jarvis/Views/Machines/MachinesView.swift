@@ -41,7 +41,7 @@ struct MachineCard: View {
                         .fill((machine.online ? Theme.accent : Color.secondary).opacity(0.12))
                         .frame(width: 52, height: 52)
                     Image(systemName: machine.symbol)
-                        .font(.system(size: 24, weight: .medium))
+                        .font(.title2.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                         .foregroundStyle(machine.online ? Theme.accent : .secondary)
                 }
                 VStack(alignment: .leading, spacing: 3) {

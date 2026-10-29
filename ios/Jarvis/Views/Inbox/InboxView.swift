@@ -329,7 +329,7 @@ struct InboxRow: View {
             .opacity(item.isDone ? 0.6 : 1)
             // The source: Feishu's own blue (the same in both appearances), mail a neutral gray, not the accent.
             Image(systemName: item.isLark ? "bubble.left.fill" : "envelope.fill")
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold)).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
                 .foregroundStyle(.white)
                 .frame(width: 18, height: 18)
                 .background(item.isLark ? Color(hex: 0x3370FF) : Color(uiColor: .systemGray), in: .circle)

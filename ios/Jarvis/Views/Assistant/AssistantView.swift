@@ -188,7 +188,7 @@ struct AssistantHome: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
             AppGlyph(size: 56).padding(.top, 28)
-            Text(greeting).font(.system(size: 32, weight: .bold, design: .rounded))
+            Text(greeting).font(Theme.Font.greeting)
             Text(model.assistantMain == nil
                  ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
                  : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")

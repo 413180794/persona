@@ -114,7 +114,7 @@ struct FilesPane: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: e.dir ? "folder.fill" : FileViewer.symbol(for: e.name))
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundStyle(e.dir ? Theme.accent : Color.secondary)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {

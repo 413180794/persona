@@ -112,9 +112,9 @@ struct ModeChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
+            Image(systemName: symbol).font(.caption2.weight(.semibold))
             Text(text).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
+            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold)).imageScale(.small).opacity(0.6)
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(known ? (tint == .secondary ? Color.primary : tint) : Color.secondary)

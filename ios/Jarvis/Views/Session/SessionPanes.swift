@@ -64,7 +64,7 @@ private struct PaneSegment: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: pane.symbol).font(.system(size: 12, weight: .semibold))
+            Image(systemName: pane.symbol).font(.caption.weight(.semibold))
             Text(pane.title).lineLimit(1).minimumScaleFactor(0.8)
             if let badge { badgeView(badge) }
         }
@@ -78,7 +78,7 @@ private struct PaneSegment: View {
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .bold).monospacedDigit())
+            .font(.caption2.weight(.bold).monospacedDigit())
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
             .background(on ? Theme.accent.opacity(0.18) : Theme.Fill.chip, in: .capsule)
@@ -719,7 +719,7 @@ struct TerminalLinkStatus: View {
             if failure != nil || stale {
                 HStack(spacing: 8) {
                     Image(systemName: failure != nil ? "wifi.exclamationmark" : "clock.arrow.circlepath")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(.caption.weight(.semibold)).lineLimit(1)
                         Text(Self.detail(failure: failure, nextTry: nextTry, now: ctx.date))
@@ -780,7 +780,7 @@ struct BackgroundTasksStrip: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gearshape.2")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.busy)
                         .symbolEffect(.rotate, options: .repeat(.continuous))
                     Text("\(tasks.count) 个后台任务").font(.footnote.weight(.semibold)).lineLimit(1)
@@ -810,13 +810,13 @@ struct BackgroundTasksStrip: View {
         Button { if t.outputFile != nil { openOutput(t) } } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: t.isAgent ? "person.2" : "terminal")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.secondary)
                     .frame(width: 18, height: 18)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(t.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
                     if let cmd = t.command, !cmd.isEmpty, cmd != t.title {
-                        Text(cmd).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(2)
+                        Text(cmd).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
                 Spacer(minLength: 4)
@@ -869,7 +869,7 @@ struct ActivityChips: View {
             HStack(spacing: 6) {
                 if let loop {
                     chip(Theme.loop, text: Theme.loop) {
-                        Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.caption2.weight(.bold))
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(compact ? Self.shortLoopLabel(loop, now: ctx.date) : Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
                         }
@@ -877,7 +877,7 @@ struct ActivityChips: View {
                 }
                 if !background.isEmpty {
                     chip(Theme.busy, text: StatusPalette.working.text) {
-                        Image(systemName: "gearshape.2.fill").font(.system(size: 10, weight: .bold))
+                        Image(systemName: "gearshape.2.fill").font(.caption2.weight(.bold))
                             .symbolEffect(.rotate, options: .repeat(.continuous))
                         Text("后台 \(background.count)").lineLimit(1)
                         if !compact, background.count == 1, let t = background.first {
@@ -956,7 +956,7 @@ struct LoopStrip: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.footnote.weight(.bold))
                     .foregroundStyle(Theme.loop)
                     .symbolEffect(.rotate, options: .repeat(.periodic(delay: 2)))
                 VStack(alignment: .leading, spacing: 1) {
@@ -1010,7 +1010,7 @@ struct LoopTickRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
+            Image(systemName: "arrow.triangle.2.circlepath").font(.caption2.weight(.bold))
             Text("循环唤醒").fontWeight(.semibold)
             if let ts = item.ts { Text(ts.formatted(date: .omitted, time: .shortened)) }
             Text(String((item.text ?? "").dropFirst(5)).trimmingCharacters(in: .whitespaces)).lineLimit(1).foregroundStyle(.tertiary)
@@ -1068,9 +1068,9 @@ struct AgentStrip: View {
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if done {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.positive)
+                    Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundStyle(Theme.positive)
                 } else if let symbol {
-                    Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+                    Image(systemName: symbol).font(.caption2.weight(.semibold))
                 }
                 Text(title).lineLimit(1).frame(maxWidth: 160)
             }
@@ -1095,7 +1095,7 @@ struct SubagentFooter: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: agent.running ? "person.2.wave.2" : "person.2")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 1) {
                 Text("子 Agent · " + (agent.type ?? "Agent")).font(.footnote.weight(.semibold)).lineLimit(1)

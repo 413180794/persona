@@ -187,7 +187,7 @@ struct MessageActionBar: View {
     private func label(_ title: String, _ symbol: String) -> some View {
         VStack(spacing: 5) {
             // Symbols differ in height: a fixed box keeps every label on one line.
-            Image(systemName: symbol).font(.system(size: 17, weight: .medium)).frame(height: 22)
+            Image(systemName: symbol).font(.body.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(height: 22)
             Text(title).font(.caption2).lineLimit(1)
         }
         .foregroundStyle(.white)
