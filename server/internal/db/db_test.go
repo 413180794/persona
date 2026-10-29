@@ -103,19 +103,31 @@ func TestInteractions(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = d.FinishInteraction(ctx, "ix1", "expired", nil) // first outcome wins
-	if err := d.ExpireStaleInteractions(ctx); err != nil {
-		t.Fatal(err)
+	// A hook may still claim a resumable one after a restart, unless it expired.
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix3", MachineID: "example-machine", SessionID: "s", Kind: proto.IxPermission,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour), Resumable: true})
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix4", MachineID: "example-machine", SessionID: "s", Kind: proto.IxPermission,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(-time.Minute), Resumable: true})
+	kept, err := d.ExpireStaleInteractions(ctx)
+	if err != nil || len(kept) != 1 || kept[0].ID != "ix3" || !kept[0].Resumable {
+		t.Fatalf("kept %+v, %v", kept, err)
 	}
 	recs, err := d.Interactions(ctx, "example-machine", "s", 10)
-	if err != nil || len(recs) != 2 {
+	if err != nil || len(recs) != 4 {
 		t.Fatalf("records = %+v, %v", recs, err)
 	}
 	status := map[string]string{}
 	for _, r := range recs {
 		status[r.Interaction.ID] = r.Status
 	}
-	if status["ix1"] != "resolved" || status["ix2"] != "cancelled" {
+	if status["ix1"] != "resolved" || status["ix2"] != "cancelled" || status["ix3"] != "pending" || status["ix4"] != "cancelled" {
 		t.Fatalf("status = %v", status)
+	}
+	if st, res, err := d.InteractionOutcome(ctx, "ix1"); err != nil || st != "resolved" || res == nil || res.Approve == nil || !*res.Approve {
+		t.Fatalf("outcome ix1 %q %+v %v", st, res, err)
+	}
+	if st, res, err := d.InteractionOutcome(ctx, "nope"); err != nil || st != "" || res != nil {
+		t.Fatalf("outcome of a missing one %q %+v %v", st, res, err)
 	}
 }
 

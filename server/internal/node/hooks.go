@@ -3,7 +3,10 @@ package node
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 // SocketPath is where hook and mcp subprocesses reach the node.
@@ -23,6 +27,13 @@ func SocketPath() string {
 // HookTimeout is how long a hook waits for the phone before handing the dialog back to the terminal.
 var HookTimeout = 30 * time.Minute
 
+// ResumeWait is how long a hook whose node went away mid-wait (a hub or node restart) keeps reconnecting to the next
+// node; the hub holds its interaction at least that long (hub.resumeGrace).
+var ResumeWait = 2 * time.Minute
+
+// ErrNoNode: nothing listens on the node socket (no hub connected to this machine).
+var ErrNoNode = errors.New("no jarvis node")
+
 type sockRequest struct {
 	Kind      string          `json:"kind"`
 	Input     json.RawMessage `json:"input,omitempty"`
@@ -31,6 +42,9 @@ type sockRequest struct {
 	Args      json.RawMessage `json:"args,omitempty"`
 	SessionID string          `json:"session_id,omitempty"`
 	Assistant bool            `json:"assistant,omitempty"` // the caller is the assistant's MCP server
+	// Attempt is the hook process's own id, the same on each reconnect; Resume marks those reconnects.
+	Attempt string `json:"attempt,omitempty"`
+	Resume  bool   `json:"resume,omitempty"`
 }
 
 func (n *Node) listenHookSocket(ctx context.Context) (net.Listener, error) {
@@ -108,8 +122,13 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 	var resp any
 	switch req.Kind {
 	case "hook":
-		out := n.handleHook(ctx, req.Input, req.Pane)
-		resp = map[string]any{"output": out}
+		out, err := n.handleHook(ctx, req)
+		if errors.Is(err, errNodeGone) {
+			// This node is going away under a pending question: the hook asks the next one (runHook).
+			resp = map[string]any{"retry": true}
+		} else {
+			resp = map[string]any{"output": out}
+		}
 	case "mcp.tools":
 		var res struct {
 			Tools []proto.Tool `json:"tools"`
@@ -147,26 +166,49 @@ type hookInput struct {
 	Prompt               string          `json:"prompt"`
 }
 
-// handleHook returns the JSON Claude Code should read from the hook's stdout, or nil to let the TUI decide.
-func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string) any {
-	var in hookInput
-	if json.Unmarshal(raw, &in) != nil || n.peer == nil {
-		return nil
+// errNodeGone: the hub connection ended while a hook waited (the node is going away).
+var errNodeGone = errors.New("node going away")
+
+// interactionID is the same for every attempt of one hook call, so a hook that reconnects after a restart finds
+// its interaction again: the tool call it is about, else the hook process's own id.
+func interactionID(in hookInput, attempt string) string {
+	key := in.SessionID + "\x00" + in.HookEventName + "\x00" + in.ToolName + "\x00"
+	switch {
+	case in.ToolUseID != "":
+		key += in.ToolUseID
+	case attempt != "":
+		key += "attempt:" + attempt
+	default: // an older hook that does not reconnect
+		return "ix_" + newUUID()[:12]
 	}
-	n.bindPane(pane, in.SessionID)
+	sum := sha256.Sum256([]byte(key))
+	return "ix_" + hex.EncodeToString(sum[:])[:16]
+}
+
+// handleHook returns the JSON Claude Code should read from the hook's stdout, or nil to let the TUI decide;
+// errNodeGone when this node lost the hub before the phone answered.
+func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
+	var in hookInput
+	if json.Unmarshal(req.Input, &in) != nil || n.peer == nil {
+		return nil, nil
+	}
+	n.bindPane(req.Pane, in.SessionID)
 	if in.TranscriptPath != "" && validID(in.SessionID) {
 		n.mu.Lock()
 		n.paths[in.SessionID] = in.TranscriptPath
 		n.mu.Unlock()
 	}
-	_ = n.peer.Notify("hook.event", map[string]any{
-		"session_id": in.SessionID, "event": in.HookEventName, "tool_name": in.ToolName,
-		"message": in.Message, "last_assistant_message": snippet(in.LastAssistantMessage), "cwd": in.Cwd,
-	})
+	if !req.Resume { // the event was reported on the first attempt
+		_ = n.peer.Notify("hook.event", map[string]any{
+			"session_id": in.SessionID, "event": in.HookEventName, "tool_name": in.ToolName,
+			"message": in.Message, "last_assistant_message": snippet(in.LastAssistantMessage), "cwd": in.Cwd,
+		})
+	}
 
 	ix := proto.Interaction{
-		ID: "ix_" + newUUID()[:12], SessionID: in.SessionID, Cwd: in.Cwd, CreatedAt: time.Now().UTC(),
+		ID: interactionID(in, req.Attempt), SessionID: in.SessionID, Cwd: in.Cwd, CreatedAt: time.Now().UTC(),
 		ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolName: in.ToolName, ToolUseID: in.ToolUseID, ToolInput: in.ToolInput,
+		Resumable: req.Attempt != "",
 	}
 	if p := n.transcriptPath(in.SessionID); p != "" {
 		if st, err := os.Stat(p); err == nil {
@@ -188,22 +230,22 @@ func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string)
 			} `json:"questions"`
 		}
 		if json.Unmarshal(in.ToolInput, &q) != nil || len(q.Questions) == 0 {
-			return nil
+			return nil, nil
 		}
 		ix.Kind = proto.IxQuestion
 		for _, qq := range q.Questions {
 			ix.Questions = append(ix.Questions, proto.Question{Question: qq.Question, Header: qq.Header, MultiSelect: qq.MultiSelect, Options: qq.Options})
 		}
-		res, ok := n.ask(ctx, ix)
-		if !ok || len(res.Answers) == 0 {
-			return nil
+		res, ok, err := n.ask(ctx, ix)
+		if err != nil || !ok || len(res.Answers) == 0 {
+			return nil, err
 		}
 		var input map[string]any
 		_ = json.Unmarshal(in.ToolInput, &input)
 		input["answers"] = res.Answers
 		return map[string]any{"hookSpecificOutput": map[string]any{
 			"hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": input,
-		}}
+		}}, nil
 
 	case in.HookEventName == "PermissionRequest" && in.ToolName == "ExitPlanMode":
 		var p struct {
@@ -211,16 +253,16 @@ func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string)
 		}
 		_ = json.Unmarshal(in.ToolInput, &p)
 		ix.Kind, ix.Plan = proto.IxPlan, p.Plan
-		res, ok := n.ask(ctx, ix)
-		if !ok || res.Approve == nil {
-			return nil
+		res, ok, err := n.ask(ctx, ix)
+		if err != nil || !ok || res.Approve == nil {
+			return nil, err
 		}
 		if !*res.Approve {
 			msg := "用户在手机上打回了这个计划。"
 			if strings.TrimSpace(res.Feedback) != "" {
 				msg += "修改意见：" + res.Feedback
 			}
-			return permissionDecision(map[string]any{"behavior": "deny", "message": msg})
+			return permissionDecision(map[string]any{"behavior": "deny", "message": msg}), nil
 		}
 		mode := res.Mode
 		if mode == "" {
@@ -232,20 +274,20 @@ func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string)
 		return permissionDecision(map[string]any{
 			"behavior": "allow", "updatedInput": input,
 			"updatedPermissions": []any{map[string]any{"type": "setMode", "mode": mode, "destination": "session"}},
-		})
+		}), nil
 
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
-		res, ok := n.ask(ctx, ix)
-		if !ok || res.Allow == nil {
-			return nil
+		res, ok, err := n.ask(ctx, ix)
+		if err != nil || !ok || res.Allow == nil {
+			return nil, err
 		}
 		if !*res.Allow {
 			msg := res.Message
 			if msg == "" {
 				msg = "用户在手机上拒绝了这次调用。"
 			}
-			return permissionDecision(map[string]any{"behavior": "deny", "message": msg})
+			return permissionDecision(map[string]any{"behavior": "deny", "message": msg}), nil
 		}
 		var input map[string]any
 		_ = json.Unmarshal(in.ToolInput, &input)
@@ -256,9 +298,9 @@ func (n *Node) handleHook(ctx context.Context, raw json.RawMessage, pane string)
 				"behavior": "allow", "destination": "session",
 			}}
 		}
-		return permissionDecision(d)
+		return permissionDecision(d), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func permissionDecision(d map[string]any) any {
@@ -266,19 +308,31 @@ func permissionDecision(d map[string]any) any {
 }
 
 // ask forwards an interaction to the hub and blocks until the phone answers, it expires, or the hook is cancelled.
-func (n *Node) ask(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool) {
+// It fails with errNodeGone when the hub connection ends first: a resumable hook then asks the next node.
+func (n *Node) ask(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool, error) {
 	ctx, cancel := context.WithDeadline(ctx, ix.ExpiresAt)
 	defer cancel()
 	var res proto.Resolution
 	err := n.peer.Call(ctx, "interaction.create", map[string]any{"interaction": ix}, &res)
 	if err != nil {
+		select {
+		case <-n.peer.Done():
+			if ix.Resumable {
+				return res, false, errNodeGone
+			}
+			return res, false, nil
+		default:
+		}
+		if errors.Is(err, rpc.ErrClosed) {
+			return res, false, errNodeGone
+		}
 		_ = n.peer.Notify("interaction.cancel", map[string]any{"id": ix.ID})
-		return res, false
+		return res, false, nil
 	}
 	if res.Dismiss {
-		return res, false
+		return res, false, nil
 	}
-	return res, true
+	return res, true, nil
 }
 
 func toolSummary(name string, input json.RawMessage) string {
@@ -309,12 +363,57 @@ func toolSummary(name string, input json.RawMessage) string {
 	return snippet(string(b))
 }
 
-// DialSocket sends one request to the local node and returns the raw response line.
+// Hook hands a Claude Code hook's input to the node and returns what the hook should print (nil: let the TUI decide).
+// When the node goes away while the phone is deciding (a hub or node restart) it reconnects to the next node with the
+// same request for up to ResumeWait: the interaction keeps its id, and the hub keeps it pending through the gap.
+// No node at all: nil at once, the TUI asks as usual.
+func Hook(ctx context.Context, input json.RawMessage, pane string) json.RawMessage {
+	req := sockRequest{Kind: "hook", Input: input, Pane: pane, Attempt: newUUID()}
+	// A live node answers by the interaction's expiry; a socket that is there but never answers must not hold Claude.
+	ctx, cancel := context.WithTimeout(ctx, HookTimeout+ResumeWait)
+	defer cancel()
+	line, err := DialSocket(ctx, req)
+	if errors.Is(err, ErrNoNode) {
+		return nil
+	}
+	var until time.Time
+	for {
+		var resp struct {
+			Output json.RawMessage `json:"output"`
+			Retry  bool            `json:"retry"`
+		}
+		if err == nil && json.Unmarshal(line, &resp) == nil && !resp.Retry {
+			if len(resp.Output) == 0 || string(resp.Output) == "null" {
+				return nil
+			}
+			return resp.Output
+		}
+		if until.IsZero() {
+			until = time.Now().Add(ResumeWait)
+		}
+		if time.Now().After(until) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(resumeRetry):
+		}
+		req.Resume = true
+		line, err = DialSocket(ctx, req)
+	}
+}
+
+// resumeRetry is how often a resuming hook tries the node socket.
+var resumeRetry = time.Second
+
+// DialSocket sends one request to the local node and returns the raw response line. It fails with ErrNoNode when no
+// node listens.
 func DialSocket(ctx context.Context, req any) ([]byte, error) {
 	var d net.Dialer
 	c, err := d.DialContext(ctx, "unix", SocketPath())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrNoNode, err)
 	}
 	defer c.Close()
 	if dl, ok := ctx.Deadline(); ok {

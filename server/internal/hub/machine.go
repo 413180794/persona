@@ -372,6 +372,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			ID string `json:"id"`
 		}
 		if json.Unmarshal(params, &p) == nil {
+			m.hub.recordEnd(p.ID, "cancelled", nil) // or the next hub would take it for one a hook may still claim
 			m.hub.finishInteraction(p.ID)
 		}
 	case "hook.event":

@@ -74,6 +74,7 @@ type Store interface {
 	DeleteDevice(ctx context.Context, id string) error
 	InsertInteraction(ctx context.Context, ix proto.Interaction) error
 	FinishInteraction(ctx context.Context, id, status string, res *proto.Resolution) error
+	InteractionOutcome(ctx context.Context, id string) (status string, res *proto.Resolution, err error)
 	Interactions(ctx context.Context, machine, session string, limit int) ([]db.InteractionRecord, error)
 	PutNodeSession(ctx context.Context, machine, id string, s db.NodeSession) error
 	NodeSessions(ctx context.Context, machine string) (map[string]db.NodeSession, error)
@@ -92,7 +93,14 @@ type pending struct {
 	done chan proto.Resolution
 	// local is set for interactions the hub resolves itself (screen dialogs, mail approvals).
 	local func(proto.Resolution)
+	// orphaned is set while no hook waits on a resumable interaction (its node went away, or the hub restarted): it
+	// ends the interaction unless the hook claims it again in time.
+	orphaned *time.Timer
 }
+
+// resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
+// (node.ResumeWait).
+var resumeGrace = 3 * time.Minute
 
 func Run(ctx context.Context, version string) error {
 	cfg, err := LoadConfig()
@@ -110,8 +118,16 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer database.Close()
 	h.store = database
-	if err := database.ExpireStaleInteractions(ctx); err != nil {
+	if resumable, err := database.ExpireStaleInteractions(ctx); err != nil {
 		h.logf("expire stale interactions: %v", err)
+	} else {
+		// Hooks waiting on these reconnect to the next node and claim them again (waitInteraction).
+		h.mu.Lock()
+		for _, ix := range resumable {
+			h.interactions[ix.ID] = &pending{ix: ix, done: make(chan proto.Resolution, 1)}
+			h.orphanLocked(h.interactions[ix.ID])
+		}
+		h.mu.Unlock()
 	}
 	h.importLegacy(ctx)
 	h.loadSeen(ctx)
@@ -300,9 +316,26 @@ func (h *Hub) machineName(id string) string {
 }
 
 // waitInteraction registers a hook interaction and blocks until it is resolved, cancelled or expires.
+// A resumable one asked again with the same id (its hook reconnected after a hub or node restart) is the same
+// interaction: the wait resumes on it, or returns the answer given meanwhile.
 func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
 	if ix.ExpiresAt.IsZero() {
 		ix.ExpiresAt = time.Now().Add(time.Duration(h.cfg.HookTimeoutMinutes) * time.Minute).UTC()
+	}
+	if ix.Resumable {
+		h.mu.Lock()
+		if p := h.interactions[ix.ID]; p != nil && p.local == nil {
+			if p.orphaned != nil {
+				p.orphaned.Stop()
+				p.orphaned = nil
+			}
+			h.mu.Unlock()
+			return h.await(ctx, p)
+		}
+		h.mu.Unlock()
+		if r, ended := h.outcome(ix.ID); ended {
+			return r, nil
+		}
 	}
 	p := &pending{ix: ix, done: make(chan proto.Resolution, 1)}
 	h.mu.Lock()
@@ -317,18 +350,73 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	h.mu.Unlock()
 	h.record(ix)
 	h.announce(ix)
-	defer h.finishInteraction(ix.ID)
-	timer := time.NewTimer(time.Until(ix.ExpiresAt))
+	return h.await(ctx, p)
+}
+
+// await blocks on a registered interaction. When ctx ends — the node's connection is gone — a resumable
+// interaction stays pending for its hook to claim again.
+func (h *Hub) await(ctx context.Context, p *pending) (proto.Resolution, error) {
+	id := p.ix.ID
+	timer := time.NewTimer(time.Until(p.ix.ExpiresAt))
 	defer timer.Stop()
 	select {
 	case r := <-p.done:
+		h.finishInteraction(id)
 		return r, nil
 	case <-timer.C:
-		h.recordEnd(ix.ID, "expired", nil)
+		h.recordEnd(id, "expired", nil)
+		h.finishInteraction(id)
 		return proto.Resolution{Dismiss: true}, nil
 	case <-ctx.Done():
-		h.recordEnd(ix.ID, "cancelled", nil)
+		if p.ix.Resumable {
+			h.mu.Lock()
+			kept := h.interactions[id] == p && h.orphanLocked(p)
+			h.mu.Unlock()
+			if kept {
+				return proto.Resolution{Dismiss: true}, nil // nobody reads it: the node is gone
+			}
+		}
+		h.recordEnd(id, "cancelled", nil)
+		h.finishInteraction(id)
 		return proto.Resolution{Dismiss: true}, nil
+	}
+}
+
+// orphanLocked starts p's grace period: it ends (cancelled) unless its hook claims it again first. Callers hold h.mu.
+func (h *Hub) orphanLocked(p *pending) bool {
+	if p.orphaned != nil {
+		return true
+	}
+	wait := min(resumeGrace, time.Until(p.ix.ExpiresAt))
+	if wait <= 0 {
+		return false
+	}
+	p.orphaned = time.AfterFunc(wait, func() {
+		h.mu.Lock()
+		still := h.interactions[p.ix.ID] == p && p.orphaned != nil
+		h.mu.Unlock()
+		if still {
+			h.recordEnd(p.ix.ID, "cancelled", nil)
+			h.finishInteraction(p.ix.ID)
+		}
+	})
+	return true
+}
+
+// outcome reports how a resumable interaction no longer pending here ended: the answer given before its hook could
+// read it (the hub or node restarted right then), or a dismiss when it was cancelled or expired.
+func (h *Hub) outcome(id string) (proto.Resolution, bool) {
+	if h.store == nil {
+		return proto.Resolution{}, false
+	}
+	status, res, err := h.store.InteractionOutcome(context.Background(), id)
+	switch {
+	case err != nil || status == "" || status == "pending":
+		return proto.Resolution{}, false
+	case status == "resolved" && res != nil:
+		return *res, true
+	default:
+		return proto.Resolution{Dismiss: true}, true
 	}
 }
 
@@ -381,6 +469,9 @@ func (h *Hub) finishInteraction(id string) {
 	h.mu.Lock()
 	p, ok := h.interactions[id]
 	delete(h.interactions, id)
+	if ok && p.orphaned != nil {
+		p.orphaned.Stop()
+	}
 	h.mu.Unlock()
 	if !ok {
 		return
@@ -396,7 +487,8 @@ func (h *Hub) cancelMachineInteractions(machineID string) {
 	h.mu.Lock()
 	var ids []string
 	for id, p := range h.interactions {
-		if p.ix.MachineID == machineID {
+		// Resumable ones wait for their hook to come back through the next node (await).
+		if p.ix.MachineID == machineID && !p.ix.Resumable {
 			ids = append(ids, id)
 		}
 	}

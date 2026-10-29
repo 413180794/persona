@@ -179,11 +179,25 @@ node → hub 请求：
 
 一次连接一问一答，各一行 JSON：
 
-- `{"kind":"hook","input":<Claude Code 传给 hook 的 stdin JSON>}` → `{"output":<要打印到 stdout 的 JSON 或 null>}`
+- `{"kind":"hook","input":<Claude Code 传给 hook 的 stdin JSON>,"pane":"…","attempt":"<hook 进程自己的 id>","resume":<是不是重连>}`
+  → `{"output":<要打印到 stdout 的 JSON 或 null>}`，或 `{"retry":true}`（node 正在退出，去问下一个 node）
 - `{"kind":"mcp.tools"}` → `{"tools":[…]}`
 - `{"kind":"mcp.call","name":"…","args":{},"session_id":"…"}` → `{"content":[…],"is_error":false}`
 
 连不上 node（hub 不在线）时 hook 立即退出 0、不输出，即 TUI 正常处理；mcp 返回错误文本。
+
+### 交互挺过重启
+
+部署频繁（hub 重启、换 node 二进制），以前手机上正在答的提问 / 计划 / 授权会消失，退回电脑 TUI。现在：
+
+- **hook**：已经连上 node、还没拿到回答时 node 没了（连接断开或回 `retry`），每秒重连 `node.sock`、带同一个 `attempt` 重发，
+  最多 2 分钟（`node.ResumeWait`）；一开始就连不上 node 照旧立即交给 TUI。
+- **node**：interaction id 是确定的：`session_id + 事件 + 工具名 + tool_use_id` 的哈希（没有 tool_use_id 用 hook 的 attempt），
+  重连的 hook 得到同一个 id；带 attempt 的交互标 `resumable: true`，重连的那次不再发 `hook.event`。
+- **hub**：`resumable` 的交互在 node 连接断开时不撤销，留 3 分钟（`resumeGrace`）等 hook 重新认领；同 id 的 `interaction.create`
+  挂回原来的那张卡（不重复推送，App 按 id 去重），这期间手机上答了的，回来的 hook 直接从数据库拿到答案。启动时数据库里
+  pending 的 `resumable` 交互重新载入（同样等 3 分钟），其余标 cancelled。旧 node 不带 `resumable`，行为不变。
+- 本机实测（假 hub + 沙箱 node + 真 `jarvisd hook`）：提问时杀掉 node、2 秒后起新 node，hook 3.1 秒后拿到手机的回答，hub 只看到一个 id。
 
 ## MCP 工具（`jarvisd mcp`）
 

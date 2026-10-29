@@ -77,16 +77,10 @@ func runHook(ctx context.Context) {
 	if err != nil || !json.Valid(input) {
 		return
 	}
-	line, err := node.DialSocket(ctx, map[string]any{"kind": "hook", "input": json.RawMessage(input), "pane": os.Getenv("HERDR_PANE_ID")})
-	if err != nil {
+	out := node.Hook(ctx, input, os.Getenv("HERDR_PANE_ID"))
+	if len(out) == 0 {
 		return
 	}
-	var resp struct {
-		Output json.RawMessage `json:"output"`
-	}
-	if json.Unmarshal(line, &resp) != nil || len(resp.Output) == 0 || string(resp.Output) == "null" {
-		return
-	}
-	os.Stdout.Write(resp.Output)
+	os.Stdout.Write(out)
 	os.Stdout.Write([]byte("\n"))
 }

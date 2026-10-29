@@ -337,10 +337,47 @@ func (d *DB) Interactions(ctx context.Context, machine, session string, limit in
 	})
 }
 
-// ExpireStaleInteractions marks interactions left pending by a previous hub process (they died with it).
-func (d *DB) ExpireStaleInteractions(ctx context.Context) error {
-	_, err := d.pool.Exec(ctx, `UPDATE interactions SET status = 'cancelled', resolved_at = now() WHERE status = 'pending'`)
-	return err
+// ExpireStaleInteractions marks interactions left pending by a previous hub process cancelled, and returns the
+// resumable ones not yet expired instead: their hooks reconnect and claim them again.
+func (d *DB) ExpireStaleInteractions(ctx context.Context) ([]proto.Interaction, error) {
+	rows, err := d.pool.Query(ctx, `SELECT payload FROM interactions WHERE status = 'pending'
+		AND (payload->>'resumable')::boolean IS TRUE AND (payload->>'expires_at')::timestamptz > now()`)
+	if err != nil {
+		return nil, err
+	}
+	keep, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (proto.Interaction, error) {
+		var payload []byte
+		var ix proto.Interaction
+		if err := r.Scan(&payload); err != nil {
+			return ix, err
+		}
+		return ix, json.Unmarshal(payload, &ix)
+	})
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(keep))
+	for i, ix := range keep {
+		ids[i] = ix.ID
+	}
+	_, err = d.pool.Exec(ctx, `UPDATE interactions SET status = 'cancelled', resolved_at = now()
+		WHERE status = 'pending' AND NOT (id = ANY($1))`, ids)
+	return keep, err
+}
+
+// InteractionOutcome returns an interaction's status and resolution; an empty status when there is no such row.
+func (d *DB) InteractionOutcome(ctx context.Context, id string) (string, *proto.Resolution, error) {
+	var status string
+	var raw []byte
+	err := d.pool.QueryRow(ctx, `SELECT status, resolution FROM interactions WHERE id = $1`, id).Scan(&status, &raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, nil
+	}
+	if err != nil || len(raw) == 0 {
+		return status, nil, err
+	}
+	var res proto.Resolution
+	return status, &res, json.Unmarshal(raw, &res)
 }
 
 // ---- settings ----

@@ -241,6 +241,9 @@ type Interaction struct {
 	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
 	Summary      string          `json:"summary,omitempty"`
 	Screen       string          `json:"screen,omitempty"`
+	// Resumable: a hook waits on it that reconnects when its node goes away (hub or node restart), so the hub keeps
+	// it pending through the gap instead of cancelling it (docs/protocol.md「交互挺过重启」).
+	Resumable bool `json:"resumable,omitempty"`
 }
 
 type Resolution struct {
