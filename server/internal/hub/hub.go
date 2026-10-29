@@ -4,6 +4,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,6 +19,8 @@ import (
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/screen"
 )
 
 type Hub struct {
@@ -93,8 +96,9 @@ type Store interface {
 type pending struct {
 	ix   proto.Interaction
 	done chan proto.Resolution
-	// local is set for interactions the hub resolves itself (screen dialogs, mail approvals).
-	local func(proto.Resolution)
+	// local is set for interactions the hub resolves itself (screen dialogs): it acts on the answer, and an error
+	// goes back to whoever answered (prompt_changed: nothing was pressed).
+	local func(proto.Resolution) error
 	// orphaned is set while no hook waits on a resumable interaction (its node went away, or the hub restarted): it
 	// ends the interaction unless the hook claims it again in time.
 	orphaned *time.Timer
@@ -267,10 +271,14 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	if err := m.call(ctx, "session.screen", map[string]any{"session_id": s.SessionID, "lines": 40}, &scr); err != nil {
 		return
 	}
+	d := screen.ParseDialog(scr.Text)
 	id := "scr_" + m.cfg.ID + "_" + s.SessionID
+	if d != nil {
+		id += "_" + d.Rev // another dialog is another card: nothing picked on the last one carries over
+	}
 	ix := proto.Interaction{
 		ID: id, MachineID: m.cfg.ID, SessionID: s.SessionID, SessionTitle: s.Title, Cwd: s.Cwd, Kind: proto.IxScreen,
-		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(24 * time.Hour).UTC(), Screen: trimScreen(scr.Text),
+		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(24 * time.Hour).UTC(), Screen: trimScreen(scr.Text), Dialog: d,
 	}
 	h.mu.Lock()
 	for _, p := range h.interactions {
@@ -279,17 +287,51 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 			return
 		}
 	}
-	h.interactions[id] = &pending{ix: ix, local: func(r proto.Resolution) {
+	h.interactions[id] = &pending{ix: ix, local: func(r proto.Resolution) error {
 		if r.Dismiss {
-			return
+			return nil
 		}
-		kctx, kcancel := context.WithTimeout(context.Background(), 10*time.Second)
+		params, err := screenAnswer(s.SessionID, d, r)
+		if err != nil {
+			return err
+		}
+		kctx, kcancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer kcancel()
-		_ = m.call(kctx, "session.keys", map[string]any{"session_id": s.SessionID, "keys": r.Keys, "text": r.Text, "pre_keys": r.PreKeys}, nil)
+		err = m.call(kctx, "session.keys", params, nil)
+		var re *rpc.Error
+		if errors.As(err, &re) && re.Code == screen.PromptChanged {
+			go h.createScreenInteraction(m, s) // the card for what is on screen now
+		}
+		return err
 	}}
 	h.mu.Unlock()
 	h.record(ix)
 	h.announce(ix)
+}
+
+// screenAnswer turns an answer to a screen card into session.keys parameters. With a dialog the node checks its
+// revision before pressing anything; an option's keys come from the node's fresh reading of the screen, and the
+// ones worked out here are for nodes that predate that.
+func screenAnswer(session string, d *screen.Dialog, r proto.Resolution) (map[string]any, error) {
+	params := map[string]any{"session_id": session, "keys": r.Keys, "text": r.Text, "pre_keys": r.PreKeys}
+	if d == nil {
+		return params, nil
+	}
+	params["rev"] = d.Rev
+	if r.Option == "" {
+		return params, nil
+	}
+	o := d.Option(r.Option)
+	if o == nil {
+		return nil, fmt.Errorf("the dialog has no option %q", r.Option)
+	}
+	params["option"] = o.Key
+	if o.Kind == screen.KindTypeSomething {
+		params["pre_keys"], params["keys"] = o.Keys, []string{"enter"}
+	} else {
+		params["keys"], params["text"], params["pre_keys"] = o.Keys, "", nil
+	}
+	return params, nil
 }
 
 func trimScreen(s string) string {
@@ -441,24 +483,35 @@ func (h *Hub) recordEnd(id, status string, r *proto.Resolution) {
 	}
 }
 
-// resolve answers an interaction from the app.
+// errNotPending: the interaction was answered, withdrawn or expired already.
+var errNotPending = errors.New("no longer pending")
+
+// resolve answers an interaction from the app. A screen card acts right away and its error comes back (the
+// dialog changed: nothing pressed, a new card follows).
 func (h *Hub) resolve(id string, r proto.Resolution) error {
 	h.mu.Lock()
 	p := h.interactions[id]
+	if p != nil && p.local != nil {
+		delete(h.interactions, id) // claimed: a second answer to the same card is not pending any more
+	}
 	h.mu.Unlock()
 	if p == nil {
-		return fmt.Errorf("interaction %s is no longer pending", id)
+		return fmt.Errorf("interaction %s is %w", id, errNotPending)
 	}
 	status := "resolved"
 	if r.Dismiss {
 		status = "dismissed"
 	}
-	h.recordEnd(id, status, &r)
 	if p.local != nil {
-		h.finishInteraction(id)
-		go p.local(r)
-		return nil
+		err := p.local(r)
+		if err != nil {
+			status = "failed"
+		}
+		h.recordEnd(id, status, &r)
+		h.finished(p)
+		return err
 	}
+	h.recordEnd(id, status, &r)
 	select {
 	case p.done <- r:
 	default:
@@ -475,9 +528,14 @@ func (h *Hub) finishInteraction(id string) {
 		p.orphaned.Stop()
 	}
 	h.mu.Unlock()
-	if !ok {
-		return
+	if ok {
+		h.finished(p)
 	}
+}
+
+// finished tells everyone an interaction, already out of the pending set, is over.
+func (h *Hub) finished(p *pending) {
+	id := p.ix.ID
 	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	if m := h.byID[p.ix.MachineID]; m != nil {
 		h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": h.decorated(m)})

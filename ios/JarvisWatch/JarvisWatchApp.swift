@@ -292,8 +292,14 @@ struct WatchInteractionView: View {
                     Button("拒绝") { act(Resolution(allow: false)) }
                 case .screen:
                     Text(interaction.screen ?? "").font(.system(size: 9, design: .monospaced))
-                    ForEach(ScreenParser.options(interaction.screen ?? ""), id: \.key) { opt in
-                        Button("\(opt.key). \(opt.label)") { act(Resolution(keys: [opt.key])) }.font(.caption2)
+                    if let d = interaction.dialog { // the hub's reading: answered by option, checked on the computer first
+                        ForEach(d.options.filter { $0.kind == nil }, id: \.key) { opt in
+                            Button("\(opt.key). \(opt.label)") { act(Resolution(option: opt.key)) }.font(.caption2)
+                        }
+                    } else {
+                        ForEach(ScreenParser.options(interaction.screen ?? ""), id: \.key) { opt in
+                            Button("\(opt.key). \(opt.label)") { act(Resolution(keys: [opt.key])) }.font(.caption2)
+                        }
                     }
                     HStack {
                         Button("Esc") { act(Resolution(keys: ["esc"])) }

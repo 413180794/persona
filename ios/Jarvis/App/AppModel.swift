@@ -344,6 +344,10 @@ final class AppModel {
         do {
             try await api.resolve(ix.id, r)
             Haptics.success()
+        } catch let e as APIError where e.code == "prompt_changed" {
+            // Nothing pressed: the terminal's dialog changed. The hub sends the card for what is there now.
+            Haptics.attention()
+            toast = Toast("终端上的对话框已经变了，这次没有按任何键：看看新的再答", style: .error)
         } catch {
             if (error as? APIError)?.status != 410 { interactions[ix.id] = ix }
             show(error)

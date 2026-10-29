@@ -351,7 +351,7 @@ func TestScreenInteractionResolveRunsLocally(t *testing.T) {
 	h.mu.Lock()
 	h.interactions["scr_x"] = &pending{
 		ix:    proto.Interaction{ID: "scr_x", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen},
-		local: func(r proto.Resolution) { ran <- r },
+		local: func(r proto.Resolution) error { ran <- r; return nil },
 	}
 	h.mu.Unlock()
 

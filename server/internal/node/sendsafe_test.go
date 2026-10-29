@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/screen"
 )
 
 func screenFixture(t *testing.T, name string) string {
@@ -169,4 +171,38 @@ func TestSentLogOnce(t *testing.T) {
 	if typed.Load() != 5 {
 		t.Fatal(typed.Load())
 	}
+}
+
+func TestDialogKeysCheckRevision(t *testing.T) {
+	trust := screenFixture(t, "claude-2.1.312-trust-162.txt")
+	f := &fakePane{screens: []string{trust}}
+	n := &Node{herdr: f.serve(t), agents: map[string]herdr.Agent{"s1": {PaneID: "w1:p1"}}}
+	ctx := context.Background()
+	rev := screenDialogRev(t, trust)
+	keys, pre, err := n.dialogKeys(ctx, "s1", rev, "2")
+	if err != nil || strings.Join(keys, ",") != "down,enter" || pre != nil {
+		t.Fatalf("keys %v %v %v", keys, pre, err)
+	}
+	// The cursor moved on the computer: same dialog, keys from where it is now.
+	moved := strings.Replace(strings.Replace(trust, " ❯ No, exit", "   No, exit", 1), "   Yes, I trust this folder", " ❯ Yes, I trust this folder", 1)
+	f.screens[0] = moved
+	if keys, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err != nil || strings.Join(keys, ",") != "enter" {
+		t.Fatalf("after the cursor moved: %v %v", keys, err)
+	}
+	// Answered at the computer: the screen moved on, nothing is pressed.
+	f.screens[0] = screenFixture(t, "claude-2.1.312-empty-162.txt")
+	if _, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err == nil {
+		t.Fatal("answered into a changed screen")
+	} else if code, _ := refusalOf(t, err); code != "prompt_changed" {
+		t.Fatal(code)
+	}
+}
+
+func screenDialogRev(t *testing.T, s string) string {
+	t.Helper()
+	d := screen.ParseDialog(s)
+	if d == nil {
+		t.Fatal("no dialog")
+	}
+	return d.Rev
 }

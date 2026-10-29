@@ -91,7 +91,11 @@ func (h *Hub) routes() http.Handler {
 			return
 		}
 		if err := h.resolve(r.PathValue("id"), res); err != nil {
-			writeErr(w, http.StatusGone, err)
+			if errors.Is(err, errNotPending) {
+				writeErr(w, http.StatusGone, err)
+			} else {
+				callErr(w, err) // prompt_changed: 409, nothing pressed
+			}
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})

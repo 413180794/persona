@@ -143,6 +143,23 @@
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
 
+### 终端对话框（screen 交互）
+
+Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`，40 行）建一张 `screen` 卡：
+
+- hub 用 `server/internal/screen` 解析对话框，放进 `interaction.dialog`：`header`、`question`、`detail`、
+  `options[{key,label,detail,kind,keys}]`（`kind`：`type_something` / `chat` / 空）、`rev`（问题和选项的哈希，不含光标和转圈）。
+  有编号的选项按数字；Claude 2.1.312 信任目录那种不带编号的列表按光标算 `up/down` + `enter`。卡片 id 带上 `rev`：对话框换了就是新卡，
+  上一张卡里选的不会带过来。
+- App 回答带 `option`（`type_something` 再带 `text`），不再自己猜按键；hub 把 `rev` 和 `option` 交给 node 的 `session.keys`，
+  node **按键之前重读屏幕、重新解析、比对 `rev`**，不一致就什么都不按，回 409 `{"code":"prompt_changed"}`，hub 随即按当前屏幕再建一张卡。
+  按键也在 node 上按当时的屏幕算（光标在电脑上被挪过也不会选错）。
+- 兼容：旧 App 不认 `dialog`，照旧自己解析 `screen`、发 `keys`——hub 也会带上 `rev`，同样先核对；旧 node 不认 `rev` / `option`，
+  hub 同时传算好的 `keys`，行为同以前。没解析出对话框的卡（只有终端和按键栏）不核对。
+- 屏幕卡的回答是同步的：hub 等 node 按完才回 App（以前是先回成功再在后台按）。
+- `rev` 由 hub 和 node 各自用同一份解析代码算：改了 `internal/screen` 的解析就要 hub 和所有 node 一起部署，否则新卡永远对不上（每次都 `prompt_changed`）。
+- 手表有 `dialog` 时也按 `option` 回答（Siri「批准第一个待处理」不处理屏幕卡）。
+
 ### 发消息
 
 往别人的终端里打字是这个 App 风险最大的操作。node 在往正在跑的 Agent 窗格里打字之前先读一次屏幕（`server/internal/node/sendsafe.go`、

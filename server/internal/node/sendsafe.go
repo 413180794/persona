@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -18,6 +19,36 @@ import (
 //     draft and send (clear_draft).
 // Sends carry the app's client_msg_id: a retry of one already delivered (the response was lost) is acknowledged
 // without typing it again. See docs/protocol.md「发消息」.
+
+// dialogKeys checks that the session's screen still shows the dialog a card was made from (same revision) and
+// returns the keys for option, worked out from the screen as it is now (an unnumbered list moves from where the cursor
+// is): keys nil when no option is named (the caller's keys stand). A changed or gone dialog refuses with
+// prompt_changed, nothing pressed.
+func (n *Node) dialogKeys(ctx context.Context, id, rev, option string) (keys, pre []string, err error) {
+	pane, err := n.paneFor(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	text, err := n.herdr.PaneRead(ctx, pane, "visible", screen.DialogLines)
+	if err != nil {
+		return nil, nil, err
+	}
+	d := screen.ParseDialog(text)
+	if d == nil || d.Rev != rev {
+		return nil, nil, refusal(screen.PromptChanged, "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。", nil)
+	}
+	if option == "" {
+		return nil, nil, nil
+	}
+	o := d.Option(option)
+	if o == nil {
+		return nil, nil, fmt.Errorf("the dialog has no option %q", option)
+	}
+	if o.Kind == screen.KindTypeSomething {
+		return []string{"enter"}, o.Keys, nil
+	}
+	return o.Keys, nil, nil
+}
 
 // sendOpts are the optional fields of session.send.
 type sendOpts struct {

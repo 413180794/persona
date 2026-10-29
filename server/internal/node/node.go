@@ -256,6 +256,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return n.send(ctx, p.SessionID, p.Text, p.Images, opts)
 		}))
 	case "session.keys":
+		var dl struct {
+			Rev    string `json:"rev"`
+			Option string `json:"option"`
+		}
+		_ = json.Unmarshal(params, &dl)
+		if dl.Rev != "" { // an answer to a dialog card: only into that same dialog (sendsafe.go)
+			keys, pre, err := n.dialogKeys(ctx, p.SessionID, dl.Rev, dl.Option)
+			if err != nil {
+				return nil, err
+			}
+			if keys != nil {
+				p.Keys, p.PreKeys = keys, pre
+			}
+		}
 		if len(p.PreKeys) > 0 {
 			if err := n.keys(ctx, p.SessionID, p.PreKeys, ""); err != nil {
 				return nil, err

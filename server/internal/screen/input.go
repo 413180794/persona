@@ -284,6 +284,8 @@ func Choosing(plain string) bool {
 const (
 	DialogOpen = "dialog_open" // a dialog has the keyboard
 	InputDraft = "input_draft" // the input box holds something the text would be appended to
+	// PromptChanged refuses an answer to a dialog no longer on screen as its card showed it (Dialog.Rev).
+	PromptChanged = "prompt_changed"
 )
 
 // CheckClaude says whether typing a message into a Claude Code pane is safe: "" when it is, else the refusal code

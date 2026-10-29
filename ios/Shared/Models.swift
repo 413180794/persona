@@ -424,11 +424,16 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var toolInput: JSONValue?
     var summary: String?
     var screen: String?
+    /// The screen's dialog as the hub read it (newer hubs): answer with `Resolution.option`.
+    var dialog: ScreenDialog?
 
     var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
 
+    /// The dialog to show: the hub's reading, else the app's own (older hubs).
+    var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
+
     enum CodingKeys: String, CodingKey {
-        case id, kind, questions, plan, summary, screen, cwd
+        case id, kind, questions, plan, summary, screen, cwd, dialog
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
              toolInput = "tool_input"
@@ -448,9 +453,11 @@ nonisolated struct Resolution: Codable, Sendable {
     var dismiss: Bool?
     /// Keys before `text` (`keys` go after it): pick "Type something." by its number, then type.
     var preKeys: [String]?
+    /// A screen dialog's option (Interaction.dialog): the node works out its keys, after checking the dialog is unchanged.
+    var option: String?
 
     enum CodingKeys: String, CodingKey {
-        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss
+        case answers, approve, mode, feedback, allow, always, message, keys, text, dismiss, option
         case preKeys = "pre_keys"
     }
 
@@ -625,4 +632,29 @@ nonisolated struct Mailbox: Codable, Hashable, Sendable, Identifiable {
     var unseen: Int?
     var total: Int?
     var id: String { name }
+}
+
+/// A terminal dialog read on the hub (server/internal/screen): what the card shows, and `rev`, which the node checks
+/// before pressing anything for the answer.
+nonisolated struct ScreenDialog: Codable, Hashable, Sendable {
+    struct Option: Codable, Hashable, Sendable {
+        var key: String
+        var label: String
+        var detail: String?
+        var kind: String?
+    }
+    var header: String?
+    var question: String
+    var detail: String?
+    var options: [Option]
+    var rev: String
+
+    var parsed: ScreenParser.Dialog {
+        ScreenParser.Dialog(
+            header: header.flatMap { $0.isEmpty ? nil : $0 }, question: question, detail: detail.flatMap { $0.isEmpty ? nil : $0 },
+            options: options.map { o in
+                let kind: ScreenParser.Dialog.Kind = o.kind == "type_something" ? .typeSomething : o.kind == "chat" ? .chat : .plain
+                return .init(key: o.key, label: o.label, detail: o.detail.flatMap { $0.isEmpty ? nil : $0 }, kind: kind)
+            })
+    }
 }

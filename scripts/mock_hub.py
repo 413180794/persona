@@ -191,6 +191,21 @@ INTERACTIONS = [
      "plan": "## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过\n4. 补测试：竖拍、实况照片、没有 EXIF 的图"},
 ]
 
+# MOCK_SCREEN_DIALOG=1: a terminal dialog (screen interaction) as a newer hub reads it; MOCK_PROMPT_CHANGED=1 makes
+# answering it fail as if the dialog changed on the computer (409 prompt_changed).
+if os.environ.get("MOCK_SCREEN_DIALOG"):
+    INTERACTIONS.append(
+        {"id": "scr_macbook_review_3f9a1c2b7d4e", "machine_id": "macbook", "session_id": REVIEW, "session_title": "检查 PR #42 的改动",
+         "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
+         "screen": " Bash command\n\n   git push origin review/naming\n   Push the naming fixes\n\n Do you want to proceed?\n"
+                   " ❯ 1. Yes\n   2. Yes, and don't ask again for git push commands in /Users/me/code/weather\n"
+                   "   3. No, and tell Claude what to do differently (esc)",
+         "dialog": {"question": "Do you want to proceed?", "detail": "Bash command\ngit push origin review/naming\nPush the naming fixes",
+                    "rev": "3f9a1c2b7d4e", "options": [
+                        {"key": "1", "label": "Yes", "keys": ["1"]},
+                        {"key": "2", "label": "Yes, and don't ask again for git push commands in /Users/me/code/weather", "keys": ["2"]},
+                        {"key": "3", "label": "No, and tell Claude what to do differently (esc)", "keys": ["3"]}]}})
+
 PREFS = {"input": True, "done": "long", "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
@@ -319,6 +334,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
         if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
             RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
+            if os.environ.get("MOCK_PROMPT_CHANGED") and p.split("/")[4].startswith("scr_"):
+                return self.send_json({"error": "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。",
+                                       "code": "prompt_changed", "delivered": "none"}, 409)
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
             PREFS.update({k: v for k, v in json.loads(self.last_body or b"{}").items() if k in ("input", "done")})

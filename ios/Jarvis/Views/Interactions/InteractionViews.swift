@@ -178,13 +178,13 @@ struct InteractionPanel: View {
         case .question: interaction.questions?.first?.question ?? ""
         case .plan: PlanText.title(interaction.plan ?? "")
         case .permission: interaction.summary ?? ""
-        case .screen: ScreenParser.dialog(interaction.screen ?? "")?.question ?? ""
+        case .screen: interaction.screenDialog?.question ?? ""
         }
     }
 
     /// A terminal dialog that reads as a question is titled like one.
     private var panelTitle: String {
-        if interaction.kind == .screen, ScreenParser.dialog(interaction.screen ?? "") != nil { return "终端在问你" }
+        if interaction.kind == .screen, interaction.screenDialog != nil { return "终端在问你" }
         return interaction.title
     }
 }
@@ -526,7 +526,7 @@ struct ScreenForm: View {
 
     var body: some View {
         let screen = interaction.screen ?? ""
-        if let d = ScreenParser.dialog(screen) {
+        if let d = interaction.screenDialog {
             dialog(d, screen: screen)
         } else {
             VStack(alignment: .leading, spacing: 12) { terminal(screen) }
@@ -559,7 +559,7 @@ struct ScreenForm: View {
             .background(Color.primary.opacity(0.045), in: .rect(cornerRadius: 16, style: .continuous))
             HStack(spacing: 16) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
-                    Button { send(chat.key, Resolution(keys: [chat.key])) } label: {
+                    Button { send(chat.key, answer(chat)) } label: {
                         Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
                     }
                 }
@@ -577,7 +577,7 @@ struct ScreenForm: View {
 
     private func choice(_ opt: ScreenParser.Dialog.Option) -> some View {
         let (label, recommended) = QuestionForm.display(opt.label)
-        return Button { send(opt.key, Resolution(keys: [opt.key])) } label: {
+        return Button { send(opt.key, answer(opt)) } label: {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     Circle().fill(sending == opt.key ? Theme.accent : Color.primary.opacity(0.08))
@@ -635,7 +635,7 @@ struct ScreenForm: View {
                     Button {
                         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         focused = false
-                        send(opt.key, Resolution(keys: ["enter"], text: t, preKeys: [opt.key]))
+                        send(opt.key, answer(opt, text: t))
                     } label: {
                         if sending == opt.key { ProgressView().controlSize(.small) }
                         else { Image(systemName: "arrow.up.circle.fill").font(.title2).foregroundStyle(Theme.accent) }
@@ -677,6 +677,13 @@ struct ScreenForm: View {
                 .themedButton(prominent: true)
                 .disabled(text.isEmpty)
         }
+    }
+
+    /// The answer for an option: by its key when the hub read the dialog (it checks the screen first), else the keys.
+    private func answer(_ opt: ScreenParser.Dialog.Option, text: String? = nil) -> Resolution {
+        if interaction.dialog != nil { return Resolution(text: text, option: opt.key) }
+        if let text { return Resolution(keys: ["enter"], text: text, preKeys: [opt.key]) }
+        return Resolution(keys: [opt.key])
     }
 
     private func send(_ key: String, _ r: Resolution) {

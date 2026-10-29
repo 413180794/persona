@@ -10,6 +10,8 @@ import (
 	_ "image/png"
 	"strings"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/screen"
 )
 
 type Machine struct {
@@ -241,6 +243,9 @@ type Interaction struct {
 	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
 	Summary      string          `json:"summary,omitempty"`
 	Screen       string          `json:"screen,omitempty"`
+	// Dialog is the screen's dialog read on the hub (screen interactions); answers name an option and are checked
+	// against Dialog.Rev before any key is pressed. Absent when the screen shows no dialog it could read.
+	Dialog *screen.Dialog `json:"dialog,omitempty"`
 	// Resumable: a hook waits on it that reconnects when its node goes away (hub or node restart), so the hub keeps
 	// it pending through the gap instead of cancelling it (docs/protocol.md「交互挺过重启」).
 	Resumable bool `json:"resumable,omitempty"`
@@ -259,6 +264,9 @@ type Resolution struct {
 	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
 	PreKeys []string `json:"pre_keys,omitempty"`
 	Dismiss bool     `json:"dismiss,omitempty"`
+	// Option answers a screen dialog by its option's key (Interaction.Dialog): the keys are worked out where they are
+	// pressed, from the screen as it is then (Text goes with a type_something option).
+	Option string `json:"option,omitempty"`
 }
 
 // Tool is an MCP tool definition.
