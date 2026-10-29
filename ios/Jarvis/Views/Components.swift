@@ -5,7 +5,6 @@ import SwiftUI
 struct StatusDot: View {
     var state: AgentState
     var size: CGFloat = 9
-    @State private var pulse = false
 
     var body: some View {
         Circle()
@@ -13,21 +12,22 @@ struct StatusDot: View {
             .frame(width: size, height: size)
             .overlay {
                 if state.animates {
-                    Circle()
-                        .stroke(state.color.opacity(0.6), lineWidth: 1.5)
-                        .scaleEffect(pulse ? 2.2 : 1)
-                        .opacity(pulse ? 0 : 1)
+                    // The ring's size comes from the clock, not from a repeatForever animation on a @State flag:
+                    // that animation's transaction leaked into other changes of the row (re-layout, a state change,
+                    // the row coming back in a lazy list) and the ring sometimes grew far past 2.2×.
+                    let period = state == .needsYou ? 1.0 : 1.4
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                        let p = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+                        let eased = 1 - (1 - p) * (1 - p) // ease out
+                        Circle()
+                            .stroke(state.color.opacity(0.6), lineWidth: 1.5)
+                            .scaleEffect(1 + 1.2 * eased)
+                            .opacity(1 - eased)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
-            .onAppear { animate() }
-            .onChange(of: state) { _, _ in animate() }
             .accessibilityLabel(state.label)
-    }
-
-    private func animate() {
-        pulse = false
-        guard state.animates else { return }
-        withAnimation(.easeOut(duration: state == .needsYou ? 1.0 : 1.4).repeatForever(autoreverses: false)) { pulse = true }
     }
 }
 
