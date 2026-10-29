@@ -148,7 +148,7 @@ nonisolated struct APIClient: Sendable {
 
     struct MachinesResponse: Decodable { var machines: [Machine] }
     struct LaunchersResponse: Decodable { var launchers: [Launcher] }
-    struct SessionsResponse: Decodable { var sessions: [Session] }
+    nonisolated struct SessionsResponse: Decodable, Sendable { var sessions: [Session] }
     struct SessionResponse: Decodable { var session: Session }
     struct ItemsResponse: Decodable, Sendable {
         var items: [Item]
@@ -185,7 +185,12 @@ nonisolated struct APIClient: Sendable {
         struct R: Decodable { var metrics: MachineMetrics }
         return try await get("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self).metrics
     }
-    func sessions() async throws -> [Session] { try await get("/api/v1/sessions", as: SessionsResponse.self).sessions }
+    func sessions() async throws -> [Session] {
+        let data = try await request("GET", "/api/v1/sessions")
+        return try await Task.detached(priority: .userInitiated) {
+            try JSON.decoder.decode(SessionsResponse.self, from: data).sessions
+        }.value
+    }
 
     struct StartRequest: Encodable {
         var machineID: String
