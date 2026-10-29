@@ -2189,12 +2189,12 @@ nonisolated indirect enum WorkItem: Identifiable, Equatable, Sendable {
 
 /// One step of an open work line, a line of the chat list itself. The steps read as one card under their header:
 /// each draws its slice of it (`WorkCardSlice`), with a hairline between steps, instead of a tile per step.
-nonisolated struct WorkStepView: View, Equatable {
+struct WorkStepView: View, Equatable {
     @Environment(\.openSubagent) private var openSubagent
-    var item: WorkItem
-    var first: Bool
+    nonisolated let item: WorkItem
+    nonisolated let first: Bool
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.item == rhs.item && lhs.first == rhs.first
     }
 
