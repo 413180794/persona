@@ -67,9 +67,11 @@ nonisolated enum Theme {
     static func accent(_ style: AppStyle) -> Color {
         switch style {
         case .glass: Color(light: 0x007AFF, dark: 0x0A84FF)
-        case .claude: Color(light: 0xD4683F, dark: 0xE8835C)
-        case .clay: Color(light: 0x7A5AF8, dark: 0x9D8BFF)
-        case .island: Color(light: 0x0E9F8E, dark: 0x2DD4BF)
+        // Dark accents deep enough for white words on solid buttons and selected chips (≥ 3.5:1, like system blue's
+        // 3.65); Island's teal leans cyan and darker, away from the 完成未看 green and readable as a link on its mist.
+        case .claude: Color(light: 0xD4683F, dark: 0xCD6E45)
+        case .clay: Color(light: 0x7A5AF8, dark: 0x8979EB)
+        case .island: Color(light: 0x27747F, dark: 0x2A9798)
         case .lark: Color(light: 0x3370FF, dark: 0x4C88FF)
         }
     }
@@ -197,8 +199,9 @@ nonisolated enum Theme {
     static func userBubble(_ style: AppStyle) -> Color {
         switch style {
         case .glass: Color(light: 0xDCEAFF, dark: 0x1D3557) // a soft tint: a solid system blue was too heavy
-        case .claude: Color(light: 0xD4683F, dark: 0xC9623C)
-        case .clay: Color(light: 0x8E7BFA, dark: 0x6E5CE0)
+        // White words on the colored bubbles need ≥ 4.5:1 (body text): deeper than the accents.
+        case .claude: Color(light: 0xB24C25, dark: 0xAF4C28)
+        case .clay: Color(light: 0x6759D3, dark: 0x6756D9)
         case .island: Color(light: 0x14201E, dark: 0xE8F3F1)
         case .lark: Color(light: 0xD1E3FF, dark: 0x133063)
         }
@@ -210,9 +213,15 @@ nonisolated enum Theme {
         default: .white
         }
     }
-    /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient.
+    /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient that only darkens toward the bottom
+    /// (`Color.gradient` lightened the top, and the white words on it fell to 3:1).
     static var userBubbleFill: AnyShapeStyle {
-        style == .lark || style == .glass ? AnyShapeStyle(userBubble) : AnyShapeStyle(userBubble.gradient)
+        style == .lark || style == .glass ? AnyShapeStyle(userBubble) : AnyShapeStyle(deepening(userBubble))
+    }
+
+    /// A color that darkens a little toward the bottom: depth without lightening what words sit on.
+    static func deepening(_ c: Color) -> LinearGradient {
+        LinearGradient(colors: [c, c.mix(with: .black, by: 0.12)], startPoint: .top, endPoint: .bottom)
     }
 
     /// The page behind lists and chats.
@@ -220,7 +229,8 @@ nonisolated enum Theme {
     static func pageBackground(_ style: AppStyle) -> Color {
         switch style {
         case .glass, .claude: systemPage
-        case .clay: Color(light: 0xEFEAF7, dark: 0x1D1A23)
+        // Clay's dark canvas sits under the system's grouped cells (#1C1C1E): at #1D1A23 they were one color (1.01:1).
+        case .clay: Color(light: 0xEFEAF7, dark: 0x0A0510)
         case .island: Color(light: 0xE6F1EF, dark: 0x0A1110)
         case .lark: Color(light: 0xF5F6F7, dark: 0x141414)
         }
