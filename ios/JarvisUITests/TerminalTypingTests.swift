@@ -12,7 +12,7 @@ final class TerminalTypingTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
-                               "-terminalInputMode", "direct", "-terminalTipsSeen", "YES"]
+                               "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launch()
 
         func sent() -> [(keys: [String], text: String)] {
@@ -49,5 +49,64 @@ final class TerminalTypingTests: XCTestCase {
 
         app.buttons["收起键盘"].tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "the keyboard stayed up")
+    }
+
+    /// Driving the terminal (MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1): the phone's grid goes up with the
+    /// subscribe, keys go out as the terminal's bytes over the WebSocket, and the keyboard coming up gives the
+    /// terminal fewer rows.
+    @MainActor func testDrivingTheTerminalSendsItsBytes() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
+                               "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
+        app.launch()
+
+        func input() -> [[String: Any]] {
+            guard let data = try? Data(contentsOf: URL(string: hub + "/mock/terminal_input")!),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+            return obj["input"] as? [[String: Any]] ?? []
+        }
+        let size = app.descendants(matching: .any)["terminal-size"]
+        guard size.waitForExistence(timeout: 15), (size.label.contains("手机尺寸") || {
+            sleep(2); return size.label.contains("手机尺寸")
+        }()) else { throw XCTSkip("the mock does not drive terminals (MOCK_TERMINAL_CONTROL=1)") }
+        let rowsBefore = Int(size.label.split(separator: "×").last ?? "") ?? 0
+        let before = input().count
+        let screen = app.descendants(matching: .any)["terminal-screen"]
+        screen.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard on the terminal")
+        sleep(1)
+        app.typeText("ls\n")
+        app.buttons["Control"].tap()
+        app.typeText("c")
+
+        var got: [[String: Any]] = []
+        let deadline = Date.now.addingTimeInterval(10)
+        while Date.now < deadline {
+            got = Array(input().dropFirst(before))
+            if got.contains(where: { ($0["text"] as? String)?.contains("\u{03}") == true }) { break }
+            usleep(300_000)
+        }
+        XCTAssertEqual(got.compactMap { $0["text"] as? String }.joined(), "ls\r\u{03}", "input: \(got)")
+        let resized = got.compactMap { ($0["control"] as? [String: Int])?["rows"] }
+        XCTAssertFalse(resized.isEmpty, "no new size with the keyboard up: \(got)")
+        // (typeText may switch the simulator to its hardware keyboard afterwards: rows come back, more with the
+        // page's header folded)
+        XCTAssertLessThan(resized.min() ?? .max, rowsBefore, "the keyboard did not take rows: \(resized)")
+        XCTAssertTrue(size.label.hasSuffix("×\(resized.last ?? 0)"), size.label)
+
+        // Leaving the tab lets the terminal go (the pane goes back to the computer's size).
+        app.buttons["收起键盘"].tap() // the page's header (with the tabs) is folded while the keyboard is up
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        sleep(1)
+        app.buttons["对话"].firstMatch.tap()
+        let gone = Date.now.addingTimeInterval(5)
+        while Date.now < gone, !input().dropFirst(before).contains(where: { $0["type"] as? String == "terminal_unsubscribe" }) {
+            usleep(200_000)
+        }
+        XCTAssertTrue(input().dropFirst(before).contains { $0["type"] as? String == "terminal_unsubscribe" }, "still driving after leaving")
     }
 }

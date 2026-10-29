@@ -241,13 +241,28 @@ final class AppModel {
     @ObservationIgnored private var terminalHandlers: [SessionKey: (TerminalEvent) -> Void] = [:]
 
     var canStreamTerminal: Bool { hubFeatures.contains("terminal_stream") }
+    /// The hub can let the phone drive a terminal at its own size (`terminal_control`).
+    var canControlTerminal: Bool { hubFeatures.contains("terminal_control") }
     var isLive: Bool { live.state == .connected }
 
-    /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream.
-    func terminalSubscribe(_ key: SessionKey, epoch: String?, after: Int, handler: @escaping (TerminalEvent) -> Void) {
+    /// Starts (or continues, with the last epoch and seq the view holds) a session's terminal stream. grid: drive it at
+    /// that size (the phone's); takeover: even if another program on the computer holds it.
+    func terminalSubscribe(_ key: SessionKey, epoch: String?, after: Int, grid: TerminalGridSize? = nil, takeover: Bool = false,
+                           handler: @escaping (TerminalEvent) -> Void) {
         terminalHandlers[key] = handler
         var msg: [String: Any] = ["type": "terminal_subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
         if let epoch { msg["epoch"] = epoch; msg["after_seq"] = after }
+        if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
+        if takeover { msg["takeover"] = true }
+        live.send(msg)
+    }
+
+    /// Typed into a terminal the phone drives: the bytes go straight to it (in order, over the WebSocket). grid: the
+    /// terminal's new size (the keyboard came up, the font changed).
+    func terminalInput(_ key: SessionKey, _ text: String, grid: TerminalGridSize? = nil) {
+        var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID]
+        if !text.isEmpty { msg["text"] = text }
+        if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
         live.send(msg)
     }
 

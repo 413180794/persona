@@ -1,7 +1,10 @@
 # 终端：真终端怎么做
 
 「终端」tab 要像一个真终端：完整颜色、光标、备用屏、宽字符 / 中文对齐、断线后接着看，长行在手机上完整显示（换行），
-同时**不改电脑上 herdr 窗格的大小**、**会话不离开 herdr**。这里记 2026-10-29 spike 的实测结论和由此定下的方案。
+**会话不离开 herdr**。这里记 2026-10-29 spike 的实测结论和由此定下的方案。
+
+起初的约束是「不改电脑上窗格的大小」，一到十节都按它做（镜像窗格、手机上折行）。同日用户改了主意：要 Moshi 那样真正的手机尺寸，
+打开终端 tab 时手机接管窗格（第十一节）；镜像保留为「电脑尺寸」模式和接管不了时的降级。
 
 ## 一、数据从哪来（herdr 0.9.3 本机 / 0.9.5 hub，协议 22，实测）
 
@@ -9,7 +12,8 @@
 | --- | --- | --- |
 | `pane.read`（socket RPC） | 网格快照：`format` 为 `text` / `ansi`，`source` 为 `visible` / `recent` / `recent_unwrapped` / `detection` | `ansi` 带完整 SGR（粗体、16 / 256 / 真彩色、下划线、反显），中文原样；**没有光标位置**；每行 `\r\n` 结尾、行尾空白去掉。一次读约 0.3 ms（整屏 Claude 4.9 KB）。用来补**滚动历史**。 |
 | 事件 `pane.updated` / `pane.scroll_changed` | 窗格元数据变化（标题、滚动范围），`revision` 也只跟元数据走 | **输出本身不触发事件**，不能拿来做推送；`max_offset_from_bottom` 能看出有多少行进了滚动历史。 |
-| `herdr terminal attach <terminal>`（隐藏命令） | 交互客户端的字节流 | **不用**：每个终端只有一个 attach 槽位（Ovis 装在同一台电脑上会互相抢），而且交互客户端会把终端改成自己的尺寸 = 改电脑上窗格的宽度。 |
+| `herdr terminal attach <terminal>`（隐藏命令） | 交互客户端的字节流：**也是 herdr 重画的网格**（备用屏 + 逐格 CUP），不是程序的原始输出；要一个 PTY | **不用**：每个终端只有一个 attach 槽位（Ovis 装在同一台电脑上会互相抢），而且交互客户端会把终端改成自己的尺寸 = 改电脑上窗格的宽度。手机接管用的是同一个槽位的管道版 `session control`（第十一节）。 |
+| `herdr terminal session control <pane> --cols C --rows R [--takeover]` | 占 attach 槽位，窗格里的程序看到的尺寸变成 C × R；stdin 每行一个命令（`terminal.input {text\|bytes}`、`terminal.resize`、`terminal.scroll`、`terminal.mouse`、`terminal.release`），stdout 和 observe 一样的帧 | **手机接管用这个**（第十一节）。 |
 | `herdr terminal session observe <pane> --cols W --rows H` | **观察者流**：每行一个 JSON `{"type":"terminal.frame","seq","full","width","height","encoding":"ansi","bytes":<base64>}`，bytes 是 herdr 把窗格网格重新画出来的 VT 序列 | **用这个。** 不占 attach 槽位、不改窗格尺寸（观察时窗格仍是 172×45），多个观察者可以同时开；有输出就推（不用轮询）；不需要 PTY，普通管道就行。 |
 
 `observe` 流的细节：
@@ -191,4 +195,64 @@ tab4 截图里整段中文缺字、看起来字距大，根源在这里。
 - Claude 里用 `!` 跑每 5 ms 打一行的循环：帧间隔中位 101 / 107 ms。Claude 显示命令输出也按自己约 100 ms 的节奏重画，到不了 herdr 的 60 帧/秒。
 - 所以手头的会话（都是 Claude）里，没有一个能把合帧窗口真正用满。合帧的正确性由 `TestFrameGateMergesBurstsOnly` 保证；
   等有每秒几十帧重画的 Agent（Codex 一类）时，再用 `/tmp` 下的测量办法（本机 observe 对比经 hub 的 WebSocket）复核。
+
+## 十一、手机接管：真正的手机尺寸（2026-10-29 用户拍板方案 A）
+
+镜像窗格时 Claude Code 以为终端 172 列宽，按电脑排版，手机再折行，体验不对。现在打开终端 tab 时手机**接管**终端：
+窗格里的程序看到的是手机按当前字号算出的列 × 行，Claude 按手机宽度排版（权限框、diff、spinner 都是它自己按手机宽度画的），
+键直接写进终端。设置 › 终端尺寸可以切回「电脑尺寸」（镜像，第二节）。
+
+### herdr 给什么（实测，herdr 0.9.3）
+
+- `herdr terminal session control <pane> --cols C --rows R`：不要 PTY，stdin / stdout 走管道，**和 `terminal attach` 共用一个槽位**。
+  开起来窗格立刻变成 C × R（`pane get` 的 `viewport_rows`、Claude 的分隔线宽度都变了），stdout 是和 observe 一样的 `terminal.frame`。
+  stdin 一行一个 JSON：`{"type":"terminal.input","text":"…"}`（或 `bytes`：base64），`{"type":"terminal.resize","cols":C,"rows":R}`，`{"type":"terminal.release"}`。
+- **怎么断都会自动恢复**：stdin 关掉（EOF）、`kill -TERM`、`kill -9`、`release`，herdr 都把窗格放回原来的尺寸（172×45），Claude 重画回电脑宽度。
+  所以 node 崩了、hub 崩了（node 是它的子进程，stdin 跟着断）都不会把窗格卡在手机宽度。
+- 槽位被占着（Ovis、另一个 herdr 客户端）：不带 `--takeover` 时立刻 `{"type":"terminal.closed","reason":"terminal attach failed: … already has an attached client; retry with --takeover"}`；
+  带 `--takeover` 抢过来，原来那个收到 `terminal attach taken over` 后退出。我们被别人抢走时也是收到这个 reason。
+- resize 后约 6 ms 来一个整帧；**同尺寸的 resize 也回一个整帧**，而程序收不到 SIGWINCH（尺寸没变）：node 用它在增量攒太多（256 KB）时要一个新整帧，
+  不用像 observe 那样重开（重开会让窗格先回电脑尺寸再变回来，Claude 重画两次）。
+- `terminal attach` 的输出也是 herdr 重画的网格（`ESC[?1049h` 备用屏 + 逐格 CUP），**herdr 不给程序的原始字节**。所以「换 SwiftTerm 吃原始字节流」不成立：
+  SwiftTerm 收到的也是原地重画，不会自己长出滚动历史；手机上现有的 VT 子集已经和 `herdr pane read` 逐行一致，就不引入新的 Swift 包了（也就不用补 `/tmp/jarvis-spm` 镜像）。
+- **接管期间 herdr 没有滚动历史**：`pane read --source recent` 只返回当前一屏（31 行），`max_offset_from_bottom` 一直是 0，Claude 写了 60 行也一样；
+  放回电脑尺寸后，原来 172 列的历史又回来了。
+
+### 链路
+
+```
+App ──terminal_subscribe {control:{cols,rows}, takeover?}──▶ hub ──terminal.watch {control}──▶ node ──session control──▶ herdr
+App ──terminal_input {text, control?}────────────────────▶ hub ──terminal.input / terminal.resize（事件，保序）──▶ node ──stdin──▶ herdr
+App ◀──terminal（帧，同镜像）、terminal_control {state}──── hub ◀──terminal.frame / terminal.end {control, taken}── node
+```
+
+- 键走 WebSocket → hub → node 的**事件**（RPC 的 method 在对端是并发处理的，事件按到达顺序处理），node 写进 control 进程的 stdin，不再每批起一次 `herdr pane send-keys`。
+  App 把键名换成终端字节（`TerminalKeyBytes`：回车 `\r`，方向键 `CSI A–D`、带修饰 `CSI 1;m X`，ctrl+字母是控制字符，alt 是前缀 ESC，shift+enter 是 `ESC \r`），
+  多行粘贴包成 bracketed paste（`ESC[200~ … ESC[201~`）。
+- 尺寸：终端视图按字号算出能放下的列 × 行（`onGrid`），第一次立即用（订阅要等它），之后键盘起落、旋转、捏合字号都防抖 250 ms 再发（`terminal_input` 带 `control`）。
+- 一个终端只有一个「驾驶」的设备：最新订阅带 control 的那台接管，之前那台收到 `taken`、改为只看。别的设备照样能看（看到的是手机尺寸的帧）。
+- hub 对每个会话的 watch / unwatch 一次一个（`callLock`），每次按当时想要的状态问 node，最后一次就是 hub 要的样子。
+- 放手：App 离开终端 tab / 进后台 / 被杀 → `terminal_unsubscribe` 或 WebSocket 断开 → hub 没人驾驶了：还有人看就改回镜像，没人看就 `terminal.unwatch` → node 关 stdin → herdr 恢复。
+  手机直接没了（不断开 TCP）：hub 的 WebSocket ping（20 s 一次、15 s 超时）断掉它。node 侧再有个租约：hub 每 20 s 发 `terminal.keepalive`，75 s 没收到就自己放手。
+- 槽位被占：node 回 `attach_busy`，hub 告诉 App `busy` 并先镜像着；App 弹窗「电脑上另一个程序正在使用这个终端」→「接管」重新订阅带 `takeover`，「只看」就镜像。
+  接管中途被抢走：node 发 `terminal.end {control, taken}`，hub 告诉 App `taken` 并改回镜像，App 显示「只看 · 接管」按钮可以抢回来。
+- 旧 node（不认 `control`，照样镜像、回包里没有 `control: true`）/ 旧 herdr（没有 `session control`）：hub 告诉 App `unsupported`，App 镜像。旧 hub 没有 `terminal_control` feature，App 不发 control。
+
+### 手机上的滚动历史
+
+herdr 接管期间没有历史，帧又是原地重画，所以历史只能手机自己攒：每帧前后比一下网格，新屏顶上的几行等于旧屏第 k 行起的那几行，
+就是往上滚了 k 行，旧屏顶上 k 行进历史（`TerminalGrid.scrolled`：至少对上剩下的三分之一、其中至少两行不是空行或分隔线，因为底部的 spinner 和输入框一直在变）。
+一帧里滚过整屏的部分找不回来（herdr 那边也没有），完整的过程在「对话」里。
+接管前先读一次窗格的历史（电脑宽度，200×2 行，按手机宽度折行），放在最上面，下面一条「以上是接管前电脑上的输出」；接管期间不再分页往上读。
+真实帧验证：`terminal-control-scroll.jsonl`（44×30 时 Claude 写 60 行）回放后历史 + 屏幕正好是 1. 到 60. 各一次，逐帧、按 node 的 30 ms 合帧、按 250 ms 粗合帧都对（`TerminalControlTests`）。
+
+### 实测（本机测试 hub → 本机 node → lab 窗格 w9:p5，部署前）
+
+| 项 | 结果 |
+| --- | --- |
+| 接管耗时（订阅 → `active`） | 25 ms（node 起 control 到第一帧约 70 ms，含在 watch 里） |
+| 回显（发键 → 带这个字的帧） | 接管后经 WebSocket 中位 24 ms、最慢 37 ms；同一条链路上走 `POST /keys` 中位 23 ms、最慢 122 ms。本机没有网络，差别要部署后经线上 hub 再量 |
+| node 处直接写 stdin 到出帧 | 13–23 ms（herdr 每 16 ms 出一帧是下限） |
+| 恢复 | 离开 tab 立即；App 进后台约 5 s；杀 App 约 2 s；手机不断开连接地消失 27 s（hub ping 超时）；hub `kill -9` 0.1 s；node `kill -9` 立即 |
+| 被占 / 抢占 | 占着时 `busy`、镜像着看；`takeover` 后原客户端退出、窗格变手机尺寸 |
 

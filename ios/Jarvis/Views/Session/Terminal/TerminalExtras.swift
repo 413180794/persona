@@ -15,6 +15,9 @@ enum TerminalPrefs {
     /// "direct": the keyboard types into the terminal; "field": a text field under it sends what is written.
     static let inputMode = "terminalInputMode"
     static let tipsSeen = "terminalTipsSeen"
+    /// "phone": the phone drives the terminal at its own size while the tab is open; "mirror": it shows the pane at the
+    /// computer's size and folds long rows.
+    static let size = "terminalSize"
     static let defaultFontSize = 13.0
     static let defaultShortcuts = ["git status", "git diff --stat", "ls -la", "/compact", "/status"]
     static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", "快捷命令"),
@@ -92,6 +95,7 @@ struct TerminalSettingsView: View {
     @AppStorage(TerminalPrefs.font) private var fontID = TerminalFont.jetbrains.rawValue
     @AppStorage(TerminalPrefs.theme) private var themeID = TerminalTheme.defaultID
     @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
+    @AppStorage(TerminalPrefs.size) private var size = "phone"
     @State private var newShortcut = ""
 
     private var shortcuts: Binding<[String]> {
@@ -101,6 +105,18 @@ struct TerminalSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("终端尺寸", selection: $size) {
+                        Text("手机尺寸").tag("phone")
+                        Text("电脑尺寸").tag("mirror")
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("尺寸")
+                } footer: {
+                    Text(size == "phone" ? "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。"
+                         : "不改电脑上的窗格，按电脑的宽度显示，长行在手机上折行（或左右滑）。")
+                }
                 Section {
                     TerminalPreview(fontSize: fontSize, font: TerminalFont(rawValue: fontID) ?? .jetbrains,
                                     theme: .named(themeID), wrap: wrap)

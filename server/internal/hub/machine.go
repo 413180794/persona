@@ -237,6 +237,17 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 	return p.Call(ctx, method, params, out)
 }
 
+// notify sends the node a one-way event; events arrive in the order sent.
+func (m *Machine) notify(event string, params any) error {
+	m.mu.Lock()
+	p := m.peer
+	m.mu.Unlock()
+	if p == nil {
+		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	}
+	return p.Notify(event, params)
+}
+
 func (m *Machine) setSessions(list []proto.Session) {
 	for i := range list {
 		list[i].MachineID = m.cfg.ID
@@ -375,8 +386,15 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		var p struct {
 			SessionID string `json:"session_id"`
 			Error     string `json:"error"`
+			Control   bool   `json:"control"`
+			Taken     bool   `json:"taken"`
 		}
-		if json.Unmarshal(params, &p) == nil {
+		if json.Unmarshal(params, &p) != nil {
+			return
+		}
+		if p.Control {
+			m.hub.terminalControlEnded(m.cfg.ID, p.SessionID, p.Error, p.Taken)
+		} else {
 			m.hub.terminalEnded(m.cfg.ID, p.SessionID, p.Error, nil)
 		}
 	case "session.delta":

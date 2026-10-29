@@ -115,6 +115,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	}
 	n.peer = rpc.New("n", os.Stdout)
 	n.peer.OnRequest = n.handle
+	n.peer.OnEvent = n.onTerminalEvent
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
 	go n.loadState(ctx)
 	ln, err := n.listenHookSocket(ctx)
@@ -312,7 +313,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source, p.Format == "ansi")
 		return map[string]any{"text": text, "status": status}, err
 	case "terminal.watch":
-		return n.terminalWatch(ctx, p.SessionID)
+		var a struct {
+			Control *termControl `json:"control"`
+		}
+		_ = json.Unmarshal(params, &a)
+		return n.terminalWatch(ctx, p.SessionID, a.Control)
 	case "terminal.unwatch":
 		n.terminalUnwatch(p.SessionID)
 		return ok(nil)

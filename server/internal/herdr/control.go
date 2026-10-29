@@ -1,0 +1,204 @@
+package herdr
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Control is `herdr terminal session control <pane> --cols C --rows R`: the terminal's one attach slot, held over
+// pipes. While it runs the pane's programs see C × R (Claude Code lays itself out again for it), what is written in
+// goes to them as if typed, and the frames coming out are herdr's redraws of that grid — the same as an observer's.
+// Ending it in any way (Close, the process killed, this process gone: its stdin closes) gives the slot back and herdr
+// puts the pane back to its own size.
+type Control struct {
+	cmd    *exec.Cmd
+	in     io.WriteCloser
+	writes chan []byte
+	done   chan struct{}
+	once   sync.Once
+	reason string // terminal.closed's reason, once it came
+	mu     sync.Mutex
+}
+
+// ErrAttachBusy: another client (Ovis, a second herdr client) holds the terminal's attach slot; take it over to go on.
+var ErrAttachBusy = errors.New("attach_busy")
+
+// ErrTakenOver: the slot was taken by someone else while we held it.
+var ErrTakenOver = errors.New("taken_over")
+
+// controlWait bounds the wait for herdr's first answer (a frame, or why not).
+const controlWait = 8 * time.Second
+
+// StartControl takes the pane's terminal at cols × rows and streams frames to fn until it ends (ctx ending ends it). It returns once
+// herdr answered: with the first frame already given to fn, or ErrAttachBusy (takeover false and the slot is held).
+func (c *Client) StartControl(ctx context.Context, pane string, cols, rows int, takeover bool, fn func(Frame)) (*Control, error) {
+	args := []string{"terminal", "session", "control", pane, "--cols", fmt.Sprint(cols), "--rows", fmt.Sprint(rows)}
+	if takeover {
+		args = append(args, "--takeover")
+	}
+	cmd := exec.Command(c.Bin, args...) // ctx ending lets go through Close: stdin first, a kill only if that fails
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("herdr terminal session control: %w", err)
+	}
+	s := &Control{cmd: cmd, in: in, writes: make(chan []byte, 1024), done: make(chan struct{})}
+	first := make(chan error, 1)
+	go s.writeLoop()
+	go func() {
+		select {
+		case <-ctx.Done():
+			s.Close()
+		case <-s.done:
+		}
+	}()
+	go func() {
+		defer close(s.done)
+		r := bufio.NewReaderSize(stdout, 256<<10)
+		started := false
+		for {
+			line, err := readLine(r, maxLine)
+			if err != nil {
+				break
+			}
+			var m struct {
+				Type   string `json:"type"`
+				Reason string `json:"reason"`
+				Frame
+			}
+			if json.Unmarshal(line, &m) != nil {
+				continue
+			}
+			switch m.Type {
+			case "terminal.frame":
+				fn(m.Frame)
+				if !started {
+					started = true
+					first <- nil
+				}
+			case "terminal.closed":
+				s.mu.Lock()
+				s.reason = m.Reason
+				s.mu.Unlock()
+			}
+		}
+		_ = cmd.Wait()
+		if !started {
+			first <- s.endError(strings.TrimSpace(stderr.String()))
+		}
+	}()
+	select {
+	case err := <-first:
+		if err != nil {
+			s.Close()
+			return nil, err
+		}
+		return s, nil
+	case <-time.After(controlWait):
+		s.Close()
+		return nil, fmt.Errorf("herdr terminal session control: no frame in %v", controlWait)
+	case <-ctx.Done():
+		s.Close()
+		return nil, ctx.Err()
+	}
+}
+
+// endError is why the session ended, from herdr's terminal.closed reason (or its stderr).
+func (s *Control) endError(stderr string) error {
+	s.mu.Lock()
+	reason := s.reason
+	s.mu.Unlock()
+	switch {
+	case strings.Contains(reason, "already has an attached client"):
+		return fmt.Errorf("%w: %s", ErrAttachBusy, reason)
+	case strings.Contains(reason, "taken over"):
+		return fmt.Errorf("%w: %s", ErrTakenOver, reason)
+	case reason != "":
+		return fmt.Errorf("herdr terminal session control: %s", reason)
+	case stderr != "":
+		return fmt.Errorf("herdr terminal session control: %s", stderr)
+	}
+	return errors.New("herdr terminal session control: ended")
+}
+
+func (s *Control) writeLoop() {
+	for {
+		select {
+		case b := <-s.writes:
+			if _, err := s.in.Write(b); err != nil {
+				return
+			}
+		case <-s.done:
+			return
+		}
+	}
+}
+
+func (s *Control) send(v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	select {
+	case <-s.done:
+		return errors.New("terminal control ended")
+	default:
+	}
+	select {
+	case s.writes <- append(b, '\n'):
+		return nil
+	case <-s.done:
+		return errors.New("terminal control ended")
+	case <-time.After(2 * time.Second): // herdr stopped reading: the session is as good as gone
+		return errors.New("terminal control is not taking input")
+	}
+}
+
+// Input types text into the terminal: the bytes as they are (a key is its escape sequence: "\r", "\x1b[A").
+func (s *Control) Input(text string) error {
+	return s.send(map[string]any{"type": "terminal.input", "text": text})
+}
+
+// Resize gives the pane's programs a new size; herdr answers with a whole frame of it.
+func (s *Control) Resize(cols, rows int) error {
+	return s.send(map[string]any{"type": "terminal.resize", "cols": cols, "rows": rows})
+}
+
+// Done is closed when the session ended (released, taken over, the pane gone).
+func (s *Control) Done() <-chan struct{} { return s.done }
+
+// Err is why it ended (after Done): ErrTakenOver when someone took the slot.
+func (s *Control) Err() error { return s.endError("") }
+
+// Close gives the slot back: stdin closes, herdr detaches and puts the pane back to its size. A process that does not
+// exit soon after is killed (that releases it as well).
+func (s *Control) Close() {
+	s.once.Do(func() {
+		_ = s.in.Close()
+		go func() {
+			select {
+			case <-s.done:
+			case <-time.After(3 * time.Second):
+				if s.cmd.Process != nil {
+					_ = s.cmd.Process.Kill()
+				}
+			}
+		}()
+	})
+}

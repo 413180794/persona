@@ -43,6 +43,69 @@ nonisolated struct KeyBatcher {
     }
 }
 
+/// The grid the phone asks for when it drives a terminal: what fits its view at the font size.
+nonisolated struct TerminalGridSize: Equatable, Sendable {
+    var cols: Int
+    var rows: Int
+}
+
+/// What a key is as bytes on the terminal, for the phone driving it directly (herdr's key names: "enter", "ctrl+c",
+/// "shift+tab", "alt+left"). The legacy encodings every TUI reads: CSI for arrows (with `1;m` for modifiers), the
+/// control character for ctrl+letter, ESC before the key for alt. shift+enter / alt+enter are ESC CR, which Claude
+/// Code and Codex take as a new line in the prompt.
+nonisolated enum TerminalKeyBytes {
+    static func encode(_ name: String) -> String? {
+        var parts = name.lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+        // "ctrl++": the key is "+"
+        if parts.count > 1, parts.last == "", parts[parts.count - 2] == "" { parts.removeLast(2); parts.append("+") }
+        guard let base = parts.popLast(), !base.isEmpty else { return nil }
+        let ctrl = parts.contains("ctrl") || parts.contains("control"), alt = parts.contains("alt") || parts.contains("meta") || parts.contains("option")
+        let shift = parts.contains("shift")
+        let esc = "\u{1B}"
+        let csiFinal: [String: String] = ["up": "A", "down": "B", "right": "C", "left": "D", "home": "H", "end": "F"]
+        let tilde: [String: Int] = ["insert": 2, "delete": 3, "pageup": 5, "pagedown": 6, "f5": 15, "f6": 17, "f7": 18, "f8": 19,
+                                    "f9": 20, "f10": 21, "f11": 23, "f12": 24]
+        let ss3: [String: String] = ["f1": "P", "f2": "Q", "f3": "R", "f4": "S"]
+        let mod = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0)
+        if let f = csiFinal[base] { return mod == 1 ? esc + "[" + f : esc + "[1;\(mod)" + f }
+        if let n = tilde[base] { return mod == 1 ? esc + "[\(n)~" : esc + "[\(n);\(mod)~" }
+        if let f = ss3[base] { return mod == 1 ? esc + "O" + f : esc + "[1;\(mod)" + f }
+        let prefix = alt ? esc : ""
+        switch base {
+        case "enter", "return": return shift || alt ? esc + "\r" : "\r"
+        case "tab": return shift ? esc + "[Z" : prefix + "\t"
+        case "esc", "escape": return esc
+        case "backspace": return prefix + (ctrl ? "\u{08}" : "\u{7F}")
+        case "space": return prefix + (ctrl ? "\u{00}" : " ")
+        default: break
+        }
+        guard base.count == 1, let ch = base.unicodeScalars.first else { return nil }
+        if ctrl {
+            let v = ch.value
+            switch ch {
+            case "a"..."z": return prefix + String(UnicodeScalar(v - 0x60)!)
+            case "@", "2": return prefix + "\u{00}"
+            case "[", "3": return esc
+            case "\\", "4": return prefix + "\u{1C}"
+            case "]", "5": return prefix + "\u{1D}"
+            case "^", "6": return prefix + "\u{1E}"
+            case "_", "-", "7", "/": return prefix + "\u{1F}"
+            case "?", "8": return prefix + "\u{7F}"
+            default: return prefix + base
+            }
+        }
+        return prefix + (shift ? base.uppercased() : base)
+    }
+
+    /// Typed text: as it is, or — a paste with lines in it — as a bracketed paste, so the program takes it as one
+    /// piece instead of a return at each line.
+    static func text(_ t: String) -> String {
+        guard t.contains(where: \.isNewline) else { return t }
+        let lines = t.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r")
+        return "\u{1B}[200~" + lines + "\u{1B}[201~"
+    }
+}
+
 /// A position in the composition (UTF-16 offset); the "document" the input method sees is only that.
 final class TermTextPosition: UITextPosition {
     let offset: Int

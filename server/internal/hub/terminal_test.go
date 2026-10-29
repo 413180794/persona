@@ -1,9 +1,17 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 func frames(seqs ...int) []termFrame {
@@ -94,5 +102,204 @@ func TestTerminalFramesFanOutFromAWholeFrame(t *testing.T) {
 	_ = json.Unmarshal(<-a.out, &end)
 	if end["unsupported"] != true || h.terms.relays[[2]string{"m1", "s1"}] != nil {
 		t.Fatalf("end = %v", end)
+	}
+}
+
+// termNode is a node as the hub sees it for terminals: terminal.watch (attach_busy while busy and not a takeover;
+// control true unless old), terminal.unwatch, and the events the hub sends, all recorded in order.
+type termNode struct {
+	mu    sync.Mutex
+	log   []string
+	busy  bool
+	old   bool
+	hub   *Hub
+	where *Machine
+}
+
+func newTermNode(t *testing.T) *termNode {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	h2nR, h2nW := io.Pipe()
+	n2hR, n2hW := io.Pipe()
+	hubSide := rpc.New("h", h2nW)
+	nodeSide := rpc.New("n", n2hW)
+	tn := &termNode{}
+	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		var p struct {
+			Control *struct {
+				Cols, Rows int
+				Takeover   bool
+			} `json:"control"`
+		}
+		_ = json.Unmarshal(params, &p)
+		tn.mu.Lock()
+		defer tn.mu.Unlock()
+		switch {
+		case method == "terminal.watch" && p.Control != nil:
+			tn.log = append(tn.log, fmt.Sprintf("control %dx%d takeover=%v", p.Control.Cols, p.Control.Rows, p.Control.Takeover))
+			if tn.busy && !p.Control.Takeover {
+				return nil, &rpc.Error{Code: "attach_busy", Message: "attach_busy: already has an attached client"}
+			}
+			if tn.old {
+				return map[string]any{"cols": 172, "rows": 45}, nil
+			}
+			return map[string]any{"cols": p.Control.Cols, "rows": p.Control.Rows, "control": true}, nil
+		case method == "terminal.watch":
+			tn.log = append(tn.log, "observe")
+			return map[string]any{"cols": 172, "rows": 45, "control": false}, nil
+		}
+		tn.log = append(tn.log, method)
+		return map[string]any{}, nil
+	}
+	nodeSide.OnEvent = func(event string, params json.RawMessage) {
+		tn.mu.Lock()
+		defer tn.mu.Unlock()
+		tn.log = append(tn.log, event+" "+string(params))
+	}
+	go func() { _ = hubSide.Serve(ctx, n2hR) }()
+	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
+	h := &Hub{byID: map[string]*Machine{}, logger: log.New(io.Discard, "", 0)}
+	m := newMachine(h, MachineConfig{ID: "m1", Name: "m1"})
+	m.peer = hubSide
+	h.byID["m1"] = m
+	tn.hub, tn.where = h, m
+	return tn
+}
+
+// await waits until the node's log has n entries and returns it.
+func (tn *termNode) await(t *testing.T, n int) []string {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		tn.mu.Lock()
+		got := append([]string(nil), tn.log...)
+		tn.mu.Unlock()
+		if len(got) >= n {
+			time.Sleep(30 * time.Millisecond) // nothing more should come
+			tn.mu.Lock()
+			got = append([]string(nil), tn.log...)
+			tn.mu.Unlock()
+			return got
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("node log %q, want %d entries", got, n)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// controlStates are the terminal_control states a client was told, in order.
+func controlStates(c *client) []string {
+	var out []string
+	for {
+		select {
+		case b := <-c.out:
+			var m struct {
+				Type  string `json:"type"`
+				State string `json:"state"`
+			}
+			_ = json.Unmarshal(b, &m)
+			if m.Type == "terminal_control" {
+				out = append(out, m.State)
+			}
+		default:
+			return out
+		}
+	}
+}
+
+func awaitStates(t *testing.T, c *client, want ...string) {
+	t.Helper()
+	var got []string
+	deadline := time.Now().Add(3 * time.Second)
+	for len(got) < len(want) && time.Now().Before(deadline) {
+		got = append(got, controlStates(c)...)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("control states %v, want %v", got, want)
+	}
+}
+
+func TestTerminalControlDrivesAndGivesBack(t *testing.T) {
+	tn := newTermNode(t)
+	h, ctx := tn.hub, context.Background()
+	a := &client{out: make(chan []byte, 64)}
+	b := &client{out: make(chan []byte, 64)}
+	h.terminalSubscribe(ctx, a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
+	awaitStates(t, a, "active")
+	h.terminalInput(a, "m1", "s1", "ls\r", nil)
+	h.terminalInput(b, "m1", "s1", "whoami\r", nil)      // b does not drive it
+	h.terminalInput(a, "m1", "s1", "", &termCtl{44, 18}) // the keyboard came up
+	h.terminalSubscribe(ctx, b, "m1", "s1", "", 0, nil, false)
+	got := tn.await(t, 3)
+	want := []string{"control 44x30 takeover=false", `terminal.input {"session_id":"s1","text":"ls\r"}`,
+		`terminal.resize {"cols":44,"rows":18,"session_id":"s1"}`}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("node got %q, want %q", got, want)
+	}
+	h.terminalUnsubscribe(a, "m1", "s1") // b still watches: back to the pane's own size
+	if got := tn.await(t, 4); got[3] != "observe" {
+		t.Fatalf("after the driver left: %q", got)
+	}
+	h.terminalUnsubscribe(b, "m1", "s1")
+	if got := tn.await(t, 5); got[4] != "terminal.unwatch" {
+		t.Fatalf("after the last left: %q", got)
+	}
+	h.terminalInput(a, "m1", "s1", "x", nil) // gone: nothing reaches the node
+	if got := tn.await(t, 5); len(got) != 5 {
+		t.Fatalf("typed into a terminal nobody drives: %q", got)
+	}
+}
+
+func TestTerminalControlAsksBeforeTakingOver(t *testing.T) {
+	tn := newTermNode(t)
+	tn.busy = true
+	h, ctx := tn.hub, context.Background()
+	a := &client{out: make(chan []byte, 64)}
+	h.terminalSubscribe(ctx, a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
+	awaitStates(t, a, "busy")
+	if got := tn.await(t, 2); got[1] != "observe" { // watched meanwhile
+		t.Fatalf("node got %q", got)
+	}
+	h.terminalSubscribe(ctx, a, "m1", "s1", "", 0, &termCtl{44, 30}, true) // its user said take it
+	awaitStates(t, a, "active")
+	if got := tn.await(t, 3); got[2] != "control 44x30 takeover=true" {
+		t.Fatalf("node got %q", got)
+	}
+	// Someone on the computer takes it back: the phone hears so and watches.
+	h.terminalControlEnded("m1", "s1", "taken_over", true)
+	awaitStates(t, a, "taken")
+	if got := tn.await(t, 4); got[3] != "observe" {
+		t.Fatalf("node got %q", got)
+	}
+}
+
+func TestTerminalControlOnAnOldNodeOnlyWatches(t *testing.T) {
+	tn := newTermNode(t)
+	tn.old = true
+	h := tn.hub
+	a := &client{out: make(chan []byte, 64)}
+	h.terminalSubscribe(context.Background(), a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
+	awaitStates(t, a, "unsupported")
+	h.terminalInput(a, "m1", "s1", "x", nil)
+	if got := tn.await(t, 1); len(got) != 1 {
+		t.Fatalf("node got %q", got)
+	}
+}
+
+func TestTerminalControlNewestDeviceDrives(t *testing.T) {
+	tn := newTermNode(t)
+	h, ctx := tn.hub, context.Background()
+	phone := &client{out: make(chan []byte, 64)}
+	pad := &client{out: make(chan []byte, 64)}
+	h.terminalSubscribe(ctx, phone, "m1", "s1", "", 0, &termCtl{44, 30}, false)
+	awaitStates(t, phone, "active")
+	h.terminalSubscribe(ctx, pad, "m1", "s1", "", 0, &termCtl{100, 40}, false)
+	awaitStates(t, pad, "active")
+	awaitStates(t, phone, "taken")
+	if got := tn.await(t, 2); got[1] != "control 100x40 takeover=false" {
+		t.Fatalf("node got %q", got)
 	}
 }

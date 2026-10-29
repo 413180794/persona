@@ -45,6 +45,7 @@ var Features = []string{
 	"secret_prompts",         // interaction.secret
 	"request_id",             // X-Request-Id
 	"terminal_stream",        // WebSocket terminal_subscribe: the pane's live frames (docs/terminal.md)
+	"terminal_control",       // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 }
 

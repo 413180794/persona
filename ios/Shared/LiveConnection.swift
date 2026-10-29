@@ -9,6 +9,9 @@ nonisolated enum TerminalEvent: Sendable {
     case ended(String, unsupported: Bool)
     /// The WebSocket connected again: subscribe again (continuing from the last frame).
     case reconnected
+    /// How driving the terminal at the phone's size went (docs/terminal.md): active (cols × rows), busy (another
+    /// program holds it: ask before taking over), taken / lost (back to watching), unsupported (only watching).
+    case control(state: String, cols: Int?, rows: Int?, why: String?)
 }
 
 nonisolated enum ServerEvent: Sendable {
@@ -71,10 +74,11 @@ nonisolated enum ServerEvent: Sendable {
         var rows: Int?
         var data: String?
         var unsupported: Bool?
+        var state: String?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported
+            case features, epoch, seq, full, cols, rows, data, unsupported, state
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
@@ -120,6 +124,9 @@ nonisolated enum ServerEvent: Sendable {
             if let error = e.error { return .terminal(key, .ended(error, unsupported: e.unsupported ?? false)) }
             guard let epoch = e.epoch, let seq = e.seq, let data = e.data.flatMap({ Data(base64Encoded: $0) }) else { return nil }
             return .terminal(key, .frame(epoch: epoch, seq: seq, full: e.full ?? false, cols: e.cols ?? 0, rows: e.rows ?? 0, data: data))
+        case "terminal_control":
+            guard let key, let state = e.state else { return nil }
+            return .terminal(key, .control(state: state, cols: e.cols, rows: e.rows, why: e.error))
         default: return nil
         }
     }

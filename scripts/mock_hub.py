@@ -7,7 +7,8 @@ Pair the app with it: -pairURL "jarvis://pair?url=http%3A%2F%2F127.0.0.1%3A18760
 It serves machines, agents, conversations, interactions and the inbox, enough for the main screens; requests it
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
-import base64, hashlib, json, os, struct, sys, threading, time, uuid
+import base64, unicodedata
+import hashlib, json, os, struct, sys, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -303,6 +304,48 @@ def terminal_frames(cols=96, rows=24, ticks=40):
                     "data": base64.b64encode(data.encode()).decode()})
     return out
 
+# MOCK_TERMINAL_CONTROL=1 (with MOCK_TERMINAL_STREAM): the hub also says terminal_control; a subscribe with control
+# gets terminal_control active and the made-up screen laid out at the phone's grid (re-laid at each new size), what is
+# typed shows in its prompt, and every terminal_input is kept (GET /mock/terminal_input). MOCK_TERMINAL_BUSY=1:
+# another program holds the terminal — busy until the app subscribes with takeover.
+TERMINAL_CONTROL = bool(os.environ.get("MOCK_TERMINAL_CONTROL"))
+TERMINAL_INPUT = []
+
+
+def cell_width(ch):
+    return 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+
+
+def phone_screen(cols, rows, typed="", tick=0):
+    """The made-up Claude screen at cols × rows, lines folded the way Claude lays them out at that width."""
+    E = "\x1b["
+    o, g, d, b, p, r = E + "38;5;209m", E + "32m", E + "2m", E + "1m", E + "38;5;141m", E + "0m"
+    text = [
+        (o, "✻ Welcome to Claude Code"), ("", ""),
+        (b, "> 给天气 App 加主屏幕小组件，显示当前温度和未来 3 小时的预报"), ("", ""),
+        ("", "⏺ 我先看一下现有的 Widget 扩展和数据来源。"), ("", ""),
+        ("", "⏺ Read(WeatherWidget/Provider.swift)"), ("", "  ⎿  Read 84 lines"), ("", ""),
+        ("", "⏺ Bash(swift test --filter WidgetTests)"),
+        (g, "  ⎿  Test Suite 'WidgetTests' passed at 2026-10-29 10:02:11.660."),
+        ("", "     Executed 6 tests, with 0 failures (0 unexpected) in 0.412 seconds"), ("", ""),
+        ("", "⏺ 小组件已经能显示当前温度和未来 3 小时的预报，小号和中号两种尺寸都做了。"), ("", ""),
+        (o, "✻ Brewing… (%ds · esc to interrupt)" % (12 + tick)), ("", ""),
+    ]
+    lines = []
+    for style, t in text:
+        indent = len(t) - len(t.lstrip(" ⏺⎿>✻")) if t else 0
+        cur, w = "", 0
+        for ch in t:
+            if w + cell_width(ch) > cols:
+                lines.append(style + cur + r); cur, w = " " * min(indent, 6), min(indent, 6)
+            cur += ch; w += cell_width(ch)
+        lines.append(style + cur + r)
+    prompt = "> " + typed
+    box = [d + "─" * cols + r, prompt, d + "─" * cols + r, "  " + p + "⏵⏵ accept edits on" + r + d + " (shift+tab to cycle)" + r]
+    lines = (lines + box)[-rows:]
+    return lines, len(lines) - 3
+
+
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
          "island": {"preset": "a", "left": "", "right": "", "machine": ""}}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
@@ -422,6 +465,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
+        if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
@@ -575,7 +619,8 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.write(hdr + data); self.wfile.flush()
 
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
-              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else [])})
+              "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control"] if TERMINAL_CONTROL else [])})
+        drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
         send({"type": "machines", "machines": MACHINES})
         by = {}
         for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
@@ -597,6 +642,52 @@ class H(BaseHTTPRequestHandler):
                 if op != 1: continue
                 msg = json.loads(payload or b"{}")
                 LOG.write("  WS %s\n" % msg.get("type")); LOG.flush()
+                if msg.get("type") == "terminal_input" and drive:
+                    TERMINAL_INPUT.append(msg)
+                    ctl = msg.get("control")
+                    for ch in msg.get("text", ""):
+                        if ch == "\x7f": drive["typed"] = drive["typed"][:-1]
+                        elif ch == "\r": drive["typed"] = ""
+                        elif ch >= " ": drive["typed"] += ch
+                    if ctl: drive.update(cols=ctl["cols"], rows=ctl["rows"])
+                    drive["send"](full=bool(ctl))
+                    continue
+                if msg.get("type") == "terminal_subscribe" and TERMINAL_STREAM and TERMINAL_CONTROL and msg.get("control"):
+                    sid, mid, ctl = msg.get("session_id"), msg.get("machine_id"), msg["control"]
+                    if os.environ.get("MOCK_TERMINAL_BUSY") and not msg.get("takeover"):
+                        send({"type": "terminal_control", "machine_id": mid, "session_id": sid, "state": "busy",
+                              "error": "电脑上另一个程序正在使用这个终端"})
+                        continue
+                    drive.update(cols=ctl["cols"], rows=ctl["rows"], typed=drive.get("typed", ""), seq=0, tick=0)
+
+                    def frame(full=False, sid=sid, mid=mid):
+                        lines, at = phone_screen(drive["cols"], drive["rows"], drive["typed"], drive["tick"])
+                        E = "\x1b["
+                        body = E + "2J" + "".join(E + "%d;1H" % (i + 1) + l for i, l in enumerate(lines)) if full else \
+                            E + "%d;1H" % (at + 1) + lines[at] + E + "K" + "".join(E + "%d;1H" % (i + 1) + l + E + "K" for i, l in enumerate(lines) if "Brewing" in l)
+                        col = 3 + sum(cell_width(c) for c in drive["typed"])
+                        data = E + "?2026h" + E + "?25l" + body + E + "%d;%dH" % (at + 1, col) + E + "?25h" + E + "?2026l"
+                        drive["seq"] += 1
+                        send({"type": "terminal", "machine_id": mid, "session_id": sid, "epoch": "mock-ctl", "seq": drive["seq"],
+                              "full": full, "cols": drive["cols"], "rows": drive["rows"], "data": base64.b64encode(data.encode()).decode()})
+                    drive["send"] = frame
+                    frame(full=True)
+                    send({"type": "terminal_control", "machine_id": mid, "session_id": sid, "state": "active",
+                          "cols": ctl["cols"], "rows": ctl["rows"]})
+
+                    def ticks(mine=frame):
+                        import time
+                        while drive.get("send") is mine:
+                            time.sleep(float(os.environ.get("MOCK_TERMINAL_INTERVAL", "1")))
+                            if drive.get("send") is not mine: break
+                            drive["tick"] += 1
+                            mine()
+                    threading.Thread(target=ticks, daemon=True).start()
+                    continue
+                if msg.get("type") == "terminal_unsubscribe":
+                    if drive: TERMINAL_INPUT.append(msg)  # letting go (the UI test looks for it)
+                    drive.clear()
+                    continue
                 if msg.get("type") == "terminal_subscribe" and TERMINAL_STREAM:
                     sid, mid = msg.get("session_id"), msg.get("machine_id")
 

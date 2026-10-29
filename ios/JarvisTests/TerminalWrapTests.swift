@@ -167,3 +167,109 @@ struct KeyBatcherTests {
         #expect(sorted[sorted.count / 2] < 50)
     }
 }
+
+/// The phone driving the terminal: herdr's frames of a 44 × 30 grid (`terminal session control`, recorded from Claude
+/// Code 2.1.312 writing sixty numbered lines). herdr redraws the grid in place and keeps no scrollback at that size,
+/// so what scrolled off is only what the phone noticed moving up.
+@MainActor struct TerminalControlTests {
+    private struct Rec: Decodable { var t: Double; var full: Bool; var width: Int; var height: Int; var bytes: String }
+
+    /// The recording as the app gets it: frame by frame, or through a gate like the node's (frames within `gate`
+    /// seconds of the one sent before go out as one: the diffs run on, a whole frame drops what came before it).
+    private func frames(gate: Double = 0) throws -> [Rec] {
+        let url = try #require(Bundle(for: FixtureBundle.self).url(forResource: "terminal-control-scroll", withExtension: "jsonl"))
+        let all = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+            .map { try JSONDecoder().decode(Rec.self, from: Data($0.utf8)) }
+        guard gate > 0 else { return all }
+        var out: [Rec] = [], pending: Rec?, due = 0.0, last = -1.0
+        func join(_ a: String, _ b: String) -> String { (Data(base64Encoded: a)! + Data(base64Encoded: b)!).base64EncodedString() }
+        for f in all {
+            if let p = pending, f.t >= due { out.append(p); last = due; pending = nil }
+            if var p = pending {
+                if f.full { p = f } else { p.bytes = join(p.bytes, f.bytes); p.width = f.width; p.height = f.height }
+                pending = p
+            } else if f.t - last >= gate {
+                out.append(f); last = f.t
+            } else {
+                pending = f; due = last + gate
+            }
+        }
+        if let pending { out.append(pending) }
+        return out
+    }
+
+    private func driving() -> TerminalFeed {
+        let f = TerminalFeed(key: SessionKey(machineID: "m", sessionID: "s"))
+        f.setGrid(TerminalGridSize(cols: 44, rows: 30), nil)
+        f.controlChanged("active", why: nil)
+        return f
+    }
+
+    /// 0: as herdr sent them; 0.03: the node's gate (Claude redraws every ~110 ms, nothing merges); 0.25: much
+    /// coarser, the screen moves several lines a frame.
+    @Test(arguments: [0, 0.03, 0.25]) func whatScrolledOffIsKept(gate: Double) throws {
+        let f = driving()
+        for (i, r) in try frames(gate: gate).enumerated() {
+            _ = f.apply(epoch: "e", seq: i + 1, full: r.full, cols: r.width, rows: r.height, data: try #require(Data(base64Encoded: r.bytes)))
+        }
+        #expect(!f.scrollback.isEmpty)
+        let numbered = f.content.rows.map(TerminalGrid.plain).compactMap { line -> Int? in
+            guard let m = line.firstMatch(of: /^\D{0,4}?(\d+)\. \S/) else { return nil }
+            return Int(m.1)
+        }
+        #expect(numbered == Array(1...60)) // every line once, in order: none lost, none twice
+    }
+
+    /// Driving it, rows are the view's width: one line each, nothing folds.
+    @Test func rowsOfTheScreensWidthDoNotFold() throws {
+        let f = driving()
+        for (i, r) in try frames().enumerated() {
+            _ = f.apply(epoch: "e", seq: i + 1, full: r.full, cols: r.width, rows: r.height, data: try #require(Data(base64Encoded: r.bytes)))
+        }
+        let rows = f.content.rows
+        #expect(TerminalWrap.lines(rows, cursor: nil, perLine: 44, wrap: true).count == rows.count)
+    }
+
+    @Test func onlyAMoveUpIsAScroll() {
+        func rows(_ lines: [String]) -> [TermRow] {
+            let g = TerminalGrid(cols: 12, rows: lines.count)
+            g.feed(lines.enumerated().map { "\u{1B}[\($0.offset + 1);1H\($0.element)" }.joined())
+            return g.lines
+        }
+        let a = rows(["one", "two", "three", "four", "five", "────", "> ", "────"])
+        #expect(TerminalGrid.scrolled(from: a, to: rows(["three", "four", "five", "six", "seven", "────", "> x", "────"])) == 2)
+        #expect(TerminalGrid.scrolled(from: a, to: rows(["one", "two", "three", "four", "five", "six", "────", "> "])) == 0) // grew in place
+        #expect(TerminalGrid.scrolled(from: a, to: rows(["new", "screen", "", "", "", "────", "> ", "────"])) == 0) // cleared
+        // Rules and blank rows line up anywhere: they do not make a scroll.
+        let b = rows(["", "────", "", "────", "a", "b", "c", "d"])
+        #expect(TerminalGrid.scrolled(from: b, to: rows(["────", "", "────", "x", "y", "z", "w", "v"])) == 0)
+    }
+
+    @Test func goingBackToWatchingDropsWhatWasKept() throws {
+        let f = driving()
+        for (i, r) in try frames().enumerated() {
+            _ = f.apply(epoch: "e", seq: i + 1, full: r.full, cols: r.width, rows: r.height, data: try #require(Data(base64Encoded: r.bytes)))
+        }
+        f.controlChanged("taken", why: "电脑上另一个程序接管了这个终端")
+        #expect(f.control == .declined && f.controlNote == "电脑上另一个程序接管了这个终端" && f.scrollback.isEmpty && !f.drives)
+    }
+}
+
+struct TerminalKeyBytesTests {
+    @Test func keysAreWhatATerminalSends() {
+        let cases: [(String, String)] = [
+            ("enter", "\r"), ("shift+enter", "\u{1B}\r"), ("tab", "\t"), ("shift+tab", "\u{1B}[Z"), ("esc", "\u{1B}"),
+            ("backspace", "\u{7F}"), ("ctrl+c", "\u{03}"), ("ctrl+a", "\u{01}"), ("ctrl+[", "\u{1B}"), ("ctrl+\\", "\u{1C}"),
+            ("up", "\u{1B}[A"), ("left", "\u{1B}[D"), ("ctrl+up", "\u{1B}[1;5A"), ("alt+left", "\u{1B}[1;3D"),
+            ("shift+right", "\u{1B}[1;2C"), ("alt+x", "\u{1B}x"), ("ctrl+alt+c", "\u{1B}\u{03}"), ("shift+a", "A"),
+            ("space", " "), ("pagedown", "\u{1B}[6~"), ("f1", "\u{1B}OP"), ("home", "\u{1B}[H"), ("delete", "\u{1B}[3~"),
+        ]
+        for (name, bytes) in cases { #expect(TerminalKeyBytes.encode(name) == bytes, "\(name)") }
+        #expect(TerminalKeyBytes.encode("nonsense") == nil)
+    }
+
+    @Test func aPasteWithLinesIsOnePiece() {
+        #expect(TerminalKeyBytes.text("ls -la") == "ls -la")
+        #expect(TerminalKeyBytes.text("a\nb\r\nc") == "\u{1B}[200~a\rb\rc\u{1B}[201~")
+    }
+}

@@ -37,6 +37,8 @@ struct TerminalView: UIViewRepresentable {
     /// Two fingers swiped: left / right / up / down.
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
+    /// The cols × rows that fit the view at the font size (it changes with the keyboard, a rotation, a pinch).
+    var onGrid: ((TerminalGridSize) -> Void)?
 
     func makeUIView(context: Context) -> TerminalScrollView { TerminalScrollView() }
 
@@ -48,6 +50,7 @@ struct TerminalView: UIViewRepresentable {
         v.onSwipe = onSwipe
         v.onDoubleTap = onDoubleTap
         v.onInput = onInput
+        v.onGrid = onGrid
         v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
         v.update(content: content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
                  dark: context.environment.colorScheme == .dark)
@@ -74,6 +77,8 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onDoubleTap: (() -> Void)?
     var onInput: ((TerminalInputEvent) -> Void)?
     var onFocus: ((Bool) -> Void)?
+    var onGrid: ((TerminalGridSize) -> Void)?
+    private var reportedGrid: TerminalGridSize?
     private var pinchFrom: CGFloat = TerminalPrefs.defaultFontSize
 
     // Typing (TerminalInput.swift): the input method's composition, drawn over the cursor until it is chosen.
@@ -172,6 +177,9 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         if fontSize != self.fontSize || font != self.font || first { metrics = CellMetrics(size: fontSize, font: font) }
         let fromEnd = contentSize.height - contentOffset.y
         let atEnd = isAtEnd
+        // Rows added under what is read (the scrollback grows) keep it where it is; pages added above, from the end.
+        let grewBelow = !content.rows.isEmpty && new.rows.count > content.rows.count && new.rows.first == content.rows.first
+        let top = contentOffset.y
         self.wrap = wrap; self.fontSize = fontSize; self.font = font; self.theme = theme; self.dark = dark
         content = new
         backgroundColor = UIColor(hex: theme.side(dark).background)
@@ -184,13 +192,26 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         let maxY = max(0, contentSize.height - bounds.height)
         if first || atEnd {
             contentOffset.y = maxY
+        } else if grewBelow {
+            contentOffset.y = min(top, maxY)
         } else {
             contentOffset.y = min(max(0, contentSize.height - fromEnd), maxY) // pages added above keep what you read in place
         }
         first = false
         accessibilityValue = content.rows.suffix(12).map(TerminalGrid.plain).joined(separator: "\n")
+        reportGrid()
         placeMarked()
         canvas.setNeedsDisplay()
+    }
+
+    /// The grid that fits, when it changed (not while SwiftUI is updating: the feed it goes to is observed).
+    private func reportGrid() {
+        let w = bounds.width - inset.left - inset.right, h = bounds.height - inset.top - inset.bottom
+        guard w > 0, h > 0, let onGrid else { return }
+        let g = TerminalGridSize(cols: Int(w / metrics.cell.width), rows: Int(h / metrics.cell.height))
+        guard g != reportedGrid else { return }
+        reportedGrid = g
+        DispatchQueue.main.async { onGrid(g) }
     }
 
     private var isAtEnd: Bool { contentOffset.y >= contentSize.height - bounds.height - 4 }
@@ -240,6 +261,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             laidOutHeight = bounds.height
             if bounds.width != laidOutWidth { relayout() }
             if wasAtEnd { contentOffset.y = max(0, contentSize.height - bounds.height) }
+            reportGrid()
             placeMarked()
         }
         canvas.frame = CGRect(origin: contentOffset, size: bounds.size)

@@ -644,13 +644,19 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		IsError    bool            `json:"is_error"`
 		Epoch      string          `json:"epoch"`
 		AfterSeq   int             `json:"after_seq"`
+		// terminal_subscribe, terminal_input: the grid the app drives the terminal at (docs/terminal.md)
+		Control  *termCtl `json:"control"`
+		Takeover bool     `json:"takeover"`
+		Text     string   `json:"text"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
 	}
 	switch msg.Type {
 	case "terminal_subscribe":
-		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq)
+		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
+	case "terminal_input":
+		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control)
 	case "terminal_unsubscribe":
 		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)
 	case "subscribe":

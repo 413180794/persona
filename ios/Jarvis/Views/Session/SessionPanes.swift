@@ -115,6 +115,9 @@ struct TerminalPanel: View {
     @AppStorage(TerminalPrefs.autoHide) private var autoHideKeys = false
     @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
     @AppStorage(TerminalPrefs.tipsSeen) private var tipsSeen = false
+    @AppStorage(TerminalPrefs.size) private var sizeMode = "phone"
+    /// A grid change waiting to go out (the keyboard animates, a pinch goes on: the last size is what counts).
+    @State private var gridTask: Task<Void, Never>?
     /// The keyboard is up on the terminal (typing straight in).
     @State private var keyboardUp = false
     @FocusState private var typing: Bool
@@ -156,6 +159,18 @@ struct TerminalPanel: View {
         .animation(.snappy, value: keyboardUp)
         .onChange(of: keyboardUp) { _, up in onKeyboard?(up) }
         .sheet(isPresented: $showSettings) { TerminalSettingsView().environment(\.colorScheme, scheme) }
+        .alert("电脑上另一个程序正在使用这个终端", isPresented: Binding(get: { feed.control == .busy }, set: { shown in
+            if !shown, feed.control == .busy { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+        })) {
+            Button("接管") { feed.takeOver(model) }
+            Button("只看", role: .cancel) { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+        } message: {
+            Text("比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。")
+        }
+        .onChange(of: feed.controlNote) { _, note in
+            if let note { model.toast = Toast(note, style: .info) }
+        }
+        .onChange(of: sizeMode) { _, mode in feed.setWantsControl(mode == "phone", model) }
         .confirmationDialog(pasting.map { "粘贴 \($0.split(separator: "\n", omittingEmptySubsequences: false).count) 行到终端？" } ?? "",
                             isPresented: Binding(get: { pasting != nil }, set: { if !$0 { pasting = nil } }),
                             titleVisibility: .visible) {
@@ -173,6 +188,7 @@ struct TerminalPanel: View {
         #endif
         .task(id: key) {
             if feed.key != key { feed = TerminalFeed(key: key) }
+            feed.wantsControl = sizeMode == "phone"
             #if DEBUG
             // `-terminalPages N`: load N pages of history once the screen is there (what scrolling up does).
             let pages = UserDefaults.standard.integer(forKey: "terminalPages")
@@ -303,7 +319,8 @@ struct TerminalPanel: View {
                          onCopy: { model.toast = Toast("已拷贝", style: .success) },
                          onFontSize: pinched,
                          onSwipe: swipe,
-                         onDoubleTap: pasteClipboard)
+                         onDoubleTap: pasteClipboard,
+                         onGrid: gridChanged)
         }
     }
 
@@ -348,7 +365,7 @@ struct TerminalPanel: View {
         HStack(spacing: 8) {
             historyStatus
             Spacer(minLength: 8)
-            wrapToggle
+            if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
             Button { Haptics.tap(); showSettings = true } label: {
                 Label("设置", systemImage: "slider.horizontal.3")
                     .font(.caption2.weight(.semibold))
@@ -370,6 +387,8 @@ struct TerminalPanel: View {
         Group {
             if feed.loading {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
+            } else if feed.drives || feed.control == .starting {
+                Text("— 更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
             } else if feed.atLimit {
                 Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
             } else if !feed.hasOlder {
@@ -380,6 +399,55 @@ struct TerminalPanel: View {
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(Color(hex: side.foreground).opacity(0.55))
+    }
+
+    /// Driving the terminal: its size (the computer's pane is that now). Watching although it wanted to drive: a
+    /// button to take it.
+    @ViewBuilder private var sizeChip: some View {
+        let fg = Color(hex: side.foreground)
+        switch feed.control {
+        case .active, .starting:
+            let g = feed.phoneGrid
+            Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: "iphone")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(fg.opacity(0.1), in: .capsule)
+                .foregroundStyle(fg.opacity(0.75))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("terminal-size")
+        default:
+            Button {
+                Haptics.tap()
+                feed.takeOver(model)
+            } label: {
+                Label("只看 · 接管", systemImage: "iphone.and.arrow.forward")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(fg.opacity(0.1), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(fg.opacity(0.75))
+            .accessibilityLabel("接管终端")
+            .accessibilityIdentifier("terminal-size")
+        }
+    }
+
+    /// The view's grid: the first one at once (the feed waits for it to subscribe), later ones once they settle.
+    private func gridChanged(_ g: TerminalGridSize) {
+        gridTask?.cancel()
+        guard feed.phoneGrid != nil else { return feed.setGrid(g, model) }
+        let feed = feed, model = model
+        gridTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            feed.setGrid(g, model)
+        }
     }
 
     /// 换行 (rows fold at the phone's width) or 不换行 · 左右滑 (the pane's width, for TUI boxes).
@@ -498,6 +566,13 @@ struct TerminalPanel: View {
     }
 
     private func push(_ e: TerminalInputEvent) {
+        if feed.drives { // straight to the terminal, as its bytes
+            switch e {
+            case .text(let t): feed.type(TerminalKeyBytes.text(t), model)
+            case .key(let k): if let b = TerminalKeyBytes.encode(k) { feed.type(b, model) }
+            }
+            return
+        }
         let model = model, key = key, feed = feed
         stream.push(e) { keys, text in
             await model.keys(key, keys, text: text)

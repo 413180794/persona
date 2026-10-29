@@ -12,7 +12,7 @@ final class TerminalKeysTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
-                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES",
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror",
                                "-terminalKeys", "esc,tab,ctrlc,shortcuts,paste,alt,shift,pad"] // alt and ⇧ are off by default
         app.launch()
 
@@ -71,7 +71,7 @@ final class TerminalKeysTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
-                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES"]
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launch()
         let screen = app.descendants(matching: .any)["terminal-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 15), "no terminal:\n\(app.debugDescription)")
@@ -92,7 +92,7 @@ final class TerminalKeysTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
-                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES"]
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
         app.launch()
         let bolt = app.buttons["快捷命令"]
         XCTAssertTrue(bolt.waitForExistence(timeout: 15), "no shortcuts button:\n\(app.debugDescription)")

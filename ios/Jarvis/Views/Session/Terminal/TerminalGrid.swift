@@ -387,3 +387,33 @@ nonisolated private struct Parser {
         }
     }
 }
+
+// MARK: Scrollback
+
+extension TerminalGrid {
+    /// How many rows the screen moved up from `old` to `new` (0: it did not): herdr redraws a grid in place, so rows
+    /// that scroll off the top are in no frame — the phone keeps them itself when it drives the terminal (no
+    /// scrollback in herdr then, docs/terminal.md). Moved by k: new's top rows are old's from row k, for at least a
+    /// third of what is left (the bottom — Claude's spinner, its prompt box — changes as it goes), and those rows say
+    /// something (rules and blank rows match anywhere). Moved further than the screen in one frame: nothing to match.
+    static func scrolled(from old: [TermRow], to new: [TermRow]) -> Int {
+        guard old.count >= 4, new.count >= 4, old[0] != new[0] else { return 0 }
+        let keyOld = old.map(Self.rowKey), keyNew = new.map(Self.rowKey)
+        for k in 1..<(old.count - 2) {
+            var run = 0, telling = 0
+            while run < new.count, k + run < old.count, keyNew[run] == keyOld[k + run], new[run] == old[k + run] {
+                if !new[run].allSatisfy(\.isFiller) { telling += 1 }
+                run += 1
+            }
+            if run >= max(3, (old.count - k) / 3), telling >= 2 { return k }
+        }
+        return 0
+    }
+
+    /// A cheap stand-in for comparing rows (most do not match).
+    private static func rowKey(_ row: TermRow) -> Int {
+        var h = Hasher()
+        for c in row { h.combine(c.text); h.combine(c.style) }
+        return h.finalize()
+    }
+}

@@ -4,6 +4,10 @@ import Observation
 /// Where the terminal tab's screen comes from (docs/terminal.md): the hub's live stream of the pane — herdr's frames
 /// applied to a grid of the pane's size, continued from the last frame after a reconnect — or, with a hub, node or
 /// herdr that cannot stream, the colored screen read once a second. Pages of scrollback load above it either way.
+///
+/// Driving it (`wantsControl`, the default): the phone takes the terminal at its own grid, the programs in it lay
+/// themselves out for the phone, and keys go straight in. herdr keeps no scrollback at that size, so the rows that
+/// scroll off the top are kept here; above them, the pane's history as it was just before.
 @MainActor @Observable
 final class TerminalFeed {
     enum Mode { case stream, poll }
@@ -24,6 +28,18 @@ final class TerminalFeed {
     private(set) var paused = false
     /// A failed page load (shown briefly).
     var error: String?
+    /// Driving the terminal at the phone's size: asked for (starting), granted (active), another program holds it and
+    /// the user is to say whether to take it (busy), or not (declined: watching, `controlNote` says why).
+    enum Control: Equatable { case off, starting, active, busy, declined }
+    private(set) var control = Control.off
+    private(set) var controlNote: String?
+    /// This view wants to drive the terminal (设置 › 终端尺寸).
+    var wantsControl = false
+    /// The grid that fits the view at its font size: the size the phone asks for.
+    private(set) var phoneGrid: TerminalGridSize?
+    /// While driving: the rows that scrolled off the top of the screen, oldest first.
+    private(set) var scrollback: [TermRow] = []
+    var drives: Bool { control == .active }
     /// The link's health for the status bar: when the screen was last known current, why not now, the next try.
     private(set) var lastOK: Date?
     private(set) var failure: String?
@@ -36,8 +52,11 @@ final class TerminalFeed {
     @ObservationIgnored private var subscribed = false
     /// Stream unavailable for this session (old node / herdr): stay on polling.
     @ObservationIgnored private var unsupported = false
+    @ObservationIgnored private var takeover = false
+    @ObservationIgnored private var priorLoaded = false
 
     static let page = 200
+    static let scrollbackLimit = 3000
     static let linkDown = "连不上 hub"
 
     init(key: SessionKey) { self.key = key }
@@ -47,8 +66,8 @@ final class TerminalFeed {
     var content: TerminalContent {
         var end = screen.count
         while end > 0, end - 1 > (cursor?.row ?? -1), screen[end - 1].allSatisfy(\.isBlank) { end -= 1 }
-        var c = TerminalContent(rows: older + screen[..<end], cols: cols)
-        if let cursor { c.cursor = (older.count + cursor.row, cursor.col) }
+        var c = TerminalContent(rows: older + scrollback + screen[..<end], cols: cols)
+        if let cursor { c.cursor = (older.count + scrollback.count + cursor.row, cursor.col) }
         return c
     }
 
@@ -58,8 +77,12 @@ final class TerminalFeed {
     /// stream, retries after failures and keeps the health current.
     func tick(_ model: AppModel) async {
         if mode == .poll, !unsupported, model.canStreamTerminal, model.isLive {
+            if wantsControl, model.canControlTerminal, control == .off {
+                guard phoneGrid != nil else { return } // the view's first layout tells the size
+                if !priorLoaded { await loadPrior(model) }
+            }
             mode = .stream // the hub's hello came after the first reads: what they concluded about history is moot
-            hasOlder = true
+            hasOlder = !willDrive(model)
             atLimit = false
             subscribe(model, continuing: false)
             return
@@ -92,12 +115,117 @@ final class TerminalFeed {
         if mode == .stream, model.isLive { subscribe(model, continuing: true) }
     }
 
+    private func willDrive(_ model: AppModel) -> Bool {
+        wantsControl && model.canControlTerminal && phoneGrid != nil && control != .declined && control != .busy
+    }
+
     private func subscribe(_ model: AppModel, continuing: Bool) {
         subscribed = true
-        model.terminalSubscribe(key, epoch: continuing ? epoch : nil, after: seq) { [weak self, weak model] event in
+        let drive = willDrive(model)
+        if drive, control == .off { control = .starting }
+        model.terminalSubscribe(key, epoch: continuing ? epoch : nil, after: seq, grid: drive ? phoneGrid : nil, takeover: takeover) {
+            [weak self, weak model] event in
             guard let self, let model else { return }
             self.receive(event, model)
         }
+        takeover = false
+    }
+
+    // MARK: Driving the terminal
+
+    /// The view's grid changed (laid out, the keyboard, the font): a terminal the phone drives takes the new size.
+    func setGrid(_ g: TerminalGridSize, _ model: AppModel?) {
+        guard g != phoneGrid, g.cols >= 10, g.rows >= 4 else { return }
+        phoneGrid = g
+        if subscribed, control == .active || control == .starting { model?.terminalInput(key, "", grid: g) }
+    }
+
+    /// What the hub said about driving it (terminal_control).
+    func controlChanged(_ state: String, why: String?) {
+        switch state {
+        case "active":
+            control = .active
+            controlNote = nil
+        case "busy":
+            control = .busy
+        case "unsupported":
+            control = .declined
+            controlNote = why ?? "这台电脑只能看，不能接管"
+            leaveControl()
+        default: // taken, lost: watching from now on
+            control = .declined
+            controlNote = why ?? "终端已回到电脑上的尺寸"
+            leaveControl()
+        }
+    }
+
+    /// Bytes typed on the phone, straight to the terminal it drives.
+    func type(_ text: String, _ model: AppModel) {
+        guard drives, !text.isEmpty else { return }
+        model.terminalInput(key, text)
+    }
+
+    /// The user said take it from the program that holds it (or take it back).
+    func takeOver(_ model: AppModel) {
+        takeover = true
+        control = .starting
+        controlNote = nil
+        guard model.isLive else { return }
+        Task {
+            if !priorLoaded { await loadPrior(model) }
+            subscribe(model, continuing: true)
+        }
+    }
+
+    /// The user said only watch: the pane stays as the computer has it (and its history pages as usual).
+    func watchOnly(_ why: String) {
+        control = .declined
+        controlNote = why
+        leaveControl()
+    }
+
+    /// Driving it or not (设置 › 终端尺寸 changed): subscribe again the other way.
+    func setWantsControl(_ on: Bool, _ model: AppModel) {
+        guard on != wantsControl else { return }
+        wantsControl = on
+        if !on {
+            control = .off
+            controlNote = nil
+            leaveControl()
+        } else if control == .declined {
+            control = .off
+        }
+        if subscribed, model.isLive {
+            if on, !priorLoaded { Task { await loadPrior(model); subscribe(model, continuing: false) } } else { subscribe(model, continuing: false) }
+        }
+    }
+
+    /// Back to watching the pane at its size: what was kept at the phone's goes.
+    private func leaveControl() {
+        scrollback = []
+        older = []
+        priorLoaded = false
+        hasOlder = true
+        atLimit = false
+    }
+
+    /// The pane's history before the phone takes it (herdr has none at the phone's size), under a line saying so.
+    private func loadPrior(_ model: AppModel) async {
+        priorLoaded = true
+        guard let api = model.api, let r = try? await api.screen(key, lines: Self.page * 2, recent: true, ansi: true) else { return }
+        var rows = TerminalGrid.rows(fromANSI: r.text)
+        while rows.last?.allSatisfy(\.isBlank) == true { rows.removeLast() }
+        guard !rows.isEmpty else { return }
+        older = rows + [Self.divider("以上是接管前电脑上的输出")]
+        hasOlder = false
+    }
+
+    static func divider(_ text: String) -> TermRow {
+        var style = TermStyle()
+        style.dim = true
+        return Array("──── \(text) ────").map { ch in
+            TermCell(text: String(ch), width: ch.isASCII || ch == "─" ? 1 : 2, style: style)
+        }.flatMap { $0.width == 2 ? [$0, TermCell(text: "", width: 0, style: style)] : [$0] }
     }
 
     private func receive(_ event: TerminalEvent, _ model: AppModel) {
@@ -125,8 +253,11 @@ final class TerminalFeed {
             offline = why.contains("not running")
             failed(offline ? "会话没有在 herdr 里运行" : why)
             loaded = true
+            if control == .active || control == .starting { control = .off } // it asks again when it subscribes again
         case .reconnected:
             if mode == .stream { subscribe(model, continuing: true) }
+        case .control(let state, _, _, let why):
+            controlChanged(state, why: why)
         }
     }
 
@@ -136,6 +267,9 @@ final class TerminalFeed {
     /// not follow (one went missing, or a new stream started without its whole frame) is a gap: start again from a
     /// whole frame.
     func apply(epoch: String, seq: Int, full: Bool, cols: Int, rows: Int, data: Data) -> FrameResult {
+        // Driving it, the screen is the phone's: rows that scroll off the top go to the scrollback.
+        let before = (control == .active || control == .starting) && cols == phoneGrid?.cols ? grid.lines : nil
+        let beforeCols = grid.cols
         if full {
             grid.reset(cols: cols, rows: rows)
         } else if epoch == self.epoch, seq <= self.seq {
@@ -145,6 +279,13 @@ final class TerminalFeed {
             return .gap
         }
         grid.feed(data)
+        if let before, beforeCols == grid.cols {
+            let k = TerminalGrid.scrolled(from: before, to: grid.lines)
+            if k > 0 {
+                scrollback += before.prefix(k)
+                if scrollback.count > Self.scrollbackLimit { scrollback.removeFirst(scrollback.count - Self.scrollbackLimit) }
+            }
+        }
         self.epoch = epoch
         self.seq = seq
         if !paused { publish() }
@@ -202,7 +343,7 @@ final class TerminalFeed {
 
     /// The page of scrollback before the first rows on screen; the screen stops following the pane meanwhile.
     func loadOlder(_ model: AppModel) async {
-        guard !loading, hasOlder, loaded, let api = model.api else { return }
+        guard !loading, hasOlder, loaded, control == .off || control == .declined, let api = model.api else { return }
         loading = true
         error = nil
         let wasPaused = paused

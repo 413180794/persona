@@ -131,7 +131,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   文件在知道目录时出现；助手对话没有选项卡。
   - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。hub 有 `terminal_stream` 时订阅实时流
     （`TerminalFeed`：herdr observe 的帧套到窗格尺寸的网格 `TerminalGrid` 上，丢帧 / 换流就从整帧重来，重连带 epoch / seq 续上）；
-    hub / node / herdr 不能推流时每秒读一次带颜色的屏幕（`format=ansi`）。画面由 `TerminalView` 按格子画：每个字符画在自己的格子里
+    hub / node / herdr 不能推流时每秒读一次带颜色的屏幕（`format=ansi`）。
+    默认「手机尺寸」（设置 › 尺寸）：hub 有 `terminal_control` 时手机按自己的列 × 行接管终端，Claude 按手机宽度排版，键直接写进终端；
+    表头显示「手机尺寸 45×29」，被别的程序占着先问「接管 / 只看」，被抢走后显示「只看 · 接管」。离开 tab、进后台、断线后窗格回到电脑的尺寸（`docs/terminal.md` 第十一节）。画面由 `TerminalView` 按格子画：每个字符画在自己的格子里
     （宽字符两格），框线和块字符画成线和矩形，所以中文和框线永远对齐；屏幕只画到最后一行有字的地方或光标处。默认按手机宽度折行，
     右上角「换行 / 不换行 · 左右滑」切换（`@AppStorage("terminalWrap")`）；配色跟随浅 / 深色（`TerminalTheme`：Jarvis、Solarized、深夜），
     字号 `terminalFontSize`。长按选词、拖动扩选，菜单「拷贝 / 全选」；点 OSC 8 链接或行里的网址在 App 内打开。

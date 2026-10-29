@@ -166,6 +166,7 @@ func Run(ctx context.Context, version string) error {
 		go m.run(ctx)
 	}
 	go h.expireLoop(ctx)
+	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
