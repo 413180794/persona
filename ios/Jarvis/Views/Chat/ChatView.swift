@@ -2293,14 +2293,55 @@ private nonisolated struct WorkCardEdges: Shape {
 /// The quiet line under a message: what the agent did for it. Finished: "工具 3 · 思考 1 · 1 分 20 秒 ›";
 /// running: a spinner and "正在工作 39 秒 · 工具 2" (ticking) with the terminal at the end. Tap to list every
 /// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
+struct WorkSummary {
+    let full: [String]
+    let short: [String]
+
+    init(_ items: [WorkItem]) {
+        var calls = 0, thoughts = 0, notices = 0, texts = 0
+        for item in items {
+            switch item {
+            case .step(.call): calls += 1
+            case .step(.thought(let thought)):
+                if thought.kind == .notice {
+                    if thought.wake == true { calls += 1 } else { notices += 1 }
+                } else { thoughts += 1 }
+            case .text: texts += 1
+            }
+        }
+        var full: [String] = []
+        var short: [String] = []
+        if calls > 0 { full.append("工具 \(calls)"); short.append("工具 \(calls)") }
+        if thoughts > 0 { full.append("思考 \(thoughts)") }
+        if texts > 0 { full.append("回复 \(texts)") }
+        if full.isEmpty && notices > 0 { full.append("后台通知 \(notices)") }
+        if short.isEmpty && notices > 0 { short.append("后台通知 \(notices)") }
+        self.full = full
+        self.short = short
+    }
+}
+
 struct WorkLine: View {
-    var items: [WorkItem]
-    var live: Bool
-    var start: Date?
-    var end: Date?
-    var open: Bool
-    var openTerminal: (() -> Void)?
-    var toggle: () -> Void
+    private let isEmpty: Bool
+    private let counts: WorkSummary
+    let live: Bool
+    let start: Date?
+    let end: Date?
+    let open: Bool
+    let openTerminal: (() -> Void)?
+    let toggle: () -> Void
+
+    init(items: [WorkItem], live: Bool, start: Date?, end: Date?, open: Bool,
+         openTerminal: (() -> Void)?, toggle: @escaping () -> Void) {
+        isEmpty = items.isEmpty
+        counts = WorkSummary(items)
+        self.live = live
+        self.start = start
+        self.end = end
+        self.open = open
+        self.openTerminal = openTerminal
+        self.toggle = toggle
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2315,7 +2356,7 @@ struct WorkLine: View {
                         } else {
                             summary(now: end ?? .now)
                         }
-                        if !items.isEmpty {
+                        if !isEmpty {
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.semibold))
                                 .rotationEffect(.degrees(open ? 90 : 0))
@@ -2327,7 +2368,7 @@ struct WorkLine: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .disabled(items.isEmpty)
+                .disabled(isEmpty)
                 .accessibilityLabel(open ? "收起过程" : "展开过程")
                 .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
@@ -2348,24 +2389,7 @@ struct WorkLine: View {
     }
 
     private func label(now: Date, short: Bool) -> String {
-        var calls = 0, thoughts = 0, notices = 0, texts = 0
-        for item in items {
-            switch item {
-            case .step(.call): calls += 1
-            case .step(.thought(let t)):
-                // A background task reporting back counts as one of the agent's tools.
-                if t.kind == .notice { if t.wake == true { calls += 1 } else { notices += 1 } } else { thoughts += 1 }
-            case .text: texts += 1
-            }
-        }
-        var parts: [String] = []
-        // One shape for every count: name, then number ("工具 3 · 思考 2 · 回复 1").
-        if calls > 0 { parts.append("工具 \(calls)") }
-        if !short {
-            if thoughts > 0 { parts.append("思考 \(thoughts)") }
-            if texts > 0 { parts.append("回复 \(texts)") }
-        }
-        if parts.isEmpty && notices > 0 { parts.append("后台通知 \(notices)") }
+        var parts = short ? counts.short : counts.full
         let took = Self.duration(from: start, to: now)
         if live { parts.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { parts.append(took) }
         return parts.isEmpty ? "已完成" : parts.joined(separator: " · ")
