@@ -1,6 +1,6 @@
 # 在 herdr 里驱动 Claude Code
 
-结论均在 Claude Code 2.1.310（mac）/ 2.1.308（example-machine）、herdr 0.8.0 上实测（2026-10-24）。
+结论均在 Claude Code 2.1.310（mac）/ 2.1.308（Linux 的 hub 机器）、herdr 0.8.0 上实测（2026-10-24）。
 
 ## 启动会话
 
@@ -19,7 +19,7 @@ node 的 `session.start`：
 
 ## 会话 id 与 transcript
 
-- mac 装了 herdr 的 claude integration，`agent list` 带 `agent_session.value`（= Claude session id）。**example-machine 没装**，拿不到 id。
+- mac 装了 herdr 的 claude integration，`agent list` 带 `agent_session.value`（= Claude session id）。**hub 机器没装**，拿不到 id。
 - 兜底顺序：herdr 上报 → 我们 hook 里记下的 `HERDR_PANE_ID`→`session_id`（hook 进程继承 pane 的环境变量，只有 Jarvis 启动的会话有）
   → **窗格里 claude 进程的 `~/.claude/sessions/<pid>.json`**（Claude Code 自己维护，含当前 `sessionId`，`/clear` 后会更新；
   pid 用 `herdr pane process-info --pane <id>` 拿，缓存一分钟）→ 标题匹配 AI 标题 → 按 cwd 推项目目录
@@ -132,7 +132,7 @@ node 的 `session.start`：
 - 解析成 user 条目并带 `from`（发送方名字），排队条里显示为「【来自 名字】正文」；手机上画成左侧的灰色卡片「来自 名字」，不当成用户自己的消息。
 
 
-## transcript 里的特殊 XML（2026-10-26 扫了本机和 example-machine）
+## transcript 里的特殊 XML（2026-10-26 扫了本机和 hub 机器）
 
 | 标签 | 处理 |
 | --- | --- |

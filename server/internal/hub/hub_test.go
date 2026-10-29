@@ -317,7 +317,7 @@ func TestWaitInteractionCancelledDismisses(t *testing.T) {
 func TestWaitInteractionReplacesScreenGuess(t *testing.T) {
 	h := newTestHub(t)
 	// A screen interaction (a guess from a blocked agent) is already pending for the session.
-	scr := proto.Interaction{ID: "scr_devbox_s1", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen,
+	scr := proto.Interaction{ID: "scr_server_s1", MachineID: "server", SessionID: "s1", Kind: proto.IxScreen,
 		ExpiresAt: time.Now().Add(time.Hour)}
 	h.mu.Lock()
 	h.interactions[scr.ID] = &pending{ix: scr, done: make(chan proto.Resolution, 1)}
@@ -504,7 +504,7 @@ func TestCallToolDispatch(t *testing.T) {
 func TestPhoneToolsPersist(t *testing.T) {
 	url := os.Getenv("JARVIS_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on example-machine)")
+		t.Skip("JARVIS_TEST_DATABASE_URL not set (scripts/test-server.sh runs this on the hub machine)")
 	}
 	database, err := db.Open(context.Background(), url)
 	if err != nil {

@@ -35,18 +35,18 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 ## 部署
 
 ```sh
-./scripts/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 example-machine 上的 hub
-./scripts/deploy.sh example-machine example-machine  # 只装部分机器
+./scripts/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
+./scripts/deploy.sh <机器 id> <机器 id> # 只装部分机器
 ```
 
 - 二进制：每台机器 `~/.jarvis/bin/jarvisd`。node 由 hub 经 `ssh <别名> ~/.jarvis/bin/jarvisd node --stdio` 拉起，Mac 上不用常驻服务。
-- hub：example-machine `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
-- 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh example-machine` 会重启 hub，或在 App「机器」页点「重新连接」。
+- hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
+- 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
 
 ## 数据库（Postgres）
 
-example-machine 上的 docker 容器 `jarvis-postgres`（`postgres:18-alpine`，只监听 `127.0.0.1:18661`，数据卷 `jarvis-pgdata`，`--restart unless-stopped`）。
-`scripts/db.sh` 幂等地创建 / 启动它，首次创建时生成密码写进 `hub.json` 的 `database_url`；`deploy.sh example-machine` 每次都会先跑它。
+hub 机器上的 docker 容器 `jarvis-postgres`（`postgres:18-alpine`，只监听 `127.0.0.1:18661`，数据卷 `jarvis-pgdata`，`--restart unless-stopped`）。
+`scripts/db.sh` 幂等地创建 / 启动它，首次创建时生成密码写进 `hub.json` 的 `database_url`；`deploy.sh <hub 机器 id>` 每次都会先跑它。
 hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advisory lock 防并发）。
 
 | 表 | 内容 |
@@ -59,12 +59,12 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `interactions` | 每次提问 / 计划 / 授权 / 终端交互及结局（resolved / dismissed / expired / cancelled）；hub 重启时把残留的 pending 标成 cancelled |
 | `settings` | App 里改的全局设置（如助手的启动器） |
 
-连库：`ssh example-machine 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`。
-测试：`./scripts/test-server.sh`（同步代码到 example-machine，在 `jarvis_test` 库上跑全部测试；本机没有 docker，DB 测试在本机会 skip）。
+连库：`ssh <hub 机器> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`。
+测试：`./scripts/test-server.sh`（同步代码到 hub 机器，在 `jarvis_test` 库上跑全部测试；本机没有 docker，DB 测试在本机会 skip）。
 
 旧版的 `phone_tools.json`、`devices.json`、`mail_accounts.json`、`sessions.json` 首次启动时自动导入，改名为 `*.migrated`。
 
-## 配置（example-machine `~/.jarvis/`，0600，不入库）
+## 配置（hub 机器 `~/.jarvis/`，0600，不入库）
 
 | 文件 | 内容 |
 | --- | --- |
@@ -74,7 +74,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 每台机器 `~/.jarvis/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
 
-配对：example-machine 上 `~/.jarvis/bin/jarvisd hub pair` 打印地址、token 和二维码（`jarvis://pair?url=…&token=…`）。
+配对：hub 机器上 `~/.jarvis/bin/jarvisd hub pair` 打印地址、token 和二维码（`jarvis://pair?url=…&token=…`）。
 
 ## 推送策略（`hub/push.go`、`hub/notify.go`）
 

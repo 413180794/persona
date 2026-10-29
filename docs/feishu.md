@@ -23,7 +23,7 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
   `POST` 只放行 `search/page`、`search/mention-history`（只读搜索，POST 是因为 body 大）。助手的 `lark_api` 工具走同一套白名单（`lark.Read`）。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。
 
-## 接口速查（AI 调 `lark_api` 时有用，全部在 example-machine 实测过）
+## 接口速查（AI 调 `lark_api` 时有用，全部在 hub 机器上实测过）
 
 ### 搜索
 - `search/page`（POST）body `{tab,query,cursor,limit,senderIds,chatIds,feedId,startTime,endTime,attachmentTypes,chatType,docTypes,ownerIds,sortType}`

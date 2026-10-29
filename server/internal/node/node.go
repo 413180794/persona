@@ -44,7 +44,7 @@ type Node struct {
 	lastRevs map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
 	metas    map[string]quickMeta      // transcript path -> cached meta
 	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
-	panePIDs map[string]panePID        // pane -> its claude pid (no herdr integration: example-machine)
+	panePIDs map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
 	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
 	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)

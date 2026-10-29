@@ -15,13 +15,13 @@
 
 ```
  iPhone App ──┐  HTTPS/WS (Bearer token)
- Watch App ───┤ ───────────────────────────►  jarvisd hub (example-machine :18660)
+ Watch App ───┤ ───────────────────────────►  jarvisd hub (hub 机器 :18660)
               │                                   │  ├─ mail（IMAP/SMTP，凭据加密）
               │  WS: tool.call ◄──────────────────┤  ├─ 交互队列（问题 / 计划 / 权限）
               │      (手机数据工具)                │  └─ 会话索引、事件扇出
                                                   │
                      stdio JSON-RPC over `ssh <host> jarvisd node --stdio`
-                     （example-machine 本机直接起子进程）
+                     （hub 机器本机直接起子进程）
                                                   ▼
                               jarvisd node（每台机器一个，生命周期跟随 hub 的连接）
                                ├─ herdr socket API（~/.config/herdr/herdr.sock，CLI 兜底）：建 tab、启动 claude、prompt、
@@ -36,7 +36,7 @@
 
 | 模式 | 运行位置 | 作用 |
 | --- | --- | --- |
-| `hub` | example-machine，systemd --user 常驻 | App 的 API、事件扇出、交互队列、邮件、调度各 node |
+| `hub` | 一台常开的机器，systemd --user 常驻 | App 的 API、事件扇出、交互队列、邮件、调度各 node |
 | `node --stdio` | 每台机器，由 hub 通过 SSH 拉起 | 本机 herdr / claude / transcript / hook 中转 |
 | `hook <event>` | Claude Code hooks 调用 | 把事件交给 node；需要人决定的（提问、计划、权限）阻塞等手机回答 |
 | `mcp` | Claude Code MCP（stdio） | 暴露手机数据、邮件等工具，调用经 node → hub → 手机 |
@@ -53,8 +53,8 @@
   按键面板。
 - **hooks 只注入 jarvis 启动的会话**（`--settings ~/.jarvis/claude-settings.json`），不改全局 settings，不影响用户自己开的 claude。
   不是 jarvis 启动的 herdr claude 也能在 App 里看（按 herdr 报告的 session id 找 transcript）、发消息、按键回答。
-- **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh example-machine` 等别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
-- **hub 在 example-machine**：example-machine 常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
+- **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh <机器>` 这类别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
+- **hub 在一台常开的机器上**：它常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
 ## 关键流程
 

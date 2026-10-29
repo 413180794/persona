@@ -57,11 +57,11 @@ App                         hub                                Google
 - id_token 是 hub 直接从 Google token 接口（TLS）拿到的，按 OIDC 规范不用再验签，只读 `email` / `email_verified`。
 - 凭据：`{client_id, refresh_token}` 用 AES-GCM 加密后存 `mail_accounts.oauth_enc`；access token 只在内存里缓存，过期前 1 分钟刷新。
 - 收信：IMAP `AUTHENTICATE XOAUTH2`，Gmail 搜索的临时连接同样走 XOAUTH2。
-- **Gmail 流量走代理**：example-machine 只连得上 Google 的少数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 多数时候解析到 173.194.x.x，
+- **Gmail 流量走代理**：作者的 hub 机器只连得上 Google 的少数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 多数时候解析到 173.194.x.x，
   443 / 993 / 465 / 587 全部超时；HTTPS 能通只是因为走了 IPv6）。`hub.json` 的 `google.proxy`（`http://[user:pass@]host:port`）
   让 Gmail 账号的 IMAP / SMTP（HTTP CONNECT 隧道）、Google 换 token、Gmail API 全部经代理出去；其他服务商照旧直连。
 - **发信走 Gmail API**（`POST gmail.googleapis.com/gmail/v1/users/me/messages/send`，raw MIME），不走 SMTP：
-  example-machine 连不上 `smtp.gmail.com`（465 / 587 都超时，2026-10-25 实测），HTTPS 到 Google 正常；`https://mail.google.com/` 授权同样覆盖 Gmail API
+  这台机器连不上 `smtp.gmail.com`（465 / 587 都超时，2026-10-25 实测），HTTPS 到 Google 正常；`https://mail.google.com/` 授权同样覆盖 Gmail API
   （项目里已启用 Gmail API）。密送靠在 raw 前面加 `Bcc:` 头，Gmail 投递后会去掉；发出的信 Gmail 自己归进「已发送」。
   添加账号时的检查也从 SMTP 换成 Gmail API 的 `users/me/profile`（并核对邮箱地址一致）。
 - refresh token 失效（用户撤销授权、改了 Google 密码、半年没用）时报「Google authorization expired or was revoked」：
@@ -75,14 +75,14 @@ App                         hub                                Google
 
 建好的客户端是同意屏幕「Jarvis」外部 / 正式版（未验证，登录时会看到「此应用未经 Google 验证」，点「高级 → 转至 Jarvis」），
 client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和文档。
-发布成正式版要求品牌页有首页、隐私政策、服务条款链接，且域名在「已获授权的网域」里，所以建了 `jarvis.chirpet.com`（仓库 `site/`）。
+发布成正式版要求品牌页有首页、隐私政策、服务条款链接，且域名在「已获授权的网域」里，所以建了一个静态站（仓库 `site/`，域名在 `site/wrangler.jsonc`）。
 
 步骤（重建时参考）：
 
 1. <https://console.cloud.google.com/projectcreate> 建项目（如 `jarvis-mail`）。
 2. 「Google Auth Platform」→ 品牌：应用名 `Jarvis`，用户类型选「外部」。
 3. 「数据访问」里添加 scope `https://mail.google.com/`（受限 scope）。
-4. 「品牌塑造」填首页 / 隐私政策 / 服务条款（`https://jarvis.chirpet.com/`、`/privacy/`、`/terms/`），已获授权的网域加 `chirpet.com`。
+4. 「品牌塑造」填首页 / 隐私政策 / 服务条款（`https://<站点域名>/`、`/privacy/`、`/terms/`），已获授权的网域加站点的主域名。
    不填这些，「目标对象」里的「发布应用」按钮是灰的，页面也不提示缺什么。
 5. 「目标对象」里**发布应用（In production）**。停在 Testing 时 refresh token 7 天就过期；发布后不过期。
    未经验证的应用最多 100 个用户，登录时 Google 会提示「此应用未经验证」，点「高级 → 继续」即可，自己用不需要走验证 / CASA 安全评估。

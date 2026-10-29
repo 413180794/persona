@@ -9,6 +9,10 @@ What counts as private comes from this machine, never from the repo: the values 
 (hosts, hub address, machine names, Apple ids, emails), ~/.config/jarvis/private-words.txt (one word per line:
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
 address and any email outside example.* domains. Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
+
+Not private: values config.example.json ships as defaults, the repo's own Go module path (it names the GitHub owner),
+CLAUDE.local.md spans that only name repo files, commands or config keys, and in site/ the contact address and domain
+the App Store and the OAuth consent screen publish anyway.
 """
 import ipaddress, json, os, re, subprocess, sys
 
@@ -18,35 +22,63 @@ HOME = os.path.expanduser("~")
 IGNORE = {"darwin", "linux", "local", "ssh", "true", "false", "server", "localhost"}
 # Files that may hold placeholders that look like the real thing.
 SKIP_FILES = {"scripts/privacy_check.py"}
+# Config keys whose values are published on purpose (App Store contact, the site's address): fine in PUBLIC_DIRS.
+PUBLIC_KEYS = {"feedback_email", "privacy_url"}
+
+
+def strings(o, key=""):
+    """(key, value) for every string in a JSON value; a list item takes its list's key."""
+    if isinstance(o, dict):
+        for k, v in o.items():
+            yield from strings(v, k)
+    elif isinstance(o, list):
+        for v in o:
+            yield from strings(v, key)
+    elif isinstance(o, str) and o:
+        yield key, o
+
+
+def example_values():
+    try:
+        return {v for _, v in strings(json.load(open(os.path.join(ROOT, "config.example.json"))))}
+    except (OSError, ValueError):
+        return set()
 
 
 def config_values():
-    out = set()
+    """The config's values, and the subset that is published on purpose (PUBLIC_KEYS)."""
+    out, public = set(), set()
     try:
         cfg = json.load(open(os.path.join(HOME, ".config/jarvis/config.json")))
     except (OSError, ValueError):
-        return out
+        return out, public
+    defaults = example_values()
+    for key, o in strings(cfg):
+        if key in ("os", "simulator") or o in defaults:
+            continue
+        if key == "url" or key.endswith("_url"):
+            o = re.sub(r"^\w+://", "", o).split("/")[0].split(":")[0]
+        elif key.endswith("path"):
+            o = o.replace(HOME, "~")
+        out.add(o)
+        if key in PUBLIC_KEYS:
+            public.add(o)
+    return out, public
 
-    def walk(o, key=""):
-        if isinstance(o, dict):
-            for k, v in o.items():
-                walk(v, k)
-        elif isinstance(o, list):
-            for v in o:
-                walk(v, key)
-        elif isinstance(o, str) and o:
-            if key in ("os", "simulator"):
-                return
-            if key == "url":
-                host = re.sub(r"^\w+://", "", o).split("/")[0].split(":")[0]
-                out.add(host)
-                return
-            if key.endswith("path"):
-                o = o.replace(HOME, "~")
-            out.add(o)
 
-    walk(cfg)
-    return out
+# A token that looks like somebody's value: a long id mixing letters and digits (key ids, team ids, hostnames like
+# n12-345), a run of six or more digits (app ids), or a host under a real TLD. Repo paths, commands and config keys
+# (`docs/config.md`, `python3 scripts/x.py`, `google.proxy`) have none.
+ID_LIKE = re.compile(r"(?=[\w-]*\d)(?=[\w-]*[A-Za-z])[\w-]{8,}|\d{6,}")
+
+
+def private_looking(span):
+    if ID_LIKE.search(span) or "@" in span or IPV4.search(span):
+        return True
+    for host in re.findall(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", span):
+        if host.rsplit(".", 1)[-1].lower() in REAL_TLDS and not host.lower().endswith((".md", ".py", ".sh", ".json")):
+            return True
+    return False
 
 
 def word_list():
@@ -61,18 +93,31 @@ def word_list():
     local = os.path.join(ROOT, "CLAUDE.local.md")
     if os.path.exists(local):
         for span in re.findall(r"`([^`\n]{4,})`", open(local).read()):
-            if re.search(r"[.@/:]|\d", span):  # hosts, addresses, accounts, paths, ids; not prose
+            if private_looking(span):  # hosts, addresses, accounts, ids; not prose, repo paths or commands
                 out.add(span.strip())
     return out
 
 
 def terms():
-    vals = {v for v in config_values() | word_list() if len(v) >= 4 and v.lower() not in IGNORE}
+    """Words to look for, longest first, and those of them allowed in PUBLIC_DIRS."""
+    config, public = config_values()
+    vals = {v for v in config | word_list() if len(v) >= 4 and v.lower() not in IGNORE}
     user = os.path.basename(HOME)
     if len(user) >= 3:
         vals.add("/Users/" + user)
         vals.add("/home/" + user)
-    return sorted(vals, key=len, reverse=True)
+    return sorted(vals, key=len, reverse=True), public
+
+
+def module_paths():
+    """The repo's own Go module paths (github.com/<owner>/...): every import carries them."""
+    out = []
+    for f in git("ls-files", "-z", "--", "*go.mod").decode().split("\0"):
+        if f:
+            m = re.search(r"^module\s+(\S+)", open(os.path.join(ROOT, f)).read(), re.M)
+            if m:
+                out.append(m.group(1).split("/")[0:3])
+    return re.compile("|".join(re.escape("/".join(p)) for p in out), re.I) if out else None
 
 
 IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])")
@@ -117,13 +162,16 @@ def git(*args):
 def main():
     staged = "--staged" in sys.argv
     message = sys.argv[sys.argv.index("--message") + 1] if "--message" in sys.argv else None
-    words = terms()
+    words, public_words = terms()
+    modules = module_paths()
     if staged:
         files = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z").decode().split("\0")
     else:
         files = git("ls-files", "-z").decode().split("\0")
     bad = []
     for f in filter(None, files):
+        public = f.startswith(PUBLIC_DIRS)
+        allowed = [w for w in words if w not in public_words] if public else words
         for w in problems(f, words):
             bad.append((f, "path", w))
         if f in SKIP_FILES:
@@ -135,9 +183,10 @@ def main():
         if b"\0" in data[:4096]:
             continue  # binary
         text = data.decode("utf-8", "replace")
-        public = f.startswith(PUBLIC_DIRS)
+        if modules:
+            text = modules.sub("", text)
         for n, line in enumerate(text.splitlines(), 1):
-            for w in problems(line, words, emails=not public):
+            for w in problems(line, allowed, emails=not public):
                 bad.append((f, n, w))
     if message and os.path.exists(message):
         for n, line in enumerate(open(message).read().splitlines(), 1):

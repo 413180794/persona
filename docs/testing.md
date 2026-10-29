@@ -6,7 +6,7 @@
 cd server && go test ./... && go vet ./...                    # 服务端
 cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
-./scripts/sim.sh [-openSession example-machine/<id>]                    # 模拟器里跑，自动配对真实 hub
+./scripts/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 ```
 
 transcript 解析用真实样本做 golden 测试（`server/internal/transcript/testdata/`，`fixtures_test.go`）：每份样本的解析结果、
@@ -14,17 +14,17 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 加样本前先 `scripts/redact_transcript.py` 脱敏、人工复核（`testdata/README.md`）；Claude Code / Codex 升级后跑
 `scripts/transcript_stats.py` 看有没有解析器不认识的新类型。
 
-接口冒烟：`curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`、`…/api/v1/sessions?machine_id=example-machine`。
+接口冒烟：`curl -H "Authorization: Bearer $TOKEN" …/api/v1/machines`、`…/api/v1/sessions?machine_id=<machine>`。
 
 ## 端到端（2026-10-24 实测通过）
 
 | 场景 | 方法 | 结果 |
 | --- | --- | --- |
-| 手机新建会话 | `POST /api/v1/sessions` 在 example-machine `~/jarvis-test` 用 cc_ds 启动 | 自动通过信任目录、首条消息送达 |
+| 手机新建会话 | `POST /api/v1/sessions` 在 hub 机器 `~/jarvis-test` 用启动器启动 | 自动通过信任目录、首条消息送达 |
 | 提问 | 首条消息让 claude 调 AskUserQuestion（单题 / 两题含多选） | hub 出现 question 交互，`resolve` 后 claude 拿到答案继续 |
 | 计划审批 | ExitPlanMode → deny + 意见 → 改计划 → allow + setMode | 两种分支都对（`docs/claude-integration.md`） |
-| 手机工具 | example-machine 的 claude 调 `mcp__jarvis__phone_device_info` | 经 node → hub → 模拟器 App 返回 iPhone 17 Pro / iOS 26.5 |
-| 实时流 | App 打开 example-machine 上正在工作的会话 | 工具步骤实时追加，状态条显示 spinner 行 |
+| 手机工具 | hub 机器上的 claude 调 `mcp__jarvis__phone_device_info` | 经 node → hub → 模拟器 App 返回 iPhone 17 Pro / iOS 26.5 |
+| 实时流 | App 打开另一台 Mac 上正在工作的会话 | 工具步骤实时追加，状态条显示 spinner 行 |
 | 手表 | 手表模拟器 `-pairURL` | 「需要你」（等你的 Agent + 收件箱里需要你的事）、运行中会话；`-openInboxFirst YES` 打开第一件 |
 
 ## 界面检查清单（每次改界面都要截图看）
@@ -90,7 +90,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/jarvis/config.json` 里的
 主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/jarvis/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
 自己维护）和 `CLAUDE.local.md` 里反引号括起来的值；另外任何私网 IPv4（文档网段 192.0.2.0/24 等除外）和真实域名下的邮箱
-（`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。`release.sh` 打包前跑一遍；
+（`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。
+不算私有值的：`config.example.json` 里本来就有的默认值（比如外部测试群组名）、仓库自己的 Go 模块路径（里面带 GitHub 用户名）、
+`CLAUDE.local.md` 里只是仓库路径 / 命令 / 配置键名的反引号内容（只有像 ID、主机、邮箱、IP 的才算），以及 `site/` 里的联系邮箱和站点域名
+（`app_store.feedback_email`、`privacy_url`，App Store 和 OAuth 同意屏幕本来就公开）。文档里说到机器用「hub 机器」「另一台 Mac」，
+示例里的机器 id 用 `server` / `laptop` 这类占位符。`release.sh` 打包前跑一遍；
 提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息）。
 
 ## 卡顿测量（掉帧统计）

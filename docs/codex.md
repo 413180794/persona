@@ -33,7 +33,7 @@ herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab�
 | `event_msg/turn_aborted` | 提示「已中断」 |
 | `turn_context` / `token_count` | 模型、审批策略、上下文 token |
 
-UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 example-machine 的全部 rollout）：
+UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 hub 机器的全部 rollout）：
 `<send_user_message_question_reply>`（回答 Codex 的 request_user_input 提问，里面是 JSON）显示成回答本身，多题时每行「问题：回答」；
 `<in-app-browser-context>`（Codex App 自动附带的浏览器状态）去掉；`local_image` 内容变成 `<attached_images>` 路径，App 显示成缩略图。
 `<environment_context>`、`<INSTRUCTIONS>`、`<skill>`、`<turn_aborted>`、`<subagent_notification>`、`<realtime_delegation>`、

@@ -30,7 +30,7 @@ type MachineConfig struct {
 }
 
 // GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy
-// Gmail traffic takes (example-machine reaches few of Google's IPv4 addresses; docs/mail.md).
+// Gmail traffic takes (some networks reach few of Google's IPv4 addresses; docs/mail.md).
 type GoogleConfig struct {
 	ClientID string `json:"client_id"`
 	// Proxy is an http:// proxy for Gmail IMAP / SMTP and Google's OAuth / Gmail API, e.g. a local proxy on the hub's machine.
@@ -52,7 +52,7 @@ type Config struct {
 	HookTimeoutMinutes int    `json:"hook_timeout_minutes"`
 	// DatabaseURL points at the Postgres container (scripts/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
-	// AI configures the Messages API used for in-app AI helpers (defaults to the cc_ds gateway on example-machine).
+	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
 	AI ai.Config `json:"ai"`
 	// Lark points at the user's lark-connector agent API (Feishu messages in the 信息 tab).
 	Lark lark.Config `json:"lark"`

@@ -588,7 +588,7 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 	}
 	n.mu.Unlock()
 	for _, a := range unknown {
-		// Without herdr's claude integration (example-machine) the pane's claude process says which session it runs; a
+		// Without herdr's claude integration the pane's claude process says which session it runs; a
 		// guess (title, then newest transcript in the directory) is only the last resort — six agents in one repo
 		// got each other's tab names that way.
 		id := n.sessionFromProcess(a.PaneID)

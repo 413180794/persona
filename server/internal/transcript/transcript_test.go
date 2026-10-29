@@ -412,8 +412,8 @@ func TestRecapDropsConfigHint(t *testing.T) {
 
 func TestFirstUserFromContentBlocks(t *testing.T) {
 	var m Meta
-	ParseLine(1, []byte(`{"type":"user","uuid":"u","message":{"role":"user","content":[{"type":"text","text":"example-machine 负载"}]}}`), &m)
-	if m.FirstUser != "example-machine 负载" {
+	ParseLine(1, []byte(`{"type":"user","uuid":"u","message":{"role":"user","content":[{"type":"text","text":"服务器负载"}]}}`), &m)
+	if m.FirstUser != "服务器负载" {
 		t.Fatalf("first user = %q", m.FirstUser)
 	}
 }

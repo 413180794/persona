@@ -10,7 +10,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test-server.sh creates it on example-machine)
+// open connects to JARVIS_TEST_DATABASE_URL (a throwaway database; scripts/test-server.sh creates it on the hub machine)
 // and wipes every table so each test starts clean.
 func open(t *testing.T) *DB {
 	t.Helper()
@@ -119,10 +119,10 @@ func TestPhoneToolsReplace(t *testing.T) {
 func TestNodeSessions(t *testing.T) {
 	d, ctx := open(t), context.Background()
 	start := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
-	_ = d.PutNodeSession(ctx, "example-machine", "s1", NodeSession{Launcher: "cc_ds", Cwd: "/x", StartedAt: start})
-	_ = d.PutNodeSession(ctx, "example-machine", "s1", NodeSession{Pane: "w1:p2", Launcher: "cc_ds", Cwd: "/x", StartedAt: start})
+	_ = d.PutNodeSession(ctx, "server", "s1", NodeSession{Launcher: "cc_ds", Cwd: "/x", StartedAt: start})
+	_ = d.PutNodeSession(ctx, "server", "s1", NodeSession{Pane: "w1:p2", Launcher: "cc_ds", Cwd: "/x", StartedAt: start})
 	_ = d.PutNodeSession(ctx, "mac", "s2", NodeSession{Launcher: "ccc"})
-	got, err := d.NodeSessions(ctx, "example-machine")
+	got, err := d.NodeSessions(ctx, "server")
 	if err != nil || len(got) != 1 || got["s1"].Pane != "w1:p2" || !got["s1"].StartedAt.Equal(start) {
 		t.Fatalf("sessions = %+v, %v", got, err)
 	}
@@ -145,24 +145,24 @@ func TestMailAccountsReplace(t *testing.T) {
 
 func TestInteractions(t *testing.T) {
 	d, ctx := open(t), context.Background()
-	ix := proto.Interaction{ID: "ix1", MachineID: "example-machine", SessionID: "s", Kind: proto.IxQuestion, CreatedAt: time.Now()}
+	ix := proto.Interaction{ID: "ix1", MachineID: "server", SessionID: "s", Kind: proto.IxQuestion, CreatedAt: time.Now()}
 	_ = d.InsertInteraction(ctx, ix)
-	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix2", MachineID: "example-machine", SessionID: "s", Kind: proto.IxPlan, CreatedAt: time.Now()})
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix2", MachineID: "server", SessionID: "s", Kind: proto.IxPlan, CreatedAt: time.Now()})
 	yes := true
 	if err := d.FinishInteraction(ctx, "ix1", "resolved", &proto.Resolution{Approve: &yes}); err != nil {
 		t.Fatal(err)
 	}
 	_ = d.FinishInteraction(ctx, "ix1", "expired", nil) // first outcome wins
 	// A hook may still claim a resumable one after a restart, unless it expired.
-	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix3", MachineID: "example-machine", SessionID: "s", Kind: proto.IxPermission,
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix3", MachineID: "server", SessionID: "s", Kind: proto.IxPermission,
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour), Resumable: true})
-	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix4", MachineID: "example-machine", SessionID: "s", Kind: proto.IxPermission,
+	_ = d.InsertInteraction(ctx, proto.Interaction{ID: "ix4", MachineID: "server", SessionID: "s", Kind: proto.IxPermission,
 		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(-time.Minute), Resumable: true})
 	kept, err := d.ExpireStaleInteractions(ctx)
 	if err != nil || len(kept) != 1 || kept[0].ID != "ix3" || !kept[0].Resumable {
 		t.Fatalf("kept %+v, %v", kept, err)
 	}
-	recs, err := d.Interactions(ctx, "example-machine", "s", 10)
+	recs, err := d.Interactions(ctx, "server", "s", 10)
 	if err != nil || len(recs) != 4 {
 		t.Fatalf("records = %+v, %v", recs, err)
 	}
@@ -197,10 +197,10 @@ func TestSessionViews(t *testing.T) {
 	d, ctx := open(t), context.Background()
 	_, _ = d.pool.Exec(ctx, `TRUNCATE session_views`)
 	t1 := time.Now().Add(-time.Minute).UTC().Truncate(time.Millisecond)
-	_ = d.MarkSeen(ctx, "example-machine", "s", t1)
-	_ = d.MarkSeen(ctx, "example-machine", "s", t1.Add(-time.Hour)) // older view never moves it back
+	_ = d.MarkSeen(ctx, "server", "s", t1)
+	_ = d.MarkSeen(ctx, "server", "s", t1.Add(-time.Hour)) // older view never moves it back
 	got, err := d.SeenTimes(ctx)
-	if err != nil || !got[[2]string{"example-machine", "s"}].Equal(t1) {
+	if err != nil || !got[[2]string{"server", "s"}].Equal(t1) {
 		t.Fatalf("seen = %v, %v", got, err)
 	}
 }

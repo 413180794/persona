@@ -1,5 +1,5 @@
 // Package lark reads and sends Feishu / Lark messages through the user's lark-connector instance
-// (github.com/Eric-2369/lark-connector) on example-machine, via its local agent API (/agent/v1, loopback only).
+// (github.com/Eric-2369/lark-connector) on the hub machine, via its local agent API (/agent/v1, loopback only).
 // The agent token is read from the lark-connector container's environment at runtime; Jarvis never stores a copy.
 package lark
 

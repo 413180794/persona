@@ -365,7 +365,7 @@ func newXOAUTH2Client(user, token string) sasl.Client {
 	return &xoauth2Client{user: user, token: token}
 }
 
-// gmailAPIBase is the Gmail API. OAuth Gmail accounts send through it rather than SMTP: example-machine (the hub) cannot
+// gmailAPIBase is the Gmail API. OAuth Gmail accounts send through it rather than SMTP: some hub machines cannot
 // reach smtp.gmail.com on 465 or 587, while HTTPS to Google works, and https://mail.google.com/ covers both.
 var gmailAPIBase = "https://gmail.googleapis.com"
 

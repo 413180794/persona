@@ -28,7 +28,7 @@ type Config struct {
 	ReasoningEffort string `json:"reasoning_effort"`
 }
 
-// Defaults mirror the cc_ds launcher on example-machine (relay-history → DeepSeek).
+// Defaults mirror the launcher used on the hub machine.
 func (c Config) withDefaults() Config {
 	if c.BaseURL == "" {
 		c.BaseURL = "http://127.0.0.1:18000"

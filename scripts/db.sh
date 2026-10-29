@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs on example-machine (deploy.sh pipes it over ssh): make sure the Jarvis Postgres container is up and that
+# Runs on the hub machine (deploy.sh pipes it over ssh): make sure the Jarvis Postgres container is up and that
 # ~/.jarvis/hub.json has database_url. Idempotent; the password is generated once and lives only in hub.json (0600).
 #   container jarvis-postgres · image postgres:18-alpine · 127.0.0.1:18661 · volume jarvis-pgdata
 set -euo pipefail

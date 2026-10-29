@@ -4,7 +4,7 @@
 
 ## 鉴权
 
-- `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 example-machine `~/.jarvis/hub.json` 的 `token`，
+- `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 hub 机器 `~/.jarvis/hub.json` 的 `token`，
   `jarvisd hub pair` 打印 URL + token（以及终端二维码，App 扫码配对）。
 - **每台设备自己的凭据**：配对用的 token（hub.json）什么都能做，留给 CLI 和旧 App。新 App 配对后立刻
   `POST /api/v1/auth/tokens {"name","kind":"phone"}` 换一个自己的 token（`jd_…`，hub 只存哈希），之后只用它；再给配对的手表换一个
@@ -23,7 +23,7 @@
 
 ```jsonc
 // Machine
-{"id":"example-machine","name":"公司 Mac","kind":"ssh","ssh_host":"example-machine","online":true,"error":"",
+{"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"laptop","online":true,"error":"",
  "hostname":"example-machine","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
  "last_seen":"..."}
 
@@ -31,7 +31,7 @@
 {"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
-{"machine_id":"example-machine","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",
+{"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
@@ -56,7 +56,7 @@
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）
 
 // Interaction：需要人处理的事
-{"id":"ix_…","machine_id":"example-machine","session_id":"uuid","session_title":"…","cwd":"…",
+{"id":"ix_…","machine_id":"server","session_id":"uuid","session_title":"…","cwd":"…",
  "kind":"question|plan|permission|screen",
  "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
  "questions":[{"question":"…","header":"…","multi_select":false,
@@ -95,7 +95,7 @@
 | POST | `/api/v1/sessions/{mid}/{sid}/modes` | `{"permission_mode"?, "effort"?}`：改在跑的会话的权限模式 / 思考强度（`docs/ios.md`「思考强度和权限模式」）；会话列表里的 `permission_mode`、`effort` 是当前值。`POST /api/v1/sessions` 和 `POST /api/v1/assistant/conversations` 也收这两个字段，作为启动时的值 |
 | POST | `/api/v1/sessions/{mid}/{sid}/rename` | `{"tab_name"?, "title"?}`：tab 用 `herdr tab rename`；会话名给在跑的 claude 发 `/rename <名字>`（它写 `custom-title`），没在跑就直接往 transcript 追加同样的 `custom-title` 行 |
 | GET / PUT | `/api/v1/mutes` | 屏蔽，结构同 pins，另有 `allowed`（空间被屏蔽时单独开启通知的 Agent）。规则：Agent 自己在 sessions 里→屏蔽；在 allowed 里→不屏蔽；否则看它的空间。被屏蔽的 Agent / 空间不推送任何通知（完成、需要你），手机上弱化显示；hub 内存缓存，PUT 时更新 |
-| GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["example-machine/app"],"sessions":["example-machine/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
+| GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["server/app"],"sessions":["server/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
 | GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
 | GET | `/api/v1/machines/{mid}/git/diff?cwd=&path=&staged=0\|1` | `{"path","diff","truncated"}`；未跟踪文件对 /dev/null 出 diff，最多 512 KB |
@@ -196,7 +196,7 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 
 ## hub ↔ node RPC
 
-`ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（example-machine 本机直接起子进程）。stdin/stdout 每行一个 JSON。
+`ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
 双向都能发请求：`{"id":"h12","method":"…","params":{}}` → `{"id":"h12","result":{}}` / `{"id":"h12","error":{"message":"…"}}`；
 单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
 
@@ -309,7 +309,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 
 ## 飞书 API（lark-connector）
 
-hub 经 example-machine 上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。
+hub 经 hub 机器上 lark-connector 的 agent 接口（`/agent/v1`，token 从容器环境变量读）代理飞书数据，见 `server/internal/lark`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |

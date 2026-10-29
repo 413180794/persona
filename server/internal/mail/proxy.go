@@ -15,7 +15,7 @@ import (
 	"github.com/emersion/go-smtp"
 )
 
-// Gmail traffic can go through an HTTP proxy (hub.json google.proxy): example-machine reaches only some of Google's
+// Gmail traffic can go through an HTTP proxy (hub.json google.proxy): some networks reach only some of Google's
 // IPv4 addresses, so imap.gmail.com and smtp.gmail.com time out on most resolutions. The proxy carries IMAP
 // and SMTP with CONNECT tunnels, and the OAuth token endpoint and the Gmail API as ordinary HTTPS.
 
