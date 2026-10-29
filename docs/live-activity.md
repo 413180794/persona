@@ -96,7 +96,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐
 - 启动就监听 `pushToStartTokenUpdates`、`activityUpdates`（hub 推开的活动），每个活动监听 `pushTokenUpdates`（会轮换）和结束 / 划掉，
   都上报 `POST /api/v1/devices/{id}/live-activity`。
 - 前台收到 `fleet` 事件或回到前台拉 `GET /api/v1/fleet`：有内容就开始（只有前台能 `Activity.request`）或更新；空了等 1 分钟再结束（轮次之间会闪）。
-- 点活动打开 `jarvis://open?machine=…&session=…`（第一条，展开态每一行各自的会话）。
+- 点活动本身（紧凑态、锁屏）：只有一个 Agent 时打开它（`jarvis://open?machine=…&session=…`），有好几个时打开 Agents 列表（`jarvis://agents`，退回列表根）；展开态每一行打开各自的会话。2026-10-29 以前一律打开第一条，用户反馈「点灵动岛进了某个 Agent，应该进列表」。
 - 模拟器自动化（`-pairURL`）不上报 token，免得 hub 把真机的活动当成模拟器的。
 
 ## 按钮（`ios/LiveActivity/FleetIntents.swift`）
