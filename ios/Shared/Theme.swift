@@ -87,6 +87,14 @@ nonisolated enum Theme {
     static let ai = Color(light: 0x5B4FD6, dark: 0x9C94FF)
     /// /loop and other scheduled wake-ups (待唤醒).
     static let loop = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
+    /// Count badges on rows (unread messages): white text on it is ≥ 4.5:1 in both appearances.
+    static let countBadge = Color(light: 0x636366, dark: 0x636366)
+    /// The disc behind a monogram that has no color of its own (a mail sender).
+    #if os(watchOS)
+    static let monogramFill = Color.white.opacity(0.16)
+    #else
+    static let monogramFill = Color(uiColor: .secondarySystemFill)
+    #endif
 
     /// Diffs and Git: their own colors, text strength (≥ 4.5:1 on the code background) for signs and counts.
     enum Diff {

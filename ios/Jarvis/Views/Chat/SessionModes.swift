@@ -117,7 +117,7 @@ struct ModeChip: View {
             Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(known ? tint : Color.secondary)
+        .foregroundStyle(known ? (tint == .secondary ? Color.primary : tint) : Color.secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background((known && tint != .secondary ? tint : Color.primary).opacity(known && tint != .secondary ? 0.12 : 0.06), in: .capsule)

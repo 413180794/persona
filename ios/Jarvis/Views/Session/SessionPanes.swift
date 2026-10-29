@@ -728,7 +728,7 @@ struct TerminalLinkStatus: View {
                     Spacer(minLength: 4)
                     Button(action: retry) {
                         Text("重试").font(.footnote.weight(.semibold)).lineLimit(1)
-                            .foregroundStyle(tint)
+                            .foregroundStyle(.black)
                             .padding(.horizontal, 14)
                             .frame(height: 30)
                             .background(.white, in: .capsule)
@@ -736,11 +736,11 @@ struct TerminalLinkStatus: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("重试")
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.black)
                 .padding(.leading, 12)
                 .padding(.trailing, 8)
                 .padding(.vertical, 7)
-                .background(tint.opacity(0.92), in: .rect(cornerRadius: 10, style: .continuous))
+                .background(tint, in: .rect(cornerRadius: 10, style: .continuous))
                 .padding([.horizontal, .top], 6)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -866,7 +866,7 @@ struct ActivityChips: View {
         } label: {
             HStack(spacing: 6) {
                 if let loop {
-                    chip(Theme.loop) {
+                    chip(Theme.loop, text: Theme.loop) {
                         Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
@@ -874,7 +874,7 @@ struct ActivityChips: View {
                     }
                 }
                 if !background.isEmpty {
-                    chip(Theme.busy) {
+                    chip(Theme.busy, text: StatusPalette.working.text) {
                         Image(systemName: "gearshape.2.fill").font(.system(size: 10, weight: .bold))
                             .symbolEffect(.rotate, options: .repeat(.continuous))
                         Text("后台 \(background.count)").lineLimit(1)
@@ -892,10 +892,10 @@ struct ActivityChips: View {
                              background.isEmpty ? nil : "\(background.count) 个后台任务"].compactMap { $0 }.joined(separator: "，") + "，点按查看")
     }
 
-    private func chip(_ tint: Color, @ViewBuilder _ content: () -> some View) -> some View {
+    private func chip(_ tint: Color, text: Color, @ViewBuilder _ content: () -> some View) -> some View {
         HStack(spacing: 4) { content() }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(tint)
+            .foregroundStyle(text)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(tint.opacity(0.12), in: .capsule)

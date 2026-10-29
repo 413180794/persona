@@ -130,7 +130,7 @@ struct ChatsView: View {
                                 .listRowSeparator(.hidden)
                         }
                     } header: {
-                        SectionHeader(title: "需要你处理", count: interactions.count, tint: Theme.needsYou)
+                        SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
                     }
                 }
 
@@ -139,7 +139,7 @@ struct ChatsView: View {
                         // No state word: the dot and the name's color already say it.
                         ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
                     } header: {
-                        SectionHeader(title: "置顶", count: nil, tint: Theme.accent)
+                        SectionHeader(title: "置顶", count: nil, tone: StatusPalette.idle)
                     }
                 }
 
@@ -213,7 +213,7 @@ struct ChatsView: View {
                             }
                         }
                     } header: {
-                        SectionHeader(title: "空闲的空间", count: quiet.count, tint: .secondary)
+                        SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
                     }
                 }
                 }
@@ -320,9 +320,10 @@ struct ChatsView: View {
     /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background
     /// work will bring some.
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
-        let titles: [(key: String, title: String, tint: Color)] = [
-            ("needs", "需要你", Theme.needsYou), ("unread", "完成未看", Theme.unread), ("working", "工作中", Theme.busy),
-            ("waiting", "待唤醒", Theme.loop), ("muted", "已屏蔽", .secondary), ("idle", "已看", .secondary),
+        let titles: [(key: String, title: String, tint: StatusTone)] = [
+            ("needs", "需要你", StatusPalette.needsYou), ("unread", "完成未看", StatusPalette.unread),
+            ("working", "工作中", StatusPalette.working), ("waiting", "待唤醒", StatusTone(dot: Theme.loop, text: Theme.loop)),
+            ("muted", "已屏蔽", StatusPalette.idle), ("idle", "已看", StatusPalette.idle),
         ]
         let byRank = Dictionary(grouping: live, by: rank)
         let buckets = titles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }
@@ -337,7 +338,7 @@ struct ChatsView: View {
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    SectionHeader(title: b.title, count: rows.count, tint: b.tint)
+                    SectionHeader(title: b.title, count: rows.count, tone: b.tint)
                 }
             }
         }
@@ -464,7 +465,8 @@ struct SpaceRoute: Hashable { var id: String }
 struct SectionHeader: View {
     var title: String
     var count: Int?
-    var tint: Color
+    /// The count's color: a state's tone, or StatusPalette.idle for a plain count.
+    var tone: StatusTone
 
     var body: some View {
         HStack(spacing: 6) {
@@ -472,10 +474,10 @@ struct SectionHeader: View {
             if let count {
                 Text("\(count)")
                     .font(.caption2.weight(.bold).monospacedDigit())
-                    .foregroundStyle(tint)
+                    .foregroundStyle(tone.text)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
-                    .background(tint.opacity(0.14), in: .capsule)
+                    .background(tone.tint, in: .capsule)
             }
         }
     }

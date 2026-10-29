@@ -6,7 +6,11 @@ enum FleetPalette {
     static var needsYou: Color { StatusPalette.needsYou.dot }
     static var working: Color { StatusPalette.working.dot }
     static var unread: Color { StatusPalette.unread.dot }
+    /// Small working text (the timer) on the lock screen, which follows the system appearance.
+    static var workingText: Color { StatusPalette.working.text }
     static let coral = Color(light: 0xD4683F, dark: 0xE8835C)
+    /// Coral dark enough for white button labels (4.8:1); `coral` stays for the mark and the keyline.
+    static let coralButton = Color(light: 0xB9532E, dark: 0xB9532E)
 
     static func color(_ phase: FleetState.Phase) -> Color {
         switch phase {

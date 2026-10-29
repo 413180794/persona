@@ -120,7 +120,8 @@ struct FleetRow: View {
             }
             Spacer(minLength: 4)
             if item.kind == .working, let since = item.sinceDate {
-                FleetTimer(since: since).font(.caption.weight(.medium)).foregroundStyle(FleetPalette.working).frame(maxWidth: 60, alignment: .trailing)
+                FleetTimer(since: since).font(.caption.weight(.medium)).foregroundStyle(onDark ? FleetPalette.working : FleetPalette.workingText)
+                    .frame(maxWidth: 60, alignment: .trailing)
             }
         }
         .foregroundStyle(onDark ? Color.white : Color.primary)
@@ -164,7 +165,8 @@ struct FleetStatsLine: View {
         HStack(spacing: 8) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
                 if case let .timer(since) = cell {
-                    FleetTimer(since: since).font(.caption.weight(.semibold)).foregroundStyle(FleetPalette.working).frame(maxWidth: 52, alignment: .trailing)
+                    FleetTimer(since: since).font(.caption.weight(.semibold)).foregroundStyle(onDark ? FleetPalette.working : FleetPalette.workingText)
+                        .frame(maxWidth: 52, alignment: .trailing)
                 } else if let text = FleetText.stat(cell) {
                     Text(text).font(.caption.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
                         .foregroundStyle(onDark ? Color.white.opacity(0.75) : Color.secondary)
@@ -183,26 +185,32 @@ struct FleetActionRow: View {
         if let id = item.interaction {
             HStack(spacing: 10) {
                 switch item.kind {
+                // 拒绝 / 查看: the system's neutral fill with primary words (white on gray was 1.6:1 on a light lock
+                // screen); 允许 / 批准: a coral dark enough for white words.
                 case .permission:
                     Button(intent: DenyPermissionIntent(interactionID: id)) { label("拒绝", "xmark") }
-                        .tint(Color.gray.opacity(0.45))
+                        .buttonStyle(.bordered)
+                        .tint(.primary)
                     Button(intent: AllowPermissionIntent(interactionID: id)) { label("允许", "checkmark") }
-                        .tint(FleetPalette.coral)
+                        .buttonStyle(.borderedProminent)
+                        .tint(FleetPalette.coralButton)
+                        .foregroundStyle(.white)
                 case .plan:
                     Link(destination: FleetLink.url(item)!) {
                         label("查看", "doc.text")
                             .padding(.vertical, 7)
-                            .background(Color.gray.opacity(0.45), in: .capsule)
+                            .background(Color.primary.opacity(0.12), in: .capsule)
                     }
+                    .foregroundStyle(.primary)
                     Button(intent: ApprovePlanIntent(interactionID: id)) { label("批准", "checkmark") }
-                        .tint(FleetPalette.coral)
+                        .buttonStyle(.borderedProminent)
+                        .tint(FleetPalette.coralButton)
+                        .foregroundStyle(.white)
                 default:
                     EmptyView()
                 }
             }
-            .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
-            .foregroundStyle(.white)
             .padding(.leading, 15)
         }
     }

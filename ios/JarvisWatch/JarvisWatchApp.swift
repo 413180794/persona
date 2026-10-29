@@ -345,7 +345,7 @@ struct WatchSessionView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Circle().fill(session.state.color).frame(width: 7, height: 7)
-                    Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.color)
+                    Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
                 ForEach(items.suffix(6)) { it in
                     Text(WatchText.shown(it.text ?? ""))

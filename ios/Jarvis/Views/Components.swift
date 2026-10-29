@@ -85,7 +85,7 @@ struct StatusLabel: View {
             StatusDot(state: state, size: 7)
             Text(state.label)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(state == .idle ? Color.secondary : state.color)
+                .foregroundStyle(state.tone.text)
         }
     }
 }

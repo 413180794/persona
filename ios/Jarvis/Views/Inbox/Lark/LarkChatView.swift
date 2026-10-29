@@ -69,7 +69,7 @@ struct LarkChatView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
                         if Self.startsDay(m, after: prev) {
-                            Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
+                            Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 10)
                         }
                         LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
@@ -593,7 +593,7 @@ struct LarkMessageRow: View {
                 if let d = m.createdAt { Text(d.formatted(date: .omitted, time: .shortened)) }
             }
             .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
             .sheet(isPresented: $showThread) { LarkThreadView(root: m, isGroup: isGroup, feedID: feedID) }
         }

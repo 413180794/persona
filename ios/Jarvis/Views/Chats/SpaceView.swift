@@ -162,15 +162,15 @@ struct SlotCard: View {
     var pending: Int
 
     var body: some View {
-        let tint = session.state == .idle || session.state == .unknown ? Color.secondary : session.state.color
+        let tone = session.state.tone
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(session.slotLabel ?? "—")
                     .font(.caption.weight(.bold).monospaced())
-                    .foregroundStyle(tint)
+                    .foregroundStyle(tone.text)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
-                    .background(tint.opacity(0.12), in: .capsule)
+                    .background(tone.tint, in: .capsule)
                     .lineLimit(1)
                 AgentTag(label: session.agentLabel)
                 Spacer(minLength: 4)
@@ -179,7 +179,7 @@ struct SlotCard: View {
             Text(session.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
             Text(session.state.label + (pending > 0 ? " · \(pending) 件待处理" : ""))
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(tone.text)
             if let t = session.lastText, !t.isEmpty {
                 Text(Fmt.plain(t)).font(.caption).foregroundStyle(.secondary).lineLimit(3)
             }

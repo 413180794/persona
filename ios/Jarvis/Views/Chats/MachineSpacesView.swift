@@ -26,14 +26,14 @@ struct MachineSpacesView: View {
                 Section {
                     ForEach(active) { g in row(g, busy: true) }
                 } header: {
-                    SectionHeader(title: "进行中", count: active.count, tint: Theme.busy)
+                    SectionHeader(title: "进行中", count: active.count, tone: StatusPalette.working)
                 }
             }
             if !quiet.isEmpty {
                 Section {
                     ForEach(quiet) { g in row(g, busy: false) }
                 } header: {
-                    SectionHeader(title: "空闲", count: quiet.count, tint: .secondary)
+                    SectionHeader(title: "空闲", count: quiet.count, tone: StatusPalette.idle)
                 }
             }
             if groups.isEmpty {

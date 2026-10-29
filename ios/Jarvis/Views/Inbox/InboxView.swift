@@ -262,7 +262,7 @@ struct InboxRow: View {
             avatar
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(item.title).font(.body.weight(item.isDone ? .regular : .semibold)).lineLimit(1)
+                    Text(item.title).font(.body.weight(item.isDone ? .regular : .semibold)).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
                         Text(label)
                             .font(.caption2.weight(.semibold))
@@ -279,8 +279,8 @@ struct InboxRow: View {
                     if let summary = item.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
                             (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + summary))
-                                .font(.subheadline).foregroundStyle(.primary.opacity(item.isDone ? 0.7 : 0.9)).lineLimit(2)
-                            Text(from).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                                .font(.subheadline).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
+                            Text(from).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } else {
                         Text(from).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
@@ -291,11 +291,11 @@ struct InboxRow: View {
                             .font(.caption2.weight(.bold).monospacedDigit())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.6), in: .capsule)
+                            .background(Theme.countBadge, in: .capsule)
                     }
                 }
                 if showAccount && !item.isLark {
-                    Text(item.accountName).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(item.accountName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !item.isDone {
                     if let draft = item.agentDraft, let send {
@@ -313,7 +313,6 @@ struct InboxRow: View {
             }
         }
         .padding(.vertical, 10)
-        .opacity(item.isDone ? 0.55 : 1)
         .contentShape(.rect)
     }
 
@@ -325,12 +324,15 @@ struct InboxRow: View {
 
     private var avatar: some View {
         ZStack(alignment: .bottomTrailing) {
+            Group {
             if item.isLark {
                 LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
             } else {
-                Circle().fill(Theme.accent.opacity(0.15)).frame(width: 40, height: 40)
-                    .overlay(Text(String((item.sender ?? "?").prefix(1))).font(.headline).foregroundStyle(Theme.accent))
+                Circle().fill(Theme.monogramFill).frame(width: 40, height: 40)
+                    .overlay(Text(String((item.sender ?? "?").prefix(1))).font(.headline).foregroundStyle(.primary))
             }
+            }
+            .opacity(item.isDone ? 0.6 : 1)
             Image(systemName: item.isLark ? "bubble.left.fill" : "envelope.fill")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(.white)
@@ -425,7 +427,7 @@ struct InboxAgentRow: View {
                 if let s = ix.summary ?? ix.questions?.first?.question, !s.isEmpty {
                     Text(s).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
-                Text(machine).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                Text(machine).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .padding(.vertical, 10)
