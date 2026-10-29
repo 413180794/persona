@@ -160,12 +160,12 @@ struct InboxView: View {
 
     private func agentRow(_ ix: Interaction) -> some View {
         Button { open(ix) } label: {
-            InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID)?.name ?? ix.machineID)
+            InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID), machineName: model.machine(ix.machineID)?.name ?? ix.machineID)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
         .themedRow()
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
+        .alignmentGuide(.listRowSeparatorLeading) { _ in InboxRow.textColumn }
     }
 
     /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
@@ -192,7 +192,7 @@ struct InboxView: View {
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
             .themedRow()
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 62 }
+            .alignmentGuide(.listRowSeparatorLeading) { _ in InboxRow.textColumn }
     }
 
     // MARK: Filters
@@ -257,45 +257,43 @@ struct InboxRow: View {
     var send: ((String) -> Void)?
     var edit: (() -> Void)?
 
+    /// Where the text column starts inside the row (40 avatar + 12): the separator lines up with it.
+    static let textColumn: CGFloat = 52
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(item.title).font(.body.weight(item.isDone ? .regular : .semibold)).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
+                    Text(item.title).font(item.isDone ? .body : .headline).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
-                        Text(label)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(item.kind == "mention" ? Theme.danger : .secondary)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background((item.kind == "mention" ? Theme.danger : Color.secondary).opacity(0.12), in: .capsule)
-                            .lineLimit(1)
-                            .fixedSize()
+                        Chip(text: label, tint: item.kind == "mention" ? Theme.danger : .secondary).fixedSize()
                     }
                     Spacer(minLength: 4)
-                    Text(LarkTime.short(item.updatedAt)).font(.caption).foregroundStyle(.secondary).fixedSize()
+                    Text(LarkTime.short(item.updatedAt)).font(.footnote).foregroundStyle(.secondary).fixedSize()
                 }
                 HStack(alignment: .top, spacing: 6) {
                     if let summary = item.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
                             (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + summary))
                                 .font(.subheadline).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
-                            Text(from).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(from).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } else {
                         Text(from).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
                     if item.count > 1 && !item.isDone {
+                        // @我 is the accent (it is about you); any other count is neutral.
                         Text(item.count > 99 ? "99+" : "\(item.count)")
                             .font(.caption2.weight(.bold).monospacedDigit())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Theme.countBadge, in: .capsule)
+                            .background(item.kind == "mention" ? Theme.accent : Theme.countBadge, in: .capsule)
                     }
                 }
                 if showAccount && !item.isLark {
-                    Text(item.accountName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    Text(item.accountName).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !item.isDone {
                     if let draft = item.agentDraft, let send {
@@ -333,13 +331,14 @@ struct InboxRow: View {
             }
             }
             .opacity(item.isDone ? 0.6 : 1)
+            // The source: Feishu's own blue (the same in both appearances), mail a neutral gray, not the accent.
             Image(systemName: item.isLark ? "bubble.left.fill" : "envelope.fill")
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 16, height: 16)
-                .background(item.isLark ? Color(hex: 0x3370FF) : Theme.accent, in: .circle)
+                .frame(width: 18, height: 18)
+                .background(item.isLark ? Color(hex: 0x3370FF) : Color(uiColor: .systemGray), in: .circle)
                 .overlay(Circle().stroke(Theme.pageBackground, lineWidth: 1.5))
-                .offset(x: 3, y: 3)
+                .offset(x: 4, y: 4)
         }
         .frame(width: 40, height: 40)
     }
@@ -356,7 +355,7 @@ struct InboxDraftCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("AI 分身草拟的回复", systemImage: "sparkles")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.ai)
                 .lineLimit(1)
             Text(draft)
                 .font(.subheadline)
@@ -395,39 +394,35 @@ struct InboxDraftCard: View {
     }
 }
 
-/// An agent waiting on the user, among the inbox rows: what it waits for, which agent, on which machine.
+/// An agent waiting on the user, among the inbox rows: which agent, what it asks, then what it waits for (red, as
+/// 需要你 is everywhere) and on which machine. The label sits under the title so the title keeps the width.
 struct InboxAgentRow: View {
     var interaction: Interaction
-    var machine: String
+    var machine: Machine?
+    var machineName: String
 
     var body: some View {
         let ix = interaction
+        let asks = ix.summary ?? ix.questions?.first?.question
         HStack(alignment: .top, spacing: 12) {
-            // 需要你, as everywhere else: the state's red on its soft tint (a solid red disc was louder than any row).
-            Image(systemName: ix.kind.symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(StatusPalette.needsYou.dot)
-                .frame(width: 40, height: 40)
-                .background(StatusPalette.needsYou.tint, in: .circle)
-                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
+            // The rounded square of the Agents rows (SessionAvatar), with what kind of request it is.
+            SessionAvatar(machine: machine, state: .needsYou, size: 40, symbol: ix.kind.symbol, dot: false)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(ix.sessionTitle?.isEmpty == false ? ix.sessionTitle! : (ix.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Agent"))
-                        .font(.body.weight(.semibold)).lineLimit(1)
-                    Text(ix.title)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(StatusPalette.needsYou.text)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(StatusPalette.needsYou.tint, in: .capsule)
-                        .lineLimit(1)
-                        .fixedSize()
+                        .font(.headline).lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(LarkTime.short(ix.createdAt)).font(.caption).foregroundStyle(.secondary).fixedSize()
+                    Text(LarkTime.short(ix.createdAt)).font(.footnote).foregroundStyle(.secondary).fixedSize()
                 }
-                if let s = ix.summary ?? ix.questions?.first?.question, !s.isEmpty {
-                    Text(s).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                if let asks, !asks.isEmpty {
+                    Text(asks).font(.subheadline).foregroundStyle(Color.primary.opacity(0.9)).lineLimit(2)
+                    (Text(ix.title).fontWeight(.semibold).foregroundStyle(StatusPalette.needsYou.text)
+                        + Text(" · " + machineName).foregroundStyle(.secondary))
+                        .font(.footnote).lineLimit(1)
+                } else {
+                    Text(ix.title).font(.subheadline.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+                    Text(machineName).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Text(machine).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .padding(.vertical, 10)

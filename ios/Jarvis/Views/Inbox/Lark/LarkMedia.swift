@@ -336,7 +336,8 @@ struct LarkAvatar: View {
     var size: CGFloat = 44
 
     var body: some View {
-        let palette: [Color] = [Color(hex: 0x3370FF), Color(hex: 0x00B42A), Color(hex: 0xFF7D00), Color(hex: 0x7B61FF), Color(hex: 0x14C9C9), Color(hex: 0xF54A45)]
+        // No red or orange: beside the inbox's 需要你 rows they read as an agent waiting.
+        let palette: [Color] = [Color(hex: 0x3370FF), Color(hex: 0x00B42A), Color(hex: 0x7B61FF), Color(hex: 0x14C9C9), Color(hex: 0x4F5BD5), Color(hex: 0x64748B)]
         let color = palette[abs(name.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }) % palette.count]
         Circle()
             .fill(color.gradient)

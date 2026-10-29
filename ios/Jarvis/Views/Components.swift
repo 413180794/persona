@@ -36,6 +36,10 @@ struct SessionAvatar: View {
     var machine: Machine?
     var state: AgentState
     var size: CGFloat = 44
+    /// In place of the machine's symbol (the inbox shows what the agent asks: a question, a plan…).
+    var symbol: String?
+    /// The state dot on the corner; off where the square's color already says it (the inbox's 需要你 rows).
+    var dot = true
 
     var body: some View {
         let tint: Color = state == .idle || state == .offline || state == .unknown ? .secondary : state.color
@@ -44,12 +48,12 @@ struct SessionAvatar: View {
                 .fill(tint.opacity(state == .offline ? 0.06 : 0.12))
                 .frame(width: size, height: size)
                 .overlay {
-                    Image(systemName: machine?.symbol ?? "terminal")
+                    Image(systemName: symbol ?? machine?.symbol ?? "terminal")
                         .font(.system(size: size * 0.42, weight: .medium))
                         .foregroundStyle(tint)
                         .symbolEffect(.pulse, options: .repeating, isActive: state == .working)
                 }
-            if state != .offline {
+            if dot, state != .offline {
                 StatusDot(state: state, size: size * 0.24)
                     .padding(2.5)
                     .background(Circle().fill(Color(.systemBackground)))
