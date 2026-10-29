@@ -68,13 +68,20 @@ struct TerminalModifiers: Equatable {
     }
 }
 
-/// Terminal keys in one row that never wraps: ctrl / alt / shift (tap, double tap, hold), esc, tab, a ⌃C that goes
-/// out straight away, and a game-pad button that floats a direction pad (↑ ↓ ← → with enter in the middle) above the bar.
+/// Terminal keys in one row that never wraps (it scrolls sideways when they do not fit): ctrl / alt / shift (tap,
+/// double tap, hold), esc, tab, a ⌃C that goes out straight away, the saved commands, paste; then, always in reach, a
+/// game-pad button that floats a direction pad (↑ ↓ ← → with enter in the middle) above the bar and the keyboard's.
 struct TerminalKeyBar: View {
     /// Shared with a text field that should honor them; the bar keeps its own when nil.
     var mods: Binding<TerminalModifiers>? = nil
     /// The optional buttons shown (TerminalPrefs.allKeys ids); ctrl always is.
     var visible: Set<String> = Set(TerminalPrefs.allKeys.map(\.id))
+    /// The saved commands' button (nil: none).
+    var shortcuts: (() -> Void)? = nil
+    var shortcutsOn = false
+    var paste: (() -> Void)? = nil
+    /// The keyboard on the terminal: up or down (nil: no button).
+    var keyboard: Binding<Bool>? = nil
     var send: ([String]) -> Void
     @State private var own = TerminalModifiers()
     #if DEBUG
@@ -91,15 +98,14 @@ struct TerminalKeyBar: View {
     private var m: Binding<TerminalModifiers> { mods ?? $own }
 
     var body: some View {
-        HStack(spacing: 6) {
-            modifier(.ctrl, "ctrl", name: "Control")
-            if visible.contains("alt") { modifier(.alt, "alt", name: "Option") }
-            if visible.contains("shift") { modifier(.shift, "⇧", name: "Shift") }
-            if visible.contains("esc") { key("esc") { press("esc") } }
-            if visible.contains("tab") { key("tab") { press("tab") } }
-            if visible.contains("ctrlc") { key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) } }
+        HStack(spacing: 4) {
+            ViewThatFits(in: .horizontal) {
+                keys
+                ScrollView(.horizontal, showsIndicators: false) { keys }
+            }
             Spacer(minLength: 0)
             if visible.contains("pad") { padButton }
+            if let keyboard { keyboardButton(keyboard) }
         }
         #if DEBUG
         // `-showKeyMods locked,once,held`: ctrl, alt, shift in those states, for screenshots.
@@ -119,6 +125,41 @@ struct TerminalKeyBar: View {
                     .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
             }
         }
+    }
+
+    private var keys: some View {
+        HStack(spacing: 4) {
+            modifier(.ctrl, "ctrl", name: "Control")
+            if visible.contains("esc") { key("esc") { press("esc") } }
+            if visible.contains("tab") { key("tab") { press("tab") } }
+            if visible.contains("ctrlc") { key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) } }
+            if visible.contains("shortcuts"), let shortcuts {
+                Button { Haptics.tap(); shortcuts() } label: {
+                    KeyCap(symbol: shortcutsOn ? "bolt.fill" : "bolt", state: shortcutsOn ? .once : .off)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("快捷命令")
+            }
+            if visible.contains("paste"), let paste {
+                Button { Haptics.tap(); paste() } label: { KeyCap(symbol: "doc.on.clipboard", state: .off) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("粘贴")
+            }
+            if visible.contains("alt") { modifier(.alt, "alt", name: "Option") }
+            if visible.contains("shift") { modifier(.shift, "⇧", name: "Shift") }
+        }
+    }
+
+    private func keyboardButton(_ up: Binding<Bool>) -> some View {
+        Button {
+            Haptics.tap()
+            up.wrappedValue.toggle()
+        } label: {
+            KeyCap(symbol: up.wrappedValue ? "keyboard.chevron.compact.down" : "keyboard", state: .off)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(up.wrappedValue ? "收起键盘" : "键盘")
+        .accessibilityIdentifier("terminal-keyboard")
     }
 
     private var padButton: some View {
@@ -149,7 +190,7 @@ struct TerminalKeyBar: View {
     private func modifier(_ k: TerminalModifiers.Key, _ label: String, name: String) -> some View {
         let state = m.wrappedValue[k]
         return KeyCap(label: label, state: state)
-            .overlay(TouchArea(down: { down(k) }, up: { up(k) }))
+            .overlay(TouchArea(down: { down(k) }, up: { up(k) }, cancel: { cancelled(k) }))
             .accessibilityElement()
             .accessibilityLabel(name)
             .accessibilityValue(state == .locked ? "已锁定" : state == .off ? "" : "已按下")
@@ -183,6 +224,11 @@ struct TerminalKeyBar: View {
         m.wrappedValue.tap(k, quick: quick)
     }
 
+    private func cancelled(_ k: TerminalModifiers.Key) {
+        downAt[k] = nil
+        m.wrappedValue.release(k)
+    }
+
     static let holdAfter = 350 // ms
     static let doubleTap: TimeInterval = 0.35
 
@@ -197,16 +243,19 @@ struct TerminalKeyBar: View {
 private struct TouchArea: UIViewRepresentable {
     var down: () -> Void
     var up: () -> Void
+    /// The touch became something else (the bar scrolled): not a tap.
+    var cancel: () -> Void
 
     func makeUIView(context: Context) -> TouchView { TouchView() }
-    func updateUIView(_ v: TouchView, context: Context) { v.down = down; v.up = up }
+    func updateUIView(_ v: TouchView, context: Context) { v.down = down; v.up = up; v.cancel = cancel }
 
     final class TouchView: UIView {
         var down: (() -> Void)?
         var up: (() -> Void)?
+        var cancel: (() -> Void)?
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { down?() }
         override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { up?() }
-        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { up?() }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { cancel?() }
     }
 }
 
@@ -219,7 +268,7 @@ struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(.system(size: 17, weight: .medium)).padding(.horizontal, 4)
+                Image(systemName: symbol).font(.system(size: 16, weight: .medium)).frame(width: 22)
             } else {
                 Text(label)
                     .font(.system(.subheadline, design: .monospaced).weight(.semibold))
@@ -228,7 +277,7 @@ struct KeyCap: View {
             }
         }
         .foregroundStyle(state == .locked ? Color.white : state == .off ? Color.primary : Theme.accent)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 7)
         .frame(minWidth: 40, minHeight: 40)
         .surface(tint: state == .locked ? Theme.accent : state == .off ? nil : Theme.accent.opacity(0.16),
                  interactive: true, in: .capsule)

@@ -79,7 +79,10 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 ## 五、实现备忘
 
 - 文件：node `server/internal/node/terminal.go`、hub `server/internal/hub/terminal.go`、herdr `server/internal/herdr/observe.go`；
-  App `ios/Jarvis/Views/Session/Terminal/`（`TerminalGrid` 解析、`TerminalFeed` 订阅 / 续传 / 回退、`TerminalView` 渲染、`BoxDrawing`、`TerminalTheme`）。
+  App `ios/Jarvis/Views/Session/Terminal/`（`TerminalGrid` 解析、`TerminalFeed` 订阅 / 续传 / 回退、`TerminalView` 渲染、`TerminalWrap` 折行、
+  `TerminalInput` 直接打字、`BoxDrawing`、`TerminalTheme`）。
+- 配色默认「墨黑」（近黑底 0x0C0C0E，不随 App 浅色 / 深色变；对照 Moshi 默认纯黑）。终端卡片里的按钮、键栏、键盘都按配色的底色取深 / 浅外观。
+  另有深夜（深灰）、Jarvis、Solarized（后两套跟随系统）。
 - herdr 把反显（SGR 7）直接换成**它自己主题**的前景 / 背景真彩色发出来（`38;2;40;44;52;48;2;255;255;255`），手机上看到的是 herdr 的反显色，不随 Jarvis 主题变。
   普通的 16 / 256 色保持索引，由 Jarvis 主题决定。
 - 框线字符（U+2500–257F）和块字符（U+2580–259F）不用字体画：回退字体的这些字形比格子窄，框线会变成虚线。按格子画线（圆角用二次曲线），
@@ -92,7 +95,67 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 
 ## 六、字体（拍板 D）
 
-用户同意打包 OFL 等可再分发的等宽字体。目前**没有打包**：按格子渲染以后，对齐不再依赖字体（每个字形都放在自己的格子里，宽字符两格，
-框线自己画），系统的 SF Mono（拉丁）+ 苹方（中文，画在两格里居中）已经整齐；打包一款含中文的等宽字体（如更纱黑体 / Maple Mono CN）
-要多 10–20 MB，换来的只是字形风格。以后要加：字体文件放 `ios/Jarvis/Resources/Fonts`，许可证（OFL-1.1 全文）写进
-`THIRD_PARTY_NOTICES.md`，`CellMetrics` 按设置取字体即可。
+默认 **JetBrains Mono**（OFL-1.1，v2.304 的 Regular / Bold 两个 ttf，共约 550 KB，`ios/Jarvis/Resources/Fonts`，许可证全文在
+`THIRD_PARTY_NOTICES.md`），设置里可换回系统的 SF Mono。第一次用到时 `CTFontManagerRegisterFontsForURL` 注册，不用改 Info.plist。
+中文、符号用系统回退字体，每个字放进自己的两格。
+
+2026-10-29 以前没打包，理由是按格子渲染以后对齐不靠字体。改主意是因为对照 Moshi（默认 JetBrains Mono 14pt）：
+「像终端」的观感主要来自字形，而 Latin 字体只有几百 KB，不必等含中文的等宽字体（那种要 10–20 MB）。
+
+- 默认字号 13（原来 11）。行高统一为 `ceil(字号 × 1.42)`，不用字体自己的行距，所以换字体时行数不变。
+- 中文字形约 1 em 宽，两格是 1.2 em，原样画字和字之间会空出一截（tab4 报的「字距不均」之一）。
+  现在宽字符放大到填满两格的约 92%，上限是行高的 86%、1.25 倍。
+
+## 七、直接在终端里打字（2026-10-29）
+
+- 终端视图（`TerminalScrollView`）自己实现 `UITextInput`（`TerminalInput.swift`），点一下就成为 first responder，键盘直接作用在终端上。
+  - 文档里只放输入法正在拼的 marked text（拼音），画在光标处，选定以后才发出去。
+  - `insertText` / `replace(range:)`（听写）都当作打字。
+  - 回车、tab 发键名，退格发 `backspace`。
+  - 外接键盘的方向键、esc、ctrl+字母走 `keyCommands`。
+- 键栏的 ctrl / alt / ⇧ 对键盘打的下一个键生效（ctrl 然后 c 就是 `ctrl+c`）。键盘弹起时键栏贴在键盘上方。
+  键盘按钮在键栏最右，收起键盘只能点它。
+- 发送用 `KeyStream` + `KeyBatcher`：同一时间只有一个 `/keys` 请求在路上，在途时打的字攒进下一个请求。
+  - 一个请求的格式是「先文本、后键」，所以键后面再打的字进下一个请求。
+  - 还没发出去的字，退格在本地直接删掉。
+  - 结果是快速连打只发几个请求，顺序不乱。
+- 光标跟着 herdr 的光标画：在终端上打字时是实心块，没在打字时是空心框。
+- 页面头部（标题、空间条、tab）在键盘弹起时收成窄条，这一项由 `ChatView` 实现。
+  iPhone 17 Pro、13pt 下，键盘弹起时能看到约 20 行（原来 13 行），不弹键盘时约 27 行。
+- 设置 › 输入方式可以换回原来的「输入框」：写好一行再整条发出去，输入框有补全。
+
+## 八、手机宽度换行（`TerminalWrap.swift`）
+
+窗格按电脑的宽度排（常见 170 列），手机一行四十多格，要再折一次。以下规则都有真实帧夹具测试（`TerminalWrapTests`）：
+
+- **在词之间折**：在空格后、中文字旁边断行，不在 `，。）` 等收尾标点前、`（「` 等开头标点后断。
+  只在后半行找断点，一个词比半行还长时才在词中间断。断点处的空格不放到下一行开头。
+- **悬挂缩进**：续行缩进到这一行正文的起点，也就是前导空格 + 列表标记之后。
+  - 列表标记包括 `⏺ ⎿ ❯ • - *`、`2.`、`3)`。
+  - 缩进里的竖框线 `│ ┃ ║` 会再画一次，缩进格保留这一行的背景色。
+  - 最多缩进半行。
+- **填充不折行**：一行剩下的部分只是填充时，到手机边缘就停，不再折成几行虚线或空色块。填充指：
+  - 任何背景色的空格；
+  - 横跨窗格的分隔线：`─ ━ ═ ╌ ┄` 等，例如 Claude 输入框上下的线、权限框里的 `╌`；
+  - Claude 给用户消息铺的灰底（48;2;55;55;55）。
+- 光标所在行不截，打字的位置要能看到。
+
+## 九、herdr 重画宽字符的坑（「字消失」）
+
+herdr 增量帧里，流式输出的每个中文字都单独用 CUP 定位，常常写在原来同一个宽字符的位置上（`ESC[35;7H无`）。
+原来的写法先写左半，再写右半（宽 0 的占位格）。写右半时触发了「覆盖宽字符的右半就清掉它的左半」规则，刚写的字被清掉了。
+tab4 截图里整段中文缺字、看起来字距大，根源在这里。
+
+现在右半格单独写（`putRightHalf`），只清掉被它覆盖的下一个宽字符。验证：两份 lab 窗格的真实录制，回放结果和
+`herdr pane read` 逐行一致（`terminal-observe-mixed` / `-permission` 的 `.jsonl` + `.txt`）。
+
+## 十、实测（2026-10-29，lab 窗格 w9:p5，Claude 2.1.312）
+
+| 项 | 数值 | 怎么量 |
+| --- | --- | --- |
+| 回显（发键 → 带着这个字的帧到达） | 中位 37 ms，最快约 20 ms，偶发 150–175 ms（两轮各 12 次） | 本机通过线上 hub：`POST /keys`（keep-alive）后，在 WebSocket 的终端流里等到含这个字的帧。链路是本机 → hub → node（就是本机）→ herdr → observe → hub → 本机。手机要再加自己的网络往返和一帧渲染 |
+| herdr 本身 | 45–48 ms | tab4：`pane send-text` 后轮询 `pane read`（CLI 每次起进程，比流慢） |
+| 流式帧率 | 输出期间帧间隔中位 113 ms、p95 239 ms，约 9 帧/秒；整段含思考停顿平均 6 帧/秒 | 让 Claude 写 500 字，记录每帧到达时间 |
+| 帧大小 | 中位 117 字节，最大 18 KB（整屏） | 同上 |
+| 手机处理一帧（解析 + 折行 + 画） | 中位 11.8 ms，p95 16 ms，首个整帧 44 ms | `TerminalFrameCostTests`，模拟器 Debug 构建，录制的 76 帧 |
+| 键盘弹起时可见行数 | 约 20 行（不弹键盘约 27 行） | iPhone 17 Pro 模拟器，13pt |

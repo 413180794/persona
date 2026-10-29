@@ -8,10 +8,19 @@ enum TerminalPrefs {
     static let shortcuts = "terminalShortcuts" // JSON [String]
     static let keys = "terminalKeys" // the optional key bar buttons shown, comma separated
     static let autoHide = "terminalAutoHideKeys"
+    static let fontSize = "terminalFontSize"
+    static let font = "terminalFont"
+    static let theme = "terminalTheme"
+    static let wrap = "terminalWrap"
+    /// "direct": the keyboard types into the terminal; "field": a text field under it sends what is written.
+    static let inputMode = "terminalInputMode"
+    static let tipsSeen = "terminalTipsSeen"
+    static let defaultFontSize = 13.0
     static let defaultShortcuts = ["git status", "git diff --stat", "ls -la", "/compact", "/status"]
-    static let allKeys: [(id: String, label: String)] = [("alt", "alt"), ("shift", "⇧ shift"), ("esc", "esc"), ("tab", "tab"),
-                                                         ("ctrlc", "⌃C"), ("pad", "方向键")]
-    static let defaultKeys = allKeys.map(\.id).joined(separator: ",")
+    static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", "快捷命令"),
+                                                         ("paste", "粘贴"), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", "方向键")]
+    /// alt and shift are a tap away in the settings (Moshi shows only ctrl too): the rest fits a phone's width.
+    static let defaultKeys = allKeys.map(\.id).filter { $0 != "alt" && $0 != "shift" }.joined(separator: ",")
 
     static func decode(_ json: String) -> [String] {
         guard !json.isEmpty, let list = try? JSONDecoder().decode([String].self, from: Data(json.utf8)) else { return defaultShortcuts }
@@ -26,6 +35,7 @@ enum TerminalPrefs {
 /// Saved commands over the key bar: a tap puts one in the text field, a double tap sends it with return.
 struct ShortcutsPanel: View {
     var items: [String]
+    var hint = "快捷 · 单击填入，双击发送"
     var fill: (String) -> Void
     var send: (String) -> Void
     var edit: () -> Void
@@ -33,7 +43,7 @@ struct ShortcutsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text("快捷 · 单击填入，双击发送").font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Text(hint).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 4)
                 Button("编辑", action: edit).font(.caption.weight(.semibold)).lineLimit(1)
             }
@@ -77,9 +87,11 @@ struct TerminalSettingsView: View {
     @AppStorage(TerminalPrefs.shortcuts) private var shortcutsJSON = ""
     @AppStorage(TerminalPrefs.keys) private var keys = TerminalPrefs.defaultKeys
     @AppStorage(TerminalPrefs.autoHide) private var autoHide = false
-    @AppStorage("terminalWrap") private var wrap = true
-    @AppStorage("terminalFontSize") private var fontSize = 11.0
-    @AppStorage("terminalTheme") private var themeID = TerminalTheme.jarvis.id
+    @AppStorage(TerminalPrefs.wrap) private var wrap = true
+    @AppStorage(TerminalPrefs.fontSize) private var fontSize = TerminalPrefs.defaultFontSize
+    @AppStorage(TerminalPrefs.font) private var fontID = TerminalFont.jetbrains.rawValue
+    @AppStorage(TerminalPrefs.theme) private var themeID = TerminalTheme.defaultID
+    @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
     @State private var newShortcut = ""
 
     private var shortcuts: Binding<[String]> {
@@ -89,6 +101,45 @@ struct TerminalSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TerminalPreview(fontSize: fontSize, font: TerminalFont(rawValue: fontID) ?? .jetbrains,
+                                    theme: .named(themeID), wrap: wrap)
+                        .frame(height: TerminalPreview.height(fontSize))
+                        .listRowInsets(EdgeInsets())
+                    ForEach(TerminalTheme.all, id: \.id) { t in
+                        Button { themeID = t.id } label: { ThemeRow(theme: t, on: t.id == themeID) }
+                            .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("配色")
+                } footer: {
+                    Text("墨黑、深夜不随系统变化；Jarvis、Solarized 跟着系统的浅色 / 深色。")
+                }
+                Section {
+                    Picker("字体", selection: $fontID) {
+                        ForEach(TerminalFont.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+                    }
+                    Stepper(value: $fontSize, in: 7...20, step: 0.5) {
+                        Text("字号 \(fontSize, specifier: "%.1f")").monospacedDigit()
+                    }
+                    Toggle("长行按手机宽度换行", isOn: $wrap)
+                } header: {
+                    Text("文字")
+                } footer: {
+                    Text("在终端上双指捏合也能调字号。中文用系统字体，每个字占两格。")
+                }
+                Section {
+                    Picker("输入方式", selection: $inputMode) {
+                        Text("直接打字").tag("direct")
+                        Text("输入框").tag("field")
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("输入")
+                } footer: {
+                    Text(inputMode == "field" ? "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。"
+                         : "点终端弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；键栏贴在键盘上方。")
+                }
                 Section {
                     ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { _, s in
                         Text(s).font(.system(.body, design: .monospaced)).lineLimit(1)
@@ -106,7 +157,7 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("快捷命令")
                 } footer: {
-                    Text("在终端输入框左边的闪电里：单击填入，双击直接发送。")
+                    Text("在键栏的闪电里：单击输入，双击带回车执行。左上角「编辑」可以删除、排序。")
                 }
                 Section {
                     Toggle(isOn: .constant(true)) { Text("ctrl") }.disabled(true)
@@ -117,18 +168,10 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("键栏")
                 } footer: {
-                    Text("ctrl 一直在。收起时点输入框或按下修饰键会再出现。")
-                }
-                Section("显示") {
-                    Picker("配色", selection: $themeID) {
-                        ForEach(TerminalTheme.all, id: \.id) { Text($0.name).tag($0.id) }
-                    }
-                    Stepper(value: $fontSize, in: 7...20, step: 0.5) {
-                        Text("字号 \(fontSize, specifier: "%.1f")").monospacedDigit()
-                    }
-                    Toggle("长行按手机宽度换行", isOn: $wrap)
+                    Text("ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。")
                 }
                 Section("手势") {
+                    Label("点终端：弹出键盘直接打字", systemImage: "keyboard")
                     Label("捏合调字号", systemImage: "arrow.up.left.and.arrow.down.right")
                     Label("双指左右滑：切换同一空间里的 Agent", systemImage: "arrow.left.arrow.right")
                     Label("双指上下滑：切换到相邻的空间", systemImage: "arrow.up.arrow.down")
@@ -161,6 +204,58 @@ struct TerminalSettingsView: View {
             if on { set.append(id) }
             keys = TerminalPrefs.allKeys.map(\.id).filter(set.contains).joined(separator: ",")
         })
+    }
+}
+
+/// A few lines of a Claude session in the chosen look, for the settings.
+struct TerminalPreview: View {
+    var fontSize: Double
+    var font: TerminalFont
+    var theme: TerminalTheme
+    var wrap: Bool
+
+    private static let sample: TerminalContent = {
+        let ansi = "\u{1B}[38;2;215;119;87m⏺\u{1B}[0m 好的，先跑一下测试：\r\n"
+            + "  ⎿  \u{1B}[32mok\u{1B}[0m  ./screen  \u{1B}[2m0.41s\u{1B}[0m\r\n"
+            + "\u{1B}[38;2;136;136;136m" + String(repeating: "─", count: 60) + "\u{1B}[0m\r\n"
+            + "❯ \u{1B}[7m \u{1B}[0m\r\n"
+            + "\u{1B}[38;2;136;136;136m" + String(repeating: "─", count: 60) + "\u{1B}[0m\r\n"
+            + "  \u{1B}[35m⏵⏵ auto mode on\u{1B}[0m \u{1B}[2m(shift+tab to cycle)\u{1B}[0m"
+        return TerminalContent(rows: TerminalGrid.rows(fromANSI: ansi), cols: 60, cursor: nil)
+    }()
+
+    /// Room for its six rows at a size.
+    static func height(_ size: Double) -> CGFloat { min(280, 6 * ceil(size * 1.42) + 22) }
+
+    var body: some View {
+        TerminalView(content: Self.sample, wrap: wrap, fontSize: fontSize, font: font, theme: theme)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// A theme in the list: its name and its colors.
+struct ThemeRow: View {
+    @Environment(\.colorScheme) private var scheme
+    var theme: TerminalTheme
+    var on: Bool
+
+    var body: some View {
+        let side = theme.side(scheme == .dark)
+        HStack(spacing: 10) {
+            Text(theme.name).lineLimit(1)
+            Spacer(minLength: 8)
+            HStack(spacing: 4) {
+                ForEach([side.background, side.foreground, side.ansi[1], side.ansi[2], side.ansi[4]], id: \.self) { c in
+                    Circle().fill(Color(hex: c)).frame(width: 14, height: 14)
+                        .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
+                }
+            }
+            Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Theme.accent).opacity(on ? 1 : 0)
+        }
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }
 }
 

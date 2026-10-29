@@ -17,12 +17,17 @@ struct TerminalContent: Equatable {
 
 /// The terminal tab's screen: every character drawn in its own cell (wide ones in two), so columns and Chinese line up
 /// whatever the font's own widths are. Wrapped, each row is folded at the view's width; unwrapped, rows keep the pane's
-/// width and the view scrolls sideways. Long press selects (拷贝 / 全选), a tap opens a link.
+/// width and the view scrolls sideways. Long press selects (拷贝 / 全选), a tap opens a link. With `onInput` it takes the
+/// keyboard: a tap brings it up and what is typed goes to the terminal (TerminalInput.swift).
 struct TerminalView: UIViewRepresentable {
     var content: TerminalContent
     var wrap: Bool
     var fontSize: CGFloat
+    var font: TerminalFont = .jetbrains
     var theme: TerminalTheme
+    /// Whether the keyboard is up on the terminal; it follows the view as well (a tap, the keyboard going down).
+    var focused: Binding<Bool>?
+    var onInput: ((TerminalInputEvent) -> Void)?
     /// Called while the user scrolls near the top (load the page before; the view keeps its place when it arrives).
     var onNearTop: (() -> Void)?
     var onOpenURL: ((URL) -> Void)?
@@ -42,8 +47,21 @@ struct TerminalView: UIViewRepresentable {
         v.onFontSize = onFontSize
         v.onSwipe = onSwipe
         v.onDoubleTap = onDoubleTap
-        v.update(content: content, wrap: wrap, fontSize: fontSize, theme: theme,
+        v.onInput = onInput
+        v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
+        v.update(content: content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
                  dark: context.environment.colorScheme == .dark)
+        if let focused, onInput != nil, focused.wrappedValue != v.isFirstResponder {
+            let on = focused.wrappedValue
+            DispatchQueue.main.async { // not while SwiftUI is updating views: the keyboard's frame changes the layout
+                guard on != v.isFirstResponder, v.window != nil else { return }
+                _ = on ? v.becomeFirstResponder() : v.resignFirstResponder()
+            }
+        }
+    }
+
+    static func dismantleUIView(_ v: TerminalScrollView, coordinator: ()) {
+        if v.isFirstResponder { _ = v.resignFirstResponder() }
     }
 }
 
@@ -54,15 +72,34 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onFontSize: ((CGFloat) -> Void)?
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
-    private var pinchFrom: CGFloat = 11
+    var onInput: ((TerminalInputEvent) -> Void)?
+    var onFocus: ((Bool) -> Void)?
+    private var pinchFrom: CGFloat = TerminalPrefs.defaultFontSize
 
-    private let canvas = TerminalCanvas()
+    // Typing (TerminalInput.swift): the input method's composition, drawn over the cursor until it is chosen.
+    var marked = ""
+    var markedSelection = NSRange()
+    weak var inputDelegate: UITextInputDelegate?
+    var markedTextStyle: [NSAttributedString.Key: Any]?
+    var autocorrectionType = UITextAutocorrectionType.no
+    var autocapitalizationType = UITextAutocapitalizationType.none
+    var spellCheckingType = UITextSpellCheckingType.no
+    var smartQuotesType = UITextSmartQuotesType.no
+    var smartDashesType = UITextSmartDashesType.no
+    var smartInsertDeleteType = UITextSmartInsertDeleteType.no
+    var inlinePredictionType = UITextInlinePredictionType.no
+    var keyboardAppearance = UIKeyboardAppearance.dark
+    private let markedLabel = UILabel()
+
+    let canvas = TerminalCanvas()
     private var content = TerminalContent()
     private var wrap = true
-    private var fontSize: CGFloat = 11
-    private var theme = TerminalTheme.jarvis
+    private var fontSize: CGFloat = TerminalPrefs.defaultFontSize
+    private var font = TerminalFont.jetbrains
+    private var theme = TerminalTheme.ink
     private var dark = true
-    private var metrics = CellMetrics(size: 11)
+    private var metrics = CellMetrics(size: TerminalPrefs.defaultFontSize)
+    private var laidOutHeight: CGFloat = 0
     private var lines: [DisplayLine] = []
     private var maxCells = 0
     private var laidOutWidth: CGFloat = 0
@@ -73,7 +110,6 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     private var selection: (anchor: CellPoint, focus: CellPoint)?
     private lazy var editMenu = UIEditMenuInteraction(delegate: self)
 
-    struct DisplayLine: Equatable { var row: Int; var from: Int; var to: Int }
     struct CellPoint: Comparable {
         var line: Int; var col: Int
         static func < (a: CellPoint, b: CellPoint) -> Bool { a.line < b.line || (a.line == b.line && a.col < b.col) }
@@ -91,6 +127,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         canvas.backgroundColor = .clear
         canvas.contentMode = .redraw
         addSubview(canvas)
+        markedLabel.isHidden = true
+        markedLabel.layer.cornerRadius = 3
+        markedLabel.layer.masksToBounds = true
+        addSubview(markedLabel)
         addInteraction(editMenu)
         let press = UILongPressGestureRecognizer(target: self, action: #selector(longPress(_:)))
         press.minimumPressDuration = 0.35
@@ -120,8 +160,8 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
 
     // MARK: Content
 
-    func update(content new: TerminalContent, wrap: Bool, fontSize: CGFloat, theme: TerminalTheme, dark: Bool) {
-        let styleChanged = wrap != self.wrap || fontSize != self.fontSize || theme.id != self.theme.id || dark != self.dark
+    func update(content new: TerminalContent, wrap: Bool, fontSize: CGFloat, font: TerminalFont, theme: TerminalTheme, dark: Bool) {
+        let styleChanged = wrap != self.wrap || fontSize != self.fontSize || font != self.font || theme.id != self.theme.id || dark != self.dark
         guard first || styleChanged || new != content else { return }
         if styleChanged || new.rows.count != content.rows.count {
             cache.removeAll(keepingCapacity: true)
@@ -129,13 +169,17 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             // Only rows that changed are drawn again.
             for i in new.rows.indices where new.rows[i] != content.rows[i] { invalidate(row: i) }
         }
-        if fontSize != self.fontSize || first { metrics = CellMetrics(size: fontSize) }
+        if fontSize != self.fontSize || font != self.font || first { metrics = CellMetrics(size: fontSize, font: font) }
         let fromEnd = contentSize.height - contentOffset.y
-        let atEnd = contentOffset.y >= contentSize.height - bounds.height - 4
-        self.wrap = wrap; self.fontSize = fontSize; self.theme = theme; self.dark = dark
+        let atEnd = isAtEnd
+        self.wrap = wrap; self.fontSize = fontSize; self.font = font; self.theme = theme; self.dark = dark
         content = new
         backgroundColor = UIColor(hex: theme.side(dark).background)
-        indicatorStyle = dark || theme.id == "midnight" ? .white : .black
+        indicatorStyle = theme.side(dark).isDark ? .white : .black
+        if keyboardAppearance != (theme.side(dark).isDark ? .dark : .light) {
+            keyboardAppearance = theme.side(dark).isDark ? .dark : .light
+            if isFirstResponder { reloadInputViews() }
+        }
         relayout()
         let maxY = max(0, contentSize.height - bounds.height)
         if first || atEnd {
@@ -145,7 +189,43 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         }
         first = false
         accessibilityValue = content.rows.suffix(12).map(TerminalGrid.plain).joined(separator: "\n")
+        placeMarked()
         canvas.setNeedsDisplay()
+    }
+
+    private var isAtEnd: Bool { contentOffset.y >= contentSize.height - bounds.height - 4 }
+
+    /// The input method's composition, over the cursor (or the end of the screen when it is hidden).
+    func setMarked(_ text: String, selected: NSRange) {
+        marked = text
+        markedSelection = selected
+        placeMarked()
+    }
+
+    private func placeMarked() {
+        guard !marked.isEmpty else { markedLabel.isHidden = true; return }
+        let side = theme.side(dark)
+        markedLabel.attributedText = NSAttributedString(string: marked, attributes: [
+            .font: metrics.regular, .foregroundColor: UIColor(hex: side.foreground),
+            .underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: UIColor(hex: side.cursor),
+        ])
+        markedLabel.backgroundColor = UIColor(hex: side.background).withAlphaComponent(0.92)
+        markedLabel.sizeToFit()
+        let r = cursorRect()
+        markedLabel.frame = CGRect(x: min(r.minX, max(inset.left, bounds.width - markedLabel.bounds.width - inset.right)),
+                                   y: r.minY, width: markedLabel.bounds.width + 2, height: r.height)
+        markedLabel.isHidden = false
+    }
+
+    /// The terminal cursor's cell in this view (the end of the last line when it is hidden).
+    func cursorRect() -> CGRect {
+        let w = metrics.cell.width, h = metrics.cell.height
+        var at: (line: Int, col: Int)?
+        if let c = content.cursor {
+            if let i = lines.lastIndex(where: { $0.row == c.row && c.col >= $0.from }) { at = (i, c.col - lines[i].from + lines[i].indent) }
+        }
+        let point = at ?? (max(0, lines.count - 1), lines.last.map { $0.to - $0.from + $0.indent } ?? 0)
+        return CGRect(x: inset.left + CGFloat(point.col) * w, y: inset.top + CGFloat(point.line) * h, width: w, height: h)
     }
 
     private func invalidate(row: Int) {
@@ -154,7 +234,14 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if bounds.width != laidOutWidth { relayout() }
+        if bounds.width != laidOutWidth || bounds.height != laidOutHeight {
+            // The keyboard coming up shrinks the view: what was at the bottom (the cursor) stays there.
+            let wasAtEnd = contentOffset.y >= contentSize.height - laidOutHeight - 4
+            laidOutHeight = bounds.height
+            if bounds.width != laidOutWidth { relayout() }
+            if wasAtEnd { contentOffset.y = max(0, contentSize.height - bounds.height) }
+            placeMarked()
+        }
         canvas.frame = CGRect(origin: contentOffset, size: bounds.size)
     }
 
@@ -167,26 +254,8 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     private func relayout() {
         laidOutWidth = bounds.width
         let perLine = max(10, Int((bounds.width - inset.left - inset.right) / metrics.cell.width))
-        var out: [DisplayLine] = []
-        out.reserveCapacity(content.rows.count + 16)
-        maxCells = content.cols
-        for (r, row) in content.rows.enumerated() {
-            var end = row.count
-            while end > 0, row[end - 1].isBlank { end -= 1 }
-            if let c = content.cursor, c.row == r { end = max(end, min(c.col + 1, max(row.count, c.col + 1))) }
-            maxCells = max(maxCells, end)
-            guard wrap, end > perLine else {
-                out.append(DisplayLine(row: r, from: 0, to: end))
-                continue
-            }
-            var from = 0
-            while from < end {
-                var to = min(from + perLine, end)
-                if to < end, to < row.count, row[to].width == 0, to - 1 > from { to -= 1 } // a wide character stays whole
-                out.append(DisplayLine(row: r, from: from, to: to))
-                from = to
-            }
-        }
+        let out = TerminalWrap.lines(content.rows, cursor: content.cursor, perLine: perLine, wrap: wrap)
+        maxCells = out.reduce(content.cols) { max($0, $1.to + $1.indent) }
         if out != lines { selection = nil }
         lines = out
         let width = wrap ? bounds.width : max(bounds.width, CGFloat(maxCells) * metrics.cell.width + inset.left + inset.right)
@@ -195,6 +264,14 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     }
 
     // MARK: Drawing
+
+    /// A continuation line's cells: the borders of the row's indent again, blanks (on the row's background), then its
+    /// own cells.
+    private static func hanging(_ row: TermRow, _ line: DisplayLine) -> TermRow {
+        var cells = row.prefix(line.indent).map { TerminalWrap.borders.contains($0.text) ? $0 : TermCell(text: " ", width: 1, style: $0.style) }
+        cells += row[line.from..<min(line.to, row.count)]
+        return cells
+    }
 
     fileprivate func draw(in ctx: CGContext, visible: CGRect) {
         let side = theme.side(dark)
@@ -211,7 +288,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             let origin = CGPoint(x: inset.left, y: inset.top + CGFloat(i) * h)
             let key = CacheKey(row: line.row, from: line.from, to: line.to)
             let render = cache[key] ?? {
-                let r = LineRender(content.rows[line.row], from: line.from, to: line.to, metrics: metrics, side: side)
+                let row = content.rows[line.row]
+                let r = line.indent == 0
+                    ? LineRender(row, from: line.from, to: line.to, metrics: metrics, side: side)
+                    : LineRender(Self.hanging(row, line), from: 0, to: line.indent + line.to - line.from, metrics: metrics, side: side)
                 cache[key] = r
                 return r
             }()
@@ -219,13 +299,20 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
                 let from = i == a.line ? a.col : 0
                 let to = i == b.line ? b.col + 1 : max(line.to - line.from, 1)
                 ctx.setFillColor(UIColor(hex: side.selection).withAlphaComponent(0.32).cgColor)
-                ctx.fill(CGRect(x: origin.x + CGFloat(from) * w, y: origin.y, width: CGFloat(max(0, to - from)) * w, height: h))
+                ctx.fill(CGRect(x: origin.x + CGFloat(line.indent + from) * w, y: origin.y, width: CGFloat(max(0, to - from)) * w, height: h))
             }
             render.draw(in: ctx, at: origin)
             if let c = content.cursor, c.row == line.row, c.col >= line.from, c.col < max(line.to, line.from + 1) {
-                let x = origin.x + CGFloat(c.col - line.from) * w
-                ctx.setFillColor(UIColor(hex: side.cursor).withAlphaComponent(0.55).cgColor)
-                ctx.fill(CGRect(x: x, y: origin.y + 1, width: w, height: h - 2))
+                // Typing here: a solid block; otherwise an outline (the keyboard is not on the terminal).
+                let rect = CGRect(x: origin.x + CGFloat(line.indent + c.col - line.from) * w, y: origin.y + 1, width: w, height: h - 2)
+                if isFirstResponder {
+                    ctx.setFillColor(UIColor(hex: side.cursor).withAlphaComponent(0.7).cgColor)
+                    ctx.fill(rect)
+                } else {
+                    ctx.setStrokeColor(UIColor(hex: side.cursor).withAlphaComponent(0.8).cgColor)
+                    ctx.setLineWidth(1)
+                    ctx.stroke(rect.insetBy(dx: 0.5, dy: 0.5))
+                }
             }
         }
         ctx.restoreGState()
@@ -237,7 +324,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         guard !lines.isEmpty else { return nil }
         let line = min(max(0, Int((p.y - inset.top) / metrics.cell.height)), lines.count - 1)
         let span = max(1, lines[line].to - lines[line].from)
-        var col = min(max(0, Int((p.x - inset.left) / metrics.cell.width)), span - 1)
+        var col = min(max(0, Int((p.x - inset.left) / metrics.cell.width) - lines[line].indent), span - 1)
         let row = content.rows[lines[line].row]
         if lines[line].from + col < row.count, row[lines[line].from + col].width == 0, col > 0 { col -= 1 }
         return CellPoint(line: line, col: col)
@@ -254,7 +341,8 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         case .ended:
             if let s = selection {
                 let a = min(s.anchor, s.focus)
-                let p = CGPoint(x: inset.left + CGFloat(a.col) * metrics.cell.width, y: inset.top + CGFloat(a.line) * metrics.cell.height)
+                let p = CGPoint(x: inset.left + CGFloat(a.col + lines[a.line].indent) * metrics.cell.width,
+                                y: inset.top + CGFloat(a.line) * metrics.cell.height)
                 editMenu.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: p))
             }
         default: break
@@ -286,8 +374,11 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
             canvas.setNeedsDisplay()
             return
         }
-        guard let c = cell(at: g.location(in: self)), let url = link(at: c) else { return }
-        onOpenURL?(url)
+        if let c = cell(at: g.location(in: self)), let url = link(at: c) {
+            onOpenURL?(url)
+            return
+        }
+        if onInput != nil, !isFirstResponder { _ = becomeFirstResponder() }
     }
 
     /// The OSC 8 link under a cell, else a URL written in its row.
@@ -376,13 +467,39 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
 }
 
 /// The visible window of the scroll view: it moves with the scroll position and draws only the lines in it.
-private final class TerminalCanvas: UIView {
+final class TerminalCanvas: UIView {
     weak var host: TerminalScrollView?
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         host?.draw(in: ctx, visible: frame)
     }
+}
+
+/// The terminal's typeface: JetBrains Mono (bundled, SIL OFL) or the system's SF Mono. Chinese and other scripts
+/// neither has come from the system's fallback, each drawn in its own cells.
+enum TerminalFont: String, CaseIterable {
+    case jetbrains, system
+
+    var name: String { self == .jetbrains ? "JetBrains Mono" : "SF Mono（系统）" }
+
+    func font(size: CGFloat, bold: Bool) -> UIFont {
+        if self == .jetbrains, Self.registered, let f = UIFont(name: bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size) {
+            return f
+        }
+        return .monospacedSystemFont(ofSize: size, weight: bold ? .bold : .regular)
+    }
+
+    /// The bundled files register on first use (no Info.plist list to keep in step).
+    private static let registered: Bool = {
+        var any = false
+        for name in ["JetBrainsMono-Regular", "JetBrainsMono-Bold"] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            any = true
+        }
+        return any
+    }()
 }
 
 /// Cell size of the monospaced font at a size.
@@ -395,14 +512,15 @@ struct CellMetrics {
     /// A light box-drawing line's width.
     let line: CGFloat
 
-    init(size: CGFloat) {
+    init(size: CGFloat, font: TerminalFont = .jetbrains) {
         self.size = size
-        regular = .monospacedSystemFont(ofSize: size, weight: .regular)
-        bold = .monospacedSystemFont(ofSize: size, weight: .bold)
+        regular = font.font(size: size, bold: false)
+        bold = font.font(size: size, bold: true)
         let w = ("M" as NSString).size(withAttributes: [.font: regular]).width
-        let h = ceil(regular.lineHeight * 1.18)
+        // The same line spacing whatever the font's own (JetBrains Mono's is taller than SF Mono's).
+        let h = ceil(max(size * 1.42, regular.ascender - regular.descender))
         cell = CGSize(width: w, height: h)
-        baseline = floor((h - regular.lineHeight) / 2 + regular.ascender)
+        baseline = floor((h - (regular.ascender - regular.descender)) / 2 + regular.ascender)
         line = max(1, (size / 11 * 2).rounded() / 2)
     }
 
@@ -484,9 +602,20 @@ private final class LineRender {
             if c.width == 1, let s = text.unicodeScalars.first, text.unicodeScalars.count == 1, s.properties.isEmoji {
                 text.unicodeScalars.append("\u{FE0E}")
             }
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
-            let glyph = CTLineGetTypographicBounds(line, nil, nil, nil)
+            var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+            var glyph = CTLineGetTypographicBounds(line, nil, nil, nil)
             let room = CGFloat(c.width) * m.cell.width
+            // A Chinese glyph is about one em, two cells are 1.2: drawn at the font's size the characters stand apart.
+            // Grown to fill their cells (within the line's height) they read as text.
+            if c.width == 2, glyph > 0, glyph < room * 0.9 {
+                let grow = min(room * 0.92 / glyph, m.cell.height * 0.86 / font.pointSize, 1.25)
+                if grow > 1.02 {
+                    var big = attrs
+                    big[.font] = font.withSize(font.pointSize * grow)
+                    line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: big))
+                    glyph = CTLineGetTypographicBounds(line, nil, nil, nil)
+                }
+            }
             let scale = glyph > room * 1.02 ? room / glyph : 1
             let x = CGFloat(i - from) * m.cell.width + max(0, (room - glyph * scale) / 2)
             texts.append((line, CGPoint(x: x, y: m.baseline), scale))

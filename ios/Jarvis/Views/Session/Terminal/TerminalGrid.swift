@@ -114,7 +114,7 @@ nonisolated final class TerminalGrid {
             return // herdr places every row itself; nothing it sends runs past the edge
         }
         put(TermCell(text: String(ch), width: UInt8(w), style: style), at: cursorCol)
-        if w == 2 { put(TermCell(text: "", width: 0, style: style), at: cursorCol + 1) }
+        if w == 2 { putRightHalf(at: cursorCol + 1) }
         cursorCol += w
     }
 
@@ -126,6 +126,15 @@ nonisolated final class TerminalGrid {
         if lines[r][col].width == 0, col > 0, lines[r][col - 1].width == 2 { lines[r][col - 1] = .blank }
         if lines[r][col].width == 2, col + 1 < lines[r].count, cell.width != 2 { lines[r][col + 1] = .blank }
         lines[r][col] = cell
+    }
+
+    /// The right half of the wide character just put at col - 1. Not `put`: the cell there may be the right half of
+    /// the wide character it replaced (herdr redraws streaming text that way), and that rule would blank the new one.
+    private func putRightHalf(at col: Int) {
+        let r = cursorRow
+        if lines[r].count <= col { lines[r].append(contentsOf: repeatElement(TermCell.blank, count: col - lines[r].count + 1)) }
+        if lines[r][col].width == 2, col + 1 < lines[r].count { lines[r][col + 1] = .blank }
+        lines[r][col] = TermCell(text: "", width: 0, style: style)
     }
 
     fileprivate func control(_ ch: Character) {

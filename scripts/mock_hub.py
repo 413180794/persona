@@ -254,7 +254,8 @@ TERMINAL = "\n".join(
 SCREEN_FIRST = []
 
 # MOCK_TERMINAL_STREAM=1: the hub says terminal_stream and answers terminal_subscribe with frames of a made-up Claude
-# Code screen (96×24) as herdr's observer sends them: a whole frame, then the spinner ticking once a second.
+# Code screen (96×24) as herdr's observer sends them: a whole frame, then the spinner ticking once a second
+# (MOCK_TERMINAL_INTERVAL seconds: 0.02 plays a recording through at once).
 TERMINAL_STREAM = bool(os.environ.get("MOCK_TERMINAL_STREAM"))
 
 
@@ -605,7 +606,7 @@ class H(BaseHTTPRequestHandler):
                         start = after if epoch == "mock" else 0
                         for f in frames[start:]:
                             send({"type": "terminal", "machine_id": mid, "session_id": sid, "epoch": "mock", **f})
-                            time.sleep(1)
+                            time.sleep(float(os.environ.get("MOCK_TERMINAL_INTERVAL", "1")))
                     threading.Thread(target=term, daemon=True).start()
                     continue
                 if msg.get("type") == "subscribe":

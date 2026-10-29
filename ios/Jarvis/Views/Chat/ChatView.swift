@@ -690,10 +690,20 @@ struct ChatView: View {
     @ViewBuilder private var paneContent: some View {
         switch pane {
         case .chat: chatPane
-        case .terminal: TerminalPanel(key: key, switchTo: switchTo).padding(.horizontal, 12).padding(.bottom, 8).padding(.top, headerRoom)
+        case .terminal:
+            TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
+                .padding(.horizontal, 12).padding(.bottom, 8)
+                .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
         case .files: FilesPane(machineID: key.machineID, cwd: session?.cwd ?? "", git: git).padding(.top, headerRoom)
         }
+    }
+
+    /// Typing on the terminal folds the header to its slim bar, so the rows over the keyboard go to the terminal; the
+    /// keyboard going down opens it again.
+    private func terminalKeyboard(_ up: Bool) {
+        guard style == .dev else { return }
+        withAnimation(.smooth(duration: 0.3)) { chrome.collapse = up ? chrome.maxCollapse : 0 }
     }
 
     /// The custom header's full height (Agents): the other panes sit below it, the chat list scrolls under it.

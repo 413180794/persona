@@ -11,7 +11,9 @@ final class TerminalKeysTests: XCTestCase {
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal"]
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES",
+                               "-terminalKeys", "esc,tab,ctrlc,shortcuts,paste,alt,shift,pad"] // alt and ⇧ are off by default
         app.launch()
 
         func sent() -> [[String: String]] {
@@ -32,6 +34,7 @@ final class TerminalKeysTests: XCTestCase {
         field.tap()
         field.typeText("c")
         expect("ctrl+c")
+        sleep(1) // the keyboard came up and moved the key bar: a tap while it slides lands where the key was
         // ⌃C goes out on its own.
         app.buttons["发送 Control C"].tap()
         expect("ctrl+c")
@@ -67,7 +70,8 @@ final class TerminalKeysTests: XCTestCase {
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal"]
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES"]
         app.launch()
         let screen = app.descendants(matching: .any)["terminal-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 15), "no terminal:\n\(app.debugDescription)")
@@ -87,7 +91,8 @@ final class TerminalKeysTests: XCTestCase {
         }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal"]
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
+                               "-terminalInputMode", "field", "-terminalTipsSeen", "YES"]
         app.launch()
         let bolt = app.buttons["快捷命令"]
         XCTAssertTrue(bolt.waitForExistence(timeout: 15), "no shortcuts button:\n\(app.debugDescription)")

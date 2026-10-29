@@ -40,11 +40,29 @@ nonisolated struct TerminalTheme: Sendable {
     /// Always dark, the classic terminal look (the tab's look before themes).
     static let midnight = TerminalTheme(id: "midnight", name: "深夜", light: jarvis.dark, dark: jarvis.dark)
 
-    static let all = [jarvis, solarized, midnight]
-    static func named(_ id: String) -> TerminalTheme { all.first { $0.id == id } ?? jarvis }
+    /// The default: near black whatever the app's appearance, soft bright colors (what terminal apps on the phone look like).
+    static let ink: TerminalTheme = {
+        let side = Side(background: 0x0C0C0E, foreground: 0xDCDFE4, cursor: 0x7AA2F7, selection: 0x7AA2F7,
+                        ansi: [0x2A2C33, 0xF7768E, 0x73DACA, 0xE0AF68, 0x7AA2F7, 0xBB9AF7, 0x7DCFFF, 0xC0C4CE,
+                               0x5A5F6E, 0xFF8FA3, 0x9AF0DC, 0xF2C88A, 0x9DBBFF, 0xD0B6FF, 0xA4E0FF, 0xF4F5F7])
+        return TerminalTheme(id: "ink", name: "墨黑", light: side, dark: side)
+    }()
+
+    static let all = [ink, midnight, jarvis, solarized]
+    static let defaultID = ink.id
+    static func named(_ id: String) -> TerminalTheme { all.first { $0.id == id } ?? ink }
+
+    /// Dark whatever the app's appearance.
+    var alwaysDark: Bool { light.background == dark.background }
 }
 
 extension TerminalTheme.Side {
+    /// A dark background: the controls on it take the dark look.
+    var isDark: Bool {
+        let r = Double(background >> 16 & 0xFF), g = Double(background >> 8 & 0xFF), b = Double(background & 0xFF)
+        return 0.299 * r + 0.587 * g + 0.114 * b < 128
+    }
+
     func color(_ c: TermColor, foreground fg: Bool) -> UIColor {
         switch c {
         case .standard: return UIColor(hex: fg ? foreground : background)

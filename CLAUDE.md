@@ -208,6 +208,12 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - 要分清单击 / 快速双击 / 按住的键（终端键栏的修饰键）别用 `DragGesture(minimumDistance: 0)` 记按下松开：快速双击的第二下它收不到
   （XCUITest 的 doubleTap 只来一对 down / up）。用一个覆盖在上面的 UIView 重写 touchesBegan / Ended（`TerminalKeys.swift` 的 `TouchArea`）。
 - Swift 的 `dict[k, default: X].method()`：值是 class（`CGMutablePath`）时只是读，默认值不会存进字典，改动全丢（终端框线整条消失过）。
+- 网格里写宽字符要分两步：左半照常写，右半（宽 0 的占位格）不能走「覆盖宽字符右半就清掉左半」的规则。
+  否则在同一位置重写一个宽字符时，刚写的字会被清掉。herdr 流式重画中文正是这样写的，手机上整段缺字（`TerminalGrid.putRightHalf`）。
+  改终端解析一律用录制的真实帧回放，和 `herdr pane read` 逐行比（`TerminalWrapTests`）。
+- 自定义视图直接收键盘（`UITextInput`）时，`hasText` 要恒为 true，否则空文档时键盘会自动切大写；拼音靠 marked text。
+  选定候选时可能来 `insertText`，也可能来 `setMarkedText` + `unmarkText`，两种都要当提交处理（`TerminalInput.swift`）。
+- XCUITest 在键盘弹起的动画中点键栏会点空（键栏正跟着键盘移动）：先等键盘出现、停一下再点。
 - herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。
 - `TextField(text:selection:)` 的选区：没在编辑（未聚焦）时也会报一个选区，冷启动恢复草稿后它指在草稿中间；而且它的

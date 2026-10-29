@@ -1,0 +1,45 @@
+      return a + b
+
+
+  print(add(2, 3))
+
+✻ Cogitated for 20s · done 3:24 pm
+
+❯ 用中英混排写一段约 250 字的说明：解释终端里宽字符（中文）和半角字符的对齐、换行与横向滚动的区别，专业术语保留英文，例如 wide character、soft wrap。每一段都要有中文。
+
+⏺ 对齐（alignment）：终端按 cell 计算宽度。半角字符（halfwidth）如 ASCII 占 1 个 cell，中文等 wide character 占 2 个 cell，宽度通常由 wcwidth()
+  决定。如果程序按字节数或字符数计算宽度，中英混排的表格就会错位。East Asian Ambiguous 字符（如 ±、①）在不同终端里可能占 1 或 2 个 cell，也会导致对齐不一致。
+
+  换行（wrapping）：soft wrap 是终端在行尾自动折行，缓冲区里仍是同一个逻辑行，复制时不会多出换行符。hard wrap 则是文本中真实存在的 \n。行尾只剩 1 个 cell 而下一个是 wide
+  character 时，终端不会把它拆成两半，而是留空并整体移到下一行。
+
+  横向滚动（horizontal scrolling）：关闭自动换行（如 less -S）后，超出部分要靠横向滚动查看。如果滚动边界落在 wide character 中间，多数实现会用空格补位，避免显示半个汉字。
+
+✻ Baked for 8s · done 3:25 pm
+
+❯ Run ls /tmp/term-lab in the shell and tell me what is there.
+
+  Listed 1 directory
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Cooked for 3s · done 3:27 pm
+
+❯ 用中英混排写三段说明（每段约 120 字）：终端里 wide character 和 halfwidth 字符的对齐、soft wrap 与 hard wrap、horizontal scrolling。专业术语保留英文，例如
+  wcwidth()、East Asian Ambiguous（±、①）、less -S。不要用列表。
+
+⏺ 终端以 cell 为单位排版：halfwidth 字符（如 ASCII）占 1 个 cell，中文等 wide character 占 2 个 cell，宽度通常由 wcwidth()
+  返回。若程序按字节数或字符数计算宽度，中英混排的表格和进度条就会错位。East Asian Ambiguous 字符（如 ±、①）更麻烦，在不同终端或 locale 设置下可能占 1 个或 2 个
+  cell，导致同一份输出换个终端就对不齐。
+
+  soft wrap 是终端在行尾自动折行的显示效果，缓冲区里仍是同一个逻辑行，复制粘贴时不会多出换行符，调整窗口宽度后还会重新排列。hard wrap 则是文本中真实存在的
+  \n，无论窗口多宽都会在原处断行。当行尾只剩 1 个 cell 而下一个字符是 wide character 时，终端不会把汉字劈成两半，而是留出一个空位，把整个字符移到下一行。
+
+  关闭自动换行后，超出窗口宽度的内容需要靠 horizontal scrolling 查看，例如 less -S 会截断长行，用左右方向键横向移动视口。如果滚动边界恰好落在一个 wide character 的两个 cell
+  之间，多数实现会用空格或特殊标记补位，避免显示半个汉字。也正因为如此，横向滚动的步长和光标位置都要按 cell 计算，而不能按字符数计算。
+
+✻ Cooked for 8s · done 3:30 pm
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)

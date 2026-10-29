@@ -85,6 +85,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `LiveActivityActionTests` 同样连 mock：开一个示例实时活动、锁屏、点活动上的「拒绝」。模拟器系统语言是英文时授权弹窗的按钮叫「Allow」；
 授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
 
+终端直接打字（`TerminalTypingTests`：点终端弹出键盘、打的字和回车按顺序发出且被合并成少数几个请求、键栏的 ctrl 作用于键盘打的下一个字、键盘按钮收起键盘）同样连 mock。
+`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=ios/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
+（中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
 终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
 `PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
 （mock 的 `GET /mock/keys` 回放收到的按键）。
