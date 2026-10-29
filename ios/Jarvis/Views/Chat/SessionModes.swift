@@ -33,8 +33,7 @@ nonisolated enum SessionModes {
 
     static func modeTint(_ id: String?) -> Color {
         switch id {
-        case "plan": Theme.done
-        case "acceptEdits", "auto": Theme.attention
+        // Neutral: amber is the working state and would read as 等你处理. Only "allow everything" warns.
         case "bypassPermissions": Theme.danger
         default: .secondary
         }

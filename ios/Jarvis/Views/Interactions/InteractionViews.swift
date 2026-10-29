@@ -730,7 +730,7 @@ struct ScreenSteps: View {
                         }
                         .foregroundStyle(s.done ? .white : .secondary)
                         .frame(width: 15, height: 15)
-                        .background(s.done ? Theme.done : Color.primary.opacity(0.1), in: .circle)
+                        .background(s.done ? Theme.positive : Color.primary.opacity(0.1), in: .circle)
                         Text(s.label).lineLimit(1)
                     }
                     .font(.caption.weight(.medium))

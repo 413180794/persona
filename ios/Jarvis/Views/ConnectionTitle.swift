@@ -68,7 +68,7 @@ struct ConnectionDetails: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     if phase == .online {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.idle)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.positive)
                         Text("已连上 hub").font(.headline)
                     } else {
                         ConnectionLabel(phase: phase)

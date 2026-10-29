@@ -74,10 +74,37 @@ nonisolated enum Theme {
         }
     }
     static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
-    // Colors of the old session status, still borrowed by diffs, Git, modes and settings (replaced next).
-    static let attention = Color(light: 0xE09A1F, dark: 0xF5B23D)
-    static let idle = Color(light: 0x2E9E6E, dark: 0x45C38B)
-    static let done = Color(light: 0x3B7BE0, dark: 0x5B9BFF)
+
+    // Meanings that are not agent states. Never use a state color (StatusPalette) for these: changing a state color
+    // must not recolor diffs, warnings or categories.
+    /// Success and "connected / online / usable" outside the agent states (toasts, the hub dot, a finished to-do).
+    static let positive = Color(light: 0x248A3D, dark: 0x30D158)
+    /// Warnings that are not an agent asking for you (connecting, stale, truncated, a version mismatch): a symbol
+    /// beside the words, never a dot. `cautionText` when the words themselves are colored.
+    static let caution = Color(light: 0xF08A00, dark: 0xFF9F0A)
+    static let cautionText = Color(light: 0xB35400, dark: 0xFF9F0A)
+    /// What the AI wrote or suggests (✦ summaries, AI actions): not the accent, which means "tap me".
+    static let ai = Color(light: 0x5B4FD6, dark: 0x9C94FF)
+    /// /loop and other scheduled wake-ups (待唤醒).
+    static let loop = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
+
+    /// Diffs and Git: their own colors, text strength (≥ 4.5:1 on the code background) for signs and counts.
+    enum Diff {
+        static let add = Color(light: 0x1D7A4C, dark: 0x4CC38A)
+        static let del = Color(light: 0xC62B33, dark: 0xFF6369)
+        static let addFill = Color(light: 0x30A46C, dark: 0x4CC38A).opacity(0.14)
+        static let delFill = Color(light: 0xE5484D, dark: 0xFF6369).opacity(0.12)
+        /// A modified file ("M"), the way editors mark it, kept apart from the working amber.
+        static let changed = Color(light: 0x8A6A00, dark: 0xE3B341)
+    }
+
+    /// Categories with no meaning beyond telling them apart (memory types).
+    enum Hue {
+        static let blue = Color(light: 0x2E6FD0, dark: 0x5B9BFF)
+        static let orange = Color(light: 0xB35400, dark: 0xFF9F0A)
+        static let green = Color(light: 0x1D7A4C, dark: 0x4CC38A)
+        static let purple = Color(light: 0x7A5AF8, dark: 0x9D8BFF)
+    }
 
     /// The user's own messages.
     static var userBubble: Color { userBubble(style) }

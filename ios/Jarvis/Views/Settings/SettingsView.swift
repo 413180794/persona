@@ -23,7 +23,7 @@ struct SettingsView: View {
                             Text("Jarvis").font(.title3.weight(.bold))
                             Text(model.config?.url.absoluteString ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
                             HStack(spacing: 5) {
-                                Circle().fill(model.live.state == .connected ? Theme.idle : Theme.attention).frame(width: 7, height: 7)
+                                Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
                                 Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -283,7 +283,7 @@ struct PhoneDataView: View {
                                 } label: {
                                     Text(st == .granted || st == .limited ? st.title : st == .denied ? "已拒绝 · 去设置" : "点此授权")
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(st.isUsable ? Theme.idle : Theme.accent)
+                                        .foregroundStyle(st.isUsable ? Theme.positive : Theme.accent)
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(st == .granted)

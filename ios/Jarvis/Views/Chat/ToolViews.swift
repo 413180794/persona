@@ -407,8 +407,8 @@ struct DiffView: View {
         let added = new.isEmpty ? [] : new.components(separatedBy: "\n")
         ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(removed.prefix(30).enumerated()), id: \.offset) { _, l in line("-", l, Theme.danger) }
-                ForEach(Array(added.prefix(30).enumerated()), id: \.offset) { _, l in line("+", l, Theme.idle) }
+                ForEach(Array(removed.prefix(30).enumerated()), id: \.offset) { _, l in line("-", l, Theme.Diff.del, Theme.Diff.delFill) }
+                ForEach(Array(added.prefix(30).enumerated()), id: \.offset) { _, l in line("+", l, Theme.Diff.add, Theme.Diff.addFill) }
                 if removed.count > 30 || added.count > 30 {
                     Text("… 共 -\(removed.count) +\(added.count) 行").font(.caption2).foregroundStyle(.secondary).padding(6)
                 }
@@ -419,7 +419,7 @@ struct DiffView: View {
         .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
     }
 
-    private func line(_ sign: String, _ text: String, _ color: Color) -> some View {
+    private func line(_ sign: String, _ text: String, _ color: Color, _ fill: Color) -> some View {
         HStack(spacing: 6) {
             Text(sign).foregroundStyle(color).frame(width: 10)
             Text(text.isEmpty ? " " : text)
@@ -428,7 +428,7 @@ struct DiffView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.1))
+        .background(fill)
     }
 }
 
@@ -453,15 +453,19 @@ struct UnifiedDiffView: View {
         .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
     }
 
+    /// Only the sign and the background are colored: the code itself stays readable (colored text was ~2.9:1).
     private func line(_ l: String) -> some View {
-        let color: Color? = l.hasPrefix("+") ? Theme.idle : l.hasPrefix("-") ? Theme.danger : nil
-        return Text(l.isEmpty ? " " : l)
+        let add = l.hasPrefix("+"), del = l.hasPrefix("-")
+        let text: Text = add || del
+            ? Text(String(l.prefix(1))).foregroundStyle(add ? Theme.Diff.add : Theme.Diff.del) + Text(String(l.dropFirst()))
+            : Text(l.isEmpty ? " " : l)
+        return text
             .font(.system(size: 11.5, design: .monospaced))
-            .foregroundStyle(l.hasPrefix("@@") ? Color.secondary : color ?? .primary)
+            .foregroundStyle(l.hasPrefix("@@") ? Color.secondary : .primary)
             .padding(.horizontal, 8)
             .padding(.vertical, 1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background((color ?? .clear).opacity(0.1))
+            .background(add ? Theme.Diff.addFill : del ? Theme.Diff.delFill : .clear)
     }
 }
 
@@ -474,7 +478,7 @@ struct TodoList: View {
                 let status = t["status"]?.string ?? "pending"
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: status == "completed" ? "checkmark.circle.fill" : status == "in_progress" ? "circle.dotted.circle" : "circle")
-                        .foregroundStyle(status == "completed" ? Theme.idle : status == "in_progress" ? Theme.busy : .secondary)
+                        .foregroundStyle(status == "completed" ? Theme.positive : status == "in_progress" ? Theme.busy : .secondary)
                         .symbolEffect(.rotate, options: .repeating, isActive: status == "in_progress")
                     Text(status == "in_progress" ? (t["activeForm"]?.string ?? t["content"]?.string ?? "") : (t["content"]?.string ?? ""))
                         .font(.footnote)

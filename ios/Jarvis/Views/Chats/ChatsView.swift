@@ -322,7 +322,7 @@ struct ChatsView: View {
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
         let titles: [(key: String, title: String, tint: Color)] = [
             ("needs", "需要你", Theme.needsYou), ("unread", "完成未看", Theme.unread), ("working", "工作中", Theme.busy),
-            ("waiting", "待唤醒", Theme.done), ("muted", "已屏蔽", .secondary), ("idle", "已看", .secondary),
+            ("waiting", "待唤醒", Theme.loop), ("muted", "已屏蔽", .secondary), ("idle", "已看", .secondary),
         ]
         let byRank = Dictionary(grouping: live, by: rank)
         let buckets = titles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }

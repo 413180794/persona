@@ -187,7 +187,7 @@ struct InboxView: View {
                 if it.isDone {
                     Button { store.setDone(it, false) } label: { Label("移回", systemImage: "arrow.uturn.backward") }.tint(Theme.accent)
                 } else {
-                    Button { store.setDone(it, true) } label: { Label("已处理", systemImage: "checkmark") }.tint(Theme.idle)
+                    Button { store.setDone(it, true) } label: { Label("已处理", systemImage: "checkmark") }.tint(Theme.positive)
                 }
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
@@ -278,7 +278,7 @@ struct InboxRow: View {
                 HStack(alignment: .top, spacing: 6) {
                     if let summary = item.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
-                            (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + summary))
+                            (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + summary))
                                 .font(.subheadline).foregroundStyle(.primary.opacity(item.isDone ? 0.7 : 0.9)).lineLimit(2)
                             Text(from).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                         }

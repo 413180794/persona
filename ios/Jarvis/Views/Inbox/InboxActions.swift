@@ -12,7 +12,7 @@ struct InboxActionBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let s = item.summary, !s.isEmpty {
-                (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + s))
+                (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + s))
                     .font(.subheadline)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -593,10 +593,10 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 
     var typeColor: Color {
         switch type {
-        case "user": Theme.accent
-        case "feedback": Theme.attention
-        case "project": Theme.idle
-        case "reference": Theme.done
+        case "user": Theme.Hue.purple
+        case "feedback": Theme.Hue.orange
+        case "project": Theme.Hue.green
+        case "reference": Theme.Hue.blue
         default: .secondary
         }
     }

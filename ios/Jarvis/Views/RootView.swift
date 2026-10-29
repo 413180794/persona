@@ -54,7 +54,7 @@ struct ToastOverlay: View {
             if let toast = model.toast {
                 HStack(spacing: 10) {
                     Image(systemName: toast.style == .error ? "exclamationmark.triangle.fill" : toast.style == .success ? "checkmark.circle.fill" : "info.circle.fill")
-                        .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.idle : Theme.accent)
+                        .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.positive : Theme.accent)
                     Text(toast.message)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(3)

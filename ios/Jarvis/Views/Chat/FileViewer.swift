@@ -196,7 +196,7 @@ struct FileViewer: View {
             Text(Fmt.path(f.path, home: model.machine(ref.machineID)?.home)).lineLimit(1).truncationMode(.head)
             Text("·")
             Text(ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file))
-            if f.truncated { Text("· 只显示前 2 MB").foregroundStyle(Theme.attention) }
+            if f.truncated { Text("· 只显示前 2 MB").foregroundStyle(Theme.cautionText) }
         }
         .font(.caption.monospaced())
         .foregroundStyle(.secondary)

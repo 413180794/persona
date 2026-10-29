@@ -43,8 +43,8 @@ struct GitPane: View {
                 Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.accent)
                 Text(s.branch ?? "分离的 HEAD").font(.headline).lineLimit(1)
                 Spacer(minLength: 4)
-                if s.ahead > 0 { sync("arrow.up", s.ahead, Theme.done) }
-                if s.behind > 0 { sync("arrow.down", s.behind, Theme.busy) }
+                if s.ahead > 0 { sync("arrow.up", s.ahead, .secondary) }
+                if s.behind > 0 { sync("arrow.down", s.behind, Theme.cautionText) }
             }
             HStack(spacing: 6) {
                 if let up = s.upstream {
@@ -91,8 +91,8 @@ struct GitPane: View {
                 HStack {
                     Text("改动 \(s.files.count)")
                     Spacer()
-                    Text("+\(added)").foregroundStyle(Theme.idle)
-                    Text("−\(deleted)").foregroundStyle(Theme.danger)
+                    Text("+\(added)").foregroundStyle(Theme.Diff.add)
+                    Text("−\(deleted)").foregroundStyle(Theme.Diff.del)
                 }
                 .monospacedDigit()
             }
@@ -163,10 +163,10 @@ struct GitBadge: View {
 
     var color: Color {
         switch letter {
-        case "A", "U": Theme.idle
-        case "D", "!": Theme.danger
-        case "R", "C": Theme.done
-        default: Theme.busy
+        case "A", "U": Theme.Diff.add
+        case "D", "!": Theme.Diff.del
+        case "R", "C": .secondary
+        default: Theme.Diff.changed
         }
     }
 }
@@ -183,7 +183,7 @@ struct GitFileRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name).font(.subheadline.weight(.medium)).lineLimit(1)
                 HStack(spacing: 4) {
-                    if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(Theme.done) }
+                    if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(.primary) }
                     if let orig = file.origPath { Text("← " + (orig as NSString).lastPathComponent) }
                     if !file.folder.isEmpty { Text(file.folder).truncationMode(.head) }
                 }
@@ -196,8 +196,8 @@ struct GitFileRow: View {
                 Text("二进制").font(.caption2).foregroundStyle(.secondary)
             } else if file.added + file.deleted > 0 {
                 HStack(spacing: 4) {
-                    Text("+\(file.added)").foregroundStyle(Theme.idle)
-                    Text("−\(file.deleted)").foregroundStyle(Theme.danger)
+                    Text("+\(file.added)").foregroundStyle(Theme.Diff.add)
+                    Text("−\(file.deleted)").foregroundStyle(Theme.Diff.del)
                 }
                 .font(.caption.monospacedDigit())
             }
@@ -230,8 +230,8 @@ struct GitCommitRow: View {
                                 .lineLimit(1)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background((r.contains("/") ? Theme.done : Theme.accent).opacity(0.13), in: .capsule)
-                                .foregroundStyle(r.contains("/") ? Theme.done : Theme.accent)
+                                .background((r.contains("/") ? Color.secondary : Theme.accent).opacity(0.13), in: .capsule)
+                                .foregroundStyle(r.contains("/") ? Color.secondary : Theme.accent)
                         }
                     }
                 }
@@ -398,9 +398,9 @@ struct DiffText: View {
         func num(_ n: Int?) -> String { let s = n.map(String.init) ?? ""; return String(repeating: " ", count: max(0, 5 - s.count)) + s }
         for (i, l) in lines.enumerated() {
             let (mark, fg, bg): (String, UIColor, UIColor) = switch l.kind {
-            case .add: ("+", UIColor(Theme.idle), UIColor(Theme.idle).withAlphaComponent(0.13))
-            case .del: ("−", UIColor(Theme.danger), UIColor(Theme.danger).withAlphaComponent(0.12))
-            case .hunk: (" ", UIColor(Theme.done), UIColor(Theme.done).withAlphaComponent(0.08))
+            case .add: ("+", UIColor(Theme.Diff.add), UIColor(Theme.Diff.add).withAlphaComponent(0.13))
+            case .del: ("−", UIColor(Theme.Diff.del), UIColor(Theme.Diff.del).withAlphaComponent(0.12))
+            case .hunk: (" ", .secondaryLabel, .quaternarySystemFill)
             case .info: (" ", .secondaryLabel, .clear)
             case .context: (" ", .label, .clear)
             }

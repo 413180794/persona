@@ -185,7 +185,7 @@ struct NewChatView: View {
                 HStack {
                     Image(systemName: m.symbol).font(.title3)
                     Spacer()
-                    Circle().fill(m.online ? Theme.idle : Color.secondary.opacity(0.4)).frame(width: 8, height: 8)
+                    Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).frame(width: 8, height: 8)
                 }
                 Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                 Text(m.online ? (m.hostname ?? "在线") : "离线").font(.caption2).foregroundStyle(.secondary).lineLimit(1)

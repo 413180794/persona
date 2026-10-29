@@ -711,7 +711,7 @@ struct TerminalLinkStatus: View {
     var nextTry: Date
     var retry: () -> Void
 
-    private var tint: Color { failure != nil ? Theme.danger : Theme.busy }
+    private var tint: Color { failure != nil ? Theme.danger : Theme.caution }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -866,7 +866,7 @@ struct ActivityChips: View {
         } label: {
             HStack(spacing: 6) {
                 if let loop {
-                    chip(Theme.done) {
+                    chip(Theme.loop) {
                         Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .bold))
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
@@ -949,7 +949,7 @@ struct LoopStrip: View {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.done)
+                    .foregroundStyle(Theme.loop)
                     .symbolEffect(.rotate, options: .repeat(.periodic(delay: 2)))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(.footnote.weight(.semibold)).lineLimit(1)
@@ -979,7 +979,7 @@ struct LoopStrip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .surface(tint: Theme.done.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
+        .surface(tint: Theme.loop.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
         .confirmationDialog("停止这个循环？", isPresented: $confirming, titleVisibility: .visible) {
             Button("停止循环", role: .destructive, action: stop)
         } message: {
@@ -1060,7 +1060,7 @@ struct AgentStrip: View {
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if done {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.idle)
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Theme.positive)
                 } else if let symbol {
                     Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
                 }

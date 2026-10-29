@@ -50,9 +50,9 @@ struct MachineCard: View {
                 }
                 Spacer()
                 HStack(spacing: 5) {
-                    Circle().fill(machine.online ? Theme.idle : Theme.danger.opacity(0.8)).frame(width: 8, height: 8)
+                    Circle().fill(machine.online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 8, height: 8)
                     Text(machine.online ? "在线" : "离线").font(.caption.weight(.semibold))
-                        .foregroundStyle(machine.online ? Theme.idle : .secondary)
+                        .foregroundStyle(machine.online ? Theme.positive : .secondary)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -74,7 +74,7 @@ struct MachineCard: View {
                 if machine.nodeMismatch == true {
                     Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(Theme.needsYou)
+                        .foregroundStyle(Theme.cautionText)
                 }
             } else if let err = machine.error, !err.isEmpty {
                 Text(err).font(.caption).foregroundStyle(.secondary).lineLimit(3)

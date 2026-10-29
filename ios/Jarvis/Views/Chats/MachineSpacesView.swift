@@ -65,7 +65,7 @@ struct MachineSpacesView: View {
                 .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Circle().fill(m.online ? Theme.idle : Color.secondary).frame(width: 7, height: 7)
+                    Circle().fill(m.online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
                     Text(m.online ? "在线" : "离线").font(.subheadline.weight(.semibold))
                     if let h = m.hostname, !h.isEmpty { Text(h).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1) }
                 }

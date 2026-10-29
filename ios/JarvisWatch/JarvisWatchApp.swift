@@ -415,7 +415,7 @@ struct WatchPairView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(syncing)
                 if failed {
-                    Text("连不上 iPhone：打开 iPhone 上的 Jarvis，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.attention)
+                    Text("连不上 iPhone：打开 iPhone 上的 Jarvis，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
                         .multilineTextAlignment(.center)
                 }
             }

@@ -21,7 +21,7 @@ struct NotificationSettingsView: View {
                             Text("下面的设置要在系统设置里允许 Jarvis 发通知后才生效。").font(.footnote).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "bell.slash.fill").foregroundStyle(Theme.attention)
+                        Image(systemName: "bell.slash.fill").foregroundStyle(Theme.caution)
                     }
                     openSystemSettings
                 }
@@ -35,7 +35,7 @@ struct NotificationSettingsView: View {
                             Text("提问、计划审批、工具授权、终端等你输入").font(.footnote).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "exclamationmark.bubble").foregroundStyle(Theme.attention)
+                        Image(systemName: "exclamationmark.bubble").foregroundStyle(StatusPalette.needsYou.dot)
                     }
                 }
             } footer: {
@@ -94,7 +94,7 @@ struct NotificationSettingsView: View {
                     Label {
                         Text("系统设置里关掉了 Jarvis 的实时活动").font(.footnote)
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.attention)
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.caution)
                     }
                     Button {
                         UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)

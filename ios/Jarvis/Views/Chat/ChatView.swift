@@ -1107,7 +1107,7 @@ struct ChatView: View {
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: bg > 0)
             if bg > 0 { Text("\(bg)").font(.caption2.weight(.bold).monospacedDigit()) }
         }
-        .foregroundStyle(bg > 0 ? Theme.busy : Theme.done)
+        .foregroundStyle(bg > 0 ? Theme.busy : Theme.loop)
         .frame(width: 44, height: 34)
         .contentShape(.rect)
     }

@@ -195,9 +195,9 @@ struct AssistantHome: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 ForEach(model.machines.filter(\.online)) { m in
-                    Chip(text: m.name, symbol: m.symbol, tint: Theme.idle)
+                    Chip(text: m.name, symbol: m.symbol, tint: .secondary)
                 }
-                Chip(text: "iPhone", symbol: "iphone", tint: model.live.state == .connected ? Theme.idle : .secondary)
+                Chip(text: "iPhone", symbol: model.live.state == .connected ? "iphone" : "iphone.slash", tint: .secondary)
             }
         }
     }
