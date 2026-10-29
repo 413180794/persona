@@ -1,5 +1,9 @@
 import SwiftUI
 
+@MainActor private final class InboxAccountState: ObservableObject {
+    @Published var accounts = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
+}
+
 // MARK: - 收件箱
 
 /// The unified inbox (docs/inbox.md): Feishu messages and mail in one list, one row per thing (the new messages in a
@@ -11,7 +15,11 @@ struct InboxView: View {
     @AppStorage("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
     @AppStorage("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
     @State private var query = ""
-    @State private var accounts: [MailAccount] = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
+    @StateObject private var accountState = InboxAccountState()
+    private var accounts: [MailAccount] {
+        get { accountState.accounts }
+        nonmutating set { accountState.accounts = newValue }
+    }
     /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed.
     @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var showAccounts = false
