@@ -1,6 +1,6 @@
-# 助手（「对话」tab）
+# 助手（「Jarvis」tab，原「对话」）
 
-「对话」tab 的 Jarvis 是 hub 所在机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
+「Jarvis」tab 的 Jarvis 是 hub 所在机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude Code（`claude -p` + stream-json，见
 `docs/claude-integration.md`「无头助手」）。这篇讲它能做什么、怎么做到的，以及 2026-10-26 那次能力升级背后的取舍。
 
 ## 2026-10-26 之前它为什么弱（从真实对话记录里看到的）
@@ -30,6 +30,15 @@
 
 只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
 `jarvisd mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出、执行这些工具（`hub/assistant_tools.go`）。herdr 里的普通 Agent 看不到。
+
+## 主对话、知识库和上下文流动（2026-10-30）
+
+- **主对话**：第一段对话是主对话（hub settings `assistant.main`），Jarvis tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
+  其他页面交给 Jarvis 的东西（Agents 长按「交给 Jarvis」、知识库「问 Jarvis」）都以 `<jarvis-context>` 发进主对话。
+- **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
+  （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。
+- **AI 分身**：处理一件事时提示词附上这个会话和它前 3 个项目的档案，处理完把新结论写回项目。
+- 助手和 AI 分身的默认启动器在 hub.json `assistant.launcher` / `inbox.agent.launcher`（这台机器的具体值见 `CLAUDE.local.md`）。
 
 ## 坑
 

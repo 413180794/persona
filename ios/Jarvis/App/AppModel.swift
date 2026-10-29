@@ -150,12 +150,42 @@ final class AppModel {
             assistantConfig = st
             // Only on the very first launch: after "新对话" the key exists but is empty, and the home page stays.
             let neverChosen = UserDefaults.standard.object(forKey: "assistant.current") == nil
-            if assistantCurrent == nil, neverChosen, let newest = st.conversations.max(by: { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }) {
-                assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
+            if assistantCurrent == nil, neverChosen {
+                if let main = assistantMain {
+                    assistantCurrent = main
+                } else if let newest = st.conversations.max(by: { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }) {
+                    assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
+                }
             }
             // Routines and the assistant's sense of "now" follow the phone's time zone.
             let tz = TimeZone.current.identifier
             if st.timezone != tz, let updated = try? await api.setAssistant(timezone: tz) { assistantConfig = updated }
+        }
+    }
+
+    /// The main conversation (the Jarvis tab's long-running one), when the hub has one.
+    var assistantMain: SessionKey? {
+        guard let st = assistantConfig, let id = st.main, !id.isEmpty else { return nil }
+        return SessionKey(machineID: st.machineID, sessionID: id)
+    }
+
+    /// Sends text to Jarvis' main conversation (starting it when there is none) and opens the Jarvis tab: how other
+    /// pages hand something to Jarvis with its context.
+    func askJarvis(_ text: String) async {
+        guard let api else { return }
+        selectedTab = .assistant
+        do {
+            if let main = assistantMain { // an ended one is resumed by the hub
+                assistantCurrent = main
+                try await api.send(main, text: text)
+            } else {
+                let s = try await api.startConversation(prompt: text, main: true)
+                assistantCurrent = s.key
+                await refreshAssistant()
+            }
+            Haptics.success()
+        } catch {
+            show(error)
         }
     }
 

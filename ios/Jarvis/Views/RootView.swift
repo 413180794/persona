@@ -8,7 +8,7 @@ struct RootView: View {
         Group {
             if model.isPaired {
                 TabView(selection: $model.selectedTab) {
-                    Tab("对话", systemImage: "sparkles", value: AppTab.assistant) {
+                    Tab("Jarvis", systemImage: "sparkles", value: AppTab.assistant) {
                         AssistantView()
                     }
                     .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)

@@ -55,6 +55,8 @@ type Detail struct {
 	Summary string          `json:"summary,omitempty"`
 	Log     []string        `json:"log,omitempty"`
 	Recent  string          `json:"recent,omitempty"`
+	// Links are the linked projects, chats and people, named and ranked.
+	Links []Entry `json:"links,omitempty"`
 }
 
 var ErrNotFound = errors.New("not found")
@@ -85,6 +87,13 @@ func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
 	if kind == KindChat && recentChars > 0 {
 		d.Recent = e.Store.Since(id, time.Now().AddDate(0, 0, -7), recentChars)
 	}
+	var refs struct {
+		Projects []string `json:"projects"`
+		Chats    []string `json:"chats"`
+		People   []string `json:"people"`
+	}
+	_ = json.Unmarshal(raw, &refs)
+	d.Links = e.entries(refs.Projects, refs.Chats, refs.People)
 	return d, nil
 }
 
@@ -275,4 +284,31 @@ func (e *Engine) ProjectsForDir(machine, dir string) []*Project {
 		}
 	}
 	return out
+}
+
+// entries names and ranks linked entities (at most 30 chats and 30 people).
+func (e *Engine) entries(projects, chats, people []string) []Entry {
+	var out []Entry
+	for _, slug := range projects {
+		if p, ok := e.Store.Project(slug); ok {
+			out = append(out, Entry{Kind: KindProject, ID: p.Slug, Name: p.Name, OneLine: p.OneLine, Importance: p.Importance,
+				Relevance: p.Relevance, Tags: p.Tags, Updated: p.Updated, Extra: p.Kind + " · " + p.Status})
+		}
+	}
+	var cs, ps []Entry
+	for _, id := range chats {
+		if c, ok := e.Store.Chat(id); ok {
+			cs = append(cs, Entry{Kind: KindChat, ID: c.ID, Name: c.Name, OneLine: c.OneLine, Importance: c.Importance,
+				Relevance: c.Relevance, Tags: c.Tags, Updated: c.LastAt, Extra: c.Kind})
+		}
+	}
+	for _, id := range people {
+		if p, ok := e.Store.Person(id); ok {
+			ps = append(ps, Entry{Kind: KindPerson, ID: p.ID, Name: p.Name, OneLine: p.Note, Importance: p.Importance,
+				Relevance: p.Relevance, Tags: p.Tags, Updated: p.LastSeen})
+		}
+	}
+	Rank(cs)
+	Rank(ps)
+	return append(append(out, cs[:min(len(cs), 30)]...), ps[:min(len(ps), 30)]...)
 }

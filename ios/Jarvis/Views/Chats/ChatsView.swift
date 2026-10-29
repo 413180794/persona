@@ -419,6 +419,9 @@ struct ChatsView: View {
                 if s.loop != nil {
                     Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: "stop.circle") }
                 }
+                Button { Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) } } label: {
+                    Label("交给 Jarvis", systemImage: "sparkles")
+                }
                 Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
                 Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
                 if s.state.isLive {

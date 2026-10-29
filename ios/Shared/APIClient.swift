@@ -383,8 +383,10 @@ nonisolated struct APIClient: Sendable {
         /// What the assistant is told about the user (设置 › 助手 › 关于我).
         var notes: String?
         var timezone: String?
+        /// The main conversation's session id (the Jarvis tab opens it); nil until there is one.
+        var main: String?
         enum CodingKeys: String, CodingKey {
-            case launcher, cwd, conversations, timezone; case machineID = "machine_id", notes = "notes_effective"
+            case launcher, cwd, conversations, timezone, main; case machineID = "machine_id", notes = "notes_effective"
         }
     }
     func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
@@ -493,12 +495,15 @@ nonisolated struct APIClient: Sendable {
         var launcher: String?
         var permissionMode: String?
         var effort: String?
-        enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort; case permissionMode = "permission_mode" }
+        var main: Bool?
+        enum CodingKeys: String, CodingKey { case prompt, images, launcher, effort, main; case permissionMode = "permission_mode" }
     }
+    /// `main`: the new conversation becomes the main one.
     func startConversation(prompt: String, images: [ImagePayload] = [], launcher: String? = nil, permissionMode: String? = nil,
-                           effort: String? = nil) async throws -> Session {
+                           effort: String? = nil, main: Bool = false) async throws -> Session {
         try await post("/api/v1/assistant/conversations", body: NewConversation(prompt: prompt, images: images.isEmpty ? nil : images,
-                                                                              launcher: launcher, permissionMode: permissionMode, effort: effort),
+                                                                              launcher: launcher, permissionMode: permissionMode, effort: effort,
+                                                                              main: main ? true : nil),
                        timeout: 110, as: SessionResponse.self).session
     }
 

@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访问个人和工作数据的 AI 助手（hub 机器上一个专用目录里的 Claude），
+Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访问个人和工作数据的 AI 助手（hub 机器上一个专用目录里的 Claude，有一个常驻的主对话），
+知识库 `~/.jarvis/data` 把各处的聊天、人、群、项目沉淀下来给它和 AI 分身用，
 「Agents」tab 是在手机上用聊天的方式驱动各台电脑上 herdr 里的 Claude Code / Codex（实时流式看过程、
 在手机上回答提问 / 审批计划 / 批准工具），并让 Claude 读写 iPhone 本地数据（通讯录、日历、提醒、照片、健康、位置……）和邮箱
 （Gmail / 任意 IMAP+SMTP）。服务端 `jarvisd`（Go）的 hub 跑在一台常开的机器上，经 SSH 接入其他电脑。通过 TestFlight 分发。
@@ -59,7 +60,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 | `docs/release.md` | 签名、TestFlight 发布流程 |
 | `docs/testing.md` | 测试命令、模拟器截图检查清单 |
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
-| `docs/assistant.md` | 「对话」tab 的助手：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
+| `docs/assistant.md` | 「Jarvis」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |

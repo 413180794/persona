@@ -1,8 +1,9 @@
 import PhotosUI
 import SwiftUI
 
-/// The 对话 tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
-/// user's computers, iPhone data, mail and company data. Conversations are separate sessions; the newest is resumed.
+/// The Jarvis tab: one personal assistant (a Claude session in ~/.jarvis/assistant on the hub's machine) that can reach the
+/// user's computers, iPhone data, mail, company data and the knowledge base. One conversation is the main one (where the
+/// user usually talks to it, and where other pages hand things to it); the others are side conversations.
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
     @State private var pending: PendingStart?
@@ -29,11 +30,20 @@ struct AssistantView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
                         .accessibilityLabel("历史对话")
+                    NavigationLink { KnowledgeView() } label: { Image(systemName: "books.vertical") }
+                        .accessibilityLabel("知识库")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let main = model.assistantMain, current != main {
+                        Button {
+                            withAnimation(.snappy) { model.assistantCurrent = main }
+                            Haptics.tap()
+                        } label: { Image(systemName: "house") }
+                            .accessibilityLabel("回到主对话")
+                    }
                     if current != nil {
                         Button {
                             withAnimation(.snappy) { model.assistantCurrent = nil }
@@ -60,7 +70,9 @@ struct AssistantView: View {
         do {
             let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
                                                     permissionMode: starterMode.isEmpty ? nil : starterMode,
-                                                    effort: starterEffort.isEmpty ? nil : starterEffort)
+                                                    effort: starterEffort.isEmpty ? nil : starterEffort,
+                                                    main: model.assistantMain == nil) // the first one becomes the main conversation
+            if model.assistantMain == nil { await model.refreshAssistant() }
             Haptics.success()
             withAnimation(.snappy) {
                 model.assistantCurrent = s.key
@@ -176,7 +188,9 @@ struct AssistantHome: View {
         VStack(alignment: .leading, spacing: 14) {
             AppGlyph(size: 56).padding(.top, 28)
             Text(greeting).font(.system(size: 32, weight: .bold, design: .rounded))
-            Text("我能看你的电脑、iPhone、邮箱和飞书，也能替你盯着事、到点提醒。问我任何事。")
+            Text(model.assistantMain == nil
+                 ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
+                 : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
                 .font(.body)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
@@ -329,6 +343,7 @@ struct AssistantHistory: View {
                     Button { open(s.key) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
+                                if s.key == model.assistantMain { Chip(text: "主对话", symbol: "house.fill", tint: Theme.accent) }
                                 Text(s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title)
                                     .font(.body.weight(.semibold))
                                     .foregroundStyle(Color.primary)
