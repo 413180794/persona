@@ -88,6 +88,39 @@ SESSIONS = [
 ]
 
 
+# MOCK_MACHINES=1: the machine pages' edge cases (MachinePagesTests): a fourth machine that is offline with an ssh
+# error (POST …/reconnect brings it back), and Mac Studio with many agents across several projects.
+MOCK_MACHINES = bool(os.environ.get("MOCK_MACHINES"))
+if MOCK_MACHINES:
+    MACHINES.append({"id": "lab", "name": "实验室主机", "kind": "ssh", "icon": "desktop", "ssh_host": "lab", "online": False,
+                     "error": "ssh: connect to host lab port 22: Connection refused", "last_seen": ago(hours=3)})
+    for i in range(36):
+        proj = ["infra", "ml-train", "docs-site", "mobile"][i % 4]
+        state = ["working", "idle", "idle", "unread", "idle", "needs_you"][i % 6]
+        status = {"working": "working", "idle": "idle", "unread": "done", "needs_you": "blocked"}[state]
+        SESSIONS.append(sess("studio", "c3d5e7f9-0000-4000-8000-%012d" % i, "%s 的第 %d 个任务" % (proj, i + 1),
+                             "/Users/me/code/" + proj, status, state, proj, 4 + i % 4, "t%d" % (i // 4 + 1), i // 4 + 1,
+                             i * 7, "第 %d 个 Agent 的最新一句话，长一点好看看会不会被截断或者挤到别的地方去。" % (i + 1),
+                             pending=1 if state == "needs_you" else 0))
+HITS = {}  # "GET /api/v1/machines" -> how many (GET /mock/hits): pull to refresh and reloads
+RECONNECTS = []  # machine ids of POST …/reconnect (GET /mock/reconnects)
+STARTED = []  # bodies of POST /api/v1/sessions (GET /mock/started)
+
+
+def mock_dirs(mid, path):
+    home = next((m.get("home") for m in MACHINES if m["id"] == mid), None) or "/home/me"
+    path = path or home + "/code"
+    names = {"code": ["weather", "blog", "photo-sync", "shop-api", "recipes"]}.get(path.rstrip("/").rsplit("/", 1)[-1], ["src", "docs"])
+    return {"path": path, "parent": path.rsplit("/", 1)[0] or "/",
+            "entries": [{"name": n, "path": path.rstrip("/") + "/" + n, "is_git": path.endswith("/code")} for n in names],
+            "recent": [{"path": home + "/code/weather", "name": "weather", "last_used": ago(minutes=30)},
+                       {"path": home + "/code/blog", "name": "blog", "last_used": ago(days=2)}]}
+
+
+def machine_online(mid):
+    return any(m["id"] == mid and m.get("online") for m in MACHINES)
+
+
 def assistant_sess(sid, title, minutes, last):
     return {"machine_id": "server", "session_id": sid, "title": title, "cwd": "/home/me/.jarvis/assistant",
             "status": "idle", "state": "idle", "agent": "claude", "launcher": "claude", "model": "opus",
@@ -535,6 +568,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
+        HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if net_control(p, q): return self.send_json({"ok": True, **NET})
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
@@ -547,6 +581,17 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
         if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
+        if p == "/mock/hits": return self.send_json({"hits": HITS})
+        if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
+            for m in MACHINES:
+                if m["id"] == "lab":
+                    for k in ("hostname", "os", "arch", "home", "herdr_version", "claude_version"): m.pop(k, None)
+                    m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
+            SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
+            del RECONNECTS[:], STARTED[:]
+            return self.send_json({"ok": True})
+        if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})
+        if p == "/mock/started": return self.send_json({"started": STARTED})
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
@@ -575,6 +620,10 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/lark/labels": return self.send_json({"labels": []})
         if p == "/api/v1/lark/flags": return self.send_json({"conversations": [], "messages": []})
         if p == "/api/v1/lark/emojis": return self.send_json({"emojis": {}})
+        if p.startswith("/api/v1/machines/") and not machine_online(p.split("/")[4]) and p.split("/")[5] in ("launchers", "dirs"):
+            return self.send_json({"error": "%s: machine is offline" % p.split("/")[4]}, 503)
+        if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):
+            return self.send_json(mock_dirs(p.split("/")[4], (q.get("path") or [""])[0]))
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}]})
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"): return self.send_json({"settings": []})
@@ -668,6 +717,26 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
             FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != p.split("/")[5]]
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/machines/") and p.endswith("/reconnect"):
+            mid = p.split("/")[4]
+            RECONNECTS.append(mid)
+            for m in MACHINES:
+                if m["id"] == mid and not m.get("online"):  # the ssh comes back
+                    m.update(online=True, error=None, hostname="lab", os="linux", arch="amd64", home="/home/me",
+                             herdr_version="0.9.5", claude_version="2.1.320", last_seen=ago())
+            return self.send_json({"ok": True})
+        if p == "/api/v1/sessions" and self.command == "POST":  # 新建会话
+            body = json.loads(self.last_body or b"{}")
+            STARTED.append(body)
+            if not machine_online(body.get("machine_id", "")):
+                return self.send_json({"error": "machine is offline"}, 503)
+            if body.get("cwd", "").endswith("/broken"):  # a launcher that never gets ready
+                return self.send_json({"error": "claude did not become ready within 1m0s\nzsh: command not found: claude"}, 502)
+            n = len(STARTED)
+            s = sess(body["machine_id"], "d4e6f8a0-0000-4000-8000-%012d" % n, body.get("prompt") or "新会话", body.get("cwd", ""),
+                     "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, "new%d" % n, n, 0, "")
+            SESSIONS.append(s)
+            return self.send_json({"session": s})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
                 if t["id"] == p.split("/")[-1]:

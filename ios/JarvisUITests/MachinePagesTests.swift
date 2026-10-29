@@ -1,0 +1,274 @@
+import XCTest
+
+/// Every tappable thing on the machine pages (设置 › 机器, a machine's details, an Agents list's machine menu, a
+/// machine's projects, 新对话's machine / directory / launcher), against scripts/mock_hub.py started with
+/// MOCK_MACHINES=1 (an offline machine that reconnect brings back, a machine with 36 agents):
+///   TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:<port>
+/// TEST_RUNNER_JARVIS_SHOTS=<dir> also saves a screenshot of each step there (docs/testing.md「机器页面」).
+final class MachinePagesTests: XCTestCase {
+    private let widget = "a1f3c2d4-0000-4000-8000-000000000001"
+    private var hub = ""
+    private var app: XCUIApplication!
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        guard let h = ProcessInfo.processInfo.environment["JARVIS_MACHINES_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py with MOCK_MACHINES=1 (JARVIS_MACHINES_HUB)")
+        }
+        hub = h
+        _ = mock("reset") // the offline machine offline again, no sessions started
+    }
+
+    override func tearDown() {
+        if let app, (testRun?.totalFailureCount ?? 0) > 0 {
+            add(attachment(XCTAttachment(screenshot: app.screenshot()), "failure"))
+            add(attachment(XCTAttachment(string: app.debugDescription), "view tree"))
+        }
+        super.tearDown()
+    }
+
+    private func launch(_ args: [String]) {
+        app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        // Nothing kept from an earlier run: the last dev chat (reopened at launch), 新对话's last machine and launcher. The argument domain wins over what the app saves, so only for values the test never changes.
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-newChat.machine", "macbook", "-launcher.macbook", ""] + args
+        app.launch()
+    }
+
+    private func attachment(_ a: XCTAttachment, _ name: String) -> XCTAttachment {
+        a.name = name
+        a.lifetime = .keepAlways
+        return a
+    }
+
+    /// Saves a screenshot of the step (attachment, and the shots directory when given).
+    private func shot(_ name: String) {
+        let s = app.screenshot()
+        add(attachment(XCTAttachment(screenshot: s), name))
+        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"] {
+            let style = ProcessInfo.processInfo.environment["JARVIS_STYLE"].map { "-" + $0 } ?? ""
+            try? s.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name + style + ".png"))
+        }
+    }
+
+    @discardableResult
+    private func see(_ e: XCUIElement, _ what: String, timeout: TimeInterval = 10) -> XCUIElement {
+        if !e.waitForExistence(timeout: timeout) { XCTFail("\(what) not found") }
+        return e
+    }
+
+    private func text(_ s: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    }
+
+    private func button(_ s: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    }
+
+    private func mock(_ what: String) -> [String: Any] {
+        guard let data = try? Data(contentsOf: URL(string: hub + "/mock/" + what)!),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return obj
+    }
+
+    private func hits(_ path: String) -> Int { (mock("hits")["hits"] as? [String: Int])?["GET " + path] ?? 0 }
+
+    private func wait(_ what: String, _ test: () -> Bool) {
+        let deadline = Date.now.addingTimeInterval(10)
+        while Date.now < deadline, !test() { usleep(300_000) }
+        XCTAssertTrue(test(), what)
+    }
+
+    private func pullToRefresh() {
+        let w = app.windows.firstMatch
+        w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+    }
+
+    private func openSettingsMachines() {
+        launch(["-tab", "settings"])
+        let row = see(button("在线"), "设置 › 机器 row (n / m 在线)", timeout: 15)
+        XCTAssertTrue(row.label.contains("3 / 4 在线") || row.label.contains("4 / 4 在线"), row.label)
+        row.tap()
+        see(app.navigationBars["机器"], "机器 page")
+    }
+
+    // MARK: 设置 › 机器
+
+    /// The list: every machine, the offline one with its error; pull to refresh asks the hub again; a card opens
+    /// its details, a running agent there opens its chat.
+    @MainActor func testSettingsMachineList() throws {
+        openSettingsMachines()
+        for name in ["服务器", "MacBook", "Mac Studio", "实验室主机"] { see(text(name), "card \(name)") }
+        see(text("Connection refused"), "the offline machine's error")
+        // The hub's machine runs the 对话 tab's assistant too: its conversations are not counted as agents.
+        let server = see(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "服务器")).firstMatch, "服务器 card")
+        XCTAssertTrue(server.label.contains("1、运行中"), server.label)
+        shot("machines-list")
+
+        let before = hits("/api/v1/machines")
+        pullToRefresh()
+        wait("pull to refresh reloads the machines") { hits("/api/v1/machines") > before }
+
+        text("MacBook").tap()
+        see(app.navigationBars["MacBook"], "MacBook details")
+        see(text("运行中的 Claude"), "running agents header")
+        see(text("启动器 2"), "launchers header")
+        see(text("claude"), "a launcher")
+        see(text("ssh macbook"), "how the hub reaches it")
+        shot("machine-detail")
+        let row = see(button("补齐网络层的单元测试"), "a running agent")
+        row.tap()
+        see(app.textFields.firstMatch.exists ? app.textFields.firstMatch : app.textViews.firstMatch, "the agent's chat composer")
+        app.buttons["返回"].firstMatch.tap() // the chat draws its own bar
+        see(app.navigationBars["MacBook"], "back on the details")
+    }
+
+    /// An offline machine: its details say so instead of an empty launcher list; 重新连接 asks the hub, the page
+    /// turns online and its launchers load.
+    @MainActor func testReconnectOfflineMachine() throws {
+        openSettingsMachines()
+        text("实验室主机").tap()
+        see(app.navigationBars["实验室主机"], "details of the offline machine")
+        see(text("离线"), "offline badge")
+        shot("machine-detail-offline")
+        let reconnect = see(button("重新连接"), "重新连接")
+        reconnect.tap()
+        wait("POST …/reconnect sent") { (mock("reconnects")["reconnects"] as? [String])?.contains("lab") == true }
+        see(text("在线"), "online after reconnecting", timeout: 15)
+        see(text("启动器 2"), "launchers load once it is online", timeout: 15)
+        shot("machine-detail-reconnected")
+    }
+
+    /// 设置 › Claude Code 设置: its machine picker offers the online machines only, and switching asks that machine.
+    @MainActor func testClaudeSettingsMachinePicker() throws {
+        launch(["-tab", "settings"])
+        see(button("Claude Code 设置"), "Claude Code 设置 row", timeout: 15).tap()
+        let picker = see(button("机器"), "machine picker")
+        // The picker remembers its machine: switch to the other one.
+        let (name, id) = picker.label.contains("Mac Studio") ? ("MacBook", "macbook") : ("Mac Studio", "studio")
+        picker.tap()
+        see(button(name), "an online machine")
+        XCTAssertFalse(button("实验室主机").exists, "an offline machine is not offered")
+        shot("claude-settings-machines")
+        let before = hits("/api/v1/machines/\(id)/claude-settings")
+        button(name).tap()
+        wait("switching loads that machine's settings") { hits("/api/v1/machines/\(id)/claude-settings") > before }
+    }
+
+    // MARK: Agents
+
+    /// The Agents list's top-left menu: 按机器 shows a section per machine, a machine filter narrows the list and
+    /// shows in the button, 全部机器 clears it.
+    @MainActor func testAgentsMachineMenu() throws {
+        launch(["-tab", "dev"])
+        let menu = see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch, "the machine menu", timeout: 15)
+        // From the defaults, whatever an earlier run left (the menu's choices are remembered).
+        if menu.label.contains("当前机器") { menu.tap(); see(button("全部机器"), "全部机器").tap() }
+        menu.tap()
+        see(button("按机器"), "按机器").tap()
+        see(app.staticTexts["服务器"], "a machine section")
+        see(app.staticTexts["MacBook"], "another machine section")
+        shot("agents-by-machine")
+
+        menu.tap()
+        see(button("Mac Studio"), "machine filter item").tap()
+        let filtered = see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "当前机器：Mac Studio")).firstMatch, "filter shown")
+        // MacBook's rows are gone (its question stays in 需要你处理: those cards are for every machine).
+        XCTAssertFalse(text("给天气 App 加主屏幕小组件").exists, "MacBook's agents are filtered out")
+        shot("agents-filter-studio")
+        filtered.tap()
+        see(button("全部机器"), "全部机器").tap()
+        see(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "分组：")).firstMatch, "filter cleared")
+    }
+
+    /// A project page's machine name opens the machine's projects; there a project opens its page, the info button
+    /// the machine's details. Mac Studio has 36 agents in 5 projects.
+    @MainActor func testMachineProjects() throws {
+        launch(["-tab", "dev", "-openMachinePage", "studio"])
+        see(app.navigationBars["Mac Studio"], "Mac Studio's projects", timeout: 15)
+        see(text("个项目"), "summary")
+        see(text("进行中"), "busy projects")
+        shot("machine-projects")
+        let project = see(button("infra"), "a project")
+        project.tap()
+        let machineLink = see(button("Mac Studio 上的所有项目"), "the project page's machine name")
+        shot("space-page")
+        machineLink.tap()
+        see(app.navigationBars["Mac Studio"], "machine projects again from the project page")
+        app.buttons["机器详情"].tap()
+        see(text("运行中的 Claude"), "details from the info button")
+        shot("machine-detail-many")
+        let agent = see(button("infra 的第 1 个任务"), "one of the 36 agents")
+        agent.tap()
+        see(app.textFields.firstMatch.exists ? app.textFields.firstMatch : app.textViews.firstMatch, "that agent's chat, on top")
+        app.buttons["返回"].firstMatch.tap() // the chat draws its own bar
+        for _ in 0..<12 where !text("ssh studio").exists { app.swipeUp() }
+        see(text("ssh studio"), "studio's footer, below its 36 agents")
+    }
+
+    /// An offline machine's projects page explains why it is empty.
+    @MainActor func testOfflineMachineProjects() throws {
+        launch(["-tab", "dev", "-openMachinePage", "lab"])
+        see(app.navigationBars["实验室主机"], "the offline machine's page", timeout: 15)
+        see(text("这台机器现在离线"), "offline explanation")
+        shot("machine-projects-offline")
+        app.buttons["机器详情"].tap()
+        see(button("重新连接"), "reconnect from there")
+    }
+
+    // MARK: 新对话
+
+    /// A start the computer refuses says why next to the button (it sat below the form, unseen) and stays open.
+    @MainActor func testNewSessionFailureShowsWhy() throws {
+        launch(["-tab", "dev", "-cwd.macbook", "/Users/me/code/broken"])
+        see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
+        see(button("MacBook"), "MacBook card").tap()
+        see(button("开始对话"), "开始对话").tap()
+        let err = see(app.descendants(matching: .any).matching(identifier: "newChat.error").firstMatch, "the error next to the button")
+        XCTAssertTrue(err.label.contains("did not become ready"), err.label)
+        XCTAssertTrue(err.isHittable, "on screen, not below the form")
+        XCTAssertTrue(app.navigationBars["新对话"].exists, "the sheet stays to try again")
+        shot("new-chat-failed")
+    }
+
+    /// 新建会话: the offline machine cannot be picked; pick a machine, a directory (browse into it), a launcher and
+    /// start: POST /api/v1/sessions with those, and the new chat opens.
+    @MainActor func testNewSessionPicksMachineDirectoryLauncher() throws {
+        launch(["-tab", "dev"])
+        see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
+        see(app.navigationBars["新对话"], "新对话 sheet")
+        let lab = see(button("实验室主机"), "offline machine card")
+        XCTAssertFalse(lab.isEnabled, "an offline machine cannot be picked")
+        see(button("MacBook"), "MacBook card").tap()
+        shot("new-chat")
+
+        see(app.buttons["newChat.directory"], "directory row").tap()
+        // It opens at the directory picked (the last one used): up to ~/code when that is a project.
+        let blog = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "blog")).firstMatch // not 使用「blog」
+        see(button("上一级"), "the directory browser")
+        for _ in 0..<3 where !app.navigationBars["code"].exists { button("上一级").tap(); usleep(500_000) }
+        see(blog, "a directory").tap()
+        see(button("使用「blog」"), "use this directory").tap()
+        see(text("blog"), "directory picked")
+
+        see(app.buttons["newChat.launcher"], "launcher row").tap()
+        see(app.navigationBars["启动器"], "launcher picker")
+        shot("launcher-picker")
+        see(button("codex"), "codex launcher").tap()
+        see(text("codex"), "launcher picked")
+
+        let start = see(button("开始对话"), "开始对话")
+        XCTAssertTrue(start.isEnabled)
+        start.tap()
+        wait("POST /api/v1/sessions sent") { !((mock("started")["started"] as? [[String: Any]]) ?? []).isEmpty }
+        let body = ((mock("started")["started"] as? [[String: Any]]) ?? []).last ?? [:]
+        XCTAssertEqual(body["machine_id"] as? String, "macbook")
+        XCTAssertEqual(body["cwd"] as? String, "/Users/me/code/blog")
+        XCTAssertEqual(body["launcher"] as? String, "codex")
+        XCTAssertFalse(app.navigationBars["新对话"].waitForExistence(timeout: 3), "the sheet closes on start")
+        // The new chat knows its session at once (not 「对话 · 对话」 until the hub's next list).
+        see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blog")).firstMatch, "the new chat's place in its header")
+        shot("new-chat-started")
+    }
+}

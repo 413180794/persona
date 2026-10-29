@@ -118,6 +118,26 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 （`GET /mock/uploads` 是收到的文件；`MOCK_UPLOAD_OLD_NODE=1` 模拟没升级的 node）。截图：`-openUploadDemo <文件名>` 打开会话 3 秒后传一个 24 MB 的假文件。
 系统的文件选择器 XCUITest 点不稳，选文件这一步没自动化。
 
+### 机器页面（`MachinePagesTests`、`MachinePagesLiveTests`）
+
+把机器相关的每个入口真点一遍：设置 › 机器（列表、下拉刷新、卡片 → 详情、详情里的会话 → 对话、离线机器的说明、重新连接）、
+Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、项目页的机器名 → 机器的项目页（项目 → 项目页、ⓘ → 详情、离线时的空状态）、
+新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方）。
+
+- mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
+  Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
+  再 `TEST_RUNNER_JARVIS_MACHINES_HUB=http://127.0.0.1:18773 TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/MachinePagesTests`，
+  深色再跑一遍（`simctl ui <udid> appearance dark`、`JARVIS_STYLE=dark`），每一步的截图存到 `JARVIS_SHOTS`，失败时附截图和视图树。
+- 真实接口：本机起一个测试 hub，**不要连线上 hub 做重连、新建、关闭**。在 hub 机器上 `GOOS=darwin` 编 jarvisd 拷回来；
+  `docker exec jarvis-postgres createdb -U jarvis <自己的库>`，经 `ssh -L <本地端口>:127.0.0.1:18661` 连；假 HOME 里的 `~/.jarvis/hub.json`
+  （0600）只放 `listen`、`token`、`database_url` 和两台机器：一台 `kind: local`，一台连不上的 ssh；`herdr --session <名字> server` 起一个独立的 herdr，
+  `HERDR_SOCKET_PATH` 指向它（别指向正在用的那个）。假 HOME 里建 `code/demo`，然后
+  `TEST_RUNNER_JARVIS_LIVE_MACHINES_HUB=… TEST_RUNNER_JARVIS_LIVE_MACHINES_TOKEN=… TEST_RUNNER_JARVIS_LIVE_MACHINES_CODE=<假 HOME>/code xcodebuild test … -only-testing:JarvisUITests/MachinePagesLiveTests`。
+  node 的「最近目录」来自这台机器真实的 Claude 记录，所以测试用 `-cwd.<机器 id>` 指定目录浏览的起点。跑完关掉测试 hub、隧道和 herdr 会话，删掉库。
+- 别的车道收尾时会 `pkill -f mock_hub.py`：长时间跑的 mock 复制一份改个名再起（`/tmp/<车道>_fakehub.py`），套个 while 循环被杀了自己起来。
+- 测试中途失败时 XCTest 会结束 App，App 的请求被取消：hub 日志里那次 `POST /api/v1/sessions` 记 502，其实 node 已经把会话起好了（node 不随 hub 的请求取消）。
+  看到孤立的 502 先查是不是测试自己杀了 App。
+
 ## herdr 联调
 
 `./scripts/test-herdr.sh`：起一个独立的 herdr 会话（`herdr --session jarvis-test-<pid> server`，无头，和你正在用的 herdr 互不相干，

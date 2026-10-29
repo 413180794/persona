@@ -10,11 +10,11 @@ struct SettingsView: View {
     @State private var storage: Int64?
     @State private var debugStorage = false
     @State private var debugNotifications = false
-    @State private var debugMachines = false
+    @State private var path = NavigationPath()
     @State private var debugDevices = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     HStack(spacing: 14) {
@@ -51,7 +51,7 @@ struct SettingsView: View {
                     NavigationLink { ClaudeSettingsView() } label: {
                         Label("Claude Code 设置", systemImage: "slider.horizontal.3")
                     }
-                    NavigationLink { MachinesView() } label: {
+                    NavigationLink(value: MachineListRoute()) { // by value: MachinesView pushes its cards by value (MachineListRoute)
                         LabeledContent {
                             Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
                         } label: {
@@ -110,7 +110,8 @@ struct SettingsView: View {
             }
             .themedPage()
             .navigationTitle("设置")
-            .navigationDestination(for: String.self) { id in MachineDetailView(machineID: id) }
+            .navigationDestination(for: MachineListRoute.self) { _ in MachinesView() }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .task { await model.refreshAssistant() }
             .onAppear { // measured each time the page shows (back from 存储空间 after clearing, too)
@@ -127,8 +128,7 @@ struct SettingsView: View {
             .onAppear { if UserDefaults.standard.bool(forKey: "openNotificationSettings"), !debugOpened { debugOpened = true; debugNotifications = true } }
             .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
             // `-openMachines YES` (with `-tab settings`): 机器.
-            .navigationDestination(isPresented: $debugMachines) { MachinesView() }
-            .onAppear { if UserDefaults.standard.bool(forKey: "openMachines"), !debugOpened { debugOpened = true; debugMachines = true } }
+            .onAppear { if UserDefaults.standard.bool(forKey: "openMachines"), !debugOpened { debugOpened = true; path.append(MachineListRoute()) } }
             // `-openDevices YES` (with `-tab settings`): 设备.
             .navigationDestination(isPresented: $debugDevices) { DevicesView() }
             .onAppear { if UserDefaults.standard.bool(forKey: "openDevices"), !debugOpened { debugOpened = true; debugDevices = true } }

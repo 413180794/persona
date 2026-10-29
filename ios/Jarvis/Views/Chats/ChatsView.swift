@@ -251,6 +251,7 @@ struct ChatsView: View {
             .confirmClose($closingSession)
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
             .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id) }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
                     showNew = false

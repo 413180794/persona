@@ -68,6 +68,7 @@ struct NewChatView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("newChat.directory")
                     if !recent.isEmpty {
                         ForEach(recent.prefix(6)) { r in
                             Button {
@@ -107,6 +108,7 @@ struct NewChatView: View {
                             if loading { ProgressView().controlSize(.small) }
                         }
                     }
+                    .accessibilityIdentifier("newChat.launcher")
                 } header: { Text("启动器（模型）") } footer: {
                     Text("来自这台机器 ~/.zshrc 里的 claude 启动函数，会在 herdr 里新开一个标签页运行。")
                 }
@@ -132,9 +134,6 @@ struct NewChatView: View {
                         .focused($promptFocused)
                 } header: { Text("第一条消息") }
 
-                if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
-                }
             }
             .themedPage()
             .navigationTitle("新对话")
@@ -143,6 +142,17 @@ struct NewChatView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
             }
             .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 8) {
+                // Next to the button, not as the form's last section: below 第一条消息 and under this button it went
+                // unseen, the button just turned back to 开始对话 (and a retry started a second agent).
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(Theme.danger).lineLimit(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(.regularMaterial, in: .rect(cornerRadius: 12, style: .continuous))
+                        .accessibilityIdentifier("newChat.error")
+                }
                 Button {
                     Task { await start() }
                 } label: {
@@ -156,6 +166,7 @@ struct NewChatView: View {
                 .themedButton(prominent: true)
                 .controlSize(.large)
                 .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
+                }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
             }
@@ -243,6 +254,7 @@ struct NewChatView: View {
             UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()
+            model.adopt(s)
             onStarted(s)
         } catch {
             self.error = error.shown

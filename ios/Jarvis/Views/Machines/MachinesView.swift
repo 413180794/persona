@@ -1,6 +1,12 @@
 import SwiftUI
 
-/// Settings › 机器. Lives inside the settings NavigationStack (which registers the String / SessionKey destinations).
+/// The machine pages are pushed by value (MachineListRoute, MachineDetailRoute) and so are the chats they open
+/// (SessionKey): a page pushed with `NavigationLink { … }` that pushes by value puts the new page *under* itself, so a
+/// tap seemed to do nothing (设置 › 机器 › a card; 机器详情 › an agent). Every stack that shows them registers both.
+struct MachineListRoute: Hashable {}
+struct MachineDetailRoute: Hashable { var id: String }
+
+/// Settings › 机器.
 struct MachinesView: View {
     @Environment(AppModel.self) private var model
 
@@ -8,7 +14,7 @@ struct MachinesView: View {
         ScrollView {
                 VStack(spacing: 14) {
                     ForEach(model.machines) { m in
-                        NavigationLink(value: m.id) { MachineCard(machine: m) }
+                        NavigationLink(value: MachineDetailRoute(id: m.id)) { MachineCard(machine: m) }
                             .buttonStyle(.plain)
                     }
                     if model.machines.isEmpty {
@@ -30,8 +36,7 @@ struct MachineCard: View {
     var machine: Machine
 
     var body: some View {
-        let sessions = model.sessionsByMachine[machine.id] ?? []
-        let live = sessions.filter { $0.status.isLive }
+        let live = MachineDetailView.agents(model, machine.id)
         let working = live.filter { $0.state == .working }.count
         let waiting = live.filter { $0.state == .needsYou }.count
         VStack(alignment: .leading, spacing: 14) {
@@ -42,11 +47,13 @@ struct MachineCard: View {
                         .frame(width: 52, height: 52)
                     Image(systemName: machine.symbol)
                         .font(.title2.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                        .foregroundStyle(machine.online ? Theme.accent : .secondary)
+                        .foregroundStyle(machine.online ? Theme.accent : Color.secondary)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(machine.name).font(.title3.weight(.semibold))
-                    Text(machine.hostname ?? machine.sshHost ?? machine.id).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    // Color.primary / Color.secondary, not .primary / .secondary: as the details page's section header the
+                    // list moves the hierarchical styles a step lighter (the name came out grey, the labels faint).
+                    Text(machine.name).font(.title3.weight(.semibold)).foregroundStyle(Color.primary)
+                    Text(machine.hostname ?? machine.sshHost ?? machine.id).font(.caption.monospaced()).foregroundStyle(Color.secondary)
                 }
                 Spacer()
                 Chip(text: machine.online ? "在线" : "离线", symbol: "circle.fill", look: machine.online ? .tint(Theme.positive) : .neutral)
@@ -70,7 +77,7 @@ struct MachineCard: View {
                         .foregroundStyle(Theme.cautionText)
                 }
             } else if let err = machine.error, !err.isEmpty {
-                Text(err).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                Text(err).font(.caption).foregroundStyle(Color.secondary).lineLimit(3)
             }
         }
         .card(padding: 16)
@@ -78,8 +85,8 @@ struct MachineCard: View {
 
     private func stat(_ value: String, _ label: String, tint: Color? = nil) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.title2.weight(.semibold).monospacedDigit()).foregroundStyle(tint ?? .primary)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title2.weight(.semibold).monospacedDigit()).foregroundStyle(tint ?? Color.primary)
+            Text(label).font(.caption).foregroundStyle(Color.secondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -89,16 +96,22 @@ struct MachineDetailView: View {
     @Environment(AppModel.self) private var model
     var machineID: String
     @State private var launchers: [Launcher] = []
+    @State private var launcherError: String?
     @State private var reconnecting = false
+
+    /// A machine's agents: live ones, not the 对话 tab's assistant conversations (the Agents tab leaves those out too).
+    static func agents(_ model: AppModel, _ machineID: String) -> [Session] {
+        (model.sessionsByMachine[machineID] ?? []).filter { $0.status.isLive && !$0.assistant }
+    }
 
     var body: some View {
         let machine = model.machine(machineID)
-        let sessions = (model.sessionsByMachine[machineID] ?? []).filter { $0.status.isLive }
+        let sessions = Self.agents(model, machineID)
         List {
             if let machine {
                 Section {
                     if sessions.isEmpty {
-                        Text("没有运行中的会话").foregroundStyle(.secondary)
+                        Text(machine.online ? "没有运行中的会话" : "机器离线，连上后显示它的会话").foregroundStyle(.secondary)
                     }
                     ForEach(sessions) { s in
                         NavigationLink(value: s.key) { SessionRow(session: s, machine: machine, showMachine: false) }
@@ -106,13 +119,18 @@ struct MachineDetailView: View {
                 } header: {
                     // The card is the header, not a row: as a row it was tappable and pushed this page again.
                     VStack(alignment: .leading, spacing: 16) {
-                        MachineCard(machine: machine).foregroundStyle(.primary)
+                        MachineCard(machine: machine)
                         Text("运行中的 Claude").padding(.leading, 16) // where the header text sits by default
                     }
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
                 Section {
+                    if !machine.online {
+                        Text("机器离线，连上后显示").foregroundStyle(.secondary)
+                    } else if let launcherError, launchers.isEmpty {
+                        Label(launcherError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+                    }
                     ForEach(launchers) { l in
                         HStack {
                             Text(l.name).font(.callout.monospaced())
@@ -120,22 +138,17 @@ struct MachineDetailView: View {
                             Text(Fmt.model(l.model) ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
-                } header: { Text("启动器 \(launchers.count)") }
+                } header: { Text(machine.online ? "启动器 \(launchers.count)" : "启动器") }
                 Section {
                     Button {
-                        Task {
-                            reconnecting = true
-                            try? await model.api?.reconnect(machine: machineID)
-                            try? await Task.sleep(for: .seconds(2))
-                            await model.refresh()
-                            reconnecting = false
-                        }
+                        Task { await reconnect() }
                     } label: {
                         HStack {
-                            Label("重新连接", systemImage: "arrow.clockwise")
+                            Label(reconnecting ? "正在重新连接…" : "重新连接", systemImage: "arrow.clockwise").lineLimit(1)
                             if reconnecting { Spacer(); ProgressView() }
                         }
                     }
+                    .disabled(reconnecting)
                 } footer: {
                     Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入。")
                 }
@@ -144,6 +157,40 @@ struct MachineDetailView: View {
         .themedPage()
         .navigationTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
-        .task { launchers = (try? await model.launchers(machineID)) ?? [] }
+        // Again when it comes online (after 重新连接): an offline machine has no launchers to list.
+        .task(id: machine?.online == true) { await loadLaunchers(refresh: false) }
+    }
+
+    private func loadLaunchers(refresh: Bool) async {
+        guard model.machine(machineID)?.online == true else { launchers = []; return }
+        do {
+            launchers = try await model.launchers(machineID, refresh: refresh)
+            launcherError = nil
+        } catch {
+            launcherError = error.shown.map { "读不到启动器：\($0)" }
+        }
+    }
+
+    /// Asks the hub to reconnect, then waits (up to 15 s) for the machine to come online; says so if it does not.
+    private func reconnect() async {
+        reconnecting = true
+        defer { reconnecting = false }
+        do {
+            try await model.api?.reconnect(machine: machineID)
+        } catch {
+            if let m = error.shown { model.toast = Toast("重新连接失败：\(m)", style: .error) }
+            return
+        }
+        for _ in 0..<10 {
+            try? await Task.sleep(for: .seconds(1.5))
+            await model.refresh()
+            if model.machine(machineID)?.online == true {
+                Haptics.success()
+                await loadLaunchers(refresh: true)
+                return
+            }
+        }
+        let err = model.machine(machineID)?.error
+        model.toast = Toast("还没连上\(err.map { "：\($0)" } ?? "")", style: .error)
     }
 }

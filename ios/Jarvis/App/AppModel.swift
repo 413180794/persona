@@ -131,6 +131,13 @@ final class AppModel {
         sessionsByMachine[key.machineID]?.first { $0.sessionID == key.sessionID }
     }
 
+    /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
+    /// chat opened with no title (「对话 · 对话」) and no machine until then.
+    func adopt(_ s: Session) {
+        guard session(s.key) == nil else { return }
+        sessionsByMachine[s.machineID, default: []].append(s)
+    }
+
     func machine(_ id: String) -> Machine? { machines.first { $0.id == id } }
     /// The machine the hub runs on (it reports itself as "local"): where the assistant lives by default.
     var hubMachineID: String { machines.first { $0.kind == "local" }?.id ?? machines.first?.id ?? "" }
