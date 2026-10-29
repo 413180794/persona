@@ -7,38 +7,9 @@ struct RootView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("RootView.body")
         #endif
-        @Bindable var model = model
         Group {
             if model.isPaired {
-                TabView(selection: $model.selectedTab) {
-                    Tab("Jarvis", systemImage: "sparkles", value: AppTab.assistant) {
-                        AssistantView()
-                        #if PERF_SIGNPOST
-                            .modifier(PerfTabMount("assistant"))
-                        #endif
-                    }
-                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
-                    Tab("Agents", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
-                        ChatsView()
-                        #if PERF_SIGNPOST
-                            .modifier(PerfTabMount("agents"))
-                        #endif
-                    }
-                    .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count)
-                    Tab("收件箱", systemImage: "tray.full", value: AppTab.mail) {
-                        InboxView()
-                        #if PERF_SIGNPOST
-                            .modifier(PerfTabMount("inbox"))
-                        #endif
-                    }
-                    .badge(InboxStore.shared.actionCount)
-                    Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
-                        SettingsView()
-                        #if PERF_SIGNPOST
-                            .modifier(PerfTabMount("settings"))
-                        #endif
-                    }
-                }
+                RootTabs()
             } else {
                 WelcomeView()
             }
@@ -58,6 +29,88 @@ struct RootView: View {
             Text(c.summary)
         }
         .sendRefusalAlert(model)
+    }
+}
+
+@MainActor private struct RootTabs: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("RootTabs.body")
+        #endif
+        @Bindable var model = model
+        TabView(selection: $model.selectedTab) {
+            AssistantRootTab()
+            AgentsRootTab()
+            InboxRootTab()
+            SettingsRootTab()
+        }
+    }
+}
+
+@MainActor private struct AssistantRootTab: TabContent {
+    @Environment(AppModel.self) private var model
+
+    var body: some TabContent<AppTab> {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("AssistantRootTab.body")
+        #endif
+        Tab("Jarvis", systemImage: "sparkles", value: AppTab.assistant) {
+            AssistantView()
+            #if PERF_SIGNPOST
+                .modifier(PerfTabMount("assistant"))
+            #endif
+        }
+        .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
+    }
+}
+
+@MainActor private struct AgentsRootTab: TabContent {
+    @Environment(AppModel.self) private var model
+
+    var body: some TabContent<AppTab> {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("AgentsRootTab.body")
+        #endif
+        Tab("Agents", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
+            ChatsView()
+            #if PERF_SIGNPOST
+                .modifier(PerfTabMount("agents"))
+            #endif
+        }
+        .badge(model.pendingInteractions.filter {
+            model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey)
+        }.count)
+    }
+}
+
+@MainActor private struct InboxRootTab: TabContent {
+    var body: some TabContent<AppTab> {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("InboxRootTab.body")
+        #endif
+        Tab("收件箱", systemImage: "tray.full", value: AppTab.mail) {
+            InboxView()
+            #if PERF_SIGNPOST
+                .modifier(PerfTabMount("inbox"))
+            #endif
+        }
+        .badge(InboxStore.shared.actionCount)
+    }
+}
+
+@MainActor private struct SettingsRootTab: TabContent {
+    var body: some TabContent<AppTab> {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("SettingsRootTab.body")
+        #endif
+        Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
+            SettingsView()
+            #if PERF_SIGNPOST
+                .modifier(PerfTabMount("settings"))
+            #endif
+        }
     }
 }
 
