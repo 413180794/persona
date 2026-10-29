@@ -227,6 +227,32 @@ nonisolated struct APIClient: Sendable {
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
 
+    // MARK: Device credentials (DeviceCredentials.swift)
+
+    struct NewToken: Decodable, Sendable { var id: String; var token: String; var role: String }
+    struct DeviceToken: Decodable, Identifiable, Hashable, Sendable {
+        var id: String
+        var name: String
+        var kind: String
+        var role: String
+        var createdAt: Date?
+        var lastSeen: Date?
+        var revokedAt: Date?
+        enum CodingKeys: String, CodingKey {
+            case id, name, kind, role, createdAt = "created_at", lastSeen = "last_seen", revokedAt = "revoked_at"
+        }
+    }
+    struct DeviceTokens: Decodable, Sendable { var tokens: [DeviceToken]; var current: String? }
+
+    /// Trades this credential for a device's own (kind "watch": answer-only).
+    func createToken(name: String, kind: String) async throws -> NewToken {
+        try JSON.decoder.decode(NewToken.self, from: try await request("POST", "/api/v1/auth/tokens", body: ["name": name, "kind": kind]))
+    }
+    func deviceTokens() async throws -> DeviceTokens {
+        try JSON.decoder.decode(DeviceTokens.self, from: try await request("GET", "/api/v1/auth/tokens"))
+    }
+    func revokeToken(_ id: String) async throws { _ = try await request("DELETE", "/api/v1/auth/tokens/\(id)") }
+
     struct KeysBody: Encodable { var keys: [String]; var text: String }
     func keys(_ k: SessionKey, keys: [String], text: String = "") async throws {
         try await post(sp(k) + "/keys", body: KeysBody(keys: keys, text: text))

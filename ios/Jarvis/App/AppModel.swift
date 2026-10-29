@@ -9,7 +9,8 @@ import UserNotifications
 final class AppModel {
     static let shared = AppModel()
 
-    private(set) var config: ServerConfig?
+    /// Set by pair / unpair and when the phone gets its own credential (DeviceCredentials.swift).
+    var config: ServerConfig?
     let live = LiveConnection()
     private(set) var machines: [Machine] = [] { didSet { saveSnapshot() } }
     private(set) var sessionsByMachine: [String: [Session]] = [:] { didSet { saveSnapshot() } }
@@ -60,10 +61,10 @@ final class AppModel {
             assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
         }
         live.onEvent = { [weak self] in self?.handle($0) }
-        WatchSync.shared.configProvider = { Keychain.serverConfig }
+        WatchSync.shared.configProvider = { Keychain.watchConfig ?? Keychain.serverConfig }
         WatchSync.shared.onActivated = { [weak self] in
             guard let self, let cfg = self.config else { return }
-            WatchSync.shared.push(config: cfg)
+            WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
             WatchSync.shared.push(summary: self.watchSummary())
         }
         live.onConnected = { [weak self] in self?.didConnect() }
@@ -79,7 +80,8 @@ final class AppModel {
     func start() {
         guard let config else { return }
         live.connect(config)
-        WatchSync.shared.push(config: config)
+        WatchSync.shared.push(config: Keychain.watchConfig ?? config)
+        Task { await upgradeCredentials() }
     }
 
     func pair(_ new: ServerConfig) async throws {
@@ -87,6 +89,7 @@ final class AppModel {
         _ = try await client.machines()
         config = new
         Keychain.serverConfig = new
+        forgetDeviceCredentials()
         machines = []
         sessionsByMachine = [:]
         interactions = [:]
@@ -94,12 +97,14 @@ final class AppModel {
         live.connect(new)
         WatchSync.shared.push(config: new)
         PushRegistrar.shared.registerIfPossible()
+        Task { await upgradeCredentials() }
     }
 
     func unpair() {
         live.disconnect()
         config = nil
         Keychain.serverConfig = nil
+        forgetDeviceCredentials()
         machines = []
         sessionsByMachine = [:]
         interactions = [:]

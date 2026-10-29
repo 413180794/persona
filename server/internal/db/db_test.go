@@ -232,3 +232,32 @@ func TestInboxItems(t *testing.T) {
 		t.Fatalf("row = %s", rows[0])
 	}
 }
+
+func TestDeviceTokens(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if _, err := d.pool.Exec(ctx, `TRUNCATE device_tokens`); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateDeviceToken(ctx, DeviceToken{ID: "dt1", Name: "iPhone", Kind: "phone", Role: "full"}, "h1"); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.CreateDeviceToken(ctx, DeviceToken{ID: "dt2", Name: "Watch", Kind: "watch", Role: "answer"}, "h2")
+	got, err := d.DeviceTokenByHash(ctx, "h2")
+	if err != nil || got == nil || got.ID != "dt2" || got.Role != "answer" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	_ = d.TouchDeviceToken(ctx, "dt2")
+	if ok, err := d.RevokeDeviceToken(ctx, "dt2"); !ok || err != nil {
+		t.Fatalf("revoke %v %v", ok, err)
+	}
+	if ok, _ := d.RevokeDeviceToken(ctx, "dt2"); ok {
+		t.Fatal("revoked twice")
+	}
+	if got, _ := d.DeviceTokenByHash(ctx, "h2"); got != nil {
+		t.Fatal("a revoked token still works")
+	}
+	list, _ := d.DeviceTokens(ctx)
+	if len(list) != 2 || list[0].ID != "dt1" || list[1].RevokedAt == nil || list[1].LastSeen == nil {
+		t.Fatalf("%+v", list)
+	}
+}

@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var debugStorage = false
     @State private var debugNotifications = false
     @State private var debugMachines = false
+    @State private var debugDevices = false
 
     var body: some View {
         NavigationStack {
@@ -56,6 +57,9 @@ struct SettingsView: View {
                         } label: {
                             Label("机器", systemImage: "macbook.and.iphone")
                         }
+                    }
+                    NavigationLink { DevicesView() } label: {
+                        Label("设备", systemImage: "key")
                     }
                 }
 
@@ -125,6 +129,9 @@ struct SettingsView: View {
             // `-openMachines YES` (with `-tab settings`): 机器.
             .navigationDestination(isPresented: $debugMachines) { MachinesView() }
             .onAppear { if UserDefaults.standard.bool(forKey: "openMachines"), !debugOpened { debugOpened = true; debugMachines = true } }
+            // `-openDevices YES` (with `-tab settings`): 设备.
+            .navigationDestination(isPresented: $debugDevices) { DevicesView() }
+            .onAppear { if UserDefaults.standard.bool(forKey: "openDevices"), !debugOpened { debugOpened = true; debugDevices = true } }
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }

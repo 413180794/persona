@@ -30,6 +30,15 @@ nonisolated enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
+    /// The watch's own, answer-only credential (DeviceCredentials.swift): what the phone hands the watch.
+    static var watchConfig: ServerConfig? {
+        get { load(account: "watch").flatMap { try? JSONDecoder().decode(ServerConfig.self, from: $0) } }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) { save(data, account: "watch") }
+            else { delete(account: "watch") }
+        }
+    }
+
     static var serverConfig: ServerConfig? {
         get { load(account: "server").flatMap { try? JSONDecoder().decode(ServerConfig.self, from: $0) } }
         set {

@@ -52,8 +52,9 @@ type Hub struct {
 	turns        *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
 	live         *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
 
-	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
-	inbox inbox    // the unified inbox (inbox.go)
+	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
+	inbox  inbox     // the unified inbox (inbox.go)
+	devtok devTokens // device token lookups (devicetokens.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -92,6 +93,11 @@ type Store interface {
 	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
+	CreateDeviceToken(ctx context.Context, t db.DeviceToken, hash string) error
+	DeviceTokenByHash(ctx context.Context, hash string) (*db.DeviceToken, error)
+	DeviceTokens(ctx context.Context) ([]db.DeviceToken, error)
+	RevokeDeviceToken(ctx context.Context, id string) (bool, error)
+	TouchDeviceToken(ctx context.Context, id string) error
 	PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error
 	InboxItems(ctx context.Context, doneSince time.Time) ([][]byte, error)
 }

@@ -2,7 +2,6 @@ package hub
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -151,6 +150,7 @@ func (h *Hub) routes() http.Handler {
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())
 	}
+	h.tokenRoutes(api)
 	mux.Handle("/api/", h.auth(api))
 	return logRequests(h, mux)
 }
@@ -161,10 +161,16 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 		if tok == "" {
 			tok = r.URL.Query().Get("token")
 		}
-		if subtle.ConstantTimeCompare([]byte(tok), []byte(h.cfg.Token)) != 1 {
+		p, ok := h.authenticate(r.Context(), tok)
+		if !ok {
 			writeErr(w, http.StatusUnauthorized, errors.New("invalid token"))
 			return
 		}
+		if !allowed(p, r.Method, r.URL.Path) {
+			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, p))
 		// API answers are live data: without this the phone's URLCache kept a copy of every page it pulled (megabytes,
 		// never read again). Images and media that may be cached set their own Cache-Control.
 		w.Header().Set("Cache-Control", "no-store")
@@ -410,9 +416,11 @@ type client struct {
 	subs  map[[2]string]bool
 	phone bool
 	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
-	lazy  bool // asked for items without image data (subscribe with lazy_images)
-	name  string
-	since time.Time
+	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
+	device, role string
+	lazy         bool // asked for items without image data (subscribe with lazy_images)
+	name         string
+	since        time.Time
 }
 
 func (c *client) sendJSON(v any) {
@@ -528,7 +536,9 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(64 << 20)
-	c := &client{hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now()}
+	who := principalOf(r.Context())
+	c := &client{hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
+		device: who.ID, role: who.Role}
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
@@ -640,6 +650,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			m.removeWatcher(msg.SessionID)
 		}
 	case "register_phone":
+		if c.role != roleFull { // runs tools on behalf of claude: not for an answer-only device
+			return
+		}
 		h.mu.Lock()
 		c.phone, c.sim, c.name, c.since = true, msg.Simulator, msg.DeviceName, time.Now()
 		h.mu.Unlock()
@@ -651,6 +664,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 			h.markSeen(msg.MachineID, msg.SessionID)
 		}
 	case "tool_result":
+		if c.role != roleFull {
+			return
+		}
 		h.toolResult(msg.CallID, proto.ToolResult{Content: msg.Content, IsError: msg.IsError})
 	}
 }

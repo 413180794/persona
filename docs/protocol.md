@@ -6,6 +6,12 @@
 
 - `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 example-machine `~/.jarvis/hub.json` 的 `token`，
   `jarvisd hub pair` 打印 URL + token（以及终端二维码，App 扫码配对）。
+- **每台设备自己的凭据**：配对用的 token（hub.json）什么都能做，留给 CLI 和旧 App。新 App 配对后立刻
+  `POST /api/v1/auth/tokens {"name","kind":"phone"}` 换一个自己的 token（`jd_…`，hub 只存哈希），之后只用它；再给配对的手表换一个
+  `kind: watch` 的，手表只拿到这个。角色：`full`（手机）什么都能做；`answer`（手表）能读（所有 GET、WebSocket）、回答交互、发消息、
+  标已读 / 中断、收件箱回复和完成、注册推送，别的写操作一律 403，WebSocket 上也不能注册成手机执行 `phone_*` 工具。
+  `GET /api/v1/auth/tokens` 列出（`current` 是本机），`DELETE /api/v1/auth/tokens/{id}` 撤销：立即失效（查询结果缓存 30 秒，撤销时清掉）
+  并断开它的 WebSocket。App 在「设置 › 设备」里管理。旧 hub 没有这个接口时 App 继续用配对 token，下次启动再试。
 - `GET /api/v1/health` 不需要鉴权，返回 `{"ok":true,"version":"..."}`。
 - 功能协商：`/api/v1/health` 和 WebSocket 的 `hello` 带 `features`（`proto.Features`：`client_msg_id`、`send_refusals`、
   `screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`）。新字段都是可选的，App 目前靠字段在不在判断；

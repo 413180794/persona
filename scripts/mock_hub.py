@@ -217,6 +217,12 @@ if os.environ.get("MOCK_SCREEN_SECRET"):
 
 PREFS = {"input": True, "done": "long", "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
+TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
+    {"id": "dev_phone", "name": "我的 iPhone", "kind": "phone", "role": "full", "created_at": ago(days=12), "last_seen": ago()},
+    {"id": "dev_watch", "name": "Apple Watch", "kind": "watch", "role": "answer", "created_at": ago(days=12), "last_seen": ago(hours=3)},
+    {"id": "dev_ipad", "name": "iPad", "kind": "phone", "role": "full", "created_at": ago(days=40), "last_seen": ago(days=20),
+     "revoked_at": ago(days=2)},
+]
 SENT = []  # bodies of sends while MOCK_SEND_REFUSE is set (GET /mock/sent)
 
 INBOX = [
@@ -291,6 +297,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
         if p == "/mock/resolved": return self.send_json({"resolved": RESOLVED})
+        if p == "/api/v1/auth/tokens": return self.send_json({"tokens": TOKENS, "current": "dev_phone"})
         if p == "/mock/sent": return self.send_json({"sent": SENT})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
@@ -341,6 +348,11 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
+            for t in TOKENS:
+                if t["id"] == p.split("/")[-1]:
+                    t["revoked_at"] = ago()
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
             RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
             if os.environ.get("MOCK_PROMPT_CHANGED") and p.split("/")[4].startswith("scr_"):
