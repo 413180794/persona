@@ -173,6 +173,7 @@ func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any
 		resp, err := p.http.Do(req)
 		if err != nil {
 			p.logf("apns live activity %s: %v", d.Name, err)
+			p.http.CloseIdleConnections() // see the note in send
 			return
 		}
 		defer resp.Body.Close()
@@ -271,6 +272,11 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 			resp, err := p.http.Do(req)
 			if err != nil {
 				p.logf("apns %s: %v", d.Name, err)
+				// The APNs connection is one long-lived HTTP/2 connection, and Go does not notice when it dies
+				// silently (no health pings before Go 1.24): after the hub's proxy routing broke and came back,
+				// every push still timed out on the dead connection until the hub restarted. Drop it so the next
+				// push dials a new one.
+				p.http.CloseIdleConnections()
 				return
 			}
 			defer resp.Body.Close()
