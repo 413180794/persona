@@ -102,11 +102,14 @@ final class TerminalTypingTests: XCTestCase {
         XCTAssertLessThan(resized.min() ?? .max, rowsBefore, "the keyboard did not take rows: \(resized)")
         XCTAssertTrue(size.label.hasSuffix("×\(resized.last ?? 0)"), size.label)
 
-        // Leaving the tab lets the terminal go (the pane goes back to the computer's size).
-        app.buttons["收起键盘"].tap() // the page's header (with the tabs) is folded while the keyboard is up
+        // Closing the terminal (dragging its bar down) lets it go (the pane goes back to the computer's size).
+        app.buttons["收起键盘"].tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
         sleep(1)
-        app.buttons["对话"].firstMatch.tap()
+        let bar = app.descendants(matching: .any)["terminal-close"]
+        bar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5), "the terminal did not close when its bar was dragged down")
         let gone = Date.now.addingTimeInterval(5)
         while Date.now < gone, !input().dropFirst(before).contains(where: { $0["type"] as? String == "terminal_unsubscribe" }) {
             usleep(200_000)
@@ -169,13 +172,14 @@ final class TerminalTypingTests: XCTestCase {
         XCTAssertTrue(tab.waitForExistence(timeout: 15), "no session page:\n\(app.debugDescription)")
         sleep(3) // connected by now
         let unfold = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
-        for _ in 0..<5 where !tab.isSelected { // the header may have folded away: scrolling the chat brings it back
+        let opened = app.descendants(matching: .any)["terminal-close"] // the terminal's bar: it came up over the page
+        for _ in 0..<5 where !opened.exists { // the header may have folded away: scrolling the chat brings it back
             if tab.isHittable, tab.frame.minY > 60 { tab.tap() } else if unfold.exists, unfold.isHittable { unfold.tap() } else {
                 app.swipeDown()
             }
             sleep(1)
         }
-        XCTAssertTrue(tab.isSelected, "the terminal tab did not open")
+        XCTAssertTrue(opened.exists, "the terminal did not come up")
         let size = app.descendants(matching: .any)["terminal-size"]
         let deadline = Date.now.addingTimeInterval(10)
         while Date.now < deadline, !(size.exists && size.label.contains("手机尺寸")) { usleep(250_000) }

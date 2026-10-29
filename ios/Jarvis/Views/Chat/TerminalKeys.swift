@@ -98,7 +98,9 @@ struct TerminalKeyBar: View {
     private var m: Binding<TerminalModifiers> { mods ?? $own }
 
     var body: some View {
-        HStack(spacing: 4) {
+        // One low glass capsule holding every key (as Moshi's toolbar: 44 high, 36-point keys 6 apart, 5 / 4 inside):
+        // the terminal keeps the height.
+        HStack(spacing: 6) {
             ViewThatFits(in: .horizontal) {
                 keys
                 ScrollView(.horizontal, showsIndicators: false) { keys }
@@ -107,6 +109,10 @@ struct TerminalKeyBar: View {
             if visible.contains("pad") { padButton }
             if let keyboard { keyboardButton(keyboard) }
         }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 4)
+        .frame(height: 44)
+        .surface(in: .capsule)
         #if DEBUG
         // `-showKeyMods locked,once,held`: ctrl, alt, shift in those states, for screenshots.
         .onAppear {
@@ -128,10 +134,10 @@ struct TerminalKeyBar: View {
     }
 
     private var keys: some View {
-        HStack(spacing: 4) {
-            modifier(.ctrl, "ctrl", name: "Control")
-            if visible.contains("esc") { key("esc") { press("esc") } }
-            if visible.contains("tab") { key("tab") { press("tab") } }
+        HStack(spacing: 6) {
+            modifier(.ctrl, "Ctrl", name: "Control")
+            if visible.contains("esc") { key("Esc", name: "esc") { press("esc") } }
+            if visible.contains("tab") { key("Tab", name: "tab") { press("tab") } }
             if visible.contains("ctrlc") { key("⌃C", name: "发送 Control C") { send(["ctrl+c"]) } }
             if visible.contains("shortcuts"), let shortcuts {
                 Button { Haptics.tap(); shortcuts() } label: {
@@ -145,7 +151,7 @@ struct TerminalKeyBar: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("粘贴")
             }
-            if visible.contains("alt") { modifier(.alt, "alt", name: "Option") }
+            if visible.contains("alt") { modifier(.alt, "Alt", name: "Option") }
             if visible.contains("shift") { modifier(.shift, "⇧", name: "Shift") }
         }
     }
@@ -158,6 +164,8 @@ struct TerminalKeyBar: View {
             KeyCap(symbol: up.wrappedValue ? "keyboard.chevron.compact.down" : "keyboard", state: .off)
         }
         .buttonStyle(.plain)
+        // A double tap is return (as in Moshi); a single one waits for it not to be one.
+        .highPriorityGesture(TapGesture(count: 2).onEnded { Haptics.tap(); send(["enter"]) })
         .accessibilityLabel(up.wrappedValue ? "收起键盘" : "键盘")
         .accessibilityIdentifier("terminal-keyboard")
     }
@@ -268,19 +276,19 @@ struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(.system(size: 16, weight: .medium)).frame(width: 22)
+                Image(systemName: symbol).font(.system(size: 15, weight: .medium)).frame(width: 36)
             } else {
                 Text(label)
-                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                    .font(Font(TerminalFont.jetbrains.font(size: 14, bold: false))) // the terminal's own JetBrains Mono
                     .lineLimit(1)
                     .fixedSize()
+                    .padding(.horizontal, 8)
             }
         }
         .foregroundStyle(state == .locked ? Color.white : state == .off ? Color.primary : Theme.accent)
-        .padding(.horizontal, 7)
-        .frame(minWidth: 40, minHeight: 40)
-        .surface(tint: state == .locked ? Theme.accent : state == .off ? nil : Theme.accent.opacity(0.16),
-                 interactive: true, in: .capsule)
+        .frame(minWidth: 36, minHeight: 36)
+        .background(state == .locked ? Theme.accent : state == .off ? Color.primary.opacity(0.1) : Theme.accent.opacity(0.18),
+                    in: .capsule)
         .overlay(Capsule().stroke(state == .once || state == .held ? Theme.accent : .clear, lineWidth: 1.5))
         .overlay(alignment: .bottom) {
             if state == .locked { Capsule().fill(.white).frame(width: 12, height: 2).padding(.bottom, 6) }

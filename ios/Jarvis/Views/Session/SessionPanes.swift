@@ -29,12 +29,15 @@ struct SessionPaneBar: View {
     @Binding var pane: SessionPane
     var panes: [SessionPane]
     var badges: [SessionPane: String] = [:]
+    /// 终端 comes up from the bottom over the page instead of taking its place (TerminalCover).
+    var openTerminal: (() -> Void)?
     @Namespace private var ns
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(panes) { p in
                 Button {
+                    if p == .terminal, let openTerminal { Haptics.tap(); openTerminal(); return }
                     guard p != pane else { return }
                     Haptics.tap()
                     withAnimation(.snappy(duration: 0.25)) { pane = p }
@@ -131,14 +134,17 @@ struct TerminalPanel: View {
     var switchTo: ((SessionKey) -> Void)?
     /// The keyboard came up on the terminal or went down (the page folds its header meanwhile).
     var onKeyboard: ((Bool) -> Void)?
+    /// Shown from the bottom over the page (TerminalCover): its header is a slim bar to drag it down by.
+    var grab: TerminalGrab?
 
     /// Older than this without a fresh screen counts as stale even before anything fails (a request may hang).
     static let staleAfter: TimeInterval = 4
 
-    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil, onKeyboard: ((Bool) -> Void)? = nil) {
+    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil, onKeyboard: ((Bool) -> Void)? = nil, grab: TerminalGrab? = nil) {
         self.key = key
         self.switchTo = switchTo
         self.onKeyboard = onKeyboard
+        self.grab = grab
         _feed = State(initialValue: TerminalFeed(key: key))
     }
 
@@ -242,9 +248,9 @@ struct TerminalPanel: View {
                 field
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 6)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 6)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
     }
 
     /// 输入框 mode: write, then send with return.
@@ -367,7 +373,44 @@ struct TerminalPanel: View {
         }
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if let grab { grabBar(grab) } else { cardHeader }
+    }
+
+    /// Over the page (TerminalCover): a slim bar — its size on the left, the handle, settings on the right. Dragged
+    /// down it takes the terminal with it (far or fast enough: closed); a tap on the handle closes it too.
+    private func grabBar(_ g: TerminalGrab) -> some View {
+        let fg = Color(hex: side.foreground)
+        return ZStack {
+            Capsule().fill(fg.opacity(0.35)).frame(width: 38, height: 5)
+                .frame(width: 110, height: 30)
+                .contentShape(.rect)
+                .onTapGesture { Haptics.tap(); g.close() }
+                .accessibilityElement()
+                .accessibilityLabel("关闭终端")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("terminal-close")
+            HStack(spacing: 6) {
+                if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
+                if feed.loading { ProgressView().controlSize(.mini).tint(fg) }
+                Spacer(minLength: 0)
+                Button { Haptics.tap(); showSettings = true } label: {
+                    Image(systemName: "slider.horizontal.3").font(.footnote.weight(.semibold)).frame(width: 32, height: 26)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(fg.opacity(0.75))
+                .accessibilityLabel("终端设置")
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 34)
+        .contentShape(.rect)
+        .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { g.dragged($0.translation.height) }
+            .onEnded { g.released($0.translation.height, $0.predictedEndTranslation.height) })
+    }
+
+    private var cardHeader: some View {
         HStack(spacing: 8) {
             historyStatus
             Spacer(minLength: 8)
@@ -1060,3 +1103,11 @@ struct SubagentFooter: View {
         .surface(in: .rect(cornerRadius: 20, style: .continuous))
     }
 }
+
+/// How the terminal shown over the page (TerminalCover) is dragged down by its bar, and closed.
+struct TerminalGrab {
+    var dragged: (CGFloat) -> Void
+    var released: (_ distance: CGFloat, _ predicted: CGFloat) -> Void
+    var close: () -> Void
+}
+

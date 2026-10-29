@@ -222,6 +222,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
 - 终端流的帧率上限是 Agent 自己的重画节奏，不在我们的链路上。Claude Code 2.1.312 流式时约 110 ms 重画一次（主要是转圈那一行），
   正文分几次大块整屏出；herdr observe 最快每 16 ms 一帧；node / hub 原样转发，只把 30 ms 内的帧合成一帧（`termMinGap`）。
   分段实测见 `docs/terminal.md` 第十节。
+- 模拟器会被 XCUITest 的 typeText 切成「硬件键盘」模式：之后软键盘不再弹出（键盘按钮显示已弹起，但屏幕上没有键盘），依赖键盘高度的测试全挂。
+  这台机器没有 Simulator.app，`defaults write com.apple.iphonesimulator …ConnectHardwareKeyboard` 改不回来：`simctl create` 一台新的跑。
 - XCUITest 在键盘弹起的动画中点键栏会点空（键栏正跟着键盘移动）：先等键盘出现、停一下再点。
 - 手机接管终端用 `herdr terminal session control <pane> --cols --rows`（管道，不要 PTY，和 `terminal attach` 共用一个槽位）：
   stdin 关掉、进程被 kill（包括 -9）herdr 都会把窗格放回原尺寸，所以接管进程的生死跟着 node 走就不会卡住电脑。

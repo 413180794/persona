@@ -129,7 +129,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 「回到底部」箭头：用列表末尾的哨兵视图判断是否在底部（滚到底就隐藏）。
 - 会话页选项卡（开发会话，`Views/Session/`）：导航栏下一排「对话 · 终端 · Git · 文件」，Git 只在仓库里出现（角标是改动数），
   文件在知道目录时出现；助手对话没有选项卡。
-  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。hub 有 `terminal_stream` 时订阅实时流
+  - 终端（`TerminalPanel`，`Views/Session/Terminal/`，方案见 `docs/terminal.md`）：任何状态都能看。点「终端」不切换选项卡，
+    而是**从底部弹出盖住整页**（`TerminalCover`，2026-10-30 用户要求）：没有标题和选项卡，顶上只有一条细栏（左边尺寸、中间把手、右边设置），
+    按住细栏往下拖跟手、拖过 140pt 或快速下划就关掉（点把手也关）；终端的尺寸只随键盘变，不随页头变（换尺寸就是给接管的窗格改尺寸，Claude 要重排）。
+    底下的键栏照 Moshi：一条矮的深色胶囊装下所有键（30pt 高的扁平小键，Ctrl / Esc / Tab 等宽小字，其余是图标），把高度留给终端。hub 有 `terminal_stream` 时订阅实时流
     （`TerminalFeed`：herdr observe 的帧套到窗格尺寸的网格 `TerminalGrid` 上，丢帧 / 换流就从整帧重来，重连带 epoch / seq 续上）；
     hub / node / herdr 不能推流时每秒读一次带颜色的屏幕（`format=ansi`）。
     默认「手机尺寸」（设置 › 尺寸）：hub 有 `terminal_control` 时手机按自己的列 × 行接管终端，Claude 按手机宽度排版，键直接写进终端；

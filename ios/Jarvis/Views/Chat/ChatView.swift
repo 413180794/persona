@@ -170,7 +170,7 @@ struct ChatView: View {
         }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
-        .fullScreenCover(isPresented: $showTerminal) { TerminalSheet(key: key) }
+        .fullScreenCover(isPresented: $showTerminal) { TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear) }
         .renameSessionAlert($renaming)
         .confirmClose($closing)
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
@@ -1192,7 +1192,7 @@ struct ChatView: View {
                 .padding(.top, 2)
                 .padding(.bottom, 6)
                 SiblingStrip(current: key) { next in switchTo(next) }
-                SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges)
+                SessionPaneBar(pane: $pane, panes: panes, badges: paneBadges, openTerminal: { showTerminal = true })
                 // A /loop and background work: small chips here instead of strips over the composer; a tap opens them.
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     ActivityChips(loop: session?.loop, background: session?.background ?? []) { showActivity = true }
@@ -1342,7 +1342,9 @@ struct ChatView: View {
                 let delay = UserDefaults.standard.object(forKey: "openSendDelay") != nil ? UserDefaults.standard.double(forKey: "openSendDelay") : 3
                 Task { try? await Task.sleep(for: .seconds(delay)); model.sendNow(key, text: t) }
             }
-            if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) { pane = p }
+            if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) {
+                if p == .terminal { showTerminal = true } else { pane = p } // the terminal comes up over the page
+            }
             if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
             if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent
                 Task {
@@ -1846,22 +1848,32 @@ extension UIImage {
     }
 }
 
-/// Full-screen live terminal of the herdr pane, for anything the chat cannot express.
-struct TerminalSheet: View {
-    @Environment(AppModel.self) private var model
+/// The session's live terminal, come up from the bottom over the page (终端, or the terminal button of a reply): all
+/// of the screen goes to it — no title, no tabs — under a slim bar that drags it back down (a tap on its handle too).
+/// Its size does not change with anything around it but the keyboard (a new size is a resize of the pane it drives).
+struct TerminalCover: View {
     @Environment(\.dismiss) private var dismiss
     let key: SessionKey
+    var switchTo: ((SessionKey) -> Void)?
+    @State private var offset: CGFloat = 0
 
     var body: some View {
-        NavigationStack {
-            TerminalPanel(key: key)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-                .navigationTitle(model.session(key)?.slotLabel.map { "终端 · \($0)" } ?? "终端")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
+        TerminalPanel(key: key, switchTo: switchTo, grab: TerminalGrab(
+            dragged: { offset = max(0, $0) },
+            released: { distance, predicted in
+                if distance > 140 || predicted > 420 { close() } else { withAnimation(.spring(duration: 0.3)) { offset = 0 } }
+            },
+            close: close))
+            .padding(.horizontal, 4)
+            .padding(.bottom, 2)
+            .offset(y: offset)
+            .background {
+                // The page shows through, dimmed less as the terminal goes down.
+                Color.black.opacity(0.4 * (1 - min(offset / 500, 1))).ignoresSafeArea()
+            }
     }
+
+    private func close() { dismiss() }
 }
 
 /// Input typed while Claude works and not yet taken, shown above the composer instead of in the chat.
