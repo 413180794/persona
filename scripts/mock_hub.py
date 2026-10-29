@@ -233,6 +233,20 @@ if os.environ.get("MOCK_SCREEN_SECRET"):
          "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
          "secret": True, "screen": "⏺ Bash(sudo make install)\n  ⎿  Running…\n\n[sudo] password for me:"})
 
+# The terminal tab (GET …/screen): a made-up shell. MOCK_SCREEN_FAIL_AFTER=N: N seconds after the first read every
+# read fails (503) — the stale bar over the terminal; MOCK_SCREEN_FAIL_AFTER=N:M recovers M seconds later.
+TERMINAL = "\n".join(
+    ["$ swift test --filter NetworkTests", "Building for debugging...", "[1/4] Compiling Weather Forecast.swift",
+     "[2/4] Compiling Weather Client.swift", "[3/4] Emitting module Weather", "[4/4] Linking WeatherPackageTests",
+     "Build complete! (12.48s)", "Test Suite 'NetworkTests' started at 2026-10-29 10:02:11.204",
+     "Test Case '-[NetworkTests testRetriesOnTimeout]' passed (0.412 seconds).",
+     "Test Case '-[NetworkTests testDecodesForecastWithMissingHumidityAndFallsBackToTheLastKnownValue]' passed (0.031 seconds).",
+     "Test Case '-[NetworkTests testCachesResponsesForTenMinutes]' passed (0.006 seconds).",
+     "Test Suite 'NetworkTests' passed at 2026-10-29 10:02:11.660.",
+     "\t Executed 3 tests, with 0 failures (0 unexpected) in 0.449 (0.455) seconds", "$ git status --short",
+     " M Sources/Weather/Client.swift", " M Tests/WeatherTests/NetworkTests.swift", "$ "])
+SCREEN_FIRST = []
+
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
@@ -387,7 +401,14 @@ class H(BaseHTTPRequestHandler):
                                    "context_tokens": 48200, "output_tokens": 12800, "compactions": 0, "turns": 6,
                                    "started_at": ago(minutes=40), "last_activity": ago()})
         if p.startswith("/api/v1/sessions/") and p.endswith("/screen"):
-            return self.send_json({"text": "", "status": "idle"})
+            fail = os.environ.get("MOCK_SCREEN_FAIL_AFTER")
+            if fail:
+                SCREEN_FIRST[:] = SCREEN_FIRST or [datetime.now(timezone.utc)]
+                t = (datetime.now(timezone.utc) - SCREEN_FIRST[0]).total_seconds()
+                after, _, back = fail.partition(":")
+                if t > float(after) and not (back and t > float(after) + float(back)):
+                    return self.send_json({"error": "node macbook: not connected"}, 503)
+            return self.send_json({"text": TERMINAL, "status": "idle"})
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
 

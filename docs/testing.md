@@ -61,6 +61,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 往上翻时内容不动（`ChatView` 的冻结）：`MOCK_STREAM=1` 启动 mock（第一个会话打开后每 2 秒来一条新步骤 / 回复，共 12 次），
   `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openWork YES -showFreezeProbe YES`：App 自己往上翻，每 2 秒记一次屏幕中间那行的位置，
   结果写在 App 容器的 `Documents/freeze.txt`（`xcrun simctl get_app_container $SIM <bundle id> data`），最后一行 `RESULT:`，应为移动 0pt。
+- 终端断线：`MOCK_SCREEN_FAIL_AFTER=3:14` 启动 mock（第一次读终端 3 秒后每次都 503，再过 14 秒恢复），
+  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openPane terminal`，应先出现红色「上次更新 N 秒前 · 重试」，恢复后消失。
+  mock 进程启动时还没有读终端的请求，计时从第一次请求算：编译期间旧 App 还在轮询的话，先启动 App 再启动 mock。
 - 断档自愈（`docs/protocol.md`「items 的连续性」）：`MOCK_GAP=1` 启动 mock 并卸载重装 App，`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`。
   这个会话先只有前 8 行，2 秒后「写入」后 6 条，但只推最后 2 条（`from_seq` 12）；日志里应在约 1.5 秒后出现 `items after_seq=8`，
   对话页的工作过程显示「工具 5」。等日志用带超时的脚本，别写只等成功的 `until grep`。

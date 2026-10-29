@@ -87,7 +87,8 @@ private struct PaneSegment: View {
 /// The session's terminal at any time (not only while Claude works). The latest 200 lines refresh live; scrolling up
 /// loads the 200 before them, again and again, back to the start of what herdr keeps (about 1000 lines — older output
 /// lives in the chat). Each page is found by the lines it must end before, so output arriving meanwhile shifts
-/// nothing; reading history pauses the live refresh, 回到最新 resumes it.
+/// nothing; reading history pauses the live refresh, 回到最新 resumes it. A refresh that fails or hangs never leaves
+/// old output looking live: a bar says how old it is and when the next try is, with a button to try now.
 struct TerminalPanel: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
@@ -101,8 +102,16 @@ struct TerminalPanel: View {
     @State private var offline = false
     @State private var error: String?
     @State private var input = ""
+    /// When the screen last came back, the latest refresh's failure and how many in a row, and when to try next
+    /// (backing off to every 15 seconds while it keeps failing).
+    @State private var lastOK: Date?
+    @State private var failure: String?
+    @State private var failures = 0
+    @State private var nextTry = Date.distantPast
 
     static let page = 200
+    /// Older than this without a fresh screen counts as stale even before the request fails (it may hang for a minute).
+    static let staleAfter: TimeInterval = 4
 
     private var text: String { older.isEmpty ? tail : older.joined(separator: "\n") + "\n" + tail }
 
@@ -127,6 +136,7 @@ struct TerminalPanel: View {
         }
         .task(id: key) {
             tail = ""; older = []; hasOlder = true; atLimit = false; paused = false; loaded = false
+            lastOK = nil; failure = nil; failures = 0; nextTry = .distantPast
             #if DEBUG
             // `-terminalPages N`: load N pages of history after the first refresh (what scrolling up does).
             let pages = UserDefaults.standard.integer(forKey: "terminalPages")
@@ -136,8 +146,8 @@ struct TerminalPanel: View {
             }
             #endif
             while !Task.isCancelled {
-                if !paused { await refresh() }
-                try? await Task.sleep(for: .seconds(1))
+                if !paused, Date() >= nextTry { await refresh() }
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
     }
@@ -152,6 +162,9 @@ struct TerminalPanel: View {
                 .background(Theme.terminalBackground, in: .rect(cornerRadius: 12, style: .continuous))
         } else {
             VStack(alignment: .leading, spacing: 0) {
+                if !paused {
+                    TerminalLinkStatus(lastOK: lastOK, failure: failure, nextTry: nextTry) { retryNow() }
+                }
                 historyStatus.padding(.horizontal, 10).padding(.top, 8)
                 // Unwrapped and scrollable both ways; keeps its distance from the end, so pages added on top and
                 // output added below never move what you read.
@@ -204,14 +217,27 @@ struct TerminalPanel: View {
         guard let api = model.api else { return }
         do {
             let r = try await api.screen(key, lines: Self.page, recent: true)
-            error = nil
             offline = r.status == .offline
             if r.text != tail { tail = r.text }
             if Self.lines(r.text).count < Self.page - 1 { hasOlder = false }
+            lastOK = Date(); failure = nil; failures = 0
+            nextTry = Date().addingTimeInterval(1)
         } catch {
-            if !loaded { self.error = error.shown }
+            guard !error.isCancellation else { return }
+            failure = error.shown
+            failures += 1
+            nextTry = Date().addingTimeInterval(Self.backoff(failures))
         }
         loaded = true
+    }
+
+    /// 1, 2, 4, 8 and then every 15 seconds.
+    static func backoff(_ failures: Int) -> TimeInterval { min(15, pow(2, Double(max(0, failures - 1)))) }
+
+    private func retryNow() {
+        Haptics.tap()
+        nextTry = .distantPast
+        Task { await refresh() }
     }
 
     /// The page before the first lines on screen.
@@ -241,6 +267,66 @@ struct TerminalPanel: View {
         guard !t.isEmpty else { return }
         input = ""
         Task { await model.keys(key, ["enter"], text: t); await refresh() }
+    }
+}
+
+/// Atop the terminal while what it shows may be old: how long since the last fresh screen, why, when the
+/// next try is — and a button to try now. Hidden while refreshes keep arriving.
+struct TerminalLinkStatus: View {
+    var lastOK: Date?
+    var failure: String?
+    var nextTry: Date
+    var retry: () -> Void
+
+    private var tint: Color { failure != nil ? Theme.danger : Theme.busy }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            let stale = lastOK.map { ctx.date.timeIntervalSince($0) > TerminalPanel.staleAfter } ?? false
+            if failure != nil || stale {
+                HStack(spacing: 8) {
+                    Image(systemName: failure != nil ? "wifi.exclamationmark" : "clock.arrow.circlepath")
+                        .font(.system(size: 12, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(.caption.weight(.semibold)).lineLimit(1)
+                        Text(Self.detail(failure: failure, nextTry: nextTry, now: ctx.date))
+                            .font(.caption2).opacity(0.8).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Button(action: retry) {
+                        Text("重试").font(.footnote.weight(.semibold)).lineLimit(1)
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 14)
+                            .frame(height: 30)
+                            .background(.white, in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("重试")
+                }
+                .foregroundStyle(.white)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, 7)
+                .background(tint.opacity(0.92), in: .rect(cornerRadius: 10, style: .continuous))
+                .padding([.horizontal, .top], 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+
+    /// "上次更新 12 秒前" / "还没有拿到终端".
+    static func headline(lastOK: Date?, now: Date) -> String {
+        guard let lastOK else { return "还没有拿到终端" }
+        let s = max(0, Int(now.timeIntervalSince(lastOK)))
+        return "上次更新 " + (s < 60 ? "\(s) 秒前" : s < 3600 ? "\(s / 60) 分钟前" : lastOK.formatted(date: .omitted, time: .shortened))
+    }
+
+    /// When it tries again, then why (the reason may be cut off, the countdown never): "4 秒后重试 · 连不上 hub",
+    /// or "等待电脑回应…" while a request hangs.
+    static func detail(failure: String?, nextTry: Date, now: Date) -> String {
+        guard let failure else { return "等待电脑回应…" }
+        let s = Int(ceil(nextTry.timeIntervalSince(now)))
+        return (s > 0 ? "\(s) 秒后重试" : "正在重试…") + " · " + failure
     }
 }
 
