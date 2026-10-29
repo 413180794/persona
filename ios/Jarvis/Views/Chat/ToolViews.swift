@@ -83,7 +83,7 @@ enum ToolPresentation {
     }
 
     static func firstLine(_ s: String) -> String {
-        s.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? s
+        s.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? s
     }
 }
 
@@ -247,7 +247,7 @@ struct ToolDetail: View {
             case "Task", "Agent":
                 Text(i["prompt"]?.string ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(8)
             default:
-                if i != .object([:]) { CodeBlock(text: i.pretty, maxLines: 14) }
+                if i != .object([:]) { CodeBlock(text: ToolTextMemo.input(call.use), maxLines: 14) }
             }
             if let result = call.result, base != "Edit" || result.isError == true {
                 ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
@@ -307,13 +307,35 @@ struct ToolDetail: View {
     }
 }
 
+nonisolated enum ToolTextMemo {
+    private static let inputs = TextMemo<String>(limit: 512)
+    private static let lines = TextMemo<[String]>(limit: 256)
+
+    static func input(_ item: Item) -> String {
+        inputs(item.id) { _ in (item.toolInput ?? .object([:])).pretty }
+    }
+
+    static func codeLines(_ text: String) -> [String] { lines(text) { $0.components(separatedBy: "\n") } }
+
+    static func prewarm(_ item: Item) {
+        if item.kind == .toolResult { _ = codeLines(item.cutText); return }
+        let input = item.toolInput ?? .object([:])
+        switch ToolPresentation.baseName(item.toolName ?? "") {
+        case "Bash": _ = codeLines("$ " + (input["command"]?.string ?? ""))
+        case "ExitPlanMode": _ = MarkdownMemo.content(input["plan"]?.string ?? "")
+        case "Edit", "MultiEdit", "Write", "Read", "NotebookEdit", "AskUserQuestion", "Task", "Agent": break
+        default: _ = codeLines(self.input(item))
+        }
+    }
+}
+
 struct CodeBlock: View {
     var text: String
     var maxLines: Int = 20
     @State private var full = false
 
     var body: some View {
-        let lines = text.components(separatedBy: "\n")
+        let lines = ToolTextMemo.codeLines(text)
         let clipped = !full && lines.count > maxLines
         VStack(alignment: .leading, spacing: 4) {
             ScrollView(.horizontal, showsIndicators: false) {

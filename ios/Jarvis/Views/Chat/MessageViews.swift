@@ -713,6 +713,7 @@ nonisolated enum RowMemo {
         for it in items {
             if Task.isCancelled { return }
             if it.kind == .toolUse { ToolDiffMemo.prewarm(it) }
+            if it.kind == .toolUse || it.kind == .toolResult { ToolTextMemo.prewarm(it) }
             guard it.kind == .text else { continue }
             guard let text = it.text, !text.isEmpty else { continue }
             if it.role == "assistant" { _ = assistant(it.id) { _ in AssistantRowText(text) } }
