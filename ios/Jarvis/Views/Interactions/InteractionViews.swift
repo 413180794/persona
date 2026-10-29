@@ -444,7 +444,7 @@ struct PlanForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView {
-                Markdown(interaction.plan ?? "")
+                Markdown(MarkdownMemo.content(interaction.plan ?? ""))
                     .markdownTheme(.jarvis)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -482,7 +482,7 @@ struct PlanForm: View {
         .sheet(isPresented: $showFull) {
             NavigationStack {
                 ScrollView {
-                    Markdown(interaction.plan ?? "").markdownTheme(.jarvis).padding()
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.jarvis).padding()
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)

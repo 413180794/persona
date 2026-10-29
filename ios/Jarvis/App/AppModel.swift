@@ -67,6 +67,14 @@ final class AppModel {
             assistantCurrent = SessionKey(machineID: String(v[..<slash]), sessionID: String(v[v.index(after: slash)...]))
         }
         live.onEvent = { [weak self] in self?.handle($0) }
+        live.prepareEvent = { event in
+            switch event {
+            case .delta(_, let text): _ = MarkdownMemo.content(text + " ▍")
+            case .interaction(let interaction):
+                if let plan = interaction.plan { _ = MarkdownMemo.content(plan) }
+            default: break
+            }
+        }
         WatchSync.shared.configProvider = { Keychain.watchConfig ?? Keychain.serverConfig }
         WatchSync.shared.onActivated = { [weak self] in
             guard let self, let cfg = self.config else { return }

@@ -673,7 +673,7 @@ struct StreamingText: View {
     var text: String
 
     var body: some View {
-        Markdown(text + " ▍")
+        Markdown(MarkdownMemo.content(text + " ▍"))
             .markdownTheme(.jarvis)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -696,8 +696,8 @@ nonisolated enum WebLinks {
 
 
 /// Parsed Markdown per text: MarkdownUI parses (cmark) in `Markdown.init`, on every redraw of the row.
-enum MarkdownMemo {
-    private static let memo = TextMemo<MarkdownContent>()
+nonisolated enum MarkdownMemo {
+    private static let memo = TextMemo<MarkdownContent>(limit: 128)
     static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent($0) } }
 }
 

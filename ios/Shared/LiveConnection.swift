@@ -153,6 +153,7 @@ final class LiveConnection {
     @ObservationIgnored var onEvent: ((ServerEvent) -> Void)?
     /// The state or `stalled` changed.
     @ObservationIgnored var onChange: (() -> Void)?
+    @ObservationIgnored var prepareEvent: (@Sendable (ServerEvent) -> Void)?
     @ObservationIgnored var onConnected: (() -> Void)?
 
     @ObservationIgnored private var config: ServerConfig?
@@ -264,7 +265,8 @@ final class LiveConnection {
     }
 
     private func receive(_ t: URLSessionWebSocketTask, _ gen: Int) {
-        t.receive { [weak self] result in
+        let prepare = prepareEvent
+        t.receive { [weak self, prepare] result in
             // Decode here, off the main thread: session lists are large and arrive every second while agents
             // work (decoding them on the main thread showed up in scrolling profiles).
             let event: ServerEvent? = switch result {
@@ -272,6 +274,7 @@ final class LiveConnection {
             case .success(.data(let d)): ServerEvent.decode(d)
             default: nil
             }
+            if let event { prepare?(event) }
             Task { @MainActor in
                 guard let self, gen == self.generation else { return }
                 switch result {

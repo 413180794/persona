@@ -239,7 +239,7 @@ struct ToolDetail: View {
             case "Read", "NotebookEdit":
                 path(i["file_path"]?.string ?? i["notebook_path"]?.string)
             case "ExitPlanMode":
-                Markdown(i["plan"]?.string ?? "").markdownTheme(.jarvis)
+                Markdown(MarkdownMemo.content(i["plan"]?.string ?? "")).markdownTheme(.jarvis)
             case "AskUserQuestion":
                 ForEach(Array((i["questions"]?.array ?? []).enumerated()), id: \.offset) { _, q in
                     Text(q["question"]?.string ?? "").font(.footnote.weight(.medium))
