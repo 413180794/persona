@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -115,6 +116,7 @@ type quickMeta struct {
 	model    string
 	lastText string
 	wake     bool // the latest turn was a background task waking the agent
+	readAt   time.Time
 	mode     string
 	modeAt   time.Time
 	effort   string
@@ -123,14 +125,21 @@ type quickMeta struct {
 
 const offlineWindow = 7 * 24 * time.Hour
 
+// metaMinInterval: how stale a growing transcript's title / last text / background tasks may get in the list.
+const metaMinInterval = 3 * time.Second
+
 func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	n.mu.Lock()
 	m, ok := n.metas[path]
 	n.mu.Unlock()
-	if ok && m.size == st.Size() && m.mtime.Equal(st.ModTime()) {
+	// A working agent's transcript grows all the time and every list rebuild (each herdr event) would re-read its
+	// 384 KB tail and scan the new bytes: a dozen busy agents with large transcripts kept a node reading ~20 MB/s.
+	// A growing file's meta is re-read at most every metaMinInterval; the list's rev comes from stat, so it stays exact.
+	if ok && (m.size == st.Size() && m.mtime.Equal(st.ModTime()) || time.Since(m.readAt) < metaMinInterval) {
 		return m
 	}
 	m = readQuickMeta(path, st)
+	m.readAt = time.Now()
 	m.bg, m.loop = n.backgroundTasks(path)
 	n.mu.Lock()
 	n.metas[path] = m
@@ -277,6 +286,31 @@ func (n *Node) file(id string) (*transcript.File, error) {
 	}
 	n.mu.Unlock()
 	return f, nil
+}
+
+// warmTranscripts parses the live sessions' transcripts once, one at a time, soon after the node starts. Right
+// after a (re)deploy the phone pulls every busy session, and parsing a transcript of a few hundred MB on that first
+// request took up to 30 s (the hub gave up with a 502).
+func (n *Node) warmTranscripts(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(5 * time.Second): // the first herdr snapshot is in
+	}
+	n.mu.Lock()
+	ids := make([]string, 0, len(n.agents))
+	for id := range n.agents {
+		ids = append(ids, id)
+	}
+	n.mu.Unlock()
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
+		if f, err := n.file(id); err == nil {
+			n.refresh(id, f)
+		}
+	}
 }
 
 // sessionList returns live herdr sessions plus recent offline transcripts.
@@ -679,7 +713,7 @@ func (n *Node) agent(id string) (herdr.Agent, bool) {
 func (n *Node) pollAgents(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	var snapped time.Time
+	var snapped, listed time.Time
 	for {
 		kicked := false
 		select {
@@ -687,8 +721,9 @@ func (n *Node) pollAgents(ctx context.Context) {
 			return
 		case <-t.C:
 		case <-n.events.kick:
-			// herdr said something changed: one snapshot for the whole burst (a new tab sends several events).
-			time.Sleep(50 * time.Millisecond)
+			// herdr said something changed: one snapshot for the whole burst (a new tab sends several events), and
+			// at most one list rebuild a second however busy the agents are (as when it polled every second).
+			time.Sleep(max(50*time.Millisecond, time.Until(listed.Add(time.Second))))
 			kicked = true
 		}
 		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
@@ -699,6 +734,7 @@ func (n *Node) pollAgents(ctx context.Context) {
 			snapped = time.Now()
 		}
 		list := n.sessionList(ctx, false)
+		listed = time.Now()
 		key := listKey(list)
 		n.mu.Lock()
 		changed := key != n.lastList
@@ -919,18 +955,25 @@ func (n *Node) backgroundTasks(path string) ([]proto.BackgroundTask, *proto.Loop
 		sc.off, sc.meta = 0, transcript.Meta{}
 	}
 	if st.Size() > sc.off {
-		buf := make([]byte, st.Size()-sc.off)
-		nr, _ := f.ReadAt(buf, sc.off)
-		buf = buf[:nr]
-		end := bytes.LastIndexByte(buf, '\n')
-		if end >= 0 {
-			for _, line := range bytes.Split(buf[:end], []byte("\n")) {
-				if len(line) > 64<<10 || !containsAny(line, bgMarkers) { // api-request blobs repeat everything; skip them
-					continue
-				}
-				transcript.ParseLine(0, line, &sc.meta)
+		// Streamed, not read whole: the first look at a 300 MB transcript held all of it in memory.
+		r := bufio.NewReaderSize(io.NewSectionReader(f, sc.off, st.Size()-sc.off), 256<<10)
+		off, long := sc.off, false
+		for {
+			line, err := r.ReadSlice('\n')
+			off += int64(len(line))
+			if err == bufio.ErrBufferFull {
+				long = true
+				continue
 			}
-			sc.off += int64(end + 1)
+			if err != nil {
+				break // the last line is not complete yet: read it next time
+			}
+			// api-request blobs repeat everything; skip them
+			if !long && len(line) <= 64<<10 && containsAny(line, bgMarkers) {
+				transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), &sc.meta)
+			}
+			long = false
+			sc.off = off
 		}
 	}
 	var out []proto.BackgroundTask

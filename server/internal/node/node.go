@@ -116,6 +116,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	}
 	go n.pollAgents(ctx)
 	go n.watchHerdr(ctx)
+	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	return n.peer.Serve(ctx, os.Stdin)
 }
