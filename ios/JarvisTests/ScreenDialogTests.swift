@@ -7,16 +7,16 @@ struct ScreenDialogTests {
         let screen = """
          Ran 1 shell command
         ────────────────────────────────────────────────
-         ☐ 取消发布单
+         ☐ 发布方式
 
-         │沙箱镜像第一次构建失败：SES 用 garble 混淆编译，而我选的 hertz-c
-         │编译通过，修复也已推送（a7553e20）。
+         │第一次构建失败：镜像里缺一个依赖，补上以后
+         │编译通过，修复也已推送（a1b2c3d）。
 
-        ❯ 1. 同意取消 37997 (Recommended)
-             用 example-cli release delivery cancel 37997 取消，然后用修复后的 commit
-             重新发一次。
+        ❯ 1. 取消这次发布 (Recommended)
+             用修复后的 commit 重新发一次，
+             旧的那次先撤掉。
           2. 先不取消
-             我停在这里；镜像、Nacos 和 e2e 都先不动。
+             我停在这里，什么都不动。
           3. Type something.
         ────────────────────────────────────────────────
           4. Chat about this
@@ -24,12 +24,12 @@ struct ScreenDialogTests {
          Enter to select · ↑/↓ to navigate · Esc to cancel
         """
         let d = try #require(ScreenParser.dialog(screen))
-        #expect(d.header == "取消发布单")
-        #expect(d.question == "沙箱镜像第一次构建失败：SES 用 garble 混淆编译，而我选的 hertz-c编译通过，修复也已推送（a7553e20）。")
+        #expect(d.header == "发布方式")
+        #expect(d.question == "第一次构建失败：镜像里缺一个依赖，补上以后编译通过，修复也已推送（a1b2c3d）。")
         #expect(d.options.map(\.key) == ["1", "2", "3", "4"])
-        #expect(d.options[0].label == "同意取消 37997 (Recommended)")
-        #expect(d.options[0].detail == "用 example-cli release delivery cancel 37997 取消，然后用修复后的 commit重新发一次。")
-        #expect(d.options[1].detail == "我停在这里；镜像、Nacos 和 e2e 都先不动。")
+        #expect(d.options[0].label == "取消这次发布 (Recommended)")
+        #expect(d.options[0].detail == "用修复后的 commit 重新发一次，旧的那次先撤掉。")
+        #expect(d.options[1].detail == "我停在这里，什么都不动。")
         #expect(d.options[2].kind == .typeSomething)
         #expect(d.options[2].detail == nil)
         #expect(d.options[3].kind == .chat)
@@ -40,7 +40,7 @@ struct ScreenDialogTests {
         ────────────────────────────────────────────────
          Bash command
 
-           git push origin master
+           git push origin main
            Push the release commit
 
          Do you want to proceed?
@@ -51,7 +51,7 @@ struct ScreenDialogTests {
         let d = try #require(ScreenParser.dialog(screen))
         #expect(d.header == nil)
         #expect(d.question == "Do you want to proceed?")
-        #expect(d.detail?.contains("git push origin master") == true)
+        #expect(d.detail?.contains("git push origin main") == true)
         #expect(d.options.count == 3)
         #expect(d.options.allSatisfy { $0.detail == nil })
     }

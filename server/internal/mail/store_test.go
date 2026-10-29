@@ -221,13 +221,13 @@ func TestIsConnError(t *testing.T) {
 }
 
 func TestFeishuProviderUsesFixedServers(t *testing.T) {
-	a, err := buildAccount(AddAccountRequest{Email: "person@example.com", Provider: ProviderFeishu, Password: "pw",
+	a, err := buildAccount(AddAccountRequest{Email: "me@example.com", Provider: ProviderFeishu, Password: "pw",
 		IMAPHost: "ignored.example.com", IMAPPort: 143})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if a.IMAPHost != "imap.larkoffice.com" || a.IMAPPort != 993 || a.SMTPHost != "smtp.larkoffice.com" ||
-		a.SMTPPort != 465 || a.SMTPSecurity != "tls" || a.Provider != ProviderFeishu || a.Username != "person@example.com" {
+		a.SMTPPort != 465 || a.SMTPSecurity != "tls" || a.Provider != ProviderFeishu || a.Username != "me@example.com" {
 		t.Fatalf("feishu account = %+v", a)
 	}
 }

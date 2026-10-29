@@ -76,6 +76,14 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 点终端对话框的选项，确认 hub 收到的是 `option` 而不是按键、并提示「对话框已经变了」；电脑上有草稿时点「清空并发送」，确认重发带
 `clear_draft` 且 `client_msg_id` 不变（`GET /mock/resolved`、`GET /mock/sent`）。截图：`-openSendMessage <文字>` 打开会话 3 秒后发一条。
 
+## 隐私扫描
+
+`python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/jarvis/config.json` 里的
+主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/jarvis/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
+自己维护）和 `CLAUDE.local.md` 里反引号括起来的值；另外任何私网 IPv4（文档网段 192.0.2.0/24 等除外）和真实域名下的邮箱
+（`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。`release.sh` 打包前跑一遍；
+提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息）。
+
 ## 卡顿测量（掉帧统计）
 
 xctrace 在这台 Mac 上会卡在授权上，改用 App 自己统计：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，

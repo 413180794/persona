@@ -1,0 +1,3 @@
+#!/bin/bash
+# Refuse a commit that would record private values (scripts/privacy_check.py). Install: git config core.hooksPath scripts/hooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/privacy_check.py" --staged
