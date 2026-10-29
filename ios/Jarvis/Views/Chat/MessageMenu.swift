@@ -19,8 +19,27 @@ final class MessageMenu {
     @ObservationIgnored var agent: () -> String = { "Claude" }
     @ObservationIgnored var quote: ((String) -> Void)?
     @ObservationIgnored var edit: ((String) -> Void)?
+    /// The press that opened the bar. Its own lift must not close it: the list's simultaneous tap-to-close gesture
+    /// recognizes that lift as a tap (only presses longer than ~2 s fail it), and a held finger's small drift shows
+    /// up as list scrolling.
+    @ObservationIgnored private var pressing = false
+    @ObservationIgnored private var pressEnded = Date.distantPast
 
+    func pressChanged(_ state: UIGestureRecognizer.State) {
+        switch state {
+        case .began: pressing = true
+        case .ended, .cancelled, .failed: pressing = false; pressEnded = .now
+        default: break
+        }
+    }
+
+    /// A tap or a scroll on the list: ignored while the press that opened the bar is held or has just lifted.
     func dismiss() {
+        guard !pressing, Date.now.timeIntervalSince(pressEnded) > 0.3 else { return }
+        close()
+    }
+
+    func close() {
         if selected != nil { withAnimation(.easeOut(duration: 0.15)) { selected = nil } }
     }
 }
@@ -32,6 +51,7 @@ struct SelectableText: Identifiable {
 
 /// UIKit long press: SwiftUI's own gesture does not say where the finger is.
 struct LongPressAt: UIGestureRecognizerRepresentable {
+    var changed: (UIGestureRecognizer.State) -> Void = { _ in }
     var action: (CGPoint) -> Void
 
     func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
@@ -41,6 +61,7 @@ struct LongPressAt: UIGestureRecognizerRepresentable {
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        changed(recognizer.state)
         if recognizer.state == .began { action(context.converter.localLocation) }
     }
 }
@@ -61,7 +82,7 @@ private struct MessageLongPress: ViewModifier {
     func body(content: Content) -> some View {
         if let menu {
             content
-                .gesture(LongPressAt { p in
+                .gesture(LongPressAt(changed: menu.pressChanged) { p in
                     Haptics.tap()
                     menu.anchor = p
                     withAnimation(.snappy(duration: 0.2)) { menu.selected = id }
@@ -141,7 +162,7 @@ struct MessageActionBar: View {
     private func action(_ title: String, _ symbol: String, perform: @escaping () -> Void) -> some View {
         Button {
             perform()
-            menu.dismiss()
+            menu.close()
         } label: { label(title, symbol) }
         .buttonStyle(.plain)
     }

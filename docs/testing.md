@@ -61,6 +61,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 `ios/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
 `SIM=<udid> ./scripts/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
+长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock_hub.py`，不用真实 hub：
+`TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests`。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
 ## 卡顿测量（掉帧统计）
