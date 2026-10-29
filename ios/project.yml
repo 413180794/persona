@@ -105,6 +105,7 @@ targets:
       - path: JarvisWidgets
       - path: LiveActivity
       - path: Shared/FleetState.swift
+      - path: Shared/StatusPalette.swift
     info:
       path: JarvisWidgets/Info.plist
       properties:

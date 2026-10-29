@@ -166,7 +166,7 @@ struct WatchRootView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Label(ix.kind.watchTitle, systemImage: ix.kind.watchSymbol)
                                             .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(Theme.attention)
+                                            .foregroundStyle(Theme.needsYou)
                                         Text(ix.watchSummary).font(.footnote).lineLimit(3)
                                         Text(ix.sessionTitle ?? "").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                     }

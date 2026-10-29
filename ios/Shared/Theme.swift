@@ -73,12 +73,11 @@ nonisolated enum Theme {
         case .lark: Color(light: 0x3370FF, dark: 0x4C88FF)
         }
     }
-    static var working: Color { accent }
+    static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
+    // Colors of the old session status, still borrowed by diffs, Git, modes and settings (replaced next).
     static let attention = Color(light: 0xE09A1F, dark: 0xF5B23D)
     static let idle = Color(light: 0x2E9E6E, dark: 0x45C38B)
     static let done = Color(light: 0x3B7BE0, dark: 0x5B9BFF)
-    static let offline = Color.secondary
-    static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
 
     /// The user's own messages.
     static var userBubble: Color { userBubble(style) }
@@ -128,33 +127,12 @@ nonisolated enum Theme {
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)
     static let terminalBackground = Color(light: 0x16171B, dark: 0x0E0F12)
     static let terminalText = Color(light: 0xE6E3DA, dark: 0xE6E3DA)
-    // Agent states (docs/agent-states.md).
-    static let needsYou = Color(light: 0xE5484D, dark: 0xFF6369)
-    static let busy = Color(light: 0xE8890C, dark: 0xFFB224)
-    static let unread = Color(light: 0x30A46C, dark: 0x4CC38A)
+    // Agent states (docs/agent-states.md): the dots. Text and soft backgrounds come from `AgentState.tone`
+    // (StatusPalette.swift, shared with the watch and the Live Activity).
+    static var needsYou: Color { StatusPalette.needsYou.dot }
+    static var busy: Color { StatusPalette.working.dot }
+    static var unread: Color { StatusPalette.unread.dot }
 }
-
-extension Color {
-    nonisolated init(light: UInt32, dark: UInt32) {
-        #if os(watchOS)
-        self.init(hex: dark)
-        #else
-        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
-        #endif
-    }
-
-    nonisolated init(hex: UInt32) {
-        self.init(red: Double((hex >> 16) & 0xff) / 255, green: Double((hex >> 8) & 0xff) / 255, blue: Double(hex & 0xff) / 255)
-    }
-}
-
-#if !os(watchOS)
-extension UIColor {
-    nonisolated convenience init(hex: UInt32) {
-        self.init(red: CGFloat((hex >> 16) & 0xff) / 255, green: CGFloat((hex >> 8) & 0xff) / 255, blue: CGFloat(hex & 0xff) / 255, alpha: 1)
-    }
-}
-#endif
 
 extension AgentState {
     var label: String {
@@ -169,15 +147,17 @@ extension AgentState {
     }
 
     /// Red needs you, amber works, green finished-unseen, gray seen — same meaning as herdr's sidebar dots.
-    var color: Color {
+    var tone: StatusTone {
         switch self {
-        case .needsYou: Theme.needsYou
-        case .working: Theme.busy
-        case .unread: Theme.unread
-        case .idle, .unknown: Color.secondary.opacity(0.55)
-        case .offline: Color.secondary.opacity(0.3)
+        case .needsYou: StatusPalette.needsYou
+        case .working: StatusPalette.working
+        case .unread: StatusPalette.unread
+        case .idle, .unknown: StatusPalette.idle
+        case .offline: StatusPalette.offline
         }
     }
+
+    var color: Color { tone.dot }
 
     var animates: Bool { self == .working || self == .needsYou }
 }
@@ -191,16 +171,6 @@ extension SessionStatus {
         case .done: "已完成"
         case .unknown: "未知"
         case .offline: "未运行"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .working: Theme.working
-        case .blocked: Theme.attention
-        case .idle: Theme.idle
-        case .done: Theme.done
-        case .unknown, .offline: Theme.offline
         }
     }
 }

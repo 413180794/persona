@@ -211,7 +211,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   切换风格时 RootView 以风格为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
   （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡、卡片底和描边）跟着风格走，卡片内容的飞书具名色板不变。
   调试：`-ui.style glass|claude|clay|island|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关）。
-- 状态色不随风格变：等你红、工作中跟主色、完成未看绿、刚完成蓝、未运行灰。
+- 状态色不随风格变，只有一张表 `Shared/StatusPalette.swift`（App、手表、实时活动都编译它）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰，和 herdr 侧边栏一致（`docs/agent-states.md`）。每种状态三个值：`dot`（圆点、图标、填充）、`text`（同色相加深，小字对白底 ≥ 4.5:1）、`tint`（浅底）；界面用 `AgentState.tone`。提问 / 计划 / 授权 / 终端对话框都算需要你，一律用红；工作中的转圈用琥珀，旁边的字用次要灰。不是 Agent 状态的东西（diff、Git、提醒、AI、循环、成功）不借状态色，用 `Theme` 里各自的 token。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
 - 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/make_icon.py`，含 dark / tinted）。
 

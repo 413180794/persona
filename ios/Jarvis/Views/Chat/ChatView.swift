@@ -2213,11 +2213,11 @@ struct WorkLine: View {
             HStack(spacing: 10) {
                 Button(action: toggle) {
                     HStack(spacing: 6) {
-                        if live { ProgressView().controlSize(.mini) }
+                        // Working: the state's amber spinner, the words stay secondary (the dot says the state).
+                        if live { ProgressView().controlSize(.mini).tint(Theme.busy) }
                         // Whole words, never cut: the full summary, or a shorter one when the row is narrow.
                         if live {
                             TimelineView(.periodic(from: .now, by: 1)) { ctx in summary(now: ctx.date) }
-                                .foregroundStyle(Theme.working)
                         } else {
                             summary(now: end ?? .now)
                         }

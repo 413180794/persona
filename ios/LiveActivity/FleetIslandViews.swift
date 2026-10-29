@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Jarvis' agent colors (ios/Shared/Theme.swift), copied: the extension does not build the app's Theme.
-/// Shared by the widget and the island preview in 设置 › 通知 › 灵动岛.
+/// Jarvis' agent colors: the dots of StatusPalette (Shared/StatusPalette.swift, which the extension builds too; it does
+/// not build the app's Theme). Shared by the widget and the island preview in 设置 › 通知 › 灵动岛.
 enum FleetPalette {
-    static let needsYou = Color(light: 0xE5484D, dark: 0xFF6369)
-    static let working = Color(light: 0xE8890C, dark: 0xFFB224)
-    static let unread = Color(light: 0x30A46C, dark: 0x4CC38A)
+    static var needsYou: Color { StatusPalette.needsYou.dot }
+    static var working: Color { StatusPalette.working.dot }
+    static var unread: Color { StatusPalette.unread.dot }
     static let coral = Color(light: 0xD4683F, dark: 0xE8835C)
 
     static func color(_ phase: FleetState.Phase) -> Color {

@@ -35,8 +35,9 @@ struct InteractionPreviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
+                // Every interaction is 需要你: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
-                    .foregroundStyle(Theme.attention)
+                    .foregroundStyle(StatusPalette.needsYou.dot)
                     .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(interaction.title).font(.subheadline.weight(.semibold))
@@ -55,7 +56,6 @@ struct InteractionPreviewCard: View {
             quickActions
         }
         .card()
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.attention.opacity(0.35), lineWidth: 1))
         .contentShape(.rect)
         .onTapGesture(perform: open)
     }
@@ -132,8 +132,8 @@ struct InteractionPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: interaction.kind.symbol)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(Theme.attention)
-                Text(panelTitle).font(.caption.weight(.semibold)).foregroundStyle(Theme.attention).lineLimit(1)
+                    .foregroundStyle(StatusPalette.needsYou.dot)
+                Text(panelTitle).font(.caption.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
                 if collapsed {
                     Text(previewText).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
                 }

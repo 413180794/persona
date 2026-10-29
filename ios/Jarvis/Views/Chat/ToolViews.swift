@@ -204,7 +204,7 @@ struct ToolCallRow: View {
         .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 14, style: .continuous))
     }
 
-    private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.working : .secondary }
+    private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.busy : .secondary }
 }
 
 struct ToolDetail: View {
@@ -474,7 +474,7 @@ struct TodoList: View {
                 let status = t["status"]?.string ?? "pending"
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: status == "completed" ? "checkmark.circle.fill" : status == "in_progress" ? "circle.dotted.circle" : "circle")
-                        .foregroundStyle(status == "completed" ? Theme.idle : status == "in_progress" ? Theme.working : .secondary)
+                        .foregroundStyle(status == "completed" ? Theme.idle : status == "in_progress" ? Theme.busy : .secondary)
                         .symbolEffect(.rotate, options: .repeating, isActive: status == "in_progress")
                     Text(status == "in_progress" ? (t["activeForm"]?.string ?? t["content"]?.string ?? "") : (t["content"]?.string ?? ""))
                         .font(.footnote)

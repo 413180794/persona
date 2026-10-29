@@ -401,11 +401,12 @@ struct InboxAgentRow: View {
     var body: some View {
         let ix = interaction
         HStack(alignment: .top, spacing: 12) {
+            // 需要你, as everywhere else: the state's red on its soft tint (a solid red disc was louder than any row).
             Image(systemName: ix.kind.symbol)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(StatusPalette.needsYou.dot)
                 .frame(width: 40, height: 40)
-                .background(Theme.attention.gradient, in: .circle)
+                .background(StatusPalette.needsYou.tint, in: .circle)
                 .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -413,9 +414,9 @@ struct InboxAgentRow: View {
                         .font(.body.weight(.semibold)).lineLimit(1)
                     Text(ix.title)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.attention)
+                        .foregroundStyle(StatusPalette.needsYou.text)
                         .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Theme.attention.opacity(0.14), in: .capsule)
+                        .background(StatusPalette.needsYou.tint, in: .capsule)
                         .lineLimit(1)
                         .fixedSize()
                     Spacer(minLength: 4)

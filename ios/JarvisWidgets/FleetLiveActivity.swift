@@ -66,18 +66,6 @@ struct FleetLiveActivity: Widget {
     }
 }
 
-extension Color {
-    init(light: UInt32, dark: UInt32) {
-        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
-    }
-}
-
-extension UIColor {
-    convenience init(rgb: UInt32) {
-        self.init(red: CGFloat((rgb >> 16) & 0xFF) / 255, green: CGFloat((rgb >> 8) & 0xFF) / 255, blue: CGFloat(rgb & 0xFF) / 255, alpha: 1)
-    }
-}
-
 // MARK: - Pieces
 
 /// The coral four-point star on a dark disc, like the app icon.
