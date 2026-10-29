@@ -164,10 +164,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
                 try await APIClient(config: config).resolve(id, resolution)
             } catch {
-                let content = UNMutableNotificationContent()
-                content.title = NotificationActions.failureTitle(action: action)
-                content.body = IntentFailure.sentence(for: error, host: Keychain.serverConfig?.url.host())
-                try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "resolve-failed-\(id)", content: content, trigger: nil))
+                await NotificationActions.reportFailure(id: id, title: NotificationActions.failureTitle(action: action), error: error)
             }
             done()
             if task != .invalid { app.endBackgroundTask(task) }

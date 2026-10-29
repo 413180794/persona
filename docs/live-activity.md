@@ -56,6 +56,17 @@ Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐
 - 点活动打开 `jarvis://open?machine=…&session=…`（第一条，展开态每一行各自的会话）。
 - 模拟器自动化（`-pairURL`）不上报 token，免得 hub 把真机的活动当成模拟器的。
 
+## 按钮（`ios/LiveActivity/FleetIntents.swift`）
+
+- 第一条能用按钮处理的请求（授权、计划）带按钮：授权「拒绝 / 允许」，计划「查看（打开会话）/ 批准」。打回计划要写意见，留给 App。
+  锁屏和展开态都只放这一条 + 按钮 + 「+N 个」（高度放不下第二条）。
+- 「允许」「批准」`authenticationPolicy = .requiresAuthentication`（锁屏要先 Face ID），「拒绝」`.alwaysAllowed`，和通知按钮一样。
+  计划从锁屏批准用 `acceptEdits`（没看全计划，命令仍要逐个授权）。
+- `LiveActivityIntent` 的 `perform` 在 App 进程里跑（需要时系统在后台拉起 App），所以扩展里只编译类型、`perform` 是空的
+  （`WIDGET_EXTENSION` 编译条件）；App 里的实现在 `FleetActions`：调 resolve、立刻把这一条从活动上拿掉（乐观更新，hub 的推送随后到），
+  失败发一条本地通知说明原因（410「已经处理过了」时照样拿掉）。
+- 内容过期（`isStale`，hub 15 分钟没推）时不画按钮，免得对已经被处理的请求点「允许」。
+
 ## 验证
 
 - 布局：`-showFleetSample needsYou|working|done`（`-fleetDetails YES` 看锁屏详情）用编造的数据开一个活动，不需要 hub。
@@ -63,6 +74,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐
 - 推送：`xcrun simctl push` 不支持实时活动；但模拟器能收真实的 APNs sandbox 推送。DEBUG 构建在系统日志里打印活动的 push token
   （`subsystem == "jarvis"`），在 hub 机器上 `JARVIS_LA_TOKEN=<token> JARVIS_LA_TOPIC=<bundle id> go test ./internal/hub -run TestManualLiveActivityPush`
   用 hub 的 APNs key 推一条 update，再用 `JARVIS_FLEET_SAMPLE=current` 拍下来（2026-10-29 实测通过：Go 生成的 JSON → APNs → 模拟器活动正确显示）。
+- 按钮：UI 测试 `LiveActivityActionTests` 连 `mock_hub.py`，锁屏点「拒绝」，再读 `GET /mock/resolved` 确认 hub 收到 `allow:false`（2026-10-29 通过）。
 - 真机才能验证的：push-to-start（App 被杀后由 hub 开活动）、更新预算、手表智能叠放。
 
 ## 坑

@@ -51,6 +51,14 @@ nonisolated enum NotificationActions {
         }
     }
 
+    /// Posts "没能允许 · 这个已经处理过了" and the like: buttons run while nobody looks at the app.
+    static func reportFailure(id: String, title: String, error: Error) async {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = IntentFailure.sentence(for: error, host: Keychain.serverConfig?.url.host())
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "resolve-failed-\(id)", content: content, trigger: nil))
+    }
+
     /// Shown (as a local notification) when a button could not be carried out: the phone was locked in a drawer
     /// while the agent moved on, the hub was unreachable, and so on.
     static func failureTitle(action: String) -> String {

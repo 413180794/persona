@@ -32,10 +32,20 @@ struct FleetLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(state.items.prefix(Self.rows)) { item in
-                            Link(destination: FleetLink.url(item)!) { FleetRow(item: item, showTitle: true, onDark: true) }
+                        if !context.isStale, let act = state.firstActionable {
+                            // A request the buttons can settle takes the room: it, its buttons, and how many more.
+                            Link(destination: FleetLink.url(act)!) { FleetRow(item: act, showTitle: true, onDark: true) }
+                            FleetActionRow(item: act)
+                            if state.hidden(showing: 1) > 0 {
+                                Text(FleetText.more(state.hidden(showing: 1))).font(.caption).foregroundStyle(.white.opacity(0.6))
+                                    .padding(.leading, 15)
+                            }
+                        } else {
+                            ForEach(state.items.prefix(Self.rows)) { item in
+                                Link(destination: FleetLink.url(item)!) { FleetRow(item: item, showTitle: true, onDark: true) }
+                            }
                         }
-                        if state.hidden(showing: Self.rows) > 0 {
+                        if context.isStale || state.firstActionable == nil, state.hidden(showing: Self.rows) > 0 {
                             Text(FleetText.more(state.hidden(showing: Self.rows))).font(.caption).foregroundStyle(.white.opacity(0.6))
                                 .padding(.leading, 15) // under the titles, clear of the rounded corner
                         }
@@ -216,6 +226,47 @@ struct FleetCounts: View {
     }
 }
 
+/// 拒绝 / 允许 for a permission, 查看 / 批准 for a plan (rejecting a plan needs words: that is the app's job).
+/// Hidden while the content is stale, so nobody approves something the agent has moved past.
+struct FleetActionRow: View {
+    var item: FleetState.Item
+
+    var body: some View {
+        if let id = item.interaction {
+            HStack(spacing: 10) {
+                switch item.kind {
+                case .permission:
+                    Button(intent: DenyPermissionIntent(interactionID: id)) { label("拒绝", "xmark") }
+                        .tint(Color.gray.opacity(0.45))
+                    Button(intent: AllowPermissionIntent(interactionID: id)) { label("允许", "checkmark") }
+                        .tint(FleetPalette.coral)
+                case .plan:
+                    Link(destination: FleetLink.url(item)!) {
+                        label("查看", "doc.text")
+                            .padding(.vertical, 7)
+                            .background(Color.gray.opacity(0.45), in: .capsule)
+                    }
+                    Button(intent: ApprovePlanIntent(interactionID: id)) { label("批准", "checkmark") }
+                        .tint(FleetPalette.coral)
+                default:
+                    EmptyView()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .foregroundStyle(.white)
+            .padding(.leading, 15)
+        }
+    }
+
+    private func label(_ text: String, _ symbol: String) -> some View {
+        Label(text, systemImage: symbol)
+            .font(.subheadline.weight(.semibold))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 // MARK: - Lock screen
 
 struct FleetLockScreen: View {
@@ -240,14 +291,18 @@ struct FleetLockScreen: View {
                     FleetTimer(since: since).font(.subheadline.weight(.medium)).foregroundStyle(FleetPalette.working).frame(width: 64, alignment: .trailing)
                 }
             }
-            if state.details {
+            if !stale, let act = state.firstActionable {
+                // 允许 / 批准 need Face ID first (authenticationRequired); 拒绝 works locked.
+                FleetRow(item: act, showTitle: state.details)
+                FleetActionRow(item: act)
+            } else if state.details {
                 ForEach(state.items.prefix(FleetLiveActivity.rows)) { FleetRow(item: $0, showTitle: true) }
             } else if let first = state.items.first, first.needsYou {
                 FleetRow(item: first, showTitle: false)
             }
             if stale {
                 Label("等待 hub 更新…", systemImage: "wifi.exclamationmark").font(.caption2).foregroundStyle(.secondary)
-            } else if state.details, state.hidden(showing: FleetLiveActivity.rows) > 0 {
+            } else if state.details, state.firstActionable == nil, state.hidden(showing: FleetLiveActivity.rows) > 0 {
                 Text(FleetText.more(state.hidden(showing: FleetLiveActivity.rows))).font(.caption).foregroundStyle(.secondary)
                     .padding(.leading, 15)
             }
