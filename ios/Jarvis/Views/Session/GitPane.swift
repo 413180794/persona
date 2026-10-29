@@ -353,7 +353,7 @@ struct DiffText: View {
     var diff: String
     var truncated = false
 
-    struct Line: Identifiable {
+    nonisolated struct Line: Identifiable, Sendable {
         enum Kind { case add, del, context, hunk, info }
         var id: Int
         var kind: Kind
@@ -401,7 +401,7 @@ struct DiffText: View {
         return out
     }
 
-    static func parse(_ diff: String) -> [Line] {
+    nonisolated static func parse(_ diff: String) -> [Line] {
         var out: [Line] = []
         var old = 0, new = 0
         for raw in diff.components(separatedBy: "\n") {

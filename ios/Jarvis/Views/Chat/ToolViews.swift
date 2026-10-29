@@ -3,7 +3,7 @@ import SwiftUI
 
 /// How each Claude Code tool is named and summarized in the chat.
 enum ToolPresentation {
-    static func baseName(_ name: String) -> String {
+    nonisolated static func baseName(_ name: String) -> String {
         if name.hasPrefix("mcp__") { return name.split(separator: "__").last.map(String.init) ?? name }
         return name
     }
@@ -432,6 +432,67 @@ struct FullOutputSheet: View {
 /// page's line model (`DiffText.Line`, `DiffText.parse`; the Git page draws whole files with MonoTextView). Only the
 /// sign and the line's background are colored, the code stays label; long lines scroll sideways and a fade on the
 /// right says there is more. Long diffs show their start and 展开全部.
+nonisolated enum ToolDiffMemo {
+    struct Content: Sendable {
+        var lines: [DiffText.Line]
+        var adds: Int
+        var dels: Int
+    }
+
+    private enum Input: Hashable { case edit(String, String), unified(String) }
+    nonisolated(unsafe) private static var values: [Input: Content] = [:]
+    private static let lock = NSLock()
+
+    private static func cached(_ input: Input, make: () -> Content) -> Content {
+        lock.lock()
+        if let value = values[input] { lock.unlock(); return value }
+        lock.unlock()
+        let value = make()
+        lock.lock()
+        if values.count >= 64 { values.removeAll(keepingCapacity: true) }
+        values[input] = value
+        lock.unlock()
+        return value
+    }
+
+    static func edit(old: String, new: String) -> Content {
+        cached(.edit(old, new)) {
+            let removed = old.isEmpty ? [] : old.components(separatedBy: "\n")
+            let added = new.isEmpty ? [] : new.components(separatedBy: "\n")
+            let lines = removed.enumerated().map { DiffText.Line(id: $0.offset, kind: .del, text: $0.element) }
+                + added.enumerated().map { DiffText.Line(id: removed.count + $0.offset, kind: .add, text: $0.element) }
+            return Content(lines: lines, adds: added.count, dels: removed.count)
+        }
+    }
+
+    static func unified(_ text: String) -> Content {
+        cached(.unified(text)) {
+            let lines = DiffText.parse(text)
+            var adds = 0, dels = 0
+            for line in lines {
+                if line.kind == .add { adds += 1 }
+                if line.kind == .del { dels += 1 }
+            }
+            return Content(lines: lines, adds: adds, dels: dels)
+        }
+    }
+
+    static func prewarm(_ item: Item) {
+        let input = item.toolInput ?? .object([:])
+        switch ToolPresentation.baseName(item.toolName ?? "") {
+        case "Edit":
+            if let diff = input["diff"]?.string { _ = unified(diff) }
+            else { _ = edit(old: input["old_string"]?.string ?? "", new: input["new_string"]?.string ?? "") }
+        case "MultiEdit":
+            for edit in input["edits"]?.array ?? [] {
+                _ = self.edit(old: edit["old_string"]?.string ?? "", new: edit["new_string"]?.string ?? "")
+            }
+        case "Write": _ = edit(old: "", new: input["content"]?.string ?? "")
+        default: break
+        }
+    }
+}
+
 struct DiffView: View {
     var lines: [DiffText.Line]
     var adds: Int
@@ -442,18 +503,17 @@ struct DiffView: View {
 
     /// All of old removed, then all of new added (Claude's Edit has no line numbers or context).
     init(old: String, new: String) {
-        let removed = old.isEmpty ? [] : old.components(separatedBy: "\n")
-        let added = new.isEmpty ? [] : new.components(separatedBy: "\n")
-        lines = removed.enumerated().map { DiffText.Line(id: $0.offset, kind: .del, text: $0.element) }
-            + added.enumerated().map { DiffText.Line(id: removed.count + $0.offset, kind: .add, text: $0.element) }
-        adds = added.count
-        dels = removed.count
+        let content = ToolDiffMemo.edit(old: old, new: new)
+        lines = content.lines
+        adds = content.adds
+        dels = content.dels
     }
 
     init(unified diff: String) {
-        lines = DiffText.parse(diff)
-        adds = lines.filter { $0.kind == .add }.count
-        dels = lines.filter { $0.kind == .del }.count
+        let content = ToolDiffMemo.unified(diff)
+        lines = content.lines
+        adds = content.adds
+        dels = content.dels
     }
 
     var body: some View {

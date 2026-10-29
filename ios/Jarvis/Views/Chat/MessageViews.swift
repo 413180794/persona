@@ -710,7 +710,10 @@ nonisolated enum RowMemo {
 
     /// Fills both memos off the main thread for messages just loaded, so a row scrolling into view only lays out.
     static func prewarm(_ items: [Item]) {
-        for it in items where it.kind == .text {
+        for it in items {
+            if Task.isCancelled { return }
+            if it.kind == .toolUse { ToolDiffMemo.prewarm(it) }
+            guard it.kind == .text else { continue }
             guard let text = it.text, !text.isEmpty else { continue }
             if it.role == "assistant" { _ = assistant(it.id) { _ in AssistantRowText(text) } }
             if it.role == "user" { _ = user(it.id) { _ in UserRowText(text) } }
