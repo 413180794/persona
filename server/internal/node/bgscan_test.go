@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
@@ -50,5 +51,49 @@ func TestBackgroundTasksStreamed(t *testing.T) {
 		if st, _ := os.Stat(path); n.bgScans[path].off != st.Size() {
 			t.Errorf("%s: scanned up to %d of %d bytes", name, n.bgScans[path].off, st.Size())
 		}
+	}
+}
+
+// A big transcript's first read runs off the caller's path: the first call answers "not known yet" at once, a later
+// one has the tasks, and appended lines are read in line again.
+func TestBackgroundTasksBigFirstReadIsAsync(t *testing.T) {
+	defer func(v int64) { bgSyncLimit = v }(bgSyncLimit)
+	bgSyncLimit = 1 << 10
+	src, err := os.ReadFile(filepath.Join("..", "transcript", "testdata", "claude-notifications.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want transcript.Meta
+	for _, l := range bytes.Split(bytes.TrimRight(src, "\n"), []byte("\n")) {
+		if len(l) <= 64<<10 && containsAny(l, bgMarkers) {
+			transcript.ParseLine(0, l, &want)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n := &Node{bgScans: map[string]*bgScan{}}
+	if _, _, pending := n.backgroundTasks(path); !pending {
+		t.Fatal("a big first read should not run on the caller's path")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, _, pending := n.backgroundTasks(path); !pending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the background read never finished")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := n.bgScans[path].meta.Background; !reflect.DeepEqual(got, want.Background) {
+		t.Errorf("background tasks\n got %+v\nwant %+v", got, want.Background)
+	}
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"type":"user","message":{"role":"user","content":"hi"}}` + "\n")
+	f.Close()
+	if _, _, pending := n.backgroundTasks(path); pending {
+		t.Fatal("a small append should be read in line")
 	}
 }

@@ -112,6 +112,7 @@ type quickMeta struct {
 	queue    []string
 	loop     *proto.LoopInfo
 	bg       []proto.BackgroundTask // from backgroundTasks: the tail alone misses tasks started earlier in a long turn
+	bgWait   bool                   // bg and loop are not known yet (a big first read is running)
 	cwd      string
 	model    string
 	lastText string
@@ -136,11 +137,17 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	// 384 KB tail and scan the new bytes: a dozen busy agents with large transcripts kept a node reading ~20 MB/s.
 	// A growing file's meta is re-read at most every metaMinInterval; the list's rev comes from stat, so it stays exact.
 	if ok && (m.size == st.Size() && m.mtime.Equal(st.ModTime()) || time.Since(m.readAt) < metaMinInterval) {
+		if m.bgWait { // the background read may be done now
+			m.bg, m.loop, m.bgWait = n.backgroundTasks(path)
+			n.mu.Lock()
+			n.metas[path] = m
+			n.mu.Unlock()
+		}
 		return m
 	}
 	m = readQuickMeta(path, st)
 	m.readAt = time.Now()
-	m.bg, m.loop = n.backgroundTasks(path)
+	m.bg, m.loop, m.bgWait = n.backgroundTasks(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -923,16 +930,25 @@ func (n *Node) recentDirs() []proto.RecentDir {
 // of screenshots (base64 lines of a megabyte) holds just the last few items; this reads the whole file once and then
 // only what was appended, parsing just the lines that can start or finish a background task.
 type bgScan struct {
-	mu   sync.Mutex
-	off  int64
-	meta transcript.Meta
+	mu      sync.Mutex
+	off     int64
+	meta    transcript.Meta
+	pending bool // the first read of a big transcript is running in the background
 }
+
+// bgSyncLimit: up to this much unread transcript is scanned for background tasks right away. More than that (the
+// first look at a big transcript, every busy one after a node restart) is read in the background, one file at a
+// time: building the session list waited on reading gigabytes, and a machine showed no sessions for minutes.
+var bgSyncLimit int64 = 4 << 20
+
+// bgSlot lets one big first read run at a time.
+var bgSlot = make(chan struct{}, 1)
 
 var bgMarkers = [][]byte{[]byte("ScheduleWakeup"), []byte("Next wakeup scheduled"), []byte("CronCreate"), []byte("CronDelete"),
 	[]byte("run_in_background"), []byte("in background with ID"), []byte("moved to the background"), []byte("Async agent launched"),
 	[]byte("task-notification"), []byte(`"name":"Agent"`), []byte(`"name":"Task"`), []byte(`"TaskStop"`), []byte(`"KillShell"`)}
 
-func (n *Node) backgroundTasks(path string) ([]proto.BackgroundTask, *proto.LoopInfo) {
+func (n *Node) backgroundTasks(path string) (tasks []proto.BackgroundTask, loop *proto.LoopInfo, pending bool) {
 	n.mu.Lock()
 	sc := n.bgScans[path]
 	if sc == nil {
@@ -944,45 +960,30 @@ func (n *Node) backgroundTasks(path string) ([]proto.BackgroundTask, *proto.Loop
 	defer sc.mu.Unlock()
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, nil
+		return nil, nil, false
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		return nil, nil
+		return nil, nil, false
 	}
 	if st.Size() < sc.off { // rewritten
 		sc.off, sc.meta = 0, transcript.Meta{}
 	}
-	if st.Size() > sc.off {
-		// Streamed, not read whole: the first look at a 300 MB transcript held all of it in memory.
-		r := bufio.NewReaderSize(io.NewSectionReader(f, sc.off, st.Size()-sc.off), 256<<10)
-		off, long := sc.off, false
-		for {
-			line, err := r.ReadSlice('\n')
-			off += int64(len(line))
-			if err == bufio.ErrBufferFull {
-				long = true
-				continue
-			}
-			if err != nil {
-				break // the last line is not complete yet: read it next time
-			}
-			// api-request blobs repeat everything; skip them
-			if !long && len(line) <= 64<<10 && containsAny(line, bgMarkers) {
-				transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), &sc.meta)
-			}
-			long = false
-			sc.off = off
-		}
+	if sc.pending {
+		return nil, nil, true
 	}
-	var out []proto.BackgroundTask
+	if st.Size()-sc.off > bgSyncLimit {
+		sc.pending = true
+		go n.scanBackgroundLater(path, sc, st.Size())
+		return nil, nil, true
+	}
+	scanBackground(f, &sc.off, &sc.meta, st.Size())
 	for _, t := range sc.meta.Background {
 		if time.Since(t.StartedAt) < 24*time.Hour { // older ones are surely gone (claude restarted)
-			out = append(out, t)
+			tasks = append(tasks, t)
 		}
 	}
-	var loop *proto.LoopInfo
 	if l := sc.meta.Loop; l != nil {
 		// A wakeup loop whose next tick is long overdue died with its claude; cron jobs live until deleted.
 		if l.Kind == "cron" || l.NextAt.IsZero() || time.Since(l.NextAt) < 15*time.Minute {
@@ -990,7 +991,46 @@ func (n *Node) backgroundTasks(path string) ([]proto.BackgroundTask, *proto.Loop
 			loop = &c
 		}
 	}
-	return out, loop
+	return tasks, loop, false
+}
+
+// scanBackground reads the marker lines between *off and size into m, streamed (the first look at a 300 MB
+// transcript once held all of it in memory). A last line not complete yet is read next time.
+func scanBackground(f *os.File, off *int64, m *transcript.Meta, size int64) {
+	r := bufio.NewReaderSize(io.NewSectionReader(f, *off, size-*off), 256<<10)
+	at, long := *off, false
+	for {
+		line, err := r.ReadSlice('\n')
+		at += int64(len(line))
+		if err == bufio.ErrBufferFull {
+			long = true
+			continue
+		}
+		if err != nil {
+			return
+		}
+		// api-request blobs repeat everything; skip them
+		if !long && len(line) <= 64<<10 && containsAny(line, bgMarkers) {
+			transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), m)
+		}
+		long = false
+		*off = at
+	}
+}
+
+// scanBackgroundLater does a big first read off the list's path, then hands the result to the next caller.
+func (n *Node) scanBackgroundLater(path string, sc *bgScan, size int64) {
+	bgSlot <- struct{}{}
+	defer func() { <-bgSlot }()
+	var off int64
+	var m transcript.Meta
+	if f, err := os.Open(path); err == nil {
+		scanBackground(f, &off, &m, size)
+		f.Close()
+	}
+	sc.mu.Lock()
+	sc.off, sc.meta, sc.pending = off, m, false
+	sc.mu.Unlock()
 }
 
 func containsAny(b []byte, subs [][]byte) bool {
