@@ -6,8 +6,9 @@ import Observation
 /// herdr that cannot stream, the colored screen read once a second. Pages of scrollback load above it either way.
 ///
 /// Driving it (`wantsControl`, the default): the phone takes the terminal at its own grid, the programs in it lay
-/// themselves out for the phone, and keys go straight in. herdr keeps no scrollback at that size, so the rows that
-/// scroll off the top are kept here; above them, the pane's history as it was just before.
+/// themselves out for the phone, and keys go straight in. Scrolling up shows what the terminal printed since: herdr
+/// keeps no scrollback for Claude Code at that size (it clears its own when the size changes, as in any terminal), so
+/// the rows that scroll off the top are kept here. What was there before at the computer's width is not carried over.
 @MainActor @Observable
 final class TerminalFeed {
     enum Mode { case stream, poll }
@@ -53,7 +54,6 @@ final class TerminalFeed {
     /// Stream unavailable for this session (old node / herdr): stay on polling.
     @ObservationIgnored private var unsupported = false
     @ObservationIgnored private var takeover = false
-    @ObservationIgnored private var priorLoaded = false
 
     static let page = 200
     static let scrollbackLimit = 3000
@@ -79,7 +79,6 @@ final class TerminalFeed {
         if mode == .poll, !unsupported, model.canStreamTerminal, model.isLive {
             if wantsControl, model.canControlTerminal, control == .off {
                 guard phoneGrid != nil else { return } // the view's first layout tells the size
-                if !priorLoaded { await loadPrior(model) }
             }
             mode = .stream // the hub's hello came after the first reads: what they concluded about history is moot
             hasOlder = !willDrive(model)
@@ -171,10 +170,7 @@ final class TerminalFeed {
         control = .starting
         controlNote = nil
         guard model.isLive else { return }
-        Task {
-            if !priorLoaded { await loadPrior(model) }
-            subscribe(model, continuing: true)
-        }
+        subscribe(model, continuing: true)
     }
 
     /// The user said only watch: the pane stays as the computer has it (and its history pages as usual).
@@ -195,41 +191,15 @@ final class TerminalFeed {
         } else if control == .declined {
             control = .off
         }
-        if subscribed, model.isLive {
-            if on, !priorLoaded { Task { await loadPrior(model); subscribe(model, continuing: false) } } else { subscribe(model, continuing: false) }
-        }
+        if subscribed, model.isLive { subscribe(model, continuing: false) }
     }
 
     /// Back to watching the pane at its size: what was kept at the phone's goes.
     private func leaveControl() {
         scrollback = []
         older = []
-        priorLoaded = false
         hasOlder = true
         atLimit = false
-    }
-
-    /// The pane's history before the phone takes it (herdr has none at the phone's size), under a line saying so.
-    private func loadPrior(_ model: AppModel) async {
-        priorLoaded = true
-        guard let api = model.api, let r = try? await api.screen(key, lines: Self.page * 2, recent: true, ansi: true) else { return }
-        var rows = TerminalGrid.rows(fromANSI: r.text)
-        while rows.last?.allSatisfy(\.isBlank) == true { rows.removeLast() }
-        guard !rows.isEmpty else { return }
-        older = rows + [Self.divider("以上是接管前电脑上的输出")]
-        hasOlder = false
-    }
-
-    static func divider(_ text: String) -> TermRow {
-        var style = TermStyle()
-        style.dim = true
-        var row: TermRow = []
-        for ch in "──── \(text) ────" {
-            let wide = !(ch.isASCII || ch == "─")
-            row.append(TermCell(text: String(ch), width: wide ? 2 : 1, style: style))
-            if wide { row.append(TermCell(text: "", width: 0, style: style)) } // the right half of a wide character
-        }
-        return row
     }
 
     private func receive(_ event: TerminalEvent, _ model: AppModel) {

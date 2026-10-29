@@ -226,6 +226,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   stdin 关掉、进程被 kill（包括 -9）herdr 都会把窗格放回原尺寸，所以接管进程的生死跟着 node 走就不会卡住电脑。
   herdr 从不给程序的原始字节（attach 也是它重画的网格），接管期间也没有滚动历史：历史只能手机按帧比对自己攒（`TerminalGrid.scrolled`），
   别指望换一个终端仿真库解决。键要走 RPC 的事件（method 在对端并发处理，会乱序）。`docs/terminal.md` 第十一节。
+- Claude Code（2.1.312，默认模式）窗口一改尺寸就清掉终端的滚动历史、只重画当前屏；接管期间它的输出也不进 herdr 的历史（回复 70 行，herdr 历史仍是 0），
+  herdr 的 `terminal.scroll` 对它没东西可滚（shell 正常，fullscreen 模式的 Claude 会自己接滚轮）。手机上的历史只能自己攒；用户认为接管前的历史被清掉是正常的，
+  别再去拼 transcript（试过，用户不要）。`docs/terminal.md` 第十二节。
   接管要等终端视图第一次布局量出手机的列 × 行才订阅：第一帧到之前也必须把终端视图放上去（转圈只能盖在上面），
   build 21 用转圈顶替了视图，已连上 hub 时点「终端」永远转圈；UI 测试用 `-openPane terminal` 直接开时先走了 HTTP 读屏，测不出来
   （`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` 先进会话、连上后再点「终端」）。

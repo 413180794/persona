@@ -84,71 +84,192 @@ private struct PaneSegment: View {
 
 // MARK: - Terminal
 
-/// The session's terminal, to look at (2026-10-29: no keys, no typing, no takeover — the computer keeps its size):
-/// the hub streams herdr's frames of the pane (docs/terminal.md) — colors, cursor, wide characters — or, where it
-/// cannot, the colored screen is read once a second. Drawn like a native terminal: edge to edge on the theme's
-/// background, no card or toolbar. Long rows fold at the phone's width unless 设置 › 终端 turns 换行 off. Scrolling up
-/// keeps loading the 200 rows before, page after page without a button, back to the start of what herdr keeps (about
-/// 1000 lines — older output lives in the chat); output arriving meanwhile shifts nothing. Reading history holds the
-/// screen still, the arrow lets it follow again. A link that fails never leaves old output looking live: a bar says
-/// how old it is and when the next try is.
+/// The session's terminal at any time (not only while Claude works), live: the hub streams herdr's frames of the pane
+/// (docs/terminal.md) — colors, cursor, wide characters — or, where it cannot, the colored screen is read once a
+/// second. Long rows fold at the phone's width unless 不换行 is on (for TUI boxes). Scrolling up loads the 200 rows
+/// before, again and again, back to the start of what herdr keeps (about 1000 lines — older output lives in the chat);
+/// each page is found by the lines it must end before, so output arriving meanwhile shifts nothing. Reading history
+/// holds the screen still, 回到最新 lets it follow again. A link that fails never leaves old output looking live: a
+/// bar says how old it is and when the next try is, with a button to try now.
+///
+/// Typing is on the terminal itself: a tap brings the keyboard up, every key goes to herdr as it is pressed (batched
+/// while a request is out), the key bar sits over the keyboard. 设置 › 输入方式 brings back a text field that sends
+/// what is written in one go.
 struct TerminalPanel: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var scheme
     let key: SessionKey
     @State private var feed: TerminalFeed
+    @State private var input = ""
+    /// The key bar's ctrl / alt / shift: they also apply to what is typed (ctrl, then c → ctrl+c).
+    @State private var mods = TerminalModifiers()
+    /// Everything going to the terminal, in the order it was pressed.
+    @State private var stream = KeyStream()
     @AppStorage(TerminalPrefs.wrap) private var wrap = true
     @AppStorage(TerminalPrefs.fontSize) private var fontSize = TerminalPrefs.defaultFontSize
     @AppStorage(TerminalPrefs.font) private var fontID = TerminalFont.jetbrains.rawValue
     @AppStorage(TerminalPrefs.theme) private var themeID = TerminalTheme.defaultID
+    @AppStorage(TerminalPrefs.shortcuts) private var shortcutsJSON = ""
+    @AppStorage(TerminalPrefs.keys) private var visibleKeys = TerminalPrefs.defaultKeys
+    @AppStorage(TerminalPrefs.autoHide) private var autoHideKeys = false
+    @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
+    @AppStorage(TerminalPrefs.tipsSeen) private var tipsSeen = false
+    @AppStorage(TerminalPrefs.size) private var sizeMode = "phone"
+    /// A grid change waiting to go out (the keyboard animates, a pinch goes on: the last size is what counts).
+    @State private var gridTask: Task<Void, Never>?
+    /// The keyboard is up on the terminal (typing straight in).
+    @State private var keyboardUp = false
+    @FocusState private var typing: Bool
+    @State private var showShortcuts = false
+    @State private var showSettings = false
+    @State private var suggestions: [String] = []
+    @State private var pasting: String?
     /// The size a pinch is at, shown while it changes.
     @State private var pinchHUD: Double?
     /// Switches the page to another session (two-finger swipes); nil where the panel cannot (the full-screen sheet).
     var switchTo: ((SessionKey) -> Void)?
+    /// The keyboard came up on the terminal or went down (the page folds its header meanwhile).
+    var onKeyboard: ((Bool) -> Void)?
 
     /// Older than this without a fresh screen counts as stale even before anything fails (a request may hang).
     static let staleAfter: TimeInterval = 4
 
-    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil) {
+    init(key: SessionKey, switchTo: ((SessionKey) -> Void)? = nil, onKeyboard: ((Bool) -> Void)? = nil) {
         self.key = key
         self.switchTo = switchTo
+        self.onKeyboard = onKeyboard
         _feed = State(initialValue: TerminalFeed(key: key))
     }
 
     private var theme: TerminalTheme { .named(themeID) }
     private var side: TerminalTheme.Side { theme.side(scheme == .dark) }
+    private var direct: Bool { inputMode != "field" }
     private var font: TerminalFont { TerminalFont(rawValue: fontID) ?? .jetbrains }
 
     var body: some View {
-        screen
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: side.background).ignoresSafeArea())
-            // What floats on the terminal takes its look: dark on the dark theme whatever the app's appearance.
-            .environment(\.colorScheme, side.isDark ? .dark : .light)
-            .task(id: key) {
-                if feed.key != key { feed = TerminalFeed(key: key) }
-                feed.wantsControl = false // watch only: the pane stays at the computer's size
+        VStack(spacing: 0) {
+            screen
+            controls
+        }
+        .background(Color(hex: side.background), in: .rect(cornerRadius: 16, style: .continuous))
+        // The controls on the terminal take its look: dark keys on the dark theme whatever the app's appearance.
+        .environment(\.colorScheme, side.isDark ? .dark : .light)
+        .animation(.snappy, value: typing)
+        .animation(.snappy, value: keyboardUp)
+        .onChange(of: keyboardUp) { _, up in onKeyboard?(up) }
+        .sheet(isPresented: $showSettings) { TerminalSettingsView().environment(\.colorScheme, scheme) }
+        .alert("电脑上另一个程序正在使用这个终端", isPresented: Binding(get: { feed.control == .busy }, set: { shown in
+            if !shown, feed.control == .busy { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+        })) {
+            Button("接管") { feed.takeOver(model) }
+            Button("只看", role: .cancel) { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
+        } message: {
+            Text("比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。")
+        }
+        .onChange(of: feed.controlNote) { _, note in
+            if let note { model.toast = Toast(note, style: .info) }
+        }
+        .onChange(of: sizeMode) { _, mode in feed.setWantsControl(mode == "phone", model) }
+        .confirmationDialog(pasting.map { "粘贴 \($0.split(separator: "\n", omittingEmptySubsequences: false).count) 行到终端？" } ?? "",
+                            isPresented: Binding(get: { pasting != nil }, set: { if !$0 { pasting = nil } }),
+                            titleVisibility: .visible) {
+            Button("粘贴") { if let t = pasting { paste(t) } }
+        } message: {
+            Text("多行文字在 shell 里可能被逐行执行。")
+        }
+        #if DEBUG
+        .onAppear {
+            if UserDefaults.standard.bool(forKey: "focusTerminalInput") { if direct { keyboardUp = true } else { typing = true } }
+            if UserDefaults.standard.bool(forKey: "openShortcutsPanel") { showShortcuts = true }
+            if UserDefaults.standard.bool(forKey: "openTerminalSettings") { showSettings = true }
+            if UserDefaults.standard.bool(forKey: "openTerminalTips") { tipsSeen = false }
+        }
+        #endif
+        .task(id: key) {
+            if feed.key != key { feed = TerminalFeed(key: key) }
+            feed.wantsControl = sizeMode == "phone"
+            #if DEBUG
+            // `-terminalPages N`: load N pages of history once the screen is there (what scrolling up does).
+            let pages = UserDefaults.standard.integer(forKey: "terminalPages")
+            var paged = pages == 0, ticks = 0
+            #endif
+            while !Task.isCancelled {
+                await feed.tick(model)
                 #if DEBUG
-                // `-terminalPages N`: load N pages of history once the screen is there (what scrolling up does).
-                let pages = UserDefaults.standard.integer(forKey: "terminalPages")
-                var paged = pages == 0, ticks = 0
+                if !paged, feed.loaded {
+                    ticks += 1
+                    if ticks >= 8 { // after the hub's hello: the stream replaces the first reads
+                        paged = true
+                        for _ in 0..<pages { await feed.loadOlder(model) }
+                    }
+                }
                 #endif
-                while !Task.isCancelled {
-                    await feed.tick(model)
-                    #if DEBUG
-                    if !paged, feed.loaded {
-                        ticks += 1
-                        if ticks >= 8 { // after the hub's hello: the stream replaces the first reads
-                            paged = true
-                            for _ in 0..<pages { await feed.loadOlder(model) }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            feed.stop(model)
+        }
+    }
+
+    // MARK: Controls
+
+    /// The key bar (over the keyboard while it is up), and in 输入框 mode the text field under it.
+    private var controls: some View {
+        VStack(spacing: 8) {
+            if !autoHideKeys || typing || keyboardUp || mods.active {
+                TerminalKeyBar(mods: $mods, visible: Set(visibleKeys.split(separator: ",").map(String.init)),
+                               shortcuts: { withAnimation(.spring(duration: 0.3, bounce: 0.25)) { showShortcuts.toggle() } },
+                               shortcutsOn: showShortcuts,
+                               paste: pasteClipboard,
+                               keyboard: direct ? $keyboardUp : nil) { keys in send(keys) }
+                    .overlay(alignment: .bottomLeading) {
+                        if showShortcuts {
+                            ShortcutsPanel(items: TerminalPrefs.decode(shortcutsJSON),
+                                           hint: direct ? "快捷 · 单击输入，双击执行" : "快捷 · 单击填入，双击发送",
+                                           fill: fillShortcut,
+                                           send: { send(["enter"], text: $0); showShortcuts = false },
+                                           edit: { showShortcuts = false; showSettings = true })
+                                .padding(.bottom, 52)
+                                .transition(.scale(scale: 0.6, anchor: .bottomLeading).combined(with: .opacity))
                         }
                     }
-                    #endif
-                    try? await Task.sleep(for: .milliseconds(250))
-                }
-                feed.stop(model)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            if !direct {
+                if typing, !suggestions.isEmpty {
+                    SuggestionStrip(items: suggestions) { input = $0 }
+                }
+                field
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
+    /// 输入框 mode: write, then send with return.
+    private var field: some View {
+        HStack(spacing: 8) {
+            TextField(Self.placeholder(mods), text: $input)
+                .focused($typing)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(10)
+                .background(Color.primary.opacity(0.08), in: .rect(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(mods.active ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
+                .onSubmit(sendInput)
+                .onChange(of: input) { old, new in
+                    typed(old: old, new: new)
+                    suggestions = TerminalCompletion.suggestions(for: input, rows: feed.content.rows)
+                }
+            Button(action: sendInput) {
+                Image(systemName: "return").frame(width: 24, height: 24)
+            }
+            .themedButton(prominent: true)
+            .disabled(input.isEmpty)
+            .accessibilityLabel("发送并回车")
+        }
     }
 
     // MARK: Screen
@@ -158,7 +279,10 @@ struct TerminalPanel: View {
             ContentUnavailableView("没有终端", systemImage: "terminal",
                                    description: Text("这个会话没有在 herdr 里运行，恢复会话后就能看到终端。"))
                 .foregroundStyle(Color(hex: side.foreground))
+                .frame(maxHeight: .infinity)
         } else {
+            // The view is there while the first frame comes: its layout tells the phone's grid, which driving the
+            // terminal waits for before it subscribes (a spinner in its place kept it loading forever).
             live.overlay {
                 if !feed.loaded {
                     ProgressView().tint(Color(hex: side.foreground)).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -169,72 +293,64 @@ struct TerminalPanel: View {
     }
 
     private var live: some View {
-        VStack(spacing: 0) {
+        liveContent
+            .clipShape(.rect(cornerRadius: 16, style: .continuous))
+            .overlay(alignment: .bottom) { bottomOverlay }
+            .overlay { pinchOverlay }
+            .overlay(alignment: .top) {
+                if let error = feed.error {
+                    Text(error).font(.caption).foregroundStyle(.white).padding(8)
+                        .background(Theme.danger.opacity(0.85), in: .capsule).padding(8)
+                }
+            }
+            .animation(.snappy, value: feed.paused)
+            .animation(.snappy, value: pinchHUD == nil)
+    }
+
+    private var liveContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if !feed.paused {
                 TerminalLinkStatus(lastOK: feed.lastOK, failure: feed.failure, nextTry: feed.nextTry) {
                     Haptics.tap()
                     feed.retryNow(model)
                 }
             }
+            header
             TerminalView(content: feed.content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
-                         focused: nil,
-                         onInput: nil,
+                         focused: direct ? $keyboardUp : nil,
+                         onInput: inputHandler,
                          onNearTop: { Task { await feed.loadOlder(model) } },
                          onOpenURL: { openURL($0) },
                          onCopy: { model.toast = Toast("已拷贝", style: .success) },
                          onFontSize: pinched,
                          onSwipe: swipe,
-                         onDoubleTap: nil,
-                         onGrid: nil)
-        }
-        .overlay(alignment: .top) { historyStatus }
-        .overlay(alignment: .bottomTrailing) { followButton }
-        .overlay { pinchOverlay }
-        .overlay(alignment: .top) {
-            if let error = feed.error {
-                Text(error).font(.caption).foregroundStyle(.white).padding(8)
-                    .background(Theme.danger.opacity(0.85), in: .capsule).padding(8)
-            }
-        }
-        .animation(.snappy, value: feed.paused)
-        .animation(.snappy, value: feed.loading)
-        .animation(.snappy, value: pinchHUD == nil)
-    }
-
-    /// Only while something is to be said at the top: a page loading, or the start of what herdr keeps reached.
-    @ViewBuilder private var historyStatus: some View {
-        let text: String? = feed.loading ? "加载更早的输出…"
-            : feed.paused && feed.atLimit ? "herdr 只保留最近约 1000 行，更早的过程在「对话」里"
-            : feed.paused && !feed.hasOlder ? "已到最前面" : nil
-        if let text {
-            HStack(spacing: 6) {
-                if feed.loading { ProgressView().controlSize(.mini) }
-                Text(text).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(Color(hex: side.foreground).opacity(0.7))
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Color(hex: side.background).opacity(0.9), in: .capsule)
-            .padding(.top, 6)
-            .transition(.opacity)
-            .allowsHitTesting(false)
+                         onDoubleTap: pasteClipboard,
+                         onGrid: gridChanged)
         }
     }
 
-    /// Reading history: back to the live end (as Terminal.app jumps back on new output, but on request).
-    @ViewBuilder private var followButton: some View {
+    private var inputHandler: ((TerminalInputEvent) -> Void)? {
+        guard direct else { return nil }
+        return { e in typedOnTerminal(e) }
+    }
+
+    @ViewBuilder private var bottomOverlay: some View {
         if feed.paused {
             Button {
                 Haptics.tap()
                 feed.resume()
             } label: {
-                Image(systemName: "arrow.down").font(.body.weight(.semibold)).frame(width: 40, height: 40)
+                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(.footnote.weight(.semibold))
             }
             .themedButton()
-            .clipShape(.circle)
-            .padding(12)
-            .accessibilityLabel("回到最新")
-            .transition(.scale.combined(with: .opacity))
+            .padding(10)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else if !tipsSeen {
+            TerminalTips(direct: direct, openSettings: { tipsSeen = true; showSettings = true }) {
+                withAnimation(.snappy) { tipsSeen = true }
+            }
+            .padding(10)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -250,7 +366,116 @@ struct TerminalPanel: View {
         }
     }
 
-    // MARK: Gestures
+    private var header: some View {
+        HStack(spacing: 8) {
+            historyStatus
+            Spacer(minLength: 8)
+            if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
+            Button { Haptics.tap(); showSettings = true } label: {
+                Label("设置", systemImage: "slider.horizontal.3")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
+            .accessibilityLabel("终端设置")
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder private var historyStatus: some View {
+        Group {
+            if feed.loading {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
+            } else if feed.drives || feed.control == .starting {
+                Text("— 更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
+            } else if feed.atLimit {
+                Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
+            } else if !feed.hasOlder {
+                Text("— 已到最前面 —").lineLimit(1)
+            } else {
+                Text("上滑加载更早的输出").lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(Color(hex: side.foreground).opacity(0.55))
+    }
+
+    /// Driving the terminal: its size (the computer's pane is that now). Watching although it wanted to drive: a
+    /// button to take it.
+    @ViewBuilder private var sizeChip: some View {
+        let fg = Color(hex: side.foreground)
+        switch feed.control {
+        case .active, .starting:
+            let g = feed.phoneGrid
+            Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: "iphone")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(fg.opacity(0.1), in: .capsule)
+                .foregroundStyle(fg.opacity(0.75))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("terminal-size")
+        default:
+            Button {
+                Haptics.tap()
+                feed.takeOver(model)
+            } label: {
+                Label("只看 · 接管", systemImage: "iphone.and.arrow.forward")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(fg.opacity(0.1), in: .capsule)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(fg.opacity(0.75))
+            .accessibilityLabel("接管终端")
+            .accessibilityIdentifier("terminal-size")
+        }
+    }
+
+    /// The view's grid: the first one at once (the feed waits for it to subscribe), later ones once they settle.
+    private func gridChanged(_ g: TerminalGridSize) {
+        gridTask?.cancel()
+        guard feed.phoneGrid != nil else { return feed.setGrid(g, model) }
+        let feed = feed, model = model
+        gridTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            feed.setGrid(g, model)
+        }
+    }
+
+    /// 换行 (rows fold at the phone's width) or 不换行 · 左右滑 (the pane's width, for TUI boxes).
+    private var wrapToggle: some View {
+        Button {
+            Haptics.tap()
+            wrap.toggle()
+        } label: {
+            Label(wrap ? "换行" : "不换行 · 左右滑", systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
+        .accessibilityLabel("长行换行")
+        .accessibilityValue(wrap ? "开" : "关，左右滑动看")
+    }
+
+    // MARK: Actions
 
     private func pinched(_ size: CGFloat) {
         fontSize = Double(size)
@@ -260,6 +485,34 @@ struct TerminalPanel: View {
             try? await Task.sleep(for: .seconds(1))
             if pinchHUD == shown { pinchHUD = nil }
         }
+    }
+
+    /// A shortcut: typed into the terminal (or put in the field), not run.
+    private func fillShortcut(_ s: String) {
+        showShortcuts = false
+        if direct {
+            send([], text: s)
+            keyboardUp = true
+        } else {
+            input = s
+            typing = true
+        }
+    }
+
+    /// Double tap: the clipboard goes to the terminal as typed (no return); several lines ask first.
+    private func pasteClipboard() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            model.toast = Toast("剪贴板里没有文字", style: .error)
+            return
+        }
+        if text.contains("\n") { pasting = text } else { paste(text) }
+    }
+
+    private func paste(_ text: String) {
+        Haptics.tap()
+        send([], text: text)
+        model.toast = Toast("已粘贴", style: .success)
+        pasting = nil
     }
 
     /// Two fingers: left / right go to the next / previous agent of this space (herdr's tabs), up / down to the
@@ -281,6 +534,127 @@ struct TerminalPanel: View {
             target = model.siblings(of: there.key).first?.key
         }
         if let target, target != key { switchTo(target) }
+    }
+
+    /// A key on the keyboard: with ctrl / alt / shift down on the key bar it goes out as that combination.
+    private func typedOnTerminal(_ e: TerminalInputEvent) {
+        if feed.paused { feed.resume() }
+        guard mods.active else { return push(e) }
+        switch e {
+        case .text(let t) where t.count == 1:
+            let (k, text) = mods.typed(t.first!)
+            mods.pressed()
+            push(k.map { .key($0) } ?? .text(text ?? t))
+        case .key(let k):
+            let name = mods.apply(k)
+            mods.pressed()
+            push(.key(name))
+        case .text:
+            push(e)
+        }
+    }
+
+    /// The return after the text takes the modifiers that are down (shift+enter: a new line in Claude's box).
+    private func sendInput() {
+        let t = input
+        guard !t.isEmpty else { return }
+        input = ""
+        let enter = mods.apply("enter")
+        mods.pressed()
+        send([enter], text: t)
+    }
+
+    /// Text, then keys — in order with everything typed before.
+    private func send(_ keys: [String], text: String = "") {
+        if !text.isEmpty { push(.text(text)) }
+        for k in keys { push(.key(k)) }
+    }
+
+    private func push(_ e: TerminalInputEvent) {
+        if feed.drives { // straight to the terminal, as its bytes
+            switch e {
+            case .text(let t): feed.type(TerminalKeyBytes.text(t), model)
+            case .key(let k): if let b = TerminalKeyBytes.encode(k) { feed.type(b, model) }
+            }
+            return
+        }
+        let model = model, key = key, feed = feed
+        stream.push(e) { keys, text in
+            await model.keys(key, keys, text: text)
+            feed.nudge()
+        }
+    }
+
+    /// With a modifier down, a character typed in the field goes out as that key at once (ctrl, c → ctrl+c) instead of
+    /// joining the text; the rest of a paste stays in the field.
+    private func typed(old: String, new: String) {
+        guard mods.active, new.count > old.count, new.hasPrefix(old), let ch = new.dropFirst(old.count).first else { return }
+        let (k, text) = mods.typed(ch)
+        mods.pressed()
+        let rest = String(new.dropFirst(old.count + 1))
+        input = old + rest
+        Haptics.tap()
+        if let k { send([k]) } else if let text { send([], text: text) }
+    }
+
+    static func placeholder(_ mods: TerminalModifiers) -> String {
+        guard mods.active else { return "发送文字到终端" }
+        let down = mods.apply("").dropLast()
+        return "下一个字符按 \(down) 发送"
+    }
+}
+
+/// Sends what goes to the terminal in order, one request at a time; what is typed while one is out goes in the next
+/// (KeyBatcher), so fast typing costs a few requests, not one per key, and nothing overtakes anything.
+@MainActor final class KeyStream {
+    private var batch = KeyBatcher()
+    private var running = false
+
+    func push(_ e: TerminalInputEvent, post: @escaping (_ keys: [String], _ text: String) async -> Void) {
+        batch.push(e)
+        guard !running else { return }
+        running = true
+        Task {
+            while let next = batch.take() { await post(next.keys, next.text) }
+            running = false
+        }
+    }
+}
+
+/// Shown on the terminal until dismissed: what can be done here that nothing on the screen says.
+struct TerminalTips: View {
+    var direct: Bool
+    var openSettings: () -> Void
+    var dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("终端小技巧").font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 7) {
+                if direct { tip("keyboard", "点终端直接打字，键栏在键盘上方") }
+                tip("arrow.up.left.and.arrow.down.right", "双指捏合调字号")
+                tip("hand.tap", "双击终端粘贴剪贴板")
+                tip("bolt", "闪电：常用命令，单击输入、双击执行")
+                tip("arrow.left.arrow.right", "双指左右滑：切换同一空间的 Agent")
+            }
+            .font(.footnote)
+            HStack(spacing: 10) {
+                Button("配色、字体、键栏", action: openSettings).lineLimit(1).themedButton()
+                Spacer(minLength: 0)
+                Button("知道了", action: dismiss).lineLimit(1).themedButton(prominent: true)
+            }
+            .font(.footnote.weight(.semibold))
+        }
+        .padding(14)
+        .frame(maxWidth: 380, alignment: .leading)
+        .surface(in: .rect(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+    }
+
+    private func tip(_ symbol: String, _ text: String) -> some View {
+        Label { Text(text).lineLimit(1).minimumScaleFactor(0.8) } icon: {
+            Image(systemName: symbol).foregroundStyle(Theme.accent).frame(width: 20)
+        }
     }
 }
 

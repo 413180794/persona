@@ -70,9 +70,6 @@ struct SettingsView: View {
                     NavigationLink { NotificationSettingsView() } label: {
                         Label("通知", systemImage: "bell.badge")
                     }
-                    NavigationLink { TerminalSettingsView() } label: {
-                        Label("终端", systemImage: "terminal")
-                    }
                 } footer: {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
                 }
