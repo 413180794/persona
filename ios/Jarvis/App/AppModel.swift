@@ -102,6 +102,7 @@ final class AppModel {
 
     func unpair() {
         live.disconnect()
+        LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
         config = nil
         Keychain.serverConfig = nil
         forgetDeviceCredentials()
@@ -652,7 +653,12 @@ final class AppModel {
     func refresh() async {
         guard let api else { return }
         Task { await loadPins() }
-        Task { if let fleet = try? await api.fleet() { LiveActivityController.shared.apply(fleet) } }
+        Task {
+            if let p = try? await api.notifyPrefs(device: PushRegistrar.deviceID) {
+                LiveActivityController.shared.settings(enabled: p.liveActivity, lockDetails: p.lockDetails)
+            }
+            if let fleet = try? await api.fleet() { LiveActivityController.shared.apply(fleet) }
+        }
         do {
             async let m = api.machines()
             async let s = api.sessions()

@@ -27,6 +27,24 @@ final class LiveActivityController {
         Activity<JarvisActivityAttributes>.activities.first { $0.activityState == .active || $0.activityState == .stale }
     }
 
+    /// The device's settings changed (or were loaded from the hub): remember them, and apply at once — off ends the
+    /// activity, the lock screen details flip on the running one, on starts one from the hub's current fleet.
+    func settings(enabled: Bool, lockDetails: Bool) {
+        let was = (self.enabled, self.lockDetails)
+        UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
+        UserDefaults.standard.set(lockDetails, forKey: Self.detailsKey)
+        guard was != (enabled, lockDetails) else { return }
+        if !enabled {
+            endAll()
+        } else if let activity {
+            var state = activity.content.state
+            state.details = lockDetails
+            Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate, relevanceScore: Self.relevance(state)))
+        } else if let api = AppModel.shared.api {
+            Task { if let fleet = try? await api.fleet() { apply(fleet) } }
+        }
+    }
+
     /// Once per launch: watch tokens and activities the hub push-started.
     func start() {
         guard !started else { return }

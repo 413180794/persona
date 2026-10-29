@@ -201,7 +201,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   交互推送带按钮（`NotificationActions`，类别名就是 hub 发的 `INTERACTION_<KIND>`）：授权「允许 / 拒绝」，计划「批准 / 打回修改」（打回可以直接输入意见）。
   说「是」的按钮要先解锁（`.authenticationRequired`），「拒绝」不用；计划从通知批准用 `acceptEdits`（没看全计划，命令仍要逐个授权），
   「批准并自动执行」只在 App 里。按钮在后台直接调 resolve，不打开 App；失败（已被处理、连不上 hub）发一条本地通知说明原因。提问、终端没有按钮，点开处理。
-  设置 › 通知（`NotificationSettingsView`）：「需要你处理时」开关、「Agent 做完时」不推送 / 只推长任务 / 每次都推，存在 hub 上按设备分开（`PushRegistrar.deviceID`）。
+  设置 › 通知（`NotificationSettingsView`）：「需要你处理时」开关、「Agent 做完时」不推送 / 只推长任务 / 每次都推、实时活动（锁屏和灵动岛 / 锁屏显示详情，`docs/live-activity.md`），存在 hub 上按设备分开（`PushRegistrar.deviceID`）。
   点通知打开对应会话：`UNUserNotificationCenterDelegate` 用 completion handler 版本，切回主队列处理再回调（async 版本在后台执行器上返回，
   UIKit 在非主线程收到完成回调，点通知冷启动会崩）。
 - 手表配对：iPhone 在 WCSession 激活后再推一次配对（激活前推会被丢掉），同时 transferUserInfo 保证送达；手表未配对页有「从 iPhone 同步」

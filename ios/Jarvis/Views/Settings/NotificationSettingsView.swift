@@ -1,3 +1,4 @@
+import ActivityKit
 import SwiftUI
 import UserNotifications
 
@@ -7,6 +8,7 @@ struct NotificationSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: NotifyPrefs?
     @State private var system: UNAuthorizationStatus?
+    @State private var activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
 
     var body: some View {
         List {
@@ -56,6 +58,46 @@ struct NotificationSettingsView: View {
             }
 
             Section {
+                Toggle(isOn: binding(\.liveActivity)) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("锁屏和灵动岛")
+                            Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "sparkle").foregroundStyle(Theme.accent(.claude))
+                    }
+                }
+                Toggle(isOn: binding(\.lockDetails)) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("锁屏显示详情")
+                            Text("关着时锁屏只显示数量和「有个授权等你」，不显示 Agent 名字和内容").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "eye").foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(prefs?.liveActivity == false)
+                if !activitiesAllowed {
+                    Label {
+                        Text("系统设置里关掉了 Jarvis 的实时活动").font(.footnote)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.attention)
+                    }
+                    Button {
+                        UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+                    } label: {
+                        Label("打开系统设置", systemImage: "gear").lineLimit(1)
+                    }
+                }
+            } header: {
+                Text("实时活动")
+            } footer: {
+                Text("锁屏上可以直接「允许 / 批准」（要先解锁）或「拒绝」；灵动岛只在解锁时显示，总是带详情。")
+            }
+
+            Section {
                 openSystemSettings
             } footer: {
                 Text("声音、锁屏显示、专注模式在系统设置里改。")
@@ -69,6 +111,7 @@ struct NotificationSettingsView: View {
         .task { await load() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             Task { system = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
+            activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
         }
     }
 
@@ -100,13 +143,18 @@ struct NotificationSettingsView: View {
     private func load() async {
         system = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         guard let api = model.api else { return }
-        do { prefs = try await api.notifyPrefs(device: PushRegistrar.deviceID) } catch { model.show(error) }
+        do {
+            let p = try await api.notifyPrefs(device: PushRegistrar.deviceID)
+            prefs = p
+            LiveActivityController.shared.settings(enabled: p.liveActivity, lockDetails: p.lockDetails)
+        } catch { model.show(error) }
     }
 
     /// Optimistic: the control moves at once and goes back if the hub says no.
     private func save(_ next: NotifyPrefs) {
         let before = prefs
         prefs = next
+        LiveActivityController.shared.settings(enabled: next.liveActivity, lockDetails: next.lockDetails)
         guard let api = model.api else { return }
         Task {
             do {
@@ -114,6 +162,7 @@ struct NotificationSettingsView: View {
                 Haptics.success()
             } catch {
                 prefs = before
+                if let before { LiveActivityController.shared.settings(enabled: before.liveActivity, lockDetails: before.lockDetails) }
                 model.show(error)
             }
         }

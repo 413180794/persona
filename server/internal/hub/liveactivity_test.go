@@ -338,3 +338,27 @@ func TestManualLiveActivityPush(t *testing.T) {
 	go func() { time.Sleep(3 * time.Second); close(done) }()
 	<-done
 }
+
+// Turning lock screen details (or the activity) on / off changes what each device gets though the fleet did not:
+// the next signal must push anyway.
+func TestPrefsChangeResends(t *testing.T) {
+	h := newTestHub(t)
+	srv := httptest.NewServer(h.routes())
+	defer srv.Close()
+	req, _ := http.NewRequest("PUT", srv.URL+"/api/v1/devices/phone/prefs", strings.NewReader(`{"lock_details":true}`))
+	req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("%v %v", err, resp.Status)
+	}
+	resp.Body.Close()
+	h.live.mu.Lock()
+	resend := h.live.resend
+	h.live.mu.Unlock()
+	if !resend {
+		t.Fatal("a prefs change should force the next fleet push")
+	}
+	if p := h.push.prefs("phone"); !p.LockDetails || !p.LiveActivity {
+		t.Fatalf("%+v", p)
+	}
+}

@@ -475,23 +475,32 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
     var input: Bool = true
     var done: Done = .long
+    /// The Fleet Live Activity on the lock screen / Dynamic Island (docs/live-activity.md).
+    var liveActivity: Bool = true
+    /// Agent names on the lock screen activity; off, only counts.
+    var lockDetails: Bool = false
     var longTurnSeconds: Int?
     var doneDelaySeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case input, done
+        case liveActivity = "live_activity", lockDetails = "lock_details"
         case longTurnSeconds = "long_turn_seconds", doneDelaySeconds = "done_delay_seconds"
     }
 
-    init(input: Bool = true, done: Done = .long) {
+    init(input: Bool = true, done: Done = .long, liveActivity: Bool = true, lockDetails: Bool = false) {
         self.input = input
         self.done = done
+        self.liveActivity = liveActivity
+        self.lockDetails = lockDetails
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         input = try c.decodeIfPresent(Bool.self, forKey: .input) ?? true
         done = (try? c.decodeIfPresent(Done.self, forKey: .done)) ?? .long
+        liveActivity = try c.decodeIfPresent(Bool.self, forKey: .liveActivity) ?? true
+        lockDetails = try c.decodeIfPresent(Bool.self, forKey: .lockDetails) ?? false
         longTurnSeconds = try c.decodeIfPresent(Int.self, forKey: .longTurnSeconds)
         doneDelaySeconds = try c.decodeIfPresent(Int.self, forKey: .doneDelaySeconds)
     }
@@ -500,6 +509,8 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(input, forKey: .input)
         try c.encode(done, forKey: .done)
+        try c.encode(liveActivity, forKey: .liveActivity)
+        try c.encode(lockDetails, forKey: .lockDetails)
     }
 
     /// "1 分钟" / "90 秒": how the page words a duration from the hub.

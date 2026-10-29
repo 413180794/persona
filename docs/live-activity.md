@@ -67,6 +67,15 @@ Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐
   失败发一条本地通知说明原因（410「已经处理过了」时照样拿掉）。
 - 内容过期（`isStale`，hub 15 分钟没推）时不画按钮，免得对已经被处理的请求点「允许」。
 
+## 设置（设置 › 通知 › 实时活动）
+
+- 「锁屏和灵动岛」（`prefs.live_activity`，默认开）：关掉时 App 立刻结束活动，hub 不再推这台设备。
+- 「锁屏显示详情」（`prefs.lock_details`，默认关）：改了以后 App 立刻改正在显示的活动，hub 下一次推送也按新的值填 `details`。
+- 两项都存在 hub 上按设备分开（`PUT /api/v1/devices/{id}/prefs`），App 在 UserDefaults 里留一份（`LiveActivityController.settings`），
+  每次回到前台从 hub 同步。系统设置里关掉了 Jarvis 的实时活动时，这一节提示并给「打开系统设置」。
+- 断开 hub（忘记服务器）时结束活动：它的按钮连的是旧 hub。
+- 没做「盯着一个 Agent」的单独活动：Fleet 已经包含每个在跑的 Agent，再开第二个活动会在锁屏上堆两条；有需要再加 `kind: agent`。
+
 ## 验证
 
 - 布局：`-showFleetSample needsYou|working|done`（`-fleetDetails YES` 看锁屏详情）用编造的数据开一个活动，不需要 hub。
