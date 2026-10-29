@@ -555,6 +555,48 @@ struct RecapCard: View {
     }
 }
 
+/// The newest recap in full, above the composer when you come back to a chat: a tap closes it.
+struct RecapStrip: View {
+    var item: Item
+    var close: () -> Void
+
+    var body: some View {
+        Button {
+            Haptics.tap()
+            close()
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                RoundedRectangle(cornerRadius: 1.5).fill(Theme.accent).frame(width: 3)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
+                        Text("离开期间回顾").font(.footnote.weight(.semibold)).lineLimit(1)
+                        if let ts = item.ts, ts.isMeaningful {
+                            Text("· " + Fmt.relative(ts)).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+                    }
+                    Text(Fmt.plain(item.text ?? ""))
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(8)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true) // as tall as the text: the bar would take all the room
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Theme.accent.opacity(0.08), in: .rect(cornerRadius: 14, style: .continuous))
+            .contentShape(.rect(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .contextMenu { CopyButton(text: item.text ?? "") }
+        .accessibilityLabel("离开期间回顾：" + (item.text ?? "") + "。点按关闭")
+    }
+}
+
 /// The recap in full, in the same kind of drawer as a background task's report.
 struct RecapDrawer: View {
     @Environment(\.dismiss) private var dismiss

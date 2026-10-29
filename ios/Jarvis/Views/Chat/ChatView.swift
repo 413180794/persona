@@ -781,6 +781,10 @@ struct ChatView: View {
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
+                if viewing == nil, let recap = pendingRecap {
+                    RecapStrip(item: recap) { dismissRecap(recap) }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 if viewing == nil, session?.isCodex != true, session?.isTraex != true {
                     SessionModeBar(key: key, session: session).padding(.leading, 4)
                 }
@@ -790,6 +794,29 @@ struct ChatView: View {
             .padding(.bottom, 8)
             .animation(.snappy, value: status)
             .animation(.snappy, value: model.interactions(for: key).map(\.id))
+            .animation(.snappy, value: pendingRecap?.id)
+            .onChange(of: model.drafts[key] ?? "") { _, draft in
+                if !draft.isEmpty, let recap = pendingRecap { dismissRecap(recap) } // typing closes it
+            }
+    }
+
+    /// The agent's "while you were away" recap above the composer, while it is the newest thing in the chat and has
+    /// not been closed (a tap, or starting to type). The one-line marker in the chat stays.
+    private var pendingRecap: Item? {
+        guard style == .dev, case .row(.recap(let i))? = model.chat(key).blocks.last else { return nil }
+        return closedRecap == i.id ? nil : i
+    }
+
+    @AppStorage("closedRecaps") private var closedRecapsData = Data()
+    private var closedRecap: String? {
+        (try? JSONDecoder().decode([String: String].self, from: closedRecapsData))?[key.machineID + "/" + key.sessionID]
+    }
+
+    private func dismissRecap(_ recap: Item) {
+        var all = (try? JSONDecoder().decode([String: String].self, from: closedRecapsData)) ?? [:]
+        all[key.machineID + "/" + key.sessionID] = recap.id
+        if all.count > 300 { all = Dictionary(uniqueKeysWithValues: all.suffix(200).map { ($0.key, $0.value) }) }
+        withAnimation(.snappy) { closedRecapsData = (try? JSONEncoder().encode(all)) ?? Data() }
     }
 
     /// Switches the chat to a subagent (nil: back to the main agent); its transcript streams like a session's.
