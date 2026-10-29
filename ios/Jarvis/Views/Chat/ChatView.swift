@@ -2495,13 +2495,13 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
         let c = min(max(chrome.collapse, 0), maxC)
         let p = maxC > 0 ? c / maxC : 0 // 0 open … 1 folded
         ZStack(alignment: .top) {
-            full()
+            ChatRegion(name: "ChromeFull.body", content: full)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chrome.height = $0 }
                 .offset(y: -c)
                 .opacity(Double(1 - min(1, p * 1.5)))
                 .allowsHitTesting(p < 0.5)
-            compact()
+            ChatRegion(name: "ChromeCompact.body", content: compact)
                 .opacity(Double(max(0, (p - 0.5) * 2)))
                 .allowsHitTesting(p >= 0.5)
         }
