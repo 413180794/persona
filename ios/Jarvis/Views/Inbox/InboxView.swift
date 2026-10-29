@@ -47,6 +47,9 @@ struct InboxView: View {
     }
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("InboxView.body")
+        #endif
         NavigationStack(path: $path) {
             list
                 .navigationTitle("收件箱")

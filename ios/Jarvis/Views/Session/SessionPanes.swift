@@ -154,6 +154,9 @@ struct TerminalPanel: View {
     private var font: TerminalFont { TerminalFont(rawValue: fontID) ?? .jetbrains }
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("TerminalPanel.body")
+        #endif
         VStack(spacing: 0) {
             screen
             controls

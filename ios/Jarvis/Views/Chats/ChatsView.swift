@@ -106,6 +106,9 @@ struct ChatsView: View {
     }
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("ChatsView.body")
+        #endif
         let filtered = filtered
         // A pinned agent shows once, under 置顶; every grouping below is built from the rest.
         let unpinned = filtered.filter { !model.isPinned($0.key) }

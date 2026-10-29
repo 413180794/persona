@@ -14,6 +14,9 @@ struct SettingsView: View {
     @State private var debugDevices = false
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("SettingsView.body")
+        #endif
         NavigationStack(path: $path) {
             List {
                 Section {

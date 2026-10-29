@@ -37,7 +37,12 @@ final class AppModel {
     var pendingConfirmation: PhoneConfirmation?
     /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
     var selectedTab: AppTab = .assistant {
-        didSet { UserDefaults.standard.set(selectedTab.rawValue, forKey: "app.tab") }
+        didSet {
+            UserDefaults.standard.set(selectedTab.rawValue, forKey: "app.tab")
+            #if PERF_SIGNPOST
+            PerfTrace.event("Tab selection", selectedTab.rawValue)
+            #endif
+        }
     }
 
     /// The dev chat that was open; saved when a chat opens, cleared when going back to the list.

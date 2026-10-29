@@ -105,6 +105,9 @@ struct ChatView: View {
     }
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("ChatView.body")
+        #endif
         swipeablePanes
         .background(Theme.pageBackground)
         .navigationTitle(title)
@@ -2437,6 +2440,9 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
     @ViewBuilder var compact: () -> Compact
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("ChromeHeader.body")
+        #endif
         let maxC = chrome.maxCollapse
         let c = min(max(chrome.collapse, 0), maxC)
         let p = maxC > 0 ? c / maxC : 0 // 0 open … 1 folded

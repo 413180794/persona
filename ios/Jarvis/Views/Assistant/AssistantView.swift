@@ -21,6 +21,9 @@ struct AssistantView: View {
     private var current: SessionKey? { model.assistantCurrent }
 
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("AssistantView.body")
+        #endif
         NavigationStack {
             Group {
                 if let key = current, pending == nil {
