@@ -1915,7 +1915,7 @@ struct TerminalCover: View {
             .offset(y: offset)
             .background {
                 // The page shows through, dimmed less as the terminal goes down.
-                Color.black.opacity(0.4 * (1 - min(offset / 500, 1))).ignoresSafeArea()
+                Color.black.opacity(Double(0.4 * (1 - min(offset / 500, 1)))).ignoresSafeArea()
             }
     }
 
