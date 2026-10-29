@@ -269,6 +269,9 @@ func validID(id string) bool { return idRe.MatchString(id) }
 func (n *Node) file(id string) (*transcript.File, error) {
 	n.mu.Lock()
 	f := n.files[id]
+	if f != nil {
+		n.used(id)
+	}
 	n.mu.Unlock()
 	if f != nil {
 		return f, nil
@@ -291,6 +294,8 @@ func (n *Node) file(id string) (*transcript.File, error) {
 	} else {
 		n.files[id] = f
 	}
+	n.used(id)
+	n.evictFiles()
 	n.mu.Unlock()
 	return f, nil
 }
@@ -317,6 +322,43 @@ func (n *Node) warmTranscripts(ctx context.Context) {
 		if f, err := n.file(id); err == nil {
 			n.refresh(id, f)
 		}
+	}
+}
+
+// maxFiles caps the transcripts kept parsed in memory: every session ever opened used to stay, items and all.
+const maxFiles = 16
+
+// used marks a parsed transcript as just asked for. Callers hold n.mu.
+func (n *Node) used(id string) {
+	if n.fileUse == nil {
+		n.fileUse = map[string]uint64{}
+	}
+	n.useTick++
+	n.fileUse[id] = n.useTick
+}
+
+// evictFiles drops the least recently used parsed transcripts of offline sessions nobody watches, down to maxFiles.
+// Live sessions stay (warmTranscripts parsed them so the phone never waits for a cold parse). Reopening one parses
+// the file again; its history stays the same (same file, same first line). Callers hold n.mu.
+func (n *Node) evictFiles() {
+	for len(n.files) > maxFiles {
+		oldest, at := "", uint64(0)
+		for id := range n.files {
+			if _, watched := n.watches[id]; watched {
+				continue
+			}
+			if _, live := n.agents[id]; live {
+				continue
+			}
+			if t := n.fileUse[id]; oldest == "" || t < at {
+				oldest, at = id, t
+			}
+		}
+		if oldest == "" {
+			return // all watched
+		}
+		delete(n.files, oldest)
+		delete(n.fileUse, oldest)
 	}
 }
 

@@ -53,6 +53,9 @@ type Node struct {
 
 	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
 	pushLocks map[string]*sync.Mutex
+	// fileUse: when each parsed transcript in files was last asked for (a counter), to drop the least recently used.
+	fileUse map[string]uint64
+	useTick uint64
 }
 
 func New(version string) (*Node, error) {
@@ -203,6 +206,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Hash            string          `json:"hash"`
 		Skip            int             `json:"skip"`
 		Turns           int             `json:"turns"`
+		LazyImages      bool            `json:"lazy_images"`
 		Name            string          `json:"name"`
 		TabName         *string         `json:"tab_name"`
 		Title           *string         `json:"title"`
@@ -311,11 +315,27 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)
-		it, ok := f.Item(a.ItemID)
+		it, ok := f.Full(a.ItemID)
 		if !ok || it.Image == nil {
 			return nil, fmt.Errorf("no image %s in session %s", a.ItemID, p.SessionID)
 		}
 		return it.Image, nil
+	case "session.item": // one item whole: the text a page cut (full_size)
+		var a struct {
+			ItemID string `json:"item_id"`
+		}
+		_ = json.Unmarshal(params, &a)
+		f, err := n.file(p.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		n.refresh(p.SessionID, f)
+		it, ok := f.Full(a.ItemID)
+		if !ok {
+			return nil, fmt.Errorf("no item %s in session %s", a.ItemID, p.SessionID)
+		}
+		it.Image = nil // images come from session.image
+		return it, nil
 	case "session.items":
 		f, err := n.file(p.SessionID)
 		if err != nil {
@@ -325,21 +345,28 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)
+		// Items are kept without their image data; a caller that did not ask for lazy images (an older hub) gets it.
+		items := func(items []proto.Item) []proto.Item {
+			if p.LazyImages {
+				return nonNil(items)
+			}
+			return nonNil(f.WithImages(items))
+		}
 		limit := p.Limit
 		if limit <= 0 || limit > 500 {
 			limit = 80
 		}
 		if p.AfterSeq != nil {
 			// more_after: the 500 cap cut it short; the caller asks again after the last seq (or takes the latest page).
-			items, more, span := f.After(*p.AfterSeq, 500)
-			return withSpan(map[string]any{"items": nonNil(items), "has_more": false, "more_after": more}, span, true), nil
+			page, more, span := f.After(*p.AfterSeq, 500)
+			return withSpan(map[string]any{"items": items(page), "has_more": false, "more_after": more}, span, true), nil
 		}
 		if p.Turns > 0 { // the phone pages by exchanges (user prompt + answer), not by rows
-			items, more, span := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
-			return withSpan(map[string]any{"items": nonNil(items), "has_more": more}, span, false), nil
+			page, more, span := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
+			return withSpan(map[string]any{"items": items(page), "has_more": more}, span, false), nil
 		}
-		items, more, span := f.Page(p.BeforeSeq, limit)
-		return withSpan(map[string]any{"items": nonNil(items), "has_more": more}, span, false), nil
+		page, more, span := f.Page(p.BeforeSeq, limit)
+		return withSpan(map[string]any{"items": items(page), "has_more": more}, span, false), nil
 	case "session.watch":
 		return ok(n.watch(p.SessionID, p.SinceSeq))
 	case "session.unwatch":

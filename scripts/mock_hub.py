@@ -113,6 +113,21 @@ def tool(name, inp, result, ts_min, err=False):
             it("user", "tool_result", ts_min, tool_use_id=tid, text=result, is_error=err)]
 
 
+# Whole texts of the outputs pages carry cut (GET …/items/{id}/full), by item id.
+FULL = {}
+
+
+def long_tool(name, inp, whole, ts_min):
+    """A tool call whose output the hub cut for the page, the way it does past 4 KB."""
+    items = tool(name, inp, "", ts_min)
+    data = whole.encode()
+    end = data.rfind(b"\n", 0, 4096)
+    items[1]["text"] = data[:end].decode() + "\n…（已截断，点开看全文，共 %d 字节）" % len(data)
+    items[1]["full_size"] = len(data)
+    FULL[items[1]["id"]] = {k: v for k, v in items[1].items() if k != "full_size"} | {"text": whole}
+    return items
+
+
 EDIT_OLD = """    func makeEntry(for date: Date) -> WeatherEntry {
         WeatherEntry(date: date, temperature: store.current.temperature)
     }"""
@@ -144,6 +159,9 @@ ITEMS[WIDGET] = (
 ITEMS[TESTS] = (
     [it("user", "text", 5, text="给网络层补单元测试，覆盖重试和超时")]
     + tool("Glob", {"pattern": "Sources/Weather/API/*.swift"}, "Sources/Weather/API/Client.swift\nSources/Weather/API/Retry.swift\nSources/Weather/API/Forecast.swift", 4)
+    + long_tool("Bash", {"command": "xcodebuild test -scheme Weather -only-testing:WeatherTests/APITests", "description": "跑网络层现有的测试"},
+                "".join("Test Case '-[WeatherTests.APITests test%03d_fetchForecastRetries]' passed (0.%03d seconds).\n" % (i, i % 1000) for i in range(240))
+                + "Test Suite 'APITests' passed.\n    Executed 240 tests, with 0 failures (0 unexpected) in 4.812 seconds\n", 3)
     + [it("assistant", "text", 2, text="开始写测试前想确认一下用哪个测试框架。")]
 )
 ITEMS[BLOG] = (
@@ -353,6 +371,10 @@ class H(BaseHTTPRequestHandler):
             b = q.get("before_seq", [""])[0]
             if b: items = [x for x in items if x["seq"] < int(b)]
             return self.send_json({"items": items, "has_more": False, **span(items, None, int(b) - 1 if b else last)})
+        if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/full"):
+            from urllib.parse import unquote
+            item = FULL.get(unquote(p.split("/")[7]))
+            return self.send_json(item) if item else self.send_json({"error": "not found"}, 404)
         if p.startswith("/api/v1/sessions/") and p.endswith("/info"):  # the chat's 开发信息 card
             s = next((s for s in all_sessions() if s["session_id"] == p.split("/")[5]), {})
             return self.send_json({"session_id": s.get("session_id", ""), "cwd": s.get("cwd"), "model": "claude-opus-5",

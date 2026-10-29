@@ -18,10 +18,15 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// Limits keep huge tool outputs and images from flooding the phone.
+// Limits keep huge tool outputs and images from flooding the phone. Parsing keeps up to maxTextLen of any text, what
+// "看全文" shows; pages and pushes carry a light copy (light): a tool's output cut to pageOutputLen, other text to
+// pageTextLen, images without their data.
 const (
-	maxTextLen  = 24 * 1024
-	maxImageLen = 1536 * 1024
+	maxTextLen    = 1 << 20
+	pageTextLen   = 24 * 1024
+	pageOutputLen = 4 * 1024
+	maxInputLen   = 24 * 1024 // tool inputs (a Write's content…) are not fetched whole: clipped for good
+	maxImageLen   = 1536 * 1024
 )
 
 type entry struct {
@@ -159,6 +164,9 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	}
 	if len(items) > 0 && items[0].Role == "user" && items[0].Kind == proto.KindText {
 		meta.Turns++
+	}
+	if len(meta.FirstUser) > pageTextLen { // it titles the session in every list
+		meta.FirstUser = clipTo(meta.FirstUser, pageTextLen)
 	}
 	for _, it := range items {
 		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
@@ -872,9 +880,35 @@ func clipTo(s string, n int) string {
 	return s[:cut] + fmt.Sprintf("\n…（已截断，共 %d 字节）", len(s))
 }
 
+// light is the copy of an item that pages and pushes carry; cut says something was left out (fetch it with Full).
+// Long text ends in a line that says it was cut, so apps that do not know FullSize still show it truncated, not whole.
+func light(it proto.Item, keepImage bool) (_ proto.Item, cut bool) {
+	limit := pageTextLen
+	if it.Kind == proto.KindToolResult {
+		limit = pageOutputLen
+	}
+	if len(it.Text) > limit {
+		end := limit
+		for end > 0 && (it.Text[end]&0xC0) == 0x80 {
+			end--
+		}
+		if nl := strings.LastIndexByte(it.Text[:end], '\n'); nl > end-512 { // end on a whole line when one is near
+			end = nl
+		}
+		it.FullSize = len(it.Text)
+		it.Text = it.Text[:end] + fmt.Sprintf("\n…（已截断，点开看全文，共 %d 字节）", len(it.Text))
+		cut = true
+	}
+	if it.Image != nil && it.Image.Data != "" && !keepImage {
+		it.Image = it.Image.Placeholder()
+		cut = true
+	}
+	return it, cut
+}
+
 // clipJSON shortens very long string fields (e.g. Write content) inside tool inputs.
 func clipJSON(raw json.RawMessage) json.RawMessage {
-	if len(raw) <= maxTextLen {
+	if len(raw) <= maxInputLen {
 		return raw
 	}
 	var m map[string]any
@@ -882,8 +916,8 @@ func clipJSON(raw json.RawMessage) json.RawMessage {
 		return raw
 	}
 	for k, v := range m {
-		if s, ok := v.(string); ok && len(s) > maxTextLen/2 {
-			m[k] = clipTo(s, maxTextLen/2)
+		if s, ok := v.(string); ok && len(s) > maxInputLen/2 {
+			m[k] = clipTo(s, maxInputLen/2)
 		}
 	}
 	b, _ := json.Marshal(m)
@@ -905,6 +939,14 @@ type File struct {
 	ino       uint64
 	firstHash uint32
 	gen       int
+	// cut: where the lines whose stored items were cut down (light) sit in the file, by seq; Full reads them again.
+	// Images used to stay in memory for every session ever opened.
+	cut map[int]lineRef
+}
+
+type lineRef struct {
+	off int64
+	n   int
 }
 
 // Span says where a batch of items sits in the transcript, so a client can tell whether it continues what it has.
@@ -950,7 +992,7 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	}
 	ino := inode(st)
 	if st.Size() < f.offset || (f.ino != 0 && ino != 0 && ino != f.ino) { // truncated or replaced: start over
-		f.offset, f.lines, f.partial, f.items, f.meta = 0, 0, nil, nil, Meta{Sidechain: f.meta.Sidechain}
+		f.offset, f.lines, f.partial, f.items, f.cut, f.meta = 0, 0, nil, nil, nil, Meta{Sidechain: f.meta.Sidechain}
 		f.firstHash = 0
 		f.gen++
 	}
@@ -968,14 +1010,15 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	}
 	f.offset += int64(len(data))
 	data = append(f.partial, data...)
+	pos := f.offset - int64(len(data)) // where data starts in the file
 	var fresh []proto.Item
 	for {
 		i := bytes.IndexByte(data, '\n')
 		if i < 0 {
 			break
 		}
-		line := data[:i]
-		data = data[i+1:]
+		line, at := data[:i], pos
+		data, pos = data[i+1:], pos+int64(i)+1
 		f.lines++
 		if f.lines == 1 {
 			f.firstHash = crc32.ChecksumIEEE(line)
@@ -983,10 +1026,22 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
-		fresh = append(fresh, ParseLine(f.lines, line, &f.meta)...)
+		// New items go out with their images (subscribers that did not ask for lazy images get them whole); the
+		// stored copy leaves them out.
+		for _, it := range ParseLine(f.lines, line, &f.meta) {
+			sent, _ := light(it, true)
+			kept, cut := light(it, false)
+			fresh = append(fresh, sent)
+			f.items = append(f.items, kept)
+			if cut {
+				if f.cut == nil {
+					f.cut = map[int]lineRef{}
+				}
+				f.cut[f.lines] = lineRef{at, i}
+			}
+		}
 	}
 	f.partial = append([]byte(nil), data...)
-	f.items = append(f.items, fresh...)
 	return fresh, Span{f.history(), from, f.lines}, nil
 }
 
@@ -1056,16 +1111,77 @@ func (f *File) PageTurns(beforeSeq, turns, maxItems int) ([]proto.Item, bool, Sp
 	return out, start > 0, f.pageSpan(start, beforeSeq)
 }
 
-// Item finds one item by id (an image a client fetches on demand).
-func (f *File) Item(id string) (proto.Item, bool) {
+// Full returns an item whole: all of its text and its image data (pages and pushes carry a light copy). The line it
+// came from is read and parsed again.
+func (f *File) Full(id string) (proto.Item, bool) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	var it proto.Item
+	found := false
 	for i := len(f.items) - 1; i >= 0; i-- {
 		if f.items[i].ID == id {
-			return f.items[i], true
+			it, found = f.items[i], true
+			break
 		}
 	}
-	return proto.Item{}, false
+	ref, cut := f.cut[it.Seq]
+	scratch := Meta{Sidechain: f.meta.Sidechain, Codex: f.meta.Codex}
+	f.mu.Unlock()
+	if !found || !cut {
+		return it, found
+	}
+	if full, ok := f.reparse(it.Seq, ref, &scratch)[id]; ok {
+		it.Text, it.FullSize, it.Image = full.Text, 0, full.Image
+	}
+	return it, true
+}
+
+// WithImages puts the image data back into items (for callers that did not ask for lazy images).
+func (f *File) WithImages(items []proto.Item) []proto.Item {
+	var out []proto.Item
+	parsed := map[int]map[string]proto.Item{}
+	for i, it := range items {
+		if it.Image == nil || !it.Image.Lazy {
+			continue
+		}
+		f.mu.Lock()
+		ref, cut := f.cut[it.Seq]
+		scratch := Meta{Sidechain: f.meta.Sidechain, Codex: f.meta.Codex}
+		f.mu.Unlock()
+		if !cut {
+			continue
+		}
+		if parsed[it.Seq] == nil {
+			parsed[it.Seq] = f.reparse(it.Seq, ref, &scratch)
+		}
+		if full, ok := parsed[it.Seq][it.ID]; ok && full.Image != nil {
+			if out == nil {
+				out = append([]proto.Item(nil), items...)
+			}
+			out[i].Image = full.Image
+		}
+	}
+	if out == nil {
+		return items
+	}
+	return out
+}
+
+// reparse reads line seq again and returns its items by id (none if the file changed under it).
+func (f *File) reparse(seq int, ref lineRef, scratch *Meta) map[string]proto.Item {
+	fh, err := os.Open(f.Path)
+	if err != nil {
+		return nil
+	}
+	defer fh.Close()
+	line := make([]byte, ref.n)
+	if _, err := fh.ReadAt(line, ref.off); err != nil {
+		return nil
+	}
+	out := map[string]proto.Item{}
+	for _, it := range ParseLine(seq, line, scratch) {
+		out[it.ID] = it
+	}
+	return out
 }
 
 // After returns items with seq > afterSeq, oldest first: at least limit of them unless fewer exist, and never part of

@@ -153,7 +153,7 @@ struct ToolCallRow: View {
     var autoExpand: Bool
     @State private var expanded: Bool?
 
-    private var isOpen: Bool { expanded ?? autoExpand }
+    private var isOpen: Bool { expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil)) }
 
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
@@ -247,7 +247,7 @@ struct ToolDetail: View {
                 if i != .object([:]) { CodeBlock(text: i.pretty, maxLines: 14) }
             }
             if let result = call.result, base != "Edit" || result.isError == true {
-                ResultBlock(text: result.text ?? "", isError: result.isError ?? false)
+                ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
             } else if call.isRunning {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
@@ -306,15 +306,87 @@ struct CodeBlock: View {
 struct ResultBlock: View {
     var text: String
     var isError: Bool
+    /// The page carries only the start of a long output: its item id and whole size.
+    var cut: (id: String, size: Int)? = nil
+    @Environment(\.loadFullText) private var loadFullText
+    @State private var showFull = false
+
+    /// Simulator automation: `-showFullOutput card` opens the cut tool outputs, `sheet` also the first one's whole text.
+    #if DEBUG
+    static let debugFull = UserDefaults.standard.string(forKey: "showFullOutput") != nil
+    static let debugSheet = UserDefaults.standard.string(forKey: "showFullOutput") == "sheet"
+    @MainActor static var debugFullShown = false
+    #else
+    static let debugFull = false
+    #endif
 
     var body: some View {
-        if text.isEmpty {
+        if text.isEmpty && cut == nil {
             Text(isError ? "失败" : "完成，无输出").font(.caption).foregroundStyle(isError ? Theme.danger : .secondary)
         } else {
-            CodeBlock(text: text, maxLines: 10)
-                .overlay(alignment: .topTrailing) {
-                    if isError { Image(systemName: "xmark.octagon.fill").foregroundStyle(Theme.danger).padding(6) }
+            VStack(alignment: .leading, spacing: 4) {
+                CodeBlock(text: text, maxLines: 10)
+                    .overlay(alignment: .topTrailing) {
+                        if isError { Image(systemName: "xmark.octagon.fill").foregroundStyle(Theme.danger).padding(6) }
+                    }
+                if let cut {
+                    Button { showFull = true } label: {
+                        Label("已截断，看全文（\(ByteCountFormatter.string(fromByteCount: Int64(cut.size), countStyle: .file))）",
+                              systemImage: "text.alignleft")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .font(.caption.weight(.medium))
+                    .sheet(isPresented: $showFull) { FullOutputSheet(itemID: cut.id, load: loadFullText) }
+                    #if DEBUG
+                    .task {
+                        guard Self.debugSheet, !Self.debugFullShown else { return }
+                        Self.debugFullShown = true
+                        try? await Task.sleep(for: .seconds(1))
+                        showFull = true
+                    }
+                    #endif
                 }
+            }
+        }
+    }
+}
+
+/// A tool's whole output, fetched when opened (pages carry its first 4 KB). Monospaced, scrolls both ways.
+struct FullOutputSheet: View {
+    var itemID: String
+    var load: ((String) async throws -> String)?
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let text {
+                    MonoTextView(text: MonoText.plain(text, color: .label, size: 12))
+                } else if let error {
+                    ContentUnavailableView("加载失败", systemImage: "exclamationmark.triangle", description: Text(error))
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .background(Theme.codeBackground)
+            .navigationTitle("工具输出")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                if let text {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { UIPasteboard.general.string = text } label: { Image(systemName: "doc.on.doc") }
+                            .accessibilityLabel("拷贝全文")
+                    }
+                }
+            }
+        }
+        .task {
+            guard text == nil, let load else { return }
+            do { text = try await load(itemID) } catch { if let msg = error.shown { self.error = msg } }
         }
     }
 }

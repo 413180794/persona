@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -387,7 +388,7 @@ func TestImageTooLargeIsDropped(t *testing.T) {
 
 func TestClipJSONKeepsRunesIntact(t *testing.T) {
 	// A leading ASCII byte shifts the cut point into the middle of a rune.
-	body := "a" + strings.Repeat("汉", maxTextLen)
+	body := "a" + strings.Repeat("汉", maxInputLen)
 	raw := json.RawMessage(`{"content":"` + body + `"}`)
 	var out map[string]string
 	if err := json.Unmarshal(clipJSON(raw), &out); err != nil {
@@ -397,7 +398,7 @@ func TestClipJSONKeepsRunesIntact(t *testing.T) {
 		t.Fatal("clipJSON cut a rune in half")
 	}
 	// clipTo appends a "\n…（已截断，共 N 字节）" suffix, so allow a little slack over the limit.
-	if len(out["content"]) > maxTextLen/2+64 {
+	if len(out["content"]) > maxInputLen/2+64 {
 		t.Fatalf("content was not shortened: %d bytes", len(out["content"]))
 	}
 }
@@ -775,5 +776,40 @@ func TestSubagentFileKeepsSidechainAfterRewrite(t *testing.T) {
 	_ = os.WriteFile(path, []byte(line+"\n"), 0o600) // shorter: start over
 	if items, _ := f.Refresh(); len(items) != 1 {
 		t.Fatalf("a rewritten subagent transcript lost its lines: %d items", len(items))
+	}
+}
+
+func TestLongToolOutputIsCutForPages(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	out := strings.Repeat("第 n 行的输出\n", 2000)
+	lines := []string{
+		`{"type":"assistant","uuid":"a1","message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"seq"}}]}}`,
+		`{"type":"user","uuid":"u1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":` + strconv.Quote(out) + `}]}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := NewFile(path)
+	fresh, err := f.Refresh()
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, _, _ := f.Page(0, 10)
+	for _, got := range [][]proto.Item{fresh, items} { // pushes and pages alike
+		r := got[1]
+		if r.FullSize != len(out) || len(r.Text) > pageOutputLen+100 || !strings.HasSuffix(r.Text, "…（已截断，点开看全文，共 "+strconv.Itoa(len(out))+" 字节）") {
+			t.Fatalf("full_size %d, %d bytes, ends %q", r.FullSize, len(r.Text), r.Text[len(r.Text)-60:])
+		}
+		if !strings.HasSuffix(strings.TrimSuffix(r.Text, "\n…（已截断，点开看全文，共 "+strconv.Itoa(len(out))+" 字节）"), "第 n 行的输出") {
+			t.Fatal("the cut should end on a whole line")
+		}
+	}
+	full, ok := f.Full("u1#0")
+	if !ok || full.Text != out || full.FullSize != 0 {
+		t.Fatalf("Full gave %d bytes, full_size %d", len(full.Text), full.FullSize)
+	}
+	if _, ok := f.Full("nope"); ok {
+		t.Fatal("unknown id")
 	}
 }

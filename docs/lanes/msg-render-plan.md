@@ -123,6 +123,14 @@ item 一经发出不再变化，这个模型是对的。Ovis 值得借的是三�
 字段名用 `from_seq` / `to_seq`（`to_seq` 包含没有 item 的行，空批次也推），协议见 `docs/protocol.md`「items 的连续性」；
 订阅引用计数只做在 App（hub 每个连接本来就按会话去重）；心跳靠 hub 的 websocket 库自动回 pong。
 
+阶段 3 已提交在 lane 分支（未合入 master），实测（`go test ./internal/transcript -run ColdOpenCost -v -args -cost`，20.8 MB 带截图的 transcript）：
+常驻内存 18.7 MB → 0.5 MB（item 不再常驻图片数据，按行偏移重读）；node 只留最近用过的 16 个会话（watch 中的不回收）；
+工具输出页内截到 4 KB，末尾一行「…（已截断，点开看全文，共 N 字节）」+ `full_size`，App 点「已截断，看全文」取 `/items/{id}/full`；
+App 的 rows / blocks 只重建最后一轮（1000 轮会话每次事件 21 ms → 0.4 ms，模拟器 Debug），对话页不再因每条 item 重算图片列表，内存里只留 8 个不在屏幕上的会话。
+**和方案的出入**：冷打开窗口化解析（C2）没做——20.8 MB 首页 236 ms，时间花在逐行 JSON 解析（大头是截图的 base64），
+而会话级 Meta（轮数、标题、后台任务、队列）本来就要整份过一遍；窗口化最多省到几十毫秒，代价是 Meta 不完整、分页逻辑复杂，
+加上 LRU 后每个会话只在冷打开时付一次。`StreamingText` 按段落缓存 Markdown 解析也没做（只有助手流式时有，单段文字很短）。
+
 ### 阶段 0：测试基建（先做）
 
 - **改什么**

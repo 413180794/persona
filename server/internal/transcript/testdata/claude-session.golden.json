@@ -115,7 +115,11 @@
       "kind": "image",
       "image": {
         "mime": "image/png",
-        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        "data": "",
+        "lazy": true,
+        "size": 72,
+        "width": 1,
+        "height": 1
       }
     },
     {
@@ -142,7 +146,11 @@
       "kind": "image",
       "image": {
         "mime": "image/png",
-        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        "data": "",
+        "lazy": true,
+        "size": 72,
+        "width": 1,
+        "height": 1
       }
     },
     {
@@ -342,7 +350,11 @@
       "tool_use_id": "toolu_vzSf5BYEGMKMHHMDgMrxEFAb",
       "image": {
         "mime": "image/jpeg",
-        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        "data": "",
+        "lazy": true,
+        "size": 72,
+        "width": 1,
+        "height": 1
       }
     }
   ],

@@ -363,6 +363,9 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var toolName: String?
     var toolInput: JSONValue?
     var isError: Bool?
+    /// The hub cut `text` for the page (it ends in a "…（已截断，点开看全文，共 N 字节）" line): the whole is this many bytes,
+    /// `APIClient.fullItem` fetches it.
+    var fullSize: Int?
     var image: ImagePayload?
     /// User input typed while the agent worked and absorbed mid-turn.
     var queued: Bool?
@@ -373,7 +376,13 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, seq, ts, role, kind, text, image, queued, from, wake
-        case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error"
+        case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size"
+    }
+
+    /// The text without the line the hub adds where it cut it (the app offers the whole text itself).
+    var cutText: String {
+        guard fullSize != nil, let text, let r = text.range(of: "\n…（已截断", options: .backwards) else { return text ?? "" }
+        return String(text[..<r.lowerBound])
     }
 }
 

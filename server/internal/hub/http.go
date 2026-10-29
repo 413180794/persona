@@ -59,6 +59,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions", h.startSession)
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items", h.withMachine(h.sessionItems))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image", h.withMachine(h.sessionImage))
+	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full", h.withMachine(h.sessionItemFull))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.proxyBody("session.send"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
@@ -296,6 +297,9 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if q.Has("after_seq") { // what came after the app's newest item (background sync); has_more is meaningless here
 		params["after_seq"] = atoi(q.Get("after_seq"))
 	}
+	if q.Get("lazy_images") == "1" {
+		params["lazy_images"] = true // the node keeps images out of its items; it would read them back for nothing
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	var res struct {
@@ -312,6 +316,19 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 		res.Items = proto.WithoutImageData(res.Items)
 	}
 	writeJSON(w, res)
+}
+
+// sessionItemFull serves one item whole: pages cut long text (the item says full_size), the app fetches the rest when
+// the user opens it.
+func (h *Hub) sessionItemFull(w http.ResponseWriter, r *http.Request, m *Machine) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	var it proto.Item
+	if err := m.call(ctx, "session.item", map[string]any{"session_id": r.PathValue("sid"), "item_id": r.PathValue("iid")}, &it); err != nil {
+		callErr(w, err)
+		return
+	}
+	writeJSON(w, it)
 }
 
 // sessionImage serves one item's image as raw bytes. An item's image never changes, so the app may cache it forever.
@@ -687,7 +704,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 	c.mu.Unlock()
 	after := since
 	for page := 0; ; page++ {
-		params := map[string]any{"session_id": sid, "turns": 2} // the last two exchanges, however many rows they are
+		params := map[string]any{"session_id": sid, "turns": 2, "lazy_images": lazy} // the last two exchanges, however many rows they are
 		if since > 0 {
 			params["after_seq"] = after
 		}

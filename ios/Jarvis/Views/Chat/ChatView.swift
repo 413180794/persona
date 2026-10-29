@@ -165,7 +165,7 @@ struct ChatView: View {
         .environment(\.openFile) { path in
             file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
         }
-        .environment(\.chatImages, store.items.compactMap(\.image))
+        .environment(\.chatImages, store.images)
         .environment(\.openLink) { url in link = LinkTarget(url: url) }
         // Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
         .environment(\.openURL, OpenURLAction { url in
@@ -178,6 +178,10 @@ struct ChatView: View {
         .environment(\.loadImage) { [model, key] path in
             guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
             return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
+        }
+        .environment(\.loadFullText) { [model, key] id in
+            guard let api = model.api else { throw CancellationError() }
+            return try await api.fullItem(key, id: id).text ?? ""
         }
         .onAppear(perform: appeared)
         .onDisappear {

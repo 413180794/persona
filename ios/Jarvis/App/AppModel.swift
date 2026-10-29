@@ -182,10 +182,28 @@ final class AppModel {
     }
 
     func chat(_ key: SessionKey) -> ChatStore {
+        chatTick += 1
+        chatUse[key] = chatTick
         if let c = chats[key] { return c }
         let c = ChatStore(key: key)
         chats[key] = c
+        evictChats()
         return c
+    }
+
+    /// Chats kept in memory besides the ones on screen or subscribed: every session ever opened used to stay, all
+    /// its loaded history with it. A dropped one comes back from the disk cache and the hub.
+    static let keptChats = 8
+    @ObservationIgnored private var chatUse: [SessionKey: Int] = [:]
+    @ObservationIgnored private var chatTick = 0
+
+    private func evictChats() {
+        let idle = chats.keys.filter { k in subscribers[k] == nil && !shown.contains { $0.key == k } && k != visibleSession }
+        guard idle.count > Self.keptChats else { return }
+        for k in idle.sorted(by: { chatUse[$0, default: 0] < chatUse[$1, default: 0] }).prefix(idle.count - Self.keptChats) {
+            chats[k] = nil
+            chatUse[k] = nil
+        }
     }
 
     // MARK: Subscriptions

@@ -183,13 +183,7 @@ nonisolated struct APIClient: Sendable {
     func image(ref: String) async throws -> Data {
         let parts = ref.split(separator: "/", maxSplits: 2).map(String.init)
         guard parts.count == 3 else { throw APIError(status: 0, message: "bad image ref") }
-        // Item ids carry '#' and ':'; appending(path:) would leave '#' to start a fragment.
-        let id = parts[2].addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? parts[2]
-        var comps = URLComponents(url: config.url, resolvingAgainstBaseURL: false)!
-        var base = comps.percentEncodedPath
-        if base.hasSuffix("/") { base.removeLast() }
-        comps.percentEncodedPath = base + "/api/v1/sessions/\(parts[0])/\(parts[1])/items/\(id)/image"
-        var req = URLRequest(url: comps.url!, timeoutInterval: 60)
+        var req = URLRequest(url: itemURL(machine: parts[0], session: parts[1], item: parts[2], "image"), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await Self.uncachedSession.data(for: req) // ChatImageLoader keeps it on disk
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -197,6 +191,28 @@ nonisolated struct APIClient: Sendable {
             throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
         }
         return data
+    }
+
+    /// An item whole: the text a page cut (`Item.fullSize`).
+    func fullItem(_ k: SessionKey, id: String) async throws -> Item {
+        var req = URLRequest(url: itemURL(machine: k.machineID, session: k.sessionID, item: id, "full"), timeoutInterval: 60)
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let (data, resp) = try await Self.uncachedSession.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status))
+        }
+        return try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(Item.self, from: data) }.value
+    }
+
+    /// …/items/<item id>/<what>. Item ids carry '#' and ':'; appending(path:) would leave '#' to start a fragment.
+    private func itemURL(machine: String, session: String, item: String, _ what: String) -> URL {
+        let id = item.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? item
+        var comps = URLComponents(url: config.url, resolvingAgainstBaseURL: false)!
+        var base = comps.percentEncodedPath
+        if base.hasSuffix("/") { base.removeLast() }
+        comps.percentEncodedPath = base + "/api/v1/sessions/\(machine)/\(session)/items/\(id)/\(what)"
+        return comps.url!
     }
 
     struct NewerResponse: Decodable, Sendable {

@@ -336,6 +336,14 @@ struct TurnTests {
         #expect(UserBubble.display("[Image #21]1 多了一个色块") == "1 多了一个色块")
     }
 
+    @Test func cutOutputsKnowTheirWholeSize() throws {
+        let json = #"{"id":"u1#0","seq":3,"role":"user","kind":"tool_result","text":"a\nb\n…（已截断，点开看全文，共 4874 字节）","full_size":4874}"#
+        let it = try JSON.decoder.decode(Item.self, from: Data(json.utf8))
+        #expect(it.fullSize == 4874 && it.cutText == "a\nb")
+        let whole = try JSON.decoder.decode(Item.self, from: Data(#"{"id":"u1#0","seq":3,"role":"user","kind":"tool_result","text":"a\nb"}"#.utf8))
+        #expect(whole.fullSize == nil && whole.cutText == "a\nb")
+    }
+
     @Test func contextTagRoundTrips() {
         let ref = ContextRef(kind: "edit", title: "A \"quoted\" <title>", url: "https://x.y/a?b=1&c=2", text: "选中的 <b>文字</b>")
         let msg = ref.xml + "\n\n按要求修改上面选中的内容：更短"

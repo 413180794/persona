@@ -177,6 +177,19 @@ type Image struct {
 	Height int  `json:"height,omitempty"`
 }
 
+// Placeholder is the image without its data: what a page carries, fetched on demand when shown.
+func (img *Image) Placeholder() *Image {
+	if img.Data == "" {
+		return img
+	}
+	lazy := &Image{Mime: img.Mime, Lazy: true, Size: len(img.Data) * 3 / 4}
+	// Only the header is read: the decoder stops once it knows the size.
+	if c, _, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(img.Data))); err == nil {
+		lazy.Width, lazy.Height = c.Width, c.Height
+	}
+	return lazy
+}
+
 // WithoutImageData returns items whose images carry no data, only a placeholder to fetch on demand: chat pages
 // with screenshots inline ran to megabytes.
 func WithoutImageData(items []Item) []Item {
@@ -188,12 +201,7 @@ func WithoutImageData(items []Item) []Item {
 		if out == nil {
 			out = append([]Item(nil), items...)
 		}
-		lazy := &Image{Mime: it.Image.Mime, Lazy: true, Size: len(it.Image.Data) * 3 / 4}
-		// Only the header is read: the decoder stops once it knows the size.
-		if c, _, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(it.Image.Data))); err == nil {
-			lazy.Width, lazy.Height = c.Width, c.Height
-		}
-		out[i].Image = lazy
+		out[i].Image = it.Image.Placeholder()
 	}
 	if out == nil {
 		return items
@@ -215,6 +223,9 @@ type Item struct {
 	IsError   bool            `json:"is_error,omitempty"`
 	Image     *Image          `json:"image,omitempty"`
 	Queued    bool            `json:"queued,omitempty"` // user input typed while the agent worked, absorbed mid-turn
+	// FullSize: Text was cut for pages and pushes (it ends in a "已截断，点开看全文" line); the whole of it, this many
+	// bytes, comes from GET /api/v1/sessions/{mid}/{sid}/items/{item id}/full.
+	FullSize int `json:"full_size,omitempty"`
 	// Wake marks a background task's notice that started new work after the agent had finished its turn
 	// (not one absorbed mid-turn): the exchange before it is over and its last words are an answer.
 	Wake bool `json:"wake,omitempty"`

@@ -56,6 +56,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   要拍对话 tab 就先卸载重装（新装默认在对话 tab）。
 - 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
 - 深色：`xcrun simctl ui $SIM appearance dark`。
+- 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openWork YES -showFullOutput card`（展开「运行」卡片，
+  看「已截断，看全文」）或 `sheet`（再打开全文浮层，mock 的 `/items/{id}/full` 回全文）。
 - 断档自愈（`docs/protocol.md`「items 的连续性」）：`MOCK_GAP=1` 启动 mock 并卸载重装 App，`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`。
   这个会话先只有前 8 行，2 秒后「写入」后 6 条，但只推最后 2 条（`from_seq` 12）；日志里应在约 1.5 秒后出现 `items after_seq=8`，
   对话页的工作过程显示「工具 5」。等日志用带超时的脚本，别写只等成功的 `until grep`。

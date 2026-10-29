@@ -258,6 +258,9 @@ final class ChatStore {
     private(set) var items: [Item] = []
     private(set) var rows: [ChatRow] = []
     private(set) var blocks: [ChatBlock] = []
+    /// Every image in the conversation (the viewer pages through them), rebuilt with `blocks`: a view that derived it
+    /// from `items` in its body redrew on every item.
+    private(set) var images: [ImagePayload] = []
     /// Bumped whenever `blocks` is rebuilt: views key derived data (the chat's lines) on it instead of diffing blocks.
     @ObservationIgnored private(set) var version = 0
     private(set) var hasMore = false
@@ -372,6 +375,55 @@ final class ChatStore {
     }
 
     @ObservationIgnored private var rebuildScheduled = false
+    @ObservationIgnored private var settled: SettledRows?
+
+    /// The rows and blocks of everything before the last exchange, reused while items only grow at the end (a live
+    /// session): rebuilding all of them on every event took 30 ms at 1000 exchanges.
+    nonisolated struct SettledRows: Sendable {
+        var count: Int
+        var firstID: String
+        var lastID: String
+        var rows: [ChatRow]
+        var blocks: [ChatBlock]
+    }
+
+    /// `buildRows` + `ChatBlock.build`, redoing only what comes after `settled` when that still holds. An exchange
+    /// starts at a prompt and nothing before it changes when items are appended — unless a tool result (or a tool's
+    /// image) arrives for a call before it; then everything is built again.
+    static func rebuild(_ items: [Item], settled: SettledRows?) -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
+        func full() -> (rows: [ChatRow], blocks: [ChatBlock], settled: SettledRows?) {
+            let rows = buildRows(items)
+            return (rows, ChatBlock.build(rows), nil)
+        }
+        guard let cut = items.lastIndex(where: { $0.role == "user" && $0.kind == .text && $0.queued != true }), cut > 0,
+              standsAlone(items[cut...]) else { return full() }
+        var base = settled
+        // Still the same items up to it: an older page or a sorted-in item moves them.
+        if let b = base, !(b.count <= cut && items.first?.id == b.firstID && items[b.count - 1].id == b.lastID && standsAlone(items[b.count...])) {
+            base = nil
+        }
+        var rows = base?.rows ?? []
+        var blocks = base?.blocks ?? []
+        let start = base?.count ?? 0
+        if start < cut {
+            let more = buildRows(Array(items[start..<cut]))
+            rows += more
+            blocks += ChatBlock.build(more)
+        }
+        let next = SettledRows(count: cut, firstID: items[0].id, lastID: items[cut - 1].id, rows: rows, blocks: blocks)
+        let tail = buildRows(Array(items[cut...]))
+        return (rows + tail, blocks + ChatBlock.build(tail), next)
+    }
+
+    /// Every tool result and tool image in the slice belongs to a call in it.
+    private static func standsAlone(_ items: ArraySlice<Item>) -> Bool {
+        var calls = Set<String>()
+        for it in items {
+            guard let tid = it.toolUseID else { continue }
+            if it.kind == .toolUse { calls.insert(tid) } else if !calls.contains(tid) { return false }
+        }
+        return true
+    }
 
     /// Rows and blocks are rebuilt from all items; a burst of events (a tool call, its result, the next thought)
     /// is rebuilt and redrawn once, on the next turn of the main actor, instead of once per event.
@@ -381,8 +433,12 @@ final class ChatStore {
         Task { [weak self] in
             guard let self else { return }
             self.rebuildScheduled = false
-            self.rows = ChatStore.buildRows(self.items)
-            self.blocks = ChatBlock.build(self.rows)
+            let built = ChatStore.rebuild(self.items, settled: self.settled)
+            self.rows = built.rows
+            self.blocks = built.blocks
+            self.settled = built.settled
+            let images = self.items.compactMap(\.image)
+            if images.map(\.identity) != self.images.map(\.identity) { self.images = images }
             self.version += 1
         }
     }

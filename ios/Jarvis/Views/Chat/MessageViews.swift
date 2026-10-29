@@ -66,6 +66,8 @@ extension EnvironmentValues {
     @Entry var attachImage: ((UIImage) -> Void)? = nil
     /// Loads an image file on the session's machine (photos sent from the phone are saved there; set by ChatView).
     @Entry var loadImage: ((String) async -> ImagePayload?)? = nil
+    /// Fetches the whole text of an item the page cut (`Item.fullSize`), by item id (set by ChatView).
+    @Entry var loadFullText: ((String) async throws -> String)? = nil
 }
 
 struct UserBubble: View {

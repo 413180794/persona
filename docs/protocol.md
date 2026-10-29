@@ -51,6 +51,8 @@
  "tool_use_id":"toolu_…",                             // tool_use 与 tool_result 共用，App 据此合并成一张卡片
  "tool_name":"Bash", "tool_input":{...},              // 仅 tool_use
  "is_error":false,                                    // 仅 tool_result
+ "full_size":4874,                                    // text 被截断了（页和推送里工具输出最多 4 KB、其他文字 24 KB），全文的字节数；
+                                                      // 截断的 text 末尾是一行「…（已截断，点开看全文，共 N 字节）」，旧 App 照样能看懂
  "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）
@@ -86,6 +88,7 @@
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?}` → `{"session":Session}` |
 | GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页） |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
+| GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | 一条 item 的全文（`Item`，不带图片、没有 `full_size`；最多 1 MB）：App 点「看全文」时取。node 重新读那一行解析 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?}`；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
 | POST | `/api/v1/sessions/{mid}/{sid}/interrupt` | 发 Esc |
 | POST | `/api/v1/sessions/{mid}/{sid}/keys` | `{"keys":["esc"],"text":""}` |
@@ -224,8 +227,9 @@ hub → node 请求：
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source}` → `{text, status}` |
 | `fs.list` / `git.status` / `git.diff` / `git.show` / `git.log` | 同 REST（参数同名） |
-| `session.items` | `{session_id, before_seq, limit, turns, after_seq}` → `{items, has_more, more_after, history, to_seq, from_seq}`（`from_seq` 只在 `after_seq` 请求里有） |
-| `session.image` | `{session_id, item_id}` → `Image{mime, data}` |
+| `session.items` | `{session_id, before_seq, limit, turns, after_seq, lazy_images}` → `{items, has_more, more_after, history, to_seq, from_seq}`（`from_seq` 只在 `after_seq` 请求里有；不带 `lazy_images: true` 时 node 把图片数据读回来，兼容旧 hub） |
+| `session.image` | `{session_id, item_id}` → `Image{mime, data}`（node 的 item 不常驻图片数据，按记下的行偏移重读那一行） |
+| `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
 | `interaction.resolve` | `{id, resolution}` |

@@ -457,7 +457,7 @@ func (n *Node) watch(id string, since int) error {
 func (n *Node) catchUp(id string, f *transcript.File, since int) int {
 	for {
 		items, more, span := f.After(since, 500)
-		n.pushItems(id, items, span)
+		n.pushItems(id, f.WithImages(items), span) // the hub sends them to every subscriber, lazy or not
 		since = span.To
 		if !more {
 			return since

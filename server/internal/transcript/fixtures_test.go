@@ -155,7 +155,7 @@ func TestFixtureIncrementalEqualsCold(t *testing.T) {
 					t.Fatalf("step %d: incremental read differs from a cold read", step)
 				}
 				all, _, _ := f.Page(0, 1<<30)
-				if !bytes.Equal(marshal(t, streamed), marshal(t, all)) {
+				if !bytes.Equal(marshal(t, proto.WithoutImageData(streamed)), marshal(t, all)) {
 					t.Fatalf("step %d: the items Refresh returned are not the items the file holds", step)
 				}
 			}
@@ -221,4 +221,63 @@ func TestFixturePagingCoversEverything(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Pages carry light items (long output cut, images without data); Full gives back exactly what parsing the line gives.
+func TestFixtureFullRestoresWhatPagesLeaveOut(t *testing.T) {
+	cuts := 0
+	for _, fx := range fixtures(t) {
+		t.Run(fx.name, func(t *testing.T) {
+			data, err := os.ReadFile(fx.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			whole := map[string]proto.Item{}
+			meta := Meta{Sidechain: fx.sub}
+			for i, line := range bytes.Split(data, []byte("\n")) {
+				if len(bytes.TrimSpace(line)) == 0 {
+					continue
+				}
+				for _, it := range ParseLine(i+1, line, &meta) {
+					whole[it.ID] = it
+				}
+			}
+			f := fx.open(fx.path)
+			if _, err := f.Refresh(); err != nil {
+				t.Fatal(err)
+			}
+			all, _, _ := f.Page(0, 1<<30)
+			withImages := f.WithImages(all)
+			for i, it := range all {
+				want := whole[it.ID]
+				if it.FullSize == 0 && (it.Image == nil || !it.Image.Lazy) {
+					if it.Text != want.Text {
+						t.Fatalf("%s: uncut item differs", it.ID)
+					}
+					continue
+				}
+				cuts++
+				if it.FullSize > 0 && (it.FullSize != len(want.Text) || !strings.Contains(it.Text, "已截断，点开看全文")) {
+					t.Fatalf("%s: cut text says full_size %d (whole %d): %q", it.ID, it.FullSize, len(want.Text), it.Text[max(len(it.Text)-80, 0):])
+				}
+				full, ok := f.Full(it.ID)
+				if !ok || full.Text != want.Text || full.FullSize != 0 || !sameImage(full.Image, want.Image) {
+					t.Fatalf("%s: Full does not give back the parsed item", it.ID)
+				}
+				if !sameImage(withImages[i].Image, want.Image) || withImages[i].Text != it.Text {
+					t.Fatalf("%s: WithImages does not restore the image (or touched the text)", it.ID)
+				}
+			}
+		})
+	}
+	if cuts == 0 {
+		t.Fatal("no fixture has a long output or an image: the test checks nothing")
+	}
+}
+
+func sameImage(a, b *proto.Image) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Mime == b.Mime && a.Data == b.Data
 }
