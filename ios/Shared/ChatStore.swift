@@ -839,12 +839,16 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
 
     /// Comparable form: what the transcript keeps of it — the phone's image note, pasted wrappers and Claude's
     /// "[Image #21]" placeholders removed, whitespace ignored.
+    private static let normalized = TextMemo<String>(limit: 512)
+
     static func normalize(_ s: String) -> String {
-        var t = s
-        for pattern in [#"<attached_images>[\s\S]*?</attached_images>"#, #"<[\\/]*pasted_content[^>]*>"#, #"\[Image #\d+\]"#, #"\s+"#] {
-            t = t.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        normalized(s) { s in
+            var t = s
+            for pattern in [#"<attached_images>[\s\S]*?</attached_images>"#, #"<[\\/]*pasted_content[^>]*>"#, #"\[Image #\d+\]"#, #"\s+"#] {
+                t = t.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+            }
+            return t
         }
-        return t
     }
 
     /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:
