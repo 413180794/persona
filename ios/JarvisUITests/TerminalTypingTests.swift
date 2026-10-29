@@ -109,4 +109,32 @@ final class TerminalTypingTests: XCTestCase {
         }
         XCTAssertTrue(input().dropFirst(before).contains { $0["type"] as? String == "terminal_unsubscribe" }, "still driving after leaving")
     }
+
+    /// The terminal tab opened once the app is connected (as on a phone: the session page first, then 终端):
+    /// the view measures the phone's grid before the first frame, so the takeover starts (build 21 spun forever:
+    /// the spinner stood in for the view that tells the grid the subscribe waits for).
+    @MainActor func testOpeningTheTerminalWhenConnectedDrivesIt() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget,
+                               "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
+        app.launch()
+        let tab = app.buttons["终端"].firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 15), "no session page:\n\(app.debugDescription)")
+        sleep(3) // connected by now
+        let unfold = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
+        for _ in 0..<5 where !tab.isSelected { // the header folds into a pill: unfold it first
+            if unfold.exists, unfold.isHittable { unfold.tap(); sleep(1) }
+            tab.tap(); sleep(1)
+        }
+        XCTAssertTrue(tab.isSelected, "the terminal tab did not open")
+        let size = app.descendants(matching: .any)["terminal-size"]
+        let deadline = Date.now.addingTimeInterval(10)
+        while Date.now < deadline, !(size.exists && size.label.contains("手机尺寸")) { usleep(250_000) }
+        XCTAssertTrue(size.exists && size.label.contains("手机尺寸"),
+                      "the terminal did not start: \(size.exists ? size.label : "no size chip")\n\(app.debugDescription)")
+    }
 }

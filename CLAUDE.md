@@ -224,6 +224,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「对话」tab 是能访
   stdin 关掉、进程被 kill（包括 -9）herdr 都会把窗格放回原尺寸，所以接管进程的生死跟着 node 走就不会卡住电脑。
   herdr 从不给程序的原始字节（attach 也是它重画的网格），接管期间也没有滚动历史：历史只能手机按帧比对自己攒（`TerminalGrid.scrolled`），
   别指望换一个终端仿真库解决。键要走 RPC 的事件（method 在对端并发处理，会乱序）。`docs/terminal.md` 第十一节。
+  接管要等终端视图第一次布局量出手机的列 × 行才订阅：第一帧到之前也必须把终端视图放上去（转圈只能盖在上面），
+  build 21 用转圈顶替了视图，已连上 hub 时点「终端」永远转圈；UI 测试用 `-openPane terminal` 直接开时先走了 HTTP 读屏，测不出来
+  （`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` 先进会话、连上后再点「终端」）。
 - herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。
 - `TextField(text:selection:)` 的选区：没在编辑（未聚焦）时也会报一个选区，冷启动恢复草稿后它指在草稿中间；而且它的

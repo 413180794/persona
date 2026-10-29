@@ -280,10 +280,15 @@ struct TerminalPanel: View {
                                    description: Text("这个会话没有在 herdr 里运行，恢复会话后就能看到终端。"))
                 .foregroundStyle(Color(hex: side.foreground))
                 .frame(maxHeight: .infinity)
-        } else if !feed.loaded {
-            ProgressView().tint(Color(hex: side.foreground)).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            live
+            // The view is there while the first frame comes: its layout tells the phone's grid, which driving the
+            // terminal waits for before it subscribes (a spinner in its place kept it loading forever).
+            live.overlay {
+                if !feed.loaded {
+                    ProgressView().tint(Color(hex: side.foreground)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .allowsHitTesting(false)
+                }
+            }
         }
     }
 
