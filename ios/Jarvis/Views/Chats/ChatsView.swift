@@ -192,7 +192,7 @@ struct ChatsView: View {
                                 Image(systemName: "ellipsis.circle")
                                     .font(.body)
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 32, height: 28)
+                                    .frame(width: 44, height: 44)
                                     .contentShape(.rect)
                             }
                             .accessibilityLabel("\(g.name) 的更多操作")
@@ -494,7 +494,6 @@ struct SpaceHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(muted ? Color.secondary : group.state.color)
             Text(group.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
             if pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
             if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
@@ -519,8 +518,10 @@ struct StateCounts: View {
                 if n > 0 {
                     HStack(spacing: 3) {
                         Circle().fill(st.color).frame(width: 6, height: 6)
-                        Text("\(n)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(st.color)
+                        Text("\(n)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(n) 个\(st.label)")
                 }
             }
             // Idle as a gray dot and a number like the others: "4 空闲" wrapped to two lines in a busy header.
@@ -538,11 +539,12 @@ struct StateCounts: View {
     }
 }
 
-/// One agent inside a space: one state dot, the tab name and state on the first line, then a two-line title and
-/// the latest line.
+/// One agent: its state dot, the title and when, the latest line, then where it runs. Only 需要你 is spelled out (in
+/// its red, on the last line); the dot says every other state. The tab, the agent kind and the machine are plain
+/// words there: a tinted tab chip, a colored state word and an outlined kind tag on one line said the state three times.
 struct SlotRow: View {
     var session: Session
-    /// Muted (itself or its space): gray, no state color, a bell-slash — it should not catch the eye.
+    /// Muted (itself or its space): no state word, a bell-slash — it should not catch the eye.
     var muted = false
     /// Named when the list is grouped by state or machine (otherwise the section is the space).
     var space: String? = nil
@@ -551,64 +553,53 @@ struct SlotRow: View {
     var hideState = false
 
     var body: some View {
-        let quiet = muted || session.state == .idle || session.state == .unknown
-        let tint = quiet ? Color.secondary : session.state.color
         HStack(alignment: .top, spacing: 10) {
-            StatusDot(state: session.state, size: 9).padding(.top, 5)
+            StatusDot(state: session.state, size: 9).padding(.top, 6)
             VStack(alignment: .leading, spacing: 3) {
-                // One line that never overflows: the name gives way (middle-truncated), state, badges and time
-                // keep their size.
-                HStack(spacing: 6) {
-                    name(tint: tint)
-                    AgentTag(label: session.agentLabel)
-                    if !quiet && !hideState {
-                        Text(session.state.label).font(.caption.weight(.semibold)).foregroundStyle(tint).lineLimit(1).fixedSize()
-                    }
-                    if muted {
-                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.tertiary).accessibilityLabel("已屏蔽通知")
-                    }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(session.displayTitle)
+                        .font(.body.weight(session.state == .unread ? .bold : .semibold))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .fixedSize()
                 }
-                Text(session.displayTitle)
-                    .font(.body.weight(session.state == .unread ? .bold : .semibold))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                let last = session.lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
-                if machine != nil || last != nil {
-                    // The machine leads the preview line instead of crowding the first one.
-                    (Text(machine.map { $0 + (last == nil ? "" : " · ") } ?? "").foregroundStyle(.tertiary) + Text(last ?? ""))
-                        .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
+                    Text(last).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
+                HStack(spacing: 4) {
+                    meta.lineLimit(1)
+                    if muted {
+                        Image(systemName: "bell.slash.fill").font(.caption2).accessibilityLabel("已屏蔽通知")
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.top, 1)
             }
         }
         .padding(.vertical, 3)
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 
-    /// "app › fix-login" as one string when the space is shown, else the tab chip.
-    @ViewBuilder private func name(tint: Color) -> some View {
-        if let space {
-            Text(space + " › " + (session.slotLabel ?? session.displayTitle))
-                .font(.caption.weight(.semibold).monospaced())
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .layoutPriority(-1) // the one thing that gives way
-        } else if let slot = session.slotLabel {
-            Text(slot)
-                .font(.caption.weight(.semibold).monospaced())
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundStyle(tint)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 1.5)
-                .background(tint.opacity(0.12), in: .capsule)
-                .layoutPriority(-1)
+    /// "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
+    private var meta: Text {
+        var parts: [Text] = []
+        if session.state == .needsYou && !muted && !hideState {
+            parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
+        parts.append(Text(session.agentLabel))
+        let slot = session.slotLabel
+        if let space, !space.isEmpty {
+            parts.append(Text(slot.map { space + " › " + $0 } ?? space))
+        } else if let slot {
+            parts.append(Text(slot))
+        }
+        if let machine { parts.append(Text(machine)) }
+        return parts.dropFirst().reduce(parts[0]) { $0 + Text(" · ") + $1 }
     }
 }
 
@@ -629,8 +620,8 @@ struct IdleFoldRow: View {
                 HStack(spacing: 4) {
                     ForEach(sessions.prefix(6)) { s in
                         Text(s.slotLabel ?? s.displayTitle)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
