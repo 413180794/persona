@@ -393,7 +393,7 @@ struct TerminalPanel: View {
             if feed.loading {
                 HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
             } else if feed.drives || feed.control == .starting {
-                Text("— 更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
+                EmptyView() // driving: scrolling up is the terminal's own history since the takeover, nothing to say
             } else if feed.atLimit {
                 Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
             } else if !feed.hasOlder {
