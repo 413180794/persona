@@ -82,7 +82,7 @@ struct MachineSpacesView: View {
     @ViewBuilder private func row(_ g: SpaceGroup, busy: Bool) -> some View {
         if g.spaceID == "-" {
             ForEach(g.sessions) { s in
-                NavigationLink(value: s.key) { SlotRow(session: s, muted: model.isMuted(s.key)) }
+                NavigationLink(value: s.key) { SlotRow(session: s, muted: model.isMuted(s.key)).equatable() }
             }
         } else {
             NavigationLink(value: SpaceRoute(id: g.id)) {

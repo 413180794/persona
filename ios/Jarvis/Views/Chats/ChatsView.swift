@@ -404,6 +404,7 @@ struct ChatsView: View {
             SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
                     machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
                     hideState: inStateSection)
+                .equatable()
         }
             .swipeActions(edge: .trailing) {
                 if s.state.isLive {
@@ -557,7 +558,7 @@ struct StateCounts: View {
 /// One agent: its state dot, the title and when, the latest line, then where it runs. Only 需要你 is spelled out (in
 /// its red, on the last line); the dot says every other state. The tab, the agent kind and the machine are plain
 /// words there: a tinted tab chip, a colored state word and an outlined kind tag on one line said the state three times.
-struct SlotRow: View {
+nonisolated struct SlotRow: View, Equatable {
     var session: Session
     /// Muted (itself or its space): no state word, a bell-slash — it should not catch the eye.
     var muted = false
@@ -567,7 +568,11 @@ struct SlotRow: View {
     /// The section already says the state (grouped by state): no state word on the row.
     var hideState = false
 
+    @MainActor
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("SlotRow.body")
+        #endif
         HStack(alignment: .top, spacing: 10) {
             StatusDot(state: session.state, size: 9).padding(.top, 6)
             VStack(alignment: .leading, spacing: 3) {
@@ -601,7 +606,7 @@ struct SlotRow: View {
     }
 
     /// "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
-    private var meta: Text {
+    @MainActor private var meta: Text {
         var parts: [Text] = []
         if session.state == .needsYou && !muted && !hideState {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
@@ -677,7 +682,7 @@ struct SessionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             SessionAvatar(machine: machine, state: session.state)
-            SlotRow(session: session)
+            SlotRow(session: session).equatable()
         }
     }
 }
