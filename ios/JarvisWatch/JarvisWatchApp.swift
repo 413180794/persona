@@ -152,6 +152,14 @@ final class WatchModel {
 struct WatchRootView: View {
     @Environment(WatchModel.self) private var model
     @State private var openedItem: InboxItem?
+    #if DEBUG
+    @State private var openedInteraction: Interaction?
+    @State private var openedSession: Session?
+    /// `-openWatchItem running`: the list without 需要你, so the running sessions are on screen (screenshots).
+    private static let runningFirst = UserDefaults.standard.string(forKey: "openWatchItem") == "running"
+    #else
+    private static let runningFirst = false
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -159,7 +167,7 @@ struct WatchRootView: View {
                 WatchPairView()
             } else {
                 List {
-                    if !model.interactions.isEmpty || !model.inbox.isEmpty {
+                    if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
                         Section("需要你") {
                             ForEach(model.interactions) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
@@ -204,11 +212,24 @@ struct WatchRootView: View {
                 .refreshable { await model.refresh() }
                 .navigationDestination(item: $openedItem) { WatchInboxItemView(item: $0) }
                 #if DEBUG
+                .navigationDestination(item: $openedInteraction) { WatchInteractionView(interaction: $0) }
+                .navigationDestination(item: $openedSession) { WatchSessionView(session: $0) }
                 // `-openInboxFirst YES`: open the first inbox item (screenshots).
                 .task {
                     guard UserDefaults.standard.bool(forKey: "openInboxFirst") else { return }
                     for _ in 0..<20 where model.inbox.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
                     openedItem = model.inbox.first
+                }
+                // `-openWatchItem question|plan|permission|screen|session`: open the first request of that kind, or the
+                // first running session (screenshots). `running` is handled by `runningFirst`.
+                .task {
+                    guard let want = UserDefaults.standard.string(forKey: "openWatchItem") else { return }
+                    for _ in 0..<20 where model.lastUpdate == nil { try? await Task.sleep(for: .milliseconds(500)) }
+                    if want == "session" {
+                        openedSession = model.sessions.first
+                    } else if want != "running" {
+                        openedInteraction = model.interactions.first { $0.kind.rawValue == want }
+                    }
                 }
                 #endif
             }
