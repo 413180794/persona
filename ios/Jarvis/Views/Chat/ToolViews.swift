@@ -151,6 +151,8 @@ struct ToolGroupView: View {
 struct ToolCallRow: View {
     var call: ToolCall
     var autoExpand: Bool
+    /// A row of an open work line's card (`WorkCardSlice` draws the card): no gray tile of its own, 44 pt tall.
+    var grouped = false
     @State private var expanded: Bool?
 
     private var isOpen: Bool { expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil)) }
@@ -164,7 +166,7 @@ struct ToolCallRow: View {
             } label: {
                 HStack(spacing: 10) {
                     ZStack {
-                        Circle().fill(tint.opacity(0.14)).frame(width: 26, height: 26)
+                        Circle().fill(tint.opacity(0.14)).frame(width: 24, height: 24)
                         if call.isRunning {
                             ProgressView().controlSize(.mini).tint(tint)
                         } else {
@@ -186,23 +188,25 @@ struct ToolCallRow: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                 }
-                .padding(.vertical, 7)
-                .padding(.horizontal, 10)
+                .padding(.vertical, grouped ? 10 : 7)
+                .padding(.horizontal, pad)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
 
             if base == "TodoWrite" {
-                TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, 10).padding(.bottom, 8)
+                TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, pad).padding(.bottom, 8)
             } else if isOpen {
                 ToolDetail(call: call)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, pad)
                     .padding(.bottom, 10)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(grouped ? Color.clear : Color.primary.opacity(0.035), in: .rect(cornerRadius: 14, style: .continuous))
     }
+
+    private var pad: CGFloat { grouped ? WorkCardSlice.inset : 10 }
 
     private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.busy : .secondary }
 }
@@ -219,20 +223,19 @@ struct ToolDetail: View {
             case "Bash":
                 CodeBlock(text: "$ " + (i["command"]?.string ?? ""), maxLines: 12)
             case "Edit":
-                path(i["file_path"]?.string)
-                if let diff = i["diff"]?.string { // Codex: the patch as a unified diff
-                    UnifiedDiffView(diff: diff)
-                } else {
-                    DiffView(old: i["old_string"]?.string ?? "", new: i["new_string"]?.string ?? "")
-                }
+                // Codex: the patch as a unified diff; Claude: the old and new strings.
+                let diff = i["diff"]?.string.map(DiffView.init(unified:))
+                    ?? DiffView(old: i["old_string"]?.string ?? "", new: i["new_string"]?.string ?? "")
+                diffHeader(i["file_path"]?.string, [diff])
+                diff
             case "MultiEdit":
-                path(i["file_path"]?.string)
-                ForEach(Array((i["edits"]?.array ?? []).enumerated()), id: \.offset) { _, e in
-                    DiffView(old: e["old_string"]?.string ?? "", new: e["new_string"]?.string ?? "")
-                }
+                let diffs = (i["edits"]?.array ?? []).map { DiffView(old: $0["old_string"]?.string ?? "", new: $0["new_string"]?.string ?? "") }
+                diffHeader(i["file_path"]?.string, diffs)
+                ForEach(Array(diffs.enumerated()), id: \.offset) { _, d in d }
             case "Write":
-                path(i["file_path"]?.string)
-                CodeBlock(text: i["content"]?.string ?? "", maxLines: 16)
+                let diff = DiffView(old: "", new: i["content"]?.string ?? "")
+                diffHeader(i["file_path"]?.string, [diff])
+                diff
             case "Read", "NotebookEdit":
                 path(i["file_path"]?.string ?? i["notebook_path"]?.string)
             case "ExitPlanMode":
@@ -255,6 +258,31 @@ struct ToolDetail: View {
                 }
             }
             ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
+        }
+    }
+
+    /// The file a diff is in: name, folder, +N −N; a tap opens it.
+    @ViewBuilder private func diffHeader(_ p: String?, _ diffs: [DiffView]) -> some View {
+        if let p, !p.isEmpty {
+            let adds = diffs.reduce(0) { $0 + $1.adds }, dels = diffs.reduce(0) { $0 + $1.dels }
+            let header = HStack(spacing: 6) {
+                Image(systemName: FileViewer.symbol(for: p)).font(.caption).foregroundStyle(.secondary)
+                Text((p as NSString).lastPathComponent).font(.footnote.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text((p as NSString).deletingLastPathComponent).font(.footnote).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.head)
+                Spacer(minLength: 4)
+                if adds > 0 { Text("+\(adds)").foregroundStyle(Theme.Diff.add) }
+                if dels > 0 { Text("−\(dels)").foregroundStyle(Theme.Diff.del) }
+                if openFile != nil { Image(systemName: "arrow.up.forward.square").font(.caption).foregroundStyle(Theme.accent) }
+            }
+            .font(.footnote.weight(.semibold).monospacedDigit())
+            if let openFile {
+                Button { openFile(p) } label: { header.contentShape(.rect) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("查看文件 \((p as NSString).lastPathComponent)，新增 \(adds) 行，删除 \(dels) 行")
+            } else {
+                header
+            }
         }
     }
 
@@ -325,10 +353,12 @@ struct ResultBlock: View {
             Text(isError ? "失败" : "完成，无输出").font(.caption).foregroundStyle(isError ? Theme.danger : .secondary)
         } else {
             VStack(alignment: .leading, spacing: 4) {
+                // Above the output: over it, the mark covered the end of the first line.
+                if isError {
+                    Label("出错了", systemImage: "xmark.octagon.fill").font(.caption.weight(.semibold)).foregroundStyle(Theme.danger)
+                        .lineLimit(1)
+                }
                 CodeBlock(text: text, maxLines: 10)
-                    .overlay(alignment: .topTrailing) {
-                        if isError { Image(systemName: "xmark.octagon.fill").foregroundStyle(Theme.danger).padding(6) }
-                    }
                 if let cut {
                     Button { showFull = true } label: {
                         Label("已截断，看全文（\(ByteCountFormatter.string(fromByteCount: Int64(cut.size), countStyle: .file))）",
@@ -398,74 +428,78 @@ struct FullOutputSheet: View {
     }
 }
 
+/// The chat's one diff: Edit / MultiEdit / Write (old and new text) and Codex's patches (a unified diff), on the Git
+/// page's line model (`DiffText.Line`, `DiffText.parse`; the Git page draws whole files with MonoTextView). Only the
+/// sign and the line's background are colored, the code stays label; long lines scroll sideways and a fade on the
+/// right says there is more. Long diffs show their start and 展开全部.
 struct DiffView: View {
-    var old: String
-    var new: String
+    var lines: [DiffText.Line]
+    var adds: Int
+    var dels: Int
+    @State private var full = false
+    @State private var moreRight = false
+    private static let maxLines = 40
 
-    var body: some View {
+    /// All of old removed, then all of new added (Claude's Edit has no line numbers or context).
+    init(old: String, new: String) {
         let removed = old.isEmpty ? [] : old.components(separatedBy: "\n")
         let added = new.isEmpty ? [] : new.components(separatedBy: "\n")
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(removed.prefix(30).enumerated()), id: \.offset) { _, l in line("-", l, Theme.Diff.del, Theme.Diff.delFill) }
-                ForEach(Array(added.prefix(30).enumerated()), id: \.offset) { _, l in line("+", l, Theme.Diff.add, Theme.Diff.addFill) }
-                if removed.count > 30 || added.count > 30 {
-                    Text("… 共 -\(removed.count) +\(added.count) 行").font(.caption2).foregroundStyle(.secondary).padding(6)
-                }
-            }
-            .padding(.vertical, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
+        lines = removed.enumerated().map { DiffText.Line(id: $0.offset, kind: .del, text: $0.element) }
+            + added.enumerated().map { DiffText.Line(id: removed.count + $0.offset, kind: .add, text: $0.element) }
+        adds = added.count
+        dels = removed.count
     }
 
-    private func line(_ sign: String, _ text: String, _ color: Color, _ fill: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(sign).foregroundStyle(color).frame(width: 10)
-            Text(text.isEmpty ? " " : text)
+    init(unified diff: String) {
+        lines = DiffText.parse(diff)
+        adds = lines.filter { $0.kind == .add }.count
+        dels = lines.filter { $0.kind == .del }.count
+    }
+
+    var body: some View {
+        let clipped = !full && lines.count > Self.maxLines
+        VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(clipped ? Array(lines.prefix(Self.maxLines)) : lines) { line($0) }
+                }
+                .padding(.vertical, 6)
+            }
+            .onScrollGeometryChange(for: Bool.self) { g in
+                g.contentSize.width - g.contentOffset.x > g.containerSize.width + 1
+            } action: { _, more in moreRight = more }
+            .overlay(alignment: .trailing) {
+                if moreRight {
+                    LinearGradient(colors: [Theme.codeBackground.opacity(0), Theme.codeBackground], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 28)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.codeBackground)
+            .clipShape(.rect(cornerRadius: 10, style: .continuous))
+            if clipped {
+                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(.caption.weight(.medium)).lineLimit(1)
+            }
         }
-        .font(.system(size: 11.5, design: .monospaced))
+    }
+
+    private func line(_ l: DiffText.Line) -> some View {
+        let (sign, color, fill): (String, Color, Color) = switch l.kind {
+        case .add: ("+", Theme.Diff.add, Theme.Diff.addFill)
+        case .del: ("−", Theme.Diff.del, Theme.Diff.delFill)
+        default: (" ", .secondary, .clear)
+        }
+        let quiet = l.kind == .hunk || l.kind == .info
+        return HStack(spacing: 6) {
+            Text(sign).foregroundStyle(color).frame(width: 10)
+            Text(l.text.isEmpty ? " " : l.text).foregroundStyle(quiet ? Color.secondary : .primary)
+        }
+        .font(.caption.monospaced())
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fill)
-    }
-}
-
-/// A unified diff as Codex writes it: hunk headers quiet, + green, - red, context plain.
-struct UnifiedDiffView: View {
-    var diff: String
-    private static let maxLines = 60
-
-    var body: some View {
-        let lines = diff.components(separatedBy: "\n").filter { !$0.hasPrefix("---") && !$0.hasPrefix("+++") }
-        let shown = lines.prefix(Self.maxLines)
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { _, l in line(l) }
-                if lines.count > Self.maxLines {
-                    Text("… 还有 \(lines.count - Self.maxLines) 行").font(.caption2).foregroundStyle(.secondary).padding(6)
-                }
-            }
-            .padding(.vertical, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
-    }
-
-    /// Only the sign and the background are colored: the code itself stays readable (colored text was ~2.9:1).
-    private func line(_ l: String) -> some View {
-        let add = l.hasPrefix("+"), del = l.hasPrefix("-")
-        let text: Text = add || del
-            ? Text(String(l.prefix(1))).foregroundStyle(add ? Theme.Diff.add : Theme.Diff.del) + Text(String(l.dropFirst()))
-            : Text(l.isEmpty ? " " : l)
-        return text
-            .font(.system(size: 11.5, design: .monospaced))
-            .foregroundStyle(l.hasPrefix("@@") ? Color.secondary : .primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(add ? Theme.Diff.addFill : del ? Theme.Diff.delFill : .clear)
     }
 }
 

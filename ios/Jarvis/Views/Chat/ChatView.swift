@@ -423,7 +423,7 @@ struct ChatView: View {
         for line in lines {
             out.append(line)
             if case .work(let id, let items, _, _, _) = line, isOpen(id), !items.isEmpty {
-                out += items.map { .workStep(group: id, item: $0) }
+                out += items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
                 out.append(.workEnd(group: id, count: items.count))
             }
         }
@@ -544,9 +544,10 @@ struct ChatView: View {
                 toggleWork(id, fromHeader: true)
             }
             .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
-        case .workStep(_, let item):
-            WorkStepView(item: item)
+        case .workStep(_, let item, let first):
+            WorkStepView(item: item, first: first)
         case .workEnd(let group, let count):
+            // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
@@ -554,7 +555,11 @@ struct ChatView: View {
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-                .padding(.vertical, 2)
+                .padding(.horizontal, WorkCardSlice.inset)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background { WorkCardSlice(top: false, bottom: true) }
+                .overlay(alignment: .top) { WorkCardSlice.separator }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -2096,14 +2101,15 @@ enum ChatLine: Identifiable {
     /// "后台任务完成" under an answer: tap for what the agent did once the tasks reported back.
     case wakes(Turn, live: Bool)
     /// An open work line's steps, one lazy line each (a long turn holds hundreds), then 收起 under the last one.
-    case workStep(group: String, item: WorkItem)
+    /// `first` opens the card they draw together (`WorkCardSlice`).
+    case workStep(group: String, item: WorkItem, first: Bool)
     case workEnd(group: String, count: Int)
 
     var id: String {
         switch self {
         case .row(let r): r.id
         case .work(let id, _, _, _, _): id
-        case .workStep(let group, let item): group + "/" + item.id
+        case .workStep(let group, let item, _): group + "/" + item.id
         case .workEnd(let group, _): group + "-end"
         case .userImages(let id, _): id
         case .mergedUsers(let id, _): id
@@ -2144,39 +2150,105 @@ enum WorkItem: Identifiable {
     }
 }
 
-/// One step of an open work line, a line of the chat list itself. The rule on the left runs on through the gaps
-/// between lines, so the steps read as one block under their header.
+/// One step of an open work line, a line of the chat list itself. The steps read as one card under their header:
+/// each draws its slice of it (`WorkCardSlice`), with a hairline between steps, instead of a tile per step.
 struct WorkStepView: View {
     @Environment(\.openSubagent) private var openSubagent
     var item: WorkItem
-    /// Half the list's spacing (`LazyVStack(spacing: 14)`).
-    private static let bridge: CGFloat = 7
+    var first: Bool
 
     var body: some View {
         Group {
             switch item {
             case .step(.call(let c)):
-                VStack(alignment: .leading, spacing: 4) {
-                    ToolCallRow(call: c, autoExpand: false)
+                VStack(alignment: .leading, spacing: 0) {
+                    ToolCallRow(call: c, autoExpand: false, grouped: true)
                     if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
                         Button { open(id) } label: {
                             Label("查看子 Agent", systemImage: "arrow.up.right").font(.caption.weight(.semibold)).lineLimit(1)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
-                        .padding(.leading, 12)
+                        .padding(.leading, WorkCardSlice.textColumn)
+                        .padding(.bottom, 10)
                     }
                 }
             case .step(.thought(let t)):
-                if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
-            case .text(let i): AssistantText(item: i)
+                Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) } }
+                    .padding(.horizontal, WorkCardSlice.inset)
+                    .padding(.vertical, 10)
+            case .text(let i):
+                AssistantText(item: i)
+                    .padding(.horizontal, WorkCardSlice.inset)
+                    .padding(.vertical, 10)
             }
         }
-        .padding(.leading, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 2).padding(.vertical, -Self.bridge)
+        .background { WorkCardSlice(top: first, bottom: false) }
+        .overlay(alignment: .top) { if !first { WorkCardSlice.separator } }
+    }
+}
+
+/// A slice of an open work line's card. The steps are lines of their own in the lazy chat list (a turn can hold
+/// hundreds; one view holding them all stalled the page), so each draws its part: rounded on top for the first, at
+/// the bottom for the 收起 foot, reaching halfway into the list's gaps to meet its neighbours.
+struct WorkCardSlice: View {
+    var top: Bool
+    var bottom: Bool
+    /// Half the list's spacing (`LazyVStack(spacing: 14)`).
+    static let bridge: CGFloat = 7
+    static let radius: CGFloat = 14
+    /// The rows' side padding inside the card.
+    static let inset: CGFloat = 12
+    /// Where a tool row's words start (inset + 24 pt icon + 10): separators start there.
+    static let textColumn: CGFloat = 46
+
+    var body: some View {
+        let r = Self.radius
+        UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
+                               bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0, style: .continuous)
+            .fill(Color.primary.opacity(0.04))
+            .overlay { WorkCardEdges(top: top, bottom: bottom, radius: r).stroke(Theme.cardStroke, lineWidth: 0.5) }
+            .padding(.top, top ? 0 : -Self.bridge)
+            .padding(.bottom, bottom ? 0 : -Self.bridge)
+    }
+
+    /// The hairline between two steps, in the gap above a row, from the words' column.
+    static var separator: some View {
+        Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
+            .padding(.leading, textColumn)
+            .offset(y: -bridge)
+            .allowsHitTesting(false)
+    }
+}
+
+/// The card's outline for one slice: the sides, and the rounded top or bottom where the card starts or ends.
+private struct WorkCardEdges: Shape {
+    var top: Bool
+    var bottom: Bool
+    var radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let r = min(radius, rect.height / 2, rect.width / 2)
+        // Left side, bottom to top, then across the top and down the right side.
+        p.move(to: CGPoint(x: rect.minX, y: bottom ? rect.maxY - r : rect.maxY))
+        if top {
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+            p.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX + r, y: rect.minY), radius: r)
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+            p.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY + r), radius: r)
+        } else {
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.move(to: CGPoint(x: rect.maxX, y: rect.minY))
         }
+        p.addLine(to: CGPoint(x: rect.maxX, y: bottom ? rect.maxY - r : rect.maxY))
+        if bottom {
+            p.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX - r, y: rect.maxY), radius: r)
+            p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+            p.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - r), radius: r)
+        }
+        return p
     }
 }
 
