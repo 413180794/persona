@@ -89,3 +89,10 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 - 宽字符宽度按 East Asian Width（Wide / Fullwidth）+ emoji 表现形式算；和 herdr 算的不一致时只错一行的后半段，下一次 CUP 就对齐了。
 - 实测数据：真实帧的夹具 `ios/JarvisTests/Fixtures/terminal-observe.jsonl`（草稿窗格跑示例脚本录的，没有个人信息）；
   `go test -tags herdrlive -run TestLiveObserve ./internal/herdr/` 在有 herdr 的机器上验证 observe 本身。
+
+## 六、字体（拍板 D）
+
+用户同意打包 OFL 等可再分发的等宽字体。目前**没有打包**：按格子渲染以后，对齐不再依赖字体（每个字形都放在自己的格子里，宽字符两格，
+框线自己画），系统的 SF Mono（拉丁）+ 苹方（中文，画在两格里居中）已经整齐；打包一款含中文的等宽字体（如更纱黑体 / Maple Mono CN）
+要多 10–20 MB，换来的只是字形风格。以后要加：字体文件放 `ios/Jarvis/Resources/Fonts`，许可证（OFL-1.1 全文）写进
+`THIRD_PARTY_NOTICES.md`，`CellMetrics` 按设置取字体即可。
