@@ -319,24 +319,23 @@ struct TerminalPanel: View {
     private var liveContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !feed.paused {
-                TerminalLinkStatus(lastOK: feed.lastOK, failure: feed.failure, nextTry: feed.nextTry) {
-                    Haptics.tap()
-                    feed.retryNow(model)
-                }
+                TerminalFeedLink(feed: feed)
             }
             header
-            TerminalView(content: feed.content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
-                         focused: direct ? $keyboardUp : nil,
-                         onInput: inputHandler,
-                         onNearTop: { Task { await feed.loadOlder(model) } },
-                         onOpenURL: { openURL($0) },
-                         onCopy: { model.toast = Toast("已拷贝", style: .success) },
-                         onFontSize: pinched,
-                         onSwipe: swipe,
-                         onDoubleTap: pasteClipboard,
-                         onWheel: feed.drives && model.canScrollTerminal ? { model.terminalScroll(key, lines: $0) } : nil,
-                         onClick: feed.drives && model.canClickTerminal ? { model.terminalClick(key, column: $0, row: $1) } : nil,
-                         onGrid: gridChanged)
+            TerminalFeedFrame(feed: feed) { content in
+                TerminalView(content: content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
+                             focused: direct ? $keyboardUp : nil,
+                             onInput: inputHandler,
+                             onNearTop: { Task { await feed.loadOlder(model) } },
+                             onOpenURL: { openURL($0) },
+                             onCopy: { model.toast = Toast("已拷贝", style: .success) },
+                             onFontSize: pinched,
+                             onSwipe: swipe,
+                             onDoubleTap: pasteClipboard,
+                             onWheel: feed.drives && model.canScrollTerminal ? { model.terminalScroll(key, lines: $0) } : nil,
+                             onClick: feed.drives && model.canClickTerminal ? { model.terminalClick(key, column: $0, row: $1) } : nil,
+                             onGrid: gridChanged)
+            }
         }
     }
 
@@ -649,6 +648,33 @@ struct TerminalPanel: View {
         guard mods.active else { return "发送文字到终端" }
         let down = mods.apply("").dropLast()
         return "下一个字符按 \(down) 发送"
+    }
+}
+
+private struct TerminalFeedLink: View {
+    @Environment(AppModel.self) private var model
+    let feed: TerminalFeed
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("TerminalFeedLink.body")
+        #endif
+        TerminalLinkStatus(lastOK: feed.lastOK, failure: feed.failure, nextTry: feed.nextTry) {
+            Haptics.tap()
+            feed.retryNow(model)
+        }
+    }
+}
+
+private struct TerminalFeedFrame<Frame: View>: View {
+    let feed: TerminalFeed
+    @ViewBuilder var frame: (TerminalContent) -> Frame
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("TerminalFeedFrame.body")
+        #endif
+        frame(feed.content)
     }
 }
 
