@@ -64,15 +64,21 @@ nonisolated enum Theme {
     #endif
 
     static var accent: Color { accent(style) }
+    private static let glassAccent = Color(light: 0x007AFF, dark: 0x0A84FF)
+    private static let claudeAccent = Color(light: 0xD4683F, dark: 0xCD6E45)
+    private static let clayAccent = Color(light: 0x7A5AF8, dark: 0x8979EB)
+    private static let islandAccent = Color(light: 0x27747F, dark: 0x2A9798)
+    private static let larkAccent = Color(light: 0x3370FF, dark: 0x4C88FF)
+
     static func accent(_ style: AppStyle) -> Color {
         switch style {
-        case .glass: Color(light: 0x007AFF, dark: 0x0A84FF)
+        case .glass: glassAccent
         // Dark accents deep enough for white words on solid buttons and selected chips (≥ 3.5:1, like system blue's
         // 3.65); Island's teal leans cyan and darker, away from the 完成未看 green and readable as a link on its mist.
-        case .claude: Color(light: 0xD4683F, dark: 0xCD6E45)
-        case .clay: Color(light: 0x7A5AF8, dark: 0x8979EB)
-        case .island: Color(light: 0x27747F, dark: 0x2A9798)
-        case .lark: Color(light: 0x3370FF, dark: 0x4C88FF)
+        case .claude: claudeAccent
+        case .clay: clayAccent
+        case .island: islandAccent
+        case .lark: larkAccent
         }
     }
     /// The app icon's coral. Only for Jarvis' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
