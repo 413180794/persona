@@ -567,7 +567,7 @@ struct ChatView: View {
             }
             .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
         case .workStep(_, let item, let first):
-            WorkStepView(item: item, first: first)
+            WorkStepView(item: item, first: first).equatable()
         case .workEnd(let group, let count):
             // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
@@ -2175,7 +2175,7 @@ struct ChatLine: Identifiable {
 }
 
 /// What a work line folds: tool calls, thoughts, system notices and the agent's words before its last ones.
-indirect enum WorkItem: Identifiable {
+nonisolated indirect enum WorkItem: Identifiable, Equatable, Sendable {
     case step(ToolStep)
     case text(Item)
 
@@ -2189,12 +2189,20 @@ indirect enum WorkItem: Identifiable {
 
 /// One step of an open work line, a line of the chat list itself. The steps read as one card under their header:
 /// each draws its slice of it (`WorkCardSlice`), with a hairline between steps, instead of a tile per step.
-struct WorkStepView: View {
+nonisolated struct WorkStepView: View, Equatable {
     @Environment(\.openSubagent) private var openSubagent
     var item: WorkItem
     var first: Bool
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.item == rhs.item && lhs.first == rhs.first
+    }
+
+    @MainActor
     var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("WorkStepView.body")
+        #endif
         Group {
             switch item {
             case .step(.call(let c)):
