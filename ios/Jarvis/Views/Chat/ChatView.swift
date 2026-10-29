@@ -351,7 +351,7 @@ struct ChatView: View {
         var log: [String] = []
         for kind in ["w-", "wt-"] {
             // The newest work line of this kind with steps, brought into view.
-            let newest = currentLines().last { if case .work(let id, let items, _, _, _) = $0 { id.hasPrefix(kind) && !items.isEmpty } else { false } }
+            let newest = currentLines().last { if case .work(let id, let items, _, _, _) = $0.content { id.hasPrefix(kind) && !items.isEmpty } else { false } }
             guard let w = newest?.id else { log.append("no \(kind) work line"); continue }
             await bring(w, to: 0.3)
             guard let y0 = scratch.workHeadY[w], Set(scratch.visibleLines).contains(w) else { log.append("\(w) not on screen"); continue }
@@ -375,7 +375,7 @@ struct ChatView: View {
             try? log.joined(separator: "\n").write(to: dir.appending(path: "fold.txt"), atomically: true, encoding: .utf8)
         }
         // Left open with 收起 in the middle of the screen, for screenshots.
-        if let w = currentLines().last(where: { if case .work(let id, let items, _, _, _) = $0 { id.hasPrefix("w-") && !items.isEmpty } else { false } })?.id {
+        if let w = currentLines().last(where: { if case .work(let id, let items, _, _, _) = $0.content { id.hasPrefix("w-") && !items.isEmpty } else { false } })?.id {
             toggleWork(w, fromHeader: false); await pause()
             await bring(w + "-end", to: 0.5)
         }
@@ -429,7 +429,7 @@ struct ChatView: View {
         out.reserveCapacity(lines.count)
         for line in lines {
             out.append(line)
-            if case .work(let id, let items, _, _, _) = line, isOpen(id), !items.isEmpty {
+            if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
                 out += items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
                 out.append(.workEnd(group: id, count: items.count))
             }
@@ -522,7 +522,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
-        switch line {
+        switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
         case .userImages(_, let items):
             // Close to the bubble below it, like the photos on a message being sent (the list's spacing is 14).
@@ -2100,48 +2100,63 @@ struct DevInfoCard: View {
 /// it ("调用了 3 个工具，思考 1 次 · 1 分 20 秒 ›", tap to see every step), then the agent's last words before the
 /// next message. Running and finished turns look the same; the running exchange's work line ticks. Lines are
 /// separate lazy rows on purpose (a running turn can have hundreds of steps).
-enum ChatLine: Identifiable {
-    case row(ChatRow)
-    case work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?)
-    /// The photos a message was sent with.
-    case userImages(id: String, items: [Item])
-    /// A finished turn's messages in one bubble (folded).
-    case mergedUsers(id: String, rows: [ChatRow])
-    /// A finished multi-message turn unfolded: "N 条消息 · 收起".
-    case splitHeader(id: String, count: Int)
-    /// "后台任务完成" under an answer: tap for what the agent did once the tasks reported back.
-    case wakes(Turn, live: Bool)
-    /// An open work line's steps, one lazy line each (a long turn holds hundreds), then 收起 under the last one.
-    /// `first` opens the card they draw together (`WorkCardSlice`).
-    case workStep(group: String, item: WorkItem, first: Bool)
-    case workEnd(group: String, count: Int)
+struct ChatLine: Identifiable {
+    let id: String
+    let content: Content
 
-    var id: String {
-        switch self {
-        case .row(let r): r.id
-        case .work(let id, _, _, _, _): id
-        case .workStep(let group, let item, _): group + "/" + item.id
-        case .workEnd(let group, _): group + "-end"
-        case .userImages(let id, _): id
-        case .mergedUsers(let id, _): id
-        case .splitHeader(let id, _): id + "-h"
-        case .wakes(let t, _): "wk-" + t.id
+    indirect enum Content {
+        case row(ChatRow)
+        case work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?)
+        case userImages(id: String, items: [Item])
+        case mergedUsers(id: String, rows: [ChatRow])
+        case splitHeader(id: String, count: Int)
+        case wakes(Turn, live: Bool)
+        case workStep(group: String, item: WorkItem, first: Bool)
+        case workEnd(group: String, count: Int)
+
+        var id: String {
+            switch self {
+            case .row(let r): r.id
+            case .work(let id, _, _, _, _): id
+            case .workStep(let group, let item, _): group + "/" + item.id
+            case .workEnd(let group, _): group + "-end"
+            case .userImages(let id, _): id
+            case .mergedUsers(let id, _): id
+            case .splitHeader(let id, _): id + "-h"
+            case .wakes(let t, _): "wk-" + t.id
+            }
         }
     }
 
-    /// Whether the message whose action bar is open is drawn by this line (it is lifted above its neighbours).
+    private init(_ content: Content) {
+        id = content.id
+        self.content = content
+    }
+
+    static func row(_ row: ChatRow) -> Self { Self(.row(row)) }
+    static func work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?) -> Self {
+        Self(.work(id: id, items: items, live: live, start: start, end: end))
+    }
+    static func userImages(id: String, items: [Item]) -> Self { Self(.userImages(id: id, items: items)) }
+    static func mergedUsers(id: String, rows: [ChatRow]) -> Self { Self(.mergedUsers(id: id, rows: rows)) }
+    static func splitHeader(id: String, count: Int) -> Self { Self(.splitHeader(id: id, count: count)) }
+    static func wakes(_ turn: Turn, live: Bool) -> Self { Self(.wakes(turn, live: live)) }
+    static func workStep(group: String, item: WorkItem, first: Bool) -> Self {
+        Self(.workStep(group: group, item: item, first: first))
+    }
+    static func workEnd(group: String, count: Int) -> Self { Self(.workEnd(group: group, count: count)) }
+
     func holds(_ id: String?) -> Bool {
         guard let id else { return false }
-        switch self {
+        switch content {
         case .row(let r): return r.id == id
         case .mergedUsers(_, let rows): return rows.first?.id == id
         default: return false
         }
     }
 
-    /// One of your messages (where an exchange starts).
     var isInput: Bool {
-        switch self {
+        switch content {
         case .row(.user), .mergedUsers: true
         default: false
         }
@@ -2149,7 +2164,7 @@ enum ChatLine: Identifiable {
 }
 
 /// What a work line folds: tool calls, thoughts, system notices and the agent's words before its last ones.
-enum WorkItem: Identifiable {
+indirect enum WorkItem: Identifiable {
     case step(ToolStep)
     case text(Item)
 
