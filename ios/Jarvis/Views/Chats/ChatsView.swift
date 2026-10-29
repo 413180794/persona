@@ -75,6 +75,18 @@ struct ChatsView: View {
     /// page goes back to it instead of stacking another copy.
     @State private var spaceAt: [Int: String] = [:]
     @State private var query = ""
+    @State private var searching = false
+
+    /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
+    /// header; closing the search once pushed is too late): opening something from the results closes the search
+    /// first and pushes on the next turn of the run loop. The search's text and results stay for coming back.
+    private var pushing: Binding<NavigationPath> {
+        Binding(get: { path }, set: { new in
+            guard searching, new.count > path.count else { return path = new }
+            searching = false
+            DispatchQueue.main.async { path = new }
+        })
+    }
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     @State private var showNew = false
@@ -107,7 +119,7 @@ struct ChatsView: View {
             .sorted { a, b in (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: a.key)) ?? 0) < (model.pins.sessions.firstIndex(of: AppModel.pinKey(session: b.key)) ?? 0) }
         let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
 
-        NavigationStack(path: $path) {
+        NavigationStack(path: pushing) {
             List {
                 Section { ConnectionBanner() }
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
@@ -228,7 +240,7 @@ struct ChatsView: View {
             // works inline: a large title ignores toolbar(removing:).
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(removing: .title)
-            .searchable(text: $query, prompt: "搜索空间、标签、会话、内容")
+            .searchable(text: $query, isPresented: $searching, prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { machineMenu }

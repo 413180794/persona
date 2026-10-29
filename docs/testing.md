@@ -97,6 +97,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
 （mock 的 `GET /mock/keys` 回放收到的按键）。
 
+从搜索结果打开会话只有一行标题、返回后搜索结果还在（`SearchOpenTests`，另有不搜索的对照）连普通 mock：
+`PORT=18793 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
+
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock_hub.py &`，再
 `TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/SendSafetyTests`：
