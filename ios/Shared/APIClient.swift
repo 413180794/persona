@@ -27,7 +27,12 @@ nonisolated struct APIError: LocalizedError, Sendable {
     /// The response's other string fields: a refused send (409) has code (dialog_open / input_draft), delivered
     /// (none / unknown), draft and clearable (docs/protocol.md「发消息」).
     var fields: [String: String] = [:]
-    var errorDescription: String? { message }
+    /// The hub logs failed requests under this id (X-Request-Id): a server error shows it, to find that line.
+    var requestID: String?
+    var errorDescription: String? {
+        guard status >= 500, let requestID else { return message }
+        return "\(message)（请求 \(requestID)）"
+    }
     var code: String? { fields["code"] }
 
     static func fields(in data: Data) -> [String: String] {
@@ -76,6 +81,8 @@ nonisolated struct APIClient: Sendable {
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let requestID = String(UUID().uuidString.prefix(8)).lowercased()
+        req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
         if let body {
             req.httpBody = try JSON.encoder.encode(AnyEncodable(body))
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -84,7 +91,8 @@ nonisolated struct APIClient: Sendable {
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw APIError(status: status, message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status),
-                           fields: APIError.fields(in: data))
+                           fields: APIError.fields(in: data),
+                           requestID: (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-Request-Id") ?? requestID)
         }
         return data
     }

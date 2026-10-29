@@ -7,6 +7,7 @@
 - `Authorization: Bearer <token>`；WebSocket 也可用 `?token=`。token 在 example-machine `~/.jarvis/hub.json` 的 `token`，
   `jarvisd hub pair` 打印 URL + token（以及终端二维码，App 扫码配对）。
 - `GET /api/v1/health` 不需要鉴权，返回 `{"ok":true,"version":"..."}`。
+- 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
 ## 数据类型
 

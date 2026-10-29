@@ -91,3 +91,8 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 - 机器离线：App 里显示 ssh 的最后一行错误。NAT 后面的电脑要先建好反向隧道（`docs/config.md`）。
 - 手动调接口：`curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`。
+- 请求 ID：每个响应带 `X-Request-Id`（App 发了 `X-Client-Request-Id` 就沿用它）。hub 只记失败（≥400）和慢（>2 秒）的请求，
+  一行 `[<id>] 方法 路径 -> 状态码 (耗时)`，不记 query、body、token。App 的 5xx 错误提示后面带「（请求 <id>）」，拿它在
+  `journalctl --user -u jarvisd` 里搜那一行。
+- herdr 连不上（socket 没了、herdr 重启）：node 每 30 秒最多记一行 `herdr: … failed`（带这段时间失败了几次），恢复时记一行
+  `reachable again`，经 ssh 的 stderr 进 hub 日志。

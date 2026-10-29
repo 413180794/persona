@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chyroc/jarvis/server/internal/rpc"
@@ -32,5 +33,16 @@ func TestCallErrRefusedSend(t *testing.T) {
 	callErr(w, errors.New("plain"))
 	if w.Code != http.StatusBadGateway {
 		t.Fatal(w.Code)
+	}
+}
+
+func TestRequestID(t *testing.T) {
+	if requestID("1a2b3c4d") != "1a2b3c4d" {
+		t.Fatal("a client id is kept")
+	}
+	for _, bad := range []string{"", "x", "id with spaces", strings.Repeat("a", 40), "token=secret"} {
+		if id := requestID(bad); id == bad || len(id) != 8 {
+			t.Fatalf("%q -> %q", bad, id)
+		}
 	}
 }

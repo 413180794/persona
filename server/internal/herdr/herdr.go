@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -23,8 +24,46 @@ type Client struct {
 	Bin string
 	// Socket is herdr's API socket; empty: the CLI only.
 	Socket string
+	// Log gets one line when calls to herdr start failing (at most every 30 s while they do, with how many failed
+	// meanwhile) and one when they work again; nil: silent.
+	Log func(format string, args ...any)
 
-	seq atomic.Int64
+	seq   atomic.Int64
+	trips episode
+}
+
+// episode throttles logging of transport failures (herdr down, socket gone): not one line per poll.
+type episode struct {
+	mu       sync.Mutex
+	failing  bool
+	since    time.Time
+	logged   time.Time
+	failures int
+}
+
+func (c *Client) note(method string, err error) {
+	if c.Log == nil {
+		return
+	}
+	e := &c.trips
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var he *Error
+	if err == nil || errors.As(err, &he) { // an answer from herdr, even an error one, means it is reachable
+		if e.failing {
+			c.Log("herdr: reachable again after %s (%d failed calls)", time.Since(e.since).Round(time.Second), e.failures)
+		}
+		e.failing, e.failures = false, 0
+		return
+	}
+	e.failures++
+	if !e.failing {
+		e.failing, e.since = true, time.Now()
+	}
+	if time.Since(e.logged) >= 30*time.Second {
+		c.Log("herdr: %s failed: %v (%d failed calls since %s)", method, err, e.failures, e.since.Format("15:04:05"))
+		e.logged = time.Now()
+	}
 }
 
 func New() *Client { return &Client{Bin: "herdr", Socket: SocketPath()} }
@@ -80,6 +119,14 @@ func fallback(err error) bool {
 }
 
 func (c *Client) rpc(ctx context.Context, method string, params any, out any) error {
+	err := c.rpcOnce(ctx, method, params, out)
+	if ctx.Err() == nil { // a caller giving up is not herdr failing
+		c.note(method, err)
+	}
+	return err
+}
+
+func (c *Client) rpcOnce(ctx context.Context, method string, params any, out any) error {
 	if c.Socket == "" {
 		return errNoSocket
 	}

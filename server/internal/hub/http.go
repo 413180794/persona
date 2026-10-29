@@ -180,15 +180,28 @@ func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter
 // Unwrap lets websocket.Accept reach the underlying Hijacker.
 func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
+// logRequests logs failed and slow requests (method, path, status, time; never the query, body or token) under
+// a request id: the app's X-Client-Request-Id when it sent one, which it shows next to a server error, else a new
+// one. Every response carries it as X-Request-Id.
 func logRequests(h *Hub, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		id := requestID(r.Header.Get("X-Client-Request-Id"))
+		w.Header().Set("X-Request-Id", id)
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
 		if r.URL.Path != "/api/v1/ws" && (sw.status >= 400 || time.Since(start) > 2*time.Second) {
-			h.logf("%s %s -> %d (%s)", r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+			h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
 		}
 	})
+}
+
+// requestID keeps a client's id if it is a short token (it lands in logs), else makes one.
+func requestID(client string) string {
+	if n := len(client); n >= 4 && n <= 32 && strings.Trim(client, "0123456789abcdefABCDEF-") == "" {
+		return client
+	}
+	return randomHex(4)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

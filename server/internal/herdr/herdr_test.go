@@ -233,3 +233,20 @@ func TestSubscribeEndsWithContext(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestFailureEpisodesLogOnce(t *testing.T) {
+	var lines []string
+	c := &Client{Socket: filepath.Join(t.TempDir(), "gone.sock"), Log: func(f string, a ...any) { lines = append(lines, f) }}
+	for range 5 {
+		_, _ = c.Agents(context.Background())
+	}
+	if len(lines) != 1 {
+		t.Fatalf("one line for a run of failures, got %v", lines)
+	}
+	c.Socket = fakeServer(t, func(string, map[string]any) string { return `"result":{"agents":[]}` })
+	_, _ = c.Agents(context.Background())
+	_, _ = c.Agents(context.Background())
+	if len(lines) != 2 || !strings.Contains(lines[1], "reachable again") {
+		t.Fatalf("recovery logged once: %v", lines)
+	}
+}

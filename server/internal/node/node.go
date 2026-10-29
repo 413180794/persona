@@ -92,6 +92,7 @@ func New(version string) (*Node, error) {
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
 	}
+	n.herdr.Log = n.logger.Printf
 	n.state = newState()
 	return n, nil
 }
