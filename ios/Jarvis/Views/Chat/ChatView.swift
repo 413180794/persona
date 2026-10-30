@@ -73,6 +73,10 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismissChat
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
+    /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
+    @State private var barsVertical = false
+    /// The slim header's height while the actions are in the side column (`sideHeader`).
+    @State private var sideHeaderHeight: CGFloat = 0
     /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
     /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
     @State private var chrome = ChatChrome()
@@ -121,10 +125,14 @@ struct ChatView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         // Agents chats draw their own header (devChrome) so it can follow the scroll; the assistant's floats over the
-        // chat (AssistantTopBar, drawn by AssistantView over this page and the new-conversation page).
-        .toolbarVisibility(.hidden, for: .navigationBar)
+        // chat (AssistantTopBar, drawn by AssistantView over this page and the new-conversation page). Where the system
+        // puts bars down the side (iPhone Duo), an Agents chat hands its actions to it instead: they go in that column.
+        .toolbarVisibility(sideBars ? .visible : .hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(sideBars)
+        .toolbar { if sideBars { sideBarItems } }
+        .readsVerticalBars($barsVertical)
         .overlay(alignment: .top) {
-            if style == .dev { devChrome }
+            if style == .dev { if sideBars { sideHeader } else { devChrome } }
         }
         .overlay(alignment: .top) {
             if showInfo {
@@ -659,7 +667,7 @@ struct ChatView: View {
                 try? await Task.sleep(for: .milliseconds(60))
                 if n == 1 { hideChrome() } // once the header has measured itself
                 guard let bottom = scratch.landingMaxY, scratch.listFrame.height > 0 else { continue }
-                let want = scratch.listFrame.minY + (style == .dev ? ChatChrome.compactHeight : AssistantTopBar.height) + Self.inputTail
+                let want = scratch.listFrame.minY + (style == .dev ? (sideBars ? sideHeaderHeight : ChatChrome.compactHeight) : AssistantTopBar.height) + Self.inputTail
                 let off = want - bottom // > 0: too high; the flipped list scrolls toward older to lower it
                 if abs(off) < 1 { break }
                 scrollList(to: chrome.offset + off)
@@ -748,7 +756,7 @@ struct ChatView: View {
 
     /// The custom header's full height (Agents; the assistant's floating bar): the other panes sit below it, the chat
     /// list scrolls under it.
-    private var headerRoom: CGFloat { style == .dev ? chrome.height : AssistantTopBar.height }
+    private var headerRoom: CGFloat { style == .dev ? (sideBars ? sideHeaderHeight : chrome.height) : AssistantTopBar.height }
 
     /// Git only for repositories, files only when we know the directory; the assistant has neither.
     private var panes: [SessionPane] {
@@ -1388,6 +1396,73 @@ struct ChatView: View {
     /// Back: out of files / Git to the chat first, then off the page.
     /// The widest the conversation gets: lines longer than this are hard to read.
     static let readableWidth: CGFloat = 760
+
+    /// An Agents chat whose actions are in the system's side column (no header of its own).
+    private var sideBars: Bool { style == .dev && barsVertical }
+
+    /// The header's actions as system toolbar items, for the side column: back on top (a custom one, so it leaves files /
+    /// Git for the chat first), then the panes, the terminal and ⋯. Each has a title as well as a symbol: the column
+    /// shows the symbol, the overflow menu both.
+    @ToolbarContentBuilder private var sideBarItems: some ToolbarContent {
+        if !hidesBack {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { back() } label: { Label("返回", systemImage: "chevron.left") }
+            }
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if pane != .chat {
+                Button { withAnimation(.snappy) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
+            }
+            Button { Haptics.tap(); showTerminal = true } label: { Label("终端", systemImage: SessionPane.terminal.symbol) }
+            ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
+                Button { Haptics.tap(); withAnimation(.snappy) { pane = p } } label: {
+                    Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
+                }
+            }
+            Menu { moreMenuItems } label: { Label("更多", systemImage: "ellipsis") }
+        }
+    }
+
+    /// The header's other half while its buttons are in the side column: the title (a tap shows the session's info),
+    /// and when there are any the space's other agents, a /loop or background work and running subagents. It stays put.
+    private var sideHeader: some View {
+        VStack(spacing: 6) {
+            titleButton
+            let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
+            if model.siblings(of: key).count > 1 || hasActivity {
+                HStack(spacing: 8) {
+                    SiblingMenu(current: key) { next in switchTo(next) }
+                    if hasActivity {
+                        ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
+                            .fixedSize()
+                    }
+                }
+            }
+            let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
+            if pane == .chat, !agents.isEmpty {
+                AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(alignment: .top) {
+            // The page's fog from the very top, so messages scrolling up do not show through the title.
+            GeometryReader { g in
+                TopFog(solidHeight: g.safeAreaInsets.top + g.size.height, fadeHeight: 16)
+                    .frame(height: g.safeAreaInsets.top + g.size.height + 16)
+                    .offset(y: -g.safeAreaInsets.top)
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sideHeaderHeight = $0 }
+        .sheet(isPresented: $showActivity) {
+            ActivitySheet(loop: session?.loop, background: session?.background ?? [], stopLoop: { model.stopLoop(key) }) { t in
+                showActivity = false
+                if let out = t.outputFile { file = FileRef(machineID: key.machineID, path: out, cwd: session?.cwd) }
+            }
+        }
+    }
 
     /// The first page of a split's detail column, on the chat: nothing to go back to (the list is beside it).
     private var hidesBack: Bool { split?.isFirstPage == true && pane == .chat }
@@ -2667,5 +2742,32 @@ private extension View {
     /// Hidden but keeping its room, so the title stays centered.
     func noBackWhen(_ hidden: Bool) -> some View {
         opacity(hidden ? 0 : 1).disabled(hidden).accessibilityHidden(hidden)
+    }
+}
+
+private extension View {
+    /// Whether the system presents this page's bars down the side of the screen (iPhone Duo); always false before iOS 27.1.
+    func readsVerticalBars(_ vertical: Binding<Bool>) -> some View { modifier(VerticalBarsReader(vertical: vertical)) }
+}
+
+private struct VerticalBarsReader: ViewModifier {
+    @Binding var vertical: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.modifier(VerticalBarsEdgeReader(vertical: $vertical))
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 27.1, *)
+private struct VerticalBarsEdgeReader: ViewModifier {
+    @Environment(\.toolbarVerticalEdge) private var edge
+    @Binding var vertical: Bool
+
+    func body(content: Content) -> some View {
+        content.onChange(of: edge != nil, initial: true) { _, v in vertical = v }
     }
 }

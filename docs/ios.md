@@ -237,7 +237,10 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   坐标空间），交互卡片的表单最高为所在容器的 55%（`containerRelativeFrame`），图片缩放按视图的 `traitCollection.displayScale`。
 - **工具栏按钮都要有标题和图标**（`Label("新建会话", systemImage: …)`）：竖排时只显示图标，放不下收进溢出菜单时显示标题；
   只有图标的按钮在溢出菜单里是空白。
-- Jarvis 和 Agents 对话页的顶栏是自绘的，不会跟系统一起移到侧边；按 HIG「各姿态下控件位置保持一致」，保持在内容顶部。
+- **侧边竖排栏**：系统把栏竖着放到侧边时（外屏，内屏横放；`toolbarVerticalEdge` 不为 nil，iOS 27.1 起），Agents 对话页不再画自己的页头按钮，
+  把返回、终端、Git、文件、⋯ 交给系统工具栏，它们排进状态栏下面那一列（`ChatView.sideBarItems`，每个都有标题和图标）；页面顶部只留一条不折叠的标题
+  （点开会话信息）和同空间的 Agent、循环 / 后台任务、子 Agent（`sideHeader`）。水平栏时（普通 iPhone、内屏竖放）照旧是自绘的可折叠页头。
+  Jarvis 的顶栏仍是自绘的、在内容顶部。
 - **在模拟器上验证**：iPhone Duo 只有 iOS 27.1 运行时（这个运行时也只支持它）。开合 / 半折只能在 Xcode 的 Device Hub 里切，
   没有命令行。截图要指定屏幕：`xcrun simctl io <udid> screenshot --display=1`（外屏）/ `--display=3`（内屏，横放时是 2853×2007），
   不指定时可能拍到熄灭的那块（全黑）；先算一下亮度确认拍到的是亮着的屏。启动参数照常用（`-tab`、`-openSession` 等）。
