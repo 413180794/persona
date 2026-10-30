@@ -218,3 +218,41 @@ data class Resolution(
 
 @Serializable
 data class Launcher(val name: String, @SerialName("base_url") val baseUrl: String? = null, val model: String? = null)
+
+/**
+ * Pinned or muted spaces and agents (`/api/v1/pins`, `/api/v1/mutes`, same shape). Keys are "machine/space name" for
+ * spaces (herdr workspace ids change on restart, names don't) and "machine/session id" for agents.
+ */
+@Serializable
+data class Pins(
+    val spaces: List<String> = emptyList(),
+    val sessions: List<String> = emptyList(),
+    /** Mutes only: agents that keep notifications although their space is muted. */
+    val allowed: List<String> = emptyList(),
+) {
+    /** The hub's mute rule: muted itself, or its space is unless the agent was turned back on. */
+    fun mutes(session: String, space: String?): Boolean = when {
+        session in sessions -> true
+        session in allowed -> false
+        else -> space != null && space in spaces
+    }
+
+    /** Flips one agent's notifications on top of its space's setting (iOS `Pins.togglingMute`). */
+    fun togglingMute(session: String, space: String?): Pins {
+        val wasMuted = mutes(session, space)
+        val spaceMuted = space != null && space in spaces
+        val s = sessions - session
+        val a = allowed - session
+        return when {
+            !wasMuted -> copy(sessions = listOf(session) + s, allowed = a)
+            spaceMuted -> copy(sessions = s, allowed = listOf(session) + a)
+            else -> copy(sessions = s, allowed = a)
+        }
+    }
+
+    fun toggling(session: String): Pins =
+        copy(sessions = if (session in sessions) sessions - session else listOf(session) + sessions)
+}
+
+fun Session.pinKey(): String = "$machineId/$sessionId"
+fun Session.spacePinKey(): String? = spaceName?.takeIf { it.isNotBlank() }?.let { "$machineId/$it" }

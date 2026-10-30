@@ -3,18 +3,26 @@ package jarvis.android.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import jarvis.android.MainActivity
+import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
 
 /** Pairing until a hub is paired; then the Agents list, a chat, or settings. */
 @Composable
 fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
-    if (hub == null) {
-        PairScreen()
+    val conn = hub?.conn?.collectAsState()?.value
+    // Not paired, the hub refused this device's token, or a pairing link was just opened: the pairing screen.
+    if (hub == null || conn == ConnState.Unauthorized || MainActivity.pendingPair.value != null) {
+        PairScreen(
+            reason = if (hub != null && conn == ConnState.Unauthorized)
+                "hub 不认这台手机的 token 了（在别的设备上撤销了，或者换了 hub），重新配对一下" else null,
+        )
         return
     }
     var settings by rememberSaveable { mutableStateOf(false) }

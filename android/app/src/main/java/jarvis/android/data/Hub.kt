@@ -27,7 +27,8 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
-enum class ConnState { Connecting, Online, Offline }
+/** Unauthorized: the hub refused this device's token (revoked, or a different hub): retrying can't help, pair again. */
+enum class ConnState { Connecting, Online, Offline, Unauthorized }
 
 /** Something the UI or the notifier may want to react to, beyond the state flows. */
 sealed interface HubEvent {
@@ -55,6 +56,12 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private val _interactions = MutableStateFlow<List<Interaction>>(emptyList())
     val interactions: StateFlow<List<Interaction>> = _interactions.asStateFlow()
 
+    /** Pinned / muted spaces and agents, kept by the hub (Postgres) so every device sees the same. */
+    private val _pins = MutableStateFlow(Pins())
+    val pins: StateFlow<Pins> = _pins.asStateFlow()
+    private val _mutes = MutableStateFlow(Pins())
+    val mutes: StateFlow<Pins> = _mutes.asStateFlow()
+
     private val _events = MutableSharedFlow<HubEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<HubEvent> = _events.asSharedFlow()
 
@@ -68,6 +75,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private var ws: WebSocket? = null
     private var loop: Job? = null
     @Volatile private var stopped = false
+    @Volatile private var unauthorized = false
 
     fun start() {
         if (loop?.isActive == true) return
@@ -80,6 +88,10 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 connect(onOpen = { backoff = 1_000L }, onClosed = { closed.complete(Unit) })
                 closed.await()
                 if (stopped) break
+                if (unauthorized) {
+                    _conn.value = ConnState.Unauthorized
+                    break
+                }
                 _conn.value = ConnState.Offline
                 delay(backoff)
                 backoff = (backoff * 2).coerceAtMost(30_000L)
@@ -107,6 +119,8 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 _conn.value = ConnState.Online
                 phoneTools?.let { registerPhone(webSocket, it) }
                 synchronized(chats) { chats.values.toList() }.forEach { it.resubscribe() }
+                // Pins and mutes have no WebSocket event: read them on every (re)connect.
+                scope.launch { loadPins() }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -116,6 +130,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = onClosed()
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.i(TAG, "ws closed: ${t.message}")
+                if (response?.code == 401) unauthorized = true
                 onClosed()
             }
         })
@@ -232,6 +247,41 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
         runCatching { _machines.value = api.machines() }
         runCatching { _sessions.value = api.sessions().groupBy { it.machineId } }
         runCatching { _interactions.value = api.interactions() }
+        loadPins()
+    }
+
+    private suspend fun loadPins() {
+        runCatching { _pins.value = api.pins() }
+        runCatching { _mutes.value = api.mutes() }
+    }
+
+    /** Panes of the agents running on a machine now: taken before a start, to tell the new one apart afterwards. */
+    fun livePanes(machine: String): Set<String> =
+        _sessions.value[machine].orEmpty().filter { it.isLive }.mapNotNull { it.paneId }.toSet()
+
+    /**
+     * The session a start brought up although the hub reported a failure: live, in that directory, in a pane that
+     * wasn't there before the start. (Not by time: a session with no transcript yet has no updated_at.)
+     */
+    fun startedIn(machine: String, cwd: String, panesBefore: Set<String>): Session? =
+        _sessions.value[machine].orEmpty()
+            .filter { it.isLive && it.cwd.trimEnd('/') == cwd.trimEnd('/') && it.paneId != null && it.paneId !in panesBefore }
+            .maxByOrNull { it.paneId!! }
+
+    fun isMuted(s: Session): Boolean = _mutes.value.mutes(s.pinKey(), s.spacePinKey())
+
+    /** Pins / unpins an agent: shown at once, saved on the hub, put back if saving fails. */
+    suspend fun togglePin(s: Session) {
+        val before = _pins.value
+        _pins.value = before.toggling(s.pinKey())
+        runCatching { _pins.value = api.setPins(_pins.value) }.onFailure { _pins.value = before; throw it }
+    }
+
+    /** Mutes / unmutes one agent on top of its space's setting. */
+    suspend fun toggleMute(s: Session) {
+        val before = _mutes.value
+        _mutes.value = before.togglingMute(s.pinKey(), s.spacePinKey())
+        runCatching { _mutes.value = api.setMutes(_mutes.value) }.onFailure { _mutes.value = before; throw it }
     }
 
     /** Resolves and drops the card at once (the hub's interaction_resolved follows). */

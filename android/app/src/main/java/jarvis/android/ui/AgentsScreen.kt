@@ -1,7 +1,17 @@
 package jarvis.android.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.alpha
+import jarvis.android.data.pinKey
+import jarvis.android.data.spacePinKey
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,13 +71,24 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onSettings: () -> Unit)
     val machines by hub.machines.collectAsState()
     val byMachine by hub.sessions.collectAsState()
     val pending by hub.interactions.collectAsState()
+    val pins by hub.pins.collectAsState()
+    val mutes by hub.mutes.collectAsState()
     var refreshing by remember { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<Session?>(null) }
+    var newSession by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val names = machines.associate { it.id to it.displayName }
     val sessions = byMachine.values.flatten().filter { !it.assistant }
         .sortedWith(compareBy<Session> { it.agentState.priority }.thenByDescending { it.updated ?: Instant.EPOCH })
-    val (live, offline) = sessions.partition { it.isLive }
+    // Pinned agents show once, at the top, and not again in their state section (as on iOS).
+    val pinned = sessions.filter { it.pinKey() in pins.sessions }
+    val (live, offline) = (sessions - pinned.toSet()).partition { it.isLive }
+    val muted: (Session) -> Boolean = { mutes.mutes(it.pinKey(), it.spacePinKey()) }
+    val row: @Composable (Session) -> Unit = { s ->
+        SessionRow(s, names[s.machineId], muted(s), onClick = { onOpen(s.key) }, onLongClick = { menuFor = s })
+    }
 
     Scaffold(
         topBar = {
@@ -80,6 +101,7 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onSettings: () -> Unit)
                                 ConnState.Online -> "${machines.count { it.online }}/${machines.size} 台电脑在线"
                                 ConnState.Connecting -> "正在连接…"
                                 ConnState.Offline -> "hub 连不上，正在重试"
+                                ConnState.Unauthorized -> "需要重新配对"
                             },
                             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -88,6 +110,12 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onSettings: () -> Unit)
                 actions = { IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "设置") } },
             )
         },
+        floatingActionButton = {
+            if (machines.any { it.online }) {
+                FloatingActionButton(onClick = { newSession = true }) { Icon(Icons.Default.Add, "新开会话") }
+            }
+        },
+        snackbarHost = { notice?.let { Snackbar(Modifier.padding(12.dp), action = { TextButton({ notice = null }) { Text("好", maxLines = 1) } }) { Text(it) } } },
     ) { pad ->
         PullToRefreshBox(
             isRefreshing = refreshing,
@@ -99,24 +127,39 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onSettings: () -> Unit)
                     item { SectionTitle("需要你处理 · ${pending.size}") }
                     items(pending, key = { "ix/" + it.id }) { ix -> PendingRow(ix, names) { onOpen(ix.sessionKey) } }
                 }
+                if (pinned.isNotEmpty()) {
+                    item { SectionTitle("置顶") }
+                    items(pinned, key = { "pin/" + it.key.path }) { s -> row(s) }
+                }
                 if (live.isNotEmpty()) {
                     item { SectionTitle("在跑的 Agent") }
-                    items(live, key = { it.key.path }) { s -> SessionRow(s, names[s.machineId]) { onOpen(s.key) } }
+                    items(live, key = { it.key.path }) { s -> row(s) }
                 }
                 if (offline.isNotEmpty()) {
                     item { SectionTitle("最近 7 天") }
-                    items(offline, key = { it.key.path }) { s -> SessionRow(s, names[s.machineId]) { onOpen(s.key) } }
+                    items(offline, key = { it.key.path }) { s -> row(s) }
                 }
                 if (sessions.isEmpty() && pending.isEmpty()) {
                     item {
                         Text(
-                            if (conn == ConnState.Online) "各台电脑的 herdr 里还没有 Agent。在电脑上的 herdr 里启动 claude，这里就会出现。" else "等待连接 hub…",
+                            if (conn == ConnState.Online) "各台电脑的 herdr 里还没有 Agent。点右下角的 + 新开一个，或在电脑上的 herdr 里启动 claude。" else "等待连接 hub…",
                             Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+                item { Spacer(Modifier.height(88.dp)) } // room for the + button
             }
         }
+    }
+
+    menuFor?.let { s ->
+        AgentActionsSheet(
+            hub, s, pinned = s.pinKey() in pins.sessions, muted = muted(s), machine = names[s.machineId],
+            onDismiss = { menuFor = null }, onError = { notice = it },
+        )
+    }
+    if (newSession) {
+        NewSessionSheet(hub, machines.filter { it.online }, onDismiss = { newSession = false }, onStarted = { newSession = false; onOpen(it) })
     }
 }
 
@@ -151,12 +194,15 @@ fun StateDot(state: AgentState, size: Int = 10) {
 }
 
 @Composable
-private fun SessionRow(s: Session, machine: String?, onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun SessionRow(s: Session, machine: String?, muted: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    // Muted agents read quieter (grey dot, slightly faded) but stay where their state puts them (iOS does the same).
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .alpha(if (muted) 0.8f else 1f).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StateDot(s.agentState)
+        if (muted) Box(Modifier.size(10.dp).clip(CircleShape).background(AgentState.Idle.color())) else StateDot(s.agentState)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -165,6 +211,7 @@ private fun SessionRow(s: Session, machine: String?, onClick: () -> Unit) {
                     fontWeight = if (s.agentState.priority <= 1) FontWeight.SemiBold else FontWeight.Normal,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                 )
+                if (muted) Icon(Icons.Default.NotificationsOff, "已屏蔽", Modifier.padding(start = 4.dp).size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
                 Text(ago(s.updated), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }

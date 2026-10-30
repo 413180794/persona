@@ -60,7 +60,7 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
             ListItem(
                 headlineContent = { Text(hub.api.baseUrl) },
                 supportingContent = {
-                    Text(when (conn) { ConnState.Online -> "已连接" + (hub.serverVersion?.let { " · $it" } ?: ""); ConnState.Connecting -> "正在连接"; ConnState.Offline -> "连不上" })
+                    Text(when (conn) { ConnState.Online -> "已连接" + (hub.serverVersion?.let { " · $it" } ?: ""); ConnState.Connecting -> "正在连接"; ConnState.Offline -> "连不上"; ConnState.Unauthorized -> "token 失效，需要重新配对" })
                 },
             )
             Header("机器")
