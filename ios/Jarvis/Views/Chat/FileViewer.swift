@@ -116,7 +116,7 @@ struct FileViewer: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         if let back = history.last {
-                            Button { history.removeLast(); ref = back } label: { Image(systemName: "chevron.left") }
+                            Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: "chevron.left") }
                         } else {
                             Button("完成") { dismiss() }
                         }

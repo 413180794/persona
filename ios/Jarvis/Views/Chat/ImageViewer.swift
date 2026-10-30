@@ -237,7 +237,7 @@ final class ZoomScrollView: UIScrollView {
         imageView.frame = CGRect(origin: .zero, size: fit)
         contentSize = fit
         minimumZoomScale = 1
-        maximumZoomScale = ZoomMath.maxScale(image: img.size, fitted: fit, screenScale: UIScreen.main.scale)
+        maximumZoomScale = ZoomMath.maxScale(image: img.size, fitted: fit, screenScale: traitCollection.displayScale) // this view's display (iPhone Duo has two)
         centerImage()
     }
 

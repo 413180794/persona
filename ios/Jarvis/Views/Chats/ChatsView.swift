@@ -180,12 +180,12 @@ struct ChatsView: View {
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
 
-        NavigationStack(path: pushing) {
+        SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
             List {
                 if !interactions.isEmpty && query.isEmpty {
                     Section {
                         ForEach(interactions) { ix in
-                            InteractionPreviewCard(interaction: ix) { path.append(ix.sessionKey) }
+                            InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
                                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
@@ -284,23 +284,16 @@ struct ChatsView: View {
                 ToolbarItem(placement: .principal) { ConnectionTitle() }
                 ToolbarItem(placement: .topBarLeading) { listMenu(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned)) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel("新建会话")
+                    Button { showNew = true } label: { Label("新建会话", systemImage: "square.and.pencil") }
                 }
             }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .renameSpaceAlert($renamingSpace)
             .renameSessionAlert($renamingSession)
             .confirmClose($closingSession)
-            .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id) }
-            .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id) }
-            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
-            .navigationDestination(for: MachineDashboardRoute.self) { _ in MachineDashboardView() }
-            .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
             .sheet(isPresented: $showNew) {
                 NewChatView { session in
                     showNew = false
-                    path.append(session.key)
+                    openFromList(session.key)
                 }
             }
             .onChange(of: matching) { _, now in kept.formUnion(now) }
@@ -318,14 +311,17 @@ struct ChatsView: View {
                 if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
                 #if DEBUG
                 // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
-                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { path.append(MachineRoute(id: m)) }
+                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { openFromList(MachineRoute(id: m)) }
                 // `-openMonitor all|<machine id>` (with `-tab dev`): 机器监控, or one machine's charts.
                 if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMonitor") {
-                    if m == "all" { path.append(MachineDashboardRoute()) } else { path.append(MachineMonitorRoute(id: m)) }
+                    if m == "all" { openFromList(MachineDashboardRoute()) } else { openFromList(MachineMonitorRoute(id: m)) }
                 }
                 #endif
                 if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
+        } empty: {
+            SplitPlaceholder(symbol: "chevron.left.forwardslash.chevron.right", title: "选一个 Agent",
+                             message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
         .environment(\.openSpace) { space in
             if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
@@ -349,9 +345,17 @@ struct ChatsView: View {
         kept = Set(base.filter { f != .all && f.matches($0) }.map(\.key))
     }
 
+    /// A space page from a page already open (a chat's 空间 menu): on top of it.
     private func pushSpace(_ id: String) {
         path.append(SpaceRoute(id: id))
         spaceAt[path.count - 1] = id
+    }
+
+    /// Something the list opens: in the split it replaces the detail column; in one stack the list is at the root, so
+    /// this is the same as pushing it.
+    private func openFromList(_ value: some Hashable) {
+        spaceAt = (value as? SpaceRoute).map { [0: $0.id] } ?? [:]
+        path = NavigationPath([value])
     }
 
     // MARK: By space
@@ -409,7 +413,7 @@ struct ChatsView: View {
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
-            Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { pushSpace(g.id) }) } label: {
+            Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }) } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -626,7 +630,7 @@ struct ChatsView: View {
                 }
             }
             Section {
-                Button { path.append(MachineDashboardRoute()) } label: {
+                Button { openFromList(MachineDashboardRoute()) } label: {
                     Label("机器监控", systemImage: "gauge.with.dots.needle.33percent")
                 }
             }
@@ -1081,5 +1085,18 @@ struct MachineSectionHeader: View {
             Spacer(minLength: 4)
             StateCounts(group: group)
         }
+    }
+}
+
+/// The pages the Agents list opens, in either layout (`SplitNavigation`).
+private struct AgentsDestinations: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
+            .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineDashboardRoute.self) { _ in MachineDashboardView().splitDetailPage() }
+            .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id).splitDetailPage() }
     }
 }

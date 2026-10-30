@@ -442,8 +442,7 @@ struct FullOutputSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
                 if let text {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button { UIPasteboard.general.string = text } label: { Image(systemName: "doc.on.doc") }
-                            .accessibilityLabel("拷贝全文")
+                        Button { UIPasteboard.general.string = text } label: { Label("拷贝全文", systemImage: "doc.on.doc") }
                     }
                 }
             }

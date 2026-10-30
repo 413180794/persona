@@ -49,7 +49,7 @@ def env(cfg: dict) -> dict:
     store = cfg.get("app_store", {})
     hub = cfg.get("hub", {})
     hub_ssh = machine(cfg, hub["machine"]).get("ssh", hub["machine"]) if hub.get("machine") else ""
-    return {
+    out = {
         "JARVIS_BUNDLE_ID": get(cfg, "app.bundle_id", ""),
         "JARVIS_TEAM_ID": get(cfg, "app.team_id", ""),
         "ASC_KEY_ID": store.get("key_id", ""),
@@ -62,6 +62,11 @@ def env(cfg: dict) -> dict:
         "JARVIS_MACHINES": " ".join(m["id"] for m in cfg.get("machines", [])),
         "JARVIS_SIM": cfg.get("simulator", ""),
     }
+    # Which Xcode builds (and releases) the app; a DEVELOPER_DIR already in the environment wins. iPhone Duo needs
+    # Xcode 27 or later: built with an older one, the app does not reach under the status bar and the camera.
+    if cfg.get("xcode") and not os.environ.get("DEVELOPER_DIR"):
+        out["DEVELOPER_DIR"] = os.path.join(os.path.expanduser(cfg["xcode"]), "Contents", "Developer")
+    return out
 
 
 def xcconfig(cfg: dict):

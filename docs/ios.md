@@ -215,6 +215,33 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 测试：`AssistantTopBarTests`（头像菜单和拷贝、左右按钮、按钮和手势两条路打开侧边栏、选对话后关闭并切过去、长对话滚动时顶栏位置不变、连接状态）。
   `-openAssistantSidebar YES` 启动时侧边栏就是开着的（截图）。
 
+## iPhone Duo（2026-10-30）
+
+iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度），打开用内屏（约 669×951 点，regular 宽度），还能半折、横放、立着。
+外屏和内屏横放时，**系统把状态栏、导航栏、工具栏、tab 栏竖着放到屏幕侧边**；内屏竖放时仍是水平的栏。官方指南：
+`developer.apple.com/iphone-duo`、HIG「Designing for iPhone Duo」。要用 Xcode 27 及以上编译（配置 `xcode`，`docs/config.md`），
+旧 Xcode 编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面。
+
+- **按宽度分两种布局，不看机型**（`Jarvis/Views/SplitNavigation.swift`）。compact（所有普通 iPhone、Duo 合上）还是原来的单个
+  NavigationStack，行为一点不变；regular（Duo 打开）用 `NavigationSplitView`：左栏是列表，右栏是它打开的页面，像 Mail。
+  两种布局共用同一个 `path`，开合时正在看的页面不丢；半折时系统自动让两栏避开折痕。Agents、收件箱、设置都用它。
+  - 左栏的 `NavigationLink(value:)` 替换右栏（左栏自己有一个永远不推的栈，把要推的值转给右栏）；列表里用代码打开的页面也要替换：
+    `path = NavigationPath([值])`（单栏时列表在栈底，和 append 一样；Agents 的 `openFromList`）。详情页里再打开的页面照常 append。
+  - 右栏第一页没有返回按钮（旁边就是列表）：目标页加 `.splitDetailPage()`；Agents 对话页自绘的返回键看 `\.splitDetail` 隐藏（保留占位，标题居中）。
+  - 分栏时对话页不隐藏 tab 栏（单栏时隐藏，好让对话占满）。
+  - 设置页的入口全部改成按值（`SettingsPage`），视图式的 `NavigationLink { 页面 }` 会推进左栏自己的栈，在窄栏里打开。
+- **Jarvis**：regular 下侧边栏是 `NavigationSplitView` 的左栏（没有「设置」齿轮：tab 栏一直在旁边），左上角按钮显示 / 隐藏左栏；
+  compact 下仍是抽屉。
+- **可读宽度**：对话和 Jarvis 首页最宽 760pt（`ChatView.readableWidth`），更宽时居中，顶栏仍然铺满。
+- **不用屏幕尺寸**：两块屏尺寸、比例都不同，`UIScreen.main` 一律不用。长按消息的操作条夹在对话区域里（`MessageMenu.area`
+  坐标空间），交互卡片的表单最高为所在容器的 55%（`containerRelativeFrame`），图片缩放按视图的 `traitCollection.displayScale`。
+- **工具栏按钮都要有标题和图标**（`Label("新建会话", systemImage: …)`）：竖排时只显示图标，放不下收进溢出菜单时显示标题；
+  只有图标的按钮在溢出菜单里是空白。
+- Jarvis 和 Agents 对话页的顶栏是自绘的，不会跟系统一起移到侧边；按 HIG「各姿态下控件位置保持一致」，保持在内容顶部。
+- **在模拟器上验证**：iPhone Duo 只有 iOS 27.1 运行时（这个运行时也只支持它）。开合 / 半折只能在 Xcode 的 Device Hub 里切，
+  没有命令行。截图要指定屏幕：`xcrun simctl io <udid> screenshot --display=1`（外屏）/ `--display=3`（内屏，横放时是 2853×2007），
+  不指定时可能拍到熄灭的那块（全黑）；先算一下亮度确认拍到的是亮着的屏。启动参数照常用（`-tab`、`-openSession` 等）。
+
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），

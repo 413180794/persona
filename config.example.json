@@ -30,5 +30,6 @@
     { "id": "server", "ssh": "server", "os": "linux" },
     { "id": "laptop", "ssh": "laptop", "os": "darwin", "hostnames": ["MyMacBook"] }
   ],
-  "simulator": ""
+  "simulator": "",
+  "xcode": ""
 }

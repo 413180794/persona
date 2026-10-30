@@ -186,7 +186,7 @@ struct LarkMomentsPostView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
                 if let link, let u = URL(string: link) {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { openURL(u) } label: { Image(systemName: "arrow.up.forward.app") }.accessibilityLabel("在飞书中打开")
+                        Button { openURL(u) } label: { Label("在飞书中打开", systemImage: "arrow.up.forward.app") }
                     }
                 }
             }

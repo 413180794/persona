@@ -22,6 +22,11 @@ final class MessageMenu {
     /// The press that opened the bar. Its own lift must not close it: the list's simultaneous tap-to-close gesture
     /// recognizes that lift as a tap (only presses longer than ~2 s fail it), and a held finger's small drift shows
     /// up as list scrolling.
+    /// How wide the chat is (`MessageMenu.area`): the bar stays inside it, not the screen — beside a list on a wide
+    /// display (iPhone Duo open) the screen is much wider than the chat.
+    @ObservationIgnored var areaWidth: CGFloat = 0
+    /// The chat's coordinate space, set by the chat on its panes.
+    static let area = "message-menu-area"
     @ObservationIgnored private var pressing = false
     @ObservationIgnored private var pressEnded = Date.distantPast
 
@@ -125,9 +130,11 @@ private struct MessageActionBarHost: ViewModifier {
                     if menu.selected == id {
                         GeometryReader { geo in
                             let frame = geo.frame(in: .global)
-                            let screen = UIScreen.main.bounds.width // the bar may stick out of a narrow bubble
+                            // The bar may stick out of a narrow bubble, but not out of the chat.
+                            let inArea = geo.frame(in: .named(MessageMenu.area))
+                            let areaWidth = max(menu.areaWidth, inArea.maxX)
                             let width = MessageActionBar.width(isUser: isUser)
-                            let x = min(max(frame.minX + menu.anchor.x, width / 2 + 8), screen - width / 2 - 8) - frame.minX
+                            let x = min(max(inArea.minX + menu.anchor.x, width / 2 + 8), areaWidth - width / 2 - 8) - inArea.minX
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
                             let y = menu.anchor.y + (above ? -(MessageActionBar.height / 2 + 16) : MessageActionBar.height / 2 + 24)

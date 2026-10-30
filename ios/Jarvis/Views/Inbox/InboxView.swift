@@ -50,7 +50,7 @@ struct InboxView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("InboxView.body")
         #endif
-        NavigationStack(path: $path) {
+        SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accounts)) {
             list
                 .navigationTitle("收件箱")
                 .navigationBarTitleDisplayMode(.inline)
@@ -66,8 +66,6 @@ struct InboxView: View {
                         .accessibilityLabel("更多")
                     }
                 }
-                .navigationDestination(for: InboxItem.self) { InboxDetailView(item: $0, accounts: accounts) }
-                .feishuRoutes()
                 .sheet(isPresented: $showAccounts, onDismiss: { Task { await loadAccounts() } }) { MailAccountsView() }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
@@ -82,10 +80,12 @@ struct InboxView: View {
                     // `-openInboxFirst YES`: open the first open item (detail screenshots).
                     if UserDefaults.standard.bool(forKey: "openInboxFirst") {
                         for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
-                        if let first = openItems.first { path.append(first) }
+                        if let first = openItems.first { path = NavigationPath([first]) }
                     }
                     #endif
                 }
+        } empty: {
+            SplitPlaceholder(symbol: "tray.full", title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
         }
         .environment(\.feishuOpen) { path.append($0) }
         .feishuHandlesLinks { path.append($0) }
@@ -492,5 +492,16 @@ struct InboxDetailView: View {
         } else {
             EmptyStateView(symbol: "questionmark", title: item.title, message: item.preview)
         }
+    }
+}
+
+/// The pages the inbox opens, in either layout (`SplitNavigation`).
+private struct InboxDestinations: ViewModifier {
+    var accounts: [MailAccount]
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: InboxItem.self) { InboxDetailView(item: $0, accounts: accounts).splitDetailPage() }
+            .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage() }
     }
 }

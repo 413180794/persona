@@ -180,7 +180,8 @@ struct AssistantSidebar: View {
     var openProfile: () -> Void
     var openRoutines: () -> Void
     var openKnowledge: () -> Void
-    var openSettings: () -> Void
+    /// nil when the tab bar is beside the sidebar (a column on a wide display): no second way to 设置.
+    var openSettings: (() -> Void)?
     @State private var query = ""
     @State private var showAll = false
     @State private var ending: Session?
@@ -379,12 +380,14 @@ struct AssistantSidebar: View {
             .themedButton(prominent: true)
             .accessibilityIdentifier("sidebar-new")
             Spacer(minLength: 0)
-            Button(action: openSettings) {
-                Image(systemName: "gearshape").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(.circle)
+            if let openSettings {
+                Button(action: openSettings) {
+                    Image(systemName: "gearshape").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .surface(interactive: true, in: .circle)
+                .accessibilityLabel("设置")
             }
-            .buttonStyle(.plain)
-            .surface(interactive: true, in: .circle)
-            .accessibilityLabel("设置")
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)

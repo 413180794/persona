@@ -385,8 +385,7 @@ struct FeishuDocReader: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if !outline.isEmpty {
-                Button { showOutline = true } label: { Image(systemName: "list.bullet.indent") }
-                    .accessibilityLabel("目录")
+                Button { showOutline = true } label: { Label("目录", systemImage: "list.bullet.indent") }
             }
             if model.content != nil, case .unsupported = model.content {} else if model.content != nil {
                 Button { showComments = true } label: {
@@ -609,7 +608,7 @@ struct FeishuDocsCommentsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("关闭")
+                Button { dismiss() } label: { Label("关闭", systemImage: "xmark") }
             }
         }
         .refreshable { await load() }

@@ -51,8 +51,7 @@ struct MachineSpacesView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // By value, like the chats the details page opens (MachineDetailRoute).
-                NavigationLink(value: MachineDetailRoute(id: machineID)) { Image(systemName: "info.circle") }
-                    .accessibilityLabel("机器详情")
+                NavigationLink(value: MachineDetailRoute(id: machineID)) { Label("机器详情", systemImage: "info.circle") }
             }
         }
     }

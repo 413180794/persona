@@ -283,7 +283,7 @@ struct ComposeView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        if sending { ProgressView() } else { Image(systemName: "paperplane.fill") }
+                        if sending { ProgressView() } else { Label("发送", systemImage: "paperplane.fill") }
                     }
                     .disabled(sending || draft.to.isEmpty)
                 }

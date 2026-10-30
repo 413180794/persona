@@ -9,6 +9,8 @@ struct AssistantTopBar: View {
     @Environment(AppModel.self) private var model
     /// The conversation on screen; nil on the new-conversation page.
     var key: SessionKey?
+    /// The sidebar is a column beside the conversation (a wide display): the button shows or hides it.
+    var sidebarIsColumn = false
     var openSidebar: () -> Void
     var newConversation: () -> Void
     var openKnowledge: () -> Void
@@ -52,7 +54,7 @@ struct AssistantTopBar: View {
     private var bar: some View {
         HStack(alignment: .top) {
             GlassEffectContainer {
-                circle("line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {
+                circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {
                     Haptics.tap()
                     openSidebar()
                 }

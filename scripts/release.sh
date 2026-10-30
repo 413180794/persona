@@ -11,6 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 eval "$(python3 scripts/jarvis_config.py env)"
 python3 scripts/jarvis_config.py xcconfig
+echo "Building with $(xcodebuild -version | head -1) (config \"xcode\" picks another, docs/config.md)"
 # No private values in what is about to ship from this tree (CLAUDE.md).
 python3 scripts/privacy_check.py
 OUT=build-release

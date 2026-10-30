@@ -188,7 +188,8 @@ struct InteractionPanel: View {
                     form.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .frame(height: formHeight == 0 ? nil : min(formHeight, UIScreen.main.bounds.height * 0.55))
+                // At most a little over half of what the page has (not the screen: iPhone Duo's displays differ).
+                .containerRelativeFrame(.vertical) { length, _ in min(formHeight == 0 ? length : formHeight, length * 0.55) }
                 .transition(.opacity)
             }
         }

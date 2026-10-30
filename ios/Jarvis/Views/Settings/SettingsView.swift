@@ -5,19 +5,16 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmUnpair = false
     @State private var showPair = false
-    @State private var debugAssistant = false
     @State private var debugOpened = false
     @State private var storage: Int64?
-    @State private var debugStorage = false
-    @State private var debugNotifications = false
     @State private var path = NavigationPath()
-    @State private var debugDevices = false
 
     var body: some View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("SettingsView.body")
         #endif
-        NavigationStack(path: $path) {
+        // By value, every page: in the split (iPhone Duo open) they open beside the list, not inside its column.
+        SplitNavigation(path: $path, destinations: SettingsDestinations()) {
             List {
                 Section {
                     HStack(spacing: 14) {
@@ -44,33 +41,33 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink { AssistantProfileView() } label: {
+                    NavigationLink(value: SettingsPage.assistant) {
                         LabeledContent {
                             Text(model.assistantConfig?.launcher ?? "").font(.callout.monospaced())
                         } label: {
                             Label("助手", systemImage: "sparkles")
                         }
                     }
-                    NavigationLink { ClaudeSettingsView() } label: {
+                    NavigationLink(value: SettingsPage.claude) {
                         Label("Claude Code 设置", systemImage: "slider.horizontal.3")
                     }
-                    NavigationLink(value: MachineListRoute()) { // by value: MachinesView pushes its cards by value (MachineListRoute)
+                    NavigationLink(value: MachineListRoute()) {
                         LabeledContent {
                             Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
                         } label: {
                             Label("机器", systemImage: "macbook.and.iphone")
                         }
                     }
-                    NavigationLink { DevicesView() } label: {
+                    NavigationLink(value: SettingsPage.devices) {
                         Label("设备", systemImage: "key")
                     }
                 }
 
                 Section {
-                    NavigationLink { PhoneDataView() } label: {
+                    NavigationLink(value: SettingsPage.phoneData) {
                         Label("手机数据", systemImage: "iphone.gen3")
                     }
-                    NavigationLink { NotificationSettingsView() } label: {
+                    NavigationLink(value: SettingsPage.notifications) {
                         Label("通知", systemImage: "bell.badge")
                     }
                 } footer: {
@@ -93,7 +90,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink { StorageView() } label: {
+                    NavigationLink(value: SettingsPage.storage) {
                         LabeledContent {
                             Text(storage?.storageText ?? "").monospacedDigit()
                         } label: {
@@ -113,33 +110,72 @@ struct SettingsView: View {
             }
             .themedPage()
             .navigationTitle("设置")
-            .navigationDestination(for: MachineListRoute.self) { _ in MachinesView() }
-            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
             .task { await model.refreshAssistant() }
-            .onAppear { // measured each time the page shows (back from 存储空间 after clearing, too)
-                Task { storage = await Task.detached(priority: .utility) { StorageUsage.scan().values.reduce(0, +) }.value }
-            }
+            // Measured each time the page shows and whenever a page closes (back from 存储空间 after clearing; in the
+            // split the list never leaves the screen).
+            .onAppear(perform: measureStorage)
+            .onChange(of: path) { measureStorage() }
             #if DEBUG
-            // `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about` (with `-tab settings`)
-            .navigationDestination(isPresented: $debugAssistant) { AssistantProfileView() }
-            // `-openStorage YES` (with `-tab settings`): 存储空间.
-            .navigationDestination(isPresented: $debugStorage) { StorageView() }
-            .onAppear { if UserDefaults.standard.bool(forKey: "openStorage"), !debugOpened { debugOpened = true; debugStorage = true } }
-            // `-openNotificationSettings YES` (with `-tab settings`): 通知.
-            .navigationDestination(isPresented: $debugNotifications) { NotificationSettingsView() }
-            .onAppear { if UserDefaults.standard.bool(forKey: "openNotificationSettings"), !debugOpened { debugOpened = true; debugNotifications = true } }
-            .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") != nil, !debugOpened { debugOpened = true; debugAssistant = true } }
-            // `-openMachines YES` (with `-tab settings`): 机器.
-            .onAppear { if UserDefaults.standard.bool(forKey: "openMachines"), !debugOpened { debugOpened = true; path.append(MachineListRoute()) } }
-            // `-openDevices YES` (with `-tab settings`): 设备.
-            .navigationDestination(isPresented: $debugDevices) { DevicesView() }
-            .onAppear { if UserDefaults.standard.bool(forKey: "openDevices"), !debugOpened { debugOpened = true; debugDevices = true } }
+            // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
+            // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器),
+            // `-openDevices YES` (设备).
+            .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
                 Button("断开", role: .destructive) { model.unpair() }
             }
             .sheet(isPresented: $showPair) { PairView() }
+        } empty: {
+            SplitPlaceholder(symbol: "gearshape", title: "设置", message: "左边选一项。")
+        }
+    }
+
+    private func measureStorage() {
+        Task { storage = await Task.detached(priority: .utility) { StorageUsage.scan().values.reduce(0, +) }.value }
+    }
+
+    #if DEBUG
+    private func openDebugPage() {
+        guard !debugOpened else { return }
+        let d = UserDefaults.standard
+        // Appended with their own types: a path of AnyHashable finds no destination.
+        var p = NavigationPath()
+        if d.bool(forKey: "openMachines") { p.append(MachineListRoute()) }
+        else if d.bool(forKey: "openStorage") { p.append(SettingsPage.storage) }
+        else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
+        else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
+        else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        guard !p.isEmpty else { return }
+        debugOpened = true
+        path = p
+    }
+    #endif
+}
+
+/// The pages of 设置 that are not routes of their own elsewhere.
+enum SettingsPage: Hashable {
+    case assistant, claude, devices, phoneData, notifications, storage
+}
+
+/// The pages the settings list opens, in either layout (`SplitNavigation`). MachinesView pushes its cards by value
+/// (MachineDetailRoute), and a machine's page its agents (SessionKey).
+private struct SettingsDestinations: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: SettingsPage.self) { page(for: $0).splitDetailPage() }
+            .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
+            .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
+    }
+
+    @ViewBuilder private func page(for page: SettingsPage) -> some View {
+        switch page {
+        case .assistant: AssistantProfileView()
+        case .claude: ClaudeSettingsView()
+        case .devices: DevicesView()
+        case .phoneData: PhoneDataView()
+        case .notifications: NotificationSettingsView()
+        case .storage: StorageView()
         }
     }
 }

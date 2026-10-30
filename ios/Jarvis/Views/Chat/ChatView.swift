@@ -71,6 +71,8 @@ struct ChatView: View {
     /// The turn whose "后台任务完成" drawer is open.
     @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
+    /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
+    @Environment(\.splitDetail) private var split
     /// Safari-style chrome (title row, agent strip, tabs): it follows the finger as the list scrolls and settles
     /// open or folded when the finger lifts. Its own object so the per-frame updates only redraw the header.
     @State private var chrome = ChatChrome()
@@ -109,6 +111,12 @@ struct ChatView: View {
         let _ = PerfTrace.event("ChatView.body")
         #endif
         swipeablePanes
+        // A readable measure on a wide page (iPhone Duo open, nothing beside the chat); a no-op on other iPhones.
+        .frame(maxWidth: Self.readableWidth)
+        // Where a message's action bar may go (MessageMenu): this chat, not the whole screen.
+        .coordinateSpace(.named(MessageMenu.area))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { menu.areaWidth = $0 }
+        .frame(maxWidth: .infinity)
         .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -159,7 +167,8 @@ struct ChatView: View {
             }
         }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
-        .toolbar(style == .dev ? .hidden : .automatic, for: .tabBar)
+        // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
+        .toolbar(style == .dev && split == nil ? .hidden : .automatic, for: .tabBar)
         .fullScreenCover(isPresented: $showTerminal) { TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear) }
         .renameSessionAlert($renaming)
         .confirmClose($closing)
@@ -1136,6 +1145,7 @@ struct ChatView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
+            .noBackWhen(hidesBack)
             Spacer(minLength: 0)
             Button { Haptics.tap(); showChrome() } label: {
                 HStack(spacing: 6) {
@@ -1319,6 +1329,7 @@ struct ChatView: View {
                         .buttonStyle(.plain)
                         .surface(interactive: true, in: .circle)
                         .accessibilityLabel("返回")
+                        .noBackWhen(hidesBack)
                         Spacer(minLength: 0)
                         titleButton
                         Spacer(minLength: 0)
@@ -1375,6 +1386,12 @@ struct ChatView: View {
     }
 
     /// Back: out of files / Git to the chat first, then off the page.
+    /// The widest the conversation gets: lines longer than this are hard to read.
+    static let readableWidth: CGFloat = 760
+
+    /// The first page of a split's detail column, on the chat: nothing to go back to (the list is beside it).
+    private var hidesBack: Bool { split?.isFirstPage == true && pane == .chat }
+
     private func back() {
         if pane != .chat { withAnimation(.snappy) { pane = .chat } } else { dismissChat() }
     }
@@ -2643,5 +2660,12 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+private extension View {
+    /// Hidden but keeping its room, so the title stays centered.
+    func noBackWhen(_ hidden: Bool) -> some View {
+        opacity(hidden ? 0 : 1).disabled(hidden).accessibilityHidden(hidden)
     }
 }

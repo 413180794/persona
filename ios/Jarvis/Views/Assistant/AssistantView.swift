@@ -6,6 +6,7 @@ import SwiftUI
 /// user usually talks to it, and where other pages hand things to it); the others are side conversations.
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var widthClass
     @State private var pending: PendingStart?
     @State private var startError: String?
     @State private var starterLauncher: String?
@@ -14,6 +15,8 @@ struct AssistantView: View {
     @State private var showRoutines = false
     /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Jarvis 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
+    /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
+    @State private var columns = NavigationSplitViewVisibility.all
     #if DEBUG
     @State private var showAvatars = false
     #endif
@@ -27,22 +30,46 @@ struct AssistantView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("AssistantView.body")
         #endif
-        AssistantDrawerLayout(drawer: drawer, enabled: atRoot, sidebar: {
-            AssistantSidebar(current: pending == nil ? current : nil,
-                             open: { key in
-                                 model.assistantCurrent = key
-                                 pending = nil
-                                 drawer.close()
-                             },
-                             newConversation: { newConversation(); drawer.close() },
-                             openProfile: { drawer.close(); showProfile = true },
-                             openRoutines: { drawer.close(); showRoutines = true },
-                             openKnowledge: { drawer.close(); showKnowledge = true },
-                             openSettings: { drawer.close(); model.selectedTab = .settings })
-        }, page: stack)
-        // The sidebar takes the whole height, like ChatGPT's: the tab bar would sit over its bottom row and repeat
-        // its 设置 right under the sidebar's own.
-        .toolbarVisibility(drawer.isOpen ? .hidden : .automatic, for: .tabBar)
+        if widthClass == .regular {
+            // The split keeps both columns clear of the fold when the device is partly folded.
+            NavigationSplitView(columnVisibility: $columns) {
+                // No width of our own: the system sizes the column, and moves the divide onto the fold.
+                sidebar(column: true)
+                    .toolbarVisibility(.hidden, for: .navigationBar)
+            } detail: {
+                stack
+            }
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            AssistantDrawerLayout(drawer: drawer, enabled: atRoot, sidebar: { sidebar(column: false) }, page: stack)
+                // The sidebar takes the whole height, like ChatGPT's: the tab bar would sit over its bottom row and
+                // repeat its 设置 right under the sidebar's own.
+                .toolbarVisibility(drawer.isOpen ? .hidden : .automatic, for: .tabBar)
+        }
+    }
+
+    /// The sidebar, as the drawer (compact) or as a column of the split (regular, the tab bar beside it: no 设置).
+    private func sidebar(column: Bool) -> some View {
+        AssistantSidebar(current: pending == nil ? current : nil,
+                         open: { key in
+                             model.assistantCurrent = key
+                             pending = nil
+                             drawer.close()
+                         },
+                         newConversation: { newConversation(); drawer.close() },
+                         openProfile: { drawer.close(); showProfile = true },
+                         openRoutines: { drawer.close(); showRoutines = true },
+                         openKnowledge: { drawer.close(); showKnowledge = true },
+                         openSettings: column ? nil : { drawer.close(); model.selectedTab = .settings })
+    }
+
+    /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
+    private func toggleSidebar() {
+        if widthClass == .regular {
+            withAnimation(.snappy) { columns = columns == .detailOnly ? .all : .detailOnly }
+        } else {
+            drawer.open()
+        }
     }
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
@@ -71,7 +98,8 @@ struct AssistantView: View {
             .toolbarVisibility(.hidden, for: .navigationBar)
             .overlay(alignment: .top) {
                 AssistantTopBar(key: pending == nil ? current : nil,
-                                openSidebar: { drawer.open() },
+                                sidebarIsColumn: widthClass == .regular,
+                                openSidebar: toggleSidebar,
                                 newConversation: newConversation,
                                 openKnowledge: { showKnowledge = true },
                                 openProfile: { showProfile = true })
@@ -212,6 +240,9 @@ struct AssistantHome: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+            // The conversation's measure on a wide display (iPhone Duo open).
+            .frame(maxWidth: ChatView.readableWidth)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .themedGroupedPage()
@@ -228,6 +259,8 @@ struct AssistantHome: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
+            .frame(maxWidth: ChatView.readableWidth)
+            .frame(maxWidth: .infinity)
         }
         // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it.
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)

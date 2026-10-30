@@ -122,7 +122,7 @@ struct SpaceView: View {
             if let g = SpaceGroup.build(sessions).first {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu { SpaceMenuItems(group: g) { renaming = g } } label: {
-                        Image(systemName: model.isMuted(g) ? "bell.slash" : "ellipsis")
+                        Label("空间设置", systemImage: model.isMuted(g) ? "bell.slash" : "ellipsis")
                     }
                     .accessibilityLabel("空间操作")
                 }

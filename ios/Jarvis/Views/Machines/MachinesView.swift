@@ -29,8 +29,7 @@ struct MachinesView: View {
         .toolbar {
             ToolbarItem(placement: .principal) { ConnectionTitle() }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { MachineDashboardView() } label: { Image(systemName: "gauge.with.dots.needle.33percent") }
-                    .accessibilityLabel("机器监控")
+                NavigationLink { MachineDashboardView() } label: { Label("机器监控", systemImage: "gauge.with.dots.needle.33percent") }
             }
         }
         .refreshable { await model.refresh() }
