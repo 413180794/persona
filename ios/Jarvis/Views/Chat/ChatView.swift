@@ -924,6 +924,7 @@ struct ChatView: View {
                 Button(action: jumpToEnd) {
                     Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
                 }
+                .accessibilityLabel("回到最新")
                 .themedButton()
                 .clipShape(.circle)
                 .padding(16)
@@ -1090,6 +1091,7 @@ struct ChatView: View {
             scratch.userDragging = phase == .tracking || phase == .interacting || flick
             if phase == .idle, old != .idle, old != .animating { settleChrome() } // the finger lifted, the glide ended
             if phase == .tracking || phase == .interacting {
+                scratch.lastUserScroll = .now
                 menu.dismiss()
                 entry = nil // the user scrolls on their own: no landing on the saved place after this
                 userScrolled = true
@@ -1130,17 +1132,21 @@ struct ChatView: View {
         .modifier(ChatStreamFollow(store: store) {
             if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } }
         })
-        // Your own message always brings you to the newest — only yours: one typed on the computer (or sent by another
-        // session) used to pull you out of the history you were reading too.
+        // Your own message brings you to the newest — only yours (one typed on the computer, or sent by another session,
+        // used to pull you out of the history you were reading too), and only if you have not scrolled since sending it:
+        // Claude can take it in seconds later, while you went back up to read (2026-10-30).
         .onChange(of: lastPromptID) { old, new in
             guard old != nil, let new, let text = store.items.last(where: { $0.id == new })?.text,
-                  scratch.sentHere.contains(where: { PendingMessage.same(text, $0) }) else { return }
+                  let i = scratch.sentHere.firstIndex(where: { PendingMessage.same(text, $0) }) else { return }
+            scratch.sentHere.remove(at: i)
+            guard scratch.lastUserScroll < scratch.sentAt else { return }
             followsEnd = true
             scrollToEnd()
         }
         .onChange(of: store.pending.count) { old, new in
             guard new > old else { return }
             scratch.sentHere = Array((scratch.sentHere + store.pending.map(\.text)).suffix(20))
+            scratch.sentAt = .now
             followsEnd = true
             scrollToEnd(animated: true)
         }
@@ -2773,6 +2779,10 @@ final class ChatScratch {
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
     var sentHere: [String] = []
+    /// When the last message went out from here, and when the user last took the list (a drag): a message's
+    /// transcript copy only brings you to the newest if you have not scrolled since sending it.
+    var sentAt = Date.distantPast
+    var lastUserScroll = Date.distantPast
     /// The frozen chat's rows up to its last exchange (`ChatStore.rebuild`).
     var frozenSettled: ChatStore.SettledRows?
     /// Rows on screen (for remembering where you left off), written by the list as it scrolls.
