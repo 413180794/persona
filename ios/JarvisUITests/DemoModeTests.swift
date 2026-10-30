@@ -7,6 +7,9 @@ import XCTest
 /// TEST_RUNNER_JARVIS_SHOTS=<dir> saves a screenshot of each step there (with TEST_RUNNER_JARVIS_STYLE in the name).
 final class DemoModeTests: XCTestCase {
     private var app: XCUIApplication!
+    /// The agent at the top of the demo's list (weather's, needing you). The list is lazy: an agent further down (the
+    /// working widget one, once the demo got more agents) is not in the view tree until scrolled to.
+    private static let firstAgent = "补齐网络层的单元测试"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -114,7 +117,7 @@ final class DemoModeTests: XCTestCase {
         demo.tap()
 
         // Agents: spaces in every state, the quick filters, 细列表.
-        see(text("给天气 App 加主屏幕小组件"), "the demo's agents", timeout: 10)
+        see(text(Self.firstAgent), "the demo's agents", timeout: 10)
         XCTAssertTrue(text("weather").exists)
         noErrors("agents")
         shot("agents")
@@ -148,9 +151,14 @@ final class DemoModeTests: XCTestCase {
         app.swipeDown() // the keyboard away
         sleep(1)
         // The page's own bar: the compact copy that shows once the chat scrolled (the full one sits under the clock).
+        // The terminal is in the header's ··· menu; a folded header (the slim bar) has no ···: a tap on its place opens it.
         let more = app.buttons["更多"].firstMatch
-        if !more.isHittable { app.swipeDown() } // the header folded away: scrolling the chat brings it back
-        guard more.waitForExistence(timeout: 5) else { return XCTFail("no ··· on the session page:\n\(app.debugDescription)") }
+        let unfold = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
+        for _ in 0..<3 where !more.isHittable {
+            if unfold.exists, unfold.isHittable { unfold.tap() } else { app.swipeDown() }
+            sleep(1)
+        }
+        guard more.isHittable else { return XCTFail("no ··· on the session page:\n\(app.debugDescription)") }
         more.tap()
         see(app.buttons["终端"].firstMatch, "终端 in the ··· menu", timeout: 5).tap()
         see(app.descendants(matching: .any)["terminal-close"], "the terminal", timeout: 10)
@@ -261,11 +269,11 @@ final class DemoModeTests: XCTestCase {
         app.launchArguments = ["-openWelcome", "YES", "-dev.openChat", ""]
         app.launch()
         see(app.buttons["welcome.demo"], "体验模式 on the pairing page", timeout: 15).tap()
-        see(text("给天气 App 加主屏幕小组件"), "the demo's agents")
+        see(text(Self.firstAgent), "the demo's agents")
         app.terminate()
         app.launchArguments = ["-dev.openChat", ""]
         app.launch()
-        see(text("给天气 App 加主屏幕小组件"), "the demo after a relaunch", timeout: 15)
+        see(text(Self.firstAgent), "the demo after a relaunch", timeout: 15)
         tab("设置")
         let leave = app.buttons["settings.leaveDemo"]
         for _ in 0..<3 where !(leave.exists && leave.isHittable) { app.swipeUp() }
