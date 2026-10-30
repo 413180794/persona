@@ -149,7 +149,7 @@ func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 			t.Fatalf("%s schema: %v", tool.Name, err)
 		}
 	}
-	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read", "lark_chats", "lark_api"} {
+	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read", "lark_chats", "lark_search"} {
 		if !names[want] {
 			t.Fatalf("assistant is missing %s", want)
 		}

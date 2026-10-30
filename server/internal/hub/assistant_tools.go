@@ -66,7 +66,7 @@ func assistantTools(withLark bool) []proto.Tool {
 	if withLark {
 		tools = append(tools,
 			proto.Tool{Name: "lark_chats", Description: "The user's Feishu (Lark) chats from their own account: unread ones by default, or the ones " +
-				"that @mention them, or the latest. Each line has the chat id (for lark_messages / lark_send), name, unread count, @me, muted, " +
+				"that @mention them, or the latest. Each line has the chat id (for lark_messages; the lark-connector skill calls it feedId), name, unread count, @me, muted, " +
 				"last message preview and time.",
 				InputSchema: schema(`{"type":"object","properties":{"filter":{"type":"string","enum":["unread","at_me","recent"],"description":"default unread"},"limit":{"type":"integer","description":"default 30"}}}`)},
 			proto.Tool{Name: "lark_messages", Description: "Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. " +
@@ -74,15 +74,6 @@ func assistantTools(withLark bool) []proto.Tool {
 				InputSchema: schema(`{"type":"object","required":["chat_id"],"properties":{"chat_id":{"type":"string"},"limit":{"type":"integer","description":"default 40, max 100"},"before":{"type":"string"}}}`)},
 			proto.Tool{Name: "lark_search", Description: "Search the user's Feishu: messages, docs, people, chats, calendar events, meeting minutes, tasks, mail.",
 				InputSchema: schema(`{"type":"object","required":["query"],"properties":{"query":{"type":"string"},"kind":{"type":"string","enum":["messages","docs","people","chats","calendar","minutes","todos","mail"],"description":"default messages"}}}`)},
-			proto.Tool{Name: "lark_api", Description: "Read anything else from the user's Feishu through lark-connector's agent API (read-only GET, plus POST /search/page). " +
-				"Useful routes: calendar/week?start=<UTC ISO>&end=<UTC ISO> (events; ≤62 days), calendar/event/<id> (attendees, meeting link, docs), " +
-				"meetings?count=20, meetings/<historyId>/insights (AI notes), minutes?scope=all, minutes/<token> (summary, todos), " +
-				"minutes/<token>/transcript, todos/search?q=, documents/drive?view=recent, wiki/spaces?scope=recent, search/people?q=, " +
-				"profile routes; GET / lists every route. Long answers are cut at 60 KB.",
-				InputSchema: schema(`{"type":"object","required":["path"],"properties":{"path":{"type":"string","description":"below /agent/v1, e.g. calendar/week"},"query":{"type":"object","additionalProperties":{"type":"string"}},"post_body":{"type":"object","description":"only for POST search/page"}}}`)},
-			proto.Tool{Name: "lark_send", Description: "Send a text message to a Feishu chat as the user. The user approves it on the phone first; " +
-				"say in the text exactly what will be sent.",
-				InputSchema: schema(`{"type":"object","required":["chat_id","text"],"properties":{"chat_id":{"type":"string"},"text":{"type":"string"}}}`)},
 		)
 	}
 	return tools
@@ -620,66 +611,6 @@ func (h *Hub) runLarkTool(ctx context.Context, m *Machine, name string, args jso
 			return "", err
 		}
 		return compactJSON(raw, 30000), nil
-	case "lark_api":
-		var a struct {
-			Path     string            `json:"path"`
-			Query    map[string]string `json:"query"`
-			PostBody map[string]any    `json:"post_body"`
-		}
-		if err := json.Unmarshal(args, &a); err != nil {
-			return "", err
-		}
-		p := strings.TrimPrefix(strings.TrimSpace(a.Path), "/agent/v1")
-		if u, err := url.Parse(p); err == nil && u.RawQuery != "" { // query written into the path
-			p = u.Path
-			if a.Query == nil {
-				a.Query = map[string]string{}
-			}
-			for k, v := range u.Query() {
-				a.Query[k] = v[0]
-			}
-		}
-		if !strings.HasPrefix(p, "/") {
-			p = "/" + p
-		}
-		q := url.Values{}
-		for k, v := range a.Query {
-			q.Set(k, v)
-		}
-		method := "GET"
-		var body any
-		if a.PostBody != nil {
-			method, body = "POST", a.PostBody
-		}
-		raw, err := h.lark.Read(ctx, method, p, q, body)
-		if err != nil {
-			return "", err
-		}
-		return compactJSON(raw, 60000), nil
-	case "lark_send":
-		var a struct {
-			ChatID string `json:"chat_id"`
-			Text   string `json:"text"`
-		}
-		_ = json.Unmarshal(args, &a)
-		if a.ChatID == "" || strings.TrimSpace(a.Text) == "" {
-			return "", fmt.Errorf("chat_id and text are required")
-		}
-		chat := a.ChatID
-		if convs, _, err := h.lark.Conversations(ctx, "inbox", "", 100); err == nil {
-			for _, c := range convs {
-				if c.ID == a.ChatID {
-					chat = c.Name
-				}
-			}
-		}
-		if !h.approve(ctx, m.cfg.ID, "lark_send", "发飞书消息给「"+chat+"」：\n"+a.Text, args) {
-			return "The user declined; nothing was sent.", nil
-		}
-		if err := h.lark.Send(ctx, a.ChatID, a.Text); err != nil {
-			return "", err
-		}
-		return "Sent.", nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 type MachineConfig struct {
@@ -56,6 +57,9 @@ type Config struct {
 	AI ai.Config `json:"ai"`
 	// Lark points at the user's lark-connector agent API (Feishu messages in the 信息 tab).
 	Lark lark.Config `json:"lark"`
+	// LarkGate: extra rules for the assistant's Feishu writes through the lark-connector skill, before the built-in ones
+	// (node/larkgate.go; e.g. {"method":"POST","path":"/conversations/*/messages","action":"allow"}).
+	LarkGate []proto.LarkRule `json:"lark_gate,omitempty"`
 	// Google is the iOS OAuth client behind Gmail's "Sign in with Google" (docs/mail.md).
 	Google   GoogleConfig    `json:"google"`
 	Machines []MachineConfig `json:"machines"`

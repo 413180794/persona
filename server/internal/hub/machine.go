@@ -452,7 +452,20 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return nil, err
 		}
 		p.Interaction.MachineID = m.cfg.ID
+		if p.Interaction.ToolName == "飞书" { // the assistant's lark-connector write (node/larkgate.go): name the chats it goes to
+			p.Interaction.Summary = m.hub.larkChatNames(ctx, p.Interaction.Summary)
+		}
 		return m.hub.waitInteraction(ctx, p.Interaction)
+	case "assistant.lark":
+		// lark-connector's token goes to the assistant's machine only (its process runs the lark-connector skill).
+		if m.hub.lark == nil || m.cfg.ID != m.hub.assistantConfig(ctx).MachineID {
+			return proto.AssistantLark{}, nil
+		}
+		base, token, err := m.hub.lark.AgentAccess(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return proto.AssistantLark{Base: base, Token: token, Rules: m.hub.cfg.LarkGate}, nil
 	case "state.load":
 		out := map[string]db.NodeSession{}
 		if m.hub.store != nil {
