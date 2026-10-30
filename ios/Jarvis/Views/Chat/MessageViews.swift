@@ -43,27 +43,8 @@ extension MarkdownUI.Theme {
                 .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: 3) }
                 .markdownTextStyle { ForegroundColor(.secondary) }
         }
-        .table { config in
-            ScrollView(.horizontal, showsIndicators: false) {
-                config.label
-                    .markdownTableBorderStyle(.init(color: Color.primary.opacity(0.12)))
-                    .markdownTableBackgroundStyle(.alternatingRows(Color.clear, Color.primary.opacity(0.03), header: Color.primary.opacity(0.06)))
-            }
-            .markdownMargin(top: 4, bottom: 12)
-        }
-        .tableCell { config in
-            // In the horizontal scroll a cell would get unlimited width and run on in one line: wrap at 280 pt.
-            MaxWidthLayout(max: 280) {
-                config.label
-                    .markdownTextStyle {
-                        FontSize(.em(0.88))
-                        if config.row == 0 { FontWeight(.semibold) }
-                    }
-                    .relativeLineSpacing(.em(0.15))
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-        }
+        .table { config in FittedTable(config: config) } // fits the width it gets; scrolls only when it cannot
+        .tableCell { config in FittedTableCell(config: config) }
 }
 
 /// Offers its content at most `max` points of width (the whole `max` when the parent leaves width open), so text wraps
@@ -685,7 +666,7 @@ struct RecapDrawer: View {
                     if let ts = item.ts, ts.isMeaningful {
                         Text("写于 " + Fmt.relative(ts)).font(.footnote).foregroundStyle(.secondary)
                     }
-                    Markdown(item.text ?? "")
+                    Markdown(Links.markdown(item.text ?? ""))
                         .markdownTheme(.jarvis)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -714,25 +695,18 @@ struct StreamingText: View {
 }
 
 nonisolated enum WebLinks {
-    private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-
     private static let memo = TextMemo<[URL]>()
 
-    /// The web links in a message, in order (memoized: data detection is slow and rows ask on every appearance).
-    static func find(in text: String) -> [URL] {
-        memo(text) { text in
-            guard let d = detector else { return [] }
-            return d.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
-                .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
-        }
-    }
+    /// The web links in a message, in order (memoized: rows ask on every appearance). Same rule as the links drawn
+    /// in the message (`Links`).
+    static func find(in text: String) -> [URL] { memo(text) { Links.find(in: $0) } }
 }
 
 
 /// Parsed Markdown per text: MarkdownUI parses (cmark) in `Markdown.init`, on every redraw of the row.
 nonisolated enum MarkdownMemo {
     private static let memo = TextMemo<MarkdownContent>(limit: 128)
-    static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent($0) } }
+    static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent(Links.markdown($0)) } }
 }
 
 /// What a chat row derives from its message (parsed Markdown, paths, links, the shown text), computed once per
@@ -760,7 +734,7 @@ nonisolated struct AssistantRowText {
     let markdown: MarkdownContent
     let files: [String]
     init(_ text: String) {
-        markdown = MarkdownContent(text)
+        markdown = MarkdownContent(Links.markdown(text)) // links end where `Links` says, not at the next space
         files = FilePaths.find(in: text)
     }
 }

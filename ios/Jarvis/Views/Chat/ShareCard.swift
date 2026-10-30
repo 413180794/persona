@@ -45,7 +45,7 @@ struct MessageShareCard: View {
                     Text(d.formatted(.dateTime.month().day().hour().minute())).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
-            Markdown(text)
+            Markdown(Links.markdown(text))
                 .markdownTheme(.card)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

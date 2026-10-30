@@ -295,5 +295,10 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   Monitor 事件只带 task-id，要靠 `Monitor started (task <id>` 的 tool_result 对回调用（`TaskIndex`）。
 - App 的会话磁盘缓存按 item id 合并，hub 换了某类 item 的内容（比如给 notice 加字段），缓存里的旧 item 不会被新页覆盖：改 item 结构就把
   `ChatCache` 的目录版本号加一（`chats-v3`）。
+- 链接在哪结束只有一个规则（`Links`）：空白、任何非 ASCII 字符（中文、全角标点）处结束，去掉结尾的 `.,;:!?` 和不成对的 `)` `]`。
+  MarkdownUI 用的 cmark-gfm 自动链接只在空白处结束，中文里一个链接会吞掉后面整段（2026-10-30）：所有交给 MarkdownUI 的文字先过
+  `Links.markdown`（把裸链接写成 `<url>`），回复、计划、文件、飞书消息、知识库都一样；路径识别（`FilePaths`）也按 ASCII 结束。
+- 回复里的表格不能按内容撑宽（MarkdownUI 的 Grid 每列取最宽的格子，长中文列直接出屏幕）：`FittedTable` 按可用宽度分配列宽，
+  短列保持原宽、长列折行，只有最小宽度都放不下才横滑，右边渐隐提示还能滑（`TablePlan`）。
 - 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
   别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。

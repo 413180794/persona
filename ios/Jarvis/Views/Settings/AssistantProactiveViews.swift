@@ -985,7 +985,7 @@ struct AssistantMemoryDetail: View {
                     }
                     Divider()
                 }
-                Markdown(entry.body.isEmpty ? "（空）" : entry.body)
+                Markdown(entry.body.isEmpty ? "（空）" : Links.markdown(entry.body))
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in url.scheme == nil ? .discarded : .systemAction })

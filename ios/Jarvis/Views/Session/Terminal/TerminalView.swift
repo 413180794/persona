@@ -516,16 +516,10 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         let col = line.from + c.col
         if col < row.count, let s = row[col].style.link, let url = URL(string: s) { return url }
         let text = row.map { $0.width == 0 ? "" : $0.text }.joined()
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         // Cell columns to string offsets: wide characters take one character but two cells.
         var offset = 0
         for i in 0..<min(col, row.count) where row[i].width > 0 { offset += row[i].text.utf16.count }
-        let ns = text as NSString
-        for m in detector.matches(in: text, range: NSRange(location: 0, length: ns.length))
-        where NSLocationInRange(offset, m.range) {
-            if let url = m.url, url.scheme == "http" || url.scheme == "https" { return url }
-        }
-        return nil
+        return Links.scan(text).first { NSLocationInRange(offset, $0.range) }?.url // where links end: `Links`
     }
 
     private func isWordCell(_ c: CellPoint) -> Bool {

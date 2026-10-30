@@ -682,6 +682,31 @@ if os.environ.get("MOCK_TASKS") == "1":
     ITEMS[TASKS] = _w
 
 
+# MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
+# last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
+RICH = "a1f3c2d4-0000-4000-8000-00000000000a"
+if os.environ.get("MOCK_RICH") == "1":
+    SESSIONS.append(sess("macbook", RICH, "整理待拍板事项", "/Users/me/code/weather", "done", "unread", "weather", 1, "decide", 5, 2,
+                         "三件事要你拍板。"))
+    _rich = """对比页已经放好了（http://192.0.2.10:23140/），出来我转给你拍板。拍板后整块开发，预计两天。
+
+| # | 事项 | 裁定 |
+| --- | --- | --- |
+| 1 | 小组件刷新频率 | 按小时刷新，夜间（0 点到 6 点）降到每三小时一次，省电优先，用户在设置里可以改回每小时 |
+| 2 | 降雨概率格式 | 统一显示成百分比，低于 10% 的不显示，避免“1% 降雨”这种没有意义的提示占位置 |
+| 3 | 图标 | 夜间模式换成描边版本 |
+
+各城市的数据源（宽表，横着滑）：
+
+| 城市 | 温度 | 湿度 | 风速 | 降雨 | 空气质量 | 数据来源 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 北京 | 18℃ | 40% | 3 级 | 10% | 良 | 中国气象局开放平台 |
+| 上海 | 21℃ | 65% | 2 级 | 30% | 优 | 中国气象局开放平台 |
+
+参考：https://en.wikipedia.org/wiki/Weather_(disambiguation)。"""
+    ITEMS[RICH] = [it("user", "text", 5, text="还有哪些要我拍板？"), it("assistant", "text", 2, text=_rich)]
+
+
 def fold_work(items):
     """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""
     uses = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use"}
