@@ -172,7 +172,9 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 // inputBoxVisible reports whether Claude Code's prompt footer is rendered.
 func inputBoxVisible(screen string) bool {
 	return strings.Contains(screen, "shift+tab") || strings.Contains(screen, "? for shortcuts") ||
-		strings.Contains(screen, "bypass permissions") || strings.Contains(screen, "esc to interrupt")
+		strings.Contains(screen, "bypass permissions") || strings.Contains(screen, "esc to interrupt") ||
+		// Claude Code 2.1.206 in default (manual) mode: "⏸ manual mode on · ← for agents", no shift+tab hint.
+		strings.Contains(screen, "manual mode on") || strings.Contains(screen, "← for agents")
 }
 
 // trustKeys returns the keys that select "Yes, I trust this folder" on Claude Code's trust dialog.

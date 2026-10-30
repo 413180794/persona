@@ -269,10 +269,9 @@ struct ChatsView: View {
             .listStyle(.insetGrouped)
             .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
             .themedPage()
-            // In the split's sidebar column (iPhone Duo open) the bar sits above the list, its chips wrapping (no
-            // sideways scroll view there: see QuickFilterBar.wraps).
+            // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone in its safe area.
             .modifier(TopBar(abovePage: widthClass == .regular) {
-                QuickFilterBar(selection: quick, counts: Self.counts(base), wraps: widthClass == .regular) { choose($0, base) }
+                QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, base) }
             })
             .navigationTitle("Agents")
             // No title over the list (the tab says it); the name stays for the back button. The principal item below
@@ -659,25 +658,16 @@ struct ChatsView: View {
 struct QuickFilterBar: View {
     var selection: AgentFilter
     var counts: [AgentFilter: Int]
-    /// Chips that do not fit go to a second row instead of scrolling sideways (the split's sidebar column: there the
-    /// navigation stack took this sideways scroll view for the page's own and pushed its content down by the
-    /// navigation bar's height, under the list's first rows).
-    var wraps = false
     var choose: (AgentFilter) -> Void
 
+    /// Chips that do not fit go to a second row; never a sideways scroll view. The navigation stack took that scroll
+    /// view for the page's own and pushed its chips down by the navigation bar's height, over the list's first rows
+    /// (on device in a phone's safeAreaBar, TestFlight 202610301834; in iPhone Duo's sidebar column). Accessibility
+    /// still reported the unmoved frame, so UI tests passed; the simulator only showed it on iPhone Duo.
     var body: some View {
-        if wraps {
-            LarkFlowLayout(spacing: 8, lineSpacing: 8) { chips }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) { chips }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-            }
-            .scrollClipDisabled()
-        }
+        LarkFlowLayout(spacing: 8, lineSpacing: 8) { chips }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
     }
 
     @ViewBuilder private var chips: some View {

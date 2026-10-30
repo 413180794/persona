@@ -150,6 +150,7 @@ func TestInputBoxVisible(t *testing.T) {
 		"  shift+tab to cycle",
 		"mode: bypass permissions",
 		"esc to interrupt",
+		"────\n❯ \n────\n  ⏸ manual mode on · ← for agents", // 2.1.206, default permission mode
 	}
 	for _, s := range visible {
 		if !inputBoxVisible(s) {
