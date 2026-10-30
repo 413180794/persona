@@ -125,6 +125,7 @@ struct ToolGroupView: View {
                     case .call(let c): ToolCallRow(call: c, autoExpand: false)
                     case .thought(let t):
                         if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) }
+                    case .folded(let f): FoldedWorkRow(fold: f)
                     }
                 }
                 if calls.count > 2 && !flat {
@@ -651,6 +652,53 @@ struct Base64Image: View {
         .task(id: payload.identity) {
             // Thumbnails only need ~2x their on-screen size.
             image = await ChatImageLoader.image(payload, side: 900)
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Fetches the work a fold stands for into the chat (`AppModel.unfold`); nil where nothing can.
+    @Entry var openFold: ((Item) async throws -> Void)? = nil
+}
+
+/// Work the page left out (`Item.fold`, docs/protocol.md「折叠的工作」). It shows only once its work line is open, and
+/// then fetches the steps, which take its place.
+struct FoldedWorkRow: View {
+    @Environment(\.openFold) private var openFold
+    var fold: Item
+    @State private var failed: String?
+    @State private var attempt = 0
+
+    private var steps: Int { fold.fold.map { $0.tools + $0.thoughts } ?? 0 }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let failed {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Theme.caution)
+                Text("\(steps) 步没载入：\(failed)").lineLimit(2)
+                Spacer(minLength: 0)
+                Button("重试") {
+                    self.failed = nil
+                    attempt += 1
+                }
+                .lineLimit(1)
+                .fixedSize()
+            } else {
+                ProgressView().controlSize(.small)
+                Text("正在载入 \(steps) 步…").lineLimit(1)
+                Spacer(minLength: 0)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 28)
+        .task(id: attempt) {
+            guard let openFold else { return }
+            do {
+                try await openFold(fold)
+            } catch {
+                failed = error.shown
+            }
         }
     }
 }

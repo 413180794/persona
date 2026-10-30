@@ -616,6 +616,63 @@ if os.environ.get("MOCK_SUGGESTION"):
             s["suggestion"] = "把命名问题修完再跑一遍测试，然后推到 review/naming"
 
 
+# MOCK_BIG=1: a Codex session whose last exchange ran 650 commands (a kilobyte of output each) with 110 notes and a few
+# progress replies between them — 1400 rows that the chat folds into one work line. Pages fold that work for apps that
+# ask (fold_work, like the hub; fold_work() below is transcript.FoldWork), a fold opens with from_seq / through_seq, and
+# /mock/served records what each items batch of it weighed (LongSessionTests).
+BIG = "a1f3c2d4-0000-4000-8000-000000000008"
+SERVED = []
+if os.environ.get("MOCK_BIG") == "1":
+    SESSIONS.append(sess("server", BIG, "整理构建脚本", "/home/me/code/shop-api", "done", "idle", "shop-api", 1, "build", 2, 30,
+                         "构建脚本整理完了：650 个步骤都过了一遍。", agent="codex", seen_at=ago(minutes=20)))
+    _out = "".join("step output line %d\n" % k for k in range(50))  # ~1 KB
+    _big = [it("user", "text", 200, text="先看看构建为什么慢"), it("assistant", "text", 190, text="慢在依赖下载，已经加了缓存。"),
+            it("user", "text", 100, text="把构建脚本都整理一遍")]
+    for _n in range(650):
+        _m = 100 - _n * 70 / 650
+        if _n % 6 == 0 and _n // 6 < 110:
+            _big.append(it("assistant", "thinking", _m, text="先看第 %d 步要不要保留。" % _n))
+        if _n and _n % 160 == 0:
+            _big.append(it("assistant", "text", _m, text="已经整理到第 %d 步。" % _n))
+        _big += tool("Bash", {"command": "make step-%d" % _n}, _out, _m)
+    _big.append(it("assistant", "text", 30, text="构建脚本整理完了：650 个步骤都过了一遍。"))
+    ITEMS[BIG] = _big
+
+
+def fold_work(items):
+    """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""
+    uses = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use"}
+    results = {x.get("tool_use_id") for x in items if x["kind"] == "tool_result"}
+
+    def inside(x):
+        if x["kind"] == "thinking":
+            return True
+        t = x.get("tool_use_id")
+        return x["kind"] in ("tool_use", "tool_result", "image") and t and t in uses and t in results
+    out, i = [], 0
+    while i < len(items):
+        if not inside(items[i]):
+            out.append(items[i]); i += 1; continue
+        j = i
+        while j < len(items) and inside(items[j]):
+            j += 1
+        run = items[i:j]
+        if len(run) < 3 and sum(len(x.get("text") or "") + len(json.dumps(x.get("tool_input") or "")) for x in run) < 4096:
+            out += run
+        else:
+            out.append({"id": "fold:" + run[0]["id"], "seq": run[0]["seq"], "ts": run[0]["ts"], "role": "assistant", "kind": "fold",
+                        "fold": {"items": len(run), "tools": sum(x["kind"] == "tool_use" for x in run),
+                                 "thoughts": sum(x["kind"] == "thinking" and bool((x.get("text") or "").strip()) for x in run),
+                                 "until": run[-1]["ts"], "through_seq": run[-1]["seq"], "through_id": run[-1]["id"]}})
+        i = j
+    return out
+
+
+def served(sid, via, payload):
+    if sid == BIG:
+        SERVED.append({"via": via, "items": len(payload["items"]), "bytes": len(json.dumps(payload, ensure_ascii=False).encode())})
+
+
 def all_sessions():
     return SESSIONS + ASSISTANT
 
@@ -711,8 +768,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
             r = q.get("range", ["1h"])[0]
-            span, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
-            return self.send_json({"metrics": machine_metrics(p.split("/")[4], span, step), "range": r, "step": step})
+            secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
+            return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
         if p == "/api/v1/sessions": return self.send_json({"sessions": all_sessions()})
         if p == "/api/v1/interactions": return self.send_json({"interactions": INTERACTIONS})
         if p == "/api/v1/interactions/history": return self.send_json({"interactions": []})
@@ -751,6 +808,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
         if p == "/api/v1/assistant/memory": return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
+        if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox": return self.send_json({"items": INBOX})
         if p.startswith("/api/v1/inbox/"):
             iid = p[len("/api/v1/inbox/"):]
@@ -778,9 +836,18 @@ class H(BaseHTTPRequestHandler):
                 a = int(q["after_seq"][0] or 0)
                 LOG.write("  items after_seq=%d\n" % a); LOG.flush()
                 return self.send_json({"items": [x for x in items if x["seq"] > a], "more_after": False, **span(items, a, max(a, last))})
+            if "through_seq" in q:  # opening a fold
+                frm, thru = int(q.get("from_seq", ["0"])[0]), int(q["through_seq"][0])
+                inside = [x for x in items if frm <= x["seq"] <= thru]
+                out = {"items": inside[:1000], "more": len(inside) > 1000}
+                served(sid, "range", out)
+                return self.send_json(out)
             b = q.get("before_seq", [""])[0]
             if b: items = [x for x in items if x["seq"] < int(b)]
-            return self.send_json({"items": items, "has_more": False, **span(items, None, int(b) - 1 if b else last)})
+            out = {"items": fold_work(items) if q.get("fold_work") == ["1"] else items, "has_more": False,
+                   **span(items, None, int(b) - 1 if b else last)}
+            served(sid, "page", out)
+            return self.send_json(out)
         if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/full"):
             from urllib.parse import unquote
             item = FULL.get(unquote(p.split("/")[7]))
@@ -1071,8 +1138,10 @@ class H(BaseHTTPRequestHandler):
                         send({"type": "items", "machine_id": mid, "session_id": sid, "items": newer, "backlog": True,
                               **span(items, since, max(since, items[-1]["seq"] if items else 0))})
                     else:
-                        send({"type": "items", "machine_id": mid, "session_id": sid, "items": items, "backlog": True,
-                              "has_more": False, **span(items)})
+                        out = {"type": "items", "machine_id": mid, "session_id": sid, "backlog": True, "has_more": False, **span(items),
+                               "items": fold_work(items) if msg.get("fold_work") else items}
+                        served(sid, "backlog", out)
+                        send(out)
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         SOCKETS.discard(self.connection)
