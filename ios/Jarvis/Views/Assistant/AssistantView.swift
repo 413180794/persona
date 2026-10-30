@@ -7,10 +7,13 @@ import SwiftUI
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
     @State private var pending: PendingStart?
-    @State private var showHistory = false
     @State private var startError: String?
     @State private var starterLauncher: String?
     @State private var showProfile = false
+    @State private var showKnowledge = false
+    @State private var showRoutines = false
+    /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Jarvis 顶栏和侧边栏」.
+    @State private var drawer = AssistantDrawer()
     #if DEBUG
     @State private var showAvatars = false
     #endif
@@ -24,6 +27,31 @@ struct AssistantView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("AssistantView.body")
         #endif
+        AssistantDrawerLayout(drawer: drawer, enabled: atRoot, sidebar: {
+            AssistantSidebar(current: pending == nil ? current : nil,
+                             open: { key in
+                                 model.assistantCurrent = key
+                                 pending = nil
+                                 drawer.close()
+                             },
+                             newConversation: { newConversation(); drawer.close() },
+                             openProfile: { drawer.close(); showProfile = true },
+                             openRoutines: { drawer.close(); showRoutines = true },
+                             openKnowledge: { drawer.close(); showKnowledge = true },
+                             openSettings: { drawer.close(); model.selectedTab = .settings })
+        }, page: stack)
+    }
+
+    /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
+    private var atRoot: Bool {
+        var pushed = showProfile || showKnowledge || showRoutines
+        #if DEBUG
+        pushed = pushed || showAvatars
+        #endif
+        return !pushed
+    }
+
+    private var stack: some View {
         NavigationStack {
             Group {
                 if let key = current, pending == nil {
@@ -36,43 +64,23 @@ struct AssistantView: View {
                     }
                 }
             }
-            .toolbar {
-                // Plain icons in the text color: the accent is for the page's main action (send), not for the bar.
-                ToolbarItemGroup(placement: .topBarLeading) {
-                    Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
-                        .tint(.primary)
-                        .accessibilityLabel("历史对话")
-                    NavigationLink { KnowledgeView() } label: { Image(systemName: "books.vertical") }
-                        .tint(.primary)
-                        .accessibilityLabel("知识库")
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if let main = model.assistantMain, current != main {
-                        Button {
-                            withAnimation(.snappy) { model.assistantCurrent = main }
-                            Haptics.tap()
-                        } label: { Image(systemName: "house") }
-                            .tint(.primary)
-                            .accessibilityLabel("回到主对话")
-                    }
-                    if current != nil {
-                        Button {
-                            withAnimation(.snappy) { model.assistantCurrent = nil }
-                            Haptics.tap()
-                        } label: { Image(systemName: "square.and.pencil") }
-                            .tint(.primary)
-                            .accessibilityLabel("新对话")
-                    }
-                    Button { showProfile = true } label: { JarvisAvatar(size: 30, working: working) }
-                        .accessibilityLabel("Jarvis 的资料")
-                        .accessibilityIdentifier("jarvis-profile")
-                }
+            // No system bar: the top bar floats over the conversation with a fog under it (it scrolls beneath).
+            .toolbarVisibility(.hidden, for: .navigationBar)
+            .overlay(alignment: .top) {
+                AssistantTopBar(key: pending == nil ? current : nil,
+                                openSidebar: { drawer.open() },
+                                newConversation: newConversation,
+                                openKnowledge: { showKnowledge = true },
+                                openProfile: { showProfile = true })
             }
             .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
+            .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
+            .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
             // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root.
-            .onChange(of: model.assistantCurrent) { showProfile = false }
+            .onChange(of: model.assistantCurrent) { backToRoot() }
             #if DEBUG
-            // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages.
+            // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
+            // `-openAssistantSidebar YES`: the sidebar is out.
             .navigationDestination(isPresented: $showAvatars) { JarvisAvatarGallery() }
             .onAppear {
                 switch UserDefaults.standard.string(forKey: "openAssistantPage") {
@@ -80,22 +88,23 @@ struct AssistantView: View {
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
+                if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { drawer.progress = 1 }
             }
             #endif
-            .sheet(isPresented: $showHistory) {
-                AssistantHistory { key in
-                    model.assistantCurrent = key
-                    showHistory = false
-                }
-            }
             .task { await model.refreshAssistant() }
         }
     }
 
-    /// The conversation on screen is running a turn: the avatar looks around.
-    private var working: Bool {
-        guard let key = current else { return false }
-        return model.session(key)?.state == .working
+    private func backToRoot() {
+        showProfile = false
+        showRoutines = false
+    }
+
+    private func newConversation() {
+        withAnimation(.snappy) {
+            model.assistantCurrent = nil
+            pending = nil
+        }
     }
 
     private func start(_ text: String, _ images: [ImagePayload]) async {
@@ -214,16 +223,15 @@ struct AssistantHome: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
         }
+        // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it.
+        .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         .navigationTitle("Jarvis")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle(title: "Jarvis") } }
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            JarvisAvatar(size: 56).padding(.top, 28)
-            Text(greeting).font(Theme.Font.greeting)
+            Text(greeting).font(Theme.Font.greeting).padding(.top, 20)
             Text(model.assistantMain == nil
                  ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
                  : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
@@ -332,57 +340,6 @@ struct StarterComposer: View {
     }
 }
 
-/// Past assistant conversations, newest first.
-struct AssistantHistory: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    var open: (SessionKey) -> Void
-
-    var body: some View {
-        let list = model.assistantConversations
-        NavigationStack {
-            List {
-                if list.isEmpty {
-                    Text("还没有对话").foregroundStyle(.secondary)
-                }
-                ForEach(list) { s in
-                    Button { open(s.key) } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                if s.key == model.assistantMain { Chip(text: "主对话", symbol: "house.fill") }
-                                Text(s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(Color.primary)
-                                    .lineLimit(1)
-                                Spacer()
-                                if s.state == .working || s.state == .needsYou || s.state == .unread {
-                                    StatusLabel(state: s.state)
-                                } else {
-                                    Text(Fmt.relative(s.updatedAt)).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            if let t = s.lastText, !t.isEmpty {
-                                Text(Fmt.plain(t)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
-                    .swipeActions {
-                        if s.status.isLive {
-                            Button(role: .destructive) { Task { await model.close(s.key) } } label: { Label("结束", systemImage: "xmark") }
-                        }
-                    }
-                }
-            }
-            .themedPage()
-            .navigationTitle("历史对话")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
 /// Tool activity in the assistant: one quiet line ("工具 4 · 运行 3 · 读取 1"), expandable to the steps.
 struct AssistantToolsRow: View {
     var steps: [ToolStep]
@@ -439,60 +396,6 @@ struct AssistantToolsRow: View {
             if !seen.contains(label) { seen.append(label) }
         }
         return seen.prefix(4).joined(separator: "、")
-    }
-}
-
-/// The assistant chat's title: the conversation's name over "launcher · model ⌄", and the menu behind it — which
-/// launcher the next message uses (it used to be a monospaced "claude" chip beside ⋯, repeating the subtitle and
-/// squeezing the title to four characters) and the session info card (what tapping the title did before).
-struct AssistantTitleMenu: View {
-    @Environment(AppModel.self) private var model
-    let key: SessionKey
-    var title: String
-    var subtitle: String
-    var infoShown: Bool
-    var toggleInfo: () -> Void
-    @State private var launchers: [Launcher] = []
-
-    var body: some View {
-        let current = model.assistantLaunchers[key] ?? model.session(key)?.launcher ?? model.assistantConfig?.launcher ?? "ccc"
-        Menu {
-            Section("下一条消息起使用") {
-                ForEach(launchers) { l in
-                    Button {
-                        model.assistantLaunchers[key] = l.name
-                        Haptics.tap()
-                        model.toast = Toast("已切换到 \(l.name)，下一条消息生效", style: .success)
-                    } label: {
-                        if l.name == current { Label(name(l), systemImage: "checkmark") } else { Text(name(l)) }
-                    }
-                }
-            }
-            Button(action: toggleInfo) {
-                Label(infoShown ? "收起会话信息" : "会话信息", systemImage: "info.circle")
-            }
-        } label: {
-            VStack(spacing: 1) {
-                Text(title).font(.headline).foregroundStyle(.primary).lineLimit(1)
-                HStack(spacing: 3) {
-                    Text(subtitle).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).imageScale(.small)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: 260)
-            .contentShape(.rect)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title)，\(subtitle)")
-        .accessibilityHint("切换启动器，或查看会话信息")
-        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? key.machineID)) ?? [] }
-    }
-
-    private func name(_ l: Launcher) -> String {
-        [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

@@ -161,6 +161,7 @@ RECIPE = "a1f3c2d4-0000-4000-8000-000000000007"
 ASK1 = "b2e4d6f8-0000-4000-8000-000000000001"
 ASK2 = "b2e4d6f8-0000-4000-8000-000000000002"
 ASK3 = "b2e4d6f8-0000-4000-8000-000000000003"
+ASK4 = "b2e4d6f8-0000-4000-8000-000000000004"  # a long one (the top bar must not move as it scrolls)
 
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
@@ -230,6 +231,7 @@ ASSISTANT = [
     assistant_sess(ASK1, "今天要处理的事", 3, "今天有 3 件事需要你……"),
     assistant_sess(ASK2, "早报 · 周三", 60 * 5, "早上好！今天 2 个会议……"),
     assistant_sess(ASK3, "帮我约周五和韩梅梅吃饭", 60 * 28, "已经在日历里加好了。"),
+    assistant_sess(ASK4, "整理这个季度的读书笔记", 60 * 50, "第 30 本整理好了。"),
 ]
 
 # ---------- the assistant's schedule (Jarvis › 资料 › 定时任务) ----------
@@ -382,6 +384,9 @@ ITEMS[ASK1] = (
 )
 ITEMS[ASK2] = [it("user", "text", 60 * 5, text="⏰ 早报")] + [it("assistant", "text", 60 * 5, text="早上好！今天 2 个会议，3 封邮件需要回复。")]
 ITEMS[ASK3] = [it("user", "text", 60 * 29, text="帮我约周五和韩梅梅吃饭")] + [it("assistant", "text", 60 * 28, text="已经在日历里加好了。")]
+ITEMS[ASK4] = [x for n in range(1, 31) for x in (
+    it("user", "text", 60 * 50 + 61 - 2 * n, text=f"第 {n} 本也整理一下"),
+    it("assistant", "text", 60 * 50 + 60 - 2 * n, text=f"第 {n} 本整理好了：\n\n- 三个主要观点\n- 两段摘抄\n- 一条和上一本的联系\n\n要接着整理第 {n + 1} 本吗？"))]
 
 INTERACTIONS = [
     {"id": "ix_tests", "machine_id": "macbook", "session_id": TESTS, "session_title": "补齐网络层的单元测试",
@@ -703,7 +708,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
         if p == "/api/v1/assistant":
             return self.send_json({"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant",
-                                   "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT})
+                                   "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
+                                   "main": ASK1})
         if p == "/api/v1/assistant/routines": return self.send_json({"routines": ROUTINES})
         if p == "/api/v1/assistant/followups": return self.send_json({"followups": FOLLOWUPS})
         if p == "/api/v1/assistant/runs":

@@ -8,7 +8,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 | Tab | 内容 |
 | --- | --- |
 | Jarvis | **Jarvis 助手**（2026-10-30 从「对话」改名）：hub 机器上 `~/.jarvis/assistant` 里**无头运行**的 Claude（`claude -p` + stream-json，不进 herdr；逐字流式；
-点标题（下面一行是「启动器 · 模型 ⌄」）随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去，同一个菜单里还有「会话信息」；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* 等 skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「工具 N · 电脑、iPhone…」。左上角历史对话、知识库（`KnowledgeView`：项目 / 会话 / 人 / 文档 / 会议 / 日程，按重要级 P0–P3 和与我相关性排，标签筛选，全文搜索；详情是档案、时间线、关联、在做这个项目的 Agent，「问 Jarvis」「开 Agent」带上项目档案，右上角「打标」手动改重要级 / 相关性 / 标签 / 项目类型和状态），右上角回到主对话（🏠）和新对话（工具栏里都是正文色的图标：没有主操作，主色留给发送）；第一段对话就是**主对话**（`assistant.main`，历史里标「主对话」），之后的新对话是旁支；首次启动打开主对话。其他页面「交给 Jarvis」（Agents 长按菜单、知识库「问 Jarvis」）都发进主对话（`AppModel.askJarvis`，没有主对话就新建一个） |
+点顶栏正中的头像（菜单里「启动器：…」）随时切换启动器 / 模型，下一条消息起用 `--resume` 换过去，同一个菜单里还有「会话信息」；首页模型标签决定新对话用哪个，默认在设置里改），CLAUDE.md 由 hub 生成，告诉它怎么访问各台电脑（ssh）、飞书等公司数据（lark-* 等 skills）、iPhone（phone_*）和邮件（mail_*）。首页是问候 + 可用设备 + 6 个建议；发出第一句立即显示气泡和「正在准备」，后台起会话。对话里隐藏思考，工具调用折成一行「工具 N · 电脑、iPhone…」。顶栏和侧边栏见下面「Jarvis 顶栏和侧边栏」；知识库（`KnowledgeView`：项目 / 会话 / 人 / 文档 / 会议 / 日程，按重要级 P0–P3 和与我相关性排，标签筛选，全文搜索；详情是档案、时间线、关联、在做这个项目的 Agent，「问 Jarvis」「开 Agent」带上项目档案，右上角「打标」手动改重要级 / 相关性 / 标签 / 项目类型和状态）；第一段对话就是**主对话**（`assistant.main`，历史里标「主对话」），之后的新对话是旁支；首次启动打开主对话。其他页面「交给 Jarvis」（Agents 长按菜单、知识库「问 Jarvis」）都发进主对话（`AppModel.askJarvis`，没有主对话就新建一个） |
 | 开发 | 左上角菜单选分组方式（`DevGrouping`，记住）：按项目（默认，下面描述的样子）/ 按状态（需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，已看一段默认折叠；「待唤醒」是没有新消息要看、但 `/loop` 还没到点或后台命令 / 子代理还在跑的 Agent，过几分钟可能有新消息）/
 按机器（每台机器一段，标题有在线状态和状态计数，段内按状态排、同状态按最后更新时间、空闲折叠）；不按项目时行末的元信息带「空间 › tab」（按状态时还带机器名）；三种分组用同一个顺序（`ChatsView.rank`）：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，同一状态按最后更新时间排（新的在上）；屏蔽了的工作中 / 完成未看 / 待唤醒的 Agent 算「已屏蔽」（需要你的照旧排第一）。按项目时：原来的会话列表（不含助手对话）：「需要你处理」卡片 → 置顶的 Agent（置顶的 Agent 只在这里出现一次、和别的行一样只靠圆点表达状态，不再出现在空间 / 状态 / 机器分组里；空间内的 Agent 按上面的状态顺序排（空间页 `SpaceView` 仍按 tab 顺序，和 herdr 一致）；手表仍按 `AgentState.priority`） → 置顶的空间 → 进行中 → 刚完成 → 屏蔽但有 Agent 在跑的空间（弱显示）→ 空闲的空间（折叠，屏蔽的空闲空间也在这里）；搜索、按机器筛选、左滑置顶 / 中断、右滑关闭（长按菜单、对话页「…」也有「关闭 Agent…」，herdr 里的任何 Agent 都能关，先从底部弹出确认卡片 `CloseAgentSheet`：哪个 Agent、在哪台机器哪个标签页、关了会怎样，「关闭 Agent」/「取消」）；长按空间标题置顶空间。置顶存在 hub（`/api/v1/pins`）。`/loop` 驱动的 Agent 带「⟳ 下次 12:20」标记、不折进空闲；轮次结束但还有后台命令 / 子代理在跑的 Agent 带琥珀色「⚙ 后台 N」，同样不折进空闲，它所在的空间也不算空闲空间，长按可停止循环。改名（空间：标题 ⋯ / 空间页菜单「重命名空间」，同步改 herdr workspace；Agent：长按 / 对话页「…」「重命名…」，一次改 herdr tab 名和 Claude 会话名，Mac 上 herdr 和 claude --resume 看到的一致）。屏蔽（Agent：长按或对话页「…」菜单；空间：标题右侧的 ⋯，或空间页右上角菜单——列表分组标题上的长按菜单触发不了）：不再推送通知（空间屏蔽时，其中的 Agent 可以单独「开启通知」，反之亦然——每个 Agent 的开关叠在空间的设置上，`Pins.togglingMute`）；列表里弱化（状态色变灰、🔕、不透明度 0.8——比工作中的弱，不比空闲的空间淡），在跑的照常显示不折叠，屏蔽且没在跑的空间就是普通的空闲空间；Agents tab 角标不计（`/api/v1/mutes`） |
 | 收件箱 | 飞书消息和邮件在一个列表里，一行一件事（一个会话的新消息、一个邮件线程），AI 分拣，左滑已处理；筛选来源 / 账号 / 类型（`docs/inbox.md`）。点开飞书是会话页，同 lark-connector：所有人（包括自己）的消息都在左侧带头像，群聊里连续消息的第一条显示名字，自己的气泡蓝色（#D1E3FF / 深色 #133063）；点头像或名字看资料卡；点表情回应切换自己的回应，「☺︎」或长按「表情回复」打开常用 + 全部表情；removed分享链接渲染成卡片，点开看帖子全文、图片和评论。打开时停在这件事的第一条新消息，只把上过屏的消息上报为已读。卡片渲染等见下文「飞书消息渲染」；邮件：详情、回复、写信、「让 Claude 处理」、邮箱管理（右上角菜单），「AI 一键添加」邮箱 |
@@ -193,6 +193,28 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 输入框：照片（最多 4 张，压缩到 1600px）、快捷指令（继续、/compact、/context、提交并推送、汇报进展），工作中变成红色停止键。
 - 导航副标题：机器 · 模型 · 状态。
 
+## Jarvis 顶栏和侧边栏（2026-10-30）
+
+参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Jarvis/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
+
+- **顶栏**浮在对话上方，没有系统导航栏，也没有实心的栏：下面是一层由上往下渐隐的雾（`TopFog`：页面底色 + 材质，延伸到状态栏下），对话从下面滚过去。
+  对话列表顶端留出 `AssistantTopBar.height`（70pt），首页用 `contentMargins(.top)` 留出同样的高度。滚动时顶栏不动（不像 Agents 的页头会折叠）。
+- 正中是 **Jarvis 头像 + 名字胶囊**（主对话和新对话页是「Jarvis」，旁支对话是对话标题）。点它弹出菜单：知识库、详细信息（资料页
+  `AssistantProfileView`）、回到主对话（旁支时）；拷贝目录（助手的工作目录）、拷贝信息（对话名、会话 ID、所在机器、工作目录、启动器 / 模型、
+  `claude --resume` 命令，方便贴给别的 Agent，`AssistantCopyText`）、拷贝会话 ID；启动器子菜单、会话信息卡片、工作中时的「中断」。
+  拷贝后名字胶囊上盖一个「✓ 已拷贝…」3 秒（不用全局 toast：它正好压在头像上）。弱网 / 断网时胶囊里的名字换成「转圈 + 等待网络 / 连接中… / 更新中…」，
+  菜单第一项变成「连接详情」。
+- 左边圆按钮 **历史对话** 打开侧边栏，右边圆按钮 **新对话**（新对话页上置灰）。两个都是纯图标。
+- **侧边栏**从左边推出来，占屏宽 82%（最宽 380pt），对话页被推到右边缩成一张圆角卡片（深色模式加一圈细边，否则和侧边栏分不开），点卡片或往左拖关闭。
+  内容：顶部搜索对话（标题和最后一条消息，忽略大小写 / 全半角）；Jarvis（进资料页）、定时任务、知识库；「置顶」（主对话固定在这里，
+  长按别的对话可置顶，存在本机 `assistant.pinned`）；「最近」前 8 个，「查看全部（N）…」展开；底部「新对话」主按钮和设置。长按对话还能拷贝会话 ID、结束。
+- **手势**：页面任何位置向右拖都能拉出侧边栏，手指跟手、松手按位置和速度吸附（`AssistantDrawer.settlesOpen`）；和按钮打开是同一个状态。
+  用 UIKit 的 pan（`DrawerPan`），开始时就判断：只认横向（竖着滑归列表），关着时只认向右；手指下面有能横向滚动、而且没在最左边的东西
+  （宽代码块、表格）时让给它。推出了别的页面（资料、知识库、定时任务）时不生效，那里是系统的返回手势；底部 tab 栏不在这个视图里，不受影响。
+- 进度（0…1）放在单独的 `@Observable`（`AssistantDrawer`）里，拖动时每帧只改位移和圆角，不重算对话。
+- 测试：`AssistantTopBarTests`（头像菜单和拷贝、左右按钮、按钮和手势两条路打开侧边栏、选对话后关闭并切过去、长对话滚动时顶栏位置不变、连接状态）。
+  `-openAssistantSidebar YES` 启动时侧边栏就是开着的（截图）。
+
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），
@@ -282,8 +304,8 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 弱网：只有及时回来的 pong 能解除「连接中…」（晚到的 pong 也算慢），慢的时候每 5 秒 ping 一次，好了很快就能看出来；
   否则标题会每 20 秒闪一下（实测过）。socket 照旧 45 秒没任何消息才判死重连。
 - 网络恢复（path 从没网变成有网）立刻重连，不等退避（最长 20 秒）；切换网络（Wi-Fi ↔ 蜂窝）时马上 ping 一次，旧接口上的死连接几秒内就会显示出来。
-- 显示位置（`ConnectionTitle` / `ConnectionLabel`）：Agents 列表（平时没有标题，标题位留空）、助手首页「Jarvis」、收件箱、设置 › 机器
-  的导航栏中间（`.principal`）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
+- 显示位置（`ConnectionTitle` / `ConnectionLabel`）：Agents 列表（平时没有标题，标题位留空）、收件箱、设置 › 机器
+  的导航栏中间（`.principal`）；「Jarvis」tab 是头像下的名字胶囊换成状态（菜单里多一项「连接详情」）；对话页展开的页头保留会话名、把副标题换成状态（Telegram 的做法），折叠后的小胶囊整个换成状态。
   点状态弹出说明（`ConnectionDetails`：原因、上次失败、几秒后重试、上次连上、几条消息在等、「立即重试」）。
 - 断网时的操作：
   - **发消息**：连不上时不发请求，气泡带时钟和「连上后自动发送」（点时钟可「现在重试 / 不发了」）；请求因为没网 / 超时失败也一样转成等待，
@@ -299,7 +321,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
-`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
+`-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。

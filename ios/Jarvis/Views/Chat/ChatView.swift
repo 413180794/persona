@@ -112,8 +112,9 @@ struct ChatView: View {
         .background(Theme.pageBackground)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        // Agents chats draw their own header (devChrome) so it can follow the scroll; the assistant keeps the system bar.
-        .toolbarVisibility(style == .dev ? .hidden : .visible, for: .navigationBar)
+        // Agents chats draw their own header (devChrome) so it can follow the scroll; the assistant's floats over the
+        // chat (AssistantTopBar, drawn by AssistantView over this page and the new-conversation page).
+        .toolbarVisibility(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
             if style == .dev { devChrome }
         }
@@ -131,22 +132,6 @@ struct ChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, (style == .dev ? chrome.height : 0) + 6)
                     .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .toolbar {
-            if style == .assistant {
-                // The title is the menu for the launcher (and the session info); the bar keeps two plain icons,
-                // 新对话 (AssistantView) and ⋯, in the text color: nothing here is the page's main action.
-                ToolbarItem(placement: .principal) {
-                    AssistantTitleMenu(key: key, title: title, subtitle: subtitle, infoShown: showInfo) {
-                        withAnimation(.snappy) { showInfo.toggle() }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu { moreMenuItems } label: { Image(systemName: "ellipsis") }
-                        .tint(.primary)
-                        .accessibilityLabel("更多")
-                }
             }
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
@@ -663,7 +648,7 @@ struct ChatView: View {
                 try? await Task.sleep(for: .milliseconds(60))
                 if n == 1 { hideChrome() } // once the header has measured itself
                 guard let bottom = scratch.landingMaxY, scratch.listFrame.height > 0 else { continue }
-                let want = scratch.listFrame.minY + (style == .dev ? ChatChrome.compactHeight : 0) + Self.inputTail
+                let want = scratch.listFrame.minY + (style == .dev ? ChatChrome.compactHeight : AssistantTopBar.height) + Self.inputTail
                 let off = want - bottom // > 0: too high; the flipped list scrolls toward older to lower it
                 if abs(off) < 1 { break }
                 scrollList(to: chrome.offset + off)
@@ -750,8 +735,9 @@ struct ChatView: View {
         withAnimation(.smooth(duration: 0.3)) { chrome.collapse = up ? chrome.maxCollapse : 0 }
     }
 
-    /// The custom header's full height (Agents): the other panes sit below it, the chat list scrolls under it.
-    private var headerRoom: CGFloat { style == .dev ? chrome.height : 0 }
+    /// The custom header's full height (Agents; the assistant's floating bar): the other panes sit below it, the chat
+    /// list scrolls under it.
+    private var headerRoom: CGFloat { style == .dev ? chrome.height : AssistantTopBar.height }
 
     /// Git only for repositories, files only when we know the directory; the assistant has neither.
     private var panes: [SessionPane] {

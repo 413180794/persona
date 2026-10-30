@@ -1,0 +1,199 @@
+import XCTest
+
+/// The Jarvis tab's top bar and its sidebar (docs/ios.md「Jarvis 顶栏和侧边栏」): the avatar's menu (知识库, 详细信息, the
+/// copy items), 历史对话 on the left opening the sidebar, a swipe to the right anywhere on the page doing the same,
+/// 新对话 on the right, picking a conversation in the sidebar, and the bar staying put while a long chat scrolls.
+/// Against scripts/mock_hub.py (JARVIS_MOCK_HUB): its main conversation is「今天要处理的事」, the long one is ASK4.
+final class AssistantTopBarTests: XCTestCase {
+    private var hub: String!
+    private let main = "server/b2e4d6f8-0000-4000-8000-000000000001"
+    private let long = "server/b2e4d6f8-0000-4000-8000-000000000004"
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock_hub.py (JARVIS_MOCK_HUB)")
+        }
+        self.hub = hub
+    }
+
+    @MainActor private func launch(_ open: String?, _ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "assistant"]
+            + (open.map { ["-openAssistant", $0] } ?? ["-newAssistant", "YES"]) + extra
+        app.launch()
+        return app
+    }
+
+    @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
+        let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-topbar-\(name)\(suffix).png"))
+    }
+
+    @MainActor private func avatar(_ app: XCUIApplication) -> XCUIElement {
+        let a = app.buttons["jarvis-avatar"]
+        XCTAssertTrue(a.waitForExistence(timeout: 15), "no avatar in the top bar:\n\(app.debugDescription)")
+        return a
+    }
+
+    @MainActor private func sidebar(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any)["assistant-sidebar"] }
+
+    @MainActor private func waitGone(_ e: XCUIElement, _ why: String) {
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, why)
+    }
+
+    /// The name pill says what was copied for a moment.
+    @MainActor private func copied(_ app: XCUIApplication, _ text: String) {
+        // It shows for 3 s, and XCUITest waits for the menu to finish closing first: look right away.
+        let hint = app.staticTexts[text]
+        XCTAssertTrue(hint.exists || hint.waitForExistence(timeout: 1), "the pill did not say \(text):\n\(app.debugDescription)")
+    }
+
+    /// The avatar's menu: every item is there, the copies say so (in the name pill), 详细信息 and 知识库 open their pages.
+    @MainActor func testAvatarMenu() throws {
+        let app = launch(main)
+        XCTAssertTrue(app.staticTexts["今天有 3 件事需要你："].waitForExistence(timeout: 15)
+                      || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "今天有")).firstMatch.waitForExistence(timeout: 10),
+                      "the main conversation did not open:\n\(app.debugDescription)")
+        shot(app, "chat")
+        avatar(app).tap()
+        for item in ["知识库", "详细信息", "拷贝目录", "拷贝信息", "拷贝会话 ID", "会话信息"] {
+            XCTAssertTrue(app.buttons[item].waitForExistence(timeout: 3), "no \(item) in the avatar's menu:\n\(app.debugDescription)")
+        }
+        XCTAssertFalse(app.buttons["回到主对话"].exists, "already on the main conversation")
+        shot(app, "menu")
+        app.buttons["拷贝目录"].tap()
+        copied(app, "已拷贝工作目录")
+        shot(app, "copied")
+        avatar(app).tap()
+        app.buttons["拷贝信息"].tap()
+        copied(app, "已拷贝对话信息")
+        avatar(app).tap()
+        app.buttons["拷贝会话 ID"].tap()
+        copied(app, "已拷贝会话 ID")
+
+        avatar(app).tap()
+        app.buttons["详细信息"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "你的私人助手")).firstMatch.waitForExistence(timeout: 5),
+                      "详细信息 did not open the profile:\n\(app.debugDescription)")
+        app.navigationBars.buttons.firstMatch.tap()
+        avatar(app).tap()
+        app.buttons["知识库"].tap()
+        XCTAssertTrue(app.navigationBars["知识库"].waitForExistence(timeout: 5), "知识库 did not open:\n\(app.debugDescription)")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(avatar(app).waitForExistence(timeout: 5), "not back on the chat")
+    }
+
+    /// 新对话 on the right; 历史对话 on the left opens the sidebar, a conversation there closes it and switches.
+    @MainActor func testButtonsAndPickingAConversation() throws {
+        let app = launch(main)
+        _ = avatar(app)
+        let new = app.buttons["新对话"].firstMatch
+        XCTAssertTrue(new.exists && new.isHittable, "no 新对话 on the right:\n\(app.debugDescription)")
+        new.tap()
+        XCTAssertTrue(app.textViews["问 Jarvis…"].waitForExistence(timeout: 5) || app.textFields["问 Jarvis…"].waitForExistence(timeout: 2),
+                      "新对话 did not open the new-conversation page:\n\(app.debugDescription)")
+        shot(app, "home")
+
+        let history = app.buttons["历史对话"]
+        XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
+        history.tap()
+        XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
+        for row in ["Jarvis", "定时任务", "知识库", "置顶", "最近"] {
+            XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
+        }
+        shot(app, "sidebar")
+        let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "早报 · 周三")).firstMatch
+        XCTAssertTrue(pick.isHittable, "no 早报 in 最近")
+        pick.tap()
+        waitGone(sidebar(app), "the sidebar stays open after picking a conversation")
+        XCTAssertTrue(app.staticTexts["早上好！今天 2 个会议，3 封邮件需要回复。"].waitForExistence(timeout: 10),
+                      "did not switch to 早报:\n\(app.debugDescription)")
+
+        // Off the main conversation, the avatar's menu leads back to it.
+        avatar(app).tap()
+        XCTAssertTrue(app.buttons["回到主对话"].waitForExistence(timeout: 3), "no 回到主对话 on a side conversation")
+        app.buttons["回到主对话"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "今天有")).firstMatch.waitForExistence(timeout: 10),
+                      "回到主对话 did not switch")
+    }
+
+    /// A swipe to the right from anywhere on the page (not just the edge) opens the same sidebar; a tap on the page
+    /// beside it, or a swipe back, closes it.
+    @MainActor func testSwipeOpensTheSidebar() throws {
+        let app = launch(main)
+        _ = avatar(app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "今天有")).firstMatch.waitForExistence(timeout: 10))
+        let window = app.windows.firstMatch
+        func swipe(from: CGFloat, to: CGFloat, y: CGFloat = 0.45) {
+            window.coordinate(withNormalizedOffset: CGVector(dx: from, dy: y))
+                .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: to, dy: y)),
+                       withVelocity: .default, thenHoldForDuration: 0)
+        }
+        swipe(from: 0.35, to: 0.95) // from the middle of the chat
+        XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "a swipe to the right did not open the sidebar:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["置顶"].exists && app.staticTexts["最近"].exists, "not the same sidebar as the button's")
+
+        let close = app.descendants(matching: .any)["assistant-drawer-close"]
+        XCTAssertTrue(close.exists, "no page edge to tap")
+        close.tap()
+        waitGone(sidebar(app), "a tap beside the sidebar did not close it")
+
+        swipe(from: 0.2, to: 0.9, y: 0.6)
+        XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "the second swipe did not open the sidebar")
+        swipe(from: 0.7, to: 0.05, y: 0.6)
+        waitGone(sidebar(app), "a swipe to the left did not close the sidebar")
+
+        // A swipe to the left is not the sidebar (and changes nothing here); vertical scrolling still scrolls.
+        swipe(from: 0.8, to: 0.2)
+        XCTAssertFalse(sidebar(app).exists, "a swipe to the left opened the sidebar")
+
+        swipe(from: 0.3, to: 0.95)
+        XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3))
+        let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "帮我约周五和韩梅梅吃饭")).firstMatch
+        XCTAssertTrue(pick.isHittable, "no conversation to pick")
+        pick.tap()
+        waitGone(sidebar(app), "the sidebar stays open after picking")
+        XCTAssertTrue(app.staticTexts["已经在日历里加好了。"].waitForExistence(timeout: 10), "did not switch conversations")
+
+        // The tab bar still switches tabs.
+        app.tabBars.buttons["Agents"].tap()
+        waitGone(app.buttons["jarvis-avatar"], "the tab bar did not switch")
+    }
+
+    /// Scrolling a long conversation leaves the top bar where it was.
+    @MainActor func testTopBarStaysWhileScrolling() throws {
+        let app = launch(long)
+        let a = avatar(app)
+        XCTAssertTrue(app.staticTexts["第 30 本也整理一下"].waitForExistence(timeout: 15), "the long conversation did not open:\n\(app.debugDescription)")
+        sleep(1)
+        let history = app.buttons["历史对话"], new = app.buttons["新对话"].firstMatch
+        let before = [a.frame, history.frame, new.frame]
+        // The chat list is flipped (XCUITest reports its rows' frames wrong): which messages exist says where it is.
+        func shown() -> [String] {
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "本也整理一下")).allElementsBoundByIndex.map(\.label)
+        }
+        let top = shown()
+        for _ in 0..<4 { app.swipeDown(velocity: .fast) } // back in history (older pages load as it goes)
+        shot(app, "scrolled")
+        XCTAssertNotEqual(shown(), top, "the list did not scroll:\n\(app.debugDescription)")
+        XCTAssertEqual([a.frame, history.frame, new.frame], before, "the top bar moved while scrolling back")
+        for _ in 0..<2 { app.swipeUp(velocity: .fast) }
+        XCTAssertEqual([a.frame, history.frame, new.frame], before, "the top bar moved while scrolling towards the latest")
+        XCTAssertFalse(sidebar(app).exists, "vertical scrolling opened the sidebar")
+    }
+
+    /// Out of reach of the hub, the name under the avatar turns into the spinner and the state.
+    @MainActor func testConnectionStateInTheNamePill() throws {
+        let app = launch(main, ["-showConnection", "connecting"])
+        _ = avatar(app)
+        XCTAssertTrue(app.staticTexts["连接中…"].waitForExistence(timeout: 5), "no 连接中… under the avatar:\n\(app.debugDescription)")
+        shot(app, "connecting")
+        avatar(app).tap()
+        XCTAssertTrue(app.buttons["连接详情"].waitForExistence(timeout: 3), "no 连接详情 in the menu while connecting")
+        app.buttons["连接详情"].tap()
+        XCTAssertTrue(app.buttons["立即重试"].waitForExistence(timeout: 3), "连接详情 did not open")
+    }
+}
