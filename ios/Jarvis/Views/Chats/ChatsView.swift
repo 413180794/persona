@@ -95,6 +95,8 @@ enum AgentFilter: String, CaseIterable, Identifiable {
 /// 开发: every agent across machines, grouped by space (default), by state or by machine.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
+    /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
+    @Environment(\.horizontalSizeClass) private var widthClass
     @State private var path = NavigationPath()
     /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
     /// page goes back to it instead of stacking another copy.
@@ -267,9 +269,11 @@ struct ChatsView: View {
             .listStyle(.insetGrouped)
             .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
             .themedPage()
-            .safeAreaBar(edge: .top) {
+            // In the split's sidebar column (iPhone Duo open) a top safeAreaBar under the search field was placed
+            // halfway down the list: there the bar sits above the list instead, just as still while it scrolls.
+            .modifier(TopBar(abovePage: widthClass == .regular) {
                 QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, base) }
-            }
+            })
             .navigationTitle("Agents")
             // No title over the list (the tab says it); the name stays for the back button. The principal item below
             // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
@@ -1098,5 +1102,23 @@ private struct AgentsDestinations: ViewModifier {
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
             .navigationDestination(for: MachineDashboardRoute.self) { _ in MachineDashboardView().splitDetailPage() }
             .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id).splitDetailPage() }
+    }
+}
+
+/// A bar at the top of a list: in its safe area (the list scrolls under it), or above it in a stack.
+private struct TopBar<Bar: View>: ViewModifier {
+    var abovePage: Bool
+    @ViewBuilder var bar: Bar
+
+    func body(content: Content) -> some View {
+        if abovePage {
+            VStack(spacing: 0) {
+                bar
+                content
+            }
+            .background(Theme.pageBackground)
+        } else {
+            content.safeAreaBar(edge: .top) { bar }
+        }
     }
 }
