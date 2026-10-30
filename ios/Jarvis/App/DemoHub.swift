@@ -616,7 +616,13 @@ final class DemoHub {
                                           "disk_used": .number(v.disk), "disk_total": .number(p.diskTotal * Self.gb)]
             if mid == "server" {
                 let cores = Int(system(mid)?["cores"]?.double ?? 16)
-                o["cores"] = .array((0..<cores).map { i in .number((min(100, max(1, v.cpu + 9 * Double((i * 37) % 7 - 3))) * 10).rounded() / 10) })
+                var perCore: [JSONValue] = []
+                for i in 0..<cores {
+                    let spread = 9.0 * Double((i * 37) % 7 - 3)
+                    let pct: Double = min(100, max(1, v.cpu + spread))
+                    perCore.append(.number((pct * 10).rounded() / 10))
+                }
+                o["cores"] = .array(perCore)
             }
             latest = .object(o)
         }
