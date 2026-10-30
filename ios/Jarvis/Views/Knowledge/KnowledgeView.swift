@@ -26,12 +26,15 @@ struct KnowledgeView: View {
 
     var body: some View {
         List {
-            Section {
-                KBKindBar(kind: $kind, counts: lists.mapValues { $0.items.count })
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+            // Search covers every kind: the chips (one of them lit) would say otherwise.
+            if query.isEmpty {
+                Section {
+                    KBKindBar(kind: $kind, counts: lists.mapValues { $0.items.count })
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                }
+                .listSectionSpacing(.compact)
             }
-            .listSectionSpacing(.compact)
             if !query.isEmpty {
                 searchResults
             } else if let list {
@@ -295,7 +298,7 @@ struct KBAvatar: View {
         let kind = KBKind(rawValue: entry.kind)
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(tint.opacity(0.14))
-            if kind == .people || kind == .chats, let c = entry.name.first(where: { !$0.isWhitespace && !"#@（(【[".contains($0) }) {
+            if kind == .people || kind == .chats, let c = entry.name.first(where: { !$0.isWhitespace && !"#@（(【[「『《〈\"'“‘".contains($0) }) {
                 Text(String(c).uppercased()).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(tint)
             } else {
                 Image(systemName: kind?.symbol ?? "circle").font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(tint)
@@ -464,7 +467,7 @@ struct KnowledgeDetailView: View {
                 if let log = d.log, !log.isEmpty { timeline(log) }
                 if let sum = d.summary, !sum.isEmpty {
                     Section("档案") {
-                        Markdown(Links.markdown(Self.dropTitle(sum))).markdownTheme(.jarvis).textSelection(.enabled)
+                        Markdown(Links.markdown(Self.profile(sum, oneLine: shown.oneLine))).markdownTheme(.jarvis).textSelection(.enabled)
                             .padding(.vertical, 6)
                     }
                 }
@@ -541,7 +544,9 @@ struct KnowledgeDetailView: View {
             }
             HStack(spacing: 10) {
                 Button { Task { await ask() } } label: {
+                    // White on the prominent fill: the symbol took the tint and vanished into the blue.
                     Label("问 Jarvis", systemImage: "sparkles").lineLimit(1).frame(maxWidth: .infinity)
+                        .foregroundStyle(.white)
                 }
                 .themedButton(prominent: true)
                 if entry.kind == KBKind.projects.rawValue {
@@ -632,6 +637,17 @@ struct KnowledgeDetailView: View {
                 }
             } header: { sectionHeader("代码目录", dirs.count) }
         }
+    }
+
+    /// The profile without what the header already shows: its title, the one line, the tags line of a person's
+    /// generated profile (「重要级 P0 · 与我相关性 95 · …」).
+    static func profile(_ md: String, oneLine: String?) -> String {
+        let one = oneLine?.trimmingCharacters(in: .whitespaces) ?? ""
+        return dropTitle(md).components(separatedBy: "\n").filter { line in
+            let t = line.trimmingCharacters(in: .whitespaces)
+            return !(t.hasPrefix("重要级 ") && t.contains("相关性")) && (one.isEmpty || t != one)
+        }
+        .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func dropTitle(_ md: String) -> String {

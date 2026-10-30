@@ -30,3 +30,10 @@ struct KnowledgeTests {
         #expect(groups[0].hits.map(\.source) == ["档案", "资料"])
     }
 }
+
+extension KnowledgeTests {
+    @Test func theProfileLeavesOutWhatTheHeaderShows() {
+        let md = "# 张三\n\n一起做评测。\n\n重要级 P0 · 与我相关性 95 · 评测\n\n## 项目\n- A"
+        #expect(KnowledgeDetailView.profile(md, oneLine: "一起做评测。") == "## 项目\n- A")
+    }
+}
