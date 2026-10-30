@@ -229,7 +229,8 @@ struct AssistantHome: View {
                  : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
                 .font(.body)
                 .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
+            // Wraps: in one HStack, a few more machines (or larger text) widened the whole page past the screen.
+            LarkFlowLayout(spacing: 8, lineSpacing: 8) {
                 ForEach(model.machines.filter(\.online)) { m in
                     Chip(text: m.name, symbol: m.symbol)
                 }
