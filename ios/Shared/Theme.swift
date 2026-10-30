@@ -13,6 +13,9 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
     case island
     /// Feishu: its blue, flat white cards on light gray, hairline borders — like the Feishu app.
     case lark
+    /// 液态玻璃's colors and surfaces with BeautifulUI's components: the thinking trace, tool chips in work cards, and its
+    /// prompt bar as the composer. Only this style uses them (CLAUDE.md: a new look is a new style, never a change to one).
+    case beautiful
 
     nonisolated(unsafe) static var current: AppStyle =
         AppStyle(rawValue: UserDefaults.standard.string(forKey: "ui.style") ?? "") ?? .glass
@@ -26,6 +29,7 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
         case .clay: "黏土"
         case .island: "Island"
         case .lark: "飞书"
+        case .beautiful: "BeautifulUI"
         }
     }
 
@@ -36,16 +40,19 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
         case .clay: "柔和、圆润"
         case .island: "悬浮卡片"
         case .lark: "和飞书一致"
+        case .beautiful: "新的思考轨迹、工具卡片和输入框"
         }
     }
 
     /// Liquid Glass surfaces and buttons; the other styles draw solid ones of their own.
-    var usesGlass: Bool { self == .glass || self == .claude }
+    var usesGlass: Bool { self == .glass || self == .claude || self == .beautiful }
+    /// BeautifulUI's components (`.beautiful` only); every other style keeps Jarvis' own.
+    var usesBeautifulUI: Bool { self == .beautiful }
     var fontDesign: Font.Design { self == .clay ? .rounded : .default }
     /// Corner radius of cards / panels.
     var corner: CGFloat {
         switch self {
-        case .glass, .claude: 20
+        case .glass, .claude, .beautiful: 20
         case .clay: 24
         case .island: 26
         case .lark: 10
@@ -66,7 +73,7 @@ nonisolated enum Theme {
     static var accent: Color { accent(style) }
     static func accent(_ style: AppStyle) -> Color {
         switch style {
-        case .glass: Color(light: 0x007AFF, dark: 0x0A84FF)
+        case .glass, .beautiful: Color(light: 0x007AFF, dark: 0x0A84FF)
         // Dark accents deep enough for white words on solid buttons and selected chips (≥ 3.5:1, like system blue's
         // 3.65); Island's teal leans cyan and darker, away from the 完成未看 green and readable as a link on its mist.
         case .claude: Color(light: 0xD4683F, dark: 0xCD6E45)
@@ -219,7 +226,7 @@ nonisolated enum Theme {
     static var userBubble: Color { userBubble(style) }
     static func userBubble(_ style: AppStyle) -> Color {
         switch style {
-        case .glass: Color(light: 0xDCEAFF, dark: 0x1D3557) // a soft tint: a solid system blue was too heavy
+        case .glass, .beautiful: Color(light: 0xDCEAFF, dark: 0x1D3557) // a soft tint: a solid system blue was too heavy
         // White words on the colored bubbles need ≥ 4.5:1 (body text): deeper than the accents.
         case .claude: Color(light: 0xB24C25, dark: 0xAF4C28)
         case .clay: Color(light: 0x6759D3, dark: 0x6756D9)
@@ -230,14 +237,14 @@ nonisolated enum Theme {
     static var userBubbleText: Color {
         switch style {
         case .island: Color(light: 0xFFFFFF, dark: 0x0B1211)
-        case .glass, .lark: .primary
+        case .glass, .lark, .beautiful: .primary
         default: .white
         }
     }
     /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient that only darkens toward the bottom
     /// (`Color.gradient` lightened the top, and the white words on it fell to 3:1).
     static var userBubbleFill: AnyShapeStyle {
-        style == .lark || style == .glass ? AnyShapeStyle(userBubble) : AnyShapeStyle(deepening(userBubble))
+        style == .lark || style == .glass || style == .beautiful ? AnyShapeStyle(userBubble) : AnyShapeStyle(deepening(userBubble))
     }
 
     /// A color that darkens a little toward the bottom: depth without lightening what words sit on.
@@ -249,7 +256,7 @@ nonisolated enum Theme {
     static var pageBackground: Color { pageBackground(style) }
     static func pageBackground(_ style: AppStyle) -> Color {
         switch style {
-        case .glass, .claude: systemPage
+        case .glass, .claude, .beautiful: systemPage
         // Clay's dark canvas sits under the system's grouped cells (#1C1C1E): at #1D1A23 they were one color (1.01:1).
         case .clay: Color(light: 0xEFEAF7, dark: 0x0A0510)
         case .island: Color(light: 0xE6F1EF, dark: 0x0A1110)
@@ -260,7 +267,7 @@ nonisolated enum Theme {
     static var card: Color { card(style) }
     static func card(_ style: AppStyle) -> Color {
         switch style {
-        case .glass, .claude: systemCard
+        case .glass, .claude, .beautiful: systemCard
         case .clay: Color(light: 0xF8F5FD, dark: 0x2A2533)
         case .island: Color(light: 0xFFFFFF, dark: 0x16201E)
         case .lark: Color(light: 0xFFFFFF, dark: 0x1F1F1F)

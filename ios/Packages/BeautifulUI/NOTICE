@@ -1,0 +1,9 @@
+BeautifulUI is a SwiftUI port of Beautiful UI (https://www.beautifului.dev/),
+a set of AI-native interface primitives by Turbo.
+
+Beautiful UI is Copyright (c) 2026 Shane Levine and released under the MIT License;
+the full text is in LICENSE-beautifului. The design tokens, component behaviour,
+copy and demo data in this repository are derived from it, and the left-hand
+columns of the comparison sheets in compare/ are screenshots of its showcase site.
+
+BeautifulUI's own code is Copyright (c) 2026 ChrisPan, MIT License (see LICENSE).

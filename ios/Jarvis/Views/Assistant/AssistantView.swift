@@ -1,3 +1,4 @@
+import BeautifulUI
 import PhotosUI
 import SwiftUI
 
@@ -250,12 +251,17 @@ struct AssistantHome: View {
             VStack(alignment: .leading, spacing: 8) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        StarterModelChip(launcher: $launcher)
+                        // The BeautifulUI style picks the launcher in the prompt bar's model menu.
+                        if !AppStyle.current.usesBeautifulUI { StarterModelChip(launcher: $launcher) }
                         NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.switchableModes)
                     }
                     .padding(.horizontal, 4)
                 }
-                StarterComposer(disabled: pending != nil, send: send)
+                if AppStyle.current.usesBeautifulUI {
+                    BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
+                } else {
+                    StarterComposer(disabled: pending != nil, send: send)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -353,6 +359,93 @@ struct StarterComposer: View {
                 Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
             }
         }
+        .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
+        .fileUploadPicker(isPresented: $showFiles) { urls in
+            // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
+            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+                text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
+            }
+        }
+        .onChange(of: picks) { _, items in
+            Task {
+                guard !items.isEmpty else { return }
+                for item in items {
+                    guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
+                        AppModel.shared.toast = Toast("有照片读不出来（可能还在 iCloud 里没下载完）", style: .error)
+                        continue
+                    }
+                    let scaled = img.scaledDown(maxSide: 1600)
+                    if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
+                        images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
+                    }
+                }
+                picks = []
+            }
+        }
+    }
+}
+
+/// The BeautifulUI style's composer for a conversation that does not exist yet: the prompt bar (`PromptComposer`) with its own text,
+/// sent through `send` (it starts the conversation). Its model menu is the launcher the conversation starts with.
+struct BeautifulStarterComposer: View {
+    @Environment(AppModel.self) private var model
+    var disabled: Bool
+    @Binding var launcher: String?
+    var send: (String, [ImagePayload]) -> Void
+    @State private var text = ""
+    @State private var picks: [PhotosPickerItem] = []
+    @State private var images: [(UIImage, ImagePayload)] = []
+    @State private var quotes: [ContextRef] = []
+    @State private var launchers: [Launcher] = []
+    @State private var showPhotos = false
+    @State private var showFiles = false
+    @State private var uploads = FileUploads()
+    @State private var selection: TextSelection?
+    @FocusState private var focused: Bool
+
+    private var launcherMachine: String { model.assistantConfig?.machineID ?? model.hubMachineID }
+    private var currentLauncher: String { launcher ?? model.assistantConfig?.launcher ?? "ccc" }
+
+    /// The machine's launchers; until they load, the current one alone, so the button shows what a new
+    /// conversation starts with.
+    private var models: [PromptModel] {
+        let list = launchers.map { PromptModel(id: $0.name, name: $0.name, tag: Fmt.model($0.model) ?? "") }
+        return list.isEmpty ? [PromptModel(id: currentLauncher, name: currentLauncher, tag: "")] : list
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if !quotes.isEmpty { ContextChips(refs: $quotes) }
+            if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
+            if !images.isEmpty { ComposerImages(images: $images) }
+            PromptComposer(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused,
+                           hasAttachments: !images.isEmpty || !quotes.isEmpty, disabled: disabled,
+                           attach: PromptItems.attachments(camera: false),
+                           mentions: { PromptItems.sessions(model.allSessions, except: nil) },
+                           models: models,
+                           modelID: currentLauncher,
+                           pickModel: { id in
+                               launcher = id
+                               Haptics.tap()
+                           },
+                           onAttach: { source in if source.id == "photo" { showPhotos = true } else { showFiles = true } },
+                           onMention: { source in
+                               guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
+                               quotes.append(ref)
+                               return true
+                           },
+                           send: {
+                               let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                               let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
+                               // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
+                               send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
+                               text = ""
+                               images = []
+                               quotes = []
+                           })
+        }
+        // Again once the hub is paired: on a fresh launch the first try runs before there is one.
+        .task(id: launcherMachine) { launchers = (try? await model.launchers(launcherMachine)) ?? [] }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.

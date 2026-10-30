@@ -37,7 +37,7 @@ private struct Surface<S: Shape>: ViewModifier {
 
     func body(content: Content) -> some View {
         switch AppStyle.current {
-        case .glass, .claude:
+        case .glass, .claude, .beautiful:
             content.glassEffect(glass, in: shape)
         case .clay:
             // Clay: a puffy pastel slab — light from the top left, a soft colored shadow below.
@@ -83,7 +83,7 @@ extension View {
     /// stack overflowed (crash on opening a chat in the glass styles).
     @ViewBuilder func themedButton(prominent: Bool = false) -> some View {
         switch AppStyle.current {
-        case .glass, .claude:
+        case .glass, .claude, .beautiful:
             // .glassProminent keeps its full color when disabled (iOS 26.0): an empty composer's send looked tappable.
             if prominent { buttonStyle(.glassProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.glass) }
         case .lark:

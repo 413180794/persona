@@ -1,3 +1,4 @@
+import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -393,12 +394,18 @@ struct CopyButton: View {
     }
 }
 
+/// A thought, folded to its first line; open, the whole text under a guide line. In the BeautifulUI style it is that
+/// library's thinking trace.
 struct ThinkingRow: View {
     var item: Item
     var compact = false
     @State private var open = false
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
+    }
+
+    private var plain: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
                 withAnimation(.snappy) { open.toggle() }
@@ -427,6 +434,20 @@ struct ThinkingRow: View {
                     .padding(.horizontal, compact ? 10 : 0)
             }
         }
+    }
+
+    private var beautiful: some View {
+        let text = item.text ?? ""
+        return ThinkingState(
+            .reasoning,
+            isWorking: false,
+            doneTitle: open ? "思考过程" : ToolPresentation.firstLine(text),
+            rows: [BeautifulUI.ThinkingRow(id: item.id, text)],
+            isExpanded: $open,
+            maxWidth: .infinity
+        )
+        .textSelection(.enabled)
+        .padding(.horizontal, compact ? 10 : 0)
     }
 }
 
