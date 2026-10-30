@@ -124,6 +124,8 @@ type quickMeta struct {
 	modeAt   time.Time
 	effort   string
 	effortAt time.Time
+	// turnClosed: a Codex rollout whose tail ends with its turn finished (transcript.Meta.TurnClosed)
+	turnClosed bool
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -200,9 +202,28 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 		}
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
-	m.wake = tm.LastTurnWake
+	m.wake, m.turnClosed = tm.LastTurnWake, tm.TurnClosed
 	m.mode, m.modeAt, m.effort, m.effortAt = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt
 	return m
+}
+
+// codexStaleWorking: how long herdr may say a Codex agent works while its rollout says the turn is over. Codex writes
+// task_started the moment a turn begins; herdr reads "working" off the screen and can be a moment ahead of it.
+const codexStaleWorking = 30 * time.Second
+
+// codexTurnOver reports whether a Codex session herdr calls working has in fact finished: its rollout ends with the
+// turn complete and nothing has been written for a while. herdr has said so for hours-old turns (2026-10-30: a turn
+// finished two days earlier showed 「正在工作 45 小时」 for eight minutes, the rollout untouched).
+func (n *Node) codexTurnOver(id string, now time.Time) bool {
+	p := n.transcriptPath(id)
+	if p == "" {
+		return false
+	}
+	st, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	return n.meta(p, st).turnClosed && now.Sub(st.ModTime()) > codexStaleWorking
 }
 
 // lineTime reads a transcript line's own "timestamp" without decoding it (Claude Code writes it after the message, so
@@ -390,6 +411,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 		}
 		n.placeIn(&s, a)
+		if a.Agent == "codex" && s.Status == proto.StatusWorking && n.codexTurnOver(id, time.Now()) {
+			s.Status = proto.StatusDone
+		}
 		n.mu.Lock()
 		if n.driving[id] && s.Status == proto.StatusBlocked {
 			s.Status = proto.StatusIdle

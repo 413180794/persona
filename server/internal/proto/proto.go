@@ -245,7 +245,22 @@ const (
 	KindNotice     = "notice"
 	KindImage      = "image"
 	KindRecap      = "recap" // Claude Code's "while you were away" summary
+	// KindFold stands for a run of the agent's work left out of a page (Item.Fold); only for callers that ask
+	// (fold_work).
+	KindFold = "fold"
 )
+
+// Fold is what a KindFold item stands for: a run of tool calls with their results and thoughts, from the item it is
+// named after ("fold:" + its id, at its seq and time) through ThroughID. A chat shows the run folded into counts;
+// opening it fetches the run (session.items with from_seq / through_seq), which replaces the fold.
+type Fold struct {
+	Items      int       `json:"items"`
+	Tools      int       `json:"tools"`
+	Thoughts   int       `json:"thoughts"` // thoughts with words (blank ones are not shown)
+	Until      time.Time `json:"until"`
+	ThroughSeq int       `json:"through_seq"`
+	ThroughID  string    `json:"through_id"`
+}
 
 type Image struct {
 	Mime string `json:"mime"`
@@ -313,6 +328,7 @@ type Item struct {
 	Wake bool `json:"wake,omitempty"`
 	// From names the Claude session that sent this message (cross-session messaging), not the user.
 	From string `json:"from,omitempty"`
+	Fold *Fold  `json:"fold,omitempty"`
 }
 
 // Interaction kinds.

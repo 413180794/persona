@@ -117,3 +117,38 @@ func TestBacklogCatchUpCapsAndSaysSo(t *testing.T) {
 		}
 	}
 }
+
+// An app that subscribes with fold_work gets the latest page with the agent's work folded; a catch-up (since_seq)
+// is not folded: its items continue what the app holds, calls whose results it is waiting for included.
+func TestBacklogFoldsOnlyTheLatestPage(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	h2nR, h2nW := io.Pipe()
+	n2hR, n2hW := io.Pipe()
+	hubSide := rpc.New("h", h2nW)
+	nodeSide := rpc.New("n", n2hW)
+	asked := make(chan string, 4)
+	nodeSide.OnRequest = func(_ context.Context, _ string, params json.RawMessage) (any, error) {
+		asked <- string(params)
+		return map[string]any{"items": []proto.Item{}, "history": "h1", "to_seq": 1}, nil
+	}
+	go func() { _ = hubSide.Serve(ctx, n2hR) }()
+	go func() { _ = nodeSide.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = h2nW.Close(); _ = n2hW.Close() })
+	m := newMachine(&Hub{}, MachineConfig{ID: "m1", Name: "m1"})
+	m.peer = hubSide
+	for _, tc := range []struct {
+		fold  bool
+		since int
+		want  bool
+	}{{true, 0, true}, {true, 5, false}, {false, 0, false}} {
+		c := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, fold: tc.fold}
+		(&Hub{}).sendBacklog(context.Background(), c, m, "s1", tc.since)
+		var p struct {
+			FoldWork bool `json:"fold_work"`
+		}
+		_ = json.Unmarshal([]byte(<-asked), &p)
+		if p.FoldWork != tc.want {
+			t.Fatalf("subscribed with fold_work %v, since %d: asked the node with fold_work %v", tc.fold, tc.since, p.FoldWork)
+		}
+	}
+}

@@ -222,6 +222,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Skip            int             `json:"skip"`
 		Turns           int             `json:"turns"`
 		LazyImages      bool            `json:"lazy_images"`
+		FoldWork        bool            `json:"fold_work"`
+		FromSeq         int             `json:"from_seq"`
+		ThroughSeq      int             `json:"through_seq"`
 		Name            string          `json:"name"`
 		TabName         *string         `json:"tab_name"`
 		Title           *string         `json:"title"`
@@ -384,6 +387,17 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if limit <= 0 || limit > 500 {
 			limit = 80
 		}
+		if p.ThroughSeq > 0 { // a fold being opened: the lines it stands for
+			page, more := f.Range(p.FromSeq, p.ThroughSeq, 1000)
+			return map[string]any{"items": items(page), "more": more}, nil
+		}
+		// Pages counted back from the end fold the agent's work for callers that ask (transcript.FoldWork).
+		fold := func(page []proto.Item) []proto.Item {
+			if p.FoldWork {
+				return transcript.FoldWork(page)
+			}
+			return page
+		}
 		if p.AfterSeq != nil {
 			// more_after: the 500 cap cut it short; the caller asks again after the last seq (or takes the latest page).
 			page, more, span := f.After(*p.AfterSeq, 500)
@@ -391,10 +405,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if p.Turns > 0 { // the phone pages by exchanges (user prompt + answer), not by rows
 			page, more, span := f.PageTurns(p.BeforeSeq, min(p.Turns, 10), 2000)
-			return withSpan(map[string]any{"items": items(page), "has_more": more}, span, false), nil
+			return withSpan(map[string]any{"items": items(fold(page)), "has_more": more}, span, false), nil
 		}
 		page, more, span := f.Page(p.BeforeSeq, limit)
-		return withSpan(map[string]any{"items": items(page), "has_more": more}, span, false), nil
+		return withSpan(map[string]any{"items": items(fold(page)), "has_more": more}, span, false), nil
 	case "session.watch":
 		return ok(n.watch(p.SessionID, p.SinceSeq))
 	case "session.unwatch":

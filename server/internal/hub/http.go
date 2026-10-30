@@ -304,12 +304,19 @@ func (h *Hub) sessionItems(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if q.Get("lazy_images") == "1" {
 		params["lazy_images"] = true // the node keeps images out of its items; it would read them back for nothing
 	}
+	if q.Get("fold_work") == "1" {
+		params["fold_work"] = true // runs of tools and thoughts come as one fold each (transcript.FoldWork)
+	}
+	if q.Has("through_seq") { // opening a fold: its lines, from_seq through through_seq
+		params["from_seq"], params["through_seq"] = atoi(q.Get("from_seq")), atoi(q.Get("through_seq"))
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	var res struct {
 		Items     []proto.Item `json:"items"`
 		HasMore   bool         `json:"has_more"`
 		MoreAfter bool         `json:"more_after,omitempty"`
+		More      bool         `json:"more,omitempty"` // a fold's lines go on after these
 		itemSpan
 	}
 	if err := m.call(ctx, "session.items", params, &res); err != nil {
@@ -441,6 +448,7 @@ type client struct {
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
 	device, role string
 	lazy         bool // asked for items without image data (subscribe with lazy_images)
+	fold         bool // asked for backlogs with the agent's work folded (subscribe with fold_work)
 	name         string
 	since        time.Time
 }
@@ -638,6 +646,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		SessionID  string          `json:"session_id"`
 		SinceSeq   int             `json:"since_seq"`
 		LazyImages bool            `json:"lazy_images"`
+		FoldWork   bool            `json:"fold_work"`
 		DeviceName string          `json:"device_name"`
 		Simulator  bool            `json:"simulator"`
 		Tools      []proto.Tool    `json:"tools"`
@@ -681,6 +690,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		c.subs[key] = true
 		if msg.LazyImages {
 			c.lazy = true
+		}
+		if msg.FoldWork {
+			c.fold = true
 		}
 		c.mu.Unlock()
 		if !already {
@@ -726,13 +738,15 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	c.mu.Lock()
-	lazy := c.lazy
+	lazy, fold := c.lazy, c.fold
 	c.mu.Unlock()
 	after := since
 	for page := 0; ; page++ {
 		params := map[string]any{"session_id": sid, "turns": 2, "lazy_images": lazy} // the last two exchanges, however many rows they are
 		if since > 0 {
 			params["after_seq"] = after
+		} else if fold {
+			params["fold_work"] = true
 		}
 		var res struct {
 			Items     []proto.Item `json:"items"`
