@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
+@MainActor
 struct KnowledgeTests {
     @Test func timelineLinesSplitIntoWhenSourceAndText() {
         let l = KBLogLine("- 2026-10-30 23:16 · Agent · 迭代需求实现 · 一台电脑 · Round 1 is on the dev set.")
