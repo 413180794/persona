@@ -236,9 +236,10 @@ func (h *Hub) terminalNotify(m *Machine, event string, params map[string]any) {
 	go func() { _ = m.notify(event, params) }()
 }
 
-// terminalInput forwards what the driving app typed: bytes for the terminal, as they are. From an app that does not
-// drive it, nothing.
-func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *termCtl, scroll int) {
+// terminalInput forwards what the driving app typed: bytes for the terminal, as they are; and the wheel (scroll lines,
+// > 0 back in history) over a cell of its screen, at ([column, row]; older apps do not say, the node takes the middle).
+// From an app that does not drive it, nothing.
+func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *termCtl, scroll int, at []int) {
 	m := h.byID[machineID]
 	if m == nil {
 		return
@@ -272,7 +273,11 @@ func (h *Hub) terminalInput(c *client, machineID, sessionID, text string, ctl *t
 		if lines < 0 {
 			lines = -lines
 		}
-		_ = m.notify("terminal.scroll", map[string]any{"session_id": sessionID, "lines": lines, "up": scroll > 0})
+		params := map[string]any{"session_id": sessionID, "lines": lines, "up": scroll > 0}
+		if len(at) == 2 && at[0] >= 0 && at[1] >= 0 {
+			params["column"], params["row"] = at[0], at[1]
+		}
+		_ = m.notify("terminal.scroll", params)
 	}
 }
 

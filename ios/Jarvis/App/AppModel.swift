@@ -346,12 +346,14 @@ final class AppModel {
         live.send(msg)
     }
 
-    /// The mouse wheel over a terminal the app drives, in lines (> 0 back in history): herdr gives it to a program
-    /// that takes the mouse (Claude Code scrolls its conversation) and scrolls its own scrollback for one that does
-    /// not — what a herdr client does with the wheel, as in Moshi.
-    func terminalScroll(_ key: SessionKey, lines: Int) {
+    /// The mouse wheel over a terminal the app drives, in lines (> 0 back in history), over a cell of its screen: herdr
+    /// gives it to a program that takes the mouse (Claude Code, Codex scroll their conversation) and scrolls its own
+    /// scrollback for one that does not — what a herdr client does with the wheel, as in Moshi.
+    func terminalScroll(_ key: SessionKey, lines: Int, at: (col: Int, row: Int)?) {
         guard lines != 0 else { return }
-        live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines])
+        var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines]
+        if let at { msg["at"] = [at.col, at.row] }
+        live.send(msg)
     }
 
     /// A tap on a terminal the app drives: a left click at that cell of its screen (0-based).

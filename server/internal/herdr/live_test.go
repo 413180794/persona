@@ -4,6 +4,7 @@ package herdr
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -117,4 +118,45 @@ func TestLiveObserve(t *testing.T) {
 		t.Fatalf("observing resized %s: %d×%d → %d×%d", pane, cols, rows, c2, r2)
 	}
 	t.Logf("%s %d×%d: %d frames in 1.5 s, first %d bytes (base64)", pane, cols, rows, len(got), len(got[0].Data))
+}
+
+// The wheel through a control session, against a pane whose program pins a row on top (Codex: the prompt of the turn;
+// a wheel over it does nothing): JARVIS_LIVE_WHEEL_PANE=<pane> go test -tags herdrlive -run TestLiveControlWheel.
+// The pane needs output above its screen. As the node sends it for an app that names no cell: the middle of the screen.
+func TestLiveControlWheel(t *testing.T) {
+	pane := os.Getenv("JARVIS_LIVE_WHEEL_PANE")
+	if pane == "" {
+		t.Skip("JARVIS_LIVE_WHEEL_PANE not set")
+	}
+	ctx := context.Background()
+	c := New()
+	s, err := c.StartControl(ctx, pane, 45, 30, false, func(Frame) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	screen := func() string {
+		time.Sleep(1500 * time.Millisecond)
+		out, err := c.PaneRead(ctx, pane, "visible", 30)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	before := screen()
+	if err := s.Scroll(5, true, -1, -1); err != nil {
+		t.Fatal(err)
+	}
+	up := screen()
+	if err := s.Scroll(5, false, -1, -1); err != nil {
+		t.Fatal(err)
+	}
+	back := screen()
+	if up == before {
+		t.Fatalf("5 lines up did not scroll %s:\n%s", pane, up)
+	}
+	if back != before {
+		t.Errorf("5 down did not come back:\n%s\n----\n%s", before, back)
+	}
+	t.Logf("%s scrolled and came back", pane)
 }

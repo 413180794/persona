@@ -237,6 +237,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   用户认为接管前的历史被清掉是正常的，别再去拼 transcript（试过，用户不要）。滚动照 Moshi：手指滑 = 滚轮，经 hub → node → herdr `terminal.scroll`，
   herdr 交给开了鼠标上报的程序（Claude 的全屏渲染会自己往回画对话、出「Jump to bottom」；Claude 2.1.312 的 fullscreen trial 不用配置就可能打开），否则滚 herdr 自己的历史。
   别跟用户说「要配 fullscreen」：Moshi 什么都不用配，是 herdr 客户端在接鼠标。`docs/terminal.md` 第十二节。
+  herdr 的 `terminal.scroll` 对开了鼠标上报的程序**一条命令只发一个滚轮事件（`lines` 不管用）**，不给 `column` / `row` 就落在 1;1：
+  Codex 把本轮提问钉在第 0 行、那里不接滚轮，所以手机滑了也纹丝不动。node 按行拆成多条、落在手指按下的那一格（没有就屏幕中间），第十六节。
   接管要等终端视图第一次布局量出手机的列 × 行才订阅：第一帧到之前也必须把终端视图放上去（转圈只能盖在上面），
   build 21 用转圈顶替了视图，已连上 hub 时点「终端」永远转圈；UI 测试用 `-openPane terminal` 直接开时先走了 HTTP 读屏，测不出来
   （`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` 先进会话、连上后再点「终端」）。

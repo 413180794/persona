@@ -151,16 +151,24 @@ final class TerminalTypingTests: XCTestCase {
         screen.swipeDown()
         sleep(1)
         screen.swipeUp()
+        var wheel: [[String: Any]] = []
         var scrolls: [Int] = []
         let deadline = Date.now.addingTimeInterval(8)
         while Date.now < deadline {
-            scrolls = input().dropFirst(before).compactMap { $0["scroll"] as? Int }
+            wheel = input().dropFirst(before).filter { $0["scroll"] is Int }
+            scrolls = wheel.compactMap { $0["scroll"] as? Int }
             if scrolls.contains(where: { $0 > 0 }), scrolls.contains(where: { $0 < 0 }) { break }
             usleep(300_000)
         }
         XCTAssertTrue(scrolls.contains { $0 > 0 }, "no wheel back in history: \(scrolls)")
         XCTAssertTrue(scrolls.contains { $0 < 0 }, "no wheel forward: \(scrolls)")
         XCTAssertLessThan(scrolls.firstIndex { $0 > 0 } ?? .max, scrolls.firstIndex { $0 < 0 } ?? 0, "out of order: \(scrolls)")
+        // Over the cell where the finger went down, as a mouse's wheel (herdr's default 1;1 is where Codex pins the
+        // prompt, which takes no wheel): the same cell for all of one swipe, inside the screen.
+        let at = wheel.map { $0["at"] as? [Int] ?? [] }
+        XCTAssertTrue(at.allSatisfy { $0.count == 2 && $0[0] >= 0 && $0[1] > 0 && $0[1] < 80 }, "wheel without a cell: \(at)")
+        let down = at.enumerated().filter { scrolls[$0.offset] > 0 }.map(\.element)
+        XCTAssertEqual(Set(down.map { "\($0)" }).count, 1, "one swipe, one cell: \(down)")
     }
 
     /// The terminal tab opened once the app is connected (as on a phone: the session page first, then 终端):

@@ -295,9 +295,8 @@ herdr 自己改尺寸时不丢历史（shell 窗格接管前后都是 300 行）
 herdr 看程序有没有开鼠标上报，开了（Claude 全屏渲染）就转给程序、它自己往回画对话，没开（shell、经典渲染的 Claude）就滚 herdr 自己的历史。
 所以手机照 Moshi 做：接管时手指上下滑 = 滚轮，经 hub（`terminal_input.scroll`）→ node → herdr 的 `terminal.scroll`，由 herdr 决定给谁（feature `terminal_scroll`；旧 hub / node 没有就只滚手机自己的）。
 
-所以手机上的历史仍是手机自己攒的：每帧比对网格，滚出屏幕顶的行留在手机上（第十一节「手机上的滚动历史」，真实帧回放验证过）。
-Claude 默认模式下这就是终端接管以后的全部输出；shell 的历史 herdr 也有，但两边一起滚会互相打架（herdr 往回滚时帧里的画面往下走，手机会当成新内容），所以不往 pty 里发滚轮。
-以后要让 vim / less / fullscreen 的 Claude 这类自己处理鼠标的程序在手机上滚，再按 `terminal.scroll` 接（hub / node 要加转发）。
+接管以前（2026-10-29 晚）手机上的历史是手机自己攒的：每帧比对网格，滚出屏幕顶的行留在手机上（第十一节「手机上的滚动历史」，真实帧回放验证过）。
+现在接管时手指滑动一律是 herdr 的滚轮（上一段），手机自己攒的历史只在不接管（镜像）时用；滚轮落在哪一格、一次发几个事件见第十六节。
 
 试过、没采用：在手机上按 Claude 的样式把 transcript 排出来接在上面（分支 `lane/terminal-transcript`，`TerminalHistory.swift`，带脱敏长会话夹具和接缝对齐）。
 用户不要：终端里就该只有终端打出来的东西。
@@ -323,3 +322,43 @@ Claude 默认模式下这就是终端接管以后的全部输出；shell 的历�
   拖哪个把手就移哪一端，菜单（拷贝 / 全选）在拖完后回来，摆在选区旁边不盖住它（`editMenuInteraction(_:targetRectFor:)` 返回整个选区）。
   从把手开始的拖动既不滚视图、也不当成终端的滚轮（`gestureRecognizerShouldBegin`）。
 
+
+## 十六、Codex 往上滑滚不动：滚轮要落在一格上、一行一个事件（2026-10-30，用户反馈）
+
+用户：手机接管 Codex 的终端时往上滑完全滚不动，Claude 的能滚。实测（一台 Linux 开发机：herdr 0.9.3、Codex 0.163.0；hub 机器：herdr 0.9.5、同一个 Codex，
+lab 窗格接管成 45×30；Codex 的配置一律用 `-c` 临时覆盖，没改用户的 config）：
+
+**Codex 是什么样的终端程序**（`script` 录下的原始输出）：开备用屏（`?1049h`）、开鼠标上报（`?1000h ?1002h ?1003h ?1006h`，SGR 编码），
+关掉 alternate scroll（`?1007l`）。它的主界面本身就是能滚的对话：滚上去以后底部出现「↓ Back to bottom · esc」，`enter/esc` 回到最新。
+**发过一轮对话以后，它把这一轮的提问钉在屏幕第 0 行**（和 Claude 全屏渲染钉在顶上的提问一样），下面是对话，最底下 5–6 行是输入框和状态栏。
+没有单独的 transcript 浮层：Ctrl+T 只是把折叠的工具输出（「… +71 lines (^t to view transcript)」）原地展开。
+
+| 往 Codex 发什么（接管中） | 结果 |
+| --- | --- |
+| `terminal.scroll {lines, direction}`（我们原来发的） | **不动**（0.9.3，有钉住的提问时）。0.9.5 那台的 Codex 只跑过 `!` 命令、没有钉住的提问，所以能滚 1 行 |
+| SGR 滚轮 `ESC[<64;x;yM`，落在对话区（第 1–23 行） | 每个事件滚 1 行 |
+| 同上，落在第 0 行（钉住的提问）或输入框 / 状态栏 | 不动 |
+| PageUp / PageDown | 翻约一屏（22 行），能回来 |
+| Shift+↑ / Shift+↓ | 不是滚动（输入框的历史 / 编辑） |
+
+**herdr 的 `terminal.scroll` 实际做什么**（0.9.3、0.9.5 完全一样，用一个只记录收到哪些字节的小程序验证）：
+
+- 程序开了鼠标上报（1000/1002/1003 任一，带不带 1006）：**一条命令就是一个滚轮事件，不管 `lines` 是几**；位置是命令里的 `column` / `row`（从 0 起），
+  不给就是左上角 1;1。另有 `modifiers`（数字，shift = 1 → `ESC[<68;…`）。
+- 备用屏 + 1007（alternate scroll）没开鼠标上报：一条命令一个 ↑ / ↓。
+- 都没有（shell）：滚 herdr 自己的历史，`lines` 有效，N 条 1 行 = 1 条 N 行；位置不起作用。
+
+所以原因有两层：herdr 不给位置时滚轮落在 1;1，正好是 Codex 钉住提问的那一行，它不接；就算落对了地方，手机滑过 N 行也只发出一个事件，Codex 只动 1 行。
+Claude 能滚是因为它在哪一行都接滚轮（第 0 行、输入框上都行），而且有加速（1 / 2 / 4 / 8 个事件分别滚 0 / 1 / 3 / 10 行）。
+
+**改法**（照真终端 / Moshi：Ghostty 在开了鼠标上报的程序上，手指每滑过一行发一个滚轮事件，落在手指下面那一格）：
+
+- App：拖动开始时记下手指按下的那一格（`TerminalScrollView.wheelAt`，屏幕坐标、从 0 起），这一次拖动和松手后的惯性都用它；
+  `terminal_input` 带 `at: [column, row]`。
+- hub：原样转给 node（`terminal.scroll {session_id, lines, up, column, row}`），App 没说位置就不带。
+- node（`herdr.Control.Scroll`）：`lines` 拆成 N 条 `lines: 1` 的命令，都落在那一格；没有位置（旧 App、旧 hub）就落在屏幕正中间，绝不是 1;1。
+  所以 **TestFlight 28 这样的旧 App 只要部署 hub / node 就能滚 Codex**，新 App 再加上「落在手指下面」。每次最多 120 个事件。
+- 验证：`TestLiveControlWheel`（`-tags herdrlive`，`JARVIS_LIVE_WHEEL_PANE=<窗格>`）用 node 的代码接管真窗格、往上 5 行、屏幕要变，再往下 5 行、要回到原样；
+  那台开发机上钉着提问的 Codex（0.9.3）、hub 机器上的 Codex（0.9.5）、本机 lab 的 Claude 都过。
+
+还剩的差别（和 Moshi、真终端一样）：手指从 Codex 的输入框 / 状态栏或钉住的提问上开始滑，Codex 不滚（它只在对话区接滚轮）；Claude 在哪都滚。

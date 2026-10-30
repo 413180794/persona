@@ -25,6 +25,8 @@ type Control struct {
 	done   chan struct{}
 	once   sync.Once
 	reason string // terminal.closed's reason, once it came
+	cols   int    // the size the pane's programs see (the last asked for)
+	rows   int
 	mu     sync.Mutex
 }
 
@@ -58,7 +60,7 @@ func (c *Client) StartControl(ctx context.Context, pane string, cols, rows int, 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("herdr terminal session control: %w", err)
 	}
-	s := &Control{cmd: cmd, in: in, writes: make(chan []byte, 1024), done: make(chan struct{})}
+	s := &Control{cmd: cmd, in: in, writes: make(chan []byte, 1024), done: make(chan struct{}), cols: cols, rows: rows}
 	first := make(chan error, 1)
 	go s.writeLoop()
 	go func() {
@@ -177,18 +179,37 @@ func (s *Control) Input(text string) error {
 
 // Resize gives the pane's programs a new size; herdr answers with a whole frame of it.
 func (s *Control) Resize(cols, rows int) error {
+	s.mu.Lock()
+	s.cols, s.rows = cols, rows
+	s.mu.Unlock()
 	return s.send(map[string]any{"type": "terminal.resize", "cols": cols, "rows": rows})
 }
 
-// Scroll is the mouse wheel over the terminal, lines up (back in history) or down: herdr gives it to a program that
-// takes the mouse (Claude Code's fullscreen renderer scrolls its conversation and draws "Jump to bottom") and scrolls
-// its own scrollback for one that does not (a shell) — what a herdr client does with the wheel.
-func (s *Control) Scroll(lines int, up bool) error {
+// maxWheel bounds the wheel events one Scroll sends (a fling is a few dozen rows; a phone sends a few at a time).
+const maxWheel = 120
+
+// Scroll is the mouse wheel over a cell of the screen (0-based; negative: the middle), lines up (back in history) or
+// down: herdr gives it to a program that takes the mouse (Claude Code's fullscreen renderer and Codex scroll their
+// conversation) and scrolls its own scrollback for one that does not (a shell) — what a herdr client does with the wheel.
+// It goes as one event a line: herdr hands a program one wheel event per command whatever "lines" says (Codex moves a
+// row for each), while its own scrollback moves "lines" either way. And over a cell, never herdr's default 1;1: there
+// Codex has the prompt it pins on top, which takes no wheel (docs/terminal.md, section 16).
+func (s *Control) Scroll(lines int, up bool, column, row int) error {
 	dir := "down"
 	if up {
 		dir = "up"
 	}
-	return s.send(map[string]any{"type": "terminal.scroll", "lines": lines, "direction": dir})
+	if column < 0 || row < 0 {
+		s.mu.Lock()
+		column, row = s.cols/2, s.rows/2
+		s.mu.Unlock()
+	}
+	for range min(lines, maxWheel) {
+		if err := s.send(map[string]any{"type": "terminal.scroll", "lines": 1, "direction": dir, "column": column, "row": row}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Click is a left click at a cell of the screen (0-based column and row): a program that takes the mouse gets it —

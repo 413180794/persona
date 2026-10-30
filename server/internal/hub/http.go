@@ -650,8 +650,10 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Control  *termCtl `json:"control"`
 		Takeover bool     `json:"takeover"`
 		Text     string   `json:"text"`
-		// terminal_input: the wheel over a terminal the app drives, in lines (> 0 back in history, < 0 forward)
-		Scroll int `json:"scroll"`
+		// terminal_input: the wheel over a terminal the app drives, in lines (> 0 back in history, < 0 forward), over
+		// the cell of its screen where the finger went down ([column, row], 0-based)
+		Scroll int   `json:"scroll"`
+		At     []int `json:"at"`
 		// terminal_input: a tap on a terminal the app drives, at a cell of its screen ([column, row], 0-based)
 		Click []int `json:"click"`
 	}
@@ -662,7 +664,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 	case "terminal_subscribe":
 		h.terminalSubscribe(ctx, c, msg.MachineID, msg.SessionID, msg.Epoch, msg.AfterSeq, msg.Control, msg.Takeover)
 	case "terminal_input":
-		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control, msg.Scroll)
+		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control, msg.Scroll, msg.At)
 		if len(msg.Click) == 2 {
 			h.terminalClick(c, msg.MachineID, msg.SessionID, msg.Click[0], msg.Click[1])
 		}

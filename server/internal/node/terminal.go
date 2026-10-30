@@ -312,8 +312,8 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		Rows       int      `json:"rows"`
 		Lines      int      `json:"lines"`
 		Up         bool     `json:"up"`
-		Column     int      `json:"column"`
-		Row        int      `json:"row"`
+		Column     *int     `json:"column"`
+		Row        *int     `json:"row"`
 	}
 	if json.Unmarshal(params, &p) != nil {
 		return
@@ -334,13 +334,17 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 	case "terminal.scroll":
 		if s := n.termStreamOf(p.SessionID); s != nil {
 			if c := s.control(); c != nil && p.Lines > 0 {
-				_ = c.Scroll(p.Lines, p.Up)
+				column, row := -1, -1 // an older hub: the middle of the screen
+				if p.Column != nil && p.Row != nil {
+					column, row = *p.Column, *p.Row
+				}
+				_ = c.Scroll(p.Lines, p.Up, column, row)
 			}
 		}
 	case "terminal.click":
 		if s := n.termStreamOf(p.SessionID); s != nil {
-			if c := s.control(); c != nil && p.Column >= 0 && p.Row >= 0 {
-				_ = c.Click(p.Column, p.Row)
+			if c := s.control(); c != nil && p.Column != nil && p.Row != nil && *p.Column >= 0 && *p.Row >= 0 {
+				_ = c.Click(*p.Column, *p.Row)
 			}
 		}
 	case "terminal.keepalive":

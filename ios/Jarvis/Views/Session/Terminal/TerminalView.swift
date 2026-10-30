@@ -41,8 +41,10 @@ struct TerminalView: UIViewRepresentable {
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
     /// Driving the terminal: a vertical drag is the mouse wheel for it, in rows (> 0 back), not a scroll of this view
-    /// (herdr gives it to the program — Claude Code scrolls its conversation — or scrolls its own history, as in Moshi).
-    var onWheel: ((Int) -> Void)?
+    /// (herdr gives it to the program — Claude Code, Codex scroll their conversation — or scrolls its own history, as in
+    /// Moshi). Over the cell of the screen where the finger went down (column, row; 0-based), as a mouse's wheel is:
+    /// Codex scrolls only over its conversation, not over the prompt it pins on top or its input box.
+    var onWheel: ((Int, (col: Int, row: Int)?) -> Void)?
     /// Driving the terminal: a tap is a click at a cell of its screen (column, row; 0-based) — Claude Code jumps to
     /// the prompt pinned on top, or to the bottom from "Jump to bottom". A tap never brings the keyboard up (as in
     /// Moshi: the key bar's keyboard button does).
@@ -87,10 +89,11 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     var onFontSize: ((CGFloat) -> Void)?
     var onSwipe: ((UISwipeGestureRecognizer.Direction) -> Void)?
     var onDoubleTap: (() -> Void)?
-    var onWheel: ((Int) -> Void)?
+    var onWheel: ((Int, (col: Int, row: Int)?) -> Void)?
     var onClick: ((Int, Int) -> Void)?
     private let wheelPan = UIPanGestureRecognizer()
     private var wheelRows: CGFloat = 0
+    private var wheelAt: (col: Int, row: Int)?
     private var glide: CADisplayLink?
     private var glideVelocity: CGFloat = 0
     var onInput: ((TerminalInputEvent) -> Void)?
@@ -407,7 +410,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     // MARK: The wheel (driving)
 
     /// Driving: drags go to the terminal as its wheel and this view stays at the end; otherwise it scrolls itself.
-    func setWheel(_ wheel: ((Int) -> Void)?) {
+    func setWheel(_ wheel: ((Int, (col: Int, row: Int)?) -> Void)?) {
         onWheel = wheel
         let on = wheel != nil
         guard on != wheelPan.isEnabled else { return }
@@ -421,6 +424,9 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         case .began:
             stopGlide()
             wheelRows = 0
+            let t = g.translation(in: self) // recognized a few points in: where the finger went down
+            let p = g.location(in: self)
+            wheelAt = screenCell(at: CGPoint(x: p.x - t.x, y: p.y - t.y))
         case .changed:
             let dy = g.translation(in: self).y
             g.setTranslation(.zero, in: self)
@@ -454,7 +460,7 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         let n = Int(wheelRows)
         guard n != 0 else { return }
         wheelRows -= CGFloat(n)
-        onWheel(n)
+        onWheel(n, wheelAt)
     }
 
     @objc private func pinch(_ g: UIPinchGestureRecognizer) {
