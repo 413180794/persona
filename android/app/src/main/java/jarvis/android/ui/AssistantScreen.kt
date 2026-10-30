@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,6 +79,8 @@ fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
     var pending by remember { mutableStateOf<String?>(null) }
     var startError by remember { mutableStateOf<String?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    var profile by rememberSaveable { mutableStateOf(false) }
+    val machines by hub.machines.collectAsState()
     val scope = rememberCoroutineScope()
 
     suspend fun reload() {
@@ -120,6 +123,11 @@ fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
                     onClick = { current = null; chose = true; scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+                NavigationDrawerItem(
+                    label = { Text("定时任务、记忆、关于我") }, icon = { Icon(Icons.Default.Person, null) }, selected = false,
+                    onClick = { profile = true; scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("历史对话", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, bottom = 4.dp))
                 LazyColumn {
@@ -148,7 +156,13 @@ fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
         val historyButton: @Composable () -> Unit = { IconButton({ scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "历史对话") } }
         val newButton: @Composable () -> Unit = { IconButton({ current = null; chose = true }) { Icon(Icons.Default.Edit, "新对话") } }
         val shown = current
-        if (shown != null && pending == null && machine.isNotEmpty()) {
+        if (profile) {
+            AssistantProfile(
+                hub, machineName = machines.firstOrNull { it.id == machine }?.displayName ?: machine,
+                onBack = { profile = false },
+                onOpenConversation = { id -> scope.launch { reload() }; current = id; chose = true; profile = false },
+            )
+        } else if (shown != null && pending == null && machine.isNotEmpty()) {
             // The tab bar sits under the conversation; while typing it goes away, so the composer sits right on the
             // keyboard (ChatScreen handles the keyboard inset itself: a Scaffold around it would add it twice).
             val typing = WindowInsets.isImeVisible

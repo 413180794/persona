@@ -2,6 +2,8 @@ package jarvis.android.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.encodeToString
@@ -205,6 +207,86 @@ class ApiClient(val baseUrl: String, val token: String) {
         val conversations: List<Session> = emptyList(),
     )
     suspend fun assistant(): AssistantState = get("/api/v1/assistant")
+
+    // --- The assistant's own pages (docs/assistant.md): routines, follow-ups, runs, notes, memory ---
+
+    /** A routine: the assistant starts a conversation with `prompt` at `time` (HH:MM, the user's zone) on `weekdays`. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @Serializable
+    data class Routine(
+        // Everything the app edits is always on the wire: JsonCodec leaves out values equal to their default, and
+        // the hub reads what's missing as empty or false — a 09:00 routine lost its time (400 "needs a time"), an
+        // enabled one would turn off. The hub's own fields below stay optional.
+        @EncodeDefault val id: String = "",
+        @EncodeDefault val title: String = "",
+        @EncodeDefault val prompt: String = "",
+        @EncodeDefault val time: String = "09:00",
+        /** 1 = Monday … 7 = Sunday; empty = every day. */
+        @EncodeDefault val weekdays: List<Int> = emptyList(),
+        @EncodeDefault val enabled: Boolean = true,
+        @SerialName("created_by") val createdBy: String? = null,
+        @SerialName("last_run") val lastRun: String? = null,
+        @SerialName("last_session_id") val lastSessionId: String? = null,
+        @SerialName("last_status") val lastStatus: String? = null,
+        @SerialName("last_error") val lastError: String? = null,
+        @SerialName("next_run") val nextRun: String? = null,
+    )
+    @Serializable private data class Routines(val routines: List<Routine> = emptyList())
+    suspend fun routines(): List<Routine> = get<Routines>("/api/v1/assistant/routines").routines
+    /** Replaces the whole list; the hub keeps its own fields (last run, next run, who made it). */
+    suspend fun setRoutines(list: List<Routine>): List<Routine> =
+        JsonCodec.decodeFromString<Routines>(raw("PUT", "/api/v1/assistant/routines", JsonCodec.encodeToString(Routines(list.map {
+            it.copy(lastRun = null, lastSessionId = null, lastStatus = null, lastError = null, nextRun = null, createdBy = null)
+        })))).routines
+
+    @Serializable data class RunStarted(@SerialName("session_id") val sessionId: String = "", @SerialName("machine_id") val machineId: String = "")
+    suspend fun runRoutine(id: String): RunStarted = JsonCodec.decodeFromString(raw("POST", "/api/v1/assistant/routines/$id/run", "{}"))
+
+    /** Something the assistant promised to come back to (schedule_followup). */
+    @Serializable
+    data class Followup(
+        val id: String = "",
+        val at: String? = null,
+        val title: String? = null,
+        val prompt: String = "",
+        @SerialName("session_id") val sessionId: String? = null,
+    )
+    @Serializable private data class Followups(val followups: List<Followup> = emptyList())
+    suspend fun followups(): List<Followup> = get<Followups>("/api/v1/assistant/followups").followups
+    suspend fun cancelFollowup(id: String) { raw("DELETE", "/api/v1/assistant/followups/$id") }
+    suspend fun runFollowup(id: String): RunStarted = JsonCodec.decodeFromString(raw("POST", "/api/v1/assistant/followups/$id/run", "{}"))
+
+    /** One run of a routine or follow-up, including failed and skipped ones. */
+    @Serializable
+    data class Run(
+        val id: String = "",
+        val kind: String = "",
+        val title: String = "",
+        val at: String? = null,
+        val status: String = "",
+        val error: String? = null,
+        val manual: Boolean = false,
+        @SerialName("session_id") val sessionId: String? = null,
+    )
+    @Serializable private data class Runs(val runs: List<Run> = emptyList())
+    suspend fun runs(): List<Run> = get<Runs>("/api/v1/assistant/runs").runs
+
+    /** What the user told the assistant about themselves (「关于我」); what it is told in effect is `notes_effective`. */
+    @Serializable data class Notes(val notes: String? = null, @SerialName("notes_effective") val effective: String = "")
+    suspend fun notes(): Notes = get("/api/v1/assistant")
+    @Serializable private data class SetNotes(val notes: String)
+    suspend fun setNotes(text: String) { raw("PUT", "/api/v1/assistant", JsonCodec.encodeToString(SetNotes(text))) }
+
+    /** A file of the assistant's own memory (Claude Code auto memory). */
+    @Serializable data class MemoryFile(val name: String = "", val content: String = "", @SerialName("updated_at") val updatedAt: String? = null)
+    @Serializable private data class Memory(val files: List<MemoryFile>? = null)
+    suspend fun memory(): List<MemoryFile> = get<Memory>("/api/v1/assistant/memory").files.orEmpty()
+    @Serializable private data class Content(val content: String)
+    // url() encodes each path segment itself; a "/" in a name would split it, and memory names never hold one.
+    suspend fun saveMemory(name: String, content: String) {
+        raw("PUT", "/api/v1/assistant/memory/" + name.replace("/", "_"), JsonCodec.encodeToString(Content(content)))
+    }
+    suspend fun deleteMemory(name: String) { raw("DELETE", "/api/v1/assistant/memory/" + name.replace("/", "_")) }
 
     @Serializable private data class NewConversation(val prompt: String, val main: Boolean? = null)
     /** Starts a conversation with `prompt` as its first message; the first one becomes the main conversation. */

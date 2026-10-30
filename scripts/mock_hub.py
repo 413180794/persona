@@ -609,6 +609,12 @@ MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
 
 
+# MOCK_LONG_SLOTS=1: the weather space's tabs have long names (the space page's two-column cards must still fit).
+if os.environ.get("MOCK_LONG_SLOTS"):
+    for x, name in zip([y for y in SESSIONS if y.get("space_name") == "weather"], ["ai-person-kiro", "leader-kiro", "release-notes-bot"]):
+        x["slot_name"] = name
+
+
 # MOCK_SUGGESTION=1: the idle review session has Claude's suggested next message (grey in its input box).
 if os.environ.get("MOCK_SUGGESTION"):
     for s in SESSIONS:

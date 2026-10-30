@@ -148,11 +148,22 @@ struct SlotCard: View {
     var body: some View {
         let tone = session.state.tone
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Chip(text: session.slotLabel ?? "—", look: .tone(tone))
-                Chip(text: session.agentLabel, look: .outline)
-                Spacer(minLength: 4)
-                StatusDot(state: session.state, size: 9)
+            // Chips don't shrink: in a narrow column (two cards a row on a phone) a long tab name pushed the card wider
+            // than its column and the whole grid off the screen. Drop the agent chip first, then let the name truncate.
+            ViewThatFits(in: .horizontal) {
+                header(agent: true)
+                header(agent: false)
+                HStack(spacing: 4) {
+                    Text(session.slotLabel ?? "—")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(tone.text)
+                        .lineLimit(1)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2.5)
+                        .background(tone.tint, in: .capsule)
+                    Spacer(minLength: 4)
+                    StatusDot(state: session.state, size: 9)
+                }
             }
             Text(session.displayTitle).font(.subheadline.weight(.semibold)).lineLimit(2)
             Text(session.state.label + (pending > 0 ? " · \(pending) 件待处理" : ""))
@@ -164,8 +175,17 @@ struct SlotCard: View {
             Spacer(minLength: 0)
             if let m = Fmt.model(session.model) { Text(m).font(.caption2).foregroundStyle(.tertiary).lineLimit(1) }
         }
-        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
         .card(padding: 12)
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(session.state == .needsYou ? Theme.needsYou.opacity(0.5) : .clear, lineWidth: 1.5))
+    }
+
+    private func header(agent: Bool) -> some View {
+        HStack {
+            Chip(text: session.slotLabel ?? "—", look: .tone(session.state.tone))
+            if agent { Chip(text: session.agentLabel, look: .outline) }
+            Spacer(minLength: 4)
+            StatusDot(state: session.state, size: 9)
+        }
     }
 }
