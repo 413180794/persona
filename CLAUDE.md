@@ -311,8 +311,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   页面是一个黄色 ⚠️：要按具体类型 append（`SettingsView.openDebugPage`）。
 - `NavigationSplitView` 右栏里推出的页面，是用左栏登记的 `navigationDestination` 在左栏的环境里建的：给右栏页面的环境值
   要挂在整个分栏视图上，挂在右栏的 NavigationStack 上拿不到（`SplitNavigation`）。
-- `safeAreaBar(edge: .top)` 放在 `NavigationSplitView` 左栏、导航栏又有常显搜索框时，位置算错：浮到列表中间，被行压住（Duo 打开 / 半折）。
-  分栏时把条放在列表上方的 VStack 里（`ChatsView` 的 `TopBar`），单栏照旧 safeAreaBar。`testFilterBarHugsTheTop` 在 Duo 上跑能抓到。
+- `NavigationSplitView` 左栏里，列表上方的横向 `ScrollView`（Agents 的筛选条）会被导航栏当成这一页的滚动视图，内容整体下移一个导航栏 + 搜索框的高度，
+  画到列表中间、被行压住（Duo 打开 / 半折，放在 safeAreaBar 或 VStack 里都一样）。**XCUITest 读到的 frame 仍是没下移的位置**，测试照样通过：
+  这种问题要按截图像素量。分栏时筛选条不用滚动视图，放不下就换行（`QuickFilterBar.wraps`）。
 - iPhone Duo（`docs/ios.md`「iPhone Duo」）：按宽度（size class）分布局，不看机型；模拟器开合只能在 Device Hub 里切，
   截图要 `--display=1/3` 指定屏幕，否则可能拍到熄灭的那块（全黑）。
 - 助手调飞书用 lark-connector 自带的 lark-connector skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；

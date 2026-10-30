@@ -269,10 +269,10 @@ struct ChatsView: View {
             .listStyle(.insetGrouped)
             .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
             .themedPage()
-            // In the split's sidebar column (iPhone Duo open) a top safeAreaBar under the search field was placed
-            // halfway down the list: there the bar sits above the list instead, just as still while it scrolls.
+            // In the split's sidebar column (iPhone Duo open) the bar sits above the list, its chips wrapping (no
+            // sideways scroll view there: see QuickFilterBar.wraps).
             .modifier(TopBar(abovePage: widthClass == .regular) {
-                QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, base) }
+                QuickFilterBar(selection: quick, counts: Self.counts(base), wraps: widthClass == .regular) { choose($0, base) }
             })
             .navigationTitle("Agents")
             // No title over the list (the tab says it); the name stays for the back button. The principal item below
@@ -659,44 +659,56 @@ struct ChatsView: View {
 struct QuickFilterBar: View {
     var selection: AgentFilter
     var counts: [AgentFilter: Int]
+    /// Chips that do not fit go to a second row instead of scrolling sideways (the split's sidebar column: there the
+    /// navigation stack took this sideways scroll view for the page's own and pushed its content down by the
+    /// navigation bar's height, under the list's first rows).
+    var wraps = false
     var choose: (AgentFilter) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(AgentFilter.allCases) { f in
-                    let on = f == selection
-                    let tone = f.state?.tone
-                    let tint = tone?.text ?? Theme.accent
-                    Button { if !on { choose(f) } } label: {
-                        HStack(spacing: 5) {
-                            if let tone { Circle().fill(tone.dot).frame(width: 7, height: 7) }
-                            Text(f.title)
-                            if let n = counts[f] {
-                                Text("\(n)").monospacedDigit().foregroundStyle(on ? tint : Color.secondary)
-                                    .contentTransition(.numericText(value: Double(n)))
-                            }
-                        }
-                        .font(.subheadline.weight(on ? .semibold : .medium))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .foregroundStyle(on ? tint : Color.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Capsule().fill(on ? tint.opacity(0.15) : Color.secondary.opacity(0.1)))
-                        .overlay(Capsule().strokeBorder(on ? tint.opacity(0.35) : .clear, lineWidth: 1))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("agents.filter." + f.rawValue)
-                    .accessibilityLabel(counts[f].map { "\(f.title) \($0)" } ?? f.title)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
+        if wraps {
+            LarkFlowLayout(spacing: 8, lineSpacing: 8) { chips }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { chips }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .scrollClipDisabled()
         }
-        .scrollClipDisabled()
+    }
+
+    @ViewBuilder private var chips: some View {
+        ForEach(AgentFilter.allCases) { f in
+            let on = f == selection
+            let tone = f.state?.tone
+            let tint = tone?.text ?? Theme.accent
+            Button { if !on { choose(f) } } label: {
+                HStack(spacing: 5) {
+                    if let tone { Circle().fill(tone.dot).frame(width: 7, height: 7) }
+                    Text(f.title)
+                    if let n = counts[f] {
+                        Text("\(n)").monospacedDigit().foregroundStyle(on ? tint : Color.secondary)
+                            .contentTransition(.numericText(value: Double(n)))
+                    }
+                }
+                .font(.subheadline.weight(on ? .semibold : .medium))
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(on ? tint : Color.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(on ? tint.opacity(0.15) : Color.secondary.opacity(0.1)))
+                .overlay(Capsule().strokeBorder(on ? tint.opacity(0.35) : .clear, lineWidth: 1))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("agents.filter." + f.rawValue)
+            .accessibilityLabel(counts[f].map { "\(f.title) \($0)" } ?? f.title)
+            .accessibilityAddTraits(on ? .isSelected : [])
+        }
     }
 }
 
