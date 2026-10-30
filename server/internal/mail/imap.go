@@ -54,10 +54,7 @@ func (s *Service) Mailboxes(ctx context.Context, id string) ([]Mailbox, error) {
 	var out []Mailbox
 	err = s.withConn(ctx, a, func(c *imapclient.Client) error {
 		out = nil
-		data, err := c.List("", "*", &imap.ListOptions{
-			ReturnSpecialUse: true,
-			ReturnStatus:     statusOpts,
-		}).Collect()
+		data, err := c.List("", "*", listOptions(c.Caps(), statusOpts)).Collect()
 		if err != nil {
 			return err
 		}
@@ -103,6 +100,24 @@ func (s *Service) Mailboxes(ctx context.Context, id string) ([]Mailbox, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// listOptions asks LIST only for the return options the server can take. RETURN
+// needs LIST-EXTENDED (implied by IMAP4rev2): QQ Mail advertises none of these
+// and never answers a LIST that carries RETURN, so such servers get a plain LIST
+// and roles come from mailbox names, counters from one STATUS per mailbox.
+// SPECIAL-USE is still asked of IMAP4rev2 servers, as it always was. status may
+// be nil.
+func listOptions(caps imap.CapSet, status *imap.StatusOptions) *imap.ListOptions {
+	opts := &imap.ListOptions{}
+	if !caps.Has(imap.CapListExtended) {
+		return opts
+	}
+	opts.ReturnSpecialUse = caps.Has(imap.CapSpecialUse) || caps.Has(imap.CapIMAP4rev2)
+	if status != nil && caps.Has(imap.CapListStatus) {
+		opts.ReturnStatus = status
+	}
+	return opts
 }
 
 // roleOf maps a mailbox name and its SPECIAL-USE attributes to a role.

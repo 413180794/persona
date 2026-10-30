@@ -1,9 +1,12 @@
 package mail
 
 import (
+	"bufio"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
@@ -24,6 +27,12 @@ type testIMAP struct {
 // newTestIMAP starts an in-memory IMAP server with one user and a few mailboxes.
 func newTestIMAP(t *testing.T) *testIMAP {
 	t.Helper()
+	return newTestIMAPCaps(t, imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapIMAP4rev2: {}})
+}
+
+// newTestIMAPCaps is newTestIMAP advertising only caps.
+func newTestIMAPCaps(t *testing.T, caps imap.CapSet) *testIMAP {
+	t.Helper()
 	mem := imapmemserver.New()
 	user := imapmemserver.NewUser("me@example.com", "secret")
 	for _, name := range []string{"INBOX", "Sent", "Drafts", "Trash", "Archive", "Junk"} {
@@ -38,10 +47,7 @@ func newTestIMAP(t *testing.T) *testIMAP {
 			return mem.NewSession(), nil, nil
 		},
 		InsecureAuth: true,
-		Caps: imap.CapSet{
-			imap.CapIMAP4rev1: {},
-			imap.CapIMAP4rev2: {},
-		},
+		Caps:         caps,
 	})
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -52,6 +58,61 @@ func newTestIMAP(t *testing.T) *testIMAP {
 
 	addr := ln.Addr().(*net.TCPAddr)
 	return &testIMAP{server: mem, user: user, host: "127.0.0.1", port: addr.Port, ln: ln}
+}
+
+// ignoreListReturn puts a proxy in front of the server that drops every LIST
+// command carrying RETURN options without answering it, the way QQ Mail's IMAP
+// server (no LIST-EXTENDED, LIST-STATUS or SPECIAL-USE) leaves it hanging.
+// Everything else passes through, so s.port then points at the proxy.
+func (s *testIMAP) ignoreListReturn(t *testing.T) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	target := fmt.Sprintf("%s:%d", s.host, s.port)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go proxyDroppingListReturn(c, target)
+		}
+	}()
+	s.port = ln.Addr().(*net.TCPAddr).Port
+}
+
+// proxyDroppingListReturn relays one client connection to target line by line,
+// leaving out LIST commands with RETURN options.
+func proxyDroppingListReturn(client net.Conn, target string) {
+	defer client.Close()
+	server, err := net.Dial("tcp", target)
+	if err != nil {
+		return
+	}
+	defer server.Close()
+	go func() { _, _ = io.Copy(client, server) }()
+	r := bufio.NewReader(client)
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 && !isListReturn(line) {
+			if _, werr := server.Write(line); werr != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// isListReturn reports whether line is a tagged LIST command with RETURN options.
+func isListReturn(line []byte) bool {
+	upper := strings.ToUpper(string(line))
+	fields := strings.Fields(upper)
+	return len(fields) > 1 && fields[1] == "LIST" && strings.Contains(upper, " RETURN (")
 }
 
 // appendMessage stores raw in mailbox via a throwaway client.
