@@ -98,10 +98,22 @@ nonisolated struct APIClient: Sendable {
     }()
 
     func url(_ path: String, query: [String: String] = [:]) -> URL {
-        var comps = URLComponents(url: config.url.appending(path: path), resolvingAgainstBaseURL: false)!
+        var comps = URLComponents(url: config.url, resolvingAgainstBaseURL: false)!
+        var base = comps.percentEncodedPath
+        if base.hasSuffix("/") { base.removeLast() }
+        comps.percentEncodedPath = base + Self.encodedPath(path)
         let items = query.filter { !$0.value.isEmpty }.map { URLQueryItem(name: $0.key, value: $0.value) }
         if !items.isEmpty { comps.queryItems = items.sorted { $0.name < $1.name } }
         return comps.url!
+    }
+
+    /// A path for the request line. Callers escape ids themselves (`kbDetail`: a slug with Chinese in it, an id with
+    /// a slash); `URL.appending(path:)` escaped their `%` once more and the hub got another id — 404 (2026-10-30, 知识库).
+    /// So: a path that already has escapes is used as is, anything else is escaped like appending(path:) did.
+    nonisolated static func encodedPath(_ path: String) -> String {
+        let p = path.hasPrefix("/") ? path : "/" + path
+        if p.range(of: "%[0-9A-Fa-f]{2}", options: .regularExpression) != nil { return p }
+        return p.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? p
     }
 
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
