@@ -39,6 +39,11 @@ final class AssistantTopBarTests: XCTestCase {
 
     @MainActor private func sidebar(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any)["assistant-sidebar"] }
 
+    /// One of the sidebar's day headings.
+    @MainActor private func dayHeading(_ app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label IN %@", ["今天", "昨天", "最近 7 天", "更早"])).firstMatch
+    }
+
     @MainActor private func waitGone(_ e: XCUIElement, _ why: String) {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, why)
@@ -101,12 +106,14 @@ final class AssistantTopBarTests: XCTestCase {
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
         history.tap()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
-        for row in ["Jarvis", "定时任务", "知识库", "置顶", "最近"] {
+        for row in ["定时任务", "知识库", "置顶"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Jarvis，")).firstMatch.exists, "no Jarvis card")
+        XCTAssertTrue(dayHeading(app).exists, "no day heading (今天 / 昨天 / …) in the sidebar:\n\(app.debugDescription)")
         shot(app, "sidebar")
         let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "早报 · 周三")).firstMatch
-        XCTAssertTrue(pick.isHittable, "no 早报 in 最近")
+        XCTAssertTrue(pick.isHittable, "no 早报 among the conversations")
         pick.tap()
         waitGone(sidebar(app), "the sidebar stays open after picking a conversation")
         XCTAssertTrue(app.staticTexts["早上好！今天 2 个会议，3 封邮件需要回复。"].waitForExistence(timeout: 10),
@@ -134,7 +141,7 @@ final class AssistantTopBarTests: XCTestCase {
         }
         swipe(from: 0.35, to: 0.95) // from the middle of the chat
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "a swipe to the right did not open the sidebar:\n\(app.debugDescription)")
-        XCTAssertTrue(app.staticTexts["置顶"].exists && app.staticTexts["最近"].exists, "not the same sidebar as the button's")
+        XCTAssertTrue(app.staticTexts["置顶"].exists && dayHeading(app).exists, "not the same sidebar as the button's")
 
         let close = app.descendants(matching: .any)["assistant-drawer-close"]
         XCTAssertTrue(close.exists, "no page edge to tap")

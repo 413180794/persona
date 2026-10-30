@@ -171,7 +171,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
     }
 }
 
-/// What the sidebar lists (Jarvis's own things on top, then its conversations): searching, 置顶 / 最近, 查看全部.
+/// What the sidebar lists: search and 新对话 on top, Jarvis itself (its card, 定时任务, 知识库), then its conversations —
+/// 置顶 (the main one first), the rest by day (今天 / 昨天 / 最近 7 天 / 更早). Each conversation shows its last message.
 struct AssistantSidebar: View {
     @Environment(AppModel.self) private var model
     var current: SessionKey?
@@ -183,13 +184,14 @@ struct AssistantSidebar: View {
     /// nil when the tab bar is beside the sidebar (a column on a wide display): no second way to 设置.
     var openSettings: (() -> Void)?
     @State private var query = ""
-    @State private var showAll = false
+    @State private var showAllOlder = false
     @State private var ending: Session?
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
     @AppStorage("assistant.pinned") private var pinnedRaw = ""
 
-    private static let recentCount = 8
+    /// 更早 shows this many until 查看全部.
+    private static let olderCount = 8
 
     private var pinnedIDs: Set<String> { Set(pinnedRaw.split(separator: ",").map(String.init)) }
 
@@ -198,102 +200,169 @@ struct AssistantSidebar: View {
     var body: some View {
         let all = model.assistantConversations
         VStack(spacing: 0) {
-            search
+            topBar
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 6)
+                .padding(.bottom, 10)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    if !query.isEmpty {
-                        let hits = AssistantSidebarSearch.filter(all, query)
-                        if hits.isEmpty {
-                            Text("没有找到「\(query)」").font(.subheadline).foregroundStyle(.secondary)
-                                .padding(.horizontal, 12).padding(.top, 12)
-                        }
-                        ForEach(hits) { conversation($0) }
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if query.isEmpty {
+                        jarvisCard.padding(.bottom, 10)
+                        shortcuts
+                        conversations(all)
                     } else {
-                        entries
-                        let main = model.assistantMain
-                        let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
-                        if !pinned.isEmpty {
-                            heading("置顶")
-                            ForEach(pinned) { conversation($0) }
-                        }
-                        let recent = all.filter { !isPinned($0) }
-                        heading("最近")
-                        if recent.isEmpty {
-                            Text("还没有别的对话").font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 12)
-                        }
-                        ForEach(showAll ? recent : Array(recent.prefix(Self.recentCount))) { conversation($0) }
-                        if recent.count > Self.recentCount {
-                            Button {
-                                withAnimation(.snappy) { showAll.toggle() }
-                            } label: {
-                                Text(showAll ? "收起" : "查看全部（\(recent.count)）…")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(.rect)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        results(AssistantSidebarSearch.filter(all, query))
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 16)
             }
             .scrollDismissesKeyboard(.interactively)
-            bottomBar
+            if let openSettings { settingsRow(openSettings) }
         }
         .confirmClose($ending)
     }
 
-    private var search: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("搜索对话", text: $query)
-                .focused($searching)
-                .submitLabel(.search)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("清除搜索")
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 42)
-        .background(Theme.Fill.well, in: .capsule)
-    }
+    // MARK: Top: search and 新对话
 
-    /// Jarvis itself, its routines and the knowledge base: the places that are not conversations.
-    @ViewBuilder private var entries: some View {
-        entry(action: openProfile) {
-            JarvisAvatar(size: 28)
-        } title: { "Jarvis" }
-        entry(action: openRoutines) {
-            Image(systemName: "alarm").font(.body.weight(.medium)).frame(width: 28)
-        } title: { "定时任务" }
-        entry(action: openKnowledge) {
-            Image(systemName: "books.vertical").font(.body.weight(.medium)).frame(width: 28)
-        } title: { "知识库" }
-    }
-
-    private func entry<Icon: View>(action: @escaping () -> Void, @ViewBuilder icon: () -> Icon, title: () -> String) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                icon()
-                Text(title()).font(.body.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
-                Spacer(minLength: 0)
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                TextField("搜索对话", text: $query)
+                    .focused($searching)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("清除搜索")
+                }
             }
             .padding(.horizontal, 12)
-            .frame(height: 46)
+            .frame(height: 40)
+            .background(Theme.Fill.chip, in: .rect(cornerRadius: 12, style: .continuous))
+            Button(action: newConversation) {
+                Image(systemName: "square.and.pencil")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.accent.opacity(0.12), in: .circle)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("新对话")
+            .accessibilityIdentifier("sidebar-new")
+        }
+    }
+
+    // MARK: Jarvis itself
+
+    private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
+
+    /// Jarvis: its face, where it runs and whether that machine is up; a tap opens its profile.
+    private var jarvisCard: some View {
+        let machine = model.machine(machineID)
+        let online = machine?.online ?? false
+        return Button(action: openProfile) {
+            HStack(spacing: 12) {
+                JarvisAvatar(size: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Jarvis").font(.headline).foregroundStyle(Color.primary).lineLimit(1)
+                    HStack(spacing: 5) {
+                        Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+                        Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
+                            .lineLimit(1)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .card(padding: 12)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Jarvis，\(online ? "在线" : "离线")，查看资料")
+    }
+
+    /// 定时任务 and 知识库, side by side.
+    private var shortcuts: some View {
+        HStack(spacing: 10) {
+            tile("定时任务", "alarm", action: openRoutines)
+            tile("知识库", "books.vertical", action: openKnowledge)
+        }
+    }
+
+    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: 8, style: .continuous))
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .card(padding: 10)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Conversations
+
+    @ViewBuilder private func conversations(_ all: [Session]) -> some View {
+        let main = model.assistantMain
+        let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
+        if !pinned.isEmpty {
+            heading("置顶")
+            ForEach(pinned) { row($0) }
+        }
+        let rest = all.filter { !isPinned($0) }
+        if rest.isEmpty {
+            Text(pinned.isEmpty ? "还没有对话：点右上角的新对话开始" : "还没有别的对话")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .padding(.horizontal, 12).padding(.top, 20)
+        }
+        ForEach(AssistantSidebarGroups.group(rest), id: \.title) { group in
+            heading(group.title)
+            let older = group.title == AssistantSidebarGroups.older
+            let shown = older && !showAllOlder ? Array(group.sessions.prefix(Self.olderCount)) : group.sessions
+            ForEach(shown) { row($0) }
+            if older, group.sessions.count > Self.olderCount {
+                Button {
+                    withAnimation(.snappy) { showAllOlder.toggle() }
+                } label: {
+                    Text(showAllOlder ? "收起" : "查看全部（\(group.sessions.count)）")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder private func results(_ hits: [Session]) -> some View {
+        if hits.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(.tertiary)
+                Text("没有找到「\(query)」").font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
+        } else {
+            heading("\(hits.count) 个对话")
+            ForEach(hits) { row($0) }
+        }
     }
 
     private func heading(_ text: String) -> some View {
@@ -301,34 +370,57 @@ struct AssistantSidebar: View {
             .font(.footnote.weight(.semibold))
             .foregroundStyle(Color.secondary)
             .padding(.horizontal, 12)
-            .padding(.top, 18)
-            .padding(.bottom, 4)
+            .padding(.top, 20)
+            .padding(.bottom, 6)
+            .accessibilityAddTraits(.isHeader)
     }
 
-    private func conversation(_ s: Session) -> some View {
+    /// A conversation: its title (主对话 marked) over its last message; when, and its state, on the right.
+    private func row(_ s: Session) -> some View {
         let selected = s.key == current
+        let isMain = s.key == model.assistantMain
         let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
-            HStack(spacing: 8) {
-                if s.key == model.assistantMain {
-                    Image(systemName: "house.fill").font(.caption).foregroundStyle(Theme.accent)
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                        if isMain {
+                            Text("主对话")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.accent.opacity(0.12), in: .capsule)
+                                .fixedSize()
+                        }
+                    }
+                    if !preview.isEmpty {
+                        Text(preview).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
-                Text(title).font(.body).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 4)
-                mark(s)
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(Fmt.relative(s.updatedAt)).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    mark(s)
+                }
             }
             .padding(.horizontal, 12)
-            .frame(height: 44)
+            .padding(.vertical, 10)
             .background {
-                if selected { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.Fill.well) }
+                if selected {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accent.opacity(0.12))
+                }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([title, s.key == model.assistantMain ? "主对话" : nil, stateWord(s)].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([title, isMain ? "主对话" : nil, stateWord(s), preview.isEmpty ? nil : preview]
+            .compactMap { $0 }.joined(separator: "，"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
-            if s.key != model.assistantMain {
+            if !isMain {
                 Button { togglePin(s) } label: {
                     isPinned(s) ? Label("取消置顶", systemImage: "pin.slash") : Label("置顶", systemImage: "pin")
                 }
@@ -343,13 +435,13 @@ struct AssistantSidebar: View {
         }
     }
 
-    /// Working / waiting for you / unread as a small mark; otherwise when it was last active.
+    /// Waiting for you, working or unread as a small mark under the time; nothing otherwise.
     @ViewBuilder private func mark(_ s: Session) -> some View {
         switch s.state {
-        case .working: ProgressView().controlSize(.mini)
+        case .working: ProgressView().controlSize(.mini).frame(height: 8)
         case .needsYou: Circle().fill(Theme.needsYou).frame(width: 8, height: 8)
         case .unread: Circle().fill(Theme.accent).frame(width: 8, height: 8)
-        default: Text(Fmt.relative(s.updatedAt)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        default: Color.clear.frame(width: 8, height: 8)
         }
     }
 
@@ -367,31 +459,54 @@ struct AssistantSidebar: View {
         Haptics.tap()
     }
 
-    /// 新对话 as the main button, settings beside it.
-    private var bottomBar: some View {
-        HStack(spacing: 12) {
-            Button(action: newConversation) {
-                Label("新对话", systemImage: "square.and.pencil")
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .frame(height: 36)
-            }
-            .themedButton(prominent: true)
-            .accessibilityIdentifier("sidebar-new")
-            Spacer(minLength: 0)
-            if let openSettings {
-                Button(action: openSettings) {
-                    Image(systemName: "gearshape").font(.body.weight(.semibold)).frame(width: 44, height: 44).contentShape(.circle)
+    /// 设置 at the bottom of the drawer (the tab bar is hidden while it is out).
+    private func settingsRow(_ action: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            Divider().padding(.horizontal, 16)
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    Image(systemName: "gearshape").font(.body.weight(.medium)).foregroundStyle(.secondary).frame(width: 28)
+                    Text("设置").font(.body).foregroundStyle(Color.primary).lineLimit(1)
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                .surface(interactive: true, in: .circle)
-                .accessibilityLabel("设置")
+                .padding(.horizontal, 24)
+                .frame(height: 50)
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("设置")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+    }
+}
+
+/// The sidebar's conversations by day, newest first: 今天, 昨天, 最近 7 天, 更早 (and those without a time).
+nonisolated enum AssistantSidebarGroups {
+    static let older = "更早"
+
+    struct Group: Equatable {
+        var title: String
+        var sessions: [Session]
+    }
+
+    static func group(_ sessions: [Session], now: Date = .now, calendar: Calendar = .current) -> [Group] {
+        let sorted = sessions.sorted {
+            let a = $0.updatedAt ?? .distantPast, b = $1.updatedAt ?? .distantPast
+            return a != b ? a > b : $0.sessionID < $1.sessionID // a fixed order for equal times
+        }
+        let today = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        let week = calendar.date(byAdding: .day, value: -7, to: today) ?? today
+        var out: [Group] = []
+        for s in sorted {
+            let title: String
+            if let d = s.updatedAt, d.isMeaningful {
+                title = d >= today ? "今天" : d >= yesterday ? "昨天" : d >= week ? "最近 7 天" : older
+            } else {
+                title = older
+            }
+            if out.last?.title == title { out[out.count - 1].sessions.append(s) } else { out.append(Group(title: title, sessions: [s])) }
+        }
+        return out
     }
 }
 

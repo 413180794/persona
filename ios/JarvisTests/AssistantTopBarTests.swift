@@ -41,6 +41,25 @@ struct AssistantTopBarTests {
         #expect(AssistantSidebarSearch.filter(all, "  ").count == 3)
     }
 
+    /// The sidebar's days: 今天 / 昨天 / 最近 7 天 / 更早 counted from midnight, newest first, no time goes to 更早.
+    @Test func conversationsGroupByDay() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 9))!
+        func s(_ id: String, hoursAgo: Double?) throws -> Session {
+            let o: [String: Any] = ["session_id": id, "status": "idle", "title": id, "assistant": true]
+            var x = try JSON.decoder.decode(Session.self, from: JSONSerialization.data(withJSONObject: o))
+            x.updatedAt = hoursAgo.map { now.addingTimeInterval(-$0 * 3600) }
+            return x
+        }
+        // 8 h ago is today (01:00); 10 h ago is yesterday (23:00); 3 days ago; 30 days ago; never.
+        let groups = AssistantSidebarGroups.group([try s("old", hoursAgo: 720), try s("today", hoursAgo: 8), try s("none", hoursAgo: nil),
+                                                   try s("yesterday", hoursAgo: 10), try s("week", hoursAgo: 72),
+                                                   try s("today2", hoursAgo: 1)], now: now, calendar: cal)
+        #expect(groups.map(\.title) == ["今天", "昨天", "最近 7 天", "更早"])
+        #expect(groups.map { $0.sessions.map(\.sessionID) } == [["today2", "today"], ["yesterday"], ["week"], ["old", "none"]])
+    }
+
     /// A drag to the right on something that scrolls sideways and is not at its left edge scrolls it, not the sidebar.
     @Test @MainActor func sidewaysScrollersGoFirst() {
         let root = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
