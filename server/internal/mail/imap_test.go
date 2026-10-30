@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/emersion/go-imap/v2"
 )
 
 // newServiceWithAccount builds a Service whose only account points at the test
@@ -147,6 +149,83 @@ func TestMailboxes(t *testing.T) {
 	}
 	if got := byName["Junk"].Role; got != RoleJunk {
 		t.Errorf("Junk role = %q", got)
+	}
+}
+
+// QQ Mail's IMAP server advertises none of LIST-EXTENDED, LIST-STATUS and
+// SPECIAL-USE and never answers a LIST with RETURN options, so every mailbox
+// listing used to hit the timeout.
+func TestMailboxesWithoutListExtended(t *testing.T) {
+	srv := newTestIMAPCaps(t, imap.CapSet{imap.CapIMAP4rev1: {}})
+	srv.ignoreListReturn(t)
+	s := newServiceWithAccount(t, srv)
+	srv.appendMessage(t, "INBOX", rawMessage("Unread", "a@example.com", "hi"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	boxes, err := s.Mailboxes(ctx, "acc_test")
+	if err != nil {
+		t.Fatalf("Mailboxes: %v", err)
+	}
+	byName := map[string]Mailbox{}
+	for _, b := range boxes {
+		byName[b.Name] = b
+	}
+	if inbox := byName["INBOX"]; inbox.Total != 1 || inbox.Unseen != 1 {
+		t.Errorf("INBOX counters = %d total / %d unseen, want 1/1 (from STATUS)", inbox.Total, inbox.Unseen)
+	}
+	if got := byName["Sent"].Role; got != RoleSent {
+		t.Errorf("Sent role = %q", got)
+	}
+}
+
+func TestListOptions(t *testing.T) {
+	status := &imap.StatusOptions{NumMessages: true, NumUnseen: true}
+	caps := func(cs ...imap.Cap) imap.CapSet {
+		set := imap.CapSet{imap.CapIMAP4rev1: {}}
+		for _, c := range cs {
+			set[c] = struct{}{}
+		}
+		return set
+	}
+	for _, tc := range []struct {
+		name       string
+		caps       imap.CapSet
+		specialUse bool
+		withStatus bool
+	}{
+		{"plain IMAP4rev1 (QQ Mail)", caps(), false, false},
+		{"SPECIAL-USE without LIST-EXTENDED", caps(imap.CapSpecialUse), false, false},
+		{"LIST-EXTENDED only", caps(imap.CapListExtended), false, false},
+		{"LIST-EXTENDED, LIST-STATUS, SPECIAL-USE (Gmail)", caps(imap.CapListExtended, imap.CapListStatus, imap.CapSpecialUse), true, true},
+		{"IMAP4rev2", caps(imap.CapIMAP4rev2), true, true},
+	} {
+		got := listOptions(tc.caps, status)
+		if got.ReturnSpecialUse != tc.specialUse || (got.ReturnStatus != nil) != tc.withStatus {
+			t.Errorf("%s: ReturnSpecialUse=%v ReturnStatus=%v, want %v %v",
+				tc.name, got.ReturnSpecialUse, got.ReturnStatus != nil, tc.specialUse, tc.withStatus)
+		}
+		if got := listOptions(tc.caps, nil); got.ReturnStatus != nil {
+			t.Errorf("%s: STATUS asked for without status options", tc.name)
+		}
+	}
+}
+
+// The copy into Sent after sending looks the mailbox up the same way; on such a
+// server every send waited for the timeout and the copy was lost.
+func TestSentMailboxWithoutListExtended(t *testing.T) {
+	srv := newTestIMAPCaps(t, imap.CapSet{imap.CapIMAP4rev1: {}})
+	srv.ignoreListReturn(t)
+	s := newServiceWithAccount(t, srv)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sent, err := s.sentMailbox(ctx, srv.testAccount())
+	if err != nil {
+		t.Fatalf("sentMailbox: %v", err)
+	}
+	if sent != "Sent" {
+		t.Errorf("sentMailbox = %q, want Sent", sent)
 	}
 }
 

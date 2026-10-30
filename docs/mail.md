@@ -9,7 +9,7 @@ Gmail 用「使用 Google 账号登录」（OAuth2 + XOAUTH2），额外支持�
 | --- | --- |
 | 多账号 | 每个账号独立的 IMAP / SMTP 主机（域名预设自动填），可同时挂 Gmail、QQ、163、Outlook、iCloud…… |
 | 测试连接 | 新增账号时先真正登录一次 IMAP 和 SMTP，成功才落盘；失败返回错误，不入库 |
-| 邮箱列表 | `LIST` + SPECIAL-USE，映射出 `inbox/sent/drafts/trash/archive/junk` 角色，带未读数与总数 |
+| 邮箱列表 | `LIST`，服务端支持时带 `RETURN (SPECIAL-USE STATUS)`（要有 LIST-EXTENDED 或 IMAP4rev2），映射出 `inbox/sent/drafts/trash/archive/junk` 角色，带未读数与总数；不支持的服务端发普通 `LIST`，角色按名字猜、计数逐个 `STATUS` |
 | 收件箱浏览 | 按 UID 倒序分页（`before_uid`），一次取 `limit` 条 |
 | 搜索 | Gmail 用 `X-GM-RAW`（支持 `from:`、`subject:`、`has:attachment`、`newer_than:7d` 等）；其他服务商用 `SEARCH TEXT` |
 | 摘要 | 只取 2048 字节正文片段，不下载整封信；摘要取正文前 160 个字符 |
@@ -158,4 +158,5 @@ API 响应里只有 `status` / `error`，永远拿不到密码或 refresh token�
 - **MCP 发信必须等手机批准**：没批准不会发出；但批准后真的发出去，没有撤销。
 - **每账号一条连接**：多账号合并收件箱是并发拉的，但同一账号只能串行；账号多、搜索复杂时首次会比较慢。
 - **IMAP `ID` 只在服务端声明了 `ID` 能力时发送**（163/126 需要），不要指望它做客户端标识用途。
+- **`LIST` 的 RETURN 选项只在服务端声明了 LIST-EXTENDED（或 IMAP4rev2）时带**：QQ 邮箱三个能力都不声明，收到带 `RETURN` 的 `LIST` 不应答，会一直挂到 20 秒超时（列文件夹、发信后找 `Sent` 都中招，2026-10-30 实测）。
 - 邮件内容会原样进入 Claude 的上下文，等于把信件内容交给模型；敏感信箱建议单独建一个账号只给它必要的信。

@@ -345,7 +345,7 @@ func (s *Service) sentMailbox(ctx context.Context, a *MailAccount) (string, erro
 	var out string
 	err := s.withConn(ctx, a, func(c *imapclient.Client) error {
 		out = ""
-		data, err := c.List("", "*", &imap.ListOptions{ReturnSpecialUse: true}).Collect()
+		data, err := c.List("", "*", listOptions(c.Caps(), nil)).Collect()
 		if err != nil {
 			return err
 		}
