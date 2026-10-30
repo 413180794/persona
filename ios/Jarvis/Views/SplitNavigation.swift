@@ -21,10 +21,10 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
     var body: some View {
         if widthClass == .regular {
             NavigationSplitView {
-                // A stack of its own that never pushes: what the list's links ask for goes to the detail column.
-                NavigationStack(path: Binding(get: { NavigationPath() }, set: { if !$0.isEmpty { path = $0 } })) {
-                    sidebar.modifier(destinations)
-                }
+                // No stack of its own: a value link in the sidebar column replaces the detail column's stack. A sidebar
+                // stack that refused its pushes (a path binding that always read empty) first slid the list away, then
+                // back: the sidebar folded and unfolded on every tap.
+                sidebar.modifier(destinations)
                 // No width of our own: the system sizes the columns, and partly folded it moves the divide onto the fold.
             } detail: {
                 NavigationStack(path: $path) {
