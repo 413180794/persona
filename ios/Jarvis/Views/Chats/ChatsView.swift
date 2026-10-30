@@ -34,7 +34,8 @@ struct SpaceGroup: Identifiable {
             return (group: g, priority: g.state.priority, updatedAt: g.updatedAt)
         }
         .sorted { a, b in
-            a.priority != b.priority ? a.priority < b.priority : a.updatedAt > b.updatedAt
+            if a.priority != b.priority { return a.priority < b.priority }
+            return a.updatedAt != b.updatedAt ? a.updatedAt > b.updatedAt : a.group.id < b.group.id // one order on every render
         }
         .map(\.group)
     }
@@ -68,6 +69,29 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     }
 }
 
+/// The quick filters over the Agents list (the bar under the search field): one tap, stacked on the machine menu.
+enum AgentFilter: String, CaseIterable, Identifiable {
+    case all, needsYou, unread, working
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: "全部"
+        case .needsYou: "需要你"
+        case .unread: "未读"
+        case .working: "工作中"
+        }
+    }
+    var state: AgentState? {
+        switch self {
+        case .all: nil
+        case .needsYou: .needsYou
+        case .unread: .unread
+        case .working: .working
+        }
+    }
+    func matches(_ s: Session) -> Bool { state.map { s.state == $0 } ?? true }
+}
+
 /// 开发: every agent across machines, grouped by space (default), by state or by machine.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
@@ -90,6 +114,15 @@ struct ChatsView: View {
     }
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
+    /// 细列表: one line per agent.
+    @AppStorage("dev.compact") private var compact = false
+    /// Folded sections (spaces, machines, states), one id per line.
+    @AppStorage("dev.folded") private var foldedList = ""
+    @State private var quick: AgentFilter = .all
+    /// Under a quick filter, the agents it showed stay until it is chosen again: one opened from 未读 is seen now
+    /// but keeps its place, so the next one is still right below it.
+    @State private var kept = Set<SessionKey>()
+    @State private var confirmReadAll = false
     @State private var showNew = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
@@ -97,7 +130,8 @@ struct ChatsView: View {
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
 
-    private var filtered: [Session] {
+    /// The agents the machine menu and the search leave.
+    private var base: [Session] {
         model.allSessions.filter { s in
             !s.assistant && (machineFilter.isEmpty || s.machineID == machineFilter) &&
             (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
@@ -105,26 +139,46 @@ struct ChatsView: View {
         }
     }
 
+    private var folded: Set<String> { Set(foldedList.split(separator: "\n").map(String.init)) }
+
+    private func setFolded(_ ids: Set<String>) { foldedList = ids.sorted().joined(separator: "\n") }
+
+    private func toggleFold(_ id: String) {
+        Haptics.tap()
+        var f = folded
+        if f.contains(id) { f.remove(id) } else { f.insert(id) }
+        withAnimation(.snappy) { setFolded(f) }
+    }
+
     var body: some View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("ChatsView.body")
         #endif
-        let filtered = filtered
+        let base = base
+        let matching = Set(base.filter { quick != .all && quick.matches($0) }.map(\.key))
+        let filtered = quick == .all ? base : base.filter { matching.contains($0.key) || kept.contains($0.key) }
         // A pinned agent shows once, under 置顶; every grouping below is built from the rest.
         let unpinned = filtered.filter { !model.isPinned($0.key) }
         let groups = SpaceGroup.build(unpinned)
-        // Pinned spaces lead and never fold away with the quiet ones.
         // Pinned spaces lead; muted spaces with something running come after the other busy ones, shown quietly;
-        // quiet spaces (muted or not) fold into 空闲的空间.
+        // quiet spaces (muted or not) fold into 空闲的空间. Under a quick filter every space it leaves is listed, most
+        // recent first: the order must not move while its agents are being seen.
         let pinnedSpaces = groups.filter { model.isPinned($0) && !model.isMuted($0) }
-        let active = pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) && !model.isMuted($0) }
-            + groups.filter { !$0.isQuiet && model.isMuted($0) }
-        let quiet = groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
+        let active = quick != .all
+            ? pinnedSpaces + groups.filter { !(model.isPinned($0) && !model.isMuted($0)) }
+                .sorted { $0.updatedAt != $1.updatedAt ? $0.updatedAt > $1.updatedAt : $0.id < $1.id }
+            : pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) && !model.isMuted($0) }
+                + groups.filter { !$0.isQuiet && model.isMuted($0) }
+        let quiet = quick != .all ? [] : groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
             .map { (session: $0, order: model.pins.sessions.firstIndex(of: AppModel.pinKey(session: $0.key)) ?? 0) }
             .sorted { $0.order < $1.order }
             .map(\.session)
-        let interactions = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true }
+        let interactions = model.pendingInteractions.filter { ix in
+            guard let s = model.session(ix.sessionKey), !s.assistant else { return false }
+            return quick == .all || quick == .needsYou
+        }
+        let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
 
         NavigationStack(path: pushing) {
             List {
@@ -138,6 +192,24 @@ struct ChatsView: View {
                         }
                     } header: {
                         SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
+                    }
+                }
+
+                if quick == .unread && !unreadShown.isEmpty {
+                    Section {
+                        Button { confirmReadAll = true } label: {
+                            HStack {
+                                Label("全部标为已读", systemImage: "checkmark.circle").lineLimit(1)
+                                Spacer()
+                                Text("\(unreadShown.count) 个完成未看").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
+                            Button("全部标为已读（\(unreadShown.count)）") {
+                                model.markSeen(unreadShown)
+                                kept = []
+                            }
+                        }
                     }
                 }
 
@@ -155,77 +227,27 @@ struct ChatsView: View {
                 } else if grouping == .machine {
                     machineSections(unpinned.filter { $0.state.isLive })
                 } else {
-                ForEach(active) { g in
-                    Section {
-                        // Busy (and pinned / looping) agents first; idle ones fold into one row so a big workspace
-                        // stays compact.
-                        let stays: (Session) -> Bool = {
-                            !$0.isQuiet || model.isPinned($0.key) || $0.loop != nil || !($0.background ?? []).isEmpty
-                                || ($0.subagents ?? []).contains(where: \.running)
-                        }
-                        let sessions = ordered(g.sessions)
-                        let idle = sessions.filter { !stays($0) }
-                        let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
-                        ForEach(sessions.filter(stays)) { s in slotRow(s) }
-                        if !idle.isEmpty {
-                            if showIdle {
-                                ForEach(idle) { s in slotRow(s) }
-                                if query.isEmpty {
-                                    Button {
-                                        withAnimation(.snappy) { _ = expandedIdle.remove(g.id) }
-                                    } label: {
-                                        Label("收起空闲的 \(idle.count) 个", systemImage: "chevron.up")
-                                            .font(.subheadline.weight(.medium))
-                                            .lineLimit(1)
-                                    }
+                    ForEach(active) { g in spaceSection(g) }
+
+                    if !quiet.isEmpty {
+                        Section {
+                            ForEach(quiet) { g in
+                                DisclosureGroup(isExpanded: Binding(
+                                    get: { expandedQuiet.contains(g.id) || !query.isEmpty },
+                                    set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
+                                )) {
+                                    ForEach(g.sessions) { s in slotRow(s) }
+                                } label: {
+                                    QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
                                 }
-                            } else {
-                                Button {
-                                    Haptics.tap()
-                                    withAnimation(.snappy) { _ = expandedIdle.insert(g.id) }
-                                } label: { IdleFoldRow(sessions: idle) }
-                                    .buttonStyle(.plain)
                             }
-                        }
-                    } header: {
-                        // A visible ⋯ for pin / mute: long press on a list section header does not reach a context menu.
-                        HStack(spacing: 4) {
-                            Button { pushSpace(g.id) } label: {
-                                SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
-                                            pinned: model.isPinned(g), muted: model.isMuted(g))
-                            }
-                            .buttonStyle(.plain)
-                            Menu { spaceMenu(g) } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .font(.body)
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(.rect)
-                            }
-                            .accessibilityLabel("\(g.name) 的更多操作")
+                        } header: {
+                            SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
                         }
                     }
                 }
 
-                if !quiet.isEmpty {
-                    Section {
-                        ForEach(quiet) { g in
-                            DisclosureGroup(isExpanded: Binding(
-                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
-                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
-                            )) {
-                                ForEach(g.sessions) { s in slotRow(s) }
-                            } label: {
-                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
-                            }
-                        }
-                    } header: {
-                        SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
-                    }
-                }
-                }
-
-                if filtered.isEmpty {
+                if base.isEmpty {
                     Section {
                         EmptyStateView(symbol: "chevron.left.forwardslash.chevron.right",
                                        title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
@@ -233,10 +255,21 @@ struct ChatsView: View {
                                        action: ("新建会话", { showNew = true }))
                     }
                     .listRowBackground(Color.clear)
+                } else if filtered.isEmpty, let st = quick.state {
+                    Section {
+                        EmptyStateView(symbol: "checkmark.circle", title: "没有\(st.label)的会话",
+                                       message: machineFilter.isEmpty ? "各台电脑上的 Agent 有新动静会出现在这里。" : "这台机器上的 Agent 有新动静会出现在这里。",
+                                       action: ("看全部", { choose(.all, base) }))
+                    }
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.insetGrouped)
+            .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
             .themedPage()
+            .safeAreaBar(edge: .top) {
+                QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, base) }
+            }
             .navigationTitle("Agents")
             // No title over the list (the tab says it); the name stays for the back button. The principal item below
             // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
@@ -246,7 +279,7 @@ struct ChatsView: View {
             .refreshable { await model.refresh() }
             .toolbar {
                 ToolbarItem(placement: .principal) { ConnectionTitle() }
-                ToolbarItem(placement: .topBarLeading) { machineMenu }
+                ToolbarItem(placement: .topBarLeading) { listMenu(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned)) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel("新建会话")
@@ -267,6 +300,8 @@ struct ChatsView: View {
                     path.append(session.key)
                 }
             }
+            .onChange(of: matching) { _, now in kept.formUnion(now) }
+            .onChange(of: machineFilter) { _, _ in kept = [] }
             .onChange(of: path) { _, p in
                 spaceAt = spaceAt.filter { $0.key < p.count }
                 if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
@@ -294,9 +329,92 @@ struct ChatsView: View {
         }
     }
 
+    /// Each quick filter's count. Out of the body's modifier chain: closures in a long chain are type-checked with all
+    /// of it (Release builds on the release machine time out).
+    private static func counts(_ base: [Session]) -> [AgentFilter: Int] {
+        var out: [AgentFilter: Int] = [:]
+        for f in AgentFilter.allCases {
+            if let st = f.state { out[f] = base.count { $0.state == st } }
+        }
+        return out
+    }
+
+    /// A quick filter chosen (again): it starts from what matches now.
+    private func choose(_ f: AgentFilter, _ base: [Session]) {
+        Haptics.tap()
+        quick = f
+        kept = Set(base.filter { f != .all && f.matches($0) }.map(\.key))
+    }
+
     private func pushSpace(_ id: String) {
         path.append(SpaceRoute(id: id))
         spaceAt[path.count - 1] = id
+    }
+
+    // MARK: By space
+
+    /// A space: tap its header to fold it (the counts stay on it); busy (and pinned / looping) agents first, idle ones
+    /// fold into one row so a big workspace stays compact. Under a quick filter every agent it left shows.
+    @ViewBuilder private func spaceSection(_ g: SpaceGroup) -> some View {
+        if folded.contains(g.id) {
+            // Folded: the header alone, as a plain row. As an empty section each kept a header's and a section's
+            // padding (全部折叠 showed six a screen).
+            Section {
+                spaceHeader(g, folded: true)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)) // where a header sits
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            .listSectionSpacing(.custom(0))
+        } else {
+            Section {
+                let sessions = ordered(g.sessions)
+                let idle = quick == .all ? sessions.filter { !stays($0) } : []
+                let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
+                ForEach(quick == .all ? sessions.filter(stays) : sessions) { s in slotRow(s) }
+                if !idle.isEmpty {
+                    if showIdle {
+                        ForEach(idle) { s in slotRow(s) }
+                        if query.isEmpty {
+                            Button {
+                                withAnimation(.snappy) { _ = expandedIdle.remove(g.id) }
+                            } label: {
+                                Label("收起空闲的 \(idle.count) 个", systemImage: "chevron.up")
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(1)
+                            }
+                        }
+                    } else {
+                        Button {
+                            Haptics.tap()
+                            withAnimation(.snappy) { _ = expandedIdle.insert(g.id) }
+                        } label: { IdleFoldRow(sessions: idle) }
+                            .buttonStyle(.plain)
+                    }
+                }
+            } header: {
+                spaceHeader(g, folded: false)
+            }
+        }
+    }
+
+    /// A visible ⋯ for open / mark read / pin / mute: long press on a list section header does not reach a context menu.
+    private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool) -> some View {
+        HStack(spacing: 4) {
+            Button { toggleFold(g.id) } label: {
+                SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
+                            pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
+            }
+            .buttonStyle(.plain)
+            Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { pushSpace(g.id) }) } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+            }
+            .accessibilityLabel("\(g.name) 的更多操作")
+        }
     }
 
     // MARK: By state / by machine
@@ -321,10 +439,12 @@ struct ChatsView: View {
         }
     }
 
-    /// By rank, then the most recently updated (working: most recently started) first.
+    /// By rank, then the most recently updated (working: most recently started) first. Under a quick filter by time
+    /// only: an agent seen from there keeps its place.
     private func ordered(_ list: [Session]) -> [Session] {
-        list.map { session -> (session: Session, rank: Int, sortDate: Date) in
-            (session: session, rank: rank(session), sortDate: session.sortDate)
+        let byRank = quick == .all
+        return list.map { session -> (session: Session, rank: Int, sortDate: Date) in
+            (session: session, rank: byRank ? rank(session) : 0, sortDate: session.sortDate)
         }.sorted { a, b in
             if a.rank != b.rank { return a.rank < b.rank }
             return a.sortDate != b.sortDate ? a.sortDate > b.sortDate : a.session.sessionID < b.session.sessionID
@@ -332,29 +452,43 @@ struct ChatsView: View {
         .map(\.session)
     }
 
+    private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
+        ("needs", "需要你", StatusPalette.needsYou), ("unread", "完成未看", StatusPalette.unread),
+        ("working", "工作中", StatusPalette.working), ("waiting", "待唤醒", StatusTone(dot: Theme.loop, text: Theme.loop)),
+        ("muted", "已屏蔽", StatusPalette.idle), ("idle", "已看", StatusPalette.idle),
+    ]
+
+    /// The fold ids of the sections 按状态 / 按机器 shows now (全部折叠).
+    private func sectionIDs(_ sessions: [Session]) -> [String] {
+        let live = sessions.filter { $0.state.isLive }
+        if grouping == .machine { return Set(live.map(\.machineID)).map { "machine/" + $0 } }
+        let ranks = Set(live.map(rank))
+        return Self.stateTitles.enumerated().filter { ranks.contains($0.offset) }.map { "state/" + $0.element.key }
+    }
+
     /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background
     /// work will bring some.
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
-        let titles: [(key: String, title: String, tint: StatusTone)] = [
-            ("needs", "需要你", StatusPalette.needsYou), ("unread", "完成未看", StatusPalette.unread),
-            ("working", "工作中", StatusPalette.working), ("waiting", "待唤醒", StatusTone(dot: Theme.loop, text: Theme.loop)),
-            ("muted", "已屏蔽", StatusPalette.idle), ("idle", "已看", StatusPalette.idle),
-        ]
         let byRank = Dictionary(grouping: live, by: rank)
-        let buckets = titles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }
+        let buckets = Self.stateTitles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }
         ForEach(buckets, id: \.key) { b in
             let rows = ordered(b.rows)
+            let id = "state/" + b.key
             if !rows.isEmpty {
                 Section {
-                    if b.key == "idle" {
+                    if folded.contains(id) {
+                    } else if b.key == "idle" {
                         foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
                         // 已屏蔽 mixes states: each row says its own. Loops and background work stay off the rows (the chat shows them).
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    SectionHeader(title: b.title, count: rows.count, tone: b.tint)
+                    FoldButton(title: b.title, folded: folded.contains(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
+                        SectionHeader(title: b.title, count: rows.count, tone: b.tint)
+                    }
                 }
+                .listSectionSpacing(folded.contains(id) ? .custom(0) : .default)
             }
         }
     }
@@ -364,13 +498,23 @@ struct ChatsView: View {
         let machines = model.machines.filter { m in live.contains { $0.machineID == m.id } }
         ForEach(machines) { m in
             let rows = ordered(live.filter { $0.machineID == m.id })
+            let id = "machine/" + m.id
+            let group = SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: rows)
             Section {
-                ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
-                foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.id, label: "空闲")
+                if !folded.contains(id) {
+                    if quick == .all {
+                        ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
+                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.id, label: "空闲")
+                    } else {
+                        ForEach(rows) { s in slotRow(s, context: true) }
+                    }
+                }
             } header: {
-                MachineSectionHeader(machine: m, group: SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-",
-                                                                   name: m.name, index: 0, sessions: rows))
+                FoldButton(title: m.name, folded: folded.contains(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
+                    MachineSectionHeader(machine: m, group: group)
+                }
             }
+            .listSectionSpacing(folded.contains(id) ? .custom(0) : .default)
         }
     }
 
@@ -396,16 +540,21 @@ struct ChatsView: View {
         }
     }
 
-    private func spaceMenu(_ g: SpaceGroup) -> some View { SpaceMenuItems(group: g) { renamingSpace = g } }
-
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false) -> some View {
         NavigationLink(value: s.key) {
-            SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
-                    machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
-                    hideState: inStateSection)
-                .equatable()
+            if compact {
+                CompactSlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil)
+                    .equatable()
+            } else {
+                SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
+                        machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
+                        hideState: inStateSection)
+                    .equatable()
+            }
         }
+            .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
+            .listRowInsets(compact ? EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 14) : nil)
             .swipeActions(edge: .trailing) {
                 if s.state.isLive {
                     Button { closingSession = s } label: { Label("关闭", systemImage: "xmark") }.tint(Theme.danger)
@@ -447,11 +596,25 @@ struct ChatsView: View {
             }
     }
 
-    /// Shows the chosen machine's name in the corner; "全部" keeps the plain filter icon.
-    private var machineMenu: some View {
+    /// The menu at the top left: grouping, 卡片 / 细列表, folding, the machine filter. Shows the chosen machine's name
+    /// in the corner; "全部" keeps the plain filter icon. `sections`: the fold ids of what is listed now.
+    private func listMenu(sections: [String]) -> some View {
         Menu {
             Picker("分组", selection: $grouping) {
                 ForEach(DevGrouping.allCases) { g in Label(g.title, systemImage: g.symbol).tag(g) }
+            }
+            Picker("显示", selection: $compact) {
+                Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
+                Label("细列表", systemImage: "list.bullet").tag(true)
+            }
+            Section {
+                Button {
+                    withAnimation(.snappy) { setFolded(folded.union(sections)) }
+                    expandedQuiet = []
+                } label: { Label("全部折叠", systemImage: "rectangle.compress.vertical") }
+                Button {
+                    withAnimation(.snappy) { setFolded([]) }
+                } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
             }
             Picker("机器", selection: $machineFilter) {
                 Label("全部机器", systemImage: "square.grid.2x2").tag("")
@@ -481,6 +644,86 @@ struct ChatsView: View {
     }
 }
 
+/// 全部 / 需要你 / 未读 / 工作中 under the search field, each with its count; one tap switches.
+struct QuickFilterBar: View {
+    var selection: AgentFilter
+    var counts: [AgentFilter: Int]
+    var choose: (AgentFilter) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(AgentFilter.allCases) { f in
+                    let on = f == selection
+                    let tone = f.state?.tone
+                    let tint = tone?.text ?? Theme.accent
+                    Button { if !on { choose(f) } } label: {
+                        HStack(spacing: 5) {
+                            if let tone { Circle().fill(tone.dot).frame(width: 7, height: 7) }
+                            Text(f.title)
+                            if let n = counts[f] {
+                                Text("\(n)").monospacedDigit().foregroundStyle(on ? tint : Color.secondary)
+                                    .contentTransition(.numericText(value: Double(n)))
+                            }
+                        }
+                        .font(.subheadline.weight(on ? .semibold : .medium))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .foregroundStyle(on ? tint : Color.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(on ? tint.opacity(0.15) : Color.secondary.opacity(0.1)))
+                        .overlay(Capsule().strokeBorder(on ? tint.opacity(0.35) : .clear, lineWidth: 1))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("agents.filter." + f.rawValue)
+                    .accessibilityLabel(counts[f].map { "\(f.title) \($0)" } ?? f.title)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+        }
+        .scrollClipDisabled()
+    }
+}
+
+/// A section header that folds its section: the header itself plus a chevron, spoken as "名字，已展开 / 已折叠，…".
+struct FoldButton<Content: View>: View {
+    var title: String
+    var folded: Bool
+    var detail: String
+    var action: () -> Void
+    @ViewBuilder var label: Content
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                label
+                Spacer(minLength: 4)
+                FoldChevron(folded: folded)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([title, folded ? "已折叠" : "已展开", detail].filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+struct FoldChevron: View {
+    var folded: Bool
+    var body: some View {
+        Image(systemName: "chevron.down")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.tertiary)
+            .rotationEffect(.degrees(folded ? -90 : 0))
+            .animation(.snappy, value: folded)
+    }
+}
+
 struct SpaceRoute: Hashable { var id: String }
 
 struct SectionHeader: View {
@@ -497,7 +740,7 @@ struct SectionHeader: View {
     }
 }
 
-/// Section header of a space: name, machine and a count per state.
+/// Section header of a space: name, machine and a count per state; tapping it folds the space (the counts stay).
 struct SpaceHeader: View {
     var group: SpaceGroup
     var machine: Machine?
@@ -505,6 +748,7 @@ struct SpaceHeader: View {
     var pinned = false
     /// Muted with agents running: quieter than the busy spaces, not fainter than the idle ones.
     var muted = false
+    var folded = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -516,14 +760,26 @@ struct SpaceHeader: View {
             }
             Spacer(minLength: 4)
             StateCounts(group: group).opacity(muted ? 0.6 : 1)
-            Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+            FoldChevron(folded: folded)
         }
         .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([group.name, folded ? "已折叠" : "已展开", pinned ? "已置顶" : "", muted ? "已屏蔽" : "",
+                             showMachine ? machine?.name ?? "" : "", StateCounts.spoken(group)]
+            .filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityAddTraits(.isButton)
     }
 }
 
 struct StateCounts: View {
     var group: SpaceGroup
+
+    /// "3 个需要你，12 个工作中，35 个完成未看，4 个空闲" for VoiceOver (and the UI tests).
+    static func spoken(_ group: SpaceGroup) -> String {
+        let idle = group.count(.idle) + group.count(.unknown)
+        return ([AgentState.needsYou, .working, .unread].compactMap { st in group.count(st) > 0 ? "\(group.count(st)) 个\(st.label)" : nil }
+            + (idle > 0 ? ["\(idle) 个空闲"] : [])).joined(separator: "，")
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -623,6 +879,40 @@ nonisolated struct SlotRow: View, Equatable {
     }
 }
 
+/// 细列表: one line per agent — state dot, title, where (space › tab, or the tab when the section is the space), when.
+nonisolated struct CompactSlotRow: View, Equatable {
+    var session: Session
+    var muted = false
+    var space: String? = nil
+
+    @MainActor
+    var body: some View {
+        HStack(spacing: 8) {
+            StatusDot(state: session.state, size: 8)
+            Text(session.displayTitle)
+                .font(.subheadline.weight(session.state == .unread ? .semibold : .regular))
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: 4)
+            if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
+            if let place, !place.isEmpty {
+                Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+            }
+            TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .fixedSize()
+        }
+        .opacity(muted ? 0.8 : 1)
+    }
+
+    @MainActor private var place: String? {
+        let slot = session.slotLabel
+        guard let space, !space.isEmpty else { return slot }
+        return slot.map { space + " › " + $0 } ?? space
+    }
+}
+
 /// The idle agents of a busy space folded into one line: count plus their tab names.
 struct IdleFoldRow: View {
     var sessions: [Session]
@@ -693,8 +983,17 @@ struct SpaceMenuItems: View {
     @Environment(AppModel.self) private var model
     var group: SpaceGroup
     var rename: (() -> Void)? = nil
+    /// 打开空间 (the Agents list: its header folds the space instead).
+    var open: (() -> Void)? = nil
 
     var body: some View {
+        if let open {
+            Button(action: open) { Label("打开空间", systemImage: "arrow.right.square") }
+        }
+        let unread = group.sessions.filter { $0.state == .unread }.map(\.key)
+        if !unread.isEmpty {
+            Button { model.markSeen(unread) } label: { Label("全部标为已读（\(unread.count)）", systemImage: "checkmark.circle") }
+        }
         if let rename, group.spaceID != "-" {
             Button(action: rename) { Label("重命名空间", systemImage: "pencil") }
         }

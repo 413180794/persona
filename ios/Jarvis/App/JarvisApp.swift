@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             AppModel.shared.adopt(cfg)
         }
         let d = UserDefaults.standard
+        // `-openAgentsFresh YES`: the Agents list's saved look forgotten (AgentsListTests).
+        if d.bool(forKey: "openAgentsFresh") {
+            for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
+        }
         switch d.string(forKey: "tab") {
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail

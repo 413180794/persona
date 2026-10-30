@@ -696,6 +696,25 @@ final class AppModel {
         }
     }
 
+    /// 全部标为已读: every finished-unread one of these, in one update of the list.
+    func markSeen(_ keys: [SessionKey]) {
+        let unread = keys.filter { session($0)?.state == .unread }
+        guard !unread.isEmpty else { return }
+        for key in unread {
+            if live.state == .connected {
+                live.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
+            } else if let api {
+                Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
+            }
+        }
+        var lists = sessionsByMachine
+        for key in unread {
+            if let i = lists[key.machineID]?.firstIndex(where: { $0.sessionID == key.sessionID }) { lists[key.machineID]![i].state = .idle }
+        }
+        sessionsByMachine = lists
+        Haptics.success()
+    }
+
     /// Other live agents in the same space as this session (herdr tabs of one workspace), slot order.
     func siblings(of key: SessionKey) -> [Session] {
         guard let s = session(key), let space = s.spaceKey else { return [] }

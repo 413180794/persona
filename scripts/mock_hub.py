@@ -200,6 +200,36 @@ if MOCK_MACHINES:
                              "/Users/me/code/" + proj, status, state, proj, 4 + i % 4, "t%d" % (i // 4 + 1), i // 4 + 1,
                              i * 7, "第 %d 个 Agent 的最新一句话，长一点好看看会不会被截断或者挤到别的地方去。" % (i + 1),
                              pending=1 if state == "needs_you" else 0))
+# MOCK_AGENTS=1: a long Agents list (AgentsListTests): ~120 agents, one big space with 35 finished-unread, a quiet
+# space, idle ones to fold. Sessions marked seen (WS "seen" or POST …/seen) turn idle; GET /mock/seen lists them.
+if os.environ.get("MOCK_AGENTS"):
+    n = 0
+    for mid, proj, sidx, mix in (("studio", "platform", 10, {"needs_you": 3, "unread": 35, "working": 12}),
+                                 ("studio", "infra", 11, {"working": 2, "unread": 4, "idle": 24}),
+                                 ("studio", "docs-site", 12, {"idle": 20}),
+                                 ("macbook", "mobile", 13, {"unread": 5, "idle": 10}),
+                                 ("server", "tools", 14, {"needs_you": 1, "working": 3, "unread": 2, "idle": 4})):
+        slot = 0
+        for state, count in mix.items():
+            for _ in range(count):
+                slot += 1
+                n += 1
+                status = {"working": "working", "idle": "idle", "unread": "done", "needs_you": "blocked"}[state]
+                SESSIONS.append(sess(mid, "e5f7a9b1-0000-4000-8000-%012d" % n, "%s 任务 %d" % (proj, slot), "/Users/me/code/" + proj,
+                                     status, state, proj, sidx, "t%d" % slot, slot, n * 3,
+                                     "第 %d 个 Agent 的最新一句话，看看细列表和卡片里会不会挤在一起。" % n,
+                                     pending=1 if state == "needs_you" else 0))
+ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
+SEEN = []  # session ids marked seen (GET /mock/seen)
+
+
+def mark_seen(sid):
+    SEEN.append(sid)
+    for s in SESSIONS:
+        if s["session_id"] == sid and s["state"] == "unread":
+            s.update(state="idle", status="idle", seen_at=ago())
+
+
 HITS = {}  # "GET /api/v1/machines" -> how many (GET /mock/hits): pull to refresh and reloads
 RECONNECTS = []  # machine ids of POST …/reconnect (GET /mock/reconnects)
 STARTED = []  # bodies of POST /api/v1/sessions (GET /mock/started)
@@ -696,8 +726,12 @@ class H(BaseHTTPRequestHandler):
                     for k in ("hostname", "os", "arch", "home", "herdr_version", "claude_version"): m.pop(k, None)
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
-            del RECONNECTS[:], STARTED[:]
+            del RECONNECTS[:], STARTED[:], SEEN[:]
+            for x in SESSIONS:
+                if x["session_id"] in ORIG_STATE:
+                    x["state"], x["status"] = ORIG_STATE[x["session_id"]]
             return self.send_json({"ok": True})
+        if p == "/mock/seen": return self.send_json({"seen": SEEN})
         if p == "/mock/reconnects": return self.send_json({"reconnects": RECONNECTS})
         if p == "/mock/started": return self.send_json({"started": STARTED})
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
@@ -826,6 +860,9 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
             FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != p.split("/")[5]]
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/seen"):
+            mark_seen(p.split("/")[5])
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/reconnect"):
             mid = p.split("/")[4]
             RECONNECTS.append(mid)
@@ -936,6 +973,9 @@ class H(BaseHTTPRequestHandler):
                 if op != 1: continue
                 msg = json.loads(payload or b"{}")
                 LOG.write("  WS %s\n" % msg.get("type")); LOG.flush()
+                if msg.get("type") == "seen":
+                    mark_seen(msg.get("session_id"))
+                    continue
                 if msg.get("type") == "terminal_input" and drive:
                     TERMINAL_INPUT.append(msg)
                     ctl = msg.get("control")
