@@ -2,7 +2,9 @@ package node
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -46,14 +48,14 @@ func (n *Node) readFile(path, cwd string) (*FileContent, error) {
 	}
 	st, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, explainDenied(path, n.home, err)
 	}
 	fc := &FileContent{Path: path, Name: filepath.Base(path), Size: st.Size()}
 	if st.IsDir() {
 		fc.IsDir = true
 		ents, err := os.ReadDir(path)
 		if err != nil {
-			return nil, err
+			return nil, explainDenied(path, n.home, err)
 		}
 		for i, e := range ents {
 			if i >= 500 {
@@ -70,7 +72,7 @@ func (n *Node) readFile(path, cwd string) (*FileContent, error) {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, explainDenied(path, n.home, err)
 	}
 	defer f.Close()
 	buf := make([]byte, min(st.Size(), maxFileBytes))
@@ -90,6 +92,28 @@ func (n *Node) readFile(path, cwd string) (*FileContent, error) {
 	}
 	fc.Data = base64.StdEncoding.EncodeToString(buf)
 	return fc, nil
+}
+
+// protectedDirs are the folders macOS keeps from programs the user has not allowed (TCC): jarvisd, started over ssh,
+// gets "operation not permitted" there even though the files are the user's own.
+var protectedDirs = map[string]string{"Desktop": "桌面", "Documents": "文稿", "Downloads": "下载"}
+
+// explainDenied turns macOS refusing a protected folder into what to do about it; other errors pass through.
+func explainDenied(path, home string, err error) error {
+	if !errors.Is(err, fs.ErrPermission) || home == "" {
+		return err
+	}
+	rel, rerr := filepath.Rel(home, path)
+	if rerr != nil || strings.HasPrefix(rel, "..") {
+		return err
+	}
+	top, _, _ := strings.Cut(rel, string(filepath.Separator))
+	name, ok := protectedDirs[top]
+	if !ok {
+		return err
+	}
+	return fmt.Errorf("macOS 不让 Jarvis 读「%s」文件夹里的文件。要读的话，在这台 Mac 的「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里"+
+		"打开 sshd-keygen-wrapper（Jarvis 经 ssh 在这台 Mac 上运行），或者把文件放到别的文件夹（%w）", name, err)
 }
 
 // trimPartialRune drops a UTF-8 sequence cut in half at the end of a truncated read.
@@ -134,7 +158,7 @@ func (n *Node) listDir(path, cwd string) (map[string]any, error) {
 	}
 	ents, err := os.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return nil, explainDenied(path, n.home, err)
 	}
 	list := make([]DirEntry, 0, min(len(ents), maxDirEntries))
 	for _, e := range ents {
