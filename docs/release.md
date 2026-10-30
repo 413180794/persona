@@ -1,6 +1,6 @@
 # TestFlight 发布
 
-TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及只按邮箱邀请的外部测试（见文末「外部测试」）。
+TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及用公开链接加入的外部测试（见文末「外部测试」）。
 
 ## 账号与标识
 
@@ -49,6 +49,7 @@ git push --tags
 3. `check_bundle_strings.py` 检查 `Jarvis.app` 和 `Jarvis.app/Watch/Jarvis.app`：Info.plist 里的 `*UsageDescription`
    不能为空或等于 key，`*.lproj/InfoPlist.strings` 同理（占位符文案会被 App Review 自动拒）。
 4. `strings` 检查 Release 二进制里没有 `pairURL`、`openSession`、`showNewChat` 这些只在 `#if DEBUG` 里的模拟器开关。
+   `check_bundle_privacy.py` 检查整个 bundle 里没有个人的值（外部测试是公开链接，见文末）。
 5. `xcodebuild -exportArchive`：手动签名 + `method=app-store-connect` + 两个描述文件映射。**这一步才是 App Store 签名**：
    归档用的是自动签名的开发描述文件（所以归档里 `aps-environment` 是 `development`），导出时按 App Store 描述文件重签成
    `production`。`NO_UPLOAD=1` 时把 `destination` 从 `upload` 改成 `export`，并额外校验导出的 ipa 里 `aps-environment`
@@ -93,24 +94,28 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 - 文件：hub 机器的 `~/.jarvis/apns_key.p8`（配置 `~/.jarvis/apns.json`），另存一份到密码管理器。key 只能下载一次，丢了就重建。
 - 页面提示《Apple Developer Program 许可协议》已更新，要账户持有人在 developer.apple.com 接受（不影响建 App 和传 TestFlight）。
 
-## 外部测试（只按邮箱邀请）
+## 外部测试（公开链接）
 
-内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`），**不开公开链接**，
-只有 `app_store.external.testers` 里的邮箱会收到邀请，别人拿不到加入的入口。
+内部测试员必须是团队成员；给朋友用走外部测试：群组「Friends」（`app_store.external.group`）。2026-10-30 用户定的是**公开链接**
+（`public_link: true`，`public_link_limit: 50`）：把 `https://testflight.apple.com/join/…` 发到群里，谁点开都能装，满 50 人后链接不再收人。
+不用收集邮箱；`app_store.external.testers` 仍然可以写，列出的邮箱另外收到邀请邮件。`public_link: false` 时只有这些邮箱能加入。
 
 ```sh
-python3 scripts/asc_testflight.py external   # 建群组（关掉公开链接）、写测试信息、挂最新构建、提交审核、发邀请
+python3 scripts/asc_testflight.py external   # 建群组、按配置开 / 关公开链接、写测试信息、挂最新构建、提交审核；打印公开链接
 ```
 
+- **公开链接 = 任何拿到链接的人都能装**：构建里不能有任何个人的东西（hub 地址、主机名、邮箱、路径……）。`release.sh` 在上传前跑
+  `scripts/check_bundle_privacy.py <Jarvis.app>`（用 `privacy_check.py` 的同一份敏感词，查二进制的字符串、plist、lzfse 元数据；
+  bundle id、team id、签名数据本来就在每个构建里，不算）。自己写的发版脚本也要在上传前跑它。
 - **每次发版不用另跑命令**：配置里有 `app_store.external` 时，`wait`、`info` 在挂好 Internal 之后会顺带把这个构建挂到 Friends、
-  提交审核、补邀请新加的测试员。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
+  提交审核（有列出的测试员就补邀请）。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
 - 外部测试的构建要过 **Beta App Review**（第一次约一天，同一版本后面的构建多数自动通过）。提交前必须有联系人：
   `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交，也不加测试员。
+- 公开链接在没有通过审核的构建之前就能打开（API 直接给出地址），但页面显示「This beta isn't accepting any new testers right now」，
+  审核通过后才能加入。
 - 审核状态看构建的 `buildBetaDetail.externalBuildState`：`READY_FOR_BETA_SUBMISSION`（挂了没交）→ `WAITING_FOR_BETA_REVIEW` →
-  `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`。通过前测试员装不了，邀请也不会生效。
+  `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`。
 - 朋友的 hub 是他们自己部署的：没有开发者账号的 APNs key，就收不到推送和实时活动（App 打开时照常实时）；Gmail 登录要他们
   自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
 - 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
 - App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
-- 邀请邮件里的链接只对被邀请的邮箱有效；测试员在 TestFlight 里用这个 Apple ID 接受。
-

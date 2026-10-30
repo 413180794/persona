@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""TestFlight setup for Jarvis (idempotent): an internal group, and an external one people join by invitation only.
+"""TestFlight setup for Jarvis (idempotent): an internal group, and an external one for anybody else.
 
   python3 scripts/asc_testflight.py                    # group "Internal" + testers, then status
   python3 scripts/asc_testflight.py status             # the last few builds and their processing state
   python3 scripts/asc_testflight.py wait [minutes] [build]  # poll until that build (default: newest) is VALID, then attach it
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
-  python3 scripts/asc_testflight.py external           # group "Friends": newest build, Beta App Review, invitations
+  python3 scripts/asc_testflight.py external           # group "Friends": newest build, Beta App Review, public link
 
 "wait" and "info" also hand the build to the external group when the config has app_store.external, so every new
-TestFlight build reaches the invited testers too (after Beta App Review); a failure there never fails the release.
+TestFlight build reaches the external testers too (after Beta App Review); a failure there never fails the release.
 
 Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
-External testers (app_store.external.testers) can be anyone: they get an email invitation, and the group has no
-public link, so nobody else can join. Their first build of a version goes through Beta App Review, which needs the
+External testers join the group by its public link when app_store.external.public_link is true (at most
+public_link_limit people), and/or get an email invitation when listed in app_store.external.testers. Without the
+public link only those emails can join. The first build of a version goes through Beta App Review, which needs the
 contact in app_store.external.review (docs/release.md). The App ID comes from app_store.app_id in the config (docs/config.md).
 """
 import os
@@ -26,7 +27,7 @@ APP_ID = app_id()
 GROUP = "Internal"
 TESTERS = STORE.get("testers", [])  # [{"email", "first_name"}]
 FEEDBACK_EMAIL = STORE.get("feedback_email", "")
-EXTERNAL = STORE.get("external", {})  # {"group", "testers", "review", "privacy_url"}
+EXTERNAL = STORE.get("external", {})  # {"group", "public_link", "public_link_limit", "testers", "review", "privacy_url"}
 EXTERNAL_GROUP = EXTERNAL.get("group", "Friends")
 
 BETA_INFO = {
@@ -176,20 +177,39 @@ def wait(minutes: int, version: str | None = None):
 
 
 def external_group_id() -> str:
-    """The external group: invitation only (no public link), so only the emails added here can install."""
+    """The external group, its public link on or off as the config says."""
     for g in get_all(f"/v1/apps/{APP_ID}/betaGroups"):
         if g["attributes"]["name"] == EXTERNAL_GROUP:
-            if g["attributes"].get("publicLinkEnabled"):
-                request("PATCH", f"/v1/betaGroups/{g['id']}",
-                        {"data": {"type": "betaGroups", "id": g["id"], "attributes": {"publicLinkEnabled": False}}})
-                print("turned off the public link of", EXTERNAL_GROUP)
+            public_link(g)
             return g["id"]
     print("create group", EXTERNAL_GROUP)
     body = {"data": {"type": "betaGroups",
                      "attributes": {"name": EXTERNAL_GROUP, "isInternalGroup": False, "publicLinkEnabled": False,
                                     "feedbackEnabled": True},
                      "relationships": {"app": {"data": {"type": "apps", "id": APP_ID}}}}}
-    return request("POST", "/v1/betaGroups", body)["data"]["id"]
+    g = request("POST", "/v1/betaGroups", body)["data"]
+    public_link(g)
+    return g["id"]
+
+
+def public_link(g):
+    """Turn the group's public link on (app_store.external.public_link, capped at public_link_limit people) or off.
+
+    Anyone who has the link can install, but only once a build of the group has passed Beta App Review."""
+    want = bool(EXTERNAL.get("public_link"))
+    limit = int(EXTERNAL.get("public_link_limit") or 0)
+    attrs = {"publicLinkEnabled": want}
+    if want:
+        attrs["publicLinkLimitEnabled"] = limit > 0
+        if limit:
+            attrs["publicLinkLimit"] = limit
+    if any(g["attributes"].get(k) != v for k, v in attrs.items()):
+        g = request("PATCH", f"/v1/betaGroups/{g['id']}",
+                    {"data": {"type": "betaGroups", "id": g["id"], "attributes": attrs}})["data"]
+        print("public link of", EXTERNAL_GROUP, "turned", "on" if want else "off",
+              f"(at most {limit} testers)" if want and limit else "")
+    if want and g["attributes"].get("publicLink"):
+        print("public link:", g["attributes"]["publicLink"])
 
 
 def write_review_details() -> bool:
@@ -224,7 +244,7 @@ def submit_for_review(build):
 
 
 def share(build):
-    """Put the build in the external group and ask for Beta App Review; invite the testers once it is submitted.
+    """Put the build in the external group and ask for Beta App Review; invite any listed testers once it is submitted.
 
     Without a review contact the build only sits in the group and nobody is added: testers could not install
     it before the review anyway."""
@@ -238,8 +258,8 @@ def share(build):
         return
     submit_for_review(build)
     testers = EXTERNAL.get("testers", [])
-    if not testers:
-        print("no app_store.external.testers in the config: nobody invited yet")
+    if not testers and not EXTERNAL.get("public_link"):
+        print("no app_store.external.testers and no public link in the config: nobody can join yet")
     for t in testers:
         add_tester(gid, t["email"], t.get("first_name") or t["email"].split("@")[0], t.get("last_name", ""))
 

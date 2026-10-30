@@ -12,6 +12,8 @@
     "feedback_email": "jarvis@example.com",
     "external": {
       "group": "Friends",
+      "public_link": true,
+      "public_link_limit": 50,
       "privacy_url": "https://example.com/privacy/",
       "testers": [{ "email": "friend@example.com", "first_name": "Friend", "last_name": "Name" }],
       "review": {
