@@ -7,6 +7,9 @@
   python3 scripts/asc_testflight.py info "<What to Test>"   # write "What to Test" on the newest build, attach it
   python3 scripts/asc_testflight.py external           # group "Friends": newest build, Beta App Review, invitations
 
+"wait" and "info" also hand the build to the external group when the config has app_store.external, so every new
+TestFlight build reaches the invited testers too (after Beta App Review); a failure there never fails the release.
+
 Internal testers (app_store.testers in the config) must be users of the team in App Store Connect.
 External testers (app_store.external.testers) can be anyone: they get an email invitation, and the group has no
 public link, so nobody else can join. Their first build of a version goes through Beta App Review, which needs the
@@ -163,6 +166,7 @@ def wait(minutes: int, version: str | None = None):
             if state == "VALID":
                 write_info(build, default_whats_new())
                 attach(build, group_id())
+                share_external(build)
                 return
             if state in ("INVALID", "FAILED"):
                 sys.exit(f"build {a['version']} finished as {state}: check App Store Connect for the reason")
@@ -219,23 +223,43 @@ def submit_for_review(build):
     print("build", build["attributes"]["version"], "submitted for Beta App Review")
 
 
-def external(build=None):
-    build = build or newest_valid()
-    if not build:
-        sys.exit("no VALID build yet (python3 scripts/asc_testflight.py wait)")
+def share(build):
+    """Put the build in the external group and ask for Beta App Review; invite the testers once it is submitted.
+
+    Without a review contact the build only sits in the group and nobody is added: testers could not install
+    it before the review anyway."""
     gid = external_group_id()
-    write_info(build, default_whats_new())
     linked = {b["id"] for b in get_all(f"/v1/betaGroups/{gid}/builds")}
     if build["id"] not in linked:
         request("POST", f"/v1/betaGroups/{gid}/relationships/builds", {"data": [{"type": "builds", "id": build["id"]}]})
         print("build", build["attributes"]["version"], "is now in", EXTERNAL_GROUP)
-    if write_review_details():
-        submit_for_review(build)
+    if not write_review_details():
+        print("testers are invited once a build is submitted")
+        return
+    submit_for_review(build)
     testers = EXTERNAL.get("testers", [])
     if not testers:
         print("no app_store.external.testers in the config: nobody invited yet")
     for t in testers:
         add_tester(gid, t["email"], t.get("first_name") or t["email"].split("@")[0], t.get("last_name", ""))
+
+
+def share_external(build):
+    """share() after a release, when the config has an external group; its errors don't fail the release."""
+    if not EXTERNAL:
+        return
+    try:
+        share(build)
+    except APIError as e:
+        print(f"external group {EXTERNAL_GROUP}: {e} (retry: python3 scripts/asc_testflight.py external)")
+
+
+def external(build=None):
+    build = build or newest_valid()
+    if not build:
+        sys.exit("no VALID build yet (python3 scripts/asc_testflight.py wait)")
+    write_info(build, default_whats_new())
+    share(build)
 
 
 def main():
@@ -250,6 +274,7 @@ def main():
             sys.exit("no VALID build yet (python3 scripts/asc_testflight.py wait)")
         write_info(build, args[1] if len(args) > 1 else default_whats_new())
         attach(build, group_id())
+        share_external(build)
     elif args[:1] == ["external"]:
         external()
     elif args[:1] in ([], ["setup"]):

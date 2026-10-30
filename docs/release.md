@@ -1,6 +1,6 @@
 # TestFlight 发布
 
-只发 TestFlight 内部测试（测试员在配置的 `app_store.testers`）。
+TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及只按邮箱邀请的外部测试（见文末「外部测试」）。
 
 ## 账号与标识
 
@@ -102,8 +102,14 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
 python3 scripts/asc_testflight.py external   # 建群组（关掉公开链接）、写测试信息、挂最新构建、提交审核、发邀请
 ```
 
+- **每次发版不用另跑命令**：配置里有 `app_store.external` 时，`wait`、`info` 在挂好 Internal 之后会顺带把这个构建挂到 Friends、
+  提交审核、补邀请新加的测试员。这一步出错只打印一行（附重试命令 `external`），不会让发版失败。
 - 外部测试的构建要过 **Beta App Review**（第一次约一天，同一版本后面的构建多数自动通过）。提交前必须有联系人：
-  `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交。
+  `app_store.external.review` 的 `first_name` / `last_name` / `phone` / `email`，缺了脚本只挂构建、不提交，也不加测试员。
+- 审核状态看构建的 `buildBetaDetail.externalBuildState`：`READY_FOR_BETA_SUBMISSION`（挂了没交）→ `WAITING_FOR_BETA_REVIEW` →
+  `IN_BETA_REVIEW` → `BETA_APPROVED` / `BETA_REJECTED`。通过前测试员装不了，邀请也不会生效。
+- 朋友的 hub 是他们自己部署的：没有开发者账号的 APNs key，就收不到推送和实时活动（App 打开时照常实时）；Gmail 登录要他们
+  自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
 - 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
 - App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
 - 邀请邮件里的链接只对被邀请的邮箱有效；测试员在 TestFlight 里用这个 Apple ID 接受。
