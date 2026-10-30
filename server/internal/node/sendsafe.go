@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -91,6 +93,12 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 		return s
 	}
 	code, in := screen.CheckClaude(read())
+	// What we typed a moment ago may still show while Claude takes it: wait for the box to empty rather than call our
+	// own message a draft.
+	for wait := time.Now().Add(2 * time.Second); code == screen.InputDraft && n.typing.ours(pane, in.Text) && time.Now().Before(wait); {
+		time.Sleep(100 * time.Millisecond)
+		code, in = screen.CheckClaude(read())
+	}
 	if code == screen.InputDraft && clearDraft != "" && in.Clearable == clearDraft {
 		if err := n.herdr.PaneSendKeys(ctx, pane, screen.ClearKeys...); err != nil {
 			return refusal(code, draftMessage(in.Text), map[string]any{"draft": in.Text})
@@ -122,6 +130,61 @@ func draftMessage(draft string) string {
 	}
 	return "电脑上的输入框里有没发出去的内容：「" + draft + "」。这条消息没有发出去，免得拼在一起。"
 }
+
+// typingLocks makes the sends to one session take turns, and remembers what was last typed into each pane.
+type typingLocks struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+	last  map[string]typedText
+}
+
+type typedText struct {
+	text string
+	at   time.Time
+}
+
+// lock waits for the session's earlier sends and returns the unlock.
+func (t *typingLocks) lock(id string) func() {
+	t.mu.Lock()
+	if t.locks == nil {
+		t.locks = map[string]*sync.Mutex{}
+	}
+	l := t.locks[id]
+	if l == nil {
+		l = &sync.Mutex{}
+		t.locks[id] = l
+	}
+	t.mu.Unlock()
+	l.Lock()
+	return l.Unlock
+}
+
+func (t *typingLocks) typed(pane, text string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.last == nil {
+		t.last = map[string]typedText{}
+	}
+	t.last[pane] = typedText{text, time.Now()}
+}
+
+// ours: the box shows (the start of) what was typed into the pane in the last few seconds, or Claude's placeholder
+// for a long paste.
+func (t *typingLocks) ours(pane, box string) bool {
+	t.mu.Lock()
+	last, ok := t.last[pane]
+	t.mu.Unlock()
+	if !ok || time.Since(last.at) > 5*time.Second {
+		return false
+	}
+	b := strings.Join(strings.Fields(box), "")
+	if b == "" {
+		return false
+	}
+	return strings.HasPrefix(strings.Join(strings.Fields(last.text), ""), b) || pastePlaceholder.MatchString(box)
+}
+
+var pastePlaceholder = regexp.MustCompile(`^\s*\[Pasted text #\d+`)
 
 // sentLog remembers the client_msg_id of recent sends (10 minutes) so a retry is not typed twice.
 type sentLog struct {

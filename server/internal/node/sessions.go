@@ -256,12 +256,15 @@ func (n *Node) startingSession(id string) bool {
 	return known
 }
 
-// transcriptPath finds ~/.claude/projects/*/<id>.jsonl.
+// transcriptPath finds <config dir>/projects/*/<id>.jsonl. One session can have a file in two config directories
+// (resumed under another profile: the new writes go to the new copy, the old one stays): the newest is the one.
+// A path a hook reported is Claude's own word; one found here is looked for again after half a minute.
 func (n *Node) transcriptPath(id string) string {
 	n.mu.Lock()
 	p := n.paths[id]
+	at, guessed := n.pathsAt[id]
 	n.mu.Unlock()
-	if p != "" {
+	if p != "" && (!guessed || time.Since(at) < 30*time.Second) {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
@@ -269,7 +272,7 @@ func (n *Node) transcriptPath(id string) string {
 	if !validID(id) {
 		return ""
 	}
-	matches := n.globProjects("*", id+".jsonl")
+	matches := newestFirst(n.globProjects("*", id+".jsonl"))
 	if len(matches) == 0 {
 		if p := n.codexPath(id); p != "" {
 			matches = []string{p}
@@ -279,10 +282,33 @@ func (n *Node) transcriptPath(id string) string {
 			return ""
 		}
 	}
-	n.mu.Lock()
-	n.paths[id] = matches[0]
-	n.mu.Unlock()
+	n.setGuessedPath(id, matches[0])
 	return matches[0]
+}
+
+func (n *Node) setGuessedPath(id, p string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.paths[id] = p
+	if n.pathsAt == nil {
+		n.pathsAt = map[string]time.Time{}
+	}
+	n.pathsAt[id] = time.Now()
+}
+
+// newestFirst orders the copies of a transcript by modification time, newest first.
+func newestFirst(paths []string) []string {
+	if len(paths) < 2 {
+		return paths
+	}
+	mod := map[string]time.Time{}
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil {
+			mod[p] = st.ModTime()
+		}
+	}
+	sort.SliceStable(paths, func(i, j int) bool { return mod[paths[i]].After(mod[paths[j]]) })
+	return paths
 }
 
 var idRe = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
@@ -514,15 +540,18 @@ func (n *Node) scanOffline() []proto.Session {
 	if len(cands) > 80 {
 		cands = cands[:80]
 	}
+	listed := map[string]bool{}
 	for _, c := range cands {
 		id := strings.TrimSuffix(filepath.Base(c.path), ".jsonl")
+		if listed[id] {
+			continue // an older copy in another config directory (newest first): it used to win, and list the session twice
+		}
+		listed[id] = true
 		m := n.meta(c.path, c.st)
 		if m.lastText == "" && m.title == "" {
 			continue // sessions that never produced output (e.g. hook probes)
 		}
-		n.mu.Lock()
-		n.paths[id] = c.path
-		n.mu.Unlock()
+		n.setGuessedPath(id, c.path)
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),

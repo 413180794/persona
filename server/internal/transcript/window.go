@@ -387,7 +387,7 @@ func pageBudget() int64 { return 3 * windowBytes }
 // needs, so the page knows whether anything is older — or the first line is parsed, or the page's budget is spent.
 // Callers hold f.mu.
 func (f *File) ensureItems(beforeSeq, n int) {
-	for spent := int64(0); f.base > 0 && f.before(beforeSeq) <= n && spent < pageBudget(); {
+	for spent := int64(0); f.base > 0 && f.before(beforeSeq) <= n && (spent < pageBudget() || f.before(beforeSeq) == 0); {
 		got := f.loadOlder()
 		if got == 0 {
 			return
@@ -397,10 +397,15 @@ func (f *File) ensureItems(beforeSeq, n int) {
 }
 
 // ensureTurns parses back until the page PageTurns takes (`turns` exchanges or maxItems items before beforeSeq) has
-// an item before it, or the first line is parsed, or the page's budget is spent. Callers hold f.mu.
+// an item before it, or the first line is parsed, or the page's budget is spent and it has an item. Callers hold f.mu.
 func (f *File) ensureTurns(beforeSeq, turns, maxItems int) {
-	for spent := int64(0); f.base > 0 && spent < pageBudget(); {
+	for spent := int64(0); f.base > 0; {
 		end := f.before(beforeSeq)
+		// Past the budget the page comes back short — but never empty while there is more: an empty page has no seq
+		// to ask further back from.
+		if spent >= pageBudget() && end > 0 {
+			return
+		}
 		start, seen := end, 0
 		for start > 0 && seen < turns && end-start < maxItems {
 			start--

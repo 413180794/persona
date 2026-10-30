@@ -36,6 +36,8 @@ type Machine struct {
 	watchers map[string]int // session id -> subscribed clients
 	lastSeq  map[string]int // session id -> highest item seq seen
 	kick     chan struct{}
+	// nodeCmd replaces the node command (tests).
+	nodeCmd func(context.Context) *exec.Cmd
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
@@ -93,6 +95,9 @@ func (m *Machine) reconnect() {
 }
 
 func (m *Machine) command(ctx context.Context) *exec.Cmd {
+	if m.nodeCmd != nil {
+		return m.nodeCmd(ctx)
+	}
 	if m.cfg.Kind == "local" {
 		self, _ := os.Executable()
 		return exec.CommandContext(ctx, self, "node", "--stdio")
@@ -105,7 +110,10 @@ func (m *Machine) command(ctx context.Context) *exec.Cmd {
 	if host == "" {
 		host = m.cfg.ID
 	}
-	return exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+	// Compression: the RPC is JSON (transcript pages, screens) and shrinks about 4x. Over a slow link (a machine
+	// abroad at ~15 KB/s, 2026-10-31) an 87 KB page took 5.6 s and a 500-item page passed the hub's 30 s deadline;
+	// on a LAN it costs next to nothing.
+	return exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "Compression=yes",
 		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", host, bin+" node --stdio")
 }
 
@@ -193,8 +201,13 @@ func (m *Machine) connect(ctx context.Context) error {
 		_ = peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
 	}
 
+	// The connection ends when the node's output does, or when the peer is closed (reconnect): then the ssh process
+	// is still there and its output never ends — waiting only for it left the machine "online" with every call
+	// failing (rpc: connection closed) until the hub restarted. Returning cancels ctx, which kills the process.
 	select {
 	case err = <-served:
+	case <-peer.Done():
+		err = errors.New("reconnect requested")
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
@@ -235,6 +248,11 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 	m.mu.Unlock()
 	if p == nil {
 		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	}
+	select {
+	case <-p.Done(): // closed, a new connection on its way: nothing was sent
+		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
+	default:
 	}
 	return p.Call(ctx, method, params, out)
 }

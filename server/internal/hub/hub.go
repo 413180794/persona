@@ -64,6 +64,7 @@ type Hub struct {
 	inbox  inbox     // the unified inbox (inbox.go)
 	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
 	devtok devTokens // device token lookups (devicetokens.go)
+	sends  sendLog   // messages being / just sent, by client_msg_id (send.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -82,6 +83,8 @@ var NewMail func(dataDir string, store Store, google GoogleConfig) (Mail, error)
 
 // Store is the hub's persistence (internal/db on Postgres).
 type Store interface {
+	ClaimSend(ctx context.Context, id, machine, session string) (string, error)
+	SettleSend(ctx context.Context, id, state string) error
 	ReplacePhoneTools(ctx context.Context, tools []proto.Tool) error
 	PhoneTools(ctx context.Context) ([]proto.Tool, error)
 	UpsertDevice(ctx context.Context, d db.Device) error

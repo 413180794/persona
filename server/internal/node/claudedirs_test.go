@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
@@ -185,4 +187,44 @@ func mustRel(t *testing.T, base, p string) string {
 		t.Fatal(err)
 	}
 	return r
+}
+
+// A session resumed under another profile has a file in both config directories: the old one stops, the new one
+// grows. Jarvis read whichever the directory order gave — a session running for two days showed its chat and its
+// "updated" time from before the move (2026-10-31, 45 sessions on one machine) — and listed an offline one twice.
+func TestTheNewestCopyOfATranscriptWins(t *testing.T) {
+	n, profile := claudeHome(t)
+	n.metas, n.bgScans = map[string]quickMeta{}, map[string]*bgScan{}
+	const id = "cccccccc-0000-0000-0000-000000000003"
+	line := func(text string) string {
+		return `{"type":"user","uuid":"u1","timestamp":"2026-10-30T10:00:00Z","cwd":"/src/app","message":{"role":"user","content":"` + text + `"}}` + "\n" +
+			`{"type":"assistant","uuid":"a1","timestamp":"2026-10-30T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"` + text + ` 的回答"}]}}` + "\n"
+	}
+	old := filepath.Join(n.home, ".claude", "projects", "-src-app", id+".jsonl")
+	cur := filepath.Join(profile, "projects", "-src-app", id+".jsonl")
+	_ = os.WriteFile(old, []byte(line("旧的")+strings.Repeat(" ", 4096)+"\n"), 0o600)
+	_ = os.WriteFile(cur, []byte(line("新的")+strings.Repeat(" ", 4096)+"\n"), 0o600)
+	_ = os.Chtimes(old, time.Now().Add(-2*time.Hour), time.Now().Add(-2*time.Hour))
+	if p := n.transcriptPath(id); p != cur {
+		t.Fatalf("read %s", p)
+	}
+	var listed []proto.Session
+	for _, s := range n.scanOffline() {
+		if s.SessionID == id {
+			listed = append(listed, s)
+		}
+	}
+	if len(listed) != 1 || !strings.Contains(listed[0].LastText, "新的") {
+		t.Fatalf("listed %+v", listed)
+	}
+	if p := n.transcriptPath(id); p != cur {
+		t.Fatalf("after the scan: %s", p)
+	}
+	// The profile's copy goes quiet and the other is written again: looked for again, it is found.
+	_ = os.Chtimes(cur, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour))
+	_ = os.Chtimes(old, time.Now(), time.Now())
+	n.pathsAt[id] = time.Now().Add(-time.Minute)
+	if p := n.transcriptPath(id); p != old {
+		t.Fatalf("after the move back: %s", p)
+	}
 }

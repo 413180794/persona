@@ -34,6 +34,9 @@ type fakePane struct {
 	screens []string
 	state   int
 	keys    [][]string
+	// clearAfter: after this many reads the pane moves to the next screen by itself (the TUI catching up).
+	clearAfter int
+	reads      int
 }
 
 func (f *fakePane) serve(t *testing.T) *herdr.Client {
@@ -67,6 +70,9 @@ func (f *fakePane) serve(t *testing.T) *herdr.Client {
 			switch req.Method {
 			case "pane.read":
 				result = map[string]any{"read": map[string]any{"text": f.screens[f.state]}}
+				if f.reads++; f.clearAfter > 0 && f.reads >= f.clearAfter && f.state+1 < len(f.screens) {
+					f.state++
+				}
 			case "pane.send_keys":
 				var keys []string
 				for _, k := range req.Params["keys"].([]any) {
@@ -116,6 +122,49 @@ func TestCheckPaneRefusesDraftAndClearsWhenAsked(t *testing.T) {
 	}
 	if len(f.keys) != 1 || f.keys[0][0] != "ctrl+k" || f.keys[0][1] != "ctrl+u" {
 		t.Fatalf("keys %v", f.keys)
+	}
+}
+
+// Two quick sends: the second found the first still in the box (typed, Enter not yet taken) and was refused as a
+// draft, with an offer to clear it — the user's own first message. Now the sends to a session take turns and a box
+// showing what was just typed is waited out.
+func TestCheckPaneWaitsOutWhatWasJustTyped(t *testing.T) {
+	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi") // the box shows "fix the flaky test"
+	f := &fakePane{screens: []string{typed, screenFixture(t, "claude-2.1.312-empty-162.ansi")}, clearAfter: 3}
+	n := &Node{herdr: f.serve(t)}
+	n.typing.typed("w1:p1", "fix the flaky test\nand the second line of the message")
+	if err := n.checkPane(context.Background(), "w1:p1", "claude", ""); err != nil {
+		t.Fatalf("our own message taken for a draft: %v", err)
+	}
+	// Someone else's draft in another pane is still a draft.
+	g := &fakePane{screens: []string{typed}}
+	m := &Node{herdr: g.serve(t)}
+	m.typing.typed("w1:p2", "fix the flaky test")
+	if code, _ := refusalOf(t, m.checkPane(context.Background(), "w1:p1", "claude", "")); code != "input_draft" {
+		t.Fatalf("a draft in another pane: %s", code)
+	}
+	if !n.typing.ours("w1:p1", "[Pasted text #1 +500 lines] ") || n.typing.ours("w1:p9", "fix") {
+		t.Fatal("paste placeholder / unknown pane")
+	}
+}
+
+func TestSendsToOneSessionTakeTurns(t *testing.T) {
+	var l typingLocks
+	unlock := l.lock("s1")
+	other := l.lock("s2") // another session does not wait
+	other()
+	got := make(chan struct{})
+	go func() { defer l.lock("s1")(); close(got) }()
+	select {
+	case <-got:
+		t.Fatal("a second send to the session did not wait")
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-got:
+	case <-time.After(time.Second):
+		t.Fatal("the second send never ran")
 	}
 }
 

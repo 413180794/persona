@@ -317,6 +317,7 @@ final class AppModel {
         chatUse[key] = chatTick
         if let c = chats[key] { return c }
         let c = ChatStore(key: key)
+        c.onArrived = { [weak self] in self?.saveOutbox() }
         chats[key] = c
         evictChats()
         return c
@@ -729,8 +730,13 @@ final class AppModel {
 
     func retry(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
+        if chat(key).pending[i].mayHaveArrived == true {
+            // The user looked and wants it sent again: as a new message (the old id is answered "may have arrived").
+            chat(key).pending[i].id = UUID()
+            chat(key).pending[i].mayHaveArrived = nil
+        }
         chat(key).pending[i].state = .sending
-        deliver(key, msg, clearDraft: clearDraft)
+        deliver(key, chat(key).pending[i], clearDraft: clearDraft)
     }
 
     func discard(_ key: SessionKey, _ msg: PendingMessage) {

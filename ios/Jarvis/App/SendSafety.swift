@@ -32,6 +32,7 @@ extension AppModel {
             return .failed
         } catch let e as APIError where e.fields["delivered"] == "unknown" {
             toast = Toast("可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发", style: .error)
+            if let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) { chat(key).pending[i].mayHaveArrived = true }
             return .failed
         } catch where error.isOffline || error.isTimeout {
             return .waiting

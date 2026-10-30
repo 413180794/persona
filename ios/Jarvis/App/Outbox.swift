@@ -31,8 +31,12 @@ extension AppModel {
         switch outcome {
         case .sent:
             Task {
-                // Normally the transcript shows it within a second or two (or it lands in the queue); never linger.
+                // Normally the transcript shows it within a second or two. Behind a long turn it may only be written
+                // when that turn ends (Codex keeps its queue to itself): stay while the agent works, then go.
                 try? await Task.sleep(for: .seconds(60))
+                for _ in 0..<90 where store.pending.contains(where: { $0.id == id }) && session(key)?.status.isActive == true {
+                    try? await Task.sleep(for: .seconds(10))
+                }
                 store.pending.removeAll { $0.id == id }
             }
         case .waiting where isLive && !live.stalled:
@@ -76,7 +80,7 @@ extension AppModel {
         outboxWriter.run { [weak self] in // one write at a time, the latest last
             guard let self else { return }
             let list = self.chats.flatMap { key, store in
-                store.pending.filter { $0.state == .waiting || $0.state == .sending }.map { OutboxEntry(key: key, message: $0) }
+                store.pending.filter { $0.state != .sent }.map { OutboxEntry(key: key, message: $0) }
             }
             StateCache.save(Self.outboxName, list)
         }
@@ -87,7 +91,11 @@ extension AppModel {
     func restoreOutbox() {
         for e in StateCache.load(Self.outboxName, as: [OutboxEntry].self) ?? [] {
             var msg = e.message
-            msg.state = .waiting
+            if msg.state == .failed { // a failed one stays failed, the user decides; not forever
+                if let at = msg.createdAt, at < Date().addingTimeInterval(-86400) { continue }
+            } else {
+                msg.state = .waiting
+            }
             let store = chat(e.key)
             if !store.pending.contains(where: { $0.id == msg.id }) { store.pending.append(msg) }
         }

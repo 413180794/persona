@@ -35,6 +35,7 @@ type Node struct {
 	state    *stateFile
 	files    map[string]*transcript.File // session id -> parsed transcript
 	paths    map[string]string           // session id -> transcript path
+	pathsAt  map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
 	watches  map[string]*watch
 	agents   map[string]herdr.Agent    // session id -> live agent
 	panes    map[string]string         // pane id -> session id (learned from hooks)
@@ -53,6 +54,7 @@ type Node struct {
 	events   *herdrEvents              // herdr's event stream (herdrevents.go)
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
+	typing   typingLocks               // one send at a time per session (sendsafe.go)
 	ups      uploads                   // files arriving from the phone (upload.go)
 	sysOnce  sync.Once                 // system: read once (metrics.go)
 	sys      proto.System

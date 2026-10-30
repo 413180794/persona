@@ -105,7 +105,7 @@
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
 | POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?}` → `{"session":Session}` |
-| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
+| GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取；但只要前面还有内容，一页至少带一条，空页加 `has_more: true` 会让 App 没有 seq 可以接着往前取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/full` | 一条 item 的全文（`Item`，不带图片、没有 `full_size`；最多 1 MB）：App 点「看全文」时取。node 重新读那一行解析 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | `{"text":"…","images":[{"mime","data"}]?,"client_msg_id"?,"clear_draft"?}`；会话 offline 时先用原启动器 `--resume` 拉起；被拒见下面「发消息」 |
@@ -222,9 +222,18 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   纯文本里两者一模一样。读不到颜色时一律当草稿。规则移植自 Ovis 的 `claude-input.ts`（MIT）。夹具：`server/internal/screen/testdata`。
 - `clear_draft`：用户在 App 里看到草稿后选「清空并发送」，App 带上收到的 `clearable` 重发同一条（同一个 `client_msg_id`）；
   node 只在输入框里**还是这段字**时按 `ctrl+k ctrl+u` 清掉，再读一次确认空了才发。多行草稿只能在电脑上处理（这两个键一次只清一行）。
-- `client_msg_id`：App 每条待发消息一个 UUID，重发沿用。node 记 10 分钟：已送达的重发直接回成功；被拒的（什么都没打）忘掉，可以再发；
-  打字过程中出错的回 502 + `delivered: "unknown"`（可能已经到了），同一个 id 再发也只回同样的错误，不会打第二遍。
-- Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择）。旧 App 只认 `error` 字段，看到的就是拒绝原因。
+- `client_msg_id`：App 每条待发消息一个 UUID，自动重发（没收到回应、断网后补发）沿用。**去重在 hub**（`hub/send.go`，Postgres 表
+  `sent_messages`，留一天）：发送中再来同一个 id 等第一次的结果；已送达的直接回成功；被拒或离线（什么都没打）的忘掉，可以再发；
+  打字途中断了（node 回了 `delivered: "unknown"`，或请求已发给 node 却没等到回应：连接断、超时）回 502 + `delivered: "unknown"`，
+  同一个 id 再发只回同样的错误，不会打第二遍。hub 重启、node 重连之后也是这样（以前去重只在 node 进程的内存里，重连后的新进程什么都不知道，
+  2026-10-31 实测重连途中发的消息到了电脑上、App 却收到「rpc: connection closed」）。用户看过对话、确认没到再点重发时，App 换一个新 id。
+  App 等不及断开了，hub 照样等 node 的结果记下来（发送不随请求取消）。node 自己也记 10 分钟（同一条连接内的重试）。
+- 同一个会话的发送一条一条来（node 的 `typingLocks`）：两条同时进来（连点、两台设备），以前第二条读屏时第一条还在输入框里（herdr
+  `agent.prompt` 先粘贴、约 300 ms 后才回车），被当成草稿拒掉，还提示「清空并发送」——清掉的是用户自己的第一条。读屏看到的是 5 秒内刚打进去的字
+  （或长文本的 `[Pasted text #1 …]`）时，等它被收走（最多 2 秒）。
+- 离线会话 `--resume` 拉起后同样先读屏：Claude 起来就停在对话框上时回 `dialog_open`，不往对话框里打字。
+- Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
+- 链路和耗时见 `docs/lanes/session-verify.md`。
 
 ### 发送文件
 

@@ -196,6 +196,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if in.TranscriptPath != "" && validID(in.SessionID) {
 		n.mu.Lock()
 		n.paths[in.SessionID] = in.TranscriptPath
+		delete(n.pathsAt, in.SessionID) // Claude said so: no need to look again
 		n.mu.Unlock()
 	}
 	if !req.Resume { // the event was reported on the first attempt

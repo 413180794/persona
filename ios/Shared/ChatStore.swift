@@ -374,6 +374,8 @@ final class ChatStore {
     var isLoadingOlder = false
     /// Messages sent from this phone that the transcript has not shown yet (drawn at the end right away).
     var pending: [PendingMessage] = []
+    /// A pending message's real copy arrived and its bubble went (the app saves its outbox).
+    @ObservationIgnored var onArrived: (() -> Void)?
 
     @ObservationIgnored private var ids = Set<String>()
     /// The version of the transcript the items come from (`ItemSpan.history`). Another one means the file was replaced
@@ -458,10 +460,12 @@ final class ChatStore {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
         var changed = dropFolded(by: new)
         var inOrder = true
+        var added: [Item] = []
         for it in Self.withImageRefs(new, key) where !ids.contains(it.id) {
             if let last = items.last, (it.seq, it.part) < (last.seq, last.part) { inOrder = false }
             ids.insert(it.id)
             items.append(it)
+            added.append(it)
             changed = true
         }
         // "Nothing older" only counts from a page that reaches our oldest item: a catch-up batch (newer items only)
@@ -470,9 +474,12 @@ final class ChatStore {
         if let hasMore, backlog, !loadedOnce || items.count <= new.count, hasMore || reachesStart { self.hasMore = hasMore }
         if backlog { loadedOnce = true }
         guard changed else { return }
-        if !pending.isEmpty { // the real message arrived: drop the local copy
-            let typed = new.filter { $0.role == "user" && $0.kind == .text }.map { $0.text ?? "" }
-            pending.removeAll { p in typed.contains { PendingMessage.same($0, p.text) } }
+        if !pending.isEmpty { // the real message arrived: drop the local copy, one per message
+            let before = pending.count
+            for it in added where it.role == "user" && it.kind == .text {
+                if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) { pending.remove(at: i) }
+            }
+            if pending.count != before { onArrived?() }
         }
         // Streamed items arrive in order: only older pages / reconnect backlogs need the sort.
         if !inOrder { items = Self.ordered(items) }
@@ -963,6 +970,12 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
     var text: String
     var images: [ImagePayload]
     var state: State = .sending
+    /// When it was written, in whole seconds (it survives the outbox's JSON as it is); nil in outboxes saved before this
+    /// was kept.
+    var createdAt: Date? = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+    /// The send broke off while the message was being typed (delivered: unknown): it may be on the computer. A resend
+    /// the user asks for goes with a new id, or the hub would answer it from the first one.
+    var mayHaveArrived: Bool?
 
     /// Comparable form: what the transcript keeps of it — the phone's image note, pasted wrappers and Claude's
     /// "[Image #21]" placeholders removed, whitespace ignored.
@@ -976,6 +989,17 @@ nonisolated struct PendingMessage: Identifiable, Hashable, Codable, Sendable {
             }
             return t
         }
+    }
+
+    /// This transcript item is the message: a user message that arrived after it was written (two minutes' slack for
+    /// the computer's clock), with its text — when the page cut a long one, its start. An older message with the same
+    /// words (a second "继续") is not it: the bubble of one never sent stayed gone.
+    static func arrived(_ p: PendingMessage, as item: Item) -> Bool {
+        guard item.role == "user", item.kind == .text else { return false }
+        if let created = p.createdAt, let ts = item.ts, ts < created.addingTimeInterval(-120) { return false }
+        guard item.fullSize != nil else { return same(item.text ?? "", p.text) }
+        let start = normalize(item.cutText), whole = normalize(p.text)
+        return start.count >= 8 && whole.hasPrefix(start)
     }
 
     /// The transcript's copy of a message sent from here (equal once normalized, or one containing the other:

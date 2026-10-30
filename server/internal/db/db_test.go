@@ -23,7 +23,7 @@ func open(t *testing.T) *DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
-	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics`); err != nil {
+	if _, err := d.pool.Exec(context.Background(), `TRUNCATE devices, live_activities, phone_tools, node_sessions, mail_accounts, interactions, settings, inbox_items, kb_entities, machine_systems, machine_metrics, sent_messages`); err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -357,5 +357,29 @@ func TestMachineMetrics(t *testing.T) {
 
 	if n, err := d.PruneMetrics(ctx, base.Add(30*time.Minute)); err != nil || n != 31 {
 		t.Fatalf("pruned %d, %v", n, err)
+	}
+}
+
+func TestSentMessages(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if st, err := d.ClaimSend(ctx, "m1", "box", "s1"); err != nil || st != "" {
+		t.Fatalf("new id: %q %v", st, err)
+	}
+	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "sending" {
+		t.Fatalf("claimed again while sending: %q", st)
+	}
+	if err := d.SettleSend(ctx, "m1", "delivered"); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "delivered" {
+		t.Fatalf("after delivery: %q", st)
+	}
+	_ = d.SettleSend(ctx, "m1", "") // refused: forgotten, the retry sends
+	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "" {
+		t.Fatalf("after forgetting: %q", st)
+	}
+	_, _ = d.pool.Exec(ctx, `UPDATE sent_messages SET created_at = now() - interval '2 days'`)
+	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "" {
+		t.Fatalf("a day later the id is new again: %q", st)
 	}
 }

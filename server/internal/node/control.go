@@ -243,6 +243,9 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 }
 
 func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, opts sendOpts) error {
+	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
+	// would see the first still in the box and be refused as a draft: one at a time.
+	defer n.typing.lock(id)()
 	n.dropSuggestion(id)
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
@@ -277,6 +280,10 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			return err
 		}
 		pane = s.PaneID
+		// start returns early when Claude comes up blocked (a dialog of its own): the text would answer it.
+		if err := n.checkPane(ctx, pane, "claude", ""); err != nil {
+			return err
+		}
 	}
 	paths, err := n.saveImages(images)
 	if err != nil {
@@ -286,7 +293,11 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		// In a tag so it never mixes with what the user typed; the phone shows these as thumbnails.
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
-	return uncertain(n.prompt(ctx, pane, text))
+	err = n.prompt(ctx, pane, text)
+	if err == nil {
+		n.typing.typed(pane, text)
+	}
+	return uncertain(err)
 }
 
 // prompt submits text to the agent in a pane. herdr only prompts agents it detects; for the others (TRAEX) the text
