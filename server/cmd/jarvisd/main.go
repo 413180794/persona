@@ -24,7 +24,10 @@ var version = "dev"
 const usage = `usage:
   jarvisd hub [run]        run the hub (config ~/.jarvis/hub.json)
   jarvisd hub pair         print the pairing URL, token and QR code
-  jarvisd node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh)
+  jarvisd node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
+                           node running on this machine, relay to it instead
+  jarvisd node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
+                           starts can use the login keychain (docs/server.md「常驻 node」)
   jarvisd hook             Claude Code hook entry (reads hook JSON on stdin)
   jarvisd mcp              Claude Code MCP server (stdio)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
@@ -55,6 +58,17 @@ func main() {
 			err = fmt.Errorf("unknown hub command %q", sub)
 		}
 	case "node":
+		if len(os.Args) > 2 && os.Args[2] == "--attach" {
+			err = node.Attach(ctx, func() (*node.Node, error) { return node.New(version) })
+			break
+		}
+		var relayed bool
+		if relayed, err = node.Relay(ctx, os.Stdin, os.Stdout); relayed {
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
 		var n *node.Node
 		if n, err = node.New(version); err == nil {
 			err = n.ServeStdio(ctx)

@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 struct RootView: View {
@@ -18,6 +19,7 @@ struct RootView: View {
         .id(model.style)
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
+        .buiTheme(.jarvis(model.style))
         .overlay(alignment: .top) { ToastOverlay() }
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },

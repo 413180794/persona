@@ -31,12 +31,17 @@ install_bin() { # machine-id binary
   # This machine (listed by host name in the config): copy instead of going through ssh.
   if [[ "$here" == *" $(hostname -s) "* || "$here" == *" $(scutil --get LocalHostName 2>/dev/null) "* ]]; then
     mkdir -p ~/.jarvis/bin && cp "$bin" ~/.jarvis/bin/jarvisd.new && mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
+    restart_resident
   else
     ssh -o ConnectTimeout=10 "$host" 'mkdir -p ~/.jarvis/bin' &&
       scp -q "$bin" "$host:.jarvis/bin/jarvisd.new" &&
-      ssh "$host" 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd'
+      ssh "$host" 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd' &&
+      ssh "$host" 'bash -s restart' < ../scripts/node-launchd.sh 2>/dev/null || true
   fi
 }
+
+# A Mac running a resident node (scripts/node-launchd.sh) keeps the old binary until it restarts.
+restart_resident() { [ "$(uname -s)" = Darwin ] && ../scripts/node-launchd.sh restart || true; }
 
 for t in "${TARGETS[@]}"; do
   case "$t" in

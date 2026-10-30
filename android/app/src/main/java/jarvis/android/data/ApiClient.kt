@@ -158,12 +158,14 @@ class ApiClient(val baseUrl: String, val token: String) {
         val launcher: String,
         val prompt: String? = null,
         @SerialName("permission_mode") val permissionMode: String? = null,
+        /** Open the new tab in this herdr workspace (the space page's "在这个空间开新标签"). */
+        @SerialName("workspace_id") val workspaceId: String? = null,
     )
     @Serializable private data class SessionResp(val session: Session)
     /** Starts claude in a new herdr tab; resuming or a slow shell can take ~90 s (the read timeout covers it). */
     /** `mode` null = whatever the launcher / that computer's Claude settings use (as iOS sends it). */
-    suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?, mode: String? = null): Session =
-        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode))).session
+    suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?, mode: String? = null, workspaceId: String? = null): Session =
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode, workspaceId))).session
 
     @Serializable data class DirEntry(val name: String = "", val path: String = "", @SerialName("is_git") val isGit: Boolean = false)
     @Serializable data class RecentDir(val path: String = "", val name: String = "")

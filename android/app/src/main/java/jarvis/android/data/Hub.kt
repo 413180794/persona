@@ -268,6 +268,11 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
             .filter { it.isLive && it.cwd.trimEnd('/') == cwd.trimEnd('/') && it.paneId != null && it.paneId !in panesBefore }
             .maxByOrNull { it.paneId!! }
 
+    /** Marks agents seen (the hub stops counting them as done-unseen); the next sessions push shows it. */
+    suspend fun markSeen(list: List<Session>) {
+        list.forEach { s -> runCatching { api.seen(s.key) } }
+    }
+
     fun isMuted(s: Session): Boolean = _mutes.value.mutes(s.pinKey(), s.spacePinKey())
 
     /** Pins / unpins an agent: shown at once, saved on the hub, put back if saving fails. */

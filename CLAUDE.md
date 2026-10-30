@@ -92,6 +92,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 没装 herdr claude integration 的机器，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。
 - 截图验证别靠 computer-use 点模拟器（Mac 锁屏时拿不到窗口，没锁时会抢用户的鼠标）：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
 - 开了 HealthKit entitlement 就必须有 `NSHealthUpdateUsageDescription`（哪怕只读），否则上传报 90683。
+- ssh 会话读不了 macOS 的登录钥匙串：hub 经 ssh 起的 node 再起的 claude，如果 API key 从钥匙串取，会报 401（herdr 里的 Agent 没事，herdr 在登录会话里）。
+  在那台 Mac 上装常驻 node（`scripts/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，
   hook / MCP 全部静默失效（hook 连不上就放行给 TUI）。已 `SetUnlinkOnClose(false)` 并每 15 秒自检重建。
 - 会话的「最近编辑时间」要用最后一条真实对话（user / assistant / 工具）的时间：Claude Code 会往闲置会话追加 recap、ai-title、
@@ -326,5 +328,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `scripts/sync_lark-connector_skill.sh` 同步上游）。token 只进助手进程的环境变量；写操作靠 node 的 Bash PreToolUse 闸门（`node/larkgate.go`），
   只给助手用的 `assistant-settings.json` 带这个 hook。闸门读不懂的命令里只要有 `ol POST/PUT/PATCH/DELETE` 也要手机确认，否则 bypass 模式会直接放过。
   在 hub 上起测试实例用独立 HOME / 端口 / 库（`/tmp/jt`），别碰线上 jarvisd；`ssh … 'pkill -f 模式'` 会匹配到 ssh 自己的命令行把会话杀掉，模式写成 `[/]tmp/…`。
+- BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，
+  在长工作卡里滑动会明显掉帧：ThinkingState 原样放进 650 步的工作卡，Debug 模拟器上卡顿时长从约 11 涨到约 21 ms/s，去掉这两样后约 13.7。
+  这类问题改在 BeautifulUI 仓库里，再整个拷进 `ios/Packages/BeautifulUI`（`VENDORED.md`），不在 Jarvis 里改库代码。
 - 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
   别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。

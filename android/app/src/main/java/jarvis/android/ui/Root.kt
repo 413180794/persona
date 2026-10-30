@@ -13,7 +13,10 @@ import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
 
-/** Pairing until a hub is paired; then the Agents list, a chat, or settings. */
+/**
+ * Pairing until a hub is paired; then the Agents list with, on top of it, a space page and / or a chat, or settings.
+ * A chat opened from a space page goes back to that page; one opened from the list or a notification, to the list.
+ */
 @Composable
 fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
     val conn = hub?.conn?.collectAsState()?.value
@@ -26,16 +29,23 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
         return
     }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var space by rememberSaveable { mutableStateOf<String?>(null) }
     val open = openSession.value
     when {
         open != null -> {
             BackHandler { openSession.value = null }
             ChatScreen(hub, open, onBack = { openSession.value = null })
         }
+        space != null -> {
+            BackHandler { space = null }
+            SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
+        }
         settings -> {
             BackHandler { settings = false }
             SettingsScreen(hub, onBack = { settings = false })
         }
-        else -> AgentsScreen(hub, onOpen = { openSession.value = it }, onSettings = { settings = true })
+        else -> AgentsScreen(
+            hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settings = true },
+        )
     }
 }

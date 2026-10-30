@@ -5,6 +5,9 @@ import jarvis.android.data.Grouper
 import jarvis.android.data.LoopInfo
 import jarvis.android.data.Machine
 import jarvis.android.data.Pins
+import jarvis.android.data.QuickFilter
+import jarvis.android.data.matches
+import jarvis.android.data.underFilter
 import jarvis.android.data.Rank
 import jarvis.android.data.Session
 import jarvis.android.data.Subagent
@@ -104,5 +107,27 @@ class GroupingTest {
         // Machines in the hub's order; a machine with no agents gets no section.
         assertEquals(listOf("laptop", "server"), plain.byMachine(list, machines).map { it.first.id })
         assertEquals(listOf("c", "a"), plain.byMachine(list, machines)[1].second.map { it.sessionId })
+    }
+
+    @Test fun searchMatchesTitleFolderSpaceAndLastText() {
+        val a = s("a", "idle").copy(title = "修复登录", cwd = "/home/x/code/web", lastText = "改好了 OAuth")
+        assertTrue(a.matches("登录", null))
+        assertTrue(a.matches("WEB", null)) // case-insensitive
+        assertTrue(a.matches("oauth", null))
+        assertTrue(a.matches("app", null)) // space name
+        assertFalse(a.matches("ios", null))
+        assertTrue(a.matches("", null))
+        assertFalse(a.matches("", "laptop")) // other machine
+        assertFalse(a.copy(assistant = true).matches("", null))
+    }
+
+    @Test fun quickFilterKeepsWhatItShowed() {
+        val unread = s("u", "unread")
+        val seenNow = s("seen", "idle") // was unread when the filter was picked, opened since
+        val other = s("w", "working")
+        val list = listOf(unread, seenNow, other)
+        assertEquals(listOf("u", "seen", "w"), list.underFilter(QuickFilter.All, emptySet()).map { it.sessionId })
+        assertEquals(listOf("u"), list.underFilter(QuickFilter.Unread, emptySet()).map { it.sessionId })
+        assertEquals(listOf("u", "seen"), list.underFilter(QuickFilter.Unread, setOf(seenNow.key)).map { it.sessionId })
     }
 }

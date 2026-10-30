@@ -43,6 +43,20 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 - hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
 - 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
 
+## 常驻 node（Mac，`scripts/node-launchd.sh`）
+
+hub 通过 ssh 起 node（`jarvisd node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的
+claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里会报 401；herdr 里的 Agent 没这个问题，因为 herdr 跑在登录会话里。
+
+- `scripts/node-launchd.sh install`（在那台 Mac 上跑）：装一个 launchd 用户任务 `com.jarvis.node`，登录后常驻 `jarvisd node --attach`，
+  监听 `~/.jarvis/node-attach.sock`。
+- hub 照旧 ssh 起 `jarvisd node --stdio`；它发现有常驻 node 在听，就只把 ssh 的输入输出转给它（`internal/node/attach.go` 的 `Relay`），
+  由常驻 node 处理这条连接。node 起的东西（助手的 claude、它的 key helper）都在登录会话里，能读钥匙串。hub 不用改，也分不出区别。
+- 没有常驻 node（没装、退出了、socket 是残留的）时 `--stdio` 自己处理连接，和以前一样。
+- 一次只服务一条连接：新连接进来（hub 重连）时旧的那条的 node 退出，等着的 hook 会去问新的（同 ssh 起的 node 被替换时）。同时只能有一个常驻 node。
+- `deploy.sh` 换了二进制后会 `node-launchd.sh restart`（ssh 进来也能操作登录会话的 launchd）；hub 要重连一次才会用上新的 node（重启 hub，或 App 里「重新连接」）。
+- `scripts/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
+
 ## 数据库（Postgres）
 
 hub 机器上的 docker 容器 `jarvis-postgres`（`postgres:18-alpine`，只监听 `127.0.0.1:18661`，数据卷 `jarvis-pgdata`，`--restart unless-stopped`）。

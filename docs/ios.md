@@ -296,6 +296,19 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - 标签和计数各只有一种画法（`Components.swift`）：`Chip` 是不能点的小标签，三种样子——中性（次要灰字 + 浅灰底：模型、版本、tab 名、私聊）、
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
+- BeautifulUI（`ios/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
+  - 对话页的思考过程是它的 `ThinkingState`（✦ + 首行，展开后正文在一条引导线右边）。
+  - 展开的工作卡里，连续两个以上的工具调用合成一行 chip（`ChatLine.toolRun`、`ChatView.runLines`、`ToolRunRow`）。
+    每种工具一个 chip：一个时写主语（「读取 WeatherStore.swift」），多个时写数量（「运行 6 条命令」）；编辑带 +N −N（和 diff 同一份 `ToolDiffMemo`）；出错的 chip 红底。
+    点一下展开成逐条工具行（`ToolChipRow`），再点一条才看参数和输出。只有一个调用的段直接是一行工具行。
+    转到后台的调用不进组，单独一行，好让它的「后台 · 已完成 / 失败」一直看得见（`ChatView.foldsIntoRun`）。
+    从后台任务通知跳到某个调用时，先展开它所在的组。
+  - diff、命令和输出、Markdown 代码块仍是 Jarvis 自己的（`DiffView`、`CodeBlock`）。
+  - 颜色、圆角、字号由 `BUITheme.jarvis(style)`（`BeautifulUIBridge.swift`）从 `Theme` 生成，在 RootView 注入：
+    - 库的第三级文字也用 secondaryLabel（tertiaryLabel 在卡片上只有 1.7:1）；
+    - 代码关键字用 `Theme.Hue.blue`；
+    - 字号 ×1.2（库是桌面字号），代码保持 ×1；
+    - 入场动画关掉。
 - 触感：发出 / 回答成功 success，新交互 warning，出错 error。
 - 图标：夜色背景 + 珊瑚光环 + 四角星（`scripts/make_icon.py`，含 dark / tinted）。
 - 品牌色：App 图标的珊瑚色（`Theme.brand`）只给 Jarvis 自己的标志：设置和对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。

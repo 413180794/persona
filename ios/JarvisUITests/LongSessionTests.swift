@@ -59,8 +59,13 @@ final class LongSessionTests: XCTestCase {
         XCTAssertTrue(loading.waitForExistence(timeout: 3), "nothing shows the steps are loading:\n\(app.debugDescription)")
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-long-loading.png"))
         _ = try? Data(contentsOf: URL(string: hub + "/mock/delay?s=0")!)
+        // The commands in a row fold into one line of chips ("运行 6 条命令"); opened, each is its own row again.
+        let run = app.buttons.matching(identifier: "tool-run").firstMatch
+        XCTAssertTrue(run.waitForExistence(timeout: 15), "the steps did not load:\n\(app.debugDescription)")
+        XCTAssertTrue(run.label.contains("条命令"), "the run says \(run.label)")
+        run.tap()
         let step = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "make step-")).firstMatch
-        XCTAssertTrue(step.waitForExistence(timeout: 15), "the steps did not load:\n\(app.debugDescription)")
+        XCTAssertTrue(step.waitForExistence(timeout: 5), "the opened run has no commands:\n\(app.debugDescription)")
         XCTAssertTrue(try served().contains { $0.via == "range" }, "the steps came without a fetch")
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-long-open.png"))
     }

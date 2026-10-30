@@ -1,3 +1,4 @@
+import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -152,6 +153,128 @@ struct ToolGroupView: View {
     }
 }
 
+/// Two or more tool calls in a row of an open work line, as one line of chips (BeautifulUI's `ToolChipGroup`):
+/// "搜索 hourly · 读取 3 个文件 · 编辑 Provider.swift +6 −3". Tapping opens a row per call under it (`ChatView.runLines`),
+/// where each call opens to its input and output as before. One text layout per run, however long the run.
+struct ToolRunRow: View, Equatable {
+    nonisolated let calls: [ToolCall]
+    nonisolated let open: Bool
+    nonisolated let first: Bool
+    var toggle: () -> Void
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.calls == rhs.calls && lhs.open == rhs.open && lhs.first == rhs.first
+    }
+
+    var body: some View {
+        #if PERF_SIGNPOST
+        let _ = PerfTrace.event("ToolRunRow.body")
+        #endif
+        Button(action: toggle) {
+            ToolChipGroup(ToolRunSummary.chips(calls), isOpen: open, isRunning: calls.contains(where: \.isRunning))
+                .padding(.horizontal, WorkCardSlice.inset)
+                .padding(.vertical, 8)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { WorkCardSlice(top: first, bottom: false) }
+        .overlay(alignment: .top) { if !first { WorkCardSlice.separator } }
+        .accessibilityHint(open ? "收起这 \(calls.count) 步" : "展开这 \(calls.count) 步")
+        .accessibilityIdentifier("tool-run")
+    }
+}
+
+/// A run's chips: one per kind of tool, in the order first used. One call names its subject ("读取 WeatherStore.swift"),
+/// several count ("读取 3 个文件"); edits to one file carry its +N −N; a failed call turns its chip red.
+enum ToolRunSummary {
+    private enum Kind: Hashable { case read, search, edit, run, todo, other(String) }
+
+    private static func kind(_ name: String) -> Kind {
+        switch ToolPresentation.baseName(name) {
+        case "Read", "NotebookRead": .read
+        case "Grep", "Glob", "LS", "WebSearch", "ToolSearch": .search
+        case "Edit", "MultiEdit", "Write", "NotebookEdit": .edit
+        case "Bash": .run
+        case "TodoWrite": .todo
+        default: .other(ToolPresentation.verb(name))
+        }
+    }
+
+    static func chips(_ calls: [ToolCall]) -> [ToolChipGroup.Chip] {
+        var order: [Kind] = []
+        var groups: [Kind: [ToolCall]] = [:]
+        for c in calls {
+            let k = kind(c.name)
+            if groups[k] == nil { order.append(k) }
+            groups[k, default: []].append(c)
+        }
+        return order.map { k in chip(k, groups[k]!) }
+    }
+
+    private static func chip(_ kind: Kind, _ calls: [ToolCall]) -> ToolChipGroup.Chip {
+        let first = calls[0]
+        let error = calls.contains(where: \.isError)
+        let one = calls.count == 1
+        let subject = ToolPresentation.subject(first)
+        let ascii = subject.unicodeScalars.allSatisfy(\.isASCII)
+        func named(_ label: String, many: String) -> ToolChipGroup.Chip {
+            ToolChipGroup.Chip(symbol: ToolPresentation.symbol(first.name), label: label, detail: one ? subject : many,
+                               monospacedDetail: one && ascii, isError: error)
+        }
+        switch kind {
+        case .read: return named("读取", many: "\(calls.count) 个文件")
+        case .search: return named(ToolPresentation.verb(first.name), many: "\(calls.count) 次")
+        case .run: return named("运行", many: "\(calls.count) 条命令")
+        case .todo:
+            // The latest list is the state of the to-dos.
+            return ToolChipGroup.Chip(symbol: "checklist", label: "待办", detail: ToolPresentation.subject(calls[calls.count - 1]),
+                                      monospacedDetail: true, isError: error)
+        case .other(let verb):
+            return ToolChipGroup.Chip(symbol: ToolPresentation.symbol(first.name), label: verb,
+                                      detail: one ? subject : "\(calls.count) 次", monospacedDetail: one && ascii, isError: error)
+        case .edit:
+            var adds = 0, dels = 0
+            var files: [String] = []
+            for c in calls {
+                let d = diff(c)
+                adds += d.adds
+                dels += d.dels
+                let f = c.input["file_path"]?.string ?? c.input["notebook_path"]?.string ?? ""
+                if !files.contains(f) { files.append(f) }
+            }
+            return ToolChipGroup.Chip(
+                symbol: ToolPresentation.symbol(first.name),
+                label: files.count == 1 ? ToolPresentation.verb(first.name) : "编辑",
+                detail: files.count == 1 ? (files[0] as NSString).lastPathComponent : "\(files.count) 个文件",
+                monospacedDetail: files.count == 1,
+                additions: adds, deletions: dels, isError: error
+            )
+        }
+    }
+
+    /// The same counts the open call's diff shows (`ToolDiffMemo`, warmed off the main thread with the rows).
+    private static func diff(_ c: ToolCall) -> (adds: Int, dels: Int) {
+        let i = c.input
+        switch ToolPresentation.baseName(c.name) {
+        case "Edit":
+            let d = i["diff"]?.string.map(ToolDiffMemo.unified)
+                ?? ToolDiffMemo.edit(old: i["old_string"]?.string ?? "", new: i["new_string"]?.string ?? "")
+            return (d.adds, d.dels)
+        case "MultiEdit":
+            return (i["edits"]?.array ?? []).reduce((0, 0)) { n, e in
+                let d = ToolDiffMemo.edit(old: e["old_string"]?.string ?? "", new: e["new_string"]?.string ?? "")
+                return (n.0 + d.adds, n.1 + d.dels)
+            }
+        case "Write":
+            let d = ToolDiffMemo.edit(old: "", new: i["content"]?.string ?? "")
+            return (d.adds, d.dels)
+        default:
+            return (0, 0)
+        }
+    }
+}
+
 struct ToolCallRow: View {
     @Environment(\.taskIndex) private var tasks
     var call: ToolCall
@@ -165,46 +288,22 @@ struct ToolCallRow: View {
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
         VStack(alignment: .leading, spacing: 0) {
-            Button {
+            // BeautifulUI's tool row: kind icon (a chevron once open), the verb, the subject in a chip.
+            ToolChipRow(chip, isOpen: isOpen, isRunning: call.isRunning) {
                 Haptics.tap()
                 withAnimation(.snappy(duration: 0.25)) { expanded = !isOpen }
-            } label: {
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill(tint.opacity(0.14)).frame(width: 24, height: 24)
-                        if call.isRunning {
-                            ProgressView().controlSize(.mini).tint(tint)
-                        } else {
-                            Image(systemName: ToolPresentation.symbol(call.name))
-                                .font(.caption2.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
-                                .foregroundStyle(tint)
-                        }
-                    }
-                    Text(ToolPresentation.verb(call.name)).font(.subheadline.weight(.semibold))
-                    Text(ToolPresentation.subject(call))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 4)
-                    if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
-                        let b = TaskNoteText.badge(tasks.notes[id] ?? [])
-                        Text(b.text).font(.caption).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
-                            .lineLimit(1).fixedSize()
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Theme.Fill.well, in: .capsule)
-                    }
-                    if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(.caption) }
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+            } accessory: {
+                if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
+                    let b = TaskNoteText.badge(tasks.notes[id] ?? [])
+                    Text(b.text).font(.caption).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
+                        .lineLimit(1).fixedSize()
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Theme.Fill.well, in: .capsule)
                 }
-                .padding(.vertical, grouped ? 10 : 7)
-                .padding(.horizontal, pad)
-                .contentShape(.rect)
+                if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(.caption) }
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, grouped ? 5 : 2)
+            .padding(.horizontal, pad - 3)
 
             if base == "TodoWrite" {
                 TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, pad).padding(.bottom, 8)
@@ -220,7 +319,17 @@ struct ToolCallRow: View {
 
     private var pad: CGFloat { grouped ? WorkCardSlice.inset : 10 }
 
-    private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.busy : .secondary }
+    private var chip: BeautifulUI.ToolCall {
+        let subject = ToolPresentation.subject(call)
+        return BeautifulUI.ToolCall(
+            id: call.id,
+            .symbol(ToolPresentation.symbol(call.name)),
+            label: ToolPresentation.verb(call.name),
+            chip: subject,
+            // Paths, patterns and commands in the code face; a description someone wrote (often Chinese) in the text face.
+            monospacedChip: subject.unicodeScalars.allSatisfy(\.isASCII)
+        )
+    }
 }
 
 struct ToolDetail: View {

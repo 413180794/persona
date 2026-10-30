@@ -152,9 +152,13 @@ fun AgentActionsSheet(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewSessionSheet(hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, onStarted: (SessionKey) -> Unit) {
+fun NewSessionSheet(
+    hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, onStarted: (SessionKey) -> Unit,
+    /** From a space page: start a new tab in this workspace, in its folder (machine and folder can't change). */
+    preset: SpacePreset? = null,
+) {
     val scope = rememberCoroutineScope()
-    var machine by remember { mutableStateOf(machines.firstOrNull()) }
+    var machine by remember { mutableStateOf(machines.firstOrNull { it.id == preset?.machineId } ?: machines.firstOrNull()) }
     var dir by remember { mutableStateOf<ApiClient.DirList?>(null) }
     var picked by remember { mutableStateOf<String?>(null) }
     var launchers by remember { mutableStateOf<List<Launcher>>(emptyList()) }
@@ -176,15 +180,16 @@ fun NewSessionSheet(hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, on
 
     LaunchedEffect(machine?.id) {
         val m = machine ?: return@LaunchedEffect
-        dir = null; picked = null; launcher = null
-        browse("")
+        dir = null; picked = preset?.cwd; launcher = null
+        if (preset == null) browse("")
         runCatching { hub.api.launchers(m.id) }.onSuccess { l -> launchers = l; launcher = l.firstOrNull()?.name }
     }
 
     ModalBottomSheet(onDismissRequest = { if (!starting) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("新开会话", style = MaterialTheme.typography.titleLarge)
-            if (machines.size > 1) {
+            Text(if (preset != null) "在「${preset.spaceName}」开新标签" else "新开会话", style = MaterialTheme.typography.titleLarge)
+            if (preset != null) Text(tailOf(preset.cwd), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (machines.size > 1 && preset == null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     machines.forEach { m ->
                         FilterChip(machine?.id == m.id, { machine = m }, label = { Text(m.displayName, maxLines = 1) }, enabled = !starting)
@@ -193,7 +198,7 @@ fun NewSessionSheet(hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, on
             }
 
             val d = dir
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (preset == null) Row(verticalAlignment = Alignment.CenterVertically) {
                 if (d?.parent != null) IconButton(onClick = { browse(d.parent) }, enabled = !starting) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "上一级") }
                 Text(
                     tailOf(picked ?: d?.path ?: ""), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -201,7 +206,7 @@ fun NewSessionSheet(hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, on
                 )
                 if (loading) CircularProgressIndicator(Modifier.padding(8.dp))
             }
-            LazyColumn(Modifier.heightIn(max = 320.dp)) {
+            if (preset == null) LazyColumn(Modifier.heightIn(max = 320.dp)) {
                 val recent = d?.recent.orEmpty()
                 // The hub sends recent directories only with the home listing (an empty path).
                 if (recent.isNotEmpty()) {
@@ -244,7 +249,7 @@ fun NewSessionSheet(hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, on
                         starting = true; error = null
                         val panesBefore = hub.livePanes(m.id)
                         scope.launch {
-                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: "claude", prompt.trim().ifEmpty { null }, mode.ifEmpty { null }) }
+                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: "claude", prompt.trim().ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
                                 .onSuccess { onStarted(it.key.copy(machineId = m.id)) }
                                 .onFailure { e ->
                                     // Often claude did start and the node only gave up on it:
@@ -318,3 +323,6 @@ fun RenameDialog(title: String, current: String, note: String?, onDismiss: () ->
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", maxLines = 1) } },
     )
 }
+
+/** Where the space page's "在这个空间开新标签" starts claude. */
+data class SpacePreset(val machineId: String, val cwd: String, val workspaceId: String, val spaceName: String)

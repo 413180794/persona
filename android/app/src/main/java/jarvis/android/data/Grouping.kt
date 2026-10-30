@@ -101,3 +101,26 @@ class Grouper(private val pins: Pins, private val mutes: Pins) {
         return machines.mapNotNull { m -> by[m.id]?.let { m to ordered(it) } }
     }
 }
+
+/** The quick filters over the list (iOS `AgentFilter`). */
+enum class QuickFilter(val title: String, val state: AgentState?) {
+    All("全部", null), NeedsYou("需要你", AgentState.NeedsYou), Unread("未读", AgentState.Unread), Working("工作中", AgentState.Working);
+
+    fun matches(s: Session) = state == null || s.agentState == state
+}
+
+/** The search and machine menu over the list (iOS `ChatsView.base`): which agents are listed at all. */
+fun Session.matches(query: String, machine: String?): Boolean {
+    if (assistant) return false
+    if (machine != null && machineId != machine) return false
+    if (query.isBlank()) return true
+    val q = query.trim()
+    return listOfNotNull(title, cwd, lastText, spaceName, slotName).any { it.contains(q, ignoreCase = true) }
+}
+
+/**
+ * Under a quick filter, what it showed stays until the filter is chosen again: an agent opened from 未读 is seen now
+ * but keeps its place, so the next one is still right below it. `kept` grows with whatever matches.
+ */
+fun List<Session>.underFilter(f: QuickFilter, kept: Set<SessionKey>): List<Session> =
+    if (f == QuickFilter.All) this else filter { f.matches(it) || it.key in kept }

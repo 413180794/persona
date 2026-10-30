@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -115,12 +116,18 @@ func New(version string) (*Node, error) {
 
 // ServeStdio runs the node protocol on stdin/stdout until the hub disconnects.
 func (n *Node) ServeStdio(ctx context.Context) error {
+	return n.Serve(ctx, os.Stdin, os.Stdout)
+}
+
+// Serve runs the node protocol for one hub connection on r / w until it ends. One Node serves one connection:
+// `jarvisd node --attach` makes a new one per connection (attach.go).
+func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if err := n.writeClaudeConfig(); err != nil {
 		n.logger.Printf("write claude config: %v", err)
 	}
-	n.peer = rpc.New("n", os.Stdout)
+	n.peer = rpc.New("n", w)
 	n.peer.OnRequest = n.handle
 	n.peer.OnEvent = n.onTerminalEvent
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
@@ -137,7 +144,7 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
 	go n.sampleMetrics(ctx)
-	return n.peer.Serve(ctx, os.Stdin)
+	return n.peer.Serve(ctx, r)
 }
 
 // loadState pulls this machine's session state from the hub (Postgres) and uploads a legacy sessions.json once.

@@ -32,6 +32,8 @@ struct ChatView: View {
     @State private var menu = MessageMenu()
     /// Work lines the user tapped open (by line id; kept here so lazy rows coming back keep their state).
     @State private var openWork: Set<String> = []
+    /// Runs of tool calls (`ChatLine.toolRun`) opened into a row per call.
+    @State private var openRuns: Set<String> = []
     /// While you read history, the chat is drawn from the items it had when you left the newest end (inserting at the
     /// newest end of the flipped list would push what you read); history loaded at the far end, and holes filled
     /// behind it, still show. Cleared when you are back at the newest. It used to keep the lines up to the newest
@@ -243,7 +245,7 @@ struct ChatView: View {
         let cut = frozen.map { f in Self.prefixCount(items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? items.count
         let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: frozen == nil ? store.version : cut,
                                        first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
-                                       frozen: frozen)
+                                       runs: openRuns, frozen: frozen)
         if scratch.linesKey == key { return scratch.lines }
         var blocks = store.blocks
         if frozen != nil {
@@ -430,7 +432,7 @@ struct ChatView: View {
         for line in lines {
             out.append(line)
             if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
-                out += items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
+                out += runLines(group: id, items: items)
                 out.append(.workEnd(group: id, count: items.reduce(0) { n, item in
                     if case .step(.folded(let f)) = item { n + (f.fold.map { $0.tools + $0.thoughts } ?? 1) } else { n + 1 }
                 }))
@@ -440,6 +442,56 @@ struct ChatView: View {
     }
 
     private func isOpen(_ work: String) -> Bool { openWork.contains(work) != Self.debugOpenAll }
+
+    /// An open work line's steps: two or more tool calls in a row fold into one line of chips (`ToolRunRow`); opened,
+    /// their rows follow it, one lazy line per call as before. Thoughts, notices and words stay lines of their own, and
+    /// so does a call that went to the background: its row says how the task went (后台 · 已完成).
+    private func runLines(group: String, items: [WorkItem]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        var run: [ToolCall] = []
+        var runStart = 0
+        func flush() {
+            defer { run = [] }
+            guard run.count > 1 else {
+                if let c = run.first { out.append(.workStep(group: group, item: .step(.call(c)), first: runStart == 0)) }
+                return
+            }
+            let id = group + "/run-" + run[0].id
+            let open = isRunOpen(id)
+            out.append(.toolRun(id: id, calls: run, open: open, first: runStart == 0))
+            if open { out += run.map { .workStep(group: group, item: .step(.call($0)), first: false) } }
+        }
+        for (n, item) in items.enumerated() {
+            if case .step(.call(let c)) = item, foldsIntoRun(c) {
+                if run.isEmpty { runStart = n }
+                run.append(c)
+                continue
+            }
+            flush()
+            out.append(.workStep(group: group, item: item, first: n == 0))
+        }
+        flush()
+        return out
+    }
+
+    private func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
+
+    private func foldsIntoRun(_ call: ToolCall) -> Bool {
+        guard let id = call.use.toolUseID else { return true }
+        return !store.tasks.started.contains(id) && store.tasks.notes[id] == nil
+    }
+
+    /// The run line (`runLines`) a call is folded into, if it is.
+    private func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
+        var run: [String] = []
+        func found() -> String? { run.count > 1 && run.contains(call) ? group + "/run-" + run[0] : nil }
+        for item in items {
+            if case .step(.call(let c)) = item, foldsIntoRun(c) { run.append(c.id); continue }
+            if let id = found() { return id }
+            run = []
+        }
+        return found()
+    }
 
     /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
     /// still on its own: folding from 收起 under the last step leaves the reply below it where it was. From the header,
@@ -452,10 +504,10 @@ struct ChatView: View {
     /// A merged multi-message turn ("wt-…") opens into its messages under a "N 条消息 · 收起" line instead.
     private func headLine(_ id: String, open: Bool) -> String { id.hasPrefix("wt-") && open ? id + "-h" : id }
 
-    private func toggleWork(_ id: String, fromHeader: Bool) {
+    private func toggleWork(_ id: String, fromHeader: Bool, run: Bool = false) {
         Haptics.tap()
         let frame = scratch.listFrame
-        let wasOpen = isOpen(id)
+        let wasOpen = run ? isRunOpen(id) : isOpen(id)
         let y = scratch.workHeadY[headLine(id, open: wasOpen)]
         let anchor: UnitPoint?
         if fromHeader, let y, frame.height > 0 {
@@ -467,7 +519,9 @@ struct ChatView: View {
         var t = Transaction()
         t.disablesAnimations = true // hundreds of rows animating out left blank frames behind
         withTransaction(t) {
-            if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) }
+            if run {
+                if openRuns.contains(id) { openRuns.remove(id) } else { openRuns.insert(id) }
+            } else if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) }
             if let anchor { position.scrollTo(id: headLine(id, open: !wasOpen), anchor: anchor) }
         }
         #if PERF_SIGNPOST
@@ -566,6 +620,10 @@ struct ChatView: View {
             .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
         case .workStep(_, let item, let first):
             WorkStepView(item: item, first: first).equatable()
+        case .toolRun(let id, let calls, let open, let first):
+            ToolRunRow(calls: calls, open: open, first: first) { toggleWork(id, fromHeader: true, run: true) }
+                .equatable()
+                .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
         case .workEnd(let group, let count):
             // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
@@ -815,10 +873,13 @@ struct ChatView: View {
             case .work(let wid, let items, _, _, _):
                 let steps = items.compactMap { if case .step(let s) = $0 { s } else { nil } }
                 if let step = holds(steps) {
+                    var t = Transaction()
+                    t.disablesAnimations = true
                     if !isOpen(wid) {
-                        var t = Transaction()
-                        t.disablesAnimations = true
                         withTransaction(t) { if Self.debugOpenAll { openWork.remove(wid) } else { openWork.insert(wid) } }
+                    }
+                    if let run = runID(holding: step, group: wid, items: items), !isRunOpen(run) {
+                        withTransaction(t) { _ = openRuns.insert(run) }
                     }
                     target = wid + "/" + step
                 }
@@ -2273,6 +2334,8 @@ struct ChatLine: Identifiable {
         case splitHeader(id: String, count: Int)
         case wakes(Turn, live: Bool)
         case workStep(group: String, item: WorkItem, first: Bool)
+        /// Two or more tool calls in a row of an open work line, as one line of chips.
+        case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
         case workEnd(group: String, count: Int)
 
         var id: String {
@@ -2281,6 +2344,7 @@ struct ChatLine: Identifiable {
             case .work(let id, _, _, _, _): id
             case .workStep(let group, let item, _): group + "/" + item.id
             case .workEnd(let group, _): group + "-end"
+            case .toolRun(let id, _, _, _): id
             case .userImages(let id, _): id
             case .mergedUsers(let id, _): id
             case .splitHeader(let id, _): id + "-h"
@@ -2306,6 +2370,9 @@ struct ChatLine: Identifiable {
         Self(.workStep(group: group, item: item, first: first))
     }
     static func workEnd(group: String, count: Int) -> Self { Self(.workEnd(group: group, count: count)) }
+    static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
+        Self(.toolRun(id: id, calls: calls, open: open, first: first))
+    }
 
     func holds(_ id: String?) -> Bool {
         guard let id else { return false }
@@ -2683,6 +2750,7 @@ final class ChatScratch {
         var first: String?
         var live: String?
         var open: Set<String>
+        var runs: Set<String>
         var frozen: ChatView.Frozen?
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
@@ -2754,14 +2822,19 @@ private struct VerticalBarsReader: ViewModifier {
     @Binding var vertical: Bool
 
     func body(content: Content) -> some View {
+        #if compiler(>=6.3) // `toolbarVerticalEdge` is in the iOS 27.1 SDK; Xcode 26 (Swift 6.2) has no such key path
         if #available(iOS 27.1, *) {
             content.modifier(VerticalBarsEdgeReader(vertical: $vertical))
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }
 
+#if compiler(>=6.3)
 @available(iOS 27.1, *)
 private struct VerticalBarsEdgeReader: ViewModifier {
     @Environment(\.toolbarVerticalEdge) private var edge
@@ -2771,3 +2844,4 @@ private struct VerticalBarsEdgeReader: ViewModifier {
         content.onChange(of: edge != nil, initial: true) { _, v in vertical = v }
     }
 }
+#endif
