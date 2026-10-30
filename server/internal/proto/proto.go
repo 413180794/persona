@@ -329,6 +329,24 @@ type Item struct {
 	// From names the Claude session that sent this message (cross-session messaging), not the user.
 	From string `json:"from,omitempty"`
 	Fold *Fold  `json:"fold,omitempty"`
+	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
+	Task *TaskNote `json:"task,omitempty"`
+}
+
+// TaskNote is what a <task-notification> says, read from the notification alone (the call it came from is found by
+// the app, through TaskID / ToolUseID): a command run in the background finishing, a Monitor's event or its end, a
+// subagent finishing. Title, Detail and Text come decoded (Claude Code writes &gt; &lt; &amp; in them).
+type TaskNote struct {
+	Kind   string `json:"kind"`             // shell | monitor | agent | task (anything else)
+	Status string `json:"status,omitempty"` // completed | failed | killed | stopped | event | ended | waiting
+	// Title: the call's description, or the first line of its command when it had none.
+	Title      string `json:"title"`
+	TaskID     string `json:"task_id,omitempty"`
+	ToolUseID  string `json:"tool_use_id,omitempty"`
+	ExitCode   *int   `json:"exit_code,omitempty"`
+	OutputFile string `json:"output_file,omitempty"`
+	// Detail: a Monitor's event, a subagent's result, or a command's whole text when the title is only its first line.
+	Detail string `json:"detail,omitempty"`
 }
 
 // Interaction kinds.

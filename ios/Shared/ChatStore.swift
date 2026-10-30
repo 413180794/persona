@@ -172,6 +172,54 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Background tasks and the calls that started them: a notice names its call by tool_use_id, or only by the task id
+/// the call's result announced ("running in background with ID: …", "Monitor started (task …"). Built with the
+/// rows; a call outside the loaded items is simply not found.
+nonisolated struct TaskIndex: Equatable, Sendable {
+    /// A call's notices, oldest first, by the call's tool_use_id.
+    var notes: [String: [TaskNote]] = [:]
+    /// The call a notice came from (notice item id → tool_use_id).
+    var calls: [String: String] = [:]
+    /// Calls whose result says they went to the background (they may not have reported back yet).
+    var started: Set<String> = []
+    /// What each of those calls was: its description, and when it started.
+    var descriptions: [String: String] = [:]
+    var startedAt: [String: Date] = [:]
+
+    nonisolated(unsafe) private static let launched = /(?:running in background with ID|agentId|Monitor started \(task|moved to the background \(ID):?\s*([A-Za-z0-9_-]+)/
+
+    static func build(_ items: [Item]) -> TaskIndex {
+        var x = TaskIndex()
+        var byTask: [String: String] = [:]
+        var uses: [String: Item] = [:]
+        for it in items {
+            switch it.kind {
+            case .toolUse:
+                if let id = it.toolUseID { uses[id] = it }
+            case .toolResult:
+                guard let id = it.toolUseID, let text = it.text, text.contains("background") || text.contains("Monitor started") || text.contains("agentId"),
+                      let m = text.firstMatch(of: launched) else { continue }
+                byTask[String(m.1)] = id
+                x.started.insert(id)
+                if let use = uses[id] {
+                    x.descriptions[id] = use.toolInput?["description"]?.string
+                    x.startedAt[id] = use.ts
+                }
+            case .notice:
+                guard let n = it.task, let call = n.toolUseID ?? n.taskID.flatMap({ byTask[$0] }) else { continue }
+                x.notes[call, default: []].append(n)
+                x.calls[it.id] = call
+                if x.descriptions[call] == nil, let use = uses[call] {
+                    x.descriptions[call] = use.toolInput?["description"]?.string
+                    x.startedAt[call] = use.ts
+                }
+            default: break
+            }
+        }
+        return x
+    }
+}
+
 /// Rows grouped for display: turns, plus standalone rows (recaps, compaction notices) between them.
 nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
     case turn(Turn)
@@ -246,7 +294,7 @@ nonisolated enum ChatBlock: Identifiable, Hashable, Sendable {
                     current = Turn(id: row.id)
                     current!.process.append(row)
                     current!.ordered.append(row)
-                } else if (item.text ?? "").contains("中断") {
+                } else if item.task == nil, (item.text ?? "").contains("中断") {
                     current!.trailing.append(row)
                 } else {
                     current!.process.append(row)
@@ -308,6 +356,8 @@ final class ChatStore {
     /// Every image in the conversation (the viewer pages through them), rebuilt with `blocks`: a view that derived it
     /// from `items` in its body redrew on every item.
     private(set) var images: [ImagePayload] = []
+    /// Background tasks and their calls (`TaskIndex`), rebuilt with `blocks`.
+    private(set) var tasks = TaskIndex()
     /// Bumped when the items start over (another history, or the latest page replacing what was here): a frozen view
     /// of the old items (`ChatView.Frozen`) means nothing any more.
     private(set) var resets = 0
@@ -344,6 +394,7 @@ final class ChatStore {
             covered = cached.covered ?? (cached.items.last?.seq ?? 0)
             rows = ChatStore.buildRows(items)
             blocks = ChatBlock.build(rows)
+            tasks = TaskIndex.build(items)
             version += 1
         }
     }
@@ -514,14 +565,15 @@ final class ChatStore {
             while true {
                 let revision = self.rebuildRevision
                 let items = self.items, settled = self.settled
-                let (built, images) = await Task.detached(priority: .userInitiated) {
-                    (ChatStore.rebuild(items, settled: settled), items.compactMap(\.image))
+                let (built, images, tasks) = await Task.detached(priority: .userInitiated) {
+                    (ChatStore.rebuild(items, settled: settled), items.compactMap(\.image), TaskIndex.build(items))
                 }.value
                 guard revision == self.rebuildRevision else { continue }
                 self.rows = built.rows
                 self.blocks = built.blocks
                 self.settled = built.settled
                 if images.map(\.identity) != self.images.map(\.identity) { self.images = images }
+                if tasks != self.tasks { self.tasks = tasks }
                 self.version += 1
                 self.rebuildScheduled = false
                 return
@@ -858,8 +910,9 @@ nonisolated enum ChatCache {
     private static func url(_ key: SessionKey) -> URL? {
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         let safe = "\(key.machineID)_\(key.sessionID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
-        // v2: items carry `wake`; older copies would keep the merged turns until they scrolled out.
-        return base.appending(path: "chats-v2").appending(path: String(safe) + ".json")
+        // v2: items carry `wake`; older copies would keep the merged turns until they scrolled out. v3: notices carry
+        // `task` (a page's copy of an item never replaces the cached one: old notices stayed centered blocks).
+        return base.appending(path: "chats-v3").appending(path: String(safe) + ".json")
     }
 
     static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool, history: String?, covered: Int?)? {

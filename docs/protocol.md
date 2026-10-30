@@ -68,6 +68,10 @@
                                                       // 其他文字是「…（已截断，共 N 字节）」；旧 App 照样能看懂
  "queued":true,                                       // 仅 user text：工作中输入、被中途吸收的消息
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
+ "task":{"kind":"shell|monitor|agent|task",              // 仅 notice：后台任务的通知（命令、Monitor 事件 / 结束、子 Agent），text 是一行摘要
+         "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
+         "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
+         "detail":"Monitor 的事件 / 子 Agent 的结果 / 整条命令（已解码实体）"},
  "fold":{"items":1294,"tools":647,"thoughts":110,     // 仅 kind=fold（请求带 fold_work 才有）：一段被折叠的工作，见「折叠的工作」
          "until":"...","through_seq":6890,"through_id":"…#0"},
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）

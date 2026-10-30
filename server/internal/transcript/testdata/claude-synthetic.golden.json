@@ -39,8 +39,16 @@
       "ts": "2026-01-01T00:31:00Z",
       "role": "system",
       "kind": "notice",
-      "text": "Background command \"go test\" completed (exit code 0)",
-      "wake": true
+      "text": "后台命令完成 · go test",
+      "wake": true,
+      "task": {
+        "kind": "shell",
+        "status": "completed",
+        "title": "go test",
+        "task_id": "b8kq2xv1m",
+        "tool_use_id": "toolu_000000000000000000000009",
+        "exit_code": 0
+      }
     },
     {
       "id": "00000000-0000-4000-8000-000000000008#0",

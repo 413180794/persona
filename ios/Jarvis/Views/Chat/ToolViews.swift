@@ -27,6 +27,7 @@ enum ToolPresentation {
         case "ExitPlanMode", "EnterPlanMode": return "list.bullet.clipboard"
         case "ToolSearch": return "wrench.and.screwdriver"
         case "Skill": return "sparkles"
+        case "Monitor": return "waveform.path.ecg"
         default: return name.hasPrefix("mcp__") ? "puzzlepiece.extension" : "gearshape"
         }
     }
@@ -51,6 +52,7 @@ enum ToolPresentation {
         case "EnterPlanMode": return "进入计划模式"
         case "ToolSearch": return "加载工具"
         case "Skill": return "使用技能"
+        case "Monitor": return "监视"
         default: return n
         }
     }
@@ -68,6 +70,7 @@ enum ToolPresentation {
         case "WebFetch": return URL(string: s("url") ?? "")?.host() ?? s("url") ?? ""
         case "WebSearch": return s("query") ?? ""
         case "Task", "Agent": return s("description") ?? ""
+        case "Monitor": return s("description") ?? firstLine(s("command") ?? "")
         case "Skill": return s("skill") ?? s("command") ?? ""
         case "ToolSearch": return s("query") ?? ""
         case "AskUserQuestion": return i["questions"]?.array?.first?["question"]?.string ?? ""
@@ -150,6 +153,7 @@ struct ToolGroupView: View {
 }
 
 struct ToolCallRow: View {
+    @Environment(\.taskIndex) private var tasks
     var call: ToolCall
     var autoExpand: Bool
     /// A row of an open work line's card (`WorkCardSlice` draws the card): no gray tile of its own, 44 pt tall.
@@ -183,6 +187,13 @@ struct ToolCallRow: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 4)
+                    if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
+                        let b = TaskNoteText.badge(tasks.notes[id] ?? [])
+                        Text(b.text).font(.caption).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
+                            .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Theme.Fill.well, in: .capsule)
+                    }
                     if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(.caption) }
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))

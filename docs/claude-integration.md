@@ -102,7 +102,14 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   子代理（`Agent`）异步启动时结果是 `Async agent launched … agentId: <id>`；前台命令超时会变成 `…moved to the background (ID: <id>)`。
 - 结束：`<task-notification><task-id>…</task-id><status>completed|failed|killed</status><summary>…</summary></task-notification>`，
   可能出现在 queue-operation（enqueue，**不是用户输入，不能进排队列表**）、`queued_command` 附件（commandMode=task-notification，中途吸收）
-  或空闲时的 user 消息里；`TaskStop` / `KillShell` 也算结束。完成通知在对话里显示成一行提示（summary）。
+  或空闲时的 user 消息里；`TaskStop` / `KillShell` 也算结束。
+- 通知的几种形状（2.1.3xx 语料里约 10 万条）：`Background command "<description 或整条命令>" completed (exit code N)` / `failed with exit code N` /
+  `was stopped`；Monitor 每个事件一条 `Monitor event: "<description>"`（事件内容在 `<event>`，只有 task-id）、结束时 `Monitor "<description>" stream ended`
+  （带 tool-use-id、output-file，`<event>` 是最后几行）；子 Agent `Agent "<description>" finished` / `failed: …`（`<result>` 是它的结果）。
+  Monitor 启动的 tool_result 是 `Monitor started (task <id>, timeout …ms)`，App 靠它把只带 task-id 的事件对回那次调用。
+- **Claude Code 自己把 summary / event / result 里的 `>` `<` `&` 写成实体**（`cat &gt; f &lt;&lt;'EOF'`），不是我们转了两次：解析时 `html.UnescapeString`。
+  其他 notice（`local-command-stdout` 等）语料里没有实体。没写 description 的后台命令，summary 里是整条命令（heredoc 几十行）：
+  node 解析成 `Item.task`（`transcript/tasknote.go`），文字只留一行（「后台命令完成 · <命令第一行>」），整条命令放在 `task.detail`，App 点开再看。
   空闲时的那种（user 消息，前面有一行 `system/turn_duration` 收尾上一轮）带 `wake: true`。App 不在这里切开轮次，
   而是取唤醒前后各段收尾的话里最长的一段作答案，其余收进工作行 / 「后台任务完成」抽屉（`docs/ios.md`，2026-10-26）。
 - 会话列表的快速元信息只读 transcript 尾部 384 KB，长轮次里几张截图（每张一行 base64，上 MB）就把开始那行挤出去了。所以 node 对每个

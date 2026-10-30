@@ -381,6 +381,27 @@ nonisolated struct Fold: Codable, Hashable, Sendable {
     }
 }
 
+/// A background task reporting back (`Item.task` on a notice): a command run in the background, a Monitor's event or
+/// end, a subagent. The hub reads it from the notification (decoded); `TaskIndex` finds the call it came from.
+nonisolated struct TaskNote: Codable, Hashable, Sendable {
+    var kind: String // shell | monitor | agent | task
+    var status: String?
+    var title: String
+    var taskID: String?
+    var toolUseID: String?
+    var exitCode: Int?
+    var outputFile: String?
+    /// A Monitor's event, a subagent's result, or the whole command when the title is its first line.
+    var detail: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, status, title, detail
+        case taskID = "task_id", toolUseID = "tool_use_id", exitCode = "exit_code", outputFile = "output_file"
+    }
+
+    var failed: Bool { status == "failed" || (exitCode ?? 0) != 0 }
+}
+
 nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var seq: Int
@@ -404,9 +425,11 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var wake: Bool?
     /// kind == .fold: the work this item stands for.
     var fold: Fold?
+    /// kind == .notice: a background task reporting back.
+    var task: TaskNote?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued, from, wake, fold
+        case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size"
     }
 
