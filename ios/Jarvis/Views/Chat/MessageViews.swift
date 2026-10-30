@@ -1,4 +1,3 @@
-import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -394,24 +393,40 @@ struct CopyButton: View {
     }
 }
 
-/// A thought: BeautifulUI's trace, folded to its first line; open, the whole text under a guide line.
 struct ThinkingRow: View {
     var item: Item
     var compact = false
     @State private var open = false
 
     var body: some View {
-        let text = item.text ?? ""
-        ThinkingState(
-            .reasoning,
-            isWorking: false,
-            doneTitle: open ? "思考过程" : ToolPresentation.firstLine(text),
-            rows: [BeautifulUI.ThinkingRow(id: item.id, text)],
-            isExpanded: $open,
-            maxWidth: .infinity
-        )
-        .textSelection(.enabled)
-        .padding(.horizontal, compact ? 10 : 0)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.snappy) { open.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain").font(.caption)
+                    Text(open ? "思考过程" : ToolPresentation.firstLine(item.text ?? ""))
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption2).rotationEffect(.degrees(open ? 90 : 0))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, compact ? 10 : 0)
+                .padding(.vertical, compact ? 4 : 2)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            if open {
+                Text(item.text ?? "")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(.leading, 10)
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: 2) }
+                    .padding(.horizontal, compact ? 10 : 0)
+            }
+        }
     }
 }
 

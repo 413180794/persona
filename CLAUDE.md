@@ -30,6 +30,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **不做第二个飞书**（2026-10-27 用户纠正）：App 是把各处信息收到一起交给 AI，不是把飞书的功能页面搬过来。飞书只保留
   消息（进收件箱）、链接在 App 内渲染（文档、removed单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
   别的数据源同理：不要为某个来源做一套浏览页面。
+- **不许直接改已有界面的样子**（2026-10-30 用户要求：BeautifulUI 的工作过程和输入框直接替换了原来的，太丑，已整体 revert）：
+  换一种视觉风格（组件库、设计语言、整套配色）一律做成新的**主题**（设置 › 界面风格，`AppStyle`），只在选了它时生效，
+  默认和其他主题的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ## 目录
@@ -330,9 +333,6 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   `scripts/sync_lark-connector_skill.sh` 同步上游）。token 只进助手进程的环境变量；写操作靠 node 的 Bash PreToolUse 闸门（`node/larkgate.go`），
   只给助手用的 `assistant-settings.json` 带这个 hook。闸门读不懂的命令里只要有 `ol POST/PUT/PATCH/DELETE` 也要手机确认，否则 bypass 模式会直接放过。
   在 hub 上起测试实例用独立 HOME / 端口 / 库（`/tmp/jt`），别碰线上 jarvisd；`ssh … 'pkill -f 模式'` 会匹配到 ssh 自己的命令行把会话杀掉，模式写成 `[/]tmp/…`。
-- BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，
-  在长工作卡里滑动会明显掉帧：ThinkingState 原样放进 650 步的工作卡，Debug 模拟器上卡顿时长从约 11 涨到约 21 ms/s，去掉这两样后约 13.7。
-  这类问题改在 BeautifulUI 仓库里，再整个拷进 `ios/Packages/BeautifulUI`（`VENDORED.md`），不在 Jarvis 里改库代码。
 - macOS 的「桌面」「文稿」「下载」受隐私保护（TCC）：jarvisd 经 ssh 在 Mac 上运行，没授权时读这些文件夹报 `operation not permitted`，
   手机上打不开那里的文件。node 把这个错误换成说明（`explainDenied`）：在「完全磁盘访问权限」里打开 sshd-keygen-wrapper，或换个文件夹。
   要给用户看的文件（截图等）别放桌面，放 `~/` 下的普通目录。

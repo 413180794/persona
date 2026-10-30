@@ -14,8 +14,6 @@ packages:
   MarkdownUI:
     url: https://github.com/gonzalezreal/swift-markdown-ui
     from: 2.4.1
-  BeautifulUI:
-    path: Packages/BeautifulUI
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -48,7 +46,6 @@ targets:
       - target: JarvisWatch
       - target: JarvisWidgets
       - package: MarkdownUI
-      - package: BeautifulUI
     entitlements:
       path: Jarvis/Resources/Jarvis.entitlements
       properties:
