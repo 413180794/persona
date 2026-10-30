@@ -250,7 +250,7 @@ struct KnowledgeDetailView: View {
                 }
                 if let sum = d.summary, !sum.isEmpty {
                     Section("档案") {
-                        Markdown(Self.dropTitle(sum)).markdownTheme(.jarvis).textSelection(.enabled)
+                        Markdown(Links.markdown(Self.dropTitle(sum))).markdownTheme(.jarvis).textSelection(.enabled)
                             .padding(.vertical, 4)
                     }
                 }

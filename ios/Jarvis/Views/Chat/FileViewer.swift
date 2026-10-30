@@ -37,8 +37,9 @@ nonisolated enum FilePaths {
     // Home-relative (~/x), absolute (/x/y) or relative with a directory and an extension (ios/Jarvis/Foo.swift).
     // The "~" must stay part of the match: dropping it turned ~/.config/… into /.config/….
     // Relative paths need a letter-led extension so model names like deepseek/v4.1-flash are not files.
+    // ASCII only, like links (`Links`): CJK text or full-width punctuation right after a path ends it ("Foo.swift里的").
     private static let pattern = try! NSRegularExpression(
-        pattern: #"(?<![\w/:.\-~])(~(?:/[\w.@+\-]+)+/?|/[\w.@+\-]+(?:/[\w.@+\-]+)+/?|[\w.@\-]+(?:/[\w.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![\w/\-])"#)
+        pattern: #"(?<![A-Za-z0-9_/:.\-~])(~(?:/[A-Za-z0-9_.@+\-]+)+/?|/[A-Za-z0-9_.@+\-]+(?:/[A-Za-z0-9_.@+\-]+)+/?|[A-Za-z0-9_.@\-]+(?:/[A-Za-z0-9_.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![A-Za-z0-9_/\-])"#)
 
     private static let memo = TextMemo<[String]>()
 
@@ -144,7 +145,7 @@ struct FileViewer: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             meta(file)
-                            Markdown(MarkdownHTML.simplify(text), imageBaseURL: URL(fileURLWithPath: (file.path as NSString).deletingLastPathComponent, isDirectory: true))
+                            Markdown(Links.markdown(MarkdownHTML.simplify(text)), imageBaseURL: URL(fileURLWithPath: (file.path as NSString).deletingLastPathComponent, isDirectory: true))
                                 .markdownTheme(.jarvis)
                                 .markdownImageProvider(MachineImageProvider(load: loadImageFile))
                                 .textSelection(.enabled)

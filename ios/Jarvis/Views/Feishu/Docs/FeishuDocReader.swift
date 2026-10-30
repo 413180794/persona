@@ -117,7 +117,7 @@ struct FeishuDocReader: View {
                                     .padding(.vertical, 4)
                                     .id(chunk.id)
                             } else {
-                                Markdown(chunk.text)
+                                Markdown(Links.markdown(chunk.text))
                                     .markdownTheme(.feishuDocs)
                                     .markdownImageProvider(FeishuDocsImageProvider(open: { openImage($0, in: body.images) }))
                                     .modifier(FeishuDocsSelectable(enabled: copyAllowed))
@@ -273,7 +273,7 @@ struct FeishuDocReader: View {
                     Button(summaryExpanded ? "收起" : "展开") { withAnimation(.snappy) { summaryExpanded.toggle() } }
                         .font(.footnote).lineLimit(1)
                 }
-                Markdown(s.summary)
+                Markdown(Links.markdown(s.summary))
                     .markdownTheme(.feishuDocsSmall)
                     .frame(maxHeight: summaryExpanded ? nil : 96, alignment: .top)
                     .clipped()
