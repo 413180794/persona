@@ -1027,24 +1027,28 @@ struct ChatView: View {
             scrollToEnd(animated: true)
         }
         // Parse what rows will show (Markdown, paths) in the background as messages load: scrolling then only lays out.
-        .task(id: "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)|\(store.version)") {
-            let source = "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)"
-            if scratch.prewarmSource != source {
-                scratch.prewarmSource = source
-                scratch.prewarmedIDs = []
-            }
-            let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
-            guard !items.isEmpty else { return }
-            let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
-            await withTaskCancellationHandler {
-                await warm.value
-            } onCancel: {
-                warm.cancel()
-            }
-            // Spelled out: Swift 6.3 timed out type-checking formUnion(items.map(\.id)) in this closure.
-            let ids: [String] = items.map { $0.id }
-            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(ids) }
+        .task(id: prewarmKey) { await prewarmRows() }
+    }
+
+    // Out of the modifier chain: inline, Swift 6.3 timed out type-checking the Release build.
+    private var prewarmSource: String { "\(shownKey.machineID)/\(shownKey.sessionID)|\(store.resets)" }
+    private var prewarmKey: String { "\(prewarmSource)|\(store.version)" }
+
+    private func prewarmRows() async {
+        let source = prewarmSource
+        if scratch.prewarmSource != source {
+            scratch.prewarmSource = source
+            scratch.prewarmedIDs = []
         }
+        let items = store.items.filter { !scratch.prewarmedIDs.contains($0.id) }
+        guard !items.isEmpty else { return }
+        let warm = Task.detached(priority: .utility) { RowMemo.prewarm(items) }
+        await withTaskCancellationHandler {
+            await warm.value
+        } onCancel: {
+            warm.cancel()
+        }
+        if !Task.isCancelled { scratch.prewarmedIDs.formUnion(items.map(\.id)) }
     }
 
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
