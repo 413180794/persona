@@ -319,6 +319,29 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   界面层级：每行的主体（问什么、会话名、收件箱标题）用 headline，类型和位置用 footnote；消息和计划去掉 Markdown 标记再显示（`WatchText.shown`），
   气泡跟着字宽、自己的靠右；没拿到过数据时显示「加载中」，连不上 hub 时最上面一行「连不上 hub」+「重试」（有旧数据就写明是多久前的）。
 
+## 体验模式（没有 hub 也能看全部功能，2026-10-30）
+
+TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只有配对页，审核员和还没搭 hub 的朋友什么都看不到（可能被以 2.1 拒）。
+配对页第二个按钮「没有 hub？先体验一下」进入体验模式：App 用内置的假数据跑，不连任何服务器（Release 里可用，不是 DEBUG 开关）。
+
+- **挂在数据层下面，页面不分叉**：体验模式的配对信息是 `ServerConfig.demo`（`https://demo.invalid`，永远解析不了，漏网的请求也到不了网络）。
+  `APIClient.request`（以及 `image` / `fullItem`）对它不走 URLSession，交给 `APIClient.local`；`LiveConnection` 对它不开 WebSocket，
+  用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Jarvis/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
+  所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
+- **数据**：`scripts/make_demo_data.py` 从 `scripts/mock_hub.py`（UI 测试用的假 hub）导出 `ios/Jarvis/Resources/Demo.json`，再加几个 Agent
+  （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
+  全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器监控的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
+  改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
+- **副作用**：给 Agent / Jarvis 发消息在本地回显，1.5 秒后「Agent」回一段「这是体验模式……」；回答提问 / 批准计划时卡片消失、Agent 接着「做」再回同一段话，
+  另弹「体验模式下不会真的发送」；Jarvis 新对话本地新建。其余会碰到电脑、飞书、邮件的操作（新建会话、中断、关闭、终端按键、发邮件、立即运行……）
+  以 `APIError(code: "demo")` 失败，`AppModel.show` 把它显示成蓝色提示「体验模式下不会真的发送」而不是红色报错，页面也不会显示「已关闭会话」这类成功提示。
+  只改本地状态的（已读、置顶、免打扰、定时任务开关、记忆、收件箱已处理）照常生效，退出后丢掉。
+- **标识和退出**：设置 tab 带「体验」角标；设置顶部写「体验模式 · 数据都是编造的」，下面一节「连接我的 hub」/「退出体验模式」，隐藏服务器和手表那两节。
+  退出回到配对页；配对成功（扫码、手动、`jarvis://pair` 链接）自动离开体验模式。体验模式记在 `demo.on`，重启 App 仍在体验模式里，进入时总从发货时的数据重新开始。
+  进入 / 离开时清掉演示会话的草稿和对话缓存（演示的会话 id 就是 mock 的 id，UI 测试的模拟器上会撞到别的测试留下的草稿）、收件箱，Jarvis tab 打开演示的主对话。
+- 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
+- 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
+
 ## 连接状态（弱网 / 断网）
 
 参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的
@@ -351,7 +374,7 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条。
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
 
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
 

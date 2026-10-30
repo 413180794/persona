@@ -921,6 +921,11 @@ nonisolated enum ChatCache {
         return (e.items, e.hasMore, e.history, e.covered)
     }
 
+    static func remove(_ key: SessionKey) {
+        guard let url = url(key) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
     static func save(_ key: SessionKey, items: [Item], hasMore: Bool, history: String? = nil, covered: Int? = nil) {
         guard let url = url(key), !items.isEmpty else { return }
         var entry = Entry(items: items, hasMore: hasMore, history: history, covered: covered)

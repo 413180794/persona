@@ -21,14 +21,22 @@ struct SettingsView: View {
                         AppGlyph(size: 54)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Jarvis").font(.title3.weight(.bold))
-                            Text(model.config?.url.absoluteString ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
-                            HStack(spacing: 5) {
-                                Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
-                                Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(.caption).foregroundStyle(.secondary)
+                            if model.isDemo {
+                                Text("体验模式 · 数据都是编造的").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            } else {
+                                Text(model.config?.url.absoluteString ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                                HStack(spacing: 5) {
+                                    Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
+                                    Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
                     .padding(.vertical, 4)
+                }
+
+                if model.isDemo {
+                    DemoSection(pair: { showPair = true })
                 }
 
                 Section {
@@ -74,20 +82,7 @@ struct SettingsView: View {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
                 }
 
-                Section {
-                    Button {
-                        if let cfg = model.config {
-                            WatchSync.shared.push(config: cfg)
-                            WatchSync.shared.push(summary: model.watchSummary())
-                            Haptics.success()
-                            model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
-                        }
-                    } label: {
-                        Label("同步到 Apple Watch", systemImage: "applewatch").lineLimit(1)
-                    }
-                } footer: {
-                    Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
-                }
+                if !model.isDemo { watchSection }
 
                 Section {
                     NavigationLink(value: SettingsPage.storage) {
@@ -99,9 +94,11 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("服务器") {
-                    Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
-                    Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: "xmark.circle") }
+                if !model.isDemo {
+                    Section("服务器") {
+                        Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
+                        Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: "xmark.circle") }
+                    }
                 }
 
                 Section("关于") {
@@ -150,11 +147,29 @@ struct SettingsView: View {
         path = p
     }
     #endif
+
+    private var watchSection: some View {
+        Section {
+            Button {
+                if let cfg = model.config {
+                    WatchSync.shared.push(config: cfg)
+                    WatchSync.shared.push(summary: model.watchSummary())
+                    Haptics.success()
+                    model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
+                }
+            } label: {
+                Label("同步到 Apple Watch", systemImage: "applewatch").lineLimit(1)
+            }
+        } footer: {
+            Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
+        }
+    }
 }
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
     case assistant, claude, devices, phoneData, notifications, storage
+
 }
 
 /// The pages the settings list opens, in either layout (`SplitNavigation`). MachinesView pushes its cards by value
@@ -176,6 +191,27 @@ private struct SettingsDestinations: ViewModifier {
         case .phoneData: PhoneDataView()
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
+        }
+    }
+
+}
+
+/// 设置 in 体验模式: what it is, and the two ways out.
+private struct DemoSection: View {
+    @Environment(AppModel.self) private var model
+    var pair: () -> Void
+
+    var body: some View {
+        Section {
+            Button(action: pair) { Label("连接我的 hub", systemImage: "qrcode.viewfinder").lineLimit(1) }
+            Button(role: .destructive) { model.unpair() } label: {
+                Label("退出体验模式", systemImage: "rectangle.portrait.and.arrow.right").lineLimit(1)
+            }
+            .accessibilityIdentifier("settings.leaveDemo")
+        } header: {
+            Text("体验模式")
+        } footer: {
+            Text("现在看到的机器、Agent、对话和收件箱都是演示数据，不连接任何服务器，发消息、审批等操作也不会真的发出去。连接自己的 hub 后自动退出体验模式。")
         }
     }
 }
@@ -254,6 +290,7 @@ struct AppGlyph: View {
 }
 
 struct WelcomeView: View {
+    @Environment(AppModel.self) private var model
     @State private var showPair = false
     @State private var appear = false
 
@@ -285,10 +322,28 @@ struct WelcomeView: View {
             .themedButton(prominent: true)
             .controlSize(.large)
             .padding(.horizontal, 24)
+            .accessibilityIdentifier("welcome.pair")
             Text("在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .padding(.top, 10)
+            // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
+            Button { model.enterDemo() } label: {
+                Label("没有 hub？先体验一下", systemImage: "play.circle").font(.headline).lineLimit(1).frame(maxWidth: .infinity, minHeight: 32)
+            }
+            .themedButton()
+            .controlSize(.large)
+            .padding(.horizontal, 24)
+            .padding(.top, 14)
+            .accessibilityIdentifier("welcome.demo")
+            Text("用编造的数据看看每个页面，不连接任何服务器")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.top, 8)
                 .padding(.bottom, 12)
         }
         .sheet(isPresented: $showPair) { PairView() }

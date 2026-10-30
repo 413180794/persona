@@ -101,6 +101,8 @@ struct RootView: View {
 }
 
 @MainActor private struct SettingsRootTab: TabContent {
+    @Environment(AppModel.self) private var model
+
     var body: some TabContent<AppTab> {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("SettingsRootTab.body")
@@ -111,6 +113,7 @@ struct RootView: View {
                 .modifier(PerfTabMount("settings"))
             #endif
         }
+        .badge(model.isDemo ? Text("体验") : nil) // 体验模式 is left from 设置
     }
 }
 

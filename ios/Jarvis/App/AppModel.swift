@@ -72,12 +72,24 @@ final class AppModel {
 
     var api: APIClient? { config.map { APIClient(config: $0) } }
     var isPaired: Bool { config != nil }
+    /// 体验模式: the made-up hub inside the app (DemoHub), no server at all. Remembered across launches until the
+    /// user leaves it or pairs.
+    var isDemo: Bool { config?.isDemo == true }
+    private static let demoKey = "demo.on"
 
     init() {
         let live = LiveConnection()
         self.live = live
         connection = ConnectionStatus(live: live)
-        config = Keychain.serverConfig
+        DemoHub.install()
+        #if DEBUG
+        // `-openWelcome YES`: start unpaired and out of 体验模式, on the pairing page (DemoModeTests).
+        if UserDefaults.standard.bool(forKey: "openWelcome") {
+            Keychain.serverConfig = nil
+            UserDefaults.standard.removeObject(forKey: Self.demoKey)
+        }
+        #endif
+        config = Keychain.serverConfig ?? (UserDefaults.standard.bool(forKey: Self.demoKey) ? .demo : nil)
         // Last known machines, agents and pending interactions: the lists are there offline and on a cold start.
         if config != nil { restoreSnapshot(); restoreOutbox() }
         if let raw = UserDefaults.standard.string(forKey: "app.tab"), let tab = AppTab(rawValue: raw) {
@@ -107,6 +119,7 @@ final class AppModel {
         live.onConnected = { [weak self] in self?.didConnect() }
         live.onChange = { [weak self] in self?.connection.update() }
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
+        DemoHub.shared.onNotSent = { [weak self] in self?.toast = Toast(DemoText.notSent) }
     }
 
     #if DEBUG
@@ -119,6 +132,7 @@ final class AppModel {
     func start() {
         guard let config else { return }
         live.connect(config)
+        if config.isDemo { return } // no watch, no device credentials: nothing to talk to
         WatchSync.shared.push(config: Keychain.watchConfig ?? config)
         Task { await upgradeCredentials() }
     }
@@ -126,6 +140,7 @@ final class AppModel {
     func pair(_ new: ServerConfig) async throws {
         let client = APIClient(config: new)
         _ = try await client.machines()
+        if isDemo { leaveDemo() } // a real hub ends 体验模式
         config = new
         Keychain.serverConfig = new
         forgetDeviceCredentials()
@@ -139,7 +154,46 @@ final class AppModel {
         Task { await upgradeCredentials() }
     }
 
+    /// 体验模式 from the pairing page: every tab runs on DemoHub's made-up data, nothing is sent anywhere.
+    func enterDemo() {
+        guard config == nil else { return }
+        DemoHub.shared.reset()
+        InboxStore.shared.forget()
+        forgetDemoChats()
+        chats = [:]
+        assistantCurrent = DemoHub.shared.mainConversation // Jarvis opens on a conversation, not a blank new one
+        UserDefaults.standard.set(true, forKey: Self.demoKey)
+        config = .demo
+        machines = []
+        sessionsByMachine = [:]
+        interactions = [:]
+        selectedTab = .chats
+        live.connect(.demo)
+        toast = Toast("已进入体验模式，数据都是编造的")
+    }
+
+    /// Out of 体验模式 (退出 or pairing): what it showed goes with it.
+    private func leaveDemo() {
+        UserDefaults.standard.set(false, forKey: Self.demoKey)
+        live.disconnect()
+        InboxStore.shared.forget()
+        forgetDemoChats()
+        chats = [:]
+        subscribers = [:]
+        shown = []
+    }
+
+    /// What the demo's conversations left behind: drafts, and cached chats (a new demo starts over).
+    private func forgetDemoChats() {
+        let demo = DemoHub.shared.sessionKeys
+        drafts = drafts.filter { !demo.contains($0.key) }
+        if let k = assistantCurrent, demo.contains(k) { assistantCurrent = nil }
+        if let k = openChat, demo.contains(k) { openChat = nil }
+        for key in demo { ChatCache.remove(key) }
+    }
+
     func unpair() {
+        if isDemo { leaveDemo() }
         live.disconnect()
         LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
         config = nil
@@ -497,6 +551,7 @@ final class AppModel {
     private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.machineID)/\(key.sessionID)" }
 
     func registerPhone() {
+        if isDemo { return } // nobody would call the phone's tools
         #if DEBUG
         // Simulator automation (scripts/sim.sh) must not take the real iPhone's phone_* tool calls.
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return }
@@ -981,6 +1036,7 @@ final class AppModel {
 
     func show(_ error: Error) {
         if error.isOffline { notDone(); return }
+        if (error as? APIError)?.code == DemoText.code { toast = Toast(DemoText.notSent); return } // 体验模式: not an error
         guard !error.isQuiet else { return } // leaving a screen cancels its loads, a timeout gets retried: not shown
         toast = Toast(error.localizedDescription, style: .error)
         Haptics.error()

@@ -22,6 +22,13 @@ final class InboxStore {
 
     var open: [InboxItem] { items.filter { !$0.isDone } }
 
+    /// Entering or leaving 体验模式: the other side's items must not show for a moment.
+    func forget() {
+        items = []
+        error = nil
+        saver.run { StateCache.save(Self.stateName, [InboxItem]()) }
+    }
+
     /// What the tab's badge counts: open items that need the user.
     var actionCount: Int { items.filter { !$0.isDone && $0.triage == .action }.count }
 

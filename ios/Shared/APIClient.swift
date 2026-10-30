@@ -19,6 +19,19 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
         self.url = url
         self.token = token
     }
+
+    /// 体验模式: the made-up hub inside the app (Jarvis/App/DemoHub.swift). Its host can never resolve, so nothing
+    /// that slipped past `APIClient.local` reaches a network.
+    static let demo = ServerConfig(url: URL(string: "https://demo.invalid")!, token: "demo")
+    var isDemo: Bool { url.host() == "demo.invalid" }
+}
+
+/// One request the app's own made-up hub answers instead of the network (体验模式).
+nonisolated struct LocalRequest: Sendable {
+    var method: String
+    var path: String
+    var query: [String: String]
+    var body: Data?
 }
 
 nonisolated struct APIError: LocalizedError, Sendable {
@@ -61,10 +74,19 @@ nonisolated struct APIError: LocalizedError, Sendable {
     }
 }
 
+nonisolated enum DemoText {
+    /// What a 体验模式 action that would reach a computer, Feishu or mail says instead.
+    static let notSent = "体验模式下不会真的发送"
+    /// `APIError.code` of such a refusal.
+    static let code = "demo"
+}
+
 /// REST client for the hub. All endpoints return JSON objects; errors are `{"error": "..."}`.
 nonisolated struct APIClient: Sendable {
     var config: ServerConfig
     var session: URLSession = .shared
+    /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
+    nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
     /// For bytes the app caches itself (chat images, Feishu media): through `.shared` the system's URLCache kept a
     /// second copy of every one of them.
@@ -84,6 +106,11 @@ nonisolated struct APIClient: Sendable {
 
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
                  timeout: TimeInterval = 30) async throws -> Data {
+        if config.isDemo {
+            guard let local = Self.local else { throw APIError(status: 503, message: "体验模式不可用") }
+            return try await local(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
+                                                body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }))
+        }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
@@ -117,6 +144,7 @@ nonisolated struct APIClient: Sendable {
     /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
     func upload(file: URL, name: String, machine: String,
                 progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
+        if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
         var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: ["name": name]), timeoutInterval: 120)
         req.httpMethod = "POST"
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
@@ -245,6 +273,7 @@ nonisolated struct APIClient: Sendable {
     func image(ref: String) async throws -> Data {
         let parts = ref.split(separator: "/", maxSplits: 2).map(String.init)
         guard parts.count == 3 else { throw APIError(status: 0, message: "bad image ref") }
+        if config.isDemo { return try await request("GET", "/api/v1/sessions/\(parts[0])/\(parts[1])/items/\(parts[2])/image") }
         var req = URLRequest(url: itemURL(machine: parts[0], session: parts[1], item: parts[2], "image"), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await Self.uncachedSession.data(for: req) // ChatImageLoader keeps it on disk
@@ -257,6 +286,7 @@ nonisolated struct APIClient: Sendable {
 
     /// An item whole: the text a page cut (`Item.fullSize`).
     func fullItem(_ k: SessionKey, id: String) async throws -> Item {
+        if config.isDemo { return try JSON.decoder.decode(Item.self, from: try await request("GET", sp(k) + "/items/\(id)/full")) }
         var req = URLRequest(url: itemURL(machine: k.machineID, session: k.sessionID, item: id, "full"), timeoutInterval: 60)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await Self.uncachedSession.data(for: req)

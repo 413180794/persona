@@ -151,6 +151,20 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 - 列表行（`NavigationLink`）上的 `accessibilityIdentifier` 在视图树里出现两次（cell 和里面的 button），数行数、取第 n 行用 `app.buttons.matching(identifier:)`。
 - `SearchOpenTests` 以前不带 `-dev.openChat ""`：上一次测试留下打开的对话，启动后恢复进去，右滑返回回不到列表，两个用例都挂（master 上也一样）。
 
+### 体验模式（`DemoModeTests`、`DemoHubTests`）
+
+不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/DemoModeTests`，深色再跑一遍。
+`testWalkThroughAndLeave` 从配对页（`-openWelcome YES`）进体验模式，走一遍 Agents（筛选、细列表、Claude 会话发消息收到演示回复、终端、提问卡片作答、
+计划卡片、Codex 会话、表格和链接）、机器监控和 24 小时曲线、Jarvis（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
+每页断言没有「体验模式里没有这项数据」，最后从设置退出、重启后还在配对页；`testStaysAcrossLaunches` 断言体验模式重启后还在。
+跑完看模拟器日志里有没有页面要了 `DemoHub` 没有的接口：
+`xcrun simctl spawn <udid> log show --last 10m --predicate 'eventMessage CONTAINS "DemoHub miss"'`（应为空）。
+`DemoHubTests`（单元测试）让每个接口经 `APIClient` 解码，并检查副作用被拒、消息有回显和回复。
+
+- 列表行被快速筛选条（`safeAreaBar`）盖住时 XCUITest 仍说它 `isHittable`，点下去点到的是筛选条（「需要你」被选上）：点行之前把它滚到筛选条以下、tab 栏以上，
+  而且一次只拖三分之一屏（`swipeUp` 会甩过头）。
+- 对话页有两个「终端」按钮（展开的页头在时钟下面、折叠后的小页头里），取 `frame.minY > 40` 且能点的那个。
+
 ## herdr 联调
 
 `./scripts/test-herdr.sh`：起一个独立的 herdr 会话（`herdr --session jarvis-test-<pid> server`，无头，和你正在用的 herdr 互不相干，

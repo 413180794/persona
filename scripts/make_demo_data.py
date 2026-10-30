@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Writes the app's 体验模式 data (ios/Jarvis/Resources/Demo.json) from scripts/mock_hub.py's made-up hub.
+
+    python3 scripts/make_demo_data.py        # rerun after changing mock_hub.py's data; commit the JSON
+
+体验模式 (docs/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
+own requests from this file (ios/Jarvis/App/DemoHub.swift) and never connects anywhere. Everything here is made up,
+like the mock hub's: no real names, hosts or messages (scripts/privacy_check.py scans the file, check_bundle_privacy.py
+the built app). Times are stored relative to when this ran ("@rel:<seconds>", "@unix:<seconds>") and the app puts
+them next to its own clock, so the demo always looks current. Machine metrics are drawn by the app itself.
+"""
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(HERE, "..", "ios", "Jarvis", "Resources", "Demo.json")
+
+os.environ.update(MOCK_TASKS="1", MOCK_RICH="1")
+sys.path.insert(0, HERE)
+import mock_hub as m  # noqa: E402
+
+ISO = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$")
+T0 = m.NOW.timestamp()
+
+
+def relative(v, key=None):
+    """Every timestamp as an offset from now (strings) or from the Unix now (`boot_time`)."""
+    if isinstance(v, dict):
+        return {k: relative(x, k) for k, x in v.items()}
+    if isinstance(v, list):
+        return [relative(x) for x in v]
+    if isinstance(v, str) and ISO.match(v):
+        return "@rel:%d" % round(m.datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp() - T0)
+    if key == "boot_time" and isinstance(v, int):
+        return "@unix:%d" % (v - int(T0))
+    return v
+
+
+# A few more agents, so the list has several spaces in every state and the filters have something to do.
+EXTRA = [
+    ("studio", "docs-site", 4, "首页文案改成中英双语", "done", "unread", 25, "中英文两套首页都好了，语言按浏览器设置自动选。"),
+    ("studio", "docs-site", 4, "文档站加全文搜索", "working", "working", 1, "索引建好了，正在调中文分词。"),
+    ("studio", "docs-site", 4, "修复深色模式下的代码块配色", "idle", "idle", 300, "代码块配色已经按系统深浅色切换。"),
+    ("server", "infra", 2, "部署脚本支持一键回滚", "done", "unread", 40, "回滚做好了：保留最近 5 个版本，一条命令切回上一个。"),
+    ("server", "infra", 2, "清理过期的 Docker 镜像", "idle", "idle", 600, "清掉了 38 GB 没在用的镜像，加了每周自动清理。"),
+    ("server", "infra", 2, "给 API 加限流", "working", "working", 3, "按 token 做令牌桶限流，正在补压测。"),
+    ("macbook", "weather", 1, "整理小组件的截图素材", "idle", "idle", 900, "六张截图都按 App Store 的尺寸导出了。"),
+]
+sessions = list(m.SESSIONS)
+for n, (mid, space, sidx, title, status, state, minutes, last) in enumerate(EXTRA):
+    sid = "c7e9f1a3-0000-4000-8000-%012d" % (n + 1)
+    slot = 10 + n
+    s = m.sess(mid, sid, title, "/Users/me/code/" + space if mid != "server" else "/home/me/code/" + space, status, state,
+               space, sidx, "t%d" % slot, slot, minutes, last, agent="codex" if n % 3 == 1 else "claude")
+    if state == "idle":
+        s["seen_at"] = m.ago(minutes=minutes - 1)
+    sessions.append(s)
+    m.ITEMS[sid] = [m.it("user", "text", minutes + 6, text=title), m.it("assistant", "text", minutes, text=last)]
+
+# The link in the rich reply opens in the app: somewhere that exists.
+for x in m.ITEMS[m.RICH]:
+    if x["kind"] == "text" and x["role"] == "assistant":
+        x["text"] = x["text"].replace("http://192.0.2.10:23140/", "https://example.com/")
+
+# Feishu chats behind the inbox's Feishu items (InboxItem.larkConversation).
+def lark(feed, n, sender, text, minutes, mine=False):
+    return {"id": "om_%s_%d" % (feed, n), "position": str(n), "sender_id": "u_" + sender, "sender_name": sender,
+            "is_mine": mine, "type": "TEXT", "text": text, "recalled": False, "reply_count": 0, "created_at": m.ago(minutes=minutes),
+            "parts": [{"kind": "text", "text": text}]}
+
+
+LARK = {
+    "f1": [lark("f1", 98, "我", "候选包周四晚上能出来吗？", 60 * 26, mine=True), lark("f1", 99, "韩梅梅", "应该可以，我明天再确认一下", 60 * 25),
+           lark("f1", 100, "韩梅梅", "周五的发布能赶上吗？", 40), lark("f1", 101, "韩梅梅", "下午我要和客户确认时间", 18)],
+    "f2": [lark("f2", 199, "李雷", "大家下午 3 点评审新版图标", 120), lark("f2", 200, "Tom", "收到", 100),
+           lark("f2", 201, "李雷", "新版图标放在设计稿第 3 页了", 90), lark("f2", 202, "李雷", "@你 下午评审前看一眼？", 55)],
+    "f3": [lark("f3", 299, "Tom", "这周六去后山徒步，报名的接龙", 120), lark("f3", 300, "Lucy", "1. Lucy", 110),
+           lark("f3", 301, "Tom", "周六早上 8 点地铁站集合，记得带水", 30)],
+}
+
+MAIL = {
+    "501": {"account_id": "acc1", "mailbox": "INBOX", "uid": 501, "subject": "下周的分享能不能提前到周二？",
+            "from": {"name": "Lucy Wang", "email": "lucy@example.com"}, "to": [{"name": "我", "email": "me@example.com"}],
+            "date": m.ago(hours=3), "seen": False,
+            "text": "Hi，\n\n周四我临时要出差，下周的分享能不能挪到周二下午？时间和会议室我来约。\n\n谢谢！\nLucy"},
+    "502": {"account_id": "acc1", "mailbox": "INBOX", "uid": 502, "subject": "你的订单已发货",
+            "from": {"name": "示例商城", "email": "shop@example.com"}, "to": [{"email": "me@example.com"}], "date": m.ago(hours=5),
+            "seen": False, "text": "订单 2026102800123 已由快递揽收，预计周五送达。"},
+    "503": {"account_id": "acc1", "mailbox": "INBOX", "uid": 503, "subject": "本周精选：10 个 SwiftUI 技巧",
+            "from": {"name": "Weekly Digest", "email": "news@example.com"}, "to": [{"email": "me@example.com"}], "date": m.ago(hours=8),
+            "seen": True, "text": "这周我们整理了 10 个 SwiftUI 的小技巧：从列表性能到动画曲线……"},
+}
+
+
+def kb(kind, id, name, one_line, tags, minutes, extra=None):
+    e = {"kind": kind, "id": id, "name": name, "one_line": one_line, "importance": "high", "relevance": 80, "tags": tags,
+         "updated": m.ago(minutes=minutes)}
+    if extra:
+        e["extra"] = extra
+    return e
+
+
+KB = {
+    "projects": [kb("projects", "weather", "天气 App", "主屏幕小组件这周上线", ["iOS"], 30, "product"),
+                 kb("projects", "blog", "个人博客", "已迁移到 Astro", ["web"], 60 * 12, "product:done")],
+    "people": [kb("people", "han-meimei", "韩梅梅", "产品经理，负责周五的发布", ["同事"], 40),
+               kb("people", "li-lei", "李雷", "设计师，在做新版图标", ["同事"], 55)],
+    "chats": [], "docs": [], "meetings": [], "events": [],
+}
+
+def phone_frames(cols=38, rows=30, ticks=40):
+    """The made-up Claude screen laid out for a phone's width (mock_hub.phone_screen): the first frame whole, then
+    the spinner's line once a tick. mock_hub.terminal_frames is 96 columns: a phone folds every line of it."""
+    E = "\x1b["
+    out = []
+    for n in range(ticks):
+        lines, at = m.phone_screen(cols, rows, "", n)
+        if n == 0:
+            body = E + "2J" + "".join(E + "%d;1H" % (i + 1) + l for i, l in enumerate(lines))
+        else:
+            body = "".join(E + "%d;1H" % (i + 1) + l + E + "K" for i, l in enumerate(lines) if "Brewing" in l)
+        data = E + "?2026h" + E + "?25l" + body + E + "%d;3H" % (at + 1) + E + "?25h" + E + "?2026l"
+        out.append({"seq": n + 1, "full": n == 0, "cols": cols, "rows": rows,
+                    "data": m.base64.b64encode(data.encode()).decode()})
+    return out
+
+
+data = {
+    "machines": m.MACHINES,
+    "sessions": sessions + m.ASSISTANT,
+    "items": m.ITEMS,
+    "full": m.FULL,
+    "interactions": m.INTERACTIONS,
+    "assistant": {"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant", "timezone": "Asia/Shanghai",
+                  "notes_effective": "", "conversations": m.ASSISTANT, "main": m.ASK1},
+    "routines": m.ROUTINES,
+    "followups": m.FOLLOWUPS,
+    "runs": m.RUNS,
+    "memory": m.MEMORY,
+    "inbox": m.INBOX,
+    "mail_accounts": m.MAIL_ACCOUNTS,
+    "mail": MAIL,
+    "lark": LARK,
+    "kb": KB,
+    "screen": m.TERMINAL,
+    "terminal_frames": phone_frames(),
+    "tokens": m.TOKENS,
+    "prefs": m.PREFS,
+    "pins": {"spaces": ["macbook/weather"], "sessions": []},
+    "launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}],
+    "dirs": m.mock_dirs("macbook", ""),
+}
+
+with open(OUT, "w") as f:
+    json.dump(relative(data), f, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    f.write("\n")
+print("wrote %s (%d KB)" % (os.path.relpath(OUT), os.path.getsize(OUT) // 1024))

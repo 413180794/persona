@@ -132,6 +132,14 @@ nonisolated enum ServerEvent: Sendable {
     }
 }
 
+/// The 体验模式 hub's end of the socket (Jarvis/App/DemoHub.swift): what the app sends goes to `receive`, and it
+/// answers through `deliver` with the same JSON a hub sends.
+protocol LocalSocket: AnyObject {
+    func open(deliver: @escaping (Data) -> Void)
+    func receive(_ message: [String: Any])
+    func close()
+}
+
 /// The app's WebSocket to the hub: reconnects with backoff and replays subscriptions.
 @Observable
 final class LiveConnection {
@@ -158,6 +166,9 @@ final class LiveConnection {
 
     @ObservationIgnored private var config: ServerConfig?
     @ObservationIgnored private var task: URLSessionWebSocketTask?
+    /// The demo config's socket, made by `makeLocal` (DemoHub registers it at launch).
+    @ObservationIgnored private var local: LocalSocket?
+    @ObservationIgnored static var makeLocal: (() -> LocalSocket)?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var backoff: TimeInterval = 1
     @ObservationIgnored private let session = URLSession(configuration: .default)
@@ -180,6 +191,8 @@ final class LiveConnection {
         generation += 1
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        local?.close()
+        local = nil
         state = .idle
         stalled = false
         nextTry = nil
@@ -211,6 +224,12 @@ final class LiveConnection {
         generation += 1
         let gen = generation
         task?.cancel(with: .goingAway, reason: nil)
+        local?.close()
+        local = nil
+        if config.isDemo {
+            openLocal(gen)
+            return
+        }
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
         var req = URLRequest(url: comps.url!)
@@ -296,6 +315,28 @@ final class LiveConnection {
         }
     }
 
+    /// 体验模式: no network, no heartbeat; the made-up hub's messages arrive like a socket's.
+    private func openLocal(_ gen: Int) {
+        guard let make = Self.makeLocal else {
+            state = .failed("体验模式不可用")
+            return
+        }
+        let socket = make()
+        local = socket
+        state = .connecting
+        let prepare = prepareEvent
+        socket.open { [weak self] data in
+            guard let self, gen == self.generation, let event = ServerEvent.decode(data) else { return }
+            prepare?(event)
+            if self.state != .connected {
+                self.state = .connected
+                self.onConnected?()
+            }
+            self.lastHeard = .now
+            self.onEvent?(event)
+        }
+    }
+
     private func scheduleReconnect(_ gen: Int) {
         let delay = backoff
         backoff = min(backoff * 2, 20)
@@ -308,6 +349,10 @@ final class LiveConnection {
     }
 
     func send(_ object: [String: Any]) {
+        if let local {
+            local.receive(object)
+            return
+        }
         guard let task, state == .connected,
               let data = try? JSONSerialization.data(withJSONObject: object),
               let s = String(data: data, encoding: .utf8) else { return }
@@ -315,6 +360,12 @@ final class LiveConnection {
     }
 
     func send<T: Encodable>(encodable: T) {
+        if let local {
+            if let data = try? JSON.encoder.encode(encodable), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                local.receive(object)
+            }
+            return
+        }
         guard let task, state == .connected, let data = try? JSON.encoder.encode(encodable),
               let s = String(data: data, encoding: .utf8) else { return }
         task.send(.string(s)) { _ in }

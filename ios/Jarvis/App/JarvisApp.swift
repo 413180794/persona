@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        guard userInfo["jarvis_wake"] != nil, AppModel.shared.isPaired else {
+        guard userInfo["jarvis_wake"] != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
             completionHandler(.noData)
             return
         }
@@ -215,7 +215,7 @@ final class PushRegistrar {
     static let shared = PushRegistrar()
 
     func registerIfPossible() {
-        guard AppModel.shared.isPaired else { return }
+        guard AppModel.shared.isPaired, !AppModel.shared.isDemo else { return }
         #if DEBUG
         // Simulator automation: no permission alert covering the screenshots.
         if UserDefaults.standard.string(forKey: "pairURL") != nil { return }
