@@ -143,7 +143,9 @@ struct AssistantProfileView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        // Room above for the face's glow (radius 16): the list row clips what sticks out, as a hard square edge.
+        .padding(.top, 28)
+        .padding(.bottom, 12)
     }
 
     /// Any assistant conversation running a turn right now.

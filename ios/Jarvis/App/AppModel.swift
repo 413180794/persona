@@ -61,6 +61,9 @@ final class AppModel {
         }
     }
     var debugShowNewChat = false
+    /// Bumped whenever another page hands the user to a Jarvis conversation (`askJarvis`): the Jarvis tab goes back
+    /// to its conversation even when it is the one already shown (a pushed 知识库 page would otherwise stay on top).
+    var assistantReveal = 0
 
     @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
     @ObservationIgnored var flushingOutbox = false
@@ -207,6 +210,7 @@ final class AppModel {
     func askJarvis(_ text: String) async {
         guard let api else { return }
         selectedTab = .assistant
+        assistantReveal += 1
         do {
             if let main = assistantMain { // an ended one is resumed by the hub
                 assistantCurrent = main

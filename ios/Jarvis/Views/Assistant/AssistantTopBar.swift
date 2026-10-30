@@ -21,6 +21,8 @@ struct AssistantTopBar: View {
 
     /// The bar's height below the status bar: what the conversation leaves free at its top so nothing hides under it.
     static let height: CGFloat = 70
+    /// How far below the bar the fog fades out.
+    static let fade: CGFloat = 30
 
     private var session: Session? { key.flatMap { model.session($0) } }
     private var machineID: String { key?.machineID ?? model.assistantConfig?.machineID ?? model.hubMachineID }
@@ -70,10 +72,12 @@ struct AssistantTopBar: View {
         .padding(.top, 2)
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) {
-            // From the top of the screen (under the status bar) to a little below the bar.
+            // From the top of the screen (under the status bar) to a little below the bar: solid down to the bar's
+            // bottom edge, fading out below it (fading under the pill let the messages show through the name).
             GeometryReader { g in
-                TopFog()
-                    .frame(width: g.size.width, height: g.safeAreaInsets.top + Self.height + 28)
+                let solid = g.safeAreaInsets.top + Self.height - 6
+                TopFog(solidHeight: solid, fadeHeight: Self.fade)
+                    .frame(width: g.size.width, height: solid + Self.fade)
                     .offset(y: -g.safeAreaInsets.top)
             }
         }
@@ -261,15 +265,19 @@ nonisolated enum AssistantCopyText {
     }
 }
 
-/// The fog under a floating bar: the page's own color, blurred, fading out downwards (the content scrolls under it
-/// and shows through towards the bottom edge).
+/// The fog under a floating bar: the page's own color, blurred, solid for `solidHeight` and then fading out over
+/// `fadeHeight` (the content scrolls under it and shows through only below the bar).
 struct TopFog: View {
+    var solidHeight: CGFloat
+    var fadeHeight: CGFloat
+
     var body: some View {
+        let solid = solidHeight / max(solidHeight + fadeHeight, 1)
         ZStack {
             Rectangle().fill(.regularMaterial)
             Theme.pageBackground.opacity(0.82)
         }
-        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.62),
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: solid),
                                      .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
         .allowsHitTesting(false)
         .accessibilityHidden(true)

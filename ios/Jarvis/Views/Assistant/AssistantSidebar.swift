@@ -4,12 +4,17 @@ import UIKit
 /// How far the Jarvis tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
 /// the drawer's frame (offsets, the page's corners), never the conversation.
 @Observable final class AssistantDrawer {
-    var progress: CGFloat = 0
+    var progress: CGFloat = 0 {
+        didSet { if (progress > 0) != isOut { isOut = progress > 0 } }
+    }
+    /// Out at all: changes only when the sidebar starts to come out or is fully back, so views that only care
+    /// whether it is out (the tab bar) do not redraw on every frame of a drag.
+    private(set) var isOut = false
     /// The sidebar's width, measured by `AssistantDrawerLayout`.
     @ObservationIgnored var width: CGFloat = 300
     @ObservationIgnored var dragStart: CGFloat = 0
 
-    var isOpen: Bool { progress > 0 }
+    var isOpen: Bool { isOut }
 
     func open() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -48,6 +53,8 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
                         .accessibilityIdentifier("assistant-sidebar")
                 }
                 page
+                    // While the sidebar is out the page is only a card to tap back to (the overlay below says so).
+                    .accessibilityHidden(p > 0)
                     .mask { RoundedRectangle(cornerRadius: 34 * p, style: .continuous).ignoresSafeArea() }
                     .background {
                         RoundedRectangle(cornerRadius: 34 * p, style: .continuous)
@@ -205,7 +212,8 @@ struct AssistantSidebar: View {
                         ForEach(hits) { conversation($0) }
                     } else {
                         entries
-                        let pinned = all.filter(isPinned).sorted { a, _ in a.key == model.assistantMain }
+                        let main = model.assistantMain
+                        let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
                         if !pinned.isEmpty {
                             heading("置顶")
                             ForEach(pinned) { conversation($0) }

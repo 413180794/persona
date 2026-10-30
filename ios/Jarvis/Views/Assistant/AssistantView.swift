@@ -40,6 +40,9 @@ struct AssistantView: View {
                              openKnowledge: { drawer.close(); showKnowledge = true },
                              openSettings: { drawer.close(); model.selectedTab = .settings })
         }, page: stack)
+        // The sidebar takes the whole height, like ChatGPT's: the tab bar would sit over its bottom row and repeat
+        // its 设置 right under the sidebar's own.
+        .toolbarVisibility(drawer.isOpen ? .hidden : .automatic, for: .tabBar)
     }
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
@@ -76,8 +79,10 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
-            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root.
+            // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Jarvis
+            // from the knowledge base, even when its conversation is the one already open.
             .onChange(of: model.assistantCurrent) { backToRoot() }
+            .onChange(of: model.assistantReveal) { backToRoot(); drawer.close() }
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
             // `-openAssistantSidebar YES`: the sidebar is out.
@@ -98,6 +103,7 @@ struct AssistantView: View {
     private func backToRoot() {
         showProfile = false
         showRoutines = false
+        showKnowledge = false
     }
 
     private func newConversation() {
