@@ -676,8 +676,13 @@ struct QuickFilterBar: View {
         .padding(.vertical, 6)
     }
 
+    /// 全部, and the states that have agents right now; the chosen one stays while it empties, so it can be left.
+    private var shown: [AgentFilter] {
+        AgentFilter.allCases.filter { $0 == .all || $0 == selection || (counts[$0] ?? 0) > 0 }
+    }
+
     @ViewBuilder private func chips(padding: CGFloat) -> some View {
-        ForEach(AgentFilter.allCases) { f in
+        ForEach(shown) { f in
             let on = f == selection
             let tone = f.state?.tone
             let tint = tone?.text ?? Theme.accent
