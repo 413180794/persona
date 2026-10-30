@@ -4,9 +4,9 @@ import Testing
 
 struct KnowledgeTests {
     @Test func timelineLinesSplitIntoWhenSourceAndText() {
-        let l = KBLogLine("- 2026-10-30 23:16 · Agent · 迭代需求实现 · example-machine · Round 1 is on the dev set.")
+        let l = KBLogLine("- 2026-10-30 23:16 · Agent · 迭代需求实现 · 一台电脑 · Round 1 is on the dev set.")
         #expect(l.when == "2026-10-30 23:16")
-        #expect(l.source == "Agent · 迭代需求实现 · example-machine")
+        #expect(l.source == "Agent · 迭代需求实现 · 一台电脑")
         #expect(l.text == "Round 1 is on the dev set.")
         #expect(l.shortWhen(now: ISO8601DateFormatter().date(from: "2026-11-01T00:00:00Z")!) == "10-30 23:16")
         #expect(l.shortWhen(now: ISO8601DateFormatter().date(from: "2027-02-01T00:00:00Z")!) == "2026-10-30 23:16")
