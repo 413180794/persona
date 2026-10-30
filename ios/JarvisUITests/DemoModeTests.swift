@@ -148,10 +148,11 @@ final class DemoModeTests: XCTestCase {
         app.swipeDown() // the keyboard away
         sleep(1)
         // The page's own bar: the compact copy that shows once the chat scrolled (the full one sits under the clock).
-        let buttons = app.buttons.matching(identifier: "terminal")
-        let bar = (0..<buttons.count).map { buttons.element(boundBy: $0) }.first { $0.isHittable && $0.frame.minY > 40 }
-        guard let bar else { return XCTFail("no 终端 on the session page:\n\(app.debugDescription)") }
-        bar.tap()
+        let more = app.buttons["更多"].firstMatch
+        if !more.isHittable { app.swipeDown() } // the header folded away: scrolling the chat brings it back
+        guard more.waitForExistence(timeout: 5) else { return XCTFail("no ··· on the session page:\n\(app.debugDescription)") }
+        more.tap()
+        see(app.buttons["终端"].firstMatch, "终端 in the ··· menu", timeout: 5).tap()
         see(app.descendants(matching: .any)["terminal-close"], "the terminal", timeout: 10)
         let tips = app.buttons["知道了"] // the terminal's tips, the first time
         if tips.waitForExistence(timeout: 3) { tips.tap() }

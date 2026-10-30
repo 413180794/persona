@@ -53,9 +53,13 @@ final class SwipeBackTests: XCTestCase {
     /// The header watches touches (to stay open while used): its buttons must still work.
     @MainActor func testHeaderButtonsStillWork() throws {
         let app = try launch([])
+        let more = app.buttons["更多"]
+        XCTAssertTrue(more.waitForExistence(timeout: 15), "the chat did not open")
+        more.tap()
         let terminal = app.buttons["终端"]
-        XCTAssertTrue(terminal.waitForExistence(timeout: 15), "the chat did not open")
+        XCTAssertTrue(terminal.waitForExistence(timeout: 5), "no 终端 in the ··· menu")
         terminal.tap()
-        XCTAssertTrue(app.textFields["发送文字到终端"].waitForExistence(timeout: 5), "tapping 终端 did nothing")
+        // The terminal's own bar: it came up over the page (the text field shows only in some input modes).
+        XCTAssertTrue(app.descendants(matching: .any)["terminal-close"].waitForExistence(timeout: 5), "tapping 终端 did nothing")
     }
 }

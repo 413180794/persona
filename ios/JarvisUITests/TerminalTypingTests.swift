@@ -183,13 +183,17 @@ final class TerminalTypingTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget,
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
         app.launch()
-        let tab = app.buttons["终端"].firstMatch
+        let tab = app.buttons["更多"].firstMatch // the terminal is in the header's ··· menu
         XCTAssertTrue(tab.waitForExistence(timeout: 15), "no session page:\n\(app.debugDescription)")
         sleep(3) // connected by now
         let unfold = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
         let opened = app.descendants(matching: .any)["terminal-close"] // the terminal's bar: it came up over the page
         for _ in 0..<5 where !opened.exists { // the header may have folded away: scrolling the chat brings it back
-            if tab.isHittable, tab.frame.minY > 60 { tab.tap() } else if unfold.exists, unfold.isHittable { unfold.tap() } else {
+            if tab.isHittable, tab.frame.minY > 60 {
+                tab.tap()
+                let item = app.buttons["终端"].firstMatch
+                if item.waitForExistence(timeout: 3) { item.tap() }
+            } else if unfold.exists, unfold.isHittable { unfold.tap() } else {
                 app.swipeDown()
             }
             sleep(1)

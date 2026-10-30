@@ -393,7 +393,7 @@ final class AgentsListTests: XCTestCase {
     @MainActor func testFilterBarHugsTheTopBehindARestoredChat() throws {
         let key = try XCTUnwrap(firstAgentKey())
         launch(chat: key)
-        see(app.buttons["terminal"].firstMatch, "the restored chat", timeout: 15)
+        see(app.buttons["更多"].firstMatch, "the restored chat", timeout: 15)
         backToList()
         XCTAssertLessThan(gapAboveFilters("restored-back"), 24, "back from the restored chat")
         shot("filters-restored-back")

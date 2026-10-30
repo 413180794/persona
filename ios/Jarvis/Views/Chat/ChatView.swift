@@ -1247,21 +1247,17 @@ struct ChatView: View {
             .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
                                 : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
-            // A loop or background work: a small mark; then the terminal, a tap away even with the header folded.
+            // A loop or background work: a small mark. As wide as back either way, so the place stays centered.
+            // The terminal is in the ··· menu (no button of its own in the header).
             HStack(spacing: 0) {
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 44, height: 34)
                         .accessibilityLabel("循环与后台任务，点按查看")
                 }
-                Button { Haptics.tap(); showTerminal = true } label: {
-                    Image(systemName: "terminal").font(.subheadline.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("终端")
             }
+            .frame(minWidth: 44)
         }
         .padding(.horizontal, 4)
         .frame(height: ChatChrome.compactHeight)
@@ -1411,20 +1407,14 @@ struct ChatView: View {
                         Spacer(minLength: 0)
                         titleButton
                         Spacer(minLength: 0)
-                        // The terminal comes up from the bottom over the page (TerminalCover); files and Git are a swipe
-                        // to the left or the ··· menu away — no tab row (docs/ios.md).
-                        Button { Haptics.tap(); showTerminal = true } label: {
-                            Image(systemName: "terminal").font(.callout.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
-                                .contentShape(.circle)
-                        }
-                        .buttonStyle(.plain)
-                        .surface(interactive: true, in: .circle)
-                        .accessibilityLabel("终端")
+                        // The terminal (it comes up from the bottom over the page, TerminalCover), files and Git are in
+                        // the ··· menu; files and Git also a swipe to the left away — no tab row (docs/ios.md).
                         Menu { moreMenuItems } label: {
                             Image(systemName: "ellipsis").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                                 .contentShape(.circle)
                         }
                         .surface(interactive: true, in: .circle)
+                        .accessibilityLabel("更多")
                     }
                 }
                 .padding(.horizontal, 16)
