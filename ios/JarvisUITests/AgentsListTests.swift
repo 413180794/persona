@@ -270,6 +270,62 @@ final class AgentsListTests: XCTestCase {
         shot("agents-unread-empty")
     }
 
+    // MARK: The filter bar stays under the bar
+
+    /// What sits above the filter bar: the navigation bar, and the search field while it shows.
+    private func gapAboveFilters(_ state: String) -> CGFloat {
+        let bar = filter("all").frame
+        let nav = app.navigationBars.firstMatch.frame
+        let search = app.searchFields.firstMatch
+        let above = max(nav.maxY, search.exists && search.frame.height > 1 && search.frame.minY >= 0 ? search.frame.maxY : 0)
+        print("filters \(state): bar \(bar) nav \(nav) search \(search.exists ? search.frame : .zero) gap \(bar.minY - above)")
+        return bar.minY - above
+    }
+
+    /// The bar hugs the navigation bar / search field in every state: on device (TestFlight 35) it stayed where it sat
+    /// under the open search field once scrolling folded the field away, leaving ~120 pt of blurred list above it.
+    @MainActor func testFilterBarHugsTheTop() throws {
+        launch()
+        let limit: CGFloat = 16
+        XCTAssertLessThan(gapAboveFilters("top"), limit, "before scrolling")
+        shot("filters-top")
+        // And it does not move with the list: the search field above it stays open (nothing folds away to leave a gap).
+        let y = filter("all").frame.minY
+        app.swipeUp(velocity: .slow)
+        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "scrolled")
+        XCTAssertLessThan(gapAboveFilters("scrolled"), limit, "after scrolling a screen")
+        shot("filters-scrolled")
+        // While the list still moves.
+        app.swipeUp(velocity: .fast)
+        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "moving")
+        XCTAssertLessThan(gapAboveFilters("moving"), limit, "while scrolling")
+        for _ in 0..<12 { app.swipeUp(velocity: .fast) }
+        sleep(1)
+        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "bottom")
+        XCTAssertLessThan(gapAboveFilters("bottom"), limit, "at the bottom")
+        shot("filters-bottom")
+        for _ in 0..<14 { app.swipeDown(velocity: .fast) }
+        sleep(1)
+        XCTAssertLessThan(gapAboveFilters("back"), limit, "back at the top")
+        // Pull to refresh.
+        let w = app.windows.firstMatch
+        w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+            .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "refreshed")
+        XCTAssertLessThan(gapAboveFilters("refreshed"), limit, "after pulling to refresh")
+        shot("filters-refreshed")
+        // Searching.
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("platform")
+        sleep(1)
+        XCTAssertLessThan(gapAboveFilters("searching"), limit, "while searching")
+        shot("filters-searching")
+        app.swipeUp(velocity: .slow)
+        XCTAssertLessThan(gapAboveFilters("searching-scrolled"), limit, "searching, scrolled")
+        shot("filters-searching-scrolled")
+    }
+
     // MARK: Long list
 
     /// Scrolling ~120 agents and switching the look: hitches in the test report (no hard limit on a simulator).

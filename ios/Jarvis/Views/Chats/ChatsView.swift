@@ -275,7 +275,10 @@ struct ChatsView: View {
             // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
             // (toolbar(removing: .title) would hide that too).
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, isPresented: $searching, prompt: "搜索空间、标签、会话、内容")
+            // The search field always shows: when scrolling folded it away, the filter bar (safeAreaBar) stayed where
+            // it sat under the open field on device (TestFlight 35), ~120 pt of blurred list between it and the bar.
+            .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
             .toolbar {
                 ToolbarItem(placement: .principal) { ConnectionTitle() }
