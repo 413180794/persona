@@ -137,21 +137,12 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if style == .dev { if sideBars { sideHeader } else { devChrome } }
         }
-        .overlay(alignment: .top) {
-            if showInfo {
-                // A tap anywhere outside the card closes it (the title toggles it too).
-                Color.clear.contentShape(.rect).ignoresSafeArea()
-                    .onTapGesture { withAnimation(.snappy) { showInfo = false } }
-                    .accessibilityHidden(true)
-            }
-        }
-        .overlay(alignment: .top) {
-            if showInfo {
-                DevInfoCard(key: key, session: session)
-                    .padding(.horizontal, 12)
-                    .padding(.top, (style == .dev ? chrome.height : 0) + 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
+        // The session's details come up from the bottom (2026-10-31: the card that dropped from the title covered the
+        // chat and needed a second tap on the title; a sheet closes with a swipe or a tap above it).
+        .sheet(isPresented: $showInfo) {
+            SessionInfoSheet(key: key, session: session)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         // Left alone for a few seconds, the open chrome folds away by itself (the page goes back to being all chat).
@@ -1325,7 +1316,7 @@ struct ChatView: View {
         let link = model.connection.shown
         return Button {
             Haptics.tap()
-            if link != .online { showLink = true } else { withAnimation(.snappy) { showInfo.toggle() } }
+            if link != .online { showLink = true } else { showInfo = true }
         } label: {
             VStack(spacing: 1) {
                 Text(title).font(.headline).lineLimit(1)
@@ -1335,9 +1326,6 @@ struct ChatView: View {
                     } else {
                         HStack(spacing: 3) {
                             if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
-                            Image(systemName: "chevron.down")
-                                .font(.caption2.weight(.bold)).imageScale(.small)
-                                .rotationEffect(.degrees(showInfo ? 180 : 0))
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1350,7 +1338,7 @@ struct ChatView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(link != .online ? "\(title)，\(link.title)，查看连接详情" : "\(title)，\(showInfo ? "收起" : "查看")会话信息")
+        .accessibilityLabel(link != .online ? "\(title)，\(link.title)，查看连接详情" : "\(title)，查看会话信息")
         .connectionDetails($showLink)
     }
 
@@ -1372,13 +1360,21 @@ struct ChatView: View {
         }
     }
 
+    /// Quiet states (已看, 未运行) say nothing in words (2026-10-31 user request): the dot carries them, the line is where
+    /// it runs. 需要你 / 工作中 N 分 / 完成未看 still lead the line.
     private func subtitleLine(_ s: Session, _ words: String, _ rest: [String]) -> some View {
-        let tail = rest.filter { !$0.isEmpty }.map { " · " + $0 }.joined()
+        let parts = rest.filter { !$0.isEmpty }
+        if Self.quiet(s.state) {
+            return Text(parts.isEmpty ? words : parts.joined(separator: " · ")).foregroundStyle(.secondary).lineLimit(1)
+        }
+        let tail = parts.map { " · " + $0 }.joined()
         return (Text(words).fontWeight(.semibold)
             .foregroundStyle(s.state == .idle || s.state == .offline || s.state == .unknown ? Color.secondary : s.state.tone.text)
             + Text(tail).foregroundStyle(.secondary))
             .lineLimit(1) // ViewThatFits picks by the ideal (one-line) width; the last one truncates
     }
+
+    static func quiet(_ state: AgentState) -> Bool { state == .idle || state == .offline || state == .unknown }
 
     /// "工作中 22 分" while a turn runs (minutes: the work line in the chat has the seconds), else the state's name.
     private func stateWords(_ s: Session, now: Date) -> String {
@@ -2279,55 +2275,111 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 
 /// Developer facts about a session, shown under the title: model, context in use, git branch, Claude Code version…
-struct DevInfoCard: View {
+/// 会话信息, from the bottom: who and where at the top, then what it runs, how far it has got, its settings and where
+/// its files are; copying the id or the resume command last. Settings-app grouping, values on the right.
+struct SessionInfoSheet: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let key: SessionKey
     var session: Session?
     @State private var info: APIClient.SessionInfo?
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let info {
-                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 8) {
-                    row("cpu", "模型", [Fmt.model(info.model) ?? info.model, info.launcher].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                    row("gauge.with.dots.needle.33percent", "上下文", Self.tokens(info.contextTokens) + " tokens" + (info.compactions > 0 ? " · 压缩过 \(info.compactions) 次" : ""))
-                    row("arrow.triangle.branch", "分支", info.gitBranch ?? "—")
-                    row("folder", "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home))
-                    row("macbook", "位置", [model.machine(key.machineID)?.name, session?.spaceName, session?.slotLabel].compactMap { $0 }.joined(separator: " › "))
-                    row("text.bubble", "对话", "\(info.turns) 轮 · 共生成 \(Self.tokens(info.outputTokens)) tokens")
-                    row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode) ?? "—")
-                    row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort) ?? "—")
-                    row("shippingbox", agent, info.version ?? "—")
-                    if let started = info.startedAt, started.isMeaningful {
-                        row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))
+        NavigationStack {
+            List {
+                Section { header }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+                if let info {
+                    Section("运行") {
+                        row("cpu", "模型", Fmt.model(info.model) ?? info.model)
+                        if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", "启动器", l) }
+                        row("shippingbox", agent, info.version)
+                        row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode))
+                        row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort))
                     }
+                    Section("用量") {
+                        row("gauge.with.dots.needle.33percent", "上下文", Self.tokens(info.contextTokens) + " tokens")
+                        if info.compactions > 0 { row("rectangle.compress.vertical", "压缩", "\(info.compactions) 次") }
+                        row("text.bubble", "对话", "\(info.turns) 轮")
+                        row("text.word.spacing", "共生成", Self.tokens(info.outputTokens) + " tokens")
+                        if let started = info.startedAt, started.isMeaningful {
+                            row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))
+                        }
+                    }
+                    Section("位置") {
+                        row("folder", "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home), mono: true)
+                        if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
+                    }
+                    Section {
+                        copyButton("拷贝 session id", symbol: "number", text: info.sessionID, toast: "已拷贝 session id")
+                        copyButton("拷贝恢复命令", symbol: "terminal", text: "cd \(info.cwd ?? "") && " + resume(info.sessionID), toast: "已拷贝恢复命令")
+                    } footer: {
+                        Text(info.sessionID).font(.caption2.monospaced()).textSelection(.enabled)
+                    }
+                } else if let error {
+                    Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+                } else {
+                    Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20) }.listRowBackground(Color.clear)
                 }
-                HStack(spacing: 8) {
-                    Button {
-                        UIPasteboard.general.string = info.sessionID
-                        Haptics.success()
-                        model.toast = Toast("已拷贝 session id", style: .success)
-                    } label: { Label("拷贝 ID", systemImage: "number").lineLimit(1) }
-                    Button {
-                        UIPasteboard.general.string = "cd \(info.cwd ?? "") && " + resume(info.sessionID)
-                        Haptics.success()
-                        model.toast = Toast("已拷贝恢复命令", style: .success)
-                    } label: { Label("拷贝恢复命令", systemImage: "terminal").lineLimit(1) }
-                }
-                .themedButton()
-                .controlSize(.small)
-            } else if let error {
-                Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
-            } else {
-                ProgressView().frame(maxWidth: .infinity)
+            }
+            .listStyle(.insetGrouped)
+            .listSectionSpacing(.compact)
+            .navigationTitle("会话信息")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .task(id: key) {
             do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
+        }
+    }
+
+    /// The title, its state in words (the one place they still show) and where it runs.
+    private var header: some View {
+        let s = session
+        let place = [model.machine(key.machineID)?.name ?? key.machineID, s?.spaceName, s?.slotLabel]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(s?.displayTitle ?? "会话").font(.title3.weight(.bold)).lineLimit(2)
+            HStack(spacing: 6) {
+                if let st = s?.state {
+                    HStack(spacing: 4) {
+                        StatusDot(state: st, size: 7)
+                        Text(st.label).font(.caption.weight(.semibold))
+                            .foregroundStyle(ChatView.quiet(st) ? Color.secondary : st.tone.text)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.06), in: .capsule)
+                }
+                Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ symbol: String, _ label: String, _ value: String?, mono: Bool = false) -> some View {
+        LabeledContent {
+            Text(value.flatMap { $0.isEmpty ? nil : $0 } ?? "—")
+                .font(mono ? .subheadline.monospaced() : .subheadline)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        } label: {
+            Label(label, systemImage: symbol).lineLimit(1)
+        }
+    }
+
+    private func copyButton(_ title: String, symbol: String, text: String, toast: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+            Haptics.success()
+            model.toast = Toast(toast, style: .success)
+        } label: {
+            Label(title, systemImage: symbol).lineLimit(1)
         }
     }
 
@@ -2338,21 +2390,6 @@ struct DevInfoCard: View {
         if session?.isCodex == true { return "codex resume \(id)" }
         if session?.isTraex == true { return "traex resume \(id)" }
         return "claude --resume \(id)"
-    }
-
-    private func row(_ symbol: String, _ label: String, _ value: String) -> some View {
-        GridRow {
-            Label(label, systemImage: symbol)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .gridColumnAlignment(.leading)
-            Text(value.isEmpty ? "—" : value)
-                .font(.caption.monospaced())
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-        }
     }
 
     static func tokens(_ n: Int) -> String {

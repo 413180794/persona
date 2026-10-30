@@ -31,23 +31,16 @@ struct AssistantTopBar: View {
     private var working: Bool { session?.state == .working }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            if showInfo {
-                // A tap anywhere outside the card closes it.
-                Color.clear.contentShape(.rect).ignoresSafeArea()
-                    .onTapGesture { withAnimation(.snappy) { showInfo = false } }
-                    .accessibilityHidden(true)
-            }
-            VStack(spacing: 6) {
-                bar
-                if showInfo, let key {
-                    DevInfoCard(key: key, session: session)
-                        .padding(.horizontal, 12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+        bar
+            // 会话信息 is a sheet, like the Agents chat's (SessionInfoSheet).
+            .sheet(isPresented: Binding(get: { showInfo && key != nil }, set: { showInfo = $0 })) {
+                if let key {
+                    SessionInfoSheet(key: key, session: session)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
                 }
             }
-        }
-        .onChange(of: key) { showInfo = false }
+            .onChange(of: key) { showInfo = false }
         .task(id: machineID) { launchers = (try? await model.launchers(machineID)) ?? [] }
     }
 
@@ -219,8 +212,8 @@ struct AssistantTopBar: View {
                         }
                     }
                 } label: { Label("启动器：\(launcher)", systemImage: "cpu") }
-                Button { withAnimation(.snappy) { showInfo.toggle() } } label: {
-                    Label(showInfo ? "收起会话信息" : "会话信息", systemImage: "info.circle")
+                Button { showInfo = true } label: {
+                    Label("会话信息", systemImage: "info.circle")
                 }
                 if session?.status.isActive == true {
                     Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
