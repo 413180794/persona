@@ -81,15 +81,16 @@ struct OSBadge: View {
 struct UbuntuMark: View {
     var body: some View {
         Canvas { ctx, size in
-            let s = min(size.width, size.height)
+            let s: CGFloat = min(size.width, size.height)
             let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let r = s * 0.31, dot = s * 0.13, line = s * 0.13
+            let r: CGFloat = s * 0.31, dot: CGFloat = s * 0.13, line: CGFloat = s * 0.13
+            let away: CGFloat = r + dot * 0.95
             for i in 0..<3 {
-                let mid = Double(i) * 2 * .pi / 3 - .pi / 2
+                let mid: Double = Double(i) * 2 * .pi / 3 - .pi / 2
                 var arc = Path()
                 arc.addArc(center: c, radius: r, startAngle: .radians(mid + 0.42), endAngle: .radians(mid + 2 * .pi / 3 - 0.42), clockwise: false)
                 ctx.stroke(arc, with: .foreground, style: StrokeStyle(lineWidth: line, lineCap: .butt))
-                let p = CGPoint(x: c.x + cos(mid) * (r + dot * 0.95), y: c.y + sin(mid) * (r + dot * 0.95))
+                let p = CGPoint(x: c.x + CGFloat(cos(mid)) * away, y: c.y + CGFloat(sin(mid)) * away)
                 ctx.fill(Path(ellipseIn: CGRect(x: p.x - dot, y: p.y - dot, width: dot * 2, height: dot * 2)), with: .foreground)
             }
         }
