@@ -76,7 +76,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - iOS：`./scripts/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
   直接用 xcodegen / Xcode 前先 `python3 scripts/jarvis_config.py xcconfig`（生成 bundle id、团队）。
 - Android：`./scripts/android.sh [install|apk|test]`（`docs/android.md`）。
-- 发布：`docs/release.md`。
+- 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**（2026-10-30 用户要求）：`release.sh` 上传后跑
+  `python3 scripts/asc_testflight.py wait 45 <构建号>`（进内部组），再跑 `python3 scripts/asc_testflight.py external`
+  （挂到外部组、提交 Beta 审核、打印公开链接），两个都好了再告诉用户构建号和审核状态。
 
 ## 经验
 
