@@ -1041,7 +1041,9 @@ struct ChatView: View {
             } onCancel: {
                 warm.cancel()
             }
-            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(items.map(\.id)) }
+            // Spelled out: Swift 6.3 timed out type-checking formUnion(items.map(\.id)) in this closure.
+            let ids: [String] = items.map { $0.id }
+            if !Task.isCancelled { scratch.prewarmedIDs.formUnion(ids) }
         }
     }
 
