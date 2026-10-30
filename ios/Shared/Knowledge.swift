@@ -92,6 +92,65 @@ nonisolated struct KBUpdate: Encodable, Sendable {
 nonisolated struct KBHit: Decodable, Hashable, Sendable {
     var path: String
     var line: String
+
+    /// The entry a hit is in: `chats/<id>/summary.md` → (chats, id), `docs/<id>.json` → (docs, id); nil for anything else.
+    var entry: (kind: KBKind, id: String)? {
+        let parts = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard parts.count >= 2, let kind = KBKind(rawValue: parts[0]) else { return nil }
+        let id = parts.count == 2 && parts[1].hasSuffix(".json") ? String(parts[1].dropLast(5)) : parts[1]
+        return id.isEmpty ? nil : (kind, id)
+    }
+
+    /// Which file the line is from, said plainly.
+    var source: String {
+        let file = (path as NSString).lastPathComponent
+        if path.contains("/messages/") { return "聊天记录 · " + (file as NSString).deletingPathExtension }
+        switch file {
+        case "summary.md": return "档案"
+        case "log.md": return "时间线"
+        case "meta.json": return "资料"
+        default: return file.hasSuffix(".json") ? "资料" : file
+        }
+    }
+
+    /// The line without its markdown list marker, JSON key and quotes.
+    var text: String {
+        var t = line.trimmingCharacters(in: .whitespaces)
+        for p in ["- ", "* ", "## ", "# "] where t.hasPrefix(p) { t = String(t.dropFirst(p.count)) }
+        if t.hasPrefix("\""), let colon = t.range(of: "\": ") {
+            t = String(t[colon.upperBound...])
+        }
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: " ,\""))
+        return t
+    }
+}
+
+/// A project's timeline line, `- 2026-10-30 23:16 · Agent · 标题 · 机器 · 说了什么`: when, from where, what.
+nonisolated struct KBLogLine: Hashable, Sendable {
+    var when: String
+    var source: String
+    var text: String
+
+    init(_ raw: String) {
+        var t = raw.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("- ") { t = String(t.dropFirst(2)) }
+        let parts = t.components(separatedBy: " · ")
+        if parts.count >= 2, parts[0].first?.isNumber == true {
+            when = parts[0]
+            text = parts.last ?? ""
+            source = parts.count > 2 ? parts[1..<(parts.count - 1)].joined(separator: " · ") : ""
+        } else {
+            when = ""
+            source = ""
+            text = t
+        }
+    }
+
+    /// "2026-10-30 23:16" → "10-30 23:16" (the year only when it is not this one).
+    func shortWhen(now: Date = .now) -> String {
+        let year = String(Calendar.current.component(.year, from: now))
+        return when.hasPrefix(year + "-") ? String(when.dropFirst(5)) : when
+    }
 }
 
 extension APIClient {

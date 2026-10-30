@@ -119,6 +119,7 @@ struct AssistantView: View {
             .onAppear {
                 switch UserDefaults.standard.string(forKey: "openAssistantPage") {
                 case "avatars": showAvatars = true
+                case "knowledge": showKnowledge = true
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
