@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 
 /** First run: scan the QR code `jarvisd hub pair` prints, or type the address and token. */
 @Composable
-fun PairScreen() {
+fun PairScreen(reason: String? = null) {
     var url by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -91,6 +91,7 @@ fun PairScreen() {
         ) {
             Spacer(Modifier.height(32.dp))
             Text("连接 hub", style = MaterialTheme.typography.headlineMedium)
+            reason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             Text(
                 "在 hub 所在的机器上运行 ~/.jarvis/bin/jarvisd hub pair，扫它打印的二维码。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,

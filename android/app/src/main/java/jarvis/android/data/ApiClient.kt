@@ -157,10 +157,37 @@ class ApiClient(val baseUrl: String, val token: String) {
         val cwd: String,
         val launcher: String,
         val prompt: String? = null,
+        @SerialName("permission_mode") val permissionMode: String? = null,
     )
     @Serializable private data class SessionResp(val session: Session)
-    suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?): Session =
-        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt))).session
+    /** Starts claude in a new herdr tab; resuming or a slow shell can take ~90 s (the read timeout covers it). */
+    /** `mode` null = whatever the launcher / that computer's Claude settings use (as iOS sends it). */
+    suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?, mode: String? = null): Session =
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode))).session
+
+    @Serializable data class DirEntry(val name: String = "", val path: String = "", @SerialName("is_git") val isGit: Boolean = false)
+    @Serializable data class RecentDir(val path: String = "", val name: String = "")
+    @Serializable
+    data class DirList(
+        val path: String = "",
+        val parent: String? = null,
+        val entries: List<DirEntry> = emptyList(),
+        val recent: List<RecentDir>? = null,
+    )
+    /** Directory browser for a new session; an empty path lists the home directory. */
+    suspend fun dirs(machine: String, path: String): DirList = get("/api/v1/machines/$machine/dirs", mapOf("path" to path))
+
+    /** Quits the agent and closes its herdr tab (or just its pane in a split tab). */
+    suspend fun close(k: SessionKey) { raw("POST", sp(k) + "/close") }
+
+    @Serializable private data class Rename(@SerialName("tab_name") val tabName: String, val title: String)
+    /** Renames the herdr tab and the Claude session together, as the iOS app does. */
+    suspend fun rename(k: SessionKey, name: String) { post(sp(k) + "/rename", Rename(name, name)) }
+
+    suspend fun pins(): Pins = get("/api/v1/pins")
+    suspend fun setPins(p: Pins): Pins = JsonCodec.decodeFromString(raw("PUT", "/api/v1/pins", JsonCodec.encodeToString(p)))
+    suspend fun mutes(): Pins = get("/api/v1/mutes")
+    suspend fun setMutes(p: Pins): Pins = JsonCodec.decodeFromString(raw("PUT", "/api/v1/mutes", JsonCodec.encodeToString(p)))
 
     @Serializable data class NewToken(val id: String, val token: String, val role: String = "")
     @Serializable private data class TokenReq(val name: String, val kind: String)

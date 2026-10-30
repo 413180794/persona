@@ -52,9 +52,12 @@ class Notifier(private val context: Context) {
         job = jarvis.android.JarvisApp.instance.scope.launch {
             hub.events.collect { e ->
                 when (e) {
-                    is HubEvent.NewInteraction -> postInteraction(e.interaction)
+                    // Muted agents and spaces get no notifications, as with the hub's pushes to iPhone.
+                    is HubEvent.NewInteraction -> if (!hub.session(e.interaction.sessionKey).let { it != null && hub.isMuted(it) }) {
+                        postInteraction(e.interaction)
+                    }
                     is HubEvent.Resolved -> nm.cancel(e.id.hashCode())
-                    is HubEvent.SessionChanged -> onSessionChanged(e.before, e.after)
+                    is HubEvent.SessionChanged -> if (!hub.isMuted(e.after)) onSessionChanged(e.before, e.after)
                     is HubEvent.ToolCall -> Unit
                 }
             }
@@ -153,6 +156,7 @@ class Notifier(private val context: Context) {
                 ConnState.Online -> if (pending > 0) "$pending 件事需要你" else "已连接 hub"
                 ConnState.Connecting -> "正在连接 hub"
                 ConnState.Offline -> "hub 连不上，稍后重试"
+                ConnState.Unauthorized -> "需要重新配对，打开 App 看看"
             },
         )
         .setOngoing(true)
