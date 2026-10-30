@@ -61,6 +61,11 @@ type Node struct {
 	// fileUse: when each parsed transcript in files was last asked for (a counter), to drop the least recently used.
 	fileUse map[string]uint64
 	useTick uint64
+
+	// lark-connector for the assistant (larkgate.go): the hub's config, cached, and the writes 本会话总是允许 let through.
+	larkCfg     proto.AssistantLark
+	larkCfgAt   time.Time
+	larkAllowed map[string]bool
 }
 
 func New(version string) (*Node, error) {
@@ -191,6 +196,11 @@ func (n *Node) writeClaudeConfig() error {
 		"SessionStart":      []any{notify},
 	}}
 	if err := writeJSON(filepath.Join(n.dir, "claude-settings.json"), settings); err != nil {
+		return err
+	}
+	// The assistant's own settings add the lark-connector gate on Bash (larkgate.go); herdr agents never pay for that hook.
+	settings["hooks"].(map[string]any)["PreToolUse"] = []any{blocking("AskUserQuestion"), blocking("Bash")}
+	if err := writeJSON(filepath.Join(n.dir, "assistant-settings.json"), settings); err != nil {
 		return err
 	}
 	mcp := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}}}}

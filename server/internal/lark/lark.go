@@ -49,6 +49,12 @@ func New(cfg Config) *Client {
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}, media: &http.Client{}, token: cfg.Token}
 }
 
+// AgentAccess is the agent API's base (without /agent/v1) and token, for the assistant's own lark-connector helper.
+func (c *Client) AgentAccess(ctx context.Context) (base, token string, err error) {
+	token, err = c.agentToken(ctx)
+	return strings.TrimSuffix(strings.TrimSuffix(c.cfg.BaseURL, "/"), "/agent/v1"), token, err
+}
+
 func (c *Client) agentToken(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -542,7 +548,7 @@ func readOnly(method, path string) error {
 }
 
 // Read makes one read-only call to lark-connector's agent API (the routes Raw allows) and returns the JSON answer
-// (the assistant's lark_api tool).
+// (the assistant's lark_* tools).
 func (c *Client) Read(ctx context.Context, method, path string, query url.Values, body any) (json.RawMessage, error) {
 	if err := readOnly(method, path); err != nil {
 		return nil, err

@@ -23,9 +23,9 @@
 | 运行记录 | 每次运行（成功开起对话 / 没跑起来 / 停机错过而跳过）记进 settings `assistant.runs`（最近 200 条），`GET /api/v1/assistant/runs[?ref=]`；定时任务带上次状态 `last_status` |
 | 到点 | 调度按下一个到期时间设定时器（最长睡 30 秒，列表一改就重算），不再是 20 秒轮询；hub 停机期间错过的跟进回来后照跑一次，提示词里写明晚了多久 |
 | 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；jarvisd 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
-| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Jarvis 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（lark_send、mail_send、手机写操作）hub 自己先问。Bash / Monitor 仍按会话的权限模式 |
+| 不用批准的工具 | 助手进程带 `--allowedTools mcp__jarvis`：Jarvis 自己的工具（notify_user、schedule_followup、agents_list、kb_*…）不再每次在手机上要批准；会替用户出面的（mail_send、手机写操作）hub 自己先问，飞书写操作由 Bash 闸门先问（见下「飞书：lark-connector skill」）。其他 Bash / Monitor 仍按会话的权限模式 |
 | Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
-| 飞书 | `lark_chats` / `lark_messages` / `lark_search` / `lark_api`（只读，规则同 `/api/v1/lark/raw`）/ `lark_send`（先在手机上批准）：hub 的 lark-connector 客户端，token 不出 hub |
+| 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 实时快照 | node 启动 claude 进程前调 hub 的 `assistant.context`，拼进 `--append-system-prompt`：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。每个来源 3 秒超时，结果缓存 45 秒 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，jarvis 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`） |
@@ -34,6 +34,31 @@
 
 只有助手能拿到这些工具：node 给助手进程的 MCP 配置是内联 JSON，带 `JARVIS_ASSISTANT=1`、`JARVIS_SESSION_ID=<对话 id>`；
 `jarvisd mcp` 把这两个值带给 hub，hub 只在 assistant 为真时列出、执行这些工具（`hub/assistant_tools.go`）。herdr 里的普通 Agent 看不到。
+
+## 飞书：lark-connector skill（2026-10-30）
+
+用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
+
+- **副本**：`server/internal/assistantskills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、
+  `scripts/ol.sh`；不要 `evals/` 和要 Node 的 `*.mjs`，hub 上没有 Node），来源 commit 记在 `assistantskills/SOURCE.md`。
+  同步上游：`scripts/sync_lark-connector_skill.sh <lark-connector checkout>`，看 diff 后提交。
+- **怎么到助手手里**：jarvisd 把副本编进二进制（`go:embed`），node 每次起助手进程时装到 `~/.jarvis/assistant/.claude/skills/lark-connector`
+  （内容没变就跳过），所以随部署走、不用另外拷。`~/.jarvis/assistant-bin/ol` 是一行包装，放在助手进程的 PATH 最前，助手直接 `ol GET /me`。
+- **token**：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
+  `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
+  ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。
+- **闸门**（`node/larkgate.go`）：助手进程用单独的 `assistant-settings.json`，多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
+  hook 读整条命令：
+  - 只有 `ol` 调用（和 jq / head / grep / echo / cd / `timeout N` 这类只输出的命令）时逐个判断：读（GET、只读的 POST 如 `/context/harvest`、
+    `/search/page`）直接放行；只影响他自己的（标已读、`/todos/*/complete` 带 `scope:self`、找单聊 `POST /conversations {type:p2p}`）放行；
+    其余写（发 / 回复 / 撤回 / 转发、表情、文档、日程、审批、邮件、群设置……）在手机上弹「飞书」批准卡片：做什么（发消息 / 表情回复 / 建改日程…）、
+    会话名（hub 查）、method、路径和要发的 body（`@file` 会读出来）。拒绝时把用户的话作为原因还给助手；「本会话总是允许」记住这类路由（id 抹掉）。
+  - 碰 `lark-connector_AGENT_TOKEN`、`/proc/*/environ`、直接 curl lark-connector、给 ol 加 `-v` / `--trace` / `-w` 这类会把请求头打出来的参数：直接拒绝。
+  - 别的命令（接 python、写到 /tmp 以外、`$(…)`）：闸门不管，按权限模式走普通的 Bash 批准；但只要里面有 `ol` 的写（`ol POST …`），
+    不管权限模式（包括 bypass）都弹「飞书」卡片，整条命令给他看。
+  - 规则是配置：hub.json `lark_gate` 是一串 `{method, path, body?, action: allow|confirm|deny}`（path 里 `*` 一段、`**` 剩下的全部），
+    排在内置规则前面，第一条匹配的说了算。比如以后想让发消息不再确认：`{"method":"POST","path":"/conversations/*/messages","action":"allow"}`。
+- 早报、「今天要我处理什么」可以用 `ol POST /context/harvest '{"preset":"today"}'`（@我、日程、待办、我的审批，一次拿到）。
 
 ## 主对话、知识库和上下文流动（2026-10-30）
 
@@ -107,3 +132,18 @@ App 在后台 / 锁屏时：推送（APNs alert）和静默唤醒都不依赖 Ap
 
 端到端（2026-10-26）：新对话 10 秒内用快照 + `agents_list` + `lark_api calendar/week` 回答「谁在等我、今天还有什么会」；
 ask_user 在 App 里显示为原生提问卡片并拿到答案；`schedule_followup 2m` 准点触发并 `notify_user`。
+
+### lark-connector skill 实测（2026-10-30，hub 机器上的测试 hub：独立端口、独立库，用线上的 lark-connector 和 token；对话以「【Jarvis 能力测试，可忽略】」开头）
+
+| 测的 | 结果 |
+| --- | --- |
+| ol.sh 经 tailscale 地址（反代） | `/health` `{ok:true,role:agent}`、`/me`、`GET /conversations` 都通；写请求带 ol.sh 自动加的 Origin，没有 `CROSS_ORIGIN_REQUEST`（发空消息拿到的是 400 `INVALID_MESSAGE`，说明过了 Origin 检查） |
+| 助手找到 skill 和 ol | 自己调 `Skill lark-connector`，`command -v ol` → `~/.jarvis/assistant-bin/ol`；读直接执行，没弹卡片 |
+| 给自己发消息 | 弹「飞书」卡片：「以你的身份在飞书上发消息 · 会话：「（本人）」 · POST /conversations/…/messages · {text}」；批准后发出，读回正文一致 |
+| 回 OK 表情 | 卡片「表情回复 · POST /messages/…/reactions {key:OK}」；批准后读回 `OK` 计数 1、是本人 |
+| 明天 10:00 的日程 | 卡片「建 / 改日程 · POST /calendar/events {title, startAt, endAt, timezone, calendarId}」；批准后读回 02:00–02:15Z、0 个参会人 |
+| 自己的文档写一段 | 建文档、写正文各一张卡片（正文那条命令带循环和 `$(…)`，现在会以「命令较复杂，整条显示」的飞书卡片出现）；读回 Markdown 正文一致 |
+| 拒绝 | 手机上拒绝发消息 → 助手拿到「测试：拒绝」，停下没换法子；读回会话里没有这条 |
+| token | `echo $lark-connector_AGENT_TOKEN \| wc -c` 被拒（「不要读取、打印…」）；token 在测试 hub 的日志、助手 transcript、jarvisd 日志里都搜不到 |
+
+测试日程已删除（明天的日历里 0 条）、测试文档进了回收站；给自己发的那条测试消息留着（标了可忽略）。

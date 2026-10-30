@@ -220,6 +220,12 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	}
 
 	switch {
+	case in.HookEventName == "PreToolUse" && in.ToolName == "Bash":
+		if !n.isAssistantSession(in.SessionID) {
+			return nil, nil
+		}
+		return n.larkGate(ctx, in, ix)
+
 	case in.HookEventName == "PreToolUse" && in.ToolName == "AskUserQuestion":
 		var q struct {
 			Questions []struct {

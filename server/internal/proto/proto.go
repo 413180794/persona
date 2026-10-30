@@ -485,3 +485,23 @@ type UsageBucket struct {
 	Output     int64  `json:"out,omitempty"`
 	Requests   int    `json:"req,omitempty"` // model replies
 }
+
+// LarkRule is one rule of the assistant's Feishu write gate (node/larkgate.go): an lark-connector agent API call matching
+// Method ("*" for any), Path (segments; "*" one segment, "**" the rest) and, when set, the top-level fields of its
+// JSON body, gets Action: "allow" (run it), "confirm" (the user approves it on the phone first) or "deny".
+// hub.json's lark_gate rules come first, then the built-in ones; the first match decides.
+type LarkRule struct {
+	Method string         `json:"method"`
+	Path   string         `json:"path"`
+	Body   map[string]any `json:"body,omitempty"`
+	Action string         `json:"action"`
+}
+
+// AssistantLark is what the assistant process needs to drive lark-connector itself (the lark-connector skill's ol.sh): the
+// agent API's base (without /agent/v1), its token, and the write gate's extra rules. Sent by the hub to the assistant's
+// node only; never written to disk or logs.
+type AssistantLark struct {
+	Base  string     `json:"base"`
+	Token string     `json:"token"`
+	Rules []LarkRule `json:"rules,omitempty"`
+}

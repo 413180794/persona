@@ -30,7 +30,7 @@ const assistantIdleTimeout = 20 * time.Minute
 const assistantTaskMaxIdle = 12 * time.Hour
 
 // assistantAllowedTools run without asking: Jarvis's own tools (the hub asks the phone itself before the ones that
-// send something on the user's behalf — lark_send, mail_send, phone writes). Without this every notify_user or
+// send something on the user's behalf — mail_send, phone writes; Feishu writes through the lark-connector skill pass larkgate.go). Without this every notify_user or
 // schedule_followup waited for a tap on the phone, so a follow-up firing at night just stalled.
 const assistantAllowedTools = "mcp__jarvis"
 
@@ -245,7 +245,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
-		"--settings", filepath.Join(n.dir, "claude-settings.json"), "--mcp-config", string(mcp),
+		"--settings", filepath.Join(n.dir, "assistant-settings.json"), "--mcp-config", string(mcp),
 		"--allowedTools", assistantAllowedTools}
 	if snap := n.assistantContext(id); snap != "" {
 		args = append(args, "--append-system-prompt", snap)
@@ -264,6 +264,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	cmd.Dir = cwd
 	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false")
+	cmd.Env = append(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

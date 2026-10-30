@@ -128,7 +128,8 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za
 # scrambles domains): only addresses at a real-looking domain of somebody's are flagged.
 OK_EMAIL_DOMAINS = re.compile(r"(^|\.)(example(\.(com|org|net))?|test|invalid|localhost|users\.noreply\.github\.com|anthropic\.com|"
                               r"apple\.com|gmail\.com|googlemail\.com|outlook\.com|hotmail\.com|icloud\.com|yahoo\.com|"
-                              r"qq\.com|163\.com|126\.com|foxmail\.com)$")
+                              r"qq\.com|163\.com|126\.com|foxmail\.com|"
+                              r"b\.com)$")  # a@b.com: the placeholder in lark-connector's skill (assistantskills/)
 REAL_TLDS = {"com", "net", "org", "io", "cn", "dev", "app", "ai", "co", "me", "cc", "info", "so", "xyz", "top", "edu",
              "gov", "uk", "jp", "us", "de", "fr", "hk", "tw", "sg", "in", "ru", "kr", "tech", "cloud", "site", "work", "biz"}
 # The public site (site/) shows a contact address on purpose: the OAuth consent screen requires one.
@@ -139,7 +140,12 @@ def problems(text, words, emails=True):
     found = []
     low = text.lower()
     for w in words:
-        if w.lower() in low:
+        # Short values (a name of 4–5 letters) only as a word of their own: inside identifiers ("inboxItem") they
+        # matched by accident and flagged whole files.
+        if len(w) < 6 and w.isalnum():
+            if re.search(r"(?<![a-z0-9])" + re.escape(w.lower()) + r"(?![a-z0-9])", low):
+                found.append(w)
+        elif w.lower() in low:
             found.append(w)
     for m in IPV4.finditer(text):
         try:
