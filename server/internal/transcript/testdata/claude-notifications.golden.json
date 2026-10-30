@@ -6,8 +6,15 @@
       "ts": "2026-01-01T00:00:00.756Z",
       "role": "system",
       "kind": "notice",
-      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" is raseihq tm qeo ddc background zclb",
-      "wake": true
+      "text": "子 Agent 完成 · Prggw Kurv wottwjk lfquwzoe",
+      "wake": true,
+      "task": {
+        "kind": "agent",
+        "status": "completed",
+        "title": "Prggw Kurv wottwjk lfquwzoe",
+        "task_id": "lp3t0a410q7s3nrdz",
+        "output_file": "/ysuoqxx/clu/axgzxl-540/-Lgtiq-tyby-mijzcp-ieqba-uhs-yrvkbr/5npq03ql-0r80-2794-hb11-fcNxP7Bm6zGA/rxfxp/lp3t0a410q7s3nrdz.output"
+      }
     },
     {
       "id": "cedc7ab6-db38-4449-679d-490e297b0296#0",
@@ -15,8 +22,16 @@
       "ts": "2026-01-01T00:00:40.307Z",
       "role": "system",
       "kind": "notice",
-      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" is raseihq tm qeo ddc background zclb",
-      "wake": true
+      "text": "子 Agent 完成 · Prggw Kurv wottwjk lfquwzoe",
+      "wake": true,
+      "task": {
+        "kind": "agent",
+        "status": "completed",
+        "title": "Prggw Kurv wottwjk lfquwzoe",
+        "task_id": "lp3t0a410q7s3nrdz",
+        "output_file": "/ysuoqxx/clu/axgzxl-540/-Lgtiq-tyby-mijzcp-ieqba-uhs-yrvkbr/5npq03ql-0r80-2794-hb11-fcNxP7Bm6zGA/rxfxp/lp3t0a410q7s3nrdz.output",
+        "detail": "辛庚戊甲癸乙壬庚丁己壬壬戊丁庚。丁乙庚甲辛癸戊壬丙丁辛辛庚丁丁甲乙壬丁辛乙庚壬甲壬壬，壬戊甲甲丁壬庚。"
+      }
     },
     {
       "id": "ca9516d2-d446-b631-2217-9e6200391740#0",
@@ -24,8 +39,16 @@
       "ts": "2026-01-01T00:00:59.295Z",
       "role": "system",
       "kind": "notice",
-      "text": "Agent \"Prggw Kurv wottwjk lfquwzoe\" yzzgamuw",
-      "wake": true
+      "text": "子 Agent 完成 · Prggw Kurv wottwjk lfquwzoe",
+      "wake": true,
+      "task": {
+        "kind": "agent",
+        "status": "completed",
+        "title": "Prggw Kurv wottwjk lfquwzoe",
+        "task_id": "lp3t0a410q7s3nrdz",
+        "output_file": "/ysuoqxx/clu/axgzxl-540/-Lgtiq-tyby-mijzcp-ieqba-uhs-yrvkbr/5npq03ql-0r80-2794-hb11-fcNxP7Bm6zGA/rxfxp/lp3t0a410q7s3nrdz.output",
+        "detail": "己己丁癸壬己癸壬癸丁癸戊丙壬壬戊丁己庚丙丙。乙庚丁己戊壬丙甲辛，庚己己丙戊癸。"
+      }
     }
   ],
   "meta": {

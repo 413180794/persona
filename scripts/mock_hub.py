@@ -639,6 +639,49 @@ if os.environ.get("MOCK_BIG") == "1":
     ITEMS[BIG] = _big
 
 
+# MOCK_TASKS=1: a session whose agent works with background tasks (docs/protocol.md TaskNote): a heredoc written in
+# the background (no description: its notice used to be the whole heredoc, centered), a test run that fails, a Monitor
+# reporting two events between two commands, then ending (BackgroundNoticeTests).
+TASKS = "a1f3c2d4-0000-4000-8000-000000000009"
+if os.environ.get("MOCK_TASKS") == "1":
+    SESSIONS.append(sess("macbook", TASKS, "整理发布说明", "/Users/me/code/weather", "done", "unread", "weather", 1, "release", 4, 3,
+                         "发布说明写好了，测试有一项没过，已经记下来。"))
+
+    def note(ts_min, kind, status, title, task_id, tool=None, code=None, out=None, detail=None, text=""):
+        t = {"kind": kind, "status": status, "title": title, "task_id": task_id}
+        if tool: t["tool_use_id"] = tool
+        if code is not None: t["exit_code"] = code
+        if out: t["output_file"] = out
+        if detail: t["detail"] = detail
+        return it("system", "notice", ts_min, text=text, task=t)
+    _brief = "cat > brief.md <<'EOF'\n# 发布说明\n\n## 新功能\n- 主屏幕小组件支持按小时刷新\n- 降雨概率改成百分比\n\n## 修复\n- 夜间模式下图标看不清\nEOF"
+    _w = [it("user", "text", 20, text="写一下这版的发布说明，顺便把测试跑一遍，CI 有结果告诉我")]
+    _w += tool("Bash", {"command": _brief, "run_in_background": True},
+               "Command running in background with ID: bk1brief. Output is being written to: /tmp/claude/bk1brief.output", 19)
+    _brief_call = _w[-2]["tool_use_id"]
+    _w += tool("Bash", {"command": "xcodebuild test -scheme Weather", "description": "跑单元测试", "run_in_background": True},
+               "Command running in background with ID: bk2tests. Output is being written to: /tmp/claude/bk2tests.output", 18)
+    _test_call = _w[-2]["tool_use_id"]
+    _w += tool("Monitor", {"command": "gh run watch --exit-status", "description": "等 CI 跑完", "timeout_ms": 600000},
+               "Monitor started (task mo3ci, timeout 600000ms). You will be notified on each event.", 17)
+    _w.append(note(16, "shell", "completed", "cat > brief.md <<'EOF'", "bk1brief", _brief_call, 0, "/tmp/claude/bk1brief.output",
+                   _brief, "后台命令完成 · cat > brief.md <<'EOF'"))
+    _w += tool("Read", {"file_path": "/Users/me/code/weather/brief.md"}, "# 发布说明", 15)
+    _w.append(note(14, "monitor", "event", "等 CI 跑完", "mo3ci", detail="build: 3/5 jobs passed\nlint ok, unit tests running",
+                   text="Monitor 事件 · build: 3/5 jobs passed"))
+    _w += tool("Bash", {"command": "git log --oneline -5"}, "a1b2c3d release notes", 13)
+    _w.append(note(12, "monitor", "event", "等 CI 跑完", "mo3ci", detail="build: 5/5 jobs passed", text="Monitor 事件 · build: 5/5 jobs passed"))
+    _w.append(note(11, "shell", "failed", "跑单元测试", "bk2tests", _test_call, 1, "/tmp/claude/bk2tests.output",
+                   text="后台命令失败（退出码 1） · xcodebuild test -scheme Weather"))
+    _w.append(note(10, "monitor", "ended", "等 CI 跑完", "mo3ci",
+                   detail="build: 5/5 jobs passed", text="Monitor 结束 · 等 CI 跑完"))
+    _w.append(it("assistant", "text", 9, text="发布说明写好了（brief.md），CI 全绿；本地单元测试有一项没过，已经记下来。"))
+    # A local command's output (/context): a long notice that is not a task.
+    _w.append(it("system", "notice", 8, text="Context Usage\nclaude-opus · 48k/200k tokens (24%)\nSystem prompt: 3.1k\nSystem tools: 12.4k\n"
+                                              "Messages: 30.2k\nFree space: 152k (76%)\nAutocompact buffer: 22.5k"))
+    ITEMS[TASKS] = _w
+
+
 def fold_work(items):
     """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""
     uses = {x.get("tool_use_id") for x in items if x["kind"] == "tool_use"}

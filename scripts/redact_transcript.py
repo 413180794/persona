@@ -41,6 +41,7 @@ model clear compact loop help resume rename init cost status
 Bash Read Write Edit MultiEdit Glob Grep Agent Task TaskStop KillShell ScheduleWakeup CronCreate CronDelete TodoWrite
 WebFetch WebSearch AskUserQuestion ExitPlanMode NotebookEdit ToolSearch Skill Monitor SendMessage
 task id tool use status completed failed killed summary result output file notification
+Background command event stream ended stopped was exit code finished started timeout with EOF gt lt amp quot
 """.split())
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 PREFIXED_ID_RE = re.compile(r"\b(msg|toolu|srvtoolu|call|req|fc|rs|exec|ws)_?-?[A-Za-z0-9]{8,}\b")

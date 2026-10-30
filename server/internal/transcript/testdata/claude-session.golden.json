@@ -190,7 +190,15 @@
       "ts": "2026-01-01T00:29:58.294Z",
       "role": "system",
       "kind": "notice",
-      "text": "Cnddxmhsar yczlqco \"Mtkiw cmszgfll Wngrmzs sqyiptc in background\" failed with upsy wxuf 837"
+      "text": "Cnddxmhsar yczlqco \"Mtkiw cmszgfll Wngrmzs sqyiptc in background\" failed with upsy wxuf 837",
+      "task": {
+        "kind": "task",
+        "status": "failed",
+        "title": "Cnddxmhsar yczlqco \"Mtkiw cmszgfll Wngrmzs sqyiptc in background\" failed with upsy wxuf 837",
+        "task_id": "zv0385923",
+        "tool_use_id": "toolu_mVzUcMWTwtWVMWPgsnyqzyRQ",
+        "output_file": "/xdjsirj/tpq/rjehin-331/-Oabyo-wrmd/659e57bb-322f-34a5-b54e-77163220b4d5/knvzu/zv0385923.output"
+      }
     },
     {
       "id": "19fbf09b-bcb1-3e04-7a5c-388cc16b0279#0",
@@ -295,7 +303,15 @@
       "ts": "2026-01-01T00:40:54.062Z",
       "role": "system",
       "kind": "notice",
-      "text": "Cnddxmhsar yczlqco \"Tges dhgxy blf gdfzbl-xzksc fekpcfit-yq ckymqhnm\" failed with upsy wxuf 837"
+      "text": "Cnddxmhsar yczlqco \"Tges dhgxy blf gdfzbl-xzksc fekpcfit-yq ckymqhnm\" failed with upsy wxuf 837",
+      "task": {
+        "kind": "task",
+        "status": "failed",
+        "title": "Cnddxmhsar yczlqco \"Tges dhgxy blf gdfzbl-xzksc fekpcfit-yq ckymqhnm\" failed with upsy wxuf 837",
+        "task_id": "aolsum42w",
+        "tool_use_id": "toolu_ye6E82ynJ0Uq6TsF594r1GKc",
+        "output_file": "/xdjsirj/tpq/rjehin-331/-Oabyo-wrmd/659e57bb-322f-34a5-b54e-77163220b4d5/knvzu/aolsum42w.output"
+      }
     },
     {
       "id": "1d600701-911f-aee9-3c05-8e91518e650d#0",

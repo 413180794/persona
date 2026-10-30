@@ -451,8 +451,36 @@ struct ThinkingRow: View {
 
 struct NoticeRow: View {
     var item: Item
+    @State private var expanded = false
+
     var body: some View {
-        if item.wake == true { wake } else { plain }
+        if item.wake == true { wake } else if item.task != nil { TaskNoteRow(item: item) } else if Self.isShort(item.text ?? "") { plain } else { long }
+    }
+
+    /// One short line reads as a centered capsule ("已中断", "上下文已压缩"); anything longer would be a block of centered
+    /// gray text, screens tall (a local command's output): it is a left-aligned box of a few lines instead.
+    static func isShort(_ s: String) -> Bool { !s.contains("\n") && s.count <= 60 }
+
+    private var long: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+        } label: {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle").font(.caption).foregroundStyle(.tertiary)
+                Text(item.text ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(expanded ? nil : 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .contextMenu { CopyButton(text: item.text ?? "") }
     }
 
     private var plain: some View {
@@ -468,7 +496,7 @@ struct NoticeRow: View {
 
     /// A background task woke the agent: opens the work that follows, like a message would.
     private var wake: some View {
-        let w = Self.wakeSummary(item.text ?? "")
+        let w = Self.wakeSummary(item)
         return HStack(spacing: 6) {
             Image(systemName: w.failed ? "exclamationmark.circle.fill" : "bell.fill")
                 .foregroundStyle(w.failed ? Theme.danger : Theme.accent)
@@ -485,6 +513,12 @@ struct NoticeRow: View {
     private static let wakeMemo = TextMemo<(text: String, failed: Bool)>(limit: 500)
 
     static func wakeSummary(_ s: String) -> (text: String, failed: Bool) { wakeMemo(s, computeWakeSummary) }
+
+    /// The hub's one line when it read the notification (`Item.task`), else worked out from an older hub's summary.
+    static func wakeSummary(_ item: Item) -> (text: String, failed: Bool) {
+        if let n = item.task { return (item.text ?? n.title, n.failed) }
+        return wakeSummary(item.text ?? "")
+    }
 
     private static func computeWakeSummary(_ s: String) -> (text: String, failed: Bool) {
         guard let m = s.firstMatch(of: /^(.*?)\s*"(.+)"\s*(.*)$/) else { return (s, false) }
@@ -510,8 +544,8 @@ struct WakeChip: View {
     var open: () -> Void
 
     var body: some View {
-        let summary = notices.count == 1 ? NoticeRow.wakeSummary(notices[0].text ?? "") : nil
-        let failed = notices.contains { NoticeRow.wakeSummary($0.text ?? "").failed }
+        let summary = notices.count == 1 ? NoticeRow.wakeSummary(notices[0]) : nil
+        let failed = notices.contains { NoticeRow.wakeSummary($0).failed }
         Button(action: open) {
             HStack(spacing: 6) {
                 if live {

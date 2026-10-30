@@ -759,11 +759,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		}
 		meta.notified[trimmed] = true
 		it := mk(0, "system", proto.KindNotice)
-		summary := firstTag(trimmed, "summary")
-		if summary == "" {
-			summary = "后台任务有更新"
-		}
-		it.Text = clip(summary)
+		it.Task, it.Text = taskNote(trimmed)
 		return []proto.Item{it}
 	}
 	if trimmed == "[Request interrupted by user]" || trimmed == "[Request interrupted by user for tool use]" {

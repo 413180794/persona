@@ -781,6 +781,48 @@ struct ChatView: View {
             if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
         }
         .environment(\.openFold, openFold)
+        .environment(\.taskIndex, store.tasks)
+        .environment(\.jumpToCall) { id in jumpToCall(id) }
+    }
+
+    /// From a background task's notice to the call that started it: opens the work line it is folded in and brings
+    /// the step into view (rows of the newest end hold still; the list stops following it).
+    private func jumpToCall(_ id: String) {
+        func holds(_ steps: [ToolStep]) -> String? {
+            for case .call(let c) in steps where c.use.toolUseID == id { return c.id }
+            return nil
+        }
+        var target: String?
+        for line in currentLines() {
+            switch line.content {
+            case .work(let wid, let items, _, _, _):
+                let steps = items.compactMap { if case .step(let s) = $0 { s } else { nil } }
+                if let step = holds(steps) {
+                    if !isOpen(wid) {
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { if Self.debugOpenAll { openWork.remove(wid) } else { openWork.insert(wid) } }
+                    }
+                    target = wid + "/" + step
+                }
+            case .row(.tools(let steps)):
+                if holds(steps) != nil { target = line.id }
+            default: break
+            }
+            if target != nil { break }
+        }
+        guard let target else {
+            Haptics.attention()
+            return
+        }
+        wakeDrawer = nil
+        userScrolled = true
+        followsEnd = false
+        Haptics.tap()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120)) // the opened work line's steps are laid out first
+            withAnimation(.snappy) { position.scrollTo(id: target, anchor: .center) }
+        }
     }
 
     /// Opening a work line the page folded fetches its steps (docs/protocol.md「折叠的工作」).
@@ -988,6 +1030,8 @@ struct ChatView: View {
             }
             .environment(menu)
             .environment(\.openFold, openFold)
+            .environment(\.taskIndex, store.tasks)
+            .environment(\.jumpToCall) { id in jumpToCall(id) }
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
@@ -2232,6 +2276,8 @@ struct WorkStepView: View, Equatable {
                         .padding(.bottom, 10)
                     }
                 }
+            case .step(.thought(let t)) where t.task != nil && t.wake != true:
+                TaskNoteRow(item: t, grouped: true) // a Monitor event between two commands: one line like theirs
             case .step(.thought(let t)):
                 Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) } }
                     .padding(.horizontal, WorkCardSlice.inset)
