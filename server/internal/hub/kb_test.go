@@ -30,12 +30,12 @@ func TestKBTools(t *testing.T) {
 	_ = e.Store.AppendMessages(c, []kb.Line{{At: time.Now(), Sender: "张三", Text: "周五灰度 Jarvis"}})
 	_ = e.Store.PutSummary(kb.KindChat, c.ID, "# 发布群\n\n在推 Jarvis 发布")
 
-	out, err := h.runKBTool("kb_update", json.RawMessage(`{"kind":"projects","id":"Jarvis 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["example-machine:/code/jarvis"]}`))
+	out, err := h.runKBTool("kb_update", json.RawMessage(`{"kind":"projects","id":"Jarvis 发布","project_kind":"long","importance":"P0","relevance":95,"log":"定了周五灰度","chats":["lark-f1"],"dirs":["server:/code/jarvis"]}`))
 	if err != nil || !strings.Contains(out, "projects/jarvis-发布") {
 		t.Fatalf("update: %q %v", out, err)
 	}
 	p, _ := e.Store.Project("jarvis-发布")
-	if p.Kind != "long" || !p.Locked || p.Importance != "P0" || len(p.Chats) != 1 || p.Dirs[0] != "example-machine:/code/jarvis" {
+	if p.Kind != "long" || !p.Locked || p.Importance != "P0" || len(p.Chats) != 1 || p.Dirs[0] != "server:/code/jarvis" {
 		t.Fatalf("project: %+v", p)
 	}
 	if c2, _ := e.Store.Chat("lark-f1"); len(c2.Projects) != 1 {
@@ -53,7 +53,7 @@ func TestKBTools(t *testing.T) {
 	if out, _ := h.runKBTool("kb_search", json.RawMessage(`{"query":"灰度"}`)); !strings.Contains(out, "messages/") {
 		t.Fatalf("search: %q", out)
 	}
-	if got := e.ProjectsForDir("example-machine", "/code/jarvis/server"); len(got) != 1 {
+	if got := e.ProjectsForDir("server", "/code/jarvis/server"); len(got) != 1 {
 		t.Fatalf("dir match: %v", got)
 	}
 	if got := e.ProjectsForDir("laptop", "/code/jarvis"); len(got) != 0 {
@@ -104,15 +104,15 @@ func TestKBRoutes(t *testing.T) {
 func TestKBAgentDone(t *testing.T) {
 	h := testKBHub(t)
 	e := h.kb.eng
-	if _, err := e.Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"example-machine:/code/jarvis"}}); err != nil {
+	if _, err := e.Apply(kb.KindProject, "Jarvis", kb.Update{Dirs: []string{"server:/code/jarvis"}}); err != nil {
 		t.Fatal(err)
 	}
 	s := proto.Session{SessionID: "s1", Cwd: "/code/jarvis/ios", Title: "修排序", LastText: "改好了，\n测试通过"}
-	h.kbAgentDone("example-machine", s)
-	h.kbAgentDone("example-machine", s) // the same agent again right away: one line
+	h.kbAgentDone("server", s)
+	h.kbAgentDone("server", s) // the same agent again right away: one line
 	h.kbAgentDone("laptop", proto.Session{SessionID: "s2", Cwd: "/code/jarvis", LastText: "x"})
 	log := e.Store.Log("jarvis", 10)
-	if len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · example-machine · 改好了， 测试通过") {
+	if len(log) != 1 || !strings.Contains(log[0], "Agent · 修排序 · server · 改好了， 测试通过") {
 		t.Fatalf("log: %v", log)
 	}
 }

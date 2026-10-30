@@ -257,8 +257,8 @@ func (s *topicSource) Messages(context.Context, SourceChat, string, int) ([]Sour
 func (s *topicSource) Download(context.Context, string, string) error { return nil }
 
 func TestHasPeople(t *testing.T) {
-	cases := map[string]bool{"acc-no_reply@email.apple.com": false, "acc-notify@example.com": false, "acc-notify@example.com": false,
-		"acc-zhang.san@company.com": true, "acc-notify@example.com": false}
+	cases := map[string]bool{"acc-no_reply@email.apple.com": false, "acc-noreply@example.com": false, "acc-newsletter@example.org": false,
+		"acc-zhang.san@example.com": true, "acc-hello@example.org": false}
 	for src, want := range cases {
 		if got := HasPeople(&Chat{Kind: "mail", SourceID: src}); got != want {
 			t.Errorf("%s: %v", src, got)
