@@ -76,6 +76,10 @@ data class BackgroundTask(
     val command: String? = null,
 )
 
+/** An agent the session launched (the Agent tool); only `running` matters to the list. */
+@Serializable
+data class Subagent(val id: String = "", val running: Boolean = false)
+
 @Serializable
 data class Session(
     @SerialName("machine_id") val machineId: String = "",
@@ -89,14 +93,17 @@ data class Session(
     val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
     val assistant: Boolean = false,
+    @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("space_id") val spaceId: String? = null,
     @SerialName("space_name") val spaceName: String? = null,
+    @SerialName("space_index") val spaceIndex: Int? = null,
     @SerialName("slot_name") val slotName: String? = null,
     @SerialName("slot_index") val slotIndex: Int? = null,
     val state: String? = null,
     @SerialName("seen_at") val seenAt: String? = null,
     val queued: List<String>? = null,
     val background: List<BackgroundTask>? = null,
+    val subagents: List<Subagent>? = null,
     val loop: LoopInfo? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,

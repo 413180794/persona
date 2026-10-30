@@ -26,12 +26,13 @@ final class AgentsListTests: XCTestCase {
     }
 
     /// `fresh`: forget the list's saved look (cards, nothing folded, all machines, by space) first.
-    private func launch(fresh: Bool = true) {
+    /// `chat`: the chat left open last time ("<machine>/<session>"), which the app opens again over the list.
+    private func launch(fresh: Bool = true, chat: String = "") {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
         app.launch()
-        see(filter("all"), "the quick filters", timeout: 15)
+        if chat.isEmpty { see(filter("all"), "the quick filters", timeout: 15) }
     }
 
     private func attachment(_ a: XCTAttachment, _ name: String) -> XCTAttachment {
@@ -272,21 +273,63 @@ final class AgentsListTests: XCTestCase {
 
     // MARK: The filter bar stays under the bar
 
-    /// What sits above the filter bar: the navigation bar, and the search field while it shows.
+    /// How far the quick filters sit below the search field. The field must be there, open, in the navigation bar,
+    /// and the bar drawn right under it: in the TestFlight 35 / 38 screenshot the field was gone and the bar sat far
+    /// lower, blurred list between.
     private func gapAboveFilters(_ state: String) -> CGFloat {
         let bar = filter("all").frame
         let nav = app.navigationBars.firstMatch.frame
         let search = app.searchFields.firstMatch
-        let above = max(nav.maxY, search.exists && search.frame.height > 1 && search.frame.minY >= 0 ? search.frame.maxY : 0)
-        print("filters \(state): bar \(bar) nav \(nav) search \(search.exists ? search.frame : .zero) gap \(bar.minY - above)")
-        return bar.minY - above
+        print("filters \(state): bar \(bar) nav \(nav) search \(search.exists ? search.frame : .zero)")
+        XCTAssertTrue(search.exists, "\(state): no search field")
+        guard search.exists else { return .infinity }
+        let field = search.frame
+        XCTAssertGreaterThan(field.height, 30, "\(state): the search field is folded")
+        XCTAssertTrue(field.minY >= nav.minY && field.maxY <= nav.maxY + 1, "\(state): the search field is not in the navigation bar")
+        XCTAssertGreaterThanOrEqual(bar.minY, field.maxY, "\(state): the bar is under the search field")
+        XCTAssertTrue(drawn(bar), "\(state): the bar is not drawn where it is laid out")
+        print("filters \(state): gap \(bar.minY - field.maxY)")
+        return bar.minY - field.maxY
     }
 
-    /// The bar hugs the navigation bar / search field in every state: on device (TestFlight 35) it stayed where it sat
-    /// under the open search field once scrolling folded the field away, leaving ~120 pt of blurred list above it.
+    /// Whether the selected chip (全部: an accent-tinted capsule) is on screen at `frame`. Element frames come from
+    /// layout: behind a chat restored at launch the bar was laid out under the search field but drawn ~170 pt lower
+    /// (the whole top inset again), the TestFlight 35 / 38 screenshots; only the pixels show it.
+    private func drawn(_ frame: CGRect) -> Bool {
+        let image = app.screenshot().image
+        guard let cg = image.cgImage else { return false }
+        let scale = CGFloat(cg.width) / app.windows.firstMatch.frame.width
+        let r = frame.insetBy(dx: 4, dy: 4)
+        let w = Int(r.width * scale), h = Int(r.height * scale)
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return false }
+        ctx.draw(cg, in: CGRect(x: -r.minX * scale, y: -(CGFloat(cg.height) - r.maxY * scale), width: CGFloat(cg.width), height: CGFloat(cg.height)))
+        var tinted = 0
+        for i in stride(from: 0, to: px.count, by: 4) where Int(px[i + 2]) - Int(px[i]) > 20 { tinted += 1 }
+        print("filters chip tinted \(tinted) of \(w * h)")
+        return tinted * 2 > w * h
+    }
+
+    private func backToList() {
+        _ = app.buttons["返回"].firstMatch.waitForExistence(timeout: 3)
+        // The chat's own header (its back button is not in a navigation bar), full or folded.
+        if let back = app.buttons.matching(NSPredicate(format: "label IN %@", ["返回", "Back"])).allElementsBoundByIndex
+            .first(where: { $0.isHittable }) { back.tap() } else {
+            let w = app.windows.firstMatch
+            w.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+                .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
+        }
+        see(filter("all"), "the list again")
+        sleep(1)
+    }
+
+    /// The bar hugs the search field in every state: scrolling (TestFlight 35 folded the field away and left the bar
+    /// where it was), a chat and back, the app switcher, another tab, searching.
     @MainActor func testFilterBarHugsTheTop() throws {
         launch()
-        let limit: CGFloat = 16
+        let limit: CGFloat = 24 // 16 pt as laid out
         XCTAssertLessThan(gapAboveFilters("top"), limit, "before scrolling")
         shot("filters-top")
         // And it does not move with the list: the search field above it stays open (nothing folds away to leave a gap).
@@ -314,6 +357,25 @@ final class AgentsListTests: XCTestCase {
         XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "refreshed")
         XCTAssertLessThan(gapAboveFilters("refreshed"), limit, "after pulling to refresh")
         shot("filters-refreshed")
+        // A chat and back.
+        row(0).tap()
+        backToList()
+        XCTAssertLessThan(gapAboveFilters("chat-back"), limit, "back from a chat")
+        app.swipeUp(velocity: .slow)
+        XCTAssertLessThan(gapAboveFilters("chat-back-scrolled"), limit, "back from a chat, scrolled")
+        // Away and back (the app switcher's snapshot).
+        XCUIDevice.shared.press(.home)
+        sleep(2)
+        app.activate()
+        see(filter("all"), "the list after coming back")
+        XCTAssertLessThan(gapAboveFilters("foreground"), limit, "back in the foreground")
+        // Another tab and back.
+        app.tabBars.buttons["Jarvis"].tap()
+        sleep(1)
+        app.tabBars.buttons["Agents"].tap()
+        see(filter("all"), "the list after switching tabs")
+        XCTAssertLessThan(gapAboveFilters("tabs"), limit, "after switching tabs")
+        shot("filters-after-tabs")
         // Searching.
         let search = app.searchFields.firstMatch
         search.tap()
@@ -324,6 +386,27 @@ final class AgentsListTests: XCTestCase {
         app.swipeUp(velocity: .slow)
         XCTAssertLessThan(gapAboveFilters("searching-scrolled"), limit, "searching, scrolled")
         shot("filters-searching-scrolled")
+    }
+
+    /// Opening the app on the chat left open: the list is first laid out under it. Back at the list, the search field
+    /// and the bar are where they always are.
+    @MainActor func testFilterBarHugsTheTopBehindARestoredChat() throws {
+        let key = try XCTUnwrap(firstAgentKey())
+        launch(chat: key)
+        see(app.buttons["terminal"].firstMatch, "the restored chat", timeout: 15)
+        backToList()
+        XCTAssertLessThan(gapAboveFilters("restored-back"), 24, "back from the restored chat")
+        shot("filters-restored-back")
+        app.swipeUp(velocity: .slow)
+        XCTAssertLessThan(gapAboveFilters("restored-back-scrolled"), 24, "back from the restored chat, scrolled")
+    }
+
+    private func firstAgentKey() -> String? {
+        guard let data = try? Data(contentsOf: URL(string: hub + "/api/v1/sessions")!),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let s = (obj["sessions"] as? [[String: Any]])?.first(where: { $0["assistant"] as? Bool != true }),
+              let m = s["machine_id"] as? String, let id = s["session_id"] as? String else { return nil }
+        return m + "/" + id
     }
 
     // MARK: Long list

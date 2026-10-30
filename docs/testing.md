@@ -142,7 +142,9 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 快速筛选（全部 / 需要你 / 未读 / 工作中，计数随机器筛选变）、细列表（行数至少是卡片的 2.5 倍，重启后记住）、点空间标题折叠（折叠后标题仍报各状态计数，
 重启后记住；全部折叠 / 全部展开；折叠的空间从 ⋯「打开空间」进空间页）、空间 ⋯「全部标为已读（N）」、未读筛选下一路往下看（打开过的留在原位，
-重选筛选才消失）、筛选里「全部标为已读」确认后清空、筛选条在各种状态下紧贴搜索框不留空档（`testFilterBarHugsTheTop`；真机上出过空档而模拟器复现不了，所以连「滚动时位置不变」一起断言），以及长列表滚动（`XCTOSSignpostMetric`，模拟器只给时长不给掉帧，真机再看）。
+重选筛选才消失）、筛选里「全部标为已读」确认后清空、筛选条在各种状态下紧贴搜索框不留空档（`testFilterBarHugsTheTop`：滚动、到底、下拉刷新、进对话再返回、切到后台再回来、切 tab、搜索；
+`testFilterBarHugsTheTopBehindARestoredChat`：冷启动恢复上次的对话再返回。搜索框必须在，筛选条按 frame 紧贴其下，**而且按截图像素确认真画在那里**：
+筛选条的内容被 UIKit 下移时 XCUITest 的 frame 不变，只看 frame 会把 TestFlight 35 / 38 的空档放过去），以及长列表滚动（`XCTOSSignpostMetric`，模拟器只给时长不给掉帧，真机再看）。
 
 - mock：`PORT=18775 MOCK_AGENTS=1 python3 scripts/mock_hub.py &`（约 130 个会话：platform 空间 3 需要你 / 35 完成未看 / 12 工作中，
   另有空闲多的空间和全空闲的空间；`seen`（WebSocket 或 `POST …/seen`）把完成未看改成已看，`GET /mock/seen` 列出，`/mock/reset` 复原），

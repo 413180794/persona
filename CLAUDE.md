@@ -259,8 +259,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   （标题当普通行，`listRowBackground(.clear)`，`listSectionSpacing(.custom(0))`，`ChatsView.spaceSection`）。
 - `.safeAreaBar(edge: .top)`（Agents 列表的快速筛选条）别和会随滚动收起的 `.searchable`（导航栏抽屉默认 `.automatic`）一起用：
   真机（TestFlight 35）上滚动收起搜索框后，筛选条还停在搜索框展开时的位置，中间空出约 120pt 雾化的列表（「顶部一大坨」）；
-  模拟器上复现不出来（帧和截图都正常）。现在搜索框 `.navigationBarDrawer(displayMode: .always)` 常显，顶部高度不随滚动变；
-  `AgentsListTests/testFilterBarHugsTheTop` 断言滚动前 / 中 / 到底 / 下拉刷新 / 搜索时筛选条紧贴上方、且滚动时位置不动。
+  现在搜索框 `.navigationBarDrawer(displayMode: .always)` 常显，顶部高度不随滚动变。同样的「一大坨」还有一个来源，见下面横向 `ScrollView` 那条。
 - 体验模式（`docs/ios.md`「体验模式」）挂在 `APIClient` / `LiveConnection` 下面（`DemoHub`），页面代码不写 `if demo`：新页面要的接口在
   `DemoHub` 里没有就是 404「体验模式里没有这项数据」，加接口时顺手在 `DemoHub` 回一份、跑 `DemoModeTests` 看 `DemoHub miss` 日志。
   演示数据改 `scripts/mock_hub.py` 后重跑 `scripts/make_demo_data.py`。会碰到电脑 / 飞书 / 邮件的操作一律不真的做（`DemoText.notSent`）。
@@ -315,10 +314,12 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   页面是一个黄色 ⚠️：要按具体类型 append（`SettingsView.openDebugPage`）。
 - `NavigationSplitView` 右栏里推出的页面，是用左栏登记的 `navigationDestination` 在左栏的环境里建的：给右栏页面的环境值
   要挂在整个分栏视图上，挂在右栏的 NavigationStack 上拿不到（`SplitNavigation`）。
-- `NavigationSplitView` 左栏里，列表上方的横向 `ScrollView`（Agents 的筛选条）会被导航栏当成这一页的滚动视图，内容整体下移一个导航栏 + 搜索框的高度，
-  画到列表中间、被行压住（Duo 打开 / 半折；真机 iPhone 上放在 safeAreaBar 里也会，TestFlight 202610301834，模拟器 iPhone 不复现）。
-  **XCUITest 读到的 frame 仍是没下移的位置**，测试照样通过：这种问题要按截图像素量。导航栈下面的页面顶部**别放横向 ScrollView**，
-  筛选条一律换行排（`QuickFilterBar`）。
+- 列表上方的横向 `ScrollView`（Agents 的筛选条，放在 safeAreaBar 或 VStack 里都一样）可能被导航栏当成这一页的滚动视图，内容整体下移
+  整个顶部（状态栏 + 导航栏 + 搜索框，约 170pt），中间露出雾化的列表：`NavigationSplitView` 左栏（Duo 打开 / 半折）一定出；普通 iPhone 上
+  冷启动恢复上次打开的对话、列表第一次布局在对话下面时也出，返回列表就是 TestFlight 35 / 38 截图的「顶部一大坨」。**XCUITest 读到的 frame
+  仍是没下移的位置**（是 UIKit 挪的内容，SwiftUI 的布局和无障碍 frame 都不知道），以前「模拟器复现不了」就是只看了 frame：
+  这种问题要按截图像素量（`AgentsListTests.drawn` 看选中的「全部」是不是真画在 frame 那里）。导航栈下面的页面顶部**别放横向 ScrollView**，筛选条放不下先收窄，
+  再换行（`QuickFilterBar`，`ViewThatFits`）。`testFilterBarHugsTheTop` / `testFilterBarHugsTheTopBehindARestoredChat` 覆盖。
 - iPhone Duo（`docs/ios.md`「iPhone Duo」）：按宽度（size class）分布局，不看机型；模拟器开合只能在 Device Hub 里切，
   截图要 `--display=1/3` 指定屏幕，否则可能拍到熄灭的那块（全黑）。
 - 助手调飞书用 lark-connector 自带的 lark-connector skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；

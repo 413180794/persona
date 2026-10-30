@@ -184,6 +184,11 @@ class ApiClient(val baseUrl: String, val token: String) {
     /** Renames the herdr tab and the Claude session together, as the iOS app does. */
     suspend fun rename(k: SessionKey, name: String) { post(sp(k) + "/rename", Rename(name, name)) }
 
+    @Serializable private data class SpaceName(val name: String)
+    suspend fun renameSpace(machine: String, workspaceId: String, name: String) {
+        post("/api/v1/machines/$machine/spaces/$workspaceId/rename", SpaceName(name))
+    }
+
     suspend fun pins(): Pins = get("/api/v1/pins")
     suspend fun setPins(p: Pins): Pins = JsonCodec.decodeFromString(raw("PUT", "/api/v1/pins", JsonCodec.encodeToString(p)))
     suspend fun mutes(): Pins = get("/api/v1/mutes")

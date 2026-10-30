@@ -118,21 +118,10 @@ fun AgentActionsSheet(
     }
 
     if (renaming) {
-        // The current name starts selected and focused: typing replaces it, a tap puts the cursor in it.
-        var name by remember { mutableStateOf(TextFieldValue(s.displayTitle, TextRange(0, s.displayTitle.length))) }
-        val focus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { focus.requestFocus() }
-        AlertDialog(
-            onDismissRequest = { renaming = false },
-            title = { Text("重命名") },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { renaming = false; act("重命名") { hub.api.rename(s.key, name.text.trim()) } },
-                    enabled = name.text.isNotBlank() && name.text.trim() != s.displayTitle,
-                ) { Text("保存", maxLines = 1) }
-            },
-            dismissButton = { TextButton(onClick = { renaming = false }) { Text("取消", maxLines = 1) } },
+        RenameDialog(
+            title = "重命名", current = s.displayTitle, note = null,
+            onDismiss = { renaming = false },
+            onSave = { name -> renaming = false; act("重命名") { hub.api.rename(s.key, name) } },
         )
     }
 
@@ -308,3 +297,24 @@ val PERMISSION_MODES = listOf(
     "auto" to "自动",
     "bypassPermissions" to "全部放行",
 )
+
+/** Rename with the current name selected and focused: typing replaces it, a tap puts the cursor in it. */
+@Composable
+fun RenameDialog(title: String, current: String, note: String?, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by remember { mutableStateOf(TextFieldValue(current, TextRange(0, current.length))) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val trimmed = name.text.trim()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(trimmed) }, enabled = trimmed.isNotEmpty() && trimmed != current) { Text("保存", maxLines = 1) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", maxLines = 1) } },
+    )
+}

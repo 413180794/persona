@@ -277,6 +277,28 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
         runCatching { _pins.value = api.setPins(_pins.value) }.onFailure { _pins.value = before; throw it }
     }
 
+    /** Pins / unpins a whole space ("machine/space name"). */
+    suspend fun toggleSpacePin(g: SpaceGroup) {
+        val before = _pins.value
+        val k = g.pinKey
+        _pins.value = before.copy(spaces = if (k in before.spaces) before.spaces - k else listOf(k) + before.spaces)
+        runCatching { _pins.value = api.setPins(_pins.value) }.onFailure { _pins.value = before; throw it }
+    }
+
+    /** Mutes / unmutes a whole space; agents turned back on inside it keep their notifications. */
+    suspend fun toggleSpaceMute(g: SpaceGroup) {
+        val before = _mutes.value
+        val k = g.pinKey
+        _mutes.value = before.copy(spaces = if (k in before.spaces) before.spaces - k else listOf(k) + before.spaces)
+        runCatching { _mutes.value = api.setMutes(_mutes.value) }.onFailure { _mutes.value = before; throw it }
+    }
+
+    /** Renames the herdr workspace; the hub moves its pin / mute keys to the new name, so read them again. */
+    suspend fun renameSpace(g: SpaceGroup, name: String) {
+        api.renameSpace(g.machineId, g.workspaceId ?: error("这个空间没有 herdr 的 workspace id"), name)
+        loadPins()
+    }
+
     /** Mutes / unmutes one agent on top of its space's setting. */
     suspend fun toggleMute(s: Session) {
         val before = _mutes.value

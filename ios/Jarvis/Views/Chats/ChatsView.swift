@@ -660,17 +660,23 @@ struct QuickFilterBar: View {
     var counts: [AgentFilter: Int]
     var choose: (AgentFilter) -> Void
 
-    /// Chips that do not fit go to a second row; never a sideways scroll view. The navigation stack took that scroll
-    /// view for the page's own and pushed its chips down by the navigation bar's height, over the list's first rows
-    /// (on device in a phone's safeAreaBar, TestFlight 202610301834; in iPhone Duo's sidebar column). Accessibility
-    /// still reported the unmoved frame, so UI tests passed; the simulator only showed it on iPhone Duo.
+    /// No sideways scroll view: the navigation stack can take one at the top of the page for the page's own and
+    /// inset it by the whole top bar. It did behind a chat reopened at launch (the chips drawn ~170 pt under the
+    /// search field, blurred list between: TestFlight 35 and 38), and in the split's sidebar column. Element frames
+    /// do not show it (UIKit moves the content), the pixels do: `AgentsListTests.drawn`. Chips that do not fit
+    /// tighten, then go to a second row.
     var body: some View {
-        LarkFlowLayout(spacing: 8, lineSpacing: 8) { chips }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { chips(padding: 12) }
+            HStack(spacing: 6) { chips(padding: 8) }
+            LarkFlowLayout(spacing: 6, lineSpacing: 8) { chips(padding: 8) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
     }
 
-    @ViewBuilder private var chips: some View {
+    @ViewBuilder private func chips(padding: CGFloat) -> some View {
         ForEach(AgentFilter.allCases) { f in
             let on = f == selection
             let tone = f.state?.tone
@@ -688,7 +694,7 @@ struct QuickFilterBar: View {
                 .lineLimit(1)
                 .fixedSize()
                 .foregroundStyle(on ? tint : Color.primary)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, padding)
                 .padding(.vertical, 7)
                 .background(Capsule().fill(on ? tint.opacity(0.15) : Color.secondary.opacity(0.1)))
                 .overlay(Capsule().strokeBorder(on ? tint.opacity(0.35) : .clear, lineWidth: 1))
