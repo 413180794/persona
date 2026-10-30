@@ -76,7 +76,16 @@ import java.util.UUID
 /** One agent's conversation: live items, its pending cards, and the input box. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
+fun ChatScreen(
+    hub: Hub, key: SessionKey, onBack: () -> Unit,
+    /** The Jarvis tab's conversation: headless (no terminal), titled Jarvis, its reply streamed as it is written. */
+    assistant: Boolean = false,
+    /** Replaces the back arrow (the Jarvis tab opens its history instead). */
+    navigation: (@Composable () -> Unit)? = null,
+    actions: @Composable () -> Unit = {},
+    /** Something (a tab bar) sits under the screen and takes the system navigation bar's inset itself. */
+    embedded: Boolean = false,
+) {
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) { onDispose { hub.release(key) } }
     val state by store.state.collectAsState()
@@ -103,6 +112,21 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
             if (last >= rows.size - 3) store.loadOlder()
         }
     }
+    // Follow the newest end while the user is there. A reversed list keeps its first visible item in place when
+    // rows are added before it, so a long reply that grew while you read it would leave the next one off screen.
+    // "There" = the newest end is on screen (index 0 visible), or the user just sent something.
+    var follow by remember { mutableStateOf(true) }
+    LaunchedEffect(list) {
+        snapshotFlow { list.firstVisibleItemIndex == 0 }.collect { atNewest -> if (atNewest) follow = true }
+    }
+    LaunchedEffect(list) {
+        snapshotFlow { list.isScrollInProgress }.collect { scrolling ->
+            if (scrolling && list.firstVisibleItemIndex > 0) follow = false // the user scrolled back to read
+        }
+    }
+    LaunchedEffect(rows.firstOrNull()?.id, state.live.length / 80, cards.size) {
+        if (follow && rows.isNotEmpty()) list.scrollToItem(0)
+    }
 
     var draft by rememberSaveable(key.path) { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -120,6 +144,7 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
             try {
                 hub.api.send(key, text, id, clearDraft)
                 draft = ""; pendingMsgId = null
+                follow = true; list.scrollToItem(0) // what you sent and its answer show, wherever you had scrolled
             } catch (e: HubException) {
                 when (e.code) {
                     "dialog_open", "input_draft" -> { refusal = e; if (e.fields?.get("delivered")?.jsonPrimitive?.content == "none") pendingMsgId = null }
@@ -135,11 +160,17 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                navigationIcon = navigation ?: { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                 title = {
                     Column {
-                        Text(session?.displayTitle ?: key.sessionId.take(8), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val where = listOfNotNull(
+                        Text(
+                            if (assistant) session?.title?.takeIf { it.isNotBlank() && it != "Claude Code" } ?: "Jarvis"
+                            else session?.displayTitle ?: key.sessionId.take(8),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        val where = if (assistant) listOfNotNull(
+                            "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
+                        ).joinToString(" · ") else listOfNotNull(
                             machines.firstOrNull { it.id == key.machineId }?.displayName,
                             session?.spaceName?.takeIf { it.isNotBlank() },
                             session?.agentState?.label(),
@@ -148,12 +179,13 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    if (session?.isLive == true) IconButton(onClick = { terminal = true }) { Icon(Icons.Default.Terminal, "终端") }
+                    if (session?.isLive == true && !assistant) IconButton(onClick = { terminal = true }) { Icon(Icons.Default.Terminal, "终端") }
                     if (session?.agentState == AgentState.Working) {
                         IconButton(onClick = { scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) {
                             Icon(Icons.Default.Stop, "中断")
                         }
                     }
+                    actions()
                 },
             )
         },
@@ -169,8 +201,16 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     ) {
                         items(cards, key = { "ix/" + it.id }) { ix -> InteractionCard(hub, ix) }
-                        if (session?.agentState == AgentState.Working) item(key = "working") {
-                            Text("${session.agentLabel} 正在工作…", style = MaterialTheme.typography.labelMedium, color = AgentState.Working.color())
+                        // The reply being written (the assistant streams it; herdr agents don't), unless the transcript
+                        // already holds it; otherwise a working line.
+                        val lastText = (rows.firstOrNull() as? Row.Assistant)?.text
+                        if (assistant && state.live.isNotBlank() && !(lastText != null && (lastText.startsWith(state.live) || lastText == state.live))) {
+                            item(key = "live") { Markdown(state.live, Modifier.fillMaxWidth().padding(vertical = 2.dp)) }
+                        } else if (session?.agentState == AgentState.Working) item(key = "working") {
+                            Text(
+                                if (assistant) "Jarvis 正在思考…" else "${session.agentLabel} 正在工作…",
+                                style = MaterialTheme.typography.labelMedium, color = AgentState.Working.color(),
+                            )
                         }
                         session?.queued?.takeIf { it.isNotEmpty() }?.let { q ->
                             item(key = "queued") {
@@ -184,14 +224,29 @@ fun ChatScreen(hub: Hub, key: SessionKey, onBack: () -> Unit) {
                     }
                 }
             }
+            // Live updates come over the WebSocket: say when it's down, or a reply that never shows looks like silence.
+            val conn by hub.conn.collectAsState()
+            if (conn != jarvis.android.data.ConnState.Online) Text(
+                if (conn == jarvis.android.data.ConnState.Connecting) "正在连接 hub…，新消息稍后显示" else "和 hub 的连接断了，正在重连；发出去的消息不受影响",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
             notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
             session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                 AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
             }
-            Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(8.dp), verticalAlignment = Alignment.Bottom) {
+            Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
                 OutlinedTextField(
                     draft, { draft = it; pendingMsgId = null },
-                    placeholder = { Text(if (session?.isLive == false) "发消息会在电脑上恢复这个会话" else "发给 ${session?.agentLabel ?: "Claude"}") },
+                    placeholder = {
+                        Text(
+                            when {
+                                assistant -> "问 Jarvis…"
+                                session?.isLive == false -> "发消息会在电脑上恢复这个会话"
+                                else -> "发给 ${session?.agentLabel ?: "Claude"}"
+                            },
+                        )
+                    },
                     modifier = Modifier.weight(1f).heightIn(max = 180.dp), shape = RoundedCornerShape(20.dp),
                 )
                 IconButton(onClick = { send() }, enabled = !sending && draft.isNotBlank()) {

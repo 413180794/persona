@@ -179,7 +179,7 @@ public struct ToolChips: View {
         }
         .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
         .padding(.horizontal, -6)
-        .accessibilityValue(theme.strings.expanded(open))
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
     }
 
     private func row(_ call: ToolCall) -> some View {
@@ -197,7 +197,7 @@ public struct ToolChips: View {
             }
             .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
             .padding(.horizontal, -3)
-            .accessibilityValue(theme.strings.expanded(rowOpen))
+            .accessibilityValue(rowOpen ? "Expanded" : "Collapsed")
 
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(call.detail, id: \.self) { line in
@@ -316,7 +316,7 @@ public struct ToolChipRow<Accessory: View>: View {
             .contentShape(.rect(cornerRadius: theme.radii.control))
         }
         .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
-        .accessibilityValue(theme.strings.expanded(isOpen))
+        .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
     }
 }
 

@@ -105,19 +105,9 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
-- 输入框：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用 `PromptComposer`，是 BeautifulUI 的 Prompt Bar（`layout: .stacked`）：
-  上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成红色的中断。
-  底色是当前风格的 `.surface`（库自己不画），按钮 34pt。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
-  - 草稿：输入框直接编辑 `model.drafts`（`Options.text`），不要让 bar 和宿主互相回写，否则拼音输入法正在拼的字会被提前上屏。
-  - 「@」：本会话的工具读写过的文件（最近 12 个，打 `@相对路径`，Claude Code 和 Codex 都认），再是其他会话（最近活跃的 8 个，选中后作为一段
-    `<jarvis-context>` 引用附在消息前，显示成输入框上方的引用胶囊）。只列已载入的步骤里的文件：长会话里收起的工作卡没展开过就没有。
-  - 「/」：`SlashCommand.all`，快捷消息用短词（/继续、/提交、/汇报），选中后把要发的话填进输入框，点发送才发出（以前点菜单就直接发）；
-    /compact、/context 原样；能清空时有 /clear，点了先弹确认。
-  - 模型：Agent 对话里是 Claude Code 的 `/model` 别名（默认 / Opus / Sonnet / Haiku），选中就发 `/model <别名>`；Codex、TRAEX、无头助手没有这个按钮。
-    助手首页是启动器列表（原来输入框上方的模型标签挪进来了）。
-  - 听写：`Dictation`（`SFSpeechRecognizer` 中文 + `AVAudioEngine`），听到的字实时接在草稿后面，再点一下停；发送时自动停。
-  - 输入框上方的权限、思考强度标签（`SessionModeBar` / `NewSessionModePicker`）留在原处，不并进工具栏，理由见 PLAN「PromptBar v2」。
-  - DEBUG：`-showPromptMenu mention|command|attach|model` 几秒后打开对应菜单（截图用）。
+- 输入栏：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用一行 `ComposerRow`：[+] 菜单、玻璃胶囊输入框（至少 44pt 高）、发送；
+  三件一样高（约 44pt）。没东西可发时发送键变淡，Agent 工作中且没打字时换成红色的中断键。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里，
+  共用的只有这一行的样子。上方的模型、权限、思考强度标签都是中性的（只有「全部放行」红）。
 - Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」（✦ 是 AI 的紫色，不是主色），占位文字也换成这条建议；
   点一下填进输入框（可以改了再发），长按菜单「直接发送」。一打字就消失。无头助手没有 TUI，没有建议。截图：mock 加 `MOCK_SUGGESTION=1`，打开 review 会话。
 - 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
@@ -200,7 +190,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   按键栏和输入框收在「查看终端」里。读不出对话框时直接显示终端。DEBUG：`-showSampleScreen YES`。
 - 交互面板：贴在输入框上方。提问（`QuestionForm`，iOS 分组列表的样子：题目 + 一个圆角框里的选项，前面是终端那样的编号圆点、选中变勾，「(Recommended)」显示成「推荐」标签但回答仍发原文；「其他回答…」是框里最后一行，点了才变输入框；单题单选点一下就提交，多题顶部「标题 · 1/2」、底部小号「上一题 / 下一题 / 提交」，单选后自动翻到下一题；`-showSampleQuestion YES` 塞一个示例截图用）、计划（markdown 预览 + 全屏、批准并自动执行 /
   批准并自动接受编辑 / 打回写意见）、授权（允许 / 拒绝 / 本会话总是允许）、终端（屏幕快照 + 解析出的编号选项 + 按键面板 + 发文字）。
-- 输入框：见上面「输入框」一条（照片最多 4 张，压缩到 1600px；「/」里是快捷消息和指令；工作中发送换成红色中断）。
+- 输入框：照片（最多 4 张，压缩到 1600px）、快捷指令（继续、/compact、/context、提交并推送、汇报进展），工作中变成红色停止键。
 - 导航副标题：机器 · 模型 · 状态。
 
 ## Jarvis 顶栏和侧边栏（2026-10-30）

@@ -19,6 +19,8 @@ import jarvis.android.ui.JarvisTheme
 class MainActivity : ComponentActivity() {
     /** A session to open, from a notification tap ("<machine>/<session>"). */
     private val openSession = mutableStateOf<SessionKey?>(null)
+    /** A tab to show, from a notification tap (the assistant's questions open Jarvis). */
+    private val openTab = mutableStateOf<String?>(null)
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -31,7 +33,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             JarvisTheme {
                 val hub by app.hub.collectAsState()
-                JarvisRoot(hub = hub, openSession = openSession)
+                JarvisRoot(hub = hub, openSession = openSession, openTab = openTab)
             }
         }
     }
@@ -47,6 +49,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
+        intent?.getStringExtra(EXTRA_TAB)?.let { openTab.value = it }
         intent?.getStringExtra(EXTRA_SESSION)?.let { s ->
             val i = s.indexOf('/')
             if (i > 0) openSession.value = SessionKey(s.substring(0, i), s.substring(i + 1))
@@ -56,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SESSION = "session"
+        const val EXTRA_TAB = "tab"
         /** A pairing link the activity was opened with, for the pairing screen to confirm. */
         val pendingPair = mutableStateOf<jarvis.android.data.Pairing?>(null)
     }

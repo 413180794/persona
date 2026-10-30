@@ -53,8 +53,9 @@ class Notifier(private val context: Context) {
             hub.events.collect { e ->
                 when (e) {
                     // Muted agents and spaces get no notifications, as with the hub's pushes to iPhone.
-                    is HubEvent.NewInteraction -> if (!hub.session(e.interaction.sessionKey).let { it != null && hub.isMuted(it) }) {
-                        postInteraction(e.interaction)
+                    is HubEvent.NewInteraction -> {
+                        val s = hub.session(e.interaction.sessionKey)
+                        if (s == null || !hub.isMuted(s)) postInteraction(e.interaction, assistant = s?.assistant == true)
                     }
                     is HubEvent.Resolved -> nm.cancel(e.id.hashCode())
                     is HubEvent.SessionChanged -> if (!hub.isMuted(e.after)) onSessionChanged(e.before, e.after)
@@ -70,10 +71,11 @@ class Notifier(private val context: Context) {
     private fun allowed() = android.os.Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun openIntent(key: String?, requestCode: Int): PendingIntent {
+    private fun openIntent(key: String?, requestCode: Int, assistant: Boolean = false): PendingIntent {
         val i = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            key?.let { putExtra(MainActivity.EXTRA_SESSION, it) }
+            // The assistant's own questions open the Jarvis tab, not a chat under Agents.
+            if (assistant) putExtra(MainActivity.EXTRA_TAB, "jarvis") else key?.let { putExtra(MainActivity.EXTRA_SESSION, it) }
         }
         return PendingIntent.getActivity(context, requestCode, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
@@ -90,9 +92,9 @@ class Notifier(private val context: Context) {
         }.build()
     }
 
-    fun postInteraction(ix: Interaction) {
+    fun postInteraction(ix: Interaction, assistant: Boolean = false) {
         if (!allowed()) return
-        val title = ix.sessionTitle?.takeIf { it.isNotBlank() } ?: ix.cwd?.substringAfterLast('/') ?: "Agent"
+        val title = if (assistant) "Jarvis 在问你" else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: ix.cwd?.substringAfterLast('/') ?: "Agent"
         val b = NotificationCompat.Builder(context, CH_INPUT)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
@@ -101,7 +103,7 @@ class Notifier(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openIntent("${ix.machineId}/${ix.sessionId}", ix.id.hashCode()))
+            .setContentIntent(openIntent("${ix.machineId}/${ix.sessionId}", ix.id.hashCode(), assistant))
         when (ix.kind) {
             "permission" -> {
                 b.addAction(action(ix, ActionReceiver.ALLOW, "允许"))

@@ -25,6 +25,8 @@ class ChatStore(private val hub: Hub, val key: SessionKey, private val scope: Co
         val hasOlder: Boolean = false,
         val loadingOlder: Boolean = false,
         val error: String? = null,
+        /** The assistant's reply as it is generated (WebSocket `delta`); empty between turns. */
+        val live: String = "",
     )
 
     private val _state = MutableStateFlow(State())
@@ -96,6 +98,11 @@ class ChatStore(private val hub: Hub, val key: SessionKey, private val scope: Co
         }
     }
 
+    /** A `delta`: the whole text generated so far in this turn (empty: the turn ended). */
+    fun onDelta(text: String) {
+        _state.value = _state.value.copy(live = text)
+    }
+
     /** The session's rev moved but nothing came (not subscribed yet, or a lost batch): catch up after a moment. */
     fun onRev() = scheduleGapFill(1_500)
 
@@ -147,6 +154,6 @@ class ChatStore(private val hub: Hub, val key: SessionKey, private val scope: Co
 
     private fun publish(hasOlder: Boolean = _state.value.hasOlder, loading: Boolean = false, loadingOlder: Boolean = _state.value.loadingOlder) {
         val sorted = byId.values.sortedWith(compareBy<Item> { it.seq }.thenBy { it.id.substringAfterLast('#').toIntOrNull() ?: 0 })
-        _state.value = State(sorted, loading, hasOlder, loadingOlder, null)
+        _state.value = State(sorted, loading, hasOlder, loadingOlder, null, _state.value.live)
     }
 }

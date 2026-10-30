@@ -17,11 +17,4 @@ import Testing
         #expect(row.id == "Read")
         #expect(ThinkingRow(id: "r1", "Read").id == "r1")
     }
-
-    @Test func statesSpeakTheHostsWords() {
-        #expect(BUIStrings.standard.expanded(true) == "Expanded")
-        #expect(BUIStrings.standard.expanded(false) == "Collapsed")
-        let zh = BUIStrings(expanded: "已展开", collapsed: "已折叠")
-        #expect(zh.expanded(false) == "已折叠")
-    }
 }

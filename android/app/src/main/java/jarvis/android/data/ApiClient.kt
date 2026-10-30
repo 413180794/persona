@@ -196,6 +196,25 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun mutes(): Pins = get("/api/v1/mutes")
     suspend fun setMutes(p: Pins): Pins = JsonCodec.decodeFromString(raw("PUT", "/api/v1/mutes", JsonCodec.encodeToString(p)))
 
+    /** The assistant (the Jarvis tab, docs/assistant.md): where it runs and its conversations, newest first. */
+    @Serializable
+    data class AssistantState(
+        @SerialName("machine_id") val machineId: String = "",
+        val launcher: String = "",
+        val main: String? = null,
+        val conversations: List<Session> = emptyList(),
+    )
+    suspend fun assistant(): AssistantState = get("/api/v1/assistant")
+
+    @Serializable private data class NewConversation(val prompt: String, val main: Boolean? = null)
+    /** Starts a conversation with `prompt` as its first message; the first one becomes the main conversation. */
+    suspend fun startConversation(prompt: String, main: Boolean): Session =
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/assistant/conversations", NewConversation(prompt, main.takeIf { it }))).session
+
+    @Serializable private data class Warm(val launcher: String = "")
+    /** The Jarvis tab is showing: the hub gets a claude process ready so the first message skips its startup. */
+    suspend fun warmAssistant() { post("/api/v1/assistant/warm", Warm()) }
+
     @Serializable data class NewToken(val id: String, val token: String, val role: String = "")
     @Serializable private data class TokenReq(val name: String, val kind: String)
     /** Trades the pairing token for this device's own (docs/protocol.md「鉴权」). */

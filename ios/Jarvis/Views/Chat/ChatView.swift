@@ -1,4 +1,3 @@
-import BeautifulUI
 import MarkdownUI
 import PhotosUI
 import SwiftUI
@@ -1928,16 +1927,8 @@ struct Composer: View {
         return s.paneID != nil && !s.isCodex && !s.isTraex
     }
 
-    /// Claude in a herdr pane takes `/model`; Codex and TRAEX pick theirs in a full-screen menu the phone cannot drive.
-    private var canPickModel: Bool {
-        guard let s = model.session(key) else { return false }
-        return s.paneID != nil && !s.isCodex && !s.isTraex && !s.assistant
-    }
-
-    /// The @ menu: files this chat's tools touched, then other agents' sessions.
-    private func mentions() -> [PromptSource] {
-        PromptItems.files(model.chat(key).items, cwd: model.session(key)?.cwd ?? "")
-            + PromptItems.sessions(model.allSessions, except: key)
+    private var canSend: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty
     }
 
     /// Claude's suggested next message, while the box is empty and the agent waits.
@@ -1967,35 +1958,28 @@ struct Composer: View {
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
-            PromptComposer(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
-                           text: textBinding, selection: $selection, focused: $focused,
-                           hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
-                           stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
-                           attach: PromptItems.attachments(camera: UIImagePickerController.isSourceTypeAvailable(.camera)),
-                           mentions: mentions,
-                           commands: PromptItems.commands(clear: canClear && !status.isActive && !clearing),
-                           models: canPickModel ? PromptItems.claudeModels : [],
-                           modelID: PromptItems.claudeModelID(model.session(key)?.model),
-                           pickModel: { id in model.sendNow(key, text: "/model \(id)", images: []) }, // photos and quotes stay for the message
-                           onAttach: { source in
-                               // A PhotosPicker cannot present from inside the menu: these sheets hang off the composer.
-                               switch source.id {
-                               case "photo": showPhotos = true
-                               case "camera": showCamera = true
-                               default: showFiles = true
-                               }
-                           },
-                           onMention: { source in
-                               guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
-                               contexts.wrappedValue.append(ref)
-                               return true
-                           },
-                           onCommand: { command in
-                               guard command.name == "/clear" else { return false }
-                               confirmClear = true
-                               return true
-                           },
-                           send: { Task { await sendText(text) } })
+            ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
+                        text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
+                        stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                        send: { Task { await sendText(text) } }) {
+                // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
+                Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
+                }
+                Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
+                Section("快捷指令") {
+                    ForEach(SlashCommand.all) { cmd in
+                        Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
+                    }
+                    if canClear {
+                        Button(role: .destructive) { confirmClear = true } label: {
+                            Label("清空上下文 /clear", systemImage: "eraser")
+                        }
+                        .disabled(status.isActive || clearing)
+                    }
+                }
+            }
         }
         #if DEBUG
         .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
@@ -2113,20 +2097,18 @@ struct Composer: View {
     }
 }
 
-/// The composer's "/" menu: Claude Code's own commands, and Jarvis' quick messages under a short word. Picking one
-/// types `text` into the draft; send sends it.
 struct SlashCommand: Identifiable {
-    var word: String
-    var detail: String
+    var title: String
     var text: String
-    var id: String { word }
+    var symbol: String
+    var id: String { text }
 
     static let all: [SlashCommand] = [
-        SlashCommand(word: "/继续", detail: "让它接着做", text: "继续"),
-        SlashCommand(word: "/compact", detail: "压缩上下文", text: "/compact"),
-        SlashCommand(word: "/context", detail: "查看上下文", text: "/context"),
-        SlashCommand(word: "/提交", detail: "按规范提交并推送", text: "把当前改动按规范提交并推送"),
-        SlashCommand(word: "/汇报", detail: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么"),
+        SlashCommand(title: "继续", text: "继续", symbol: "forward"),
+        SlashCommand(title: "压缩上下文 /compact", text: "/compact", symbol: "rectangle.compress.vertical"),
+        SlashCommand(title: "查看上下文 /context", text: "/context", symbol: "chart.pie"),
+        SlashCommand(title: "提交并推送", text: "把当前改动按规范提交并推送", symbol: "arrow.up.doc"),
+        SlashCommand(title: "汇报进展", text: "简要汇报一下目前的进展、还剩什么", symbol: "list.bullet.rectangle"),
     ]
 }
 

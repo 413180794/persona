@@ -46,7 +46,7 @@ extension BUITheme {
                              window: Theme.Radius.panel)
         // The library's sizes are the web original's (13 pt labels); ×1.2 puts its labels at Jarvis' tool rows (15).
         // Entrances off: the chat list rebuilds rows as they scroll in, and an opened history would fade up at once.
-        return BUITheme(colors: colors, radii: radii, typeScale: 1.2, entrances: false, strings: .jarvis)
+        return BUITheme(colors: colors, radii: radii, typeScale: 1.2, entrances: false)
     }
 
     /// For code and diffs: on the code background, at the code size Jarvis already uses (12–13).
@@ -56,28 +56,4 @@ extension BUITheme {
         t.typeScale = 1
         return t
     }
-}
-
-extension BUIStrings {
-    /// What the components show and VoiceOver says. The open state uses the Agents list's words.
-    static let jarvis: BUIStrings = {
-        var w = BUIStrings(expanded: "已展开", collapsed: "已折叠")
-        w.prompt = "输入框"
-        w.listening = "正在听…"
-        w.attach = "添加" // the + of the old composer read so too
-        w.mention = "提及文件或会话"
-        w.commands = "指令"
-        w.chooseModel = "选择模型"
-        w.startDictation = "听写"
-        w.stopDictation = "停止听写"
-        w.send = "发送"
-        w.stop = "中断"
-        w.connect = "连接"
-        w.connected = "已连接"
-        w.sourcesHint = "接着输入可以筛选"
-        w.commandsHint = "选中后会填进输入框，点发送才发出"
-        w.noMatches = "没有「%@」"
-        w.remove = "移除 %@"
-        return w
-    }()
 }

@@ -30,18 +30,4 @@ import Testing
         model.isMenuDismissed = true
         #expect(model.token == nil)
     }
-
-    @Test func hostWordsFillTheirQuery() {
-        var words = BUIStrings.standard
-        words.noMatches = "没有「%@」"
-        #expect(words.noMatches("tea") == "没有「tea」")
-        #expect(BUIStrings.standard.noMatches("x") == "No matches for “x”")
-    }
-
-    @Test func picksTypeTheirInsertOrTheirName() {
-        #expect(PromptCommand("/compact", detail: "").insert == nil)
-        #expect(PromptCommand("/提交", detail: "", insert: "提交并推送").insert == "提交并推送")
-        #expect(PromptToken.parse("看 @ios")?.kind == .mention)
-        #expect(PromptToken.parse("/继")?.query == "继")
-    }
 }

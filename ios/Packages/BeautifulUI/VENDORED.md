@@ -1,6 +1,6 @@
 # BeautifulUI（拷入的副本）
 
-来源：BeautifulUI 仓库的 `02907da`（`main` 的 `9b05853` 之后，`jarvis-host-hooks` 分支上的 Prompt Bar 接口），`BeautifulUI/` 目录原样拷入，
+来源：BeautifulUI 仓库 `main` 的 `9b05853`，`BeautifulUI/` 目录原样拷入，
 作为本地 Swift Package 由 `ios/project.yml` 引用。许可：`LICENSE`、`LICENSE-beautifului`、`NOTICE`，根目录的
 `THIRD_PARTY_NOTICES.md` 也有一份。
 

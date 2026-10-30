@@ -1,6 +1,15 @@
 package jarvis.android.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -9,16 +18,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import jarvis.android.MainActivity
+import jarvis.android.data.AgentState
 import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
 
+enum class Tab(val title: String) { Jarvis("Jarvis"), Agents("Agents") }
+
 /**
- * Pairing until a hub is paired; then the Agents list with, on top of it, a space page and / or a chat, or settings.
- * A chat opened from a space page goes back to that page; one opened from the list or a notification, to the list.
+ * Pairing until a hub is paired; then two tabs, Jarvis (the assistant) and Agents, as on iOS. Agents can push a
+ * space page and / or a chat on top of its list: a chat opened from a space page goes back to that page. A
+ * notification opens its chat in the Agents tab (the assistant's conversations stay in Jarvis).
  */
 @Composable
-fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
+fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: MutableState<String?> = mutableStateOf(null)) {
     val conn = hub?.conn?.collectAsState()?.value
     // Not paired, the hub refused this device's token, or a pairing link was just opened: the pairing screen.
     if (hub == null || conn == ConnState.Unauthorized || MainActivity.pendingPair.value != null) {
@@ -28,10 +41,43 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
         )
         return
     }
+    var tab by rememberSaveable { mutableStateOf(Tab.Agents) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var space by rememberSaveable { mutableStateOf<String?>(null) }
     val open = openSession.value
+    if (open != null) tab = Tab.Agents
+    openTab.value?.let { if (it == "jarvis") { tab = Tab.Jarvis; settings = false }; openTab.value = null }
+
+    val pending by hub.interactions.collectAsState()
+    val byMachine by hub.sessions.collectAsState()
+    val assistantKeys = byMachine.values.flatten().filter { it.assistant }.map { it.key }.toSet()
+    val needsYou = pending.count { it.sessionKey !in assistantKeys }
+    val unread = byMachine.values.flatten().count { !it.assistant && it.agentState == AgentState.Unread }
+    val assistantWaiting = pending.any { it.sessionKey in assistantKeys } ||
+        byMachine.values.flatten().any { it.assistant && it.agentState == AgentState.NeedsYou }
+    val bar: @Composable () -> Unit = {
+        NavigationBar {
+            NavigationBarItem(
+                selected = tab == Tab.Jarvis, onClick = { tab = Tab.Jarvis },
+                icon = { BadgedBox(badge = { if (assistantWaiting) Badge() }) { Icon(Icons.AutoMirrored.Filled.Chat, null) } },
+                label = { Text(Tab.Jarvis.title, maxLines = 1) },
+            )
+            NavigationBarItem(
+                selected = tab == Tab.Agents, onClick = { tab = Tab.Agents },
+                icon = {
+                    BadgedBox(badge = { if (needsYou + unread > 0) Badge { Text("${needsYou + unread}") } }) { Icon(Icons.Default.Computer, null) }
+                },
+                label = { Text(Tab.Agents.title, maxLines = 1) },
+            )
+        }
+    }
+
     when {
+        settings -> {
+            BackHandler { settings = false }
+            SettingsScreen(hub, onBack = { settings = false })
+        }
+        tab == Tab.Jarvis -> AssistantScreen(hub, bottomBar = bar)
         open != null -> {
             BackHandler { openSession.value = null }
             ChatScreen(hub, open, onBack = { openSession.value = null })
@@ -40,12 +86,9 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>) {
             BackHandler { space = null }
             SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
         }
-        settings -> {
-            BackHandler { settings = false }
-            SettingsScreen(hub, onBack = { settings = false })
-        }
         else -> AgentsScreen(
             hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settings = true },
+            bottomBar = bar,
         )
     }
 }

@@ -131,6 +131,10 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.i(TAG, "ws closed: ${t.message}")
                 if (response?.code == 401) unauthorized = true
+                // The next handshake must not reuse a pooled connection that died with this one: OkHttp doesn't retry
+                // a WebSocket upgrade on a stale connection, so every reconnect failed with "unexpected end of stream"
+                // until the app restarted (seen when the network path under the hub, an adb / ssh forward, reset).
+                api.http.connectionPool.evictAll()
                 onClosed()
             }
         })
@@ -216,6 +220,11 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                     toSeq = msg["to_seq"]?.jsonPrimitive?.intOrNull,
                     moreAfter = msg["more_after"]?.jsonPrimitive?.booleanOrNull == true,
                 )
+            }
+            "delta" -> {
+                val mid = msg["machine_id"]?.jsonPrimitive?.content ?: return
+                val sid = msg["session_id"]?.jsonPrimitive?.content ?: return
+                chat(SessionKey(mid, sid), create = false)?.onDelta(msg["text"]?.jsonPrimitive?.content.orEmpty())
             }
             "tool_call" -> {
                 val id = msg["call_id"]?.jsonPrimitive?.content ?: return

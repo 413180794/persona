@@ -97,11 +97,14 @@ import java.time.Instant
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onOpenSpace: (String) -> Unit, onSettings: () -> Unit) {
+fun AgentsScreen(
+    hub: Hub, onOpen: (SessionKey) -> Unit, onOpenSpace: (String) -> Unit, onSettings: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
+) {
     val conn by hub.conn.collectAsState()
     val machines by hub.machines.collectAsState()
     val byMachine by hub.sessions.collectAsState()
-    val pending by hub.interactions.collectAsState()
+    val allPending by hub.interactions.collectAsState()
     val pins by hub.pins.collectAsState()
     val mutes by hub.mutes.collectAsState()
     var refreshing by remember { mutableStateOf(false) }
@@ -128,6 +131,9 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onOpenSpace: (String) -
     }
 
     val names = machines.associate { it.id to it.displayName }
+    // The assistant's questions are answered in the Jarvis tab (iOS filters them the same way).
+    val assistantIds = byMachine.values.flatten().filter { it.assistant }.map { it.key }.toSet()
+    val pending = allPending.filter { it.sessionKey !in assistantIds }
     val g = Grouper(pins, mutes)
     val base = byMachine.values.flatten().filter { it.matches(query, machineFilter) }
     val matching = base.filter { quick != QuickFilter.All && quick.matches(it) }.map { it.key }.toSet()
@@ -143,6 +149,7 @@ fun AgentsScreen(hub: Hub, onOpen: (SessionKey) -> Unit, onOpenSpace: (String) -
     }
 
     Scaffold(
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = {
