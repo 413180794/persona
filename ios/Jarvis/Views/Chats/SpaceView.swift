@@ -5,50 +5,147 @@ extension EnvironmentValues {
     @Entry var openSpace: ((String) -> Void)? = nil
 }
 
-/// The other agents of the space, from the chat's header: a button under the title (how many; a red dot when another
-/// one needs you) whose menu switches to any of them or opens the space's page. It used to be a strip on a row of its own.
-struct SiblingMenu: View {
+/// The space's tabs (its agents) in the chat's header, one capsule each in its state's color (no dots: the pulsing ones
+/// were too busy in a row of them), the current one bold with a ring. As many as the width holds show around the current one; a swipe scrolls through the rest. ⋯ at the end
+/// lists every tab with its state, and the space's page, for a quick pick.
+struct SiblingTabs: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSpace) private var openSpace
     var current: SessionKey
     var select: (SessionKey) -> Void
+    /// The strip's own scroll position (not ScrollViewReader: its scrollTo drags the page above along).
+    @State private var shown: SessionKey?
+    @State private var showAll = false
 
     var body: some View {
         let siblings = model.siblings(of: current)
         if siblings.count > 1 {
-            let waiting = siblings.contains { $0.key != current && $0.state == .needsYou }
-            Menu {
-                if let s = model.session(current), let name = s.spaceName, let k = s.spaceKey, let openSpace {
-                    Button { openSpace(k) } label: { Label("空间 \(name) 的所有 Agent", systemImage: "square.stack.3d.up") }
-                    Divider()
-                }
-                ForEach(siblings) { s in
-                    Button { if s.key != current { select(s.key) } } label: {
-                        Label {
-                            Text(s.slotLabel ?? s.displayTitle)
-                            Text(s.state.label)
-                        } icon: {
-                            if s.key == current { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.stack.3d.up").font(.footnote.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                    Text("\(siblings.count)").font(.footnote.weight(.semibold).monospacedDigit())
-                }
+            HStack(spacing: 6) {
+                strip(siblings)
+                allButton(siblings)
+            }
+        }
+    }
+
+    private func strip(_ siblings: [Session]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(siblings) { s in tab(s) }
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, 2)
+        }
+        .scrollTargetBehavior(.viewAligned)
+        // A space with many tabs opens on the current one and its neighbours, not the first few.
+        .scrollPosition(id: $shown, anchor: .center)
+        .onAppear { shown = current }
+        .onChange(of: current) { _, k in withAnimation(.snappy) { shown = k } }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func tab(_ s: Session) -> some View {
+        let on = s.key == current
+        let tone = s.state.tone
+        let quiet = s.state == .idle || s.state == .unknown || s.state == .offline
+        return Button { if !on { Haptics.tap(); select(s.key) } } label: {
+            Text(s.slotLabel ?? s.displayTitle)
+                .lineLimit(1)
+                .font(.caption.weight(on ? .bold : .medium))
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                // The state is the capsule's color; a quiet (seen, idle) one is the plain gray.
+                .background(quiet ? AnyShapeStyle(Theme.Fill.chip) : AnyShapeStyle(tone.dot.opacity(on ? 0.26 : 0.16)), in: .capsule)
+                .overlay(Capsule().strokeBorder(on ? (quiet ? Color.primary.opacity(0.45) : tone.dot.opacity(0.8)) : .clear, lineWidth: 1.5))
+                .foregroundStyle(quiet ? Color.primary : tone.text)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .id(s.key)
+    }
+
+    /// ⋯: a sheet with every tab, its state and the space's page.
+    private func allButton(_ siblings: [Session]) -> some View {
+        let waiting = siblings.contains { $0.key != current && $0.state == .needsYou }
+        return Button { Haptics.tap(); showAll = true } label: {
+            Image(systemName: "ellipsis")
+                .font(.footnote.weight(.bold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .frame(height: 36)
-                .background(Theme.Fill.well, in: .capsule)
+                .frame(width: 34, height: 30)
+                .background(Theme.Fill.chip, in: .capsule)
                 .overlay(alignment: .topTrailing) {
-                    if waiting { StatusDot(state: .needsYou, size: 8).offset(x: 1, y: -1) }
+                    if waiting { Circle().fill(Theme.needsYou).frame(width: 8, height: 8).offset(x: 1, y: -1) } // still, not pulsing
                 }
                 .contentShape(.capsule)
-            }
-            .tint(.secondary) // neutral like the chips beside it, not the accent a menu label takes
-            .accessibilityLabel("同一空间的 \(siblings.count) 个 Agent" + (waiting ? "，有 Agent 需要你" : ""))
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("同一空间的 \(siblings.count) 个 Agent" + (waiting ? "，有 Agent 需要你" : ""))
+        .sheet(isPresented: $showAll) {
+            SiblingList(siblings: siblings, current: current, space: model.session(current)) { key in
+                showAll = false
+                if key != current { select(key) }
+            } openSpace: { space in
+                showAll = false
+                openSpace?(space)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+/// The ⋯ sheet of a space's tabs: the space's page on top, then each tab with its state's dot and words.
+private struct SiblingList: View {
+    var siblings: [Session]
+    var current: SessionKey
+    var space: Session?
+    var pick: (SessionKey) -> Void
+    var openSpace: (String) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(siblings.count) 个标签页").font(.headline).padding(.horizontal, 14).padding(.top, 18).padding(.bottom, 8)
+                if let s = space, let name = s.spaceName, let k = s.spaceKey {
+                    Button { openSpace(k) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.up").foregroundStyle(Theme.accent).frame(width: 22)
+                            Text("空间 \(name) 的所有 Agent").font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 46)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    Divider().padding(.leading, 14)
+                }
+                ForEach(siblings) { s in
+                    let on = s.key == current
+                    Button { pick(s.key) } label: {
+                        HStack(spacing: 10) {
+                            Circle().fill(s.state.color).frame(width: 9, height: 9).frame(width: 22) // a still dot
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(s.slotLabel ?? s.displayTitle).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1)
+                                Text(s.state.label).font(.caption).foregroundStyle(s.state.tone.text).lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            if on { Image(systemName: "checkmark").font(.footnote.weight(.semibold)).foregroundStyle(Theme.accent) }
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 50)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 

@@ -1171,7 +1171,13 @@ struct ChatView: View {
     /// The flipped list's offset grows toward older messages. Like Safari's toolbar, the chrome follows the finger:
     /// reading on (toward the newest) folds it as far as the finger goes, going back into the history unfolds it.
     /// Idle time before the open chrome folds itself.
-    static let chromeIdleSeconds: TimeInterval = 3
+    static var chromeIdleSeconds: TimeInterval {
+        #if DEBUG
+        // `-holdChromeOpen YES`: the header never folds by itself (UI tests that tap in it).
+        if UserDefaults.standard.bool(forKey: "holdChromeOpen") { return .infinity }
+        #endif
+        return 3
+    }
 
     private func scrolled(by delta: CGFloat) {
         guard style == .dev, pane == .chat, scratch.userDragging, delta != 0 else { return }
@@ -1421,12 +1427,13 @@ struct ChatView: View {
                 let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
                 if model.siblings(of: key).count > 1 || hasActivity {
                     HStack(spacing: 8) {
-                        SiblingMenu(current: key) { next in switchTo(next) }
+                        // The tabs take the width there is; without them the activity chips sit on the left.
+                        SiblingTabs(current: key) { next in switchTo(next) }
                         if hasActivity {
                             ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                                 .fixedSize()
                         }
-                        Spacer(minLength: 0)
+                        if model.siblings(of: key).count < 2 { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -1487,7 +1494,7 @@ struct ChatView: View {
             let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
             if model.siblings(of: key).count > 1 || hasActivity {
                 HStack(spacing: 8) {
-                    SiblingMenu(current: key) { next in switchTo(next) }
+                    SiblingTabs(current: key) { next in switchTo(next) }
                     if hasActivity {
                         ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
                             .fixedSize()

@@ -46,9 +46,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   `<jarvis-context kind="context|edit" title="…" url="…">选中文字</jarvis-context>`，气泡里解析成引用卡片（点开回到那个链接），原始标签不显示。
 - 文件：消息里出现的路径显示成可点的文件标签，工具卡片里 Read / Edit / Write 的路径也能点；在会话所在机器上读取
   （`GET /api/v1/machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录），Markdown 渲染 / 代码带行号 / 图片 / PDF / 目录浏览。
-- 同空间的其他 Agent（Agents 页）：顶栏第二行最左边一个按钮（`SiblingMenu`：叠层图标 + 个数；别的 Agent 需要你时右上角一个红点），
-  点开的菜单列出同一 herdr workspace 的每个 tab（名字 + 状态，当前的打勾），点了直接切换（`docs/agent-states.md`）；菜单第一项「空间 X 的所有 Agent」
-  进空间页，对话页「…」→「空间里的所有 Agent」同样（只有一个 Agent、没有这个按钮时用它）。以前是单独一行的横滑条，占掉一行顶栏。
+- 同空间的其他 Agent（Agents 页）：顶栏第二行是 tab 条（`SiblingTabs`，2026-10-31 用户要求恢复平铺）：每个 tab 一个胶囊，胶囊的底色就是状态色
+  （需要你红、工作中橙、未读绿，已看 / 空闲灰；不用会闪的圆点），当前的加粗、带一圈描边，宽度放得下几个就显示当前 tab 和它两边的几个，左右滑能看到全部；最右边「⋯」弹出全部 tab 的列表（状态圆点、名字、状态字，
+  当前的打勾，别的 Agent 需要你时「⋯」右上角一个红点），第一项「空间 X 的所有 Agent」进空间页。对话页「…」→「空间里的所有 Agent」同样。
+  10-29 曾改成只剩一个按钮的菜单（`SiblingMenu`），看不到 tab 和状态，用户不喜欢。
   对话本来就是从这个空间页点进来的，就直接返回，不再叠一层（ChatsView 记着哪一层是哪个空间页：`spaceAt`）。
   空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
   那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
