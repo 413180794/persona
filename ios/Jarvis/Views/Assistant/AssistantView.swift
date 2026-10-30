@@ -1,3 +1,4 @@
+import BeautifulUI
 import PhotosUI
 import SwiftUI
 
@@ -250,12 +251,11 @@ struct AssistantHome: View {
             VStack(alignment: .leading, spacing: 8) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        StarterModelChip(launcher: $launcher)
                         NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.switchableModes)
                     }
                     .padding(.horizontal, 4)
                 }
-                StarterComposer(disabled: pending != nil, send: send)
+                StarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -320,39 +320,67 @@ struct TypingIndicator: View {
     }
 }
 
-/// Composer for a conversation that does not exist yet: the chat's input line (`ComposerRow`) with its own text, sent
-/// through `send` (it starts the conversation).
+/// Composer for a conversation that does not exist yet: the chat's composer box (`PromptComposer`) with its own text,
+/// sent through `send` (it starts the conversation). Its model menu is the launcher the conversation starts with.
 struct StarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
+    @Binding var launcher: String?
     var send: (String, [ImagePayload]) -> Void
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
     @State private var images: [(UIImage, ImagePayload)] = []
+    @State private var quotes: [ContextRef] = []
+    @State private var launchers: [Launcher] = []
     @State private var showPhotos = false
     @State private var showFiles = false
     @State private var uploads = FileUploads()
     @State private var selection: TextSelection?
     @FocusState private var focused: Bool
 
-    private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) }
+    private var launcherMachine: String { model.assistantConfig?.machineID ?? model.hubMachineID }
+    private var currentLauncher: String { launcher ?? model.assistantConfig?.launcher ?? "ccc" }
+
+    /// The machine's launchers; until they load, the current one alone, so the button shows what a new
+    /// conversation starts with.
+    private var models: [PromptModel] {
+        let list = launchers.map { PromptModel(id: $0.name, name: $0.name, tag: Fmt.model($0.model) ?? "") }
+        return list.isEmpty ? [PromptModel(id: currentLauncher, name: currentLauncher, tag: "")] : list
+    }
 
     var body: some View {
         VStack(spacing: 8) {
+            if !quotes.isEmpty { ContextChips(refs: $quotes) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            ComposerRow(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                        send: {
-                            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            send(t.isEmpty ? "请看图片" : t, images.map(\.1))
-                            text = ""
-                            images = []
-                        }) {
-                // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
-                Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
-            }
+            PromptComposer(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused,
+                           hasAttachments: !images.isEmpty || !quotes.isEmpty, disabled: disabled,
+                           attach: PromptItems.attachments(camera: false),
+                           mentions: { PromptItems.sessions(model.allSessions, except: nil) },
+                           models: models,
+                           modelID: currentLauncher,
+                           pickModel: { id in
+                               launcher = id
+                               Haptics.tap()
+                           },
+                           onAttach: { source in if source.id == "photo" { showPhotos = true } else { showFiles = true } },
+                           onMention: { source in
+                               guard let ref = PromptItems.quote(source, in: model.allSessions) else { return false }
+                               quotes.append(ref)
+                               return true
+                           },
+                           send: {
+                               let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                               let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
+                               // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
+                               send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
+                               text = ""
+                               images = []
+                               quotes = []
+                           })
         }
+        // Again once the hub is paired: on a fresh launch the first try runs before there is one.
+        .task(id: launcherMachine) { launchers = (try? await model.launchers(launcherMachine)) ?? [] }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
         .fileUploadPicker(isPresented: $showFiles) { urls in
             // The assistant runs on its machine (the hub's unless set otherwise): files go to that one's temp directory.
@@ -445,26 +473,3 @@ struct AssistantToolsRow: View {
     }
 }
 
-/// Model chip on the assistant home page: which launcher the next new conversation starts with.
-struct StarterModelChip: View {
-    @Environment(AppModel.self) private var model
-    @Binding var launcher: String?
-    @State private var launchers: [Launcher] = []
-
-    var body: some View {
-        let current = launcher ?? model.assistantConfig?.launcher ?? "ccc"
-        Menu {
-            ForEach(launchers) { l in
-                Button {
-                    launcher = l.name
-                    Haptics.tap()
-                } label: {
-                    if l.name == current { Label(l.name, systemImage: "checkmark") } else { Text("\(l.name)  \(Fmt.model(l.model) ?? "")") }
-                }
-            }
-        } label: {
-            ModeChip(symbol: "cpu", text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
-        }
-        .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
-    }
-}

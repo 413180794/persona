@@ -6,6 +6,8 @@ public struct PromptSource: Identifiable, Sendable {
     public enum Icon: Sendable {
         case glyph(BUIGlyph)
         case mark(BUIAvatar, size: CGSize)
+        /// An SF Symbol.
+        case symbol(String)
     }
 
     public enum Kind: Sendable {
@@ -21,13 +23,16 @@ public struct PromptSource: Identifiable, Sendable {
     public var detail: String
     public var icon: Icon
     public var kind: Kind
+    /// What picking it types into the draft; `nil` types "@name ".
+    public var insert: String?
 
-    public init(id: String, name: String, detail: String, icon: Icon, kind: Kind = .source) {
+    public init(id: String, name: String, detail: String, icon: Icon, kind: Kind = .source, insert: String? = nil) {
         self.id = id
         self.name = name
         self.detail = detail
         self.icon = icon
         self.kind = kind
+        self.insert = insert
     }
 }
 
@@ -37,10 +42,13 @@ public struct PromptCommand: Identifiable, Sendable {
     /// Including the slash, e.g. "/compare".
     public var name: String
     public var detail: String
+    /// What picking it types into the draft; `nil` types the name and a space.
+    public var insert: String?
 
-    public init(_ name: String, detail: String) {
+    public init(_ name: String, detail: String, insert: String? = nil) {
         self.name = name
         self.detail = detail
+        self.insert = insert
     }
 }
 
@@ -125,6 +133,52 @@ public struct PromptBar: View {
         case pill
     }
 
+    public enum Layout: Sendable {
+        /// The original: one row, the draft moving above the controls once it wraps.
+        case adaptive
+        /// The draft always on top, the controls in a toolbar under it.
+        case stacked
+    }
+
+    /// How a host fits the bar to its own app. The defaults are the original's.
+    public struct Options {
+        public var layout: Layout = .adaptive
+        /// What `+` opens. Empty: `+` opens `sources`, like the original.
+        public var attachSources: [PromptSource] = []
+        /// `@` and `/` buttons in the toolbar (`.stacked`): they type the trigger and open its menu.
+        public var showsMentionButton = false
+        public var showsCommandButton = false
+        public var showsDictation = true
+        /// The controls' side; the original's 28 is a desktop size.
+        public var controlSize: CGFloat = 28
+        /// The draft's type size before `typeScale`.
+        public var inputSize: CGFloat = 13
+        /// Corners of the `.rounded` shape.
+        public var cornerRadius: CGFloat = 14
+        /// Off: no fill, shadow or border; the host draws the composer's surface.
+        public var drawsSurface = true
+        /// The host holds something sendable the bar does not see (photos, quoted context).
+        public var canSendExtra = false
+        /// The host's draft: the field edits it directly (the model follows it for the menus), so nothing writes
+        /// into the field while an input method is composing.
+        public var text: Binding<String>?
+        public var selection: Binding<TextSelection?>?
+        /// The host's focus for the field, so it can raise or drop the keyboard; the bar's own otherwise.
+        public var focus: FocusState<Bool>.Binding?
+        /// Shown instead of send while there is nothing to send, e.g. while an agent works.
+        public var onStop: (() -> Void)?
+        /// Replaces the bar's own listening toggle; the host sets `model.isListening`.
+        public var onDictation: (() -> Void)?
+        /// A picked attach source (`kind == .attach`).
+        public var onAttachSource: ((PromptSource) -> Void)?
+        /// Return true when the host handled the pick; otherwise the bar types the source's `insert`.
+        public var onPickSource: ((PromptSource) -> Bool)?
+        /// Return true when the host handled the pick; otherwise the bar types the command's `insert`.
+        public var onPickCommand: ((PromptCommand) -> Bool)?
+
+        public init() {}
+    }
+
     @Bindable var model: PromptBarModel
     var shape: Shape
     var sources: [PromptSource]
@@ -134,6 +188,7 @@ public struct PromptBar: View {
     var sweepModelID: String?
     var onSend: ((String) -> Void)?
     var onAttach: (() -> Void)?
+    var options: Options
 
     @State private var sweepID = 0
     @State private var containerWidth: CGFloat = 0
@@ -151,6 +206,7 @@ public struct PromptBar: View {
         models: [PromptModel] = [],
         placeholder: String = "Write a message…",
         sweepModelID: String? = nil,
+        options: Options = Options(),
         onSend: ((String) -> Void)? = nil,
         onAttach: (() -> Void)? = nil
     ) {
@@ -161,14 +217,15 @@ public struct PromptBar: View {
         self.models = models
         self.placeholder = placeholder
         self.sweepModelID = sweepModelID
+        self.options = options
         self.onSend = onSend
         self.onAttach = onAttach
     }
 
-    private enum Menu { case mention, command }
+    private enum Menu { case mention, command, attach }
 
     private var menu: Menu? {
-        if model.isSourceMenuOpen { return .mention }
+        if model.isSourceMenuOpen { return options.attachSources.isEmpty ? .mention : .attach }
         switch model.token?.kind {
         case .mention: return .mention
         case .command: return .command
@@ -179,26 +236,42 @@ public struct PromptBar: View {
     private var query: String { model.isSourceMenuOpen ? "" : model.token?.query ?? "" }
 
     private var sourceRows: [PromptSource] {
-        query.isEmpty ? sources : sources.filter { $0.name.lowercased().contains(query) }
+        if menu == .attach { return options.attachSources }
+        return query.isEmpty ? sources : sources.filter { $0.name.lowercased().contains(query) || $0.detail.lowercased().contains(query) }
     }
 
     private var commandRows: [PromptCommand] {
         commands.filter { $0.name.dropFirst().lowercased().hasPrefix(query) }
     }
 
-    private var rowCount: Int { menu == .mention ? sourceRows.count : menu == .command ? commandRows.count : 0 }
+    private var rowCount: Int { menu == .command ? commandRows.count : menu == nil ? 0 : sourceRows.count }
+
+    private var size: CGFloat { options.controlSize }
+
+    private var focus: FocusState<Bool>.Binding { options.focus ?? $inputFocused }
+
+    private var draft: Binding<String> { options.text ?? $model.text }
+
+    /// The bar's own edits (a pick, a trigger, send) go to the host's draft too.
+    private func setText(_ text: String) {
+        model.text = text
+        if let host = options.text, host.wrappedValue != text { host.wrappedValue = text }
+    }
 
     /// Wrapped text moves above the controls: when it has a newline or no longer fits inline.
     private var wide: Bool {
-        let inline = containerWidth - 12 - 28 * 3 - modelButtonWidth - 4 * 4
+        if options.layout == .stacked { return true }
+        let inline = containerWidth - 12 - size * 3 - modelButtonWidth - 4 * 4
         return model.text.contains("\n") || draftWidth + 8 > inline
     }
 
     private var currentModel: PromptModel? { models.first { $0.id == model.selectedModelID } }
 
+    private var canSend: Bool { model.canSend || options.canSendExtra }
+
     private var composerRadius: CGFloat {
         switch shape {
-        case .rounded: 14
+        case .rounded: options.cornerRadius
         case .pill: (wide || !model.attachments.isEmpty) ? 24 : 100
         }
     }
@@ -232,6 +305,9 @@ public struct PromptBar: View {
             if id == sweepModelID, !reduceMotion { sweepID += 1 }
         }
         .onChange(of: model.text) { model.isMenuDismissed = false }
+        .onChange(of: options.text?.wrappedValue, initial: true) { _, text in
+            if let text, text != model.text { model.text = text }
+        }
         .onChange(of: menu) { model.highlightedRow = nil }
     }
 
@@ -240,7 +316,10 @@ public struct PromptBar: View {
 
     /// The model menu sits over its trigger but stays inside the composer's width.
     private var modelMenuX: CGFloat {
-        let triggerX = wide ? 6 + 28 + 4 : containerWidth - 6 - 28 * 2 - 4 * 2 - modelButtonWidth
+        let leading = 1 + (options.showsMentionButton ? 1 : 0) + (options.showsCommandButton ? 1 : 0)
+        let triggerX = wide
+            ? 6 + (size + 4) * CGFloat(leading)
+            : containerWidth - 6 - size * 2 - 4 * 2 - modelButtonWidth
         return max(0, min(triggerX, containerWidth - Self.modelMenuWidth))
     }
 
@@ -267,23 +346,29 @@ public struct PromptBar: View {
         }
         .clipShape(.rect(cornerRadius: radius, style: .continuous))
         .background {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(theme.colors.surface)
-                .shadow(color: Color(light: 0, dark: 0, lightAlpha: 0.035, darkAlpha: 0.2), radius: 1, y: 1)
-                .shadow(color: Color(light: 0, dark: 0, lightAlpha: 0.035, darkAlpha: 0.2), radius: 10, y: 5)
+            if options.drawsSurface {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(theme.colors.surface)
+                    .shadow(color: Color(light: 0, dark: 0, lightAlpha: 0.035, darkAlpha: 0.2), radius: 1, y: 1)
+                    .shadow(color: Color(light: 0, dark: 0, lightAlpha: 0.035, darkAlpha: 0.2), radius: 10, y: 5)
+            }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(inputFocused ? theme.colors.lineStrong : theme.colors.line, lineWidth: 1)
+            if options.drawsSurface {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(focus.wrappedValue ? theme.colors.lineStrong : theme.colors.line, lineWidth: 1)
+            }
         }
         .animation(BUIMotion.standard, value: radius)
         .background(alignment: .topLeading) {
             // Measures the draft on one line to decide when it moves above the controls.
-            Text(model.text.isEmpty ? " " : model.text)
-                .buiFont(BUITextStyle(size: 13, lineHeight: 18 / 13))
-                .fixedSize()
-                .hidden()
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { draftWidth = $0 }
+            if options.layout == .adaptive {
+                Text(model.text.isEmpty ? " " : model.text)
+                    .buiFont(BUITextStyle(size: options.inputSize, lineHeight: 18 / 13))
+                    .fixedSize()
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { draftWidth = $0 }
+            }
         }
     }
 
@@ -294,33 +379,45 @@ public struct PromptBar: View {
                 input
                 HStack(alignment: .bottom, spacing: 4) {
                     plusButton
-                    modelButton
+                    if options.showsMentionButton { triggerButton("@", label: theme.strings.mention, kind: .mention) }
+                    if options.showsCommandButton { triggerButton("/", label: theme.strings.commands, kind: .command) }
+                    if !models.isEmpty { modelButton }
                     Spacer(minLength: 0)
-                    micButton
-                    sendButton
+                    if options.showsDictation { micButton }
+                    sendOrStopButton
                 }
             }
         } else {
             HStack(alignment: .bottom, spacing: 4) {
                 plusButton
                 input
-                modelButton
-                micButton
-                sendButton
+                if !models.isEmpty { modelButton }
+                if options.showsDictation { micButton }
+                sendOrStopButton
             }
         }
     }
 
+    @ViewBuilder
+    private var field: some View {
+        let prompt = model.isListening ? theme.strings.listening : placeholder
+        if let selection = options.selection {
+            TextField(prompt, text: draft, selection: selection, axis: .vertical)
+        } else {
+            TextField(prompt, text: draft, axis: .vertical)
+        }
+    }
+
     private var input: some View {
-        TextField(model.isListening ? "Listening…" : placeholder, text: $model.text, axis: .vertical)
-            .buiFont(BUITextStyle(size: 13, lineHeight: 18 / 13))
+        field
+            .buiFont(BUITextStyle(size: options.inputSize, lineHeight: 18 / 13))
             .foregroundStyle(theme.colors.ink)
-            .lineLimit(1...5)
-            .focused($inputFocused)
-            .padding(.horizontal, 4)
+            .lineLimit(1...(options.layout == .stacked ? 6 : 5))
+            .focused(focus)
+            .padding(.horizontal, options.layout == .stacked ? 6 : 4)
             .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-            .accessibilityLabel("Prompt")
+            .frame(maxWidth: .infinity, minHeight: size, alignment: .leading)
+            .accessibilityLabel(theme.strings.prompt)
     }
 
     private var controlShape: AnyShape {
@@ -331,14 +428,38 @@ public struct PromptBar: View {
         Button {
             model.isModelMenuOpen = false
             model.isSourceMenuOpen.toggle()
-            inputFocused = true
+            // The attach menu does not need the keyboard; the source menu filters as you type.
+            if options.attachSources.isEmpty { focus.wrappedValue = true }
         } label: {
             BUIIcon(.plus, size: 16)
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
                 .contentShape(controlShape)
         }
         .buttonStyle(ControlButtonStyle(shape: controlShape, active: model.isSourceMenuOpen))
-        .accessibilityLabel("Add attachments and sources")
+        .accessibilityLabel(theme.strings.attach)
+    }
+
+    /// `@` or `/`: types the trigger at the end of the draft, which opens its menu; again closes it.
+    private func triggerButton(_ trigger: String, label: String, kind: PromptToken.Kind) -> some View {
+        let active = model.token?.kind == kind && !model.isSourceMenuOpen
+        return Button {
+            model.isModelMenuOpen = false
+            model.isSourceMenuOpen = false
+            if active, let token = model.token {
+                setText(String(model.text.prefix(token.start)))
+            } else {
+                let needsSpace = !(model.text.last?.isWhitespace ?? true)
+                setText(model.text + (needsSpace ? " " : "") + trigger)
+            }
+            focus.wrappedValue = true
+        } label: {
+            Text(trigger)
+                .buiFont(BUITextStyle(size: 15, weight: .medium))
+                .frame(width: size, height: size)
+                .contentShape(controlShape)
+        }
+        .buttonStyle(ControlButtonStyle(shape: controlShape, active: active))
+        .accessibilityLabel(label)
     }
 
     private var modelButton: some View {
@@ -350,23 +471,24 @@ public struct PromptBar: View {
                 Text(currentModel?.name ?? "Model")
                     .buiFont(BUITextStyle(size: 12, weight: .medium))
                     .foregroundStyle(theme.colors.ink2)
+                    .lineLimit(1)
                 BUIIcon(.chevronDown, size: 11, lineWidth: 2.4)
                     .foregroundStyle(theme.colors.ink3)
             }
             .padding(.horizontal, 6)
-            .frame(height: 28)
+            .frame(height: size)
             .contentShape(controlShape)
         }
-        .buttonStyle(ControlButtonStyle(shape: controlShape, active: false))
+        .buttonStyle(ControlButtonStyle(shape: controlShape, active: model.isModelMenuOpen))
         .fixedSize()
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { modelButtonWidth = $0 }
-        .accessibilityLabel("Choose model")
+        .accessibilityLabel(theme.strings.chooseModel)
         .accessibilityValue(currentModel?.name ?? "")
     }
 
     private var micButton: some View {
         Button {
-            model.isListening.toggle()
+            if let onDictation = options.onDictation { onDictation() } else { model.isListening.toggle() }
         } label: {
             Group {
                 if model.isListening {
@@ -375,28 +497,46 @@ public struct PromptBar: View {
                     BUIIcon(BUIGlyph("M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v3"), size: 15)
                 }
             }
-            .frame(width: 28, height: 28)
+            .frame(width: size, height: size)
             .background(model.isListening ? theme.colors.accentTint : .clear, in: controlShape)
             .contentShape(controlShape)
         }
         .buttonStyle(ControlButtonStyle(shape: controlShape, active: false))
-        .accessibilityLabel(model.isListening ? "Stop dictation" : "Start dictation")
+        .accessibilityLabel(model.isListening ? theme.strings.stopDictation : theme.strings.startDictation)
+    }
+
+    @ViewBuilder
+    private var sendOrStopButton: some View {
+        if let onStop = options.onStop, !canSend {
+            Button(action: onStop) {
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(.white)
+                    .frame(width: 10, height: 10)
+                    .frame(width: size, height: size)
+                    .background(theme.colors.red, in: controlShape)
+            }
+            .buttonStyle(ShrinkStyle())
+            .accessibilityLabel(theme.strings.stop)
+        } else {
+            sendButton
+        }
     }
 
     private var sendButton: some View {
-        let enabled = model.canSend
+        let enabled = canSend
         return Button {
             send()
         } label: {
             BUIIcon(.arrowUp, size: 16, lineWidth: 2.4)
                 .foregroundStyle(enabled ? theme.colors.surface : theme.colors.ink2)
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
                 .background(enabled ? theme.colors.ink : theme.colors.lineStrong, in: controlShape)
                 .animation(.easeInOut(duration: 0.2), value: enabled)
         }
         .buttonStyle(ShrinkStyle())
         .disabled(!enabled)
-        .accessibilityLabel("Send")
+        .keyboardShortcut(.return, modifiers: .command)
+        .accessibilityLabel(theme.strings.send)
     }
 
     private func attachmentChip(_ file: String, at index: Int, pill: Bool) -> some View {
@@ -417,7 +557,7 @@ public struct PromptBar: View {
             }
             .buttonStyle(.plain)
             .padding(.vertical, -4)
-            .accessibilityLabel("Remove \(file)")
+            .accessibilityLabel(theme.strings.remove(file))
         }
         .buiFont(BUITextStyle(size: 11.5))
         .foregroundStyle(theme.colors.ink2)
@@ -443,25 +583,7 @@ public struct PromptBar: View {
                         .transition(.opacity)
                 }
                 VStack(spacing: 0) {
-                    if menu == .mention {
-                        ForEach(Array(sourceRows.enumerated()), id: \.element.id) { index, source in
-                            menuRow(index: index, name: source.name, detail: source.detail) {
-                                pick(source: source)
-                            } leading: {
-                                sourceIcon(source.icon)
-                            } trailing: {
-                                if source.kind == .connectable {
-                                    let connected = model.connectedSourceIDs.contains(source.id)
-                                    Button(connected ? "Connected" : "Connect") {
-                                        if connected { model.connectedSourceIDs.remove(source.id) } else { model.connectedSourceIDs.insert(source.id) }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .buiFont(BUITextStyle(size: 12, weight: .medium))
-                                    .foregroundStyle(connected ? theme.colors.green : theme.colors.accentInk)
-                                }
-                            }
-                        }
-                    } else {
+                    if menu == .command {
                         ForEach(Array(commandRows.enumerated()), id: \.element.id) { index, command in
                             menuRow(index: index, name: command.name, detail: command.detail) {
                                 pick(command: command)
@@ -471,9 +593,27 @@ public struct PromptBar: View {
                                 EmptyView()
                             }
                         }
+                    } else {
+                        ForEach(Array(sourceRows.enumerated()), id: \.element.id) { index, source in
+                            menuRow(index: index, name: source.name, detail: source.detail) {
+                                pick(source: source)
+                            } leading: {
+                                sourceIcon(source.icon)
+                            } trailing: {
+                                if source.kind == .connectable {
+                                    let connected = model.connectedSourceIDs.contains(source.id)
+                                    Button(connected ? theme.strings.connected : theme.strings.connect) {
+                                        if connected { model.connectedSourceIDs.remove(source.id) } else { model.connectedSourceIDs.insert(source.id) }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .buiFont(BUITextStyle(size: 12, weight: .medium))
+                                    .foregroundStyle(connected ? theme.colors.green : theme.colors.accentInk)
+                                }
+                            }
+                        }
                     }
                     if rowCount == 0 {
-                        Text("No matches for “\(query)”")
+                        Text(theme.strings.noMatches(query))
                             .buiFont(.caption)
                             .foregroundStyle(theme.colors.ink3)
                             .padding(.horizontal, 8)
@@ -482,15 +622,17 @@ public struct PromptBar: View {
                 }
             }
             .animation(BUICurve.outStrong.animation(duration: 0.22), value: model.highlightedRow)
-            Text(menu == .mention ? "Type to search sources & files" : "Type to search commands")
-                .buiFont(BUITextStyle(size: 11))
-                .foregroundStyle(theme.colors.ink3)
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
-                .padding(.bottom, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .top) { Rectangle().fill(theme.colors.line).frame(height: 1) }
-                .padding(.top, 4)
+            if menu != .attach {
+                Text(menu == .mention ? theme.strings.sourcesHint : theme.strings.commandsHint)
+                    .buiFont(BUITextStyle(size: 11))
+                    .foregroundStyle(theme.colors.ink3)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+                    .padding(.bottom, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .top) { Rectangle().fill(theme.colors.line).frame(height: 1) }
+                    .padding(.top, 4)
+            }
         }
         .padding(4)
         .buiSurface(radius: theme.radii.card, elevation: .raised)
@@ -510,11 +652,13 @@ public struct PromptBar: View {
                 Text(name)
                     .buiFont(BUITextStyle(size: 12.5, weight: .medium))
                     .foregroundStyle(theme.colors.ink)
+                    .lineLimit(1)
                     .fixedSize()
                 Text(detail)
                     .buiFont(.caption)
                     .foregroundStyle(theme.colors.ink3)
                     .lineLimit(1)
+                    .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 trailing()
             }
@@ -523,6 +667,8 @@ public struct PromptBar: View {
             .contentShape(.rect(cornerRadius: 6))
         }
         .buttonStyle(MenuRowStyle(index: index, highlighted: $model.highlightedRow))
+        .accessibilityLabel(name)
+        .accessibilityHint(detail)
     }
 
     @ViewBuilder
@@ -534,6 +680,11 @@ public struct PromptBar: View {
                 .frame(width: 22, height: 22)
         case .mark(let avatar, let size):
             avatar.view(width: size.width, height: size.height)
+                .frame(width: 22, height: 22)
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.colors.ink2)
                 .frame(width: 22, height: 22)
         }
     }
@@ -554,6 +705,7 @@ public struct PromptBar: View {
                         Text(option.tag)
                             .buiFont(BUITextStyle(size: 11))
                             .foregroundStyle(theme.colors.ink3)
+                            .lineLimit(1)
                         BUIIcon(.check, size: 13, lineWidth: 2.5)
                             .foregroundStyle(theme.colors.ink)
                             .opacity(option.id == model.selectedModelID ? 1 : 0)
@@ -579,24 +731,33 @@ public struct PromptBar: View {
         switch source.kind {
         case .attach:
             onAttach?()
-            if model.token != nil { model.text = prefix }
+            options.onAttachSource?(source)
+            if model.token != nil { setText(prefix) }
         case .source, .connectable:
-            model.text = "\(prefix)@\(source.name) "
+            if options.onPickSource?(source) == true {
+                if model.token != nil { setText(prefix) }
+            } else {
+                setText(prefix + (source.insert ?? "@\(source.name) "))
+                focus.wrappedValue = true
+            }
         }
         model.isSourceMenuOpen = false
-        inputFocused = true
     }
 
     private func pick(command: PromptCommand) {
         let prefix = model.token.map { String(model.text.prefix($0.start)) } ?? model.text
-        model.text = "\(prefix)\(command.name) "
-        inputFocused = true
+        if options.onPickCommand?(command) == true {
+            setText(prefix)
+            return
+        }
+        setText(prefix + (command.insert ?? "\(command.name) "))
+        focus.wrappedValue = true
     }
 
     private func send() {
-        guard model.canSend else { return }
+        guard canSend else { return }
         onSend?(model.text.trimmingCharacters(in: .whitespacesAndNewlines))
-        model.text = ""
+        setText("")
         model.attachments = []
         model.isSourceMenuOpen = false
         model.isModelMenuOpen = false

@@ -72,7 +72,7 @@ public struct ToolChipGroup: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(chips.map { [$0.label, $0.detail].compactMap { $0 }.joined(separator: " ") }.joined(separator: "，"))
-        .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
+        .accessibilityValue(theme.strings.expanded(isOpen))
     }
 
     private func chip(_ chip: Chip, size: CGFloat, pad: CGFloat) -> some View {

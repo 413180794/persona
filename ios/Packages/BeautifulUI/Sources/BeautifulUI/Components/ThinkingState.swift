@@ -179,7 +179,7 @@ public struct ThinkingState: View {
         .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
         .padding(.horizontal, -6)
         .accessibilityLabel(isWorking ? workingTitle : doneTitle)
-        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+        .accessibilityValue(theme.strings.expanded(expanded))
         .accessibilityAddTraits(isWorking ? .updatesFrequently : [])
     }
 
