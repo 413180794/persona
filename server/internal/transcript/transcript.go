@@ -131,6 +131,9 @@ type Meta struct {
 	Codex bool
 	// TurnOpen: a rollout's latest turn has started and not finished (task_started without task_complete).
 	TurnOpen bool
+	// TurnClosed: the lines read so far end with a Codex turn finishing (task_complete / turn_aborted), no turn
+	// started after it. Unlike !TurnOpen it is false when the lines say nothing (a tail read from mid-turn).
+	TurnClosed bool
 	// codexSeen: newer rollouts record an item both as event_msg/item_completed and in history_mutation.
 	codexSeen map[string]bool
 	// LastTurnWake: the latest turn was started by a background task reporting back, not by a message (no

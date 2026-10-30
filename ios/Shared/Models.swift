@@ -357,11 +357,27 @@ nonisolated struct ImagePayload: Codable, Hashable, Sendable {
 }
 
 nonisolated enum ItemKind: String, Codable, Sendable {
-    case text, thinking, toolUse = "tool_use", toolResult = "tool_result", notice, image, recap, unknown
+    case text, thinking, toolUse = "tool_use", toolResult = "tool_result", notice, image, recap, fold, unknown
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = ItemKind(rawValue: raw) ?? .unknown
+    }
+}
+
+/// A run of the agent's work a page left out (`Item.fold`; docs/protocol.md「折叠的工作」): its counts for the folded
+/// work line, and its range for fetching it when the line is opened.
+nonisolated struct Fold: Codable, Hashable, Sendable {
+    var items: Int
+    var tools: Int
+    var thoughts: Int
+    var until: Date?
+    var throughSeq: Int
+    var throughID: String
+
+    enum CodingKeys: String, CodingKey {
+        case items, tools, thoughts, until
+        case throughSeq = "through_seq", throughID = "through_id"
     }
 }
 
@@ -386,9 +402,11 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     var from: String?
     /// A background task's notice that woke the idle agent: new work after a finished turn.
     var wake: Bool?
+    /// kind == .fold: the work this item stands for.
+    var fold: Fold?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued, from, wake
+        case id, seq, ts, role, kind, text, image, queued, from, wake, fold
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size"
     }
 

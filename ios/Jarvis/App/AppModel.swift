@@ -381,7 +381,8 @@ final class AppModel {
 
     /// Asks for everything after what the chat holds without holes (`covered`), or the last exchanges if nothing.
     private func subscribeMessage(_ key: SessionKey) -> [String: Any] {
-        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true]
+        var msg: [String: Any] = ["type": "subscribe", "machine_id": key.machineID, "session_id": key.sessionID, "lazy_images": true,
+                                  "fold_work": true]
         let covered = chat(key).covered
         if covered > 0 { msg["since_seq"] = covered }
         return msg
@@ -437,6 +438,22 @@ final class AppModel {
         guard let api, let page = try? await api.items(key, beforeSeq: nil) else { return }
         chat(key).replace(with: page.items, hasMore: page.hasMore, span: page.span)
     }
+
+    /// Fetches the work a fold stands for into the chat, once at a time per fold (several rows of one open work line
+    /// may ask together).
+    func unfold(_ key: SessionKey, _ fold: Item) async throws {
+        guard let api else { return }
+        let id = "\(key.machineID)/\(key.sessionID)/\(fold.id)"
+        if let running = unfolding[id] {
+            _ = try await running.value
+            return
+        }
+        let task = Task { try await api.foldedWork(key, fold) }
+        unfolding[id] = task
+        defer { unfolding[id] = nil }
+        chat(key).unfold(fold, into: try await task.value)
+    }
+    @ObservationIgnored private var unfolding: [String: Task<[Item], Error>] = [:]
 
     func loadOlder(_ key: SessionKey) async {
         let store = chat(key)

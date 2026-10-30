@@ -218,10 +218,27 @@ nonisolated struct APIClient: Sendable {
     func items(_ k: SessionKey, beforeSeq: Int?, turns: Int = 2) async throws -> ItemsResponse {
         let data = try await request("GET", sp(k) + "/items",
                                      query: ["before_seq": beforeSeq.map(String.init) ?? "", "turns": String(turns), "limit": "80",
-                                            "lazy_images": "1"])
+                                            "lazy_images": "1", "fold_work": "1"])
         // Images come without their bytes (`image(ref:)` fetches one when it is shown); a page is still worth
         // decoding off the main thread, which called us.
         return try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(ItemsResponse.self, from: data) }.value
+    }
+
+    /// The work a fold stands for (`Item.fold`): its lines, a page (about 1000 items) at a time.
+    func foldedWork(_ k: SessionKey, _ fold: Item) async throws -> [Item] {
+        struct Range: Decodable, Sendable { var items: [Item]; var more: Bool? }
+        guard let through = fold.fold?.throughSeq else { return [] }
+        var out: [Item] = []
+        var from = fold.seq
+        for _ in 0..<100 {
+            let data = try await request("GET", sp(k) + "/items",
+                                         query: ["from_seq": String(from), "through_seq": String(through), "lazy_images": "1"])
+            let page = try await Task.detached(priority: .userInitiated) { try JSON.decoder.decode(Range.self, from: data) }.value
+            out += page.items
+            guard page.more == true, let last = page.items.last else { break }
+            from = last.seq + 1
+        }
+        return out
     }
 
     /// The bytes of a lazy image (`ImagePayload.ref`, "<machine>/<session>/<item id>").

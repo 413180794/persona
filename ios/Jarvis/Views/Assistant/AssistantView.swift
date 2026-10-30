@@ -349,6 +349,7 @@ struct AssistantToolsRow: View {
 
     var body: some View {
         let calls = calls
+        let count = steps.reduce(0) { $0 + $1.tools } // a fold counts the calls it stands for
         let running = calls.last.map(\.isRunning) ?? false
         VStack(alignment: .leading, spacing: 8) {
             Button {
@@ -362,7 +363,7 @@ struct AssistantToolsRow: View {
                         }
                     } else {
                         Image(systemName: "wrench.and.screwdriver")
-                        Text("工具 \(calls.count)")
+                        Text("工具 \(count)")
                         Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
@@ -376,7 +377,13 @@ struct AssistantToolsRow: View {
             }
             .buttonStyle(.plain)
             if open {
-                ForEach(calls) { c in ToolCallRow(call: c, autoExpand: false) }
+                ForEach(steps) { step in
+                    switch step {
+                    case .call(let c): ToolCallRow(call: c, autoExpand: false)
+                    case .folded(let f): FoldedWorkRow(fold: f)
+                    case .thought: EmptyView()
+                    }
+                }
             }
         }
     }

@@ -168,13 +168,13 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		return nil
 	case "task_started":
-		meta.TurnOpen = true
+		meta.TurnOpen, meta.TurnClosed = true, false
 		return nil
 	case "task_complete":
-		meta.TurnOpen = false
+		meta.TurnOpen, meta.TurnClosed = false, true
 		return nil
 	case "turn_aborted":
-		meta.TurnOpen = false
+		meta.TurnOpen, meta.TurnClosed = false, true
 		it := mk(0, "", "system", proto.KindNotice)
 		it.Text = "已中断"
 		return []proto.Item{it}

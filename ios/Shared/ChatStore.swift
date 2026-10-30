@@ -57,27 +57,45 @@ nonisolated extension ChatRow {
     }
 }
 
-/// A step inside a run of tool activity: a call, or a thought between calls.
+/// A step inside a run of tool activity: a call, a thought between calls, or a run of them the page left out
+/// (`Item.fold`, fetched when the work line is opened).
 nonisolated enum ToolStep: Identifiable, Hashable, Sendable {
     case call(ToolCall)
     case thought(Item)
+    case folded(Item)
 
     var id: String {
         switch self {
         case .call(let c): c.id
-        case .thought(let i): i.id
+        case .thought(let i), .folded(let i): i.id
         }
     }
     var firstTS: Date? {
         switch self {
         case .call(let c): c.use.ts
-        case .thought(let i): i.ts
+        case .thought(let i), .folded(let i): i.ts
         }
     }
     var lastTS: Date? {
         switch self {
         case .call(let c): c.result?.ts ?? c.use.ts
         case .thought(let i): i.ts
+        case .folded(let i): i.fold?.until ?? i.ts
+        }
+    }
+    /// Tool calls and thoughts in it (a fold counts what it stands for).
+    var tools: Int {
+        switch self {
+        case .call: 1
+        case .thought: 0
+        case .folded(let i): i.fold?.tools ?? 0
+        }
+    }
+    var thoughts: Int {
+        switch self {
+        case .call: 0
+        case .thought: 1
+        case .folded(let i): i.fold?.thoughts ?? 0
         }
     }
 }
@@ -107,7 +125,7 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
 
     var toolCount: Int {
         process.reduce(0) { n, r in
-            if case .tools(let steps) = r { return n + steps.reduce(0) { if case .call = $1 { $0 + 1 } else { $0 } } }
+            if case .tools(let steps) = r { return n + steps.reduce(0) { $0 + $1.tools } }
             return n
         }
     }
@@ -115,7 +133,7 @@ nonisolated struct Turn: Identifiable, Hashable, Sendable {
         process.reduce(0) { n, r in
             switch r {
             case .thinking: return n + 1
-            case .tools(let steps): return n + steps.reduce(0) { if case .thought = $1 { $0 + 1 } else { $0 } }
+            case .tools(let steps): return n + steps.reduce(0) { $0 + $1.thoughts }
             default: return n
             }
         }
@@ -257,9 +275,26 @@ nonisolated struct ItemSpan: Sendable, Equatable {
 
 nonisolated extension Item {
     /// The block within its transcript line (ids end in "#<n>").
-    var part: Int {
+    var part: Int { Self.part(of: id) }
+
+    static func part(of id: String) -> Int {
         guard let hash = id.lastIndex(of: "#") else { return 0 }
         return Int(id[id.index(after: hash)...]) ?? 0
+    }
+
+    /// Work a fold may stand for: tool calls, their results and images, thoughts, folds.
+    var isWork: Bool {
+        switch kind {
+        case .thinking, .toolUse, .toolResult, .fold: true
+        case .image: toolUseID != nil
+        default: false
+        }
+    }
+
+    /// This fold's range holds `other` (by line, then block).
+    func folds(_ other: Item) -> Bool {
+        guard let f = fold else { return false }
+        return (other.seq, other.part) >= (seq, part) && (other.seq, other.part) <= (f.throughSeq, Self.part(of: f.throughID))
     }
 }
 
@@ -370,7 +405,7 @@ final class ChatStore {
 
     func merge(_ new: [Item], backlog: Bool = false, hasMore: Bool? = nil) {
         if backlog || !new.isEmpty { error = nil } // data arrived: a stale "machine is offline" no longer applies
-        var changed = false
+        var changed = dropFolded(by: new)
         var inOrder = true
         for it in Self.withImageRefs(new, key) where !ids.contains(it.id) {
             if let last = items.last, (it.seq, it.part) < (last.seq, last.part) { inOrder = false }
@@ -392,6 +427,29 @@ final class ChatStore {
         if !inOrder { items = Self.ordered(items) }
         scheduleRebuild()
         scheduleSave()
+    }
+
+    /// A fold stands for the work in its range: what is here of that work (steps, or the same fold over a shorter
+    /// range from an older page) gives way to it.
+    private func dropFolded(by new: [Item]) -> Bool {
+        let folds = new.filter { f in f.kind == .fold && !items.contains { $0.id == f.id && $0.fold == f.fold } }
+        guard !folds.isEmpty else { return false }
+        let before = items.count
+        items.removeAll { it in it.isWork && folds.contains { $0.folds(it) } }
+        guard items.count != before else { return false }
+        ids = Set(items.map(\.id))
+        settled = nil
+        return true
+    }
+
+    /// The work a fold stood for, fetched (`AppModel.unfold`): it takes the fold's place.
+    func unfold(_ fold: Item, into work: [Item]) {
+        guard let i = items.firstIndex(where: { $0.id == fold.id }) else { return }
+        items.remove(at: i)
+        ids.remove(fold.id)
+        settled = nil
+        merge(work.filter { $0.kind != .fold })
+        scheduleRebuild()
     }
 
     @ObservationIgnored private var rebuildScheduled = false
@@ -557,6 +615,9 @@ final class ChatStore {
                 run.append(.call(call))
             case .thinking:
                 pendingThoughts.append(it)
+            case .fold:
+                flushThoughts(asRows: run.isEmpty)
+                run.append(.folded(it))
             case .toolResult:
                 continue
             case .image where it.toolUseID != nil:

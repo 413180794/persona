@@ -414,7 +414,9 @@ struct ChatView: View {
             out.append(line)
             if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
                 out += items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
-                out.append(.workEnd(group: id, count: items.count))
+                out.append(.workEnd(group: id, count: items.reduce(0) { n, item in
+                    if case .step(.folded(let f)) = item { n + (f.fold.map { $0.tools + $0.thoughts } ?? 1) } else { n + 1 }
+                }))
             }
         }
         return out
@@ -778,6 +780,12 @@ struct ChatView: View {
         .environment(\.openSubagent) { toolUseID in
             if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
         }
+        .environment(\.openFold, openFold)
+    }
+
+    /// Opening a work line the page folded fetches its steps (docs/protocol.md「折叠的工作」).
+    private var openFold: (Item) async throws -> Void {
+        { [model, shownKey] fold in try await model.unfold(shownKey, fold) }
     }
 
     @ViewBuilder private var footer: some View {
@@ -979,6 +987,7 @@ struct ChatView: View {
                 if let t { ForEach(unfoldWork(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty))) { lineView($0) } }
             }
             .environment(menu)
+            .environment(\.openFold, openFold)
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
@@ -2227,6 +2236,10 @@ struct WorkStepView: View, Equatable {
                 Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) } }
                     .padding(.horizontal, WorkCardSlice.inset)
                     .padding(.vertical, 10)
+            case .step(.folded(let f)):
+                FoldedWorkRow(fold: f)
+                    .padding(.horizontal, WorkCardSlice.inset)
+                    .padding(.vertical, 10)
             case .text(let i):
                 AssistantText(item: i)
                     .padding(.horizontal, WorkCardSlice.inset)
@@ -2316,6 +2329,9 @@ struct WorkSummary {
         for item in items {
             switch item {
             case .step(.call): calls += 1
+            case .step(.folded(let f)): // work the page left out counts as what it stands for
+                calls += f.fold?.tools ?? 0
+                thoughts += f.fold?.thoughts ?? 0
             case .step(.thought(let thought)):
                 if thought.kind == .notice {
                     if thought.wake == true { calls += 1 } else { notices += 1 }
@@ -2384,6 +2400,7 @@ struct WorkLine: View {
                 .buttonStyle(.plain)
                 .disabled(isEmpty)
                 .accessibilityLabel(open ? "收起过程" : "展开过程")
+                .accessibilityValue(label(now: end ?? .now, short: false))
                 .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
                 if let openTerminal {
