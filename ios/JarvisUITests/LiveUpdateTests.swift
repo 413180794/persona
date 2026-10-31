@@ -31,10 +31,12 @@ final class LiveUpdateTests: XCTestCase {
         super.tearDown()
     }
 
+    /// `chat`: opened as the chat left open last time. A cold start restores it only when the tab saved with it is
+    /// Agents (`app.tab`), so that is given too: otherwise the tab the last run ended on (another test's) decided it.
     private func launch(chat: String = "") {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-dev.openChat", chat, "-tab", "dev", "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-perfCounts", "YES"]
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev", "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-perfCounts", "YES"]
         app.launch()
     }
 

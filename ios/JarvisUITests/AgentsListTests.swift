@@ -27,10 +27,12 @@ final class AgentsListTests: XCTestCase {
 
     /// `fresh`: forget the list's saved look (cards, nothing folded, all machines, by space) first.
     /// `chat`: the chat left open last time ("<machine>/<session>"), which the app opens again over the list.
+    /// It is restored only when the tab saved with it is Agents (`app.tab`): given too, or the tab the last run ended on
+    /// (another test's) decides whether the chat opens.
     private func launch(fresh: Bool = true, chat: String = "") {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
         app.launch()
         if chat.isEmpty { see(filter("all"), "the quick filters", timeout: 15) }
     }
