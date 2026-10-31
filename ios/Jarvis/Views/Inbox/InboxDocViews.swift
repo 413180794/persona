@@ -21,25 +21,25 @@ struct DocStatusMenu: View {
                     Button {
                         store.setDocStatus(item, row: row, status: status, to: o.name)
                     } label: {
-                        if o.name == status.value { Label(o.name, systemImage: "checkmark") } else { Text(o.name) }
+                        if o.name == status.value { Label(o.name, systemImage: Theme.Icon.done) } else { Text(o.name) }
                     }
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 if moving {
                     ProgressView().controlSize(.mini)
                 } else {
                     Circle().fill(DocStatusColor.dot(status, in: status.value)).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 }
                 Text((showName ? status.name + "：" : "") + (status.value.isEmpty ? "未设置" : status.value))
-                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
-            .font(.footnote.weight(.medium))
+            .font(Theme.Font.captionMedium)
             .lineLimit(1)
             .foregroundStyle(.primary)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Theme.Space.s)
+            .padding(.vertical, Theme.Space.xs)
             .background(DocStatusColor.fill(status, in: status.value), in: .capsule)
         }
         .tint(.primary) // the label keeps its own colors, not the app's accent
@@ -78,15 +78,15 @@ struct InboxDocRowsPreview: View {
 
     var body: some View {
         if let rows = item.doc?.rows, let first = rows.first {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.turn.down.right").font(.caption2).foregroundStyle(.secondary)
-                Text(first.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: Theme.Icon.followOn).font(Theme.Font.label).foregroundStyle(.secondary)
+                Text(first.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     .layoutPriority(-1)
                 ForEach((first.status ?? []).prefix(1)) { st in
                     DocStatusMenu(item: item, row: first, status: st)
                 }
                 if rows.count > 1 {
-                    Text("+\(rows.count - 1) 行").font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    Text("+\(rows.count - 1) 行").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 }
                 Spacer(minLength: 0)
             }
@@ -99,17 +99,18 @@ struct InboxDocIcon: View {
     var doc: InboxItem.Doc
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
             .fill(tint.opacity(0.15))
             .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
-            .overlay(Image(systemName: doc.symbol).font(.body.weight(.semibold)).foregroundStyle(tint))
+            .overlay(Image(systemName: doc.symbol).font(Theme.Font.bodyStrong).foregroundStyle(tint))
     }
 
     private var tint: Color {
         switch doc.type {
-        case "sheet": Color(hex: 0x2EA121) // Feishu's sheet green
-        case "base": Color(hex: 0x7F3BF5)  // Base purple
-        default: Color(hex: 0x3370FF)      // docs blue
+        // Feishu's own colors for its document types: sheets green, Bases purple, docs blue.
+        case "sheet": LarkColor.text("green") ?? Theme.accent
+        case "base": LarkColor.text("purple") ?? Theme.accent
+        default: LarkColor.text("blue") ?? Theme.accent
         }
     }
 }
@@ -124,25 +125,25 @@ struct InboxDocDetailView: View {
         let doc = item.doc
         List {
             Section {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Theme.Space.m) {
                     if let doc { InboxDocIcon(doc: doc) }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title).font(.headline).lineLimit(2)
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        Text(item.title).font(Theme.Font.heading).lineLimit(2)
                         Text([doc?.typeName, item.preview, LarkTime.short(item.updatedAt)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                            .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.xs)
                 if let doc, let url = URL(string: doc.url) {
                     Button {
                         feishuOpen?(.doc(url: url.absoluteString, title: item.title))
                     } label: {
-                        Label("打开\(doc.typeName)", systemImage: "arrow.up.forward.square").lineLimit(1)
+                        Label("打开\(doc.typeName)", systemImage: Theme.Icon.openDocument).lineLimit(1)
                     }
                 }
                 if let error = doc?.error, !error.isEmpty {
-                    Label("读不到文档内容：\(error)", systemImage: "exclamationmark.triangle")
-                        .font(.footnote).foregroundStyle(Theme.danger)
+                    Label("读不到文档内容：\(error)", systemImage: Theme.Icon.error)
+                        .font(Theme.Font.caption).foregroundStyle(Theme.danger)
                 }
             }
             if let rows = doc?.rows, !rows.isEmpty {
@@ -156,7 +157,7 @@ struct InboxDocDetailView: View {
             }
             if let reply = doc?.reply {
                 Section {
-                    Label("回复会\(reply.label)", systemImage: "text.bubble").font(.footnote).foregroundStyle(.secondary)
+                    Label("回复会\(reply.label)", systemImage: Theme.Icon.conversation).font(Theme.Font.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -165,9 +166,9 @@ struct InboxDocDetailView: View {
     }
 
     private func rowCard(_ row: InboxItem.DocRow) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text(row.title).font(.body.weight(.semibold)).lineLimit(2)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.sm) {
+                Text(row.title).font(Theme.Font.bodyStrong).lineLimit(2)
                 Spacer(minLength: 4)
                 if let t = row.table, !t.isEmpty, (item.doc?.rows?.contains { $0.table != t } ?? false) || item.doc?.type == "base" {
                     Chip(text: t, look: .neutral)
@@ -175,15 +176,15 @@ struct InboxDocDetailView: View {
             }
             ForEach(row.fields ?? [], id: \.name) { f in
                 (Text(f.name + "  ").foregroundStyle(.secondary) + Text(f.value))
-                    .font(.subheadline).lineLimit(3)
+                    .font(Theme.Font.secondary).lineLimit(3)
             }
             if let status = row.status, !status.isEmpty {
-                FlowLayoutRow(spacing: 6) {
+                FlowLayoutRow(spacing: Theme.Space.sm) {
                     ForEach(status) { st in DocStatusMenu(item: item, row: row, status: st, showName: true) }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.xs)
     }
 }
 

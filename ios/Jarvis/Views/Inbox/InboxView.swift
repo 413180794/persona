@@ -303,7 +303,7 @@ struct InboxRow: View {
                     }
                 }
                 if item.doc != nil && !item.isDone {
-                    InboxDocRowsPreview(item: item).padding(.top, 2)
+                    InboxDocRowsPreview(item: item).padding(.top, Theme.Space.xxs)
                 }
                 if showAccount && !item.isLark {
                     Text(item.accountName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -388,8 +388,8 @@ struct InboxDraftCard: View {
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(changes, id: \.self) { c in
-                Label(c, systemImage: "arrow.triangle.2.circlepath")
-                    .font(.footnote.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                Label(c, systemImage: Theme.Icon.inProgress)
+                    .font(Theme.Font.captionMedium).foregroundStyle(.secondary).lineLimit(1)
             }
             HStack(spacing: Theme.Space.s) {
                 Spacer(minLength: 0)

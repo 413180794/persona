@@ -213,7 +213,7 @@ struct AssistantUpcomingRow: View {
             .scaledFrame(width: Theme.Size.box58, alignment: .leading)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Image(systemName: item.routine ? Theme.Icon.recurring : "arrow.turn.down.right")
+                    Image(systemName: item.routine ? Theme.Icon.recurring : Theme.Icon.followOn)
                         .font(Theme.Font.labelHeavy)
                         .foregroundStyle(Theme.accent)
                     Text(item.title).font(Theme.Font.heading).lineLimit(1)

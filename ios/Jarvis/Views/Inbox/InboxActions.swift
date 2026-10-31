@@ -153,8 +153,8 @@ struct InboxDraftSheet: View {
 
     /// The status moves the AI 分身 proposes, each one a toggle; the kept ones are made when the reply is sent.
     private var changesList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("发送时一起改").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            Text("发送时一起改").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             ForEach(proposed, id: \.self) { c in
                 let on = (kept ?? Set(proposed)).contains(c)
                 Button {
@@ -162,8 +162,8 @@ struct InboxDraftSheet: View {
                     if on { k.remove(c) } else { k.insert(c) }
                     kept = k
                 } label: {
-                    Label(DocChangeText.line(c, in: item.doc), systemImage: on ? "checkmark.circle.fill" : "circle")
-                        .font(.footnote).lineLimit(1)
+                    Label(DocChangeText.line(c, in: item.doc), systemImage: on ? Theme.Icon.successFilled : Theme.Icon.unchecked)
+                        .font(Theme.Font.caption).lineLimit(1)
                         .foregroundStyle(on ? Color.primary : Color.secondary)
                 }
                 .buttonStyle(.plain)
@@ -171,8 +171,8 @@ struct InboxDraftSheet: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.s)
     }
 
     private func load() async {

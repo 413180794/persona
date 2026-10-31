@@ -75,6 +75,10 @@ extension Theme {
         static let openExternal = "arrow.up.forward.app"
         /// Open the thing the row points at (a sub-Agent, a card's link).
         static let open = "arrow.up.right"
+        /// Open a file or a document in its viewer.
+        static let openDocument = "arrow.up.forward.square"
+        /// What follows from something before it: a follow-up, the next row of a table.
+        static let followOn = "arrow.turn.down.right"
         static let enlarge = "arrow.up.left.and.arrow.down.right"
         static let upDown = "arrow.up.arrow.down"
         static let select = "selection.pin.in.out"

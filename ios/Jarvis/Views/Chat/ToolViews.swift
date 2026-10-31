@@ -454,7 +454,7 @@ struct ToolDetail: View {
                 Spacer(minLength: 4)
                 if adds > 0 { Text("+\(adds)").foregroundStyle(Theme.Diff.add) }
                 if dels > 0 { Text("−\(dels)").foregroundStyle(Theme.Diff.del) }
-                if openFile != nil { Image(systemName: "arrow.up.forward.square").font(Theme.Font.label).foregroundStyle(Theme.accent) }
+                if openFile != nil { Image(systemName: Theme.Icon.openDocument).font(Theme.Font.label).foregroundStyle(Theme.accent) }
             }
             .font(Theme.Font.captionStrong.monospacedDigit())
             if let openFile {
@@ -474,7 +474,7 @@ struct ToolDetail: View {
                     HStack(spacing: Theme.Space.xs) {
                         Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
                         Text(p).lineLimit(2).truncationMode(.head)
-                        Image(systemName: "arrow.up.forward.square").font(Theme.Font.label)
+                        Image(systemName: Theme.Icon.openDocument).font(Theme.Font.label)
                     }
                     .font(Theme.Font.code)
                     .foregroundStyle(Theme.accent)

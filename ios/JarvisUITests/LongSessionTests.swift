@@ -31,7 +31,8 @@ final class LongSessionTests: XCTestCase {
         guard (try? served()) != nil else { throw XCTSkip("the mock hub has no /mock/served (start it with MOCK_BIG=1)") }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session]
+        // The default style: under BeautifulUI (left set by another test) the steps fold into chips and none shows.
+        app.launchArguments = ["-pairURL", pair, "-ui.style", "glass", "-tab", "dev", "-openSession", session]
         let opened = Date.now
         app.launch()
 

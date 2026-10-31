@@ -118,6 +118,9 @@ struct ChatsView: View {
             DispatchQueue.main.async { path = new }
         })
     }
+
+    /// How long the system search field takes to fold away.
+    private static let searchCloses = Duration.milliseconds(350)
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     /// 细列表: one line per agent.
@@ -395,6 +398,29 @@ struct ChatsView: View {
         path = NavigationPath([value])
     }
 
+    /// Opens a search result: the search closes first (open, it keeps the system navigation bar up over the chat), and
+    /// the chat is pushed once it has folded away. The search's text and results stay for coming back.
+    private func openFromSearch(_ key: SessionKey) {
+        searchedBeforePush = query
+        searching = false
+        Task { @MainActor in
+            try? await Task.sleep(for: Self.searchCloses)
+            path.append(key)
+        }
+    }
+
+    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool) -> some View {
+        if compact {
+            CompactSlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil)
+                .equatable()
+        } else {
+            SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
+                    machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
+                    hideState: inStateSection)
+                .equatable()
+        }
+    }
+
     // MARK: By space
 
     /// A space: tap its header to fold it (the counts stay on it); busy (and pinned / looping) agents first, idle ones
@@ -577,15 +603,20 @@ struct ChatsView: View {
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false) -> some View {
-        NavigationLink(value: s.key) {
-            if compact {
-                CompactSlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil)
-                    .equatable()
+        Group {
+            if searching {
+                // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
+                // to close first) and slid back, and the push made after it was lost (2026-10-31).
+                Button { openFromSearch(s.key) } label: {
+                    HStack(spacing: Theme.Space.s) {
+                        slotRowContent(s, context: context, inStateSection: inStateSection)
+                        Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
             } else {
-                SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
-                        machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
-                        hideState: inStateSection)
-                    .equatable()
+                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection) }
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
