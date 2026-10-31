@@ -677,22 +677,25 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 		if a.Agent != "claude" {
 			continue
 		}
-		id := a.SessionID()
-		if id == "" {
-			id = n.panes[a.PaneID]
-		}
-		if id == "" {
-			unknown = append(unknown, a)
+		if id := a.SessionID(); id != "" {
+			m[id] = a
 			continue
 		}
-		m[id] = a
+		unknown = append(unknown, a)
 	}
 	n.mu.Unlock()
 	for _, a := range unknown {
-		// Without herdr's claude integration the pane's claude process says which session it runs; a
-		// guess (title, then newest transcript in the directory) is only the last resort — six agents in one repo
-		// got each other's tab names that way.
+		// Without herdr's claude integration the pane's claude process says which session it runs. A pane binding
+		// (our start, a hook) comes after it: the bindings of sessions Jarvis started are kept in the hub's
+		// database and come back when node restarts, long after another claude took the pane (2026-10-31: after a
+		// redeploy two panes showed sessions they had run days earlier). A guess (title, then newest transcript in
+		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
 		id := n.sessionFromProcess(a.PaneID)
+		if id == "" {
+			n.mu.Lock()
+			id = n.panes[a.PaneID]
+			n.mu.Unlock()
+		}
 		if _, taken := m[id]; id == "" || taken {
 			id = n.guessSession(a, m)
 		}
