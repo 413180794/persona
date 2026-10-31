@@ -32,11 +32,13 @@ extension AppModel {
                 return
             }
         }
+        #if canImport(WatchConnectivity)
         if WCSession.isSupported(), WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
            Keychain.watchConfig?.url != cfg.url,
            let t = try? await APIClient(config: cfg).createToken(name: "Apple Watch", kind: "watch") {
             Keychain.watchConfig = ServerConfig(url: cfg.url, token: t.token)
         }
+        #endif
         WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
     }
 

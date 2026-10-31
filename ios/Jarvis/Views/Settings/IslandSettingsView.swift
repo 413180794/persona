@@ -1,5 +1,8 @@
 import SwiftUI
 
+// The Dynamic Island is an iPhone's: its preview lives in the widget's sources (LiveActivity/), and a Mac has no island.
+#if os(iOS)
+
 /// 设置 › 通知 › 灵动岛: what the compact Dynamic Island shows on each side of the camera. Kept per device on the hub
 /// (prefs.island), which fills in only the numbers this device shows (docs/live-activity.md).
 struct IslandSettingsView: View {
@@ -107,3 +110,4 @@ struct IslandSettingsView: View {
                    stats: .init(tpm: 12000, tokens: 42_000_000, requests: 1200, loads: [.init(id: "", name: "", percent: 35)]))
     }
 }
+#endif

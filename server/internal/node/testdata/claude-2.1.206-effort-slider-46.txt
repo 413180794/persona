@@ -1,0 +1,36 @@
+  phone_photos_recent / phone_photo_get
+  工具(我的可调用工具列表中没有这些 phone_*
+  MCP 工具,jarvis server
+  也没有列出可调用资源)。
+
+  请确认 Jarvis 应用已在 iPhone 上打开、MCP
+  连接正常后再让我重试。
+
+✻ Sautéed for 29s
+
+❯ /effort
+  ⎿  Cancelled
+
+❯ /effort
+  ⎿  Cancelled
+
+❯ /effort
+
+──────────────────────────────────────────────
+  Effort
+
+  Fast                                Smarte
+  r                                   r
+  ──────────────────────────────────────────
+  ────────────                 ─────
+  lo   medi   hig   xhig    ma     ultrac
+       m                           de
+                               xhigh +
+                               workflows
+  May use excessive tokens resulting in long
+  response times or overthinking. Use
+  sparingly for the hardest tasks.
+
+  ←/→ to adjust · Enter to confirm · Esc to
+  cancel
+────────────────────────────── android-demo ──

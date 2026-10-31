@@ -68,6 +68,58 @@
 - 性能：列表和对话都要在 120 Hz 屏上滚动不掉帧（`List` / `LazyVStack` 懒加载、行的 body 便宜、文字排版缓存），
   打开对话首屏 < 200 ms（有缓存时），窗口拖宽时不卡。用 Instruments（SwiftUI / Animation Hitches）量，量法写进本文。
 
+## 构建、运行、截图
+
+```sh
+cd ios
+python3 ../scripts/jarvis_config.py xcconfig && xcodegen generate
+eval "$(python3 ../scripts/jarvis_config.py env)"
+xcodebuild build -project Jarvis.xcodeproj -scheme JarvisMac -configuration Debug -destination "platform=macOS" \
+  -derivedDataPath ../../build/DerivedDataMac CODE_SIGNING_ALLOWED=NO
+open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑 Contents/MacOS/Jarvis 带启动参数
+```
+
+- 启动参数和 iOS 一样（`MacLaunchArguments`，只在 DEBUG）：`-pairURL`、`-tab dev|mail|settings|assistant`、`-openSession <machine>/<session>`、
+  `-openAssistant`、`-newAssistant`、`-showNewChat`、`-openChatsFresh`、`-openAgentsFresh`、`-lark-connector`、`-simulateTap`；体验模式 `-demo.on YES`。
+- 截图（**锁屏也能拍**）：`scripts/mac_shot.sh <名字> [启动参数…]`，浅色、深色各一张写到 `/tmp/jarvis-mac-shots/<名字>-{light,dark}.png`。
+  默认体验模式；`BUILD=1` 先编译，`APP=` 指定 .app，`SIZE=1280x820`，`DELAY=4`，`APPEARANCES="light dark"`。
+  例：`scripts/mac_shot.sh agents -tab dev -dev.openChat ""`、`scripts/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`、
+  `scripts/mac_shot.sh jarvis -tab assistant`、`scripts/mac_shot.sh inbox -tab mail`、`scripts/mac_shot.sh settings -tab settings`。
+  背后是 DEBUG 开关 `-macSnapshot <png> [-macSnapshotDelay 秒] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light]`（`Mac/App/MacSnapshot.swift`）：
+  App 自己用 `cacheDisplay` 把窗口画进 PNG，不经过屏幕。
+- 截图和屏幕上的差别（2026-10-31 试出来的）：
+  - Liquid Glass / 毛玻璃画不出模糊，露出的是窗口底色；玻璃按钮只剩边框。看布局和文字够用，看材质要真机。
+  - SwiftUI `List`（NSTableView）的行作为窗口的一部分画时是空的：截图时每一行单独再画一次、贴回原处；选中行的材质离屏画成黑块，改成画非激活窗口的选中色。
+  - 深色下 List 行里的文字仍是浅色方案的颜色（深灰），`NSApp.appearance`、`preferredColorScheme`、截图时套 appearance、去掉图层滤镜都没用；行的 effectiveAppearance 是 DarkAqua。
+    还没确认是截图的问题还是真的这样，要在解锁的 Mac 上看一眼（待办）。
+  - `layer.render(in:)` 上下颠倒、`dataWithPDF` 大部分文字丢失，都不如 `cacheDisplay`。
+  - `-AppleInterfaceStyle Dark` 作为启动参数对 App 不生效，深浅色用 `-macAppearance`（在 `applicationWillFinishLaunching` 里、窗口建出来之前设）。
+
+## Mac 版现在的样子（阶段 0：能编、能跑）
+
+- 壳（`Mac/App/`）：窗口左边一列四项（Jarvis / Agents / 收件箱 / 设置，角标同 iOS 的 tab 栏），右边是 iOS 的页面本身；
+  `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Jarvis 走的是 iPad / iPhone Duo 打开时的分栏布局。
+  外层不用 `NavigationSplitView`：页面自己是分栏，分栏套在另一个分栏的详情栏里时，里面的详情栏按外层侧栏还在前面排版，对话被挤到右边、输入框被裁掉。
+  ⌘1…⌘4 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
+  App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
+- 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
+  UIGraphicsImageRenderer、haptics 空操作、UIKit 语义色）、`SwiftUICompat.swift`（iOS 专用修饰符的同名 Mac 版本：`navigationBarTitleDisplayMode` 什么都不做、
+  `.topBarTrailing` → `.primaryAction`、`.insetGrouped` → `.inset`、`fullScreenCover` → `sheet`、`.navigationBarDrawer` → `.toolbar`、`for: .tabBar/.navigationBar` 不做事、
+  `horizontalSizeClass` 恒 regular、`EditButton` 空、`ImageRenderer.uiImage`…）、`MenuCompat.swift`（`UIAction` / `UIMenu` → `NSMenu`）、`NavigationCompat.swift`。
+- 用 AppKit 重写的同名类型：终端（`Mac/Terminal/`，NSScrollView + `NSTextInputClient`，拼音、选择、⌘C/⌘V、滚轮、捏合 / ⌘± 调字号）、代码行与等宽文本
+  （`Mac/Code/`，只画可见的行、可选中拷贝）、图片查看 / 缩放（`Mac/Media/`，NSScrollView 放大，←/→ 翻页）、长按菜单 → 右键、可选文本、
+  网页（`Mac/Link/`，WKWebView 右键菜单加「AI 修改 / 作为上下文」）、形象帧动画、ChatPin、邮件 HTML、Jarvis 侧边栏抽屉（窄窗口时才用，宽窗口是一栏）。
+- Mac 上没有的，及原因：
+  - 实时活动 / 灵动岛：macOS 没有 ActivityKit。`LiveActivityController` 的 Mac 版只记下 hub 推来的 fleet 状态（给以后的菜单栏用），设置 › 通知里「实时活动」一节不显示，`IslandSettingsView` 不编译。
+  - Apple Watch 同步：Mac 不和手表配对，`WatchSync` 是空的。
+  - 拍照（`UIImagePickerController`）：`isSourceTypeAvailable(.camera)` 为 false，输入框不出「拍照」；图片从文件、剪贴板来。
+  - 扫码配对（VisionKit `DataScannerViewController`）：换成「粘贴配对链接」按钮（`Mac/Settings/PairingPaste+Mac.swift`），或直接打开 `jarvis://pair?…` 链接。
+  - 远程推送：target 还没有 APNs entitlement，`PushRegistrar` 不注册；App 开着时靠 WebSocket，本地通知照常。
+  - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置里手机数据的健康开关还在，待收掉。
+- 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（应做成真正的三栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
+  `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；终端的 option 键不当 meta；代码行只有整行选择、没有 ⌘F；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
+  字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
+
 ## 验收清单
 
 下面是 iOS App 的全部功能，Mac 版逐条对上（做完一条勾一条）。

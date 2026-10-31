@@ -127,7 +127,11 @@ struct LinkSheet: View {
             }
             Menu {
                 Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
+                #if os(iOS)
                 Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: "safari") }
+                #else
+                Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: "safari") }
+                #endif
                 ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
             } label: { Image(systemName: Theme.Icon.moreMenu) }
             Button { dismiss() } label: { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
@@ -174,7 +178,9 @@ final class WebViewPool {
     private let config: WKWebViewConfiguration = {
         let c = WKWebViewConfiguration()
         c.websiteDataStore = .default()
+        #if os(iOS)
         c.allowsInlineMediaPlayback = true
+        #endif
         return c
     }()
 
@@ -183,8 +189,10 @@ final class WebViewPool {
         let key = url.absoluteString
         if let v = views[key] { touch(key); return v }
         let v = SelectableWebView(frame: .zero, configuration: config)
+        #if os(iOS)
         v.scrollView.showsVerticalScrollIndicator = false
         v.scrollView.showsHorizontalScrollIndicator = false
+        #endif
         v.allowsBackForwardNavigationGestures = true
         var req = URLRequest(url: url)
         req.cachePolicy = .returnCacheDataElseLoad // a page seen before paints from disk at once
@@ -210,6 +218,7 @@ final class WebViewPool {
     }
 }
 
+#if os(iOS)
 /// A WKWebView whose selection menu has AI 修改 and 作为上下文.
 final class SelectableWebView: WKWebView {
     var onPick: ((String, String) -> Void)?
@@ -263,6 +272,7 @@ struct PooledWebView: UIViewRepresentable {
         }
     }
 }
+#endif
 
 // MARK: - In messages
 
@@ -355,6 +365,7 @@ struct PickTextSheet: View {
     }
 }
 
+#if os(iOS)
 struct PickTextView: UIViewRepresentable {
     var text: String
     var pick: (String, String) -> Void
@@ -391,4 +402,4 @@ struct PickTextView: UIViewRepresentable {
         }
     }
 }
-
+#endif

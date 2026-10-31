@@ -184,6 +184,7 @@ final class Dictation {
         guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")), recognizer.isAvailable else {
             return "语音识别现在用不了"
         }
+        #if os(iOS) // a Mac has no audio session to configure: the engine takes the input as it is
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -191,6 +192,7 @@ final class Dictation {
         } catch {
             return "麦克风打不开"
         }
+        #endif
         let engine = AVAudioEngine()
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -223,7 +225,9 @@ final class Dictation {
         task = nil
         update = nil
         isListening = false
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     private static func allowed() async -> Bool {

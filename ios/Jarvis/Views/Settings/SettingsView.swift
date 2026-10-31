@@ -447,7 +447,11 @@ struct PairView: View {
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .listRowInsets(EdgeInsets())
                     } footer: {
+                        #if os(iOS)
                         Text("扫描 `jarvisd hub pair` 打印的二维码。")
+                        #else
+                        Text("拷贝 `jarvisd hub pair` 打印的配对链接（jarvis://pair?…），再点「粘贴配对链接」。")
+                        #endif
                     }
                 }
                 Section("手动输入") {
@@ -484,6 +488,7 @@ struct PairView: View {
     }
 }
 
+#if os(iOS)
 struct QRScanner: UIViewControllerRepresentable {
     var onCode: (String) -> Void
 
@@ -514,6 +519,7 @@ struct QRScanner: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 /// Claude Code's /config options (a whitelist of ~/.claude/settings.json keys) on each machine.
 struct ClaudeSettingsView: View {

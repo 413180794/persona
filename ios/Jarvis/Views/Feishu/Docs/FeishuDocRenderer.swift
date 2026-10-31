@@ -50,6 +50,7 @@ nonisolated enum FeishuDocsColor {
     }
 }
 
+#if os(iOS)
 private extension UIColor {
     var lighter: UIColor {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -57,6 +58,17 @@ private extension UIColor {
         return UIColor(hue: h, saturation: s * 0.85, brightness: max(b, 0.82), alpha: a)
     }
 }
+#else
+private extension NSColor {
+    /// NSColor's getHue returns nothing and needs an RGB color space first.
+    nonisolated var lighter: NSColor {
+        guard let rgb = usingColorSpace(.sRGB) else { return self }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        rgb.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return NSColor(hue: h, saturation: s * 0.85, brightness: max(b, 0.82), alpha: a)
+    }
+}
+#endif
 
 // MARK: - Inline
 

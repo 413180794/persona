@@ -4,6 +4,8 @@ import QuartzCore
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 nonisolated enum PerfTrace {
@@ -115,6 +117,7 @@ struct PerfCountProbe: View {
     }
 }
 
+#if os(iOS)
 @MainActor private struct PerfWindowProbe: UIViewRepresentable {
     let name: String
     func makeUIView(context: Context) -> PerfProbeView { PerfProbeView(name) }
@@ -143,4 +146,31 @@ struct PerfCountProbe: View {
     }
     deinit { PerfTrace.event("Tab UIView destroy", detail) }
 }
+#else
+/// The Mac's probe: when the tab's view joins or leaves a window.
+@MainActor private struct PerfWindowProbe: NSViewRepresentable {
+    let name: String
+    func makeNSView(context: Context) -> PerfProbeView { PerfProbeView(name) }
+    func updateNSView(_ view: PerfProbeView, context: Context) { PerfTrace.event("Tab NSView update", view.detail) }
+}
+
+@MainActor private final class PerfProbeView: NSView {
+    nonisolated let name: String
+    nonisolated let token = UUID()
+    nonisolated var detail: String { "\(name) \(token)" }
+
+    init(_ name: String) {
+        self.name = name
+        super.init(frame: .zero)
+        PerfTrace.event("Tab NSView create", detail)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        PerfTrace.event("Tab window", "\(detail) attached=\(window != nil)")
+    }
+    deinit { PerfTrace.event("Tab NSView destroy", detail) }
+}
+#endif
 #endif

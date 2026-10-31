@@ -1,5 +1,7 @@
 #if canImport(UIKit)
 import UIKit
+#else
+import AppKit
 #endif
 
 /// The terminal's colors: background, text, cursor, selection and the 16 ANSI colors (16–255 are the standard xterm

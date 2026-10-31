@@ -218,7 +218,9 @@ func tuiPromptEmpty(screen string) bool {
 	return false
 }
 
-// tuiSetEffort opens the /effort picker, moves to the level and presses "s" (this session only).
+// tuiSetEffort opens the /effort picker, moves to the level and confirms it for this session. Two pickers exist: the
+// older list ("for this session only", "s" picks it for the session) and, from Claude Code 2.1.2xx, a slider
+// ("←/→ to adjust · Enter to confirm") whose leftmost stop is low and that confirms with Enter.
 func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
 	if err != nil {
@@ -234,19 +236,21 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	if err := n.herdr.PaneSendKeys(ctx, pane, "enter"); err != nil {
 		return err
 	}
-	opened := false
+	picker := ""
 	for range 15 {
 		time.Sleep(200 * time.Millisecond)
-		if s, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil && strings.Contains(s, "for this session only") {
-			opened = true
-			break
+		if s, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil {
+			if picker = effortPicker(s); picker != "" {
+				break
+			}
 		}
 	}
-	if !opened {
+	if picker == "" {
 		_ = n.herdr.PaneSendKeys(ctx, pane, "esc")
 		return fmt.Errorf("没打开思考强度的选择器（这个 Claude Code 版本可能不支持 /effort）")
 	}
-	keys := []string{"left", "left", "left", "left"}
+	// From the left end (low) one stop right per level; the slider has stops past max (ultracode), the list does not.
+	keys := []string{"left", "left", "left", "left", "left", "left"}
 	for range slices.Index(effortLevels, effort) {
 		keys = append(keys, "right")
 	}
@@ -254,21 +258,50 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 		return err
 	}
 	time.Sleep(150 * time.Millisecond)
-	if err := n.herdr.PaneSendKeys(ctx, pane, "s"); err != nil {
+	confirm := "s"
+	if picker == "slider" {
+		confirm = "enter"
+	}
+	if err := n.herdr.PaneSendKeys(ctx, pane, confirm); err != nil {
 		return err
 	}
 	for range 15 {
 		time.Sleep(200 * time.Millisecond)
 		s, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
-		if err == nil && !strings.Contains(s, "for this session only") {
-			if strings.Contains(s, "effort level to "+effort) || strings.Contains(s, "● "+effort+" ") {
-				return nil
-			}
-			return fmt.Errorf("思考强度可能没改成 %s，请在终端里确认", effort)
+		if err == nil && effortPicker(s) == "" {
+			return effortOutcome(s, effort)
 		}
 	}
 	_ = n.herdr.PaneSendKeys(ctx, pane, "esc")
 	return fmt.Errorf("思考强度的选择器没有关闭，已取消")
+}
+
+// effortPicker says which /effort picker is on screen: "list", "slider" or "" (none).
+func effortPicker(screen string) string {
+	switch {
+	case strings.Contains(screen, "for this session only"):
+		return "list"
+	case strings.Contains(screen, "to adjust") && strings.Contains(screen, "Enter to confirm") && strings.Contains(screen, "Effort"):
+		return "slider"
+	}
+	return ""
+}
+
+// effortOutcome reads what Claude Code printed once the picker closed. An effort set in the environment
+// (CLAUDE_CODE_EFFORT_LEVEL: the env block of Claude's settings.json, or a launcher) wins over the session's: say so
+// instead of claiming it changed.
+func effortOutcome(screen, effort string) error {
+	flat := strings.Join(strings.Fields(screen), " ")
+	if i := strings.LastIndex(flat, "CLAUDE_CODE_EFFORT_LEVEL="); i >= 0 {
+		v := strings.TrimRight(strings.Fields(flat[i+len("CLAUDE_CODE_EFFORT_LEVEL="):] + " ")[0], ".,;:")
+		if v != effort && strings.Contains(flat[i:], "overrides") {
+			return fmt.Errorf("这台电脑设了 CLAUDE_CODE_EFFORT_LEVEL=%s（Claude 的 settings.json 的 env 或启动器里），它优先于会话里改的值，要改得先去掉它", v)
+		}
+	}
+	if strings.Contains(flat, "effort level to "+effort) || strings.Contains(flat, "● "+effort+" ") || strings.Contains(flat, "◈ "+effort+" ") {
+		return nil
+	}
+	return fmt.Errorf("思考强度可能没改成 %s，请在终端里确认", effort)
 }
 
 // syncAssistantModes sends a headless conversation's wanted mode and effort as control requests (they apply from

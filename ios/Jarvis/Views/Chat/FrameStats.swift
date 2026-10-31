@@ -1,6 +1,9 @@
 #if DEBUG
 import Foundation
 import QuartzCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// Simulator profiling (`-showAutoScroll YES`, ChatView): measures every frame while the chat list sweeps end to end
 /// and writes the hitches (frames late by more than half a frame) to Documents/frames.json for scripts to read.
@@ -16,7 +19,12 @@ final class FrameStats: NSObject {
     func start() {
         deltas = []
         last = 0
+        #if os(iOS)
         let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        #else
+        // A Mac's display link comes from the screen it draws on.
+        guard let link = NSScreen.main?.displayLink(target: self, selector: #selector(tick(_:))) else { return }
+        #endif
         link.add(to: .main, forMode: .common)
         self.link = link
     }

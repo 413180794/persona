@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
+#if os(iOS)
 extension View {
     /// Hides the tab bar while this pushed page shows, the UIKit way: animated, with the push.
     ///
@@ -32,3 +33,4 @@ private struct TabBarHider: UIViewControllerRepresentable {
         }
     }
 }
+#endif

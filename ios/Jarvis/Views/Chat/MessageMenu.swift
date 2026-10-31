@@ -32,6 +32,7 @@ final class MessageMenu {
     @ObservationIgnored private var pressing = false
     @ObservationIgnored private var pressEnded = Date.distantPast
 
+    #if os(iOS)
     func pressChanged(_ state: UIGestureRecognizer.State) {
         switch state {
         case .began: pressing = true
@@ -39,6 +40,16 @@ final class MessageMenu {
         default: break
         }
     }
+    #else
+    /// The Mac's secondary click (LongPressAt in ios/Mac/Media/MessageGestures.swift) reports the same phases.
+    func pressChanged(_ state: PressPhase) {
+        switch state {
+        case .began: pressing = true
+        case .ended, .cancelled, .failed: pressing = false; pressEnded = .now
+        default: break
+        }
+    }
+    #endif
 
     /// A tap or a scroll on the list: ignored while the press that opened the bar is held or has just lifted.
     func dismiss() {
@@ -56,6 +67,7 @@ struct SelectableText: Identifiable {
     var id: String { text }
 }
 
+#if os(iOS)
 /// UIKit swipe: it waits for a clear sideways flick and lets scroll views have everything else (a SwiftUI drag on the
 /// chat list would take its scrolling).
 struct SwipeTo: UIGestureRecognizerRepresentable {
@@ -89,6 +101,7 @@ struct LongPressAt: UIGestureRecognizerRepresentable {
         if recognizer.state == .began { action(context.converter.localLocation) }
     }
 }
+#endif
 
 extension View {
     /// The pressable part of a message (the bubble / the text).
@@ -230,6 +243,7 @@ struct SelectableTextSheet: View {
     }
 }
 
+#if os(iOS)
 struct SelectableTextView: UIViewRepresentable {
     var text: String
 
@@ -248,3 +262,4 @@ struct SelectableTextView: UIViewRepresentable {
         if v.text != text { v.text = text }
     }
 }
+#endif

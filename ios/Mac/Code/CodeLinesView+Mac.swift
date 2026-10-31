@@ -1,0 +1,300 @@
+#if os(macOS)
+import AppKit
+import SwiftUI
+
+/// The Mac's `CodeLinesView` (the iOS one is a UIScrollView of reused labels, `Jarvis/Code/CodeLinesView.swift`):
+/// a flipped document view inside an `NSScrollView` that draws only the lines in the dirty rect, so a file of
+/// 100 000 lines opens and scrolls like one of ten. The gutter (line numbers, JSON's fold arrows) is drawn at the
+/// visible left edge, so it stays put while the code scrolls sideways under it. A click goes to the source (JSON
+/// opens or closes a node) and selects the line (⇧-click extends, ⌘A selects all, ⌘C copies); a right click
+/// offers the line's menu (拷贝这一行…).
+final class CodeLinesView: NSView {
+    weak var source: CodeLineSource? {
+        didSet { reload() }
+    }
+    var onNearEnd: (() -> Void)?
+    /// Once, when the first lines are on screen.
+    var onFirstLines: (() -> Void)?
+
+    let font = CodeMetrics.font
+    /// NSFont has no `lineHeight`: ascender + descender + leading is what UIFont's is.
+    private(set) lazy var fontLineHeight: CGFloat = ceil(font.ascender - font.descender + font.leading)
+    private(set) lazy var lineHeight: CGFloat = ceil(fontLineHeight * 1.25)
+    private(set) lazy var charWidth: CGFloat = ("0" as NSString).size(withAttributes: [.font: font]).width
+    // The same margins as the iOS view.
+    private let pad = NSEdgeInsets(top: 10, left: 10, bottom: 24, right: 24)
+    /// Between the gutter and the code (the iOS labels sit 8 pt right of the gutter's text box).
+    private let gutterGap: CGFloat = 8
+    private var gutterWidth: CGFloat = 0
+    /// Lines whose attributed strings were made, for drawing them again without asking the source.
+    private var lineCache: [Int: NSAttributedString] = [:]
+    private var gutterCache: [Int: NSAttributedString] = [:]
+    /// The selected lines (anchor where the selection started, for ⇧-click).
+    private var selection: ClosedRange<Int>?
+    private var anchor: Int?
+    private var mouseDownLine: Int?
+    private var dragged = false
+    private var firstShown = false
+
+    private let background = NSColor(Theme.codeBackground)
+    private let rule = NSColor.separatorColor
+    private let selectionFill = NSColor.selectedTextBackgroundColor
+
+    override var isFlipped: Bool { true }
+    override var isOpaque: Bool { true }
+    override var acceptsFirstResponder: Bool { true }
+    /// The gutter is drawn where the visible rect is: every scroll redraws what is on screen, so the pre-drawn
+    /// overdraw of responsive scrolling would show a gutter in the wrong place.
+    override class var isCompatibleWithResponsiveScrolling: Bool { false }
+
+    /// Everything again: the line count or the gutter changed.
+    func reload() {
+        lineCache = [:]
+        gutterCache = [:]
+        source?.changed = { [weak self] range in
+            guard let self else { return }
+            if let range { self.refresh(range) } else { self.reload() }
+        }
+        if let n = source?.lineCount, let s = selection, s.upperBound >= n {
+            selection = n > 0 && s.lowerBound < n ? s.lowerBound...(n - 1) : nil
+        }
+        resize()
+        needsDisplay = true
+    }
+
+    /// The lines in `range` again (their colors came in).
+    func refresh(_ range: Range<Int>) {
+        for i in range { lineCache[i] = nil }
+        guard !range.isEmpty else { return }
+        setNeedsDisplay(CGRect(x: visibleRect.minX, y: pad.top + CGFloat(range.lowerBound) * lineHeight,
+                               width: visibleRect.width, height: CGFloat(range.count) * lineHeight))
+    }
+
+    /// The content's size, at least the scroll view's.
+    func resize() {
+        let clip = enclosingScrollView?.contentView.bounds.size ?? .zero
+        guard let source else {
+            setFrameSize(clip)
+            return
+        }
+        gutterWidth = CGFloat(source.gutterColumns) * charWidth + 12
+        let w = pad.left + gutterWidth + CGFloat(source.columns) * charWidth + pad.right
+        let h = pad.top + CGFloat(source.lineCount) * lineHeight + pad.bottom
+        let size = CGSize(width: max(w, clip.width), height: max(h, clip.height))
+        if frame.size != size { setFrameSize(size) }
+    }
+
+    /// The visible rect moved: the gutter moves with it, and near the end the next page is wanted.
+    func scrolled() {
+        needsDisplay = true
+        let v = visibleRect
+        if v.maxY > bounds.height - v.height * 2 { onNearEnd?() }
+    }
+
+    private func line(_ i: Int, _ source: CodeLineSource) -> NSAttributedString {
+        if let have = lineCache[i] { return have }
+        let a = source.line(i)
+        if lineCache.count > 800 { lineCache = [:] }
+        lineCache[i] = a
+        return a
+    }
+
+    private func gutter(_ i: Int, _ source: CodeLineSource) -> NSAttributedString {
+        if let have = gutterCache[i] { return have }
+        let a = source.gutter(i)
+        if gutterCache.count > 800 { gutterCache = [:] }
+        gutterCache[i] = a
+        return a
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        background.setFill()
+        dirtyRect.fill()
+        guard let source else { return }
+        let n = source.lineCount
+        let first = max(0, Int((dirtyRect.minY - pad.top) / lineHeight))
+        let last = min(n, Int((dirtyRect.maxY - pad.top) / lineHeight) + 1)
+        guard first < last else { return }
+        let textY = (lineHeight - fontLineHeight) / 2
+        let codeX = pad.left + gutterWidth + gutterGap
+        let v = visibleRect
+        if let s = selection {
+            let lo = max(s.lowerBound, first), hi = min(s.upperBound, last - 1)
+            if lo <= hi {
+                selectionFill.setFill()
+                CGRect(x: dirtyRect.minX, y: pad.top + CGFloat(lo) * lineHeight, width: dirtyRect.width,
+                       height: CGFloat(hi - lo + 1) * lineHeight).fill()
+            }
+        }
+        for i in first..<last {
+            line(i, source).draw(at: CGPoint(x: codeX, y: pad.top + CGFloat(i) * lineHeight + textY))
+        }
+        // Pinned: the gutter covers the code that scrolled under it.
+        let gutterRect = CGRect(x: v.minX, y: dirtyRect.minY, width: pad.left + gutterWidth, height: dirtyRect.height)
+        guard gutterRect.intersects(dirtyRect) else { return }
+        background.setFill()
+        gutterRect.fill()
+        let scale = window?.backingScaleFactor ?? 2
+        rule.setFill()
+        CGRect(x: gutterRect.maxX, y: dirtyRect.minY, width: 1 / scale, height: dirtyRect.height).fill()
+        let numberWidth = gutterWidth - gutterGap
+        for i in first..<last {
+            let g = gutter(i, source)
+            let w = ceil(g.size().width)
+            g.draw(at: CGPoint(x: v.minX + pad.left + numberWidth - w, y: pad.top + CGFloat(i) * lineHeight + textY))
+        }
+        if !firstShown, let f = onFirstLines {
+            firstShown = true
+            onFirstLines = nil
+            DispatchQueue.main.async { f() } // not while drawing: it may change SwiftUI state
+        }
+    }
+
+    func line(at p: CGPoint) -> Int? {
+        guard let source else { return nil }
+        let i = Int(floor((p.y - pad.top) / lineHeight))
+        return i >= 0 && i < source.lineCount ? i : nil
+    }
+
+    private func point(_ event: NSEvent) -> CGPoint { convert(event.locationInWindow, from: nil) }
+
+    // MARK: Clicks and selection
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        dragged = false
+        mouseDownLine = line(at: point(event))
+        guard let i = mouseDownLine else {
+            select(nil)
+            return
+        }
+        if event.modifierFlags.contains(.shift), let a = anchor {
+            select(min(a, i)...max(a, i))
+        } else {
+            anchor = i
+            select(i...i)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let a = anchor, let source, source.lineCount > 0 else { return }
+        dragged = true
+        let i = line(at: point(event)) ?? (point(event).y < pad.top ? 0 : source.lineCount - 1)
+        select(min(a, i)...max(a, i))
+        autoscroll(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { mouseDownLine = nil }
+        guard !dragged, !event.modifierFlags.contains(.shift), event.clickCount == 1,
+              let i = mouseDownLine, line(at: point(event)) == i, source?.tap(i) == true else { return }
+        reload()
+    }
+
+    private func select(_ range: ClosedRange<Int>?) {
+        guard range != selection else { return }
+        selection = range
+        needsDisplay = true
+    }
+
+    override func selectAll(_ sender: Any?) {
+        guard let n = source?.lineCount, n > 0 else { return }
+        anchor = 0
+        select(0...(n - 1))
+    }
+
+    @objc func copy(_ sender: Any?) {
+        guard let source, let s = selection else { return }
+        let n = source.lineCount
+        let text = (s.lowerBound...min(s.upperBound, n - 1)).map { source.line($0).string }.joined(separator: "\n")
+        UIPasteboard.general.string = text
+    }
+
+    /// Menu items (Edit › Copy / Select All) are on only when there is something for them.
+    @objc func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(copy(_:)): selection != nil
+        case #selector(selectAll(_:)): (source?.lineCount ?? 0) > 0
+        default: true
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.charactersIgnoringModifiers == "\u{1b}" { // Esc clears the selection
+            select(nil)
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let i = line(at: point(event)), let menu = source?.menu(i) else { return nil }
+        if selection.map({ !$0.contains(i) }) ?? true {
+            anchor = i
+            select(i...i)
+        }
+        return menu.nsMenu()
+    }
+}
+
+/// The scroll view around `CodeLinesView`: keeps the document at least its own size and tells it when it moved.
+final class CodeLinesScrollView: NSScrollView {
+    let lines = CodeLinesView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        hasVerticalScroller = true
+        hasHorizontalScroller = true
+        autohidesScrollers = true
+        scrollerStyle = .overlay
+        drawsBackground = false
+        borderType = .noBorder
+        documentView = lines
+        contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(moved), name: NSView.boundsDidChangeNotification, object: contentView)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func moved() {
+        lines.scrolled()
+        FrameMeter.shared.noteScroll()
+    }
+
+    override func tile() {
+        super.tile()
+        lines.resize()
+    }
+}
+
+/// `CodeLinesView` in SwiftUI. `version` changes when the source is a new one.
+struct CodeLines: NSViewRepresentable {
+    var source: CodeLineSource
+    var version: Int = 0
+    var onNearEnd: (() -> Void)? = nil
+    var onFirstLines: (() -> Void)? = nil
+
+    final class Coordinator {
+        var version = -1
+        var source: ObjectIdentifier?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> CodeLinesScrollView {
+        let v = CodeLinesScrollView()
+        v.lines.onFirstLines = onFirstLines
+        return v
+    }
+
+    func updateNSView(_ v: CodeLinesScrollView, context: Context) {
+        v.lines.onNearEnd = onNearEnd
+        let c = context.coordinator
+        let id = ObjectIdentifier(source)
+        guard c.source != id || c.version != version else { return }
+        c.source = id
+        c.version = version
+        v.lines.source = source
+    }
+}
+#endif

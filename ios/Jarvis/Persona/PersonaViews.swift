@@ -58,6 +58,7 @@ struct PersonaDot: View {
     }
 }
 
+#if os(iOS)
 /// Frames in a UIImageView, looping; the first one alone when not animating (frame 0 says the state by itself).
 struct PersonaFramesView: UIViewRepresentable {
     var frames: PersonaFrames
@@ -98,6 +99,7 @@ struct PersonaFramesView: UIViewRepresentable {
         CGSize(width: proposal.width ?? 44, height: proposal.height ?? 44)
     }
 }
+#endif
 
 /// A persona's colors as small swatches: primary, then the accent (light / dark halves).
 struct PersonaSwatches: View {

@@ -10,12 +10,14 @@ struct NotificationSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: NotifyPrefs?
     @State private var system: UNAuthorizationStatus?
+    #if os(iOS)
     @State private var activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
+    #endif
     @State private var debugIsland = false
 
     var body: some View {
         List {
-            if let system, system != .authorized && system != .provisional && system != .ephemeral {
+            if let system, system != .authorized && system != .provisional && !Self.ephemeral(system) {
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -60,6 +62,8 @@ struct NotificationSettingsView: View {
                 Text(doneFooter)
             }
 
+            // Live Activities (锁屏和灵动岛) are an iPhone's: a Mac has neither (docs/mac.md).
+            #if os(iOS)
             Section {
                 Toggle(isOn: binding(\.liveActivity)) {
                     Label {
@@ -109,6 +113,7 @@ struct NotificationSettingsView: View {
             } footer: {
                 Text("锁屏上可以直接「允许 / 批准」（要先解锁）或「拒绝」；灵动岛只在解锁时显示，总是带详情。")
             }
+            #endif
 
             Section {
                 openSystemSettings
@@ -122,7 +127,7 @@ struct NotificationSettingsView: View {
         .disabled(prefs == nil)
         .overlay { if prefs == nil { ProgressView() } }
         .task { await load() }
-        #if DEBUG
+        #if DEBUG && os(iOS)
         // `-openIslandSettings YES` (with `-openNotificationSettings YES -tab settings`): 灵动岛.
         .navigationDestination(isPresented: $debugIsland) { IslandSettingsView(island: binding(\.island)) }
         .task {
@@ -134,8 +139,19 @@ struct NotificationSettingsView: View {
         #endif
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             Task { system = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
+            #if os(iOS)
             activitiesAllowed = ActivityAuthorizationInfo().areActivitiesEnabled
+            #endif
         }
+    }
+
+    /// Allowed for a while (App Clips): iOS only.
+    private static func ephemeral(_ status: UNAuthorizationStatus) -> Bool {
+        #if os(iOS)
+        status == .ephemeral
+        #else
+        false
+        #endif
     }
 
     private var openSystemSettings: some View {

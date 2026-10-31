@@ -1,14 +1,204 @@
+import AppKit
 import SwiftUI
+import UserNotifications
 
-/// The macOS app (docs/mac.md): one AppModel, as on iOS, behind a Mac shell.
+/// The macOS app (docs/mac.md): one AppModel, as on iOS, behind a Mac shell. A window with a sidebar (the iPhone's
+/// four tabs) beside the same pages, and 设置 also in its own window (⌘,).
 @main
 struct JarvisMacApp: App {
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var delegate
     @State private var model = AppModel.shared
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
-        WindowGroup {
-            Text("Jarvis")
+        WindowGroup("Jarvis", id: "main") {
+            MacRootView()
+                .environment(model)
+                .onOpenURL { url in model.openPairing(url) }
+        }
+        .defaultSize(width: Theme.Size.macWindowWidth, height: Theme.Size.macWindowHeight)
+        .windowToolbarStyle(.unified)
+        .commands { MacCommands(model: model) }
+        .onChange(of: phase) { _, new in
+            // A Mac app keeps running in the background: the socket stays open (the hub reaches it that way), only
+            // coming back to the front checks the connection and refreshes, as the iPhone does.
+            if new == .active {
+                model.live.ensureConnected()
+                Task { await model.refresh() }
+            }
+        }
+
+        Settings {
+            MacSettingsWindow()
                 .environment(model)
         }
     }
 }
+
+extension AppModel {
+    /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
+    func openPairing(_ url: URL) {
+        guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
+        Task {
+            do { try await pair(cfg); toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
+            catch { show(error) }
+        }
+    }
+}
+
+/// The app's menus: the four sections on ⌘1…⌘4, as Mac apps with a sidebar do.
+struct MacCommands: Commands {
+    let model: AppModel
+
+    var body: some Commands {
+        CommandGroup(after: .sidebar) {
+            ForEach(Array(MacSection.allCases.enumerated()), id: \.element) { i, section in
+                Button(section.title) { model.selectedTab = section.tab }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+            }
+            Divider()
+        }
+    }
+}
+
+/// 设置 in the Settings window (⌘,): the same page as the sidebar's 设置.
+struct MacSettingsWindow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        NavigationStack {
+            SettingsView()
+        }
+        .macLook(model)
+        .frame(minWidth: Theme.Size.macSettingsWidth, minHeight: Theme.Size.macSettingsHeight)
+    }
+}
+
+final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        MacSnapshot.applyAppearanceIfAsked()
+        #endif
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
+        #if DEBUG
+        MacLaunchArguments.apply()
+        #endif
+        AppModel.shared.start()
+        #if DEBUG
+        MacSnapshot.scheduleIfAsked()
+        #endif
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Clicking the Dock icon with no window open brings the main window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { sender.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeKeyAndOrderFront(nil) }
+        return true
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let key = Self.sessionKey(notification.request.content.userInfo)
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async {
+            let visible = MainActor.assumeIsolated { AppModel.shared.visibleSession }
+            done(key != nil && key == visible ? [] : [.banner, .sound, .list])
+        }
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        let key = Self.sessionKey(info)
+        let action = response.actionIdentifier
+        let text = (response as? UNTextInputNotificationResponse)?.userText
+        let ixID = info["interaction_id"] as? String
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                if let ixID, let resolution = NotificationActions.resolution(action: action, text: text) {
+                    Task {
+                        do {
+                            guard let config = Keychain.serverConfig else { throw IntentFailure.notPaired }
+                            try await APIClient(config: config).resolve(ixID, resolution)
+                        } catch {
+                            await NotificationActions.reportFailure(id: ixID, title: NotificationActions.failureTitle(action: action), error: error)
+                        }
+                        done()
+                    }
+                    return
+                }
+                if action != UNNotificationDismissActionIdentifier, let key {
+                    NSApp.activate()
+                    AppModel.shared.open(key, latestAnswer: ixID == nil)
+                }
+                done()
+            }
+        }
+    }
+
+    nonisolated static func sessionKey(_ info: [AnyHashable: Any]) -> SessionKey? {
+        guard let machine = info["machine_id"] as? String, let session = info["session_id"] as? String,
+              !machine.isEmpty, !session.isEmpty else { return nil }
+        return SessionKey(machineID: machine, sessionID: session)
+    }
+}
+
+#if DEBUG
+/// The iOS app's DEBUG launch arguments (`JarvisApp.swift`), read the same way: `-pairURL`, `-tab`, `-openSession`,
+/// `-openAssistant`, `-newAssistant`, `-showNewChat`, `-openChatsFresh`, `-openAgentsFresh`, `-lark-connector`, `-simulateTap`.
+/// `-demo.on YES` needs nothing here: AppModel reads it from the defaults.
+enum MacLaunchArguments {
+    @MainActor static func apply() {
+        let d = UserDefaults.standard
+        let model = AppModel.shared
+        if let s = d.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
+            Keychain.serverConfig = cfg
+            model.adopt(cfg)
+        }
+        if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
+        if d.bool(forKey: "openAgentsFresh") {
+            for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
+        }
+        switch d.string(forKey: "tab") {
+        case "dev": model.selectedTab = .chats
+        case "mail": model.selectedTab = .mail
+        case "settings": model.selectedTab = .settings
+        case "assistant": model.selectedTab = .assistant
+        default: break
+        }
+        if let key = sessionKey(d.string(forKey: "openSession")) {
+            if d.bool(forKey: "openFromDoneNotice") {
+                model.open(key, latestAnswer: true)
+            } else {
+                model.selectedTab = .chats
+                model.openChat = key
+            }
+        }
+        if d.string(forKey: "lark-connector") != nil { model.selectedTab = .mail }
+        if let key = sessionKey(d.string(forKey: "openAssistant")) {
+            model.selectedTab = .assistant
+            model.assistantCurrent = key
+        }
+        if d.bool(forKey: "newAssistant") {
+            model.selectedTab = .assistant
+            model.assistantCurrent = nil
+        }
+        model.debugShowNewChat = d.bool(forKey: "showNewChat")
+        if let key = sessionKey(d.string(forKey: "simulateTap")) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { model.open(key) }
+        }
+    }
+
+    /// `<machine>/<session>`.
+    private static func sessionKey(_ s: String?) -> SessionKey? {
+        guard let s, let slash = s.firstIndex(of: "/") else { return nil }
+        return SessionKey(machineID: String(s[..<slash]), sessionID: String(s[s.index(after: slash)...]))
+    }
+}
+#endif

@@ -1,5 +1,8 @@
 import Foundation
 import QuartzCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// How long opening a file takes and how smoothly it scrolls (docs/ios.md「文件查看器」's measurements). DEBUG
 /// builds with `-showFilePerf YES` append lines to Caches/file-perf.log:
@@ -62,7 +65,12 @@ import QuartzCore
     func start(_ label: String) {
         guard FilePerf.on, link == nil else { return }
         self.label = label
+        #if os(iOS)
         let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        #else
+        // A Mac's display link comes from the screen it draws on.
+        guard let l = NSScreen.main?.displayLink(target: self, selector: #selector(tick(_:))) else { return }
+        #endif
         l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         l.add(to: .main, forMode: .common)
         link = l
@@ -119,7 +127,12 @@ import QuartzCore
     func start(after delay: TimeInterval = 2) {
         guard Self.on, link == nil else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+            #if os(iOS)
             let l = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            #else
+            // A Mac's display link comes from the screen it draws on.
+            guard let l = NSScreen.main?.displayLink(target: self, selector: #selector(tick(_:))) else { return }
+            #endif
             l.add(to: .main, forMode: .common)
             link = l
         }

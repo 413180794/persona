@@ -104,7 +104,11 @@ final class LarkMedia {
         let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
                                      kCGImageSourceThumbnailMaxPixelSize: maxPixel, kCGImageSourceShouldCacheImmediately: true]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return UIImage(data: data) }
+        #if os(iOS)
         return UIImage(cgImage: cg)
+        #else
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)) // AppKit's own init: callable off the main actor
+        #endif
     }
 
     private func cacheKey(_ url: String, size: Int?) -> String {
@@ -220,6 +224,7 @@ struct LarkImageGallery: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            #if os(iOS)
             TabView(selection: $index) {
                 ForEach(urls.indices, id: \.self) { i in
                     Group {
@@ -235,6 +240,18 @@ struct LarkImageGallery: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
+            #else
+            ImagePager(count: urls.count, index: $index) { i in
+                Group {
+                    if let img = loaded[i] {
+                        ZoomableImage(image: img, onTap: { withAnimation(Theme.Motion.state) { chrome.toggle() } }, onPullDown: { dismiss() })
+                    } else {
+                        ProgressView().tint(.white)
+                    }
+                }
+                .task(id: i) { if loaded[i] == nil { loaded[i] = await LarkMedia.shared.image(urls[i], maxPixel: 4096) } }
+            }
+            #endif
             if chrome {
                 VStack {
                     HStack {

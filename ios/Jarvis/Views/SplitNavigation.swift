@@ -51,7 +51,8 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
 /// wider one.
 struct SidebarWidth: ViewModifier {
     func body(content: Content) -> some View {
-        if UIDevice.current.userInterfaceIdiom == .pad {
+        // A Mac window: the same wider list column as on iPad.
+        if UIDevice.current.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .mac {
             content.navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin, ideal: Theme.Size.sidebar, max: Theme.Size.sidebarMax)
                 .background(GeometryReader { g in Color.clear.preference(key: SidebarEdge.self, value: g.frame(in: .global).maxX) })
         } else {

@@ -67,11 +67,20 @@ enum PhoneToolRegistry {
             + CalendarTool.tools
             + RemindersTool.tools
             + LocationTool.tools
-            + HealthTool.tools
+            + healthTools
             + PhotosTool.tools
             + DeviceTool.tools
             + ClipboardTool.tools
             + NotificationsTool.tools
+    }
+
+    /// A Mac has HealthKit's API but no health data: no health tools there.
+    private static var healthTools: [PhoneTool] {
+        #if os(iOS)
+        HealthTool.tools
+        #else
+        []
+        #endif
     }
 
     /// The tool definitions announced to the hub in `register_phone`.

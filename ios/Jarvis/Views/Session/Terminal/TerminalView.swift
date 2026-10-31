@@ -20,6 +20,7 @@ struct TerminalContent: Equatable {
     }
 }
 
+#if os(iOS)
 /// The terminal tab's screen: every character drawn in its own cell (wide ones in two), so columns and Chinese line up
 /// whatever the font's own widths are. Wrapped, each row is folded at the view's width; unwrapped, rows keep the pane's
 /// width and the view scrolls sideways. Long press selects (拷贝 / 全选), a tap opens a link. With `onInput` it takes the
@@ -663,6 +664,7 @@ final class TerminalCanvas: UIView {
         host?.draw(in: ctx, visible: frame)
     }
 }
+#endif
 
 /// The terminal's typeface: JetBrains Mono (bundled, SIL OFL) or the system's SF Mono. Chinese and other scripts
 /// neither has come from the system's fallback, each drawn in its own cells.
@@ -690,7 +692,7 @@ enum TerminalFont: String, CaseIterable {
     }()
 }
 
-@MainActor fileprivate final class TerminalGlyphMemo {
+@MainActor final class TerminalGlyphMemo {
     private nonisolated struct Key: Hashable {
         let text: String
         let width: UInt8
@@ -731,7 +733,7 @@ enum TerminalFont: String, CaseIterable {
 
 /// Cell size of the monospaced font at a size.
 struct CellMetrics {
-    fileprivate let glyphs = TerminalGlyphMemo()
+    let glyphs = TerminalGlyphMemo()
     let size: CGFloat
     let regular: UIFont
     let bold: UIFont
@@ -754,13 +756,18 @@ struct CellMetrics {
 
     func font(_ s: TermStyle) -> UIFont {
         let f = s.bold ? bold : regular
+        #if os(iOS)
         guard s.italic, let d = f.fontDescriptor.withSymbolicTraits(.traitItalic) else { return f }
         return UIFont(descriptor: d, size: size)
+        #else
+        guard s.italic else { return f }
+        return NSFont(descriptor: f.fontDescriptor.withSymbolicTraits(.italic), size: size) ?? f
+        #endif
     }
 }
 
 /// One display line ready to draw: background rects, text runs placed on their cells, underlines.
-private final class LineRender {
+final class LineRender {
     private var fills: [(CGRect, CGColor)] = []
     private var texts: [(CTLine, CGPoint, CGFloat)] = [] // line, position, horizontal scale
     private var strokes: [(CGRect, CGColor)] = []
@@ -875,6 +882,7 @@ private extension CGFloat {
     }
 }
 
+#if os(iOS)
 /// One end of a text selection, as the system draws it: a thin bar the height of a line with a knob above (start) or
 /// below (end); a finger-sized area around it takes the drag.
 final class SelectionHandle: UIView {
@@ -920,4 +928,4 @@ final class SelectionHandle: UIView {
         }
     }
 }
-
+#endif

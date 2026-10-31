@@ -13,6 +13,7 @@ nonisolated struct WatchSummary: Codable, Sendable {
     var at: Date = .now
 }
 
+#if canImport(WatchConnectivity)
 /// iPhone → Watch sync over WatchConnectivity: the server pairing and a rolling summary.
 /// The watch talks to the hub directly for actions (answering, sending), so the phone only seeds it.
 final class WatchSync: NSObject, WCSessionDelegate {
@@ -136,3 +137,4 @@ final class WatchSync: NSObject, WCSessionDelegate {
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
     #endif
 }
+#endif

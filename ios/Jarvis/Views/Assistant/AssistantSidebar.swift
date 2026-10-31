@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
+#if os(iOS)
 /// How far the Jarvis tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
 /// the page's motion modifier (offset, scale, opacities) and moves two UIKit views, never the conversation or the sidebar.
 @Observable final class AssistantDrawer {
@@ -445,6 +446,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         }
     }
 }
+
+#endif
 
 /// Calls `closed` when the drawer is back in: only this empty view reads whether it is out, so the sidebar itself is
 /// not redrawn when it comes out.

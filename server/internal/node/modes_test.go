@@ -1,6 +1,8 @@
 package node
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,5 +70,33 @@ func TestCurrentModesPrefersNewer(t *testing.T) {
 	m.mode, m.modeAt = "auto", time.Now().Add(time.Second) // then the terminal changed it again
 	if mode, _ := n.currentModes("s", m); mode != "auto" {
 		t.Fatalf("newer transcript wins: %s", mode)
+	}
+}
+
+// Claude Code 2.1.206's /effort is a slider (←/→, Enter), not the list with "for this session only".
+func TestEffortPickerAndOutcome(t *testing.T) {
+	b, err := os.ReadFile("testdata/claude-2.1.206-effort-slider-46.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := effortPicker(string(b)); got != "slider" {
+		t.Fatalf("slider: %q", got)
+	}
+	if got := effortPicker("Choose effort\n  ● high  for this session only (s)"); got != "list" {
+		t.Fatalf("list: %q", got)
+	}
+	if got := effortPicker("❯ \n  ⏸ manual mode on"); got != "" {
+		t.Fatalf("none: %q", got)
+	}
+	// A launcher's CLAUDE_CODE_EFFORT_LEVEL wins over the session's: told, not claimed as done.
+	env := "❯ /effort\n  ⎿  CLAUDE_CODE_EFFORT_LEVEL=max overrides\n     this session — clear it and xhigh takes\n     over"
+	if err := effortOutcome(env, "xhigh"); err == nil || !strings.Contains(err.Error(), "CLAUDE_CODE_EFFORT_LEVEL=max") {
+		t.Fatalf("env override: %v", err)
+	}
+	if err := effortOutcome("  ⎿  Set effort level to high (this session)", "high"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if err := effortOutcome("❯ \n", "low"); err == nil {
+		t.Fatal("nothing said: should not count as changed")
 	}
 }

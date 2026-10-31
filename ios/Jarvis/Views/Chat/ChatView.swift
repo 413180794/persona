@@ -2267,6 +2267,7 @@ struct QueueStrip: View {
     }
 }
 
+#if os(iOS)
 /// System camera for "拍照" in the composer.
 struct CameraPicker: UIViewControllerRepresentable {
     var onImage: (UIImage) -> Void
@@ -2295,6 +2296,7 @@ struct CameraPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
     }
 }
+#endif
 
 /// Developer facts about a session, shown under the title: model, context in use, git branch, Claude Code version…
 /// 会话信息, from the bottom: who and where at the top, then what it runs, how far it has got, its settings and where
@@ -3028,7 +3030,7 @@ private struct VerticalBarsReader: ViewModifier {
     @Binding var vertical: Bool
 
     func body(content: Content) -> some View {
-        #if compiler(>=6.3) // `toolbarVerticalEdge` is in the iOS 27.1 SDK; Xcode 26 (Swift 6.2) has no such key path
+        #if compiler(>=6.3) && os(iOS) // `toolbarVerticalEdge` is in the iOS 27.1 SDK; Xcode 26 (Swift 6.2) has no such key path
         if #available(iOS 27.1, *) {
             content.modifier(VerticalBarsEdgeReader(vertical: $vertical))
         } else {
@@ -3040,7 +3042,7 @@ private struct VerticalBarsReader: ViewModifier {
     }
 }
 
-#if compiler(>=6.3)
+#if compiler(>=6.3) && os(iOS)
 @available(iOS 27.1, *)
 private struct VerticalBarsEdgeReader: ViewModifier {
     @Environment(\.toolbarVerticalEdge) private var edge

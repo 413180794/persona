@@ -34,6 +34,7 @@ struct ImageViewer: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            #if os(iOS)
             TabView(selection: $index) {
                 ForEach(images.indices, id: \.self) { i in
                     Group {
@@ -54,6 +55,20 @@ struct ImageViewer: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
+            #else
+            // No page-style TabView on the Mac: one image at a time, ← / → and the pager's arrows move (ImagePager).
+            ImagePager(count: images.count, index: $index) { i in
+                Group {
+                    if let img = decoded[i] {
+                        // A click keeps the viewer open on the Mac (it toggles nothing); Esc / 关闭 close it.
+                        ZoomableImage(image: img, onTap: {}, onPullDown: { dismiss() })
+                    } else {
+                        ProgressView().tint(.white)
+                    }
+                }
+                .task(id: i) { await decode(i) }
+            }
+            #endif
 
             if chrome { overlay.transition(.opacity) }
         }
@@ -65,8 +80,10 @@ struct ImageViewer: View {
                 dismiss()
             }
         }
+        #if os(iOS)
         .statusBarHidden(!chrome)
         .persistentSystemOverlays(chrome ? .automatic : .hidden)
+        #endif
     }
 
     private var overlay: some View {
@@ -150,6 +167,7 @@ struct ImageViewer: View {
     }
 }
 
+#if os(iOS)
 /// UIScrollView-backed zooming: native pinch, pan, bounce; double tap zooms to the tapped point;
 /// pulling down at the minimum zoom closes the viewer.
 struct ZoomableImage: UIViewRepresentable {
@@ -249,6 +267,7 @@ final class ZoomScrollView: UIScrollView {
         contentInset = UIEdgeInsets(top: inset.height, left: inset.width, bottom: inset.height, right: inset.width)
     }
 }
+#endif
 
 /// Pure geometry, unit-tested.
 nonisolated enum ZoomMath {

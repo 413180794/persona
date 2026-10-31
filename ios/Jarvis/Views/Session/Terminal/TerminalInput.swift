@@ -108,6 +108,7 @@ nonisolated enum TerminalKeyBytes {
     }
 }
 
+#if os(iOS)
 /// A position in the composition (UTF-16 offset); the "document" the input method sees is only that.
 final class TermTextPosition: UITextPosition {
     let offset: Int
@@ -285,3 +286,4 @@ extension TerminalScrollView: UITextInput {
         onInput?(.key(name))
     }
 }
+#endif

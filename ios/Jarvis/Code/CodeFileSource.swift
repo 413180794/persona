@@ -9,8 +9,13 @@ import UIKit
     static let font = CodeMetrics.font
     private static let bold = UIFont.monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
     private static let italic: UIFont = {
+        #if os(iOS)
         guard let d = font.fontDescriptor.withSymbolicTraits(.traitItalic) else { return font }
         return UIFont(descriptor: d, size: font.pointSize)
+        #else
+        // AppKit's descriptor always comes back; the font from it may not.
+        return UIFont(descriptor: font.fontDescriptor.withSymbolicTraits(.italic), size: font.pointSize) ?? font
+        #endif
     }()
 
     static let plain: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.label]

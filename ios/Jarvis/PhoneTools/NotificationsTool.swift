@@ -43,7 +43,12 @@ enum NotificationsTool {
             status = await center.notificationSettings().authorizationStatus
             await NotificationsAccess.refresh()
         }
-        guard status == .authorized || status == .provisional || status == .ephemeral else {
+        #if os(iOS)
+        let allowed = status == .authorized || status == .provisional || status == .ephemeral
+        #else
+        let allowed = status == .authorized || status == .provisional // no App Clips on a Mac
+        #endif
+        guard allowed else {
             throw ToolFailure(.denied,
                 "通知 / Notifications. The user has turned notifications off for Jarvis in iOS Settings, "
                     + "so nothing was shown.")

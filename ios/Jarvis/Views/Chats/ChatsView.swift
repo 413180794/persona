@@ -1241,6 +1241,7 @@ private struct TopBar<Bar: View>: ViewModifier {
 }
 
 
+#if os(iOS)
 /// Runs something once the system search has really closed. Closing it (`isPresented = false`) only starts the fold:
 /// a push made while it still folds away is dropped by the navigation stack, which keeps the path it was given (the
 /// chat in the path, the list on screen). A fixed wait from the tap was too short whenever the list took a while to
@@ -1292,3 +1293,4 @@ private struct SearchCloseProbe: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) { watcher.view = uiView }
 }
+#endif
