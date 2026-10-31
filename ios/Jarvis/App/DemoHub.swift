@@ -256,6 +256,8 @@ final class DemoHub {
             tasks.append(.object(t))
             return ["task": .object(t)]
         case ["inbox", "refresh"]: return ["items": .array(inbox)]
+        case ["translate"], ["translate", "mail"]:
+            throw APIError(status: 403, message: "体验模式里不翻译：连接你自己的 hub 后再试")
         case ["pins"]:
             pins = body
             return pins

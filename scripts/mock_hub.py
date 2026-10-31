@@ -668,6 +668,40 @@ if os.environ.get("MOCK_DOCS"):
                  "reply": {"kind": "thread", "label": "回复评论"}}},
     ]
 
+# Mail bodies (GET /api/v1/mail/messages/{aid}/{uid}); 504 is in English, for 设置 › 翻译.
+INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id": "mail:acc1:t4:504", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
+     "title": "Can we move the design review?", "sender": "Lucy Wang",
+     "preview": "Hi, I'm travelling on Thursday. Could we move the design review to Tuesday afternoon?", "count": 1,
+     "started_at": ago(hours=1), "updated_at": ago(hours=1), "tier": "action", "summary": "Lucy 想把设计评审挪到周二下午",
+     "reason": "要你确认时间", "read": False,
+     "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [504], "from": {"name": "Lucy Wang", "email": "lucy@example.com"}, "direct": True}})
+MAIL_BODIES = {
+    504: ("Hi,\n\nI'm travelling on Thursday, so I won't make the design review. Could we move it to Tuesday afternoon, "
+          "say 3 pm? I've put the new icon set in the shared folder; the two open questions are the tab bar and the empty states.\n\n"
+          "Thanks,\nLucy"),
+    501: "Hi，周四我临时要出差，分享能不能挪到周二下午？\n\nLucy",
+}
+MAIL_TRANSLATIONS = {
+    504: {"subject": "设计评审能改期吗？",
+          "text": "你好，\n\n我周四要出差，赶不上设计评审了。能不能改到周二下午，比如 3 点？新的图标已经放在共享文件夹里了；"
+                  "还没定的两个问题是标签栏和空状态。\n\n谢谢，\nLucy"},
+}
+
+# The 设计评审 chat (inbox f2): a few messages, some in English (设置 › 翻译 picks chats to translate).
+LARK_CHATS = [{"id": "f2", "name": "设计评审", "is_group": True, "unread": 3, "at_me": True, "muted": False, "preview": "@你 新版图标放在这里了",
+               "updated_at": ago(minutes=55)},
+              {"id": "f3", "name": "周末徒步群", "is_group": True, "unread": 12, "at_me": False, "muted": False, "preview": "周六早上 8 点地铁站集合",
+               "updated_at": ago(minutes=30)}]
+def _lm(pos, who, text, mine=False, mins=60):
+    return {"id": "m" + pos, "position": pos, "sender_id": "u-" + who, "sender_name": who, "is_mine": mine, "type": "TEXT", "text": text,
+            "created_at": ago(minutes=mins), "recalled": False, "reply_count": 0}
+LARK_MESSAGES = {"f2": [
+    _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
+    _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
+    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
+    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
+]}
+
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
 
@@ -1073,9 +1107,18 @@ class H(BaseHTTPRequestHandler):
             for x in INBOX:
                 if x["id"] == iid: return self.send_json(dict(x, context=x["preview"]))
         if p == "/api/v1/mail/accounts": return self.send_json({"accounts": MAIL_ACCOUNTS})
+        if p.startswith("/api/v1/mail/messages/") and p.count("/") == 6:
+            uid = int(p.rsplit("/", 1)[1])
+            it = next((x for x in INBOX if (x.get("mail") or {}).get("uids") == [uid]), None)
+            if it: return self.send_json({"message": {"account_id": "acc1", "mailbox": "INBOX", "uid": uid, "subject": it["title"],
+                "from": it["mail"]["from"], "to": [{"name": "Me", "email": "me@example.com"}], "date": it["updated_at"],
+                "text": MAIL_BODIES.get(uid, it["preview"]), "seen": False}})
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
-        if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"): return self.send_json({"conversations": [], "next_cursor": ""})
+        if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
+            return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": ""})
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
+            return self.send_json({"messages": LARK_MESSAGES.get(p.split("/")[5], []), "has_older": False, "has_newer": False})
         if p == "/api/v1/lark/labels": return self.send_json({"labels": []})
         if p == "/api/v1/lark/flags": return self.send_json({"conversations": [], "messages": []})
         if p == "/api/v1/lark/emojis": return self.send_json({"emojis": {}})
@@ -1165,6 +1208,13 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p == "/api/v1/translate/mail":
+            body = json.loads(self.last_body or b"{}")
+            t = MAIL_TRANSLATIONS.get(body.get("uid"))
+            return self.send_json(t) if t else self.send_json({"error": "no translation"}, 502)
+        if p == "/api/v1/translate":  # marks the texts, enough to see where they show
+            body = json.loads(self.last_body or b"{}")
+            return self.send_json({"texts": ["【译】" + t for t in body.get("texts", [])]})
         if p.startswith("/api/v1/inbox/") and p.endswith("/doc/status"):
             iid, ch = p[len("/api/v1/inbox/"):-len("/doc/status")], json.loads(self.last_body or b"{}")
             for x in INBOX:

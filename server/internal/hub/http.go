@@ -164,6 +164,7 @@ func (h *Hub) routes() http.Handler {
 	h.personaRoutes(api)
 	h.larkRoutes(api)
 	h.inboxRoutes(api)
+	h.translateRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())

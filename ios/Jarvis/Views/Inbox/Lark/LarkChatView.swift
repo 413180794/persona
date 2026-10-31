@@ -416,6 +416,42 @@ struct LarkNewMessagesDivider: View {
 
 /// One message, laid out like lark-connector (and Feishu desktop): everyone's messages on the left with avatar and,
 /// in group chats, the sender's name on the first of a run; mine in blue. Avatar and name open the profile card.
+/// 设置 › 翻译 for a chat picked there: a message from someone else in another language gets its translation under
+/// the bubble, asked for when the row shows (the requests of one screen go together).
+struct LarkTranslationLine: View {
+    var message: LarkMessage
+    var feedID: String?
+    @AppStorage(TranslationPrefs.enabledKey) private var enabled = false
+    @AppStorage(TranslationPrefs.targetKey) private var target = TranslationPrefs.defaultTarget
+    @AppStorage(TranslationPrefs.chatsKey) private var chatsRaw = ""
+    private var translator: Translator { .shared }
+
+    private var applies: Bool {
+        guard enabled, let feedID, !message.isMine, !message.recalled, !message.text.isEmpty,
+              chatsRaw.contains(feedID), TranslationPrefs.chats(chatsRaw).contains(where: { $0.id == feedID }) else { return false }
+        return translator.isForeign(message.text, target: target)
+    }
+
+    var body: some View {
+        if applies {
+            ZStack(alignment: .leading) { // a container even while empty, so the task runs
+                if let t = translator.translation(of: message.text, to: target) {
+                    Label {
+                        Text(t).textSelection(.enabled)
+                    } icon: {
+                        Image(systemName: Theme.Icon.translate).foregroundStyle(.tertiary)
+                    }
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Theme.Space.xs)
+                    .accessibilityLabel("译文：" + t)
+                }
+            }
+            .task(id: message.id + target) { translator.request(message.text, to: target) }
+        }
+    }
+}
+
 struct LarkMessageRow: View {
     var message: LarkMessage
     var grouped: Bool
@@ -461,6 +497,7 @@ struct LarkMessageRow: View {
                         }
                     }
                     content
+                    LarkTranslationLine(message: m, feedID: feedID)
                     footer
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

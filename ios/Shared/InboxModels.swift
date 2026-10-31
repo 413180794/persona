@@ -103,9 +103,9 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
 
         var symbol: String {
             switch type {
-            case "sheet": "tablecells"
-            case "base": "square.grid.3x2"
-            default: "doc.text"
+            case "sheet": Theme.Icon.sheet
+            case "base": Theme.Icon.base
+            default: Theme.Icon.document
             }
         }
     }

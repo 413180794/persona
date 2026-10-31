@@ -73,6 +73,8 @@ extension Theme {
         static let reply = "arrowshape.turn.up.left"
         /// Leave the app for another one (飞书).
         static let openExternal = "arrow.up.forward.app"
+        /// Translate, and what was translated.
+        static let translate = "translate"
         /// Open the thing the row points at (a sub-Agent, a card's link).
         static let open = "arrow.up.right"
         /// Open a file or a document in its viewer.
@@ -125,6 +127,10 @@ extension Theme {
         static let conversation = "text.bubble"
         static let file = "doc"
         static let document = "doc.text"
+        /// A spreadsheet (Feishu 表格).
+        static let sheet = "tablecells"
+        /// A database table (Feishu 多维表格).
+        static let base = "square.grid.3x2"
         static let folder = "folder"
         static let folderFilled = "folder.fill"
         static let photo = "photo"

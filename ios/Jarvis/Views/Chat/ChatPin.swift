@@ -175,7 +175,7 @@ private struct Reveal: ViewModifier {
 }
 
 /// The part of the content shown, from its top; fully shown, it clips nothing (shadows and the like reach past it).
-private struct RevealShape: Shape {
+nonisolated private struct RevealShape: Shape {
     /// How far past the content a fully shown clip reaches: further than anything draws.
     static let reach: CGFloat = 10_000
     var shown: CGFloat

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -741,3 +742,23 @@ var errNotFound = errors.New("not found")
 
 // PlainText is an HTML body as readable text (styles and scripts dropped, whitespace collapsed).
 func PlainText(html string) string { return strings.Join(strings.Fields(stripHTML(html)), " ") }
+
+var (
+	blockTag   = regexp.MustCompile(`(?i)<\s*(br|/p|/div|/ul|/ol|/tr|/h[1-6]|/blockquote|/table)\b[^>]*>`)
+	listItem   = regexp.MustCompile(`(?i)<\s*li\b[^>]*>`)
+	spaces     = regexp.MustCompile(`[ \t\x{00a0}]+`)
+	blankLines = regexp.MustCompile(`\n{3,}`)
+)
+
+// ReadableText is an HTML mail as text that keeps its paragraphs and list items (PlainText flattens everything onto
+// one line, fine for a preview but not for reading or translating).
+func ReadableText(h string) string {
+	h = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(h) // line breaks in the source are only spaces
+	h = blockTag.ReplaceAllString(h, "\n$0")
+	h = listItem.ReplaceAllString(h, "\n• $0")
+	var lines []string
+	for _, l := range strings.Split(strings.ReplaceAll(stripHTML(h), "\r", ""), "\n") {
+		lines = append(lines, strings.TrimSpace(spaces.ReplaceAllString(l, " ")))
+	}
+	return strings.TrimSpace(blankLines.ReplaceAllString(strings.Join(lines, "\n"), "\n\n"))
+}

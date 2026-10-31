@@ -97,11 +97,19 @@ struct MailDetailView: View {
     @State private var reply: ComposeDraft?
     @State private var askClaude = false
     @State private var webHeight: CGFloat = 300
+    /// 设置 › 翻译: the mail in the target language (shown instead of the original until 显示原文).
+    @State private var translation: MailTranslation?
+    @State private var showOriginal = false
+    @State private var translating = false
+    @State private var translateError: String?
+    @AppStorage(TranslationPrefs.targetKey) private var target = TranslationPrefs.defaultTarget
+    private var translated: MailTranslation? { showOriginal ? nil : translation }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                Text(summary.subject?.isEmpty == false ? summary.subject! : "（无主题）").font(Theme.Font.title)
+                Text(translated.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? (summary.subject?.isEmpty == false ? summary.subject! : "（无主题）"))
+                    .font(Theme.Font.title)
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     Monogram(name: summary.from?.display ?? "", fill: Theme.accent.opacity(0.15), ink: Theme.accent)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
@@ -115,8 +123,14 @@ struct MailDetailView: View {
                     Text(summary.date.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Divider()
+                translationBar
                 if let m = message {
-                    if let text = m.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if let t = translated {
+                        Text(t.text).font(Theme.Font.body).lineHeight(.body).textSelection(.enabled)
+                        if t.clipped == true {
+                            Text("邮件很长，只翻译了前面一部分；全文看原文。").font(Theme.Font.caption).foregroundStyle(.secondary)
+                        }
+                    } else if let text = m.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(text).font(Theme.Font.body).lineHeight(.body).textSelection(.enabled)
                     } else if let html = m.html, !html.isEmpty {
                         HTMLView(html: html, height: $webHeight).frame(height: webHeight)
@@ -156,11 +170,65 @@ struct MailDetailView: View {
             guard let api = model.api else { return }
             do {
                 message = try await api.mailMessage(account: summary.accountID, uid: summary.uid, mailbox: summary.mailbox)
+                if let message { await translateIfNeeded(message) }
                 if !summary.seen { try? await api.mailFlags(account: summary.accountID, uid: summary.uid, .init(mailbox: summary.mailbox, seen: true)) }
             } catch {
                 self.error = error.shown
             }
         }
+    }
+}
+
+extension MailDetailView {
+    /// While translating, or once translated: what happened and the way back to the original (or to the translation).
+    @ViewBuilder var translationBar: some View {
+        if translating {
+            HStack(spacing: Theme.Space.s) {
+                ProgressView().controlSize(.small)
+                Text("正在翻译成\(TranslationPrefs.name(of: target))…").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        } else if translation != nil {
+            HStack(spacing: Theme.Space.s) {
+                Label(showOriginal ? "原文" : "已翻译成\(TranslationPrefs.name(of: target))", systemImage: Theme.Icon.translate)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: Theme.Space.s)
+                Button(showOriginal ? "显示译文" : "显示原文") {
+                    withAnimation(Theme.Motion.state) { showOriginal.toggle() }
+                }
+                .font(Theme.Font.captionMedium)
+                .lineLimit(1)
+                .buttonStyle(.borderless)
+            }
+        } else if let translateError {
+            Label("没能翻译：\(translateError)", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+    }
+
+    /// 设置 › 翻译 is on for mail and this one is in another language: ask the hub.
+    func translateIfNeeded(_ m: MailMessage) async {
+        guard TranslationPrefs.translatesMail, translation == nil else { return }
+        let body = m.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? m.text! : MailText.stripped(m.html ?? "")
+        guard Translator.shared.isForeign((summary.subject ?? "") + "\n" + body, target: target) else { return }
+        translating = true
+        defer { translating = false }
+        do {
+            translation = try await Translator.shared.mail(account: summary.accountID, uid: summary.uid, mailbox: summary.mailbox, to: target)
+            translateError = nil
+        } catch {
+            translateError = error.shown
+        }
+    }
+}
+
+/// A mail's HTML as rough text, enough to tell its language.
+nonisolated enum MailText {
+    static func stripped(_ html: String) -> String {
+        var s = html
+        for block in ["style", "script", "head"] {
+            s = s.replacingOccurrences(of: "<\(block)[^>]*>[\\s\\S]*?</\(block)>", with: " ", options: [.regularExpression, .caseInsensitive])
+        }
+        s = s.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        return s.replacingOccurrences(of: "&nbsp;", with: " ")
     }
 }
 

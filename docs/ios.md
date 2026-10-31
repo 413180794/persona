@@ -288,6 +288,22 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - 改思考强度要等这一轮结束、终端输入框是空的（否则 `/effort` 会接在别人没发出的草稿后面）；「全部放行」只能新开时选，循环里没有它。
 - 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
 
+## 翻译（设置 › 翻译，2026-10-31）
+
+开了「自动翻译」以后，内容不是目标语言（默认简体中文）就自动翻译，随时可以切回原文。
+
+- 范围：**邮件**（默认开）；**飞书会话**默认一个都不翻（消息太多），只翻设置里选中的会话（`TranslationChatPicker`：置顶 + 最近的会话，可搜索），
+  而且只翻别人发的。设置存在本机（`@AppStorage` 的 `translate.*`，`TranslationPrefs`）。
+- 要不要翻在手机上判断（NaturalLanguage 的 `NLLanguageRecognizer`，取前 1500 字；字母少于 6 个不判；简繁中文算同一种语言，短文本里它分不清）。
+  结果按文本记在 `Translator` 里，行的 body 里不跑识别。
+- 翻译在 hub（`server/internal/hub/translate.go`），用处理小任务的模型 `inbox.triage_ai`（用户定的：不需要强模型，现在是 gpt-6.1-terra，两句话约 2 秒）。
+  邮件按引用翻（`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`，hub 自己读信，HTML 信用 `mail.ReadableText` 转成保留段落的文本，
+  正文最多 12000 字，超出的标 `clipped`）；飞书消息批量翻（`POST /api/v1/translate {texts≤30, target}`，App 把 300 ms 内出现的行攒成一批）。
+  hub 在内存里按内容缓存，App 在本次运行里缓存。
+- 界面：邮件页标题和正文换成译文，正文上方一行「已翻译成简体中文 · 显示原文」；飞书消息气泡下方一行灰色译文（`LarkTranslationLine`）。
+- 截图 / 测试：`mock_hub.py` 的 504 号邮件是英文、「设计评审」（f2）会话里有英文消息，`/api/v1/translate` 回「【译】原文」；
+  UI 测试 `TranslationTests`；DEBUG `-openTranslationSettings YES` 打开设置页。
+
 ## 设计语言
 
 - 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：

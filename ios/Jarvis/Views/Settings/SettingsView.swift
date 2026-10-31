@@ -8,6 +8,11 @@ struct SettingsView: View {
     @State private var debugOpened = false
     @State private var storage: Int64?
     @State private var path = NavigationPath()
+    @AppStorage(TranslationPrefs.enabledKey) private var translating = false
+    @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
+
+    /// 翻译's row value: off, or the target language.
+    private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
 
     var body: some View {
         #if PERF_SIGNPOST
@@ -103,6 +108,16 @@ struct SettingsView: View {
                 if !model.isDemo { watchSection }
 
                 Section {
+                    NavigationLink(value: SettingsPage.translation) {
+                        LabeledContent {
+                            Text(translationSummary).lineLimit(1)
+                        } label: {
+                            Label("翻译", systemImage: Theme.Icon.translate)
+                        }
+                    }
+                }
+
+                Section {
                     NavigationLink(value: SettingsPage.storage) {
                         LabeledContent {
                             Text(storage?.storageText ?? "").monospacedDigit()
@@ -160,6 +175,7 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         guard !p.isEmpty else { return }
         debugOpened = true
         path = p
@@ -186,7 +202,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case assistant, claude, devices, phoneData, notifications, storage
+    case assistant, claude, devices, phoneData, notifications, storage, translation
 
 }
 
@@ -209,6 +225,7 @@ private struct SettingsDestinations: ViewModifier {
         case .phoneData: PhoneDataView()
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
+        case .translation: TranslationSettingsView()
         }
     }
 
