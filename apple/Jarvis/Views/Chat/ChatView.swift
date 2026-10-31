@@ -889,6 +889,11 @@ struct ChatView: View {
                     Image(systemName: "arrow.down").font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
                 .accessibilityLabel("回到最新")
+                #if os(macOS)
+                // ⌘↓ as in Safari / Mail; only while the arrow shows (scrolled up), so the composer keeps it otherwise.
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .help("回到最新 ⌘↓")
+                #endif
                 .themedButton()
                 .clipShape(.circle)
                 .padding(Theme.Space.l)
