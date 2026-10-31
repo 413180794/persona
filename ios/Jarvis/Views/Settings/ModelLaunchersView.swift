@@ -58,7 +58,7 @@ struct ModelLaunchersView: View {
             } else if let error {
                 Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
             } else {
-                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20) }.listRowBackground(Color.clear)
+                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
         .navigationTitle("模型")
@@ -66,7 +66,7 @@ struct ModelLaunchersView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("新增启动器")
+                Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增启动器")
             }
         }
         .sheet(isPresented: $adding) {
@@ -129,7 +129,7 @@ struct LauncherRow: View {
                 Label(machines, systemImage: Theme.Icon.machines).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 }
 
@@ -200,19 +200,19 @@ struct ModelLauncherDetailView: View {
                             ForEach(defs.sorted(by: { $0.key < $1.key }), id: \.key) { id, def in
                                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                                     if defs.count > 1 { Text(model.machine(id)?.name ?? id).font(Theme.Font.labelStrong).foregroundStyle(.secondary) }
-                                    Text(def).font(.caption.monospaced()).textSelection(.enabled)
+                                    Text(def).font(Theme.Font.code).textSelection(.enabled)
                                 }
                             }
-                        } label: { Label("函数原文", systemImage: "chevron.left.forwardslash.chevron.right").lineLimit(1) }
+                        } label: { Label("函数原文", systemImage: Theme.Icon.agents).lineLimit(1) }
                     } footer: { Text("看起来像 Key、Token 的值已经换成 •••。") }
                 }
                 Section {
                     if l.hidden == true {
-                        Button { Task { await restore() } } label: { Label("恢复显示", systemImage: "eye").lineLimit(1) }
+                        Button { Task { await restore() } } label: { Label("恢复显示", systemImage: Theme.Icon.view).lineLimit(1) }
                     } else {
                         // The confirmation comes up right where the button is (2026-10-31 user request), not as a sheet.
                         Button(role: .destructive) { confirmDelete = true } label: {
-                            Label(l.managed ? "删除启动器" : "在 Jarvis 里隐藏", systemImage: l.managed ? "trash" : "eye.slash").lineLimit(1)
+                            Label(l.managed ? "删除启动器" : "在 Jarvis 里隐藏", systemImage: l.managed ? Theme.Icon.delete : Theme.Icon.hide).lineLimit(1)
                         }
                         .popover(isPresented: $confirmDelete, arrowEdge: .top) {
                             Button(role: .destructive) {
@@ -230,7 +230,7 @@ struct ModelLauncherDetailView: View {
             } else if let error {
                 Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
             } else {
-                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20) }.listRowBackground(Color.clear)
+                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
         .navigationTitle(name)
@@ -275,7 +275,7 @@ struct ModelLauncherDetailView: View {
             }
             Button { Task { await check(machines) } } label: {
                 HStack {
-                    Label(checks.isEmpty ? "测试可用性" : "再测一次", systemImage: "bolt.horizontal.circle").lineLimit(1)
+                    Label(checks.isEmpty ? "测试可用性" : "再测一次", systemImage: Theme.Icon.tryOut).lineLimit(1)
                     if running { Spacer(); ProgressView() }
                 }
             }
@@ -440,9 +440,9 @@ struct LauncherDetailSections: View {
                         LabeledContent {
                             Text(m.model).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
                         } label: {
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(m.role)
-                                Text(m.env).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                                Text(m.env).font(Theme.Font.code).foregroundStyle(.tertiary)
                             }
                         }
                     }
@@ -458,14 +458,14 @@ struct LauncherDetailSections: View {
             }
             if let args = detail.args, !args.isEmpty {
                 Section {
-                    Text(args.joined(separator: " ")).font(.caption.monospaced()).textSelection(.enabled)
+                    Text(args.joined(separator: " ")).font(Theme.Font.code).textSelection(.enabled)
                 } header: { title("启动参数") }
             }
             if let env = detail.env, !env.isEmpty {
                 Section {
                     ForEach(env, id: \.key) { e in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(e.key).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                            Text(e.key).font(Theme.Font.code).foregroundStyle(.secondary)
                             Text(e.value).font(Theme.Font.body.monospaced()).lineLimit(3).textSelection(.enabled)
                         }
                     }
@@ -492,13 +492,13 @@ struct LauncherCheckRow: View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
             Group {
                 if let c = check {
-                    Image(systemName: c.ok ? "checkmark.circle.fill" : "xmark.octagon.fill").foregroundStyle(c.ok ? Theme.positive : Theme.danger)
+                    Image(systemName: c.ok ? Theme.Icon.successFilled : Theme.Icon.errorFilled).foregroundStyle(c.ok ? Theme.positive : Theme.danger)
                 } else {
                     ProgressView().controlSize(.small)
                 }
             }
-            .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
+            .frame(width: Theme.Size.iconS)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
                     Text(machine ?? "hub 所在的机器").font(Theme.Font.heading).lineLimit(1)
                     if let c = check { Text(Self.seconds(c.millis)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary) }
@@ -508,14 +508,14 @@ struct LauncherCheckRow: View {
                         Text([c.model, c.answer.map { "回答「\($0)」" }].compactMap { $0 }.joined(separator: " · "))
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                     } else if let e = c.error {
-                        Text(e).font(.caption.monospaced()).foregroundStyle(Theme.danger).lineLimit(6).textSelection(.enabled)
+                        Text(e).font(Theme.Font.code).foregroundStyle(Theme.danger).lineLimit(6).textSelection(.enabled)
                     }
                 } else {
                     Text("正在请求…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     static func seconds(_ ms: Int) -> String { ms >= 10_000 ? "\(ms / 1000) 秒" : String(format: "%.1f 秒", Double(ms) / 1000) }

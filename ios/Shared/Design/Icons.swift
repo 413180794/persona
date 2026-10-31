@@ -86,6 +86,10 @@ extension Theme {
         static let select = "selection.pin.in.out"
         static let insert = "text.cursor"
         static let view = "eye"
+        /// Hide from a list (it stays where it is, out of sight).
+        static let hide = "eye.slash"
+        /// Try something out for real (测试可用性: a launcher answers one question on each machine).
+        static let tryOut = "bolt.horizontal.circle"
         static let options = "slider.horizontal.3"
         static let settings = "gearshape"
         static let enter = "return"
