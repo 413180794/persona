@@ -219,6 +219,8 @@ func (n *Node) writeClaudeConfig() error {
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	var p struct {
 		Path            string          `json:"path"`
+		Paths           []string        `json:"paths"`
+		Offset          int64           `json:"offset"`
 		SessionID       string          `json:"session_id"`
 		Cwd             string          `json:"cwd"`
 		Launcher        string          `json:"launcher"`
@@ -456,7 +458,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "file.upload.begin", "file.upload.chunk", "file.upload.end", "file.upload.abort":
 		return n.uploadCall(method, params)
 	case "file.read":
-		return n.readFile(p.Path, p.Cwd)
+		return n.readFile(p.Path, p.Cwd, p.Offset)
+	case "fs.stat":
+		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":
 		return ok(n.renameSpace(ctx, p.WorkspaceID, p.Name))
 	case "session.rename":

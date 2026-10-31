@@ -949,6 +949,154 @@ if os.environ.get("MOCK_PHOTO") == "1":  # a screenshot in the chat, to save to 
 
 GAP = os.environ.get("MOCK_GAP") == "1"
 
+# ---------- files (docs/ios.md「文件查看器」) ----------
+# MOCK_FILES=1: a made-up checkout of the weather app under /Users/me/code/weather that GET …/file and …/stat answer
+# from, with big files for timing the viewer (a 3 MB JSON, a 20 000-line Go file, a 5 000-line README, a 5 MB log),
+# one small file per language for screenshots, and a last message in the widget conversation that names some of them
+# and two that are not there (another machine's path, a deleted file).
+FILES = {}
+FILE_PAGE = 2 << 20
+if os.environ.get("MOCK_FILES"):
+    import random
+    rnd = random.Random(7)
+    ROOT = "/Users/me/code/weather"
+
+    def big_json():
+        cities = ["上海", "北京", "Tokyo", "Lisbon", "Reykjavík", "São Paulo", "Nairobi", "Seattle"]
+        rows = []
+        for i in range(6000):
+            rows.append({"id": i, "city": cities[i % len(cities)], "at": "2026-10-%02dT%02d:00:00Z" % (1 + i % 28, i % 24),
+                         "temperature": {"c": round(rnd.uniform(-8, 34), 1), "feels_like": round(rnd.uniform(-10, 36), 1)},
+                         "rain": {"chance": rnd.randint(0, 100), "mm": round(rnd.uniform(0, 12), 2)},
+                         "wind": {"speed": round(rnd.uniform(0, 40), 1), "direction": rnd.choice(["N", "NE", "E", "SE", "S", "SW", "W", "NW"])},
+                         "alerts": [] if i % 9 else [{"kind": "storm", "level": 2, "note": "雷阵雨，注意出行"}],
+                         "stale": i % 13 == 0, "source": None if i % 17 == 0 else "model-v4"})
+        return json.dumps({"version": 3, "generated": "2026-10-31T09:00:00Z", "count": len(rows), "forecasts": rows},
+                          ensure_ascii=False, indent=2)
+
+    def long_go():
+        out = ["// Package server serves the weather API (made-up code for the viewer's timing).", "package server", "",
+               "import (", '\t"context"', '\t"encoding/json"', '\t"fmt"', '\t"net/http"', '\t"time"', ")", ""]
+        n = 0
+        while len(out) < 20000:
+            n += 1
+            out += [
+                "// handleForecast%d answers GET /v1/forecast/%d with the next hours for a city." % (n, n),
+                "func (s *Server) handleForecast%d(w http.ResponseWriter, r *http.Request) {" % n,
+                "	ctx, cancel := context.WithTimeout(r.Context(), %d*time.Second)" % (2 + n % 5),
+                "	defer cancel()",
+                '	city := r.URL.Query().Get("city")',
+                '	if city == "" {',
+                '		http.Error(w, "missing city", http.StatusBadRequest)',
+                "		return",
+                "	}",
+                "	hours, err := s.store.Hourly(ctx, city, %d)" % (6 + n % 18),
+                "	if err != nil {",
+                '		s.log.Printf("forecast %%s: %%v", city, err) /* logged, not shown */',
+                '		http.Error(w, fmt.Sprintf("no forecast for %%q", city), http.StatusNotFound)',
+                "		return",
+                "	}",
+                '	w.Header().Set("Content-Type", "application/json; charset=utf-8")',
+                "	_ = json.NewEncoder(w).Encode(map[string]any{\"city\": city, \"hours\": hours, \"ok\": true, \"rate\": %d.5})" % n,
+                "}",
+                "",
+            ]
+        return "\n".join(out[:20000]) + "\n"
+
+    def long_markdown():
+        out = ["# 天气 App 开发手册", "", "这份文档是编造的，用来测文件查看器打开长 Markdown 的速度。", "",
+               "[api]: https://example.com/api", ""]
+        for i in range(1, 140):
+            out += ["## %d. 第 %d 部分：小组件和时间线" % (i, i), "",
+                    "小组件每小时刷新一次（**时间线**由 `Provider` 生成），降雨概率取接下来 *6 小时* 的预报。详见 [API 说明][api] 和 <https://example.com/docs/%d>。" % i, "",
+                    "- 小号：只显示温度", "- 中号：温度 + 6 小时降雨条", "  - 降雨条用 `Theme.Hue.blue`", "1. 先读缓存", "2. 再请求网络", "",
+                    "> 注意：后台刷新有配额，别在时间线里发网络请求。", "",
+                    "```swift", "func timeline(for config: Config) async -> Timeline<Entry> {",
+                    "    let hours = await store.hourly(limit: 6) // cached", '    return Timeline(entries: hours.map(Entry.init), policy: .after(.now + 3600))', "}", "```", "",
+                    "| 尺寸 | 内容 | 刷新 |", "| --- | --- | --- |", "| 小号 | 温度 | 每小时 |", "| 中号 | 温度、降雨 | 每小时 |", "",
+                    "```json", '{"city": "上海", "hours": [0.1, 0.4, 0.8], "ok": true}', "```", "",
+                    "这一节的最后一段比较长：" + "小组件的数据来自 App Group 里共享的缓存文件，主 App 每次拉到新预报都会写一份，小组件只读不写，避免两边同时写坏文件。" * 2, ""]
+        return "\n".join(out[:5000]) + "\n"
+
+    def log():
+        lines = []
+        size = 0
+        n = 0
+        while size < 5 * (1 << 20):
+            n += 1
+            l = "2026-10-31T09:%02d:%02d.%03dZ INFO  request id=%06d path=/v1/forecast/%d city=%s status=200 took=%dms" % (
+                n // 3600 % 60, n // 60 % 60, n % 1000, n, n % 400, ["上海", "Tokyo", "Lisbon"][n % 3], 3 + n % 90)
+            lines.append(l)
+            size += len(l.encode()) + 1
+        return "\n".join(lines) + "\n"
+
+    SMALL = {
+        "Sources/App.swift": """import SwiftUI\n\n/// The app's entry point.\n@main\nstruct WeatherApp: App {\n    @State private var store = WeatherStore()\n\n    var body: some Scene {\n        WindowGroup {\n            ContentView()\n                .environment(store)\n                .task { await store.refresh(every: .seconds(3600)) } // hourly\n        }\n    }\n}\n\nextension WeatherStore {\n    func refresh(every interval: Duration) async {\n        while !Task.isCancelled {\n            try? await load(city: \"上海\", hours: 6)\n            try? await Task.sleep(for: interval)\n        }\n    }\n}\n""",
+        "scripts/deploy.sh": """#!/usr/bin/env bash\n# Deploy the API to the server (made up).\nset -euo pipefail\n\nHOST=${DEPLOY_HOST:-api.example.com}\nfor svc in api worker; do\n  echo \"deploying $svc to $HOST\"\n  ssh \"$HOST\" \"systemctl restart weather-$svc\" || exit 1\ndone\n""",
+        "config/app.yaml": """# Runtime config (made up)\nserver:\n  port: 8080\n  timeout: 30s\n  cities: [上海, Tokyo, Lisbon]\ncache: &cache\n  ttl: 3600\n  enabled: true\nworker:\n  <<: *cache\n  queue: \"forecasts\"\n""",
+        "Cargo.toml": """[package]\nname = \"weather-core\"\nversion = \"0.4.1\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\ntokio = \"1.41\" # async runtime\n""",
+        "web/index.html": """<!DOCTYPE html>\n<html lang=\"zh\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>天气 &amp; 预报</title>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <!-- the forecast list -->\n  <ul id=\"hours\" class=\"forecast\"></ul>\n  <script src=\"app.js\" defer></script>\n</body>\n</html>\n""",
+        "web/styles.css": """/* Forecast list */\n.forecast > li:hover {\n  color: #0a84ff;\n  margin: 0 1.5rem;\n  font-weight: 600 !important;\n}\n@media (max-width: 600px) {\n  .forecast { padding: 4px; }\n}\n""",
+        "Dockerfile": """FROM golang:1.23 AS build\nWORKDIR /src\nCOPY . .\n# build a static binary\nRUN CGO_ENABLED=0 go build -o /out/api ./cmd/api && \\\n    echo \"built $(date)\"\n\nFROM gcr.io/distroless/static\nCOPY --from=build /out/api /api\nENTRYPOINT [\"/api\"]\n""",
+        "db/schema.sql": """-- Forecast storage (made up)\nCREATE TABLE forecasts (\n  id BIGSERIAL PRIMARY KEY,\n  city TEXT NOT NULL,\n  at TIMESTAMPTZ NOT NULL,\n  rain_chance INT DEFAULT 0\n);\nSELECT city, count(*) FROM forecasts WHERE at > now() - interval '1 day' GROUP BY city;\n""",
+        "tools/fetch.py": """#!/usr/bin/env python3\n\"\"\"Fetch forecasts for the cities (made up).\"\"\"\nimport json\nfrom dataclasses import dataclass\n\n@dataclass\nclass Hour:\n    at: str\n    rain: float = 0.0\n\ndef fetch(city: str, hours: int = 6) -> list[Hour]:\n    print(f\"fetching {city}\")  # progress\n    return [Hour(at=str(h), rain=h / 10) for h in range(hours)] if city else None\n""",
+        "web/app.ts": """// Renders the forecast list (made up).\ninterface Hour { at: string; rain: number }\n\nexport async function render(city: string): Promise<void> {\n  const res = await fetch(`/v1/forecast?city=${encodeURIComponent(city)}`);\n  const hours: Hour[] = await res.json();\n  document.querySelector('#hours')!.innerHTML = hours.map(h => `<li>${h.at}: ${Math.round(h.rain * 100)}%</li>`).join('');\n}\n""",
+        "core/src/lib.rs": """//! Rain chance smoothing (made up).\n#[derive(Debug, Clone)]\npub struct Hour<'a> { pub at: &'a str, pub rain: f32 }\n\npub fn smooth<'a>(hours: &[Hour<'a>]) -> Vec<f32> {\n    println!(\"smoothing {} hours\", hours.len());\n    hours.windows(3).map(|w| w.iter().map(|h| h.rain).sum::<f32>() / 3.0).collect()\n}\n""",
+        "android/Main.kt": """package app.weather\n\nimport androidx.compose.runtime.Composable\n\n@Composable\nfun Forecast(hours: List<Hour>) {\n    val rainy = hours.filter { it.rain > 0.5 } // likely rain\n    Text(text = \"${rainy.size} 小时有雨\")\n}\n""",
+        "native/buffer.c": """#include <stdio.h>\n#include <stdlib.h>\n\n/* A ring buffer of readings (made up). */\ntypedef struct { float *data; size_t size, head; } ring_t;\n\nint ring_push(ring_t *r, float v) {\n    if (r == NULL) return -1;\n    r->data[r->head++ % r->size] = v;\n    printf(\"pushed %.1f\\n\", v);\n    return 0;\n}\n""",
+        "Makefile": """# Build and test (made up)\nGO ?= go\nBIN := bin/api\n\n.PHONY: build test\nbuild:\n\t$(GO) build -o $(BIN) ./cmd/api\n\ntest: build\n\t$(GO) test ./... -count=1\n""",
+    }
+    for rel, text in SMALL.items():
+        FILES[ROOT + "/" + rel] = text
+    FILES[ROOT + "/data/forecast.json"] = big_json()
+    FILES[ROOT + "/server/handlers.go"] = long_go()
+    FILES[ROOT + "/README.md"] = long_markdown()
+    FILES[ROOT + "/logs/api.log"] = log()
+    ITEMS[WIDGET] = ITEMS[WIDGET] + [it("assistant", "text", 0, text=(
+        "hub 上的 `~/.jarvis/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
+        "其余的都在：`Sources/App.swift`、`server/handlers.go`、`data/forecast.json`、`/Users/me/code/weather/README.md`、"
+        "`config/app.yaml` 和 `/Users/me/code/weather/logs/api.log`。"))]
+
+
+def file_path(path, cwd):
+    path = path.strip()
+    if path == "~" or path.startswith("~/"):
+        path = "/Users/me" + path[1:]
+    elif not path.startswith("/"):
+        if not cwd:
+            return ""
+        path = cwd.rstrip("/") + "/" + path
+    return os.path.normpath(path)
+
+
+def file_kind(path):
+    if path in FILES:
+        return "file"
+    prefix = path.rstrip("/") + "/"
+    return "dir" if any(f.startswith(prefix) for f in FILES) else "missing"
+
+
+def file_read(path, cwd, offset):
+    p = file_path(path, cwd)
+    kind = file_kind(p) if p else "missing"
+    if kind == "missing":
+        return None
+    name = os.path.basename(p.rstrip("/"))
+    if kind == "dir":
+        prefix = p.rstrip("/") + "/"
+        names = sorted({f[len(prefix):].split("/")[0] + ("/" if "/" in f[len(prefix):] else "") for f in FILES if f.startswith(prefix)})
+        return {"path": p, "name": name, "size": 0, "is_dir": True, "entries": names, "truncated": False}
+    data = FILES[p].encode()
+    page = data[offset:offset + FILE_PAGE]
+    more = offset + len(page) < len(data)
+    if more:
+        page = page[:page.rfind(b"\n") + 1]
+    ext = os.path.splitext(name)[1].lower()
+    mime = {".json": "application/json", ".md": "text/markdown"}.get(ext, "text/plain; charset=utf-8")
+    return {"path": p, "name": name, "size": len(data), "mime": mime, "text": page.decode(), "truncated": more,
+            "is_dir": False, "offset": offset, "next": offset + len(page) if more else 0}
+
+
 # ---------- personas (docs/persona.md) ----------
 # MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.jarvis/personas. MOCK_PERSONAS=demo: the
 # original placeholder (scripts/persona/make_persona.py demo), made into a temporary directory at start.
@@ -1200,6 +1348,14 @@ class H(BaseHTTPRequestHandler):
                                    "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
                                    "main": ASK1})
         if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
+        if p.startswith("/api/v1/machines/") and p.endswith("/stat"):
+            cwd = q.get("cwd", [""])[0]
+            paths = q.get("path", []) + [x for x in q.get("paths", [""])[0].split("\n") if x]
+            return self.send_json({"stats": [{"path": x, "kind": file_kind(file_path(x, cwd)) if file_path(x, cwd) else "missing"} for x in paths]})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file") and FILES:
+            f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0))
+            if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
+            return self.send_json(f)
         if p == "/api/v1/personas": return self.send_json({"personas": personas()})
         if p.startswith("/api/v1/personas/"):
             f = persona_file(p[len("/api/v1/personas/"):])

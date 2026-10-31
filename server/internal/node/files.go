@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -15,7 +16,7 @@ import (
 	"unicode/utf8"
 )
 
-// maxFileBytes caps what the phone can pull in one request.
+// maxFileBytes caps what the phone can pull in one request: a bigger text file comes in pages (`offset`, `next`).
 const maxFileBytes = 2 << 20
 
 // FileContent is a file read for the phone's file viewer (paths mentioned in a conversation).
@@ -26,24 +27,47 @@ type FileContent struct {
 	Mime      string   `json:"mime"`
 	Text      string   `json:"text,omitempty"` // UTF-8 text files
 	Data      string   `json:"data,omitempty"` // base64 for binary files (images, PDFs)
-	Truncated bool     `json:"truncated"`
+	Truncated bool     `json:"truncated"`        // there is more after this page
+	Offset    int64    `json:"offset"`           // where this page starts (bytes)
+	Next      int64    `json:"next,omitempty"`   // where the next page starts; 0 at the end
 	IsDir     bool     `json:"is_dir"`
 	Entries   []string `json:"entries,omitempty"` // directory listing (names, dirs end with /)
 }
 
-func (n *Node) readFile(path, cwd string) (*FileContent, error) {
+// resolvePath turns a path as the conversation wrote it into one on this machine: ~ is the home, a relative path is
+// in cwd. "" when there is nothing to resolve it against.
+func (n *Node) resolvePath(path, cwd string) string {
 	path = strings.TrimSpace(path)
 	switch {
 	case path == "":
-		return nil, fmt.Errorf("empty path")
+		return ""
 	case path == "~" || strings.HasPrefix(path, "~/"):
 		path = filepath.Join(n.home, strings.TrimPrefix(path, "~"))
-	case !filepath.IsAbs(path) && cwd != "":
+	case !filepath.IsAbs(path):
+		if cwd == "" {
+			return ""
+		}
 		path = filepath.Join(cwd, path)
 	}
-	path = filepath.Clean(path)
-	// iCloud Drive hangs on a locked Mac; never touch it.
-	if strings.Contains(path, "/Library/Mobile Documents") {
+	return filepath.Clean(path)
+}
+
+// inICloud: iCloud Drive hangs on a locked Mac; never touch it.
+func inICloud(path string) bool { return strings.Contains(path, "/Library/Mobile Documents") }
+
+// readFile reads a file for the phone's viewer, a text file maxFileBytes at a time from offset (the page before's
+// `next`): a page that stops short of the end stops after a line's end. Directories are listed, binary files sent
+// whole up to the cap (they are not paged).
+func (n *Node) readFile(path, cwd string, offset int64) (*FileContent, error) {
+	asked := strings.TrimSpace(path)
+	if asked == "" {
+		return nil, fmt.Errorf("empty path")
+	}
+	path = n.resolvePath(asked, cwd)
+	if path == "" {
+		path = filepath.Clean(asked) // relative with no cwd: as the node's own working directory sees it
+	}
+	if inICloud(path) {
 		return nil, fmt.Errorf("iCloud Drive files are not readable remotely")
 	}
 	st, err := os.Stat(path)
@@ -70,28 +94,82 @@ func (n *Node) readFile(path, cwd string) (*FileContent, error) {
 		}
 		return fc, nil
 	}
+	if offset < 0 || offset > st.Size() {
+		return nil, fmt.Errorf("offset %d is outside the file (%d bytes)", offset, st.Size())
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, explainDenied(path, n.home, err)
 	}
 	defer f.Close()
-	buf := make([]byte, min(st.Size(), maxFileBytes))
-	nr, _ := f.Read(buf)
+	buf := make([]byte, min(st.Size()-offset, maxFileBytes))
+	nr, _ := f.ReadAt(buf, offset)
 	buf = buf[:nr]
-	fc.Truncated = st.Size() > int64(nr)
+	more := st.Size() > offset+int64(nr)
+	fc.Offset = offset
 	fc.Mime = mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
 	if fc.Mime == "" {
 		fc.Mime = http.DetectContentType(buf)
 	}
-	if utf8.Valid(buf) || (fc.Truncated && utf8.Valid(trimPartialRune(buf))) {
-		fc.Text = string(trimPartialRune(buf))
+	// Text is valid UTF-8 (a page may cut the last character) with no NUL bytes.
+	if bytes.IndexByte(buf, 0) < 0 && (utf8.Valid(buf) || (more && utf8.Valid(trimPartialRune(buf)))) {
+		text := trimPartialRune(buf)
+		if more {
+			// Stop after the last whole line, so the next page starts at a line (one longer than a page is cut).
+			if i := bytes.LastIndexByte(text, '\n'); i >= 0 {
+				text = text[:i+1]
+			}
+			fc.Next = offset + int64(len(text))
+			fc.Truncated = true
+		}
+		fc.Text = string(text)
 		if !strings.HasPrefix(fc.Mime, "text/") && !strings.Contains(fc.Mime, "json") {
 			fc.Mime = "text/plain; charset=utf-8"
 		}
 		return fc, nil
 	}
+	if offset > 0 {
+		return nil, fmt.Errorf("binary files are read whole, not from an offset")
+	}
+	fc.Truncated = more
 	fc.Data = base64.StdEncoding.EncodeToString(buf)
 	return fc, nil
+}
+
+// maxStatPaths bounds one fs.stat: a page of conversation mentions a few dozen paths at most.
+const maxStatPaths = 200
+
+// PathStat is whether a path mentioned in a conversation is there on this machine: file, dir, denied (macOS keeps
+// the folder from jarvisd; opening it explains what to do) or missing (also: not resolvable, iCloud Drive).
+type PathStat struct {
+	Path string `json:"path"` // as asked
+	Kind string `json:"kind"`
+	Size int64  `json:"size,omitempty"`
+}
+
+// statPaths answers fs.stat: the phone links only the paths that are there (a path in a message may be another
+// machine's, or gone).
+func (n *Node) statPaths(paths []string, cwd string) []PathStat {
+	if len(paths) > maxStatPaths {
+		paths = paths[:maxStatPaths]
+	}
+	out := make([]PathStat, 0, len(paths))
+	for _, asked := range paths {
+		s := PathStat{Path: asked, Kind: "missing"}
+		if p := n.resolvePath(asked, cwd); p != "" && !inICloud(p) {
+			st, err := os.Stat(p)
+			switch {
+			case err == nil && st.IsDir():
+				s.Kind = "dir"
+			case err == nil:
+				s.Kind, s.Size = "file", st.Size()
+			case errors.Is(err, fs.ErrPermission):
+				s.Kind = "denied"
+			}
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 // protectedDirs are the folders macOS keeps from programs the user has not allowed (TCC): jarvisd, started over ssh,

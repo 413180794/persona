@@ -13,6 +13,8 @@ final class AppModel {
     var config: ServerConfig? { didSet { if config?.isDemo != oldValue?.isDemo { applyPersonaColors() } } }
     /// Jarvis's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
+    /// Which paths conversations mention are there on their machines (only those are linked).
+    let filePresence = FilePresence()
     let live: LiveConnection
     /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus

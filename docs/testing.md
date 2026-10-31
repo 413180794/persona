@@ -67,6 +67,12 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
   UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
+- 文件查看器（`docs/ios.md`「文件查看器」）：`MOCK_FILES=1` 启动 mock，给出一份编造的 `/Users/me/code/weather`：每种语言一个小文件、
+  3 MB 的 JSON、2 万行的 Go、4000 多行的 README、5 MB 的日志，`GET …/file`（2 MB 一页）和 `…/stat` 都按它回答；「给天气 App 加主屏幕小组件」
+  最后一条回复提到其中几个文件，和两个不在的路径。UI 测试 `FileViewerUITests` 要连这样的 mock。测耗时和帧率：用 `-O` 编一份
+  （`SWIFT_OPTIMIZATION_LEVEL=-O`，另一个 DerivedData），带 `JARVIS_FILE_PERF=1` 跑 `FileViewerPerfTests`，再读 App 容器里的
+  `Library/Caches/file-perf.log`。滚动用 App 内的匀速滚动测，别用 XCUITest 拖：它每个手势前在 App 主线程上抓一次无障碍快照，自己就是 40–100 ms 的长帧。
+  改了 mock 里某条消息的文字要先卸载 App：App 按 item id 缓存会话，同 id 的新文字不会盖掉旧的。
 - 形象（`docs/persona.md`）：`MOCK_PERSONAS=demo` 启动 mock 时用 `scripts/persona/make_persona.py demo` 现画一个原创的演示形象「小薄荷」；
   `MOCK_PERSONAS=<目录>` 则列出那个目录里的包（看别的形象的效果，包不进仓库）。UI 测试 `PersonaPickerTests` 要连 `MOCK_PERSONAS=demo` 的 mock。
 - 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 jarvisd，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、

@@ -12,16 +12,21 @@ nonisolated struct FileContent: Decodable, Sendable {
     var truncated: Bool
     var isDir: Bool
     var entries: [String]?
+    /// Where this page starts, and where the next one does (0 / nil: the end). Older nodes send neither.
+    var offset: Int64?
+    var next: Int64?
 
     enum CodingKeys: String, CodingKey {
-        case path, name, size, mime, text, data, truncated, entries
+        case path, name, size, mime, text, data, truncated, entries, offset, next
         case isDir = "is_dir"
     }
 }
 
 extension APIClient {
-    func file(machine: String, path: String, cwd: String?) async throws -> FileContent {
-        try await get("/api/v1/machines/\(machine)/file", query: ["path": path, "cwd": cwd ?? ""])
+    /// A file or a directory on a machine; a text file bigger than a page from `offset` (the page before's `next`).
+    func file(machine: String, path: String, cwd: String?, offset: Int64 = 0) async throws -> FileContent {
+        try await get("/api/v1/machines/\(machine)/file",
+                      query: ["path": path, "cwd": cwd ?? "", "offset": offset > 0 ? String(offset) : ""])
     }
 }
 
@@ -44,8 +49,9 @@ nonisolated enum FilePaths {
     private static let memo = TextMemo<[String]>()
 
     /// File-looking paths in text, in order, without duplicates or URL fragments (memoized: rows ask on every redraw).
-    static func find(in text: String, limit: Int = 6) -> [String] {
-        limit == 6 ? memo(text) { scan($0, limit: 6) } : scan(text, limit: limit)
+    /// More than a row of chips shows: the ones not there on the machine are left out (`FileChips`).
+    static func find(in text: String, limit: Int = 12) -> [String] {
+        limit == 12 ? memo(text) { scan($0, limit: 12) } : scan(text, limit: limit)
     }
 
     private static func scan(_ text: String, limit: Int) -> [String] {
@@ -64,16 +70,25 @@ nonisolated enum FilePaths {
     }
 }
 
-/// Tappable chips for paths found in a message.
+/// Tappable chips for the paths a message mentions that are there on the conversation's machine (`FilePresence`;
+/// the row asks with `lookUpFiles`). The others stay plain text in the message.
 struct FileChips: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.fileScope) private var scope
     var paths: [String]
     var open: (String) -> Void
 
+    private var shown: [String] {
+        guard let scope else { return [] }
+        return Array(paths.filter { model.filePresence.linkable($0, in: scope) }.prefix(6))
+    }
+
     var body: some View {
-        if !paths.isEmpty {
+        let shown = shown
+        if !shown.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Space.sm) {
-                    ForEach(paths, id: \.self) { p in
+                    ForEach(shown, id: \.self) { p in
                         Button { open(p) } label: {
                             HStack(spacing: Theme.Space.xs) {
                                 Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
@@ -87,6 +102,7 @@ struct FileChips: View {
                             .foregroundStyle(Theme.accent)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("file-chip-" + p)
                         .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) } }
                     }
                 }
@@ -96,21 +112,39 @@ struct FileChips: View {
     }
 }
 
-/// Reads a file (or lists a directory) on a machine: markdown rendered, code and text monospaced with line
-/// numbers, images and PDFs shown inline.
+/// Asks whether a row's paths are there (`FilePresence`) as it appears, so `FileChips` can link them: on the row
+/// itself, which always appears (an empty chip row would not).
+struct LookUpFiles: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Environment(\.fileScope) private var scope
+    var paths: [String]
+
+    func body(content: Content) -> some View {
+        content.task(id: paths) {
+            guard !paths.isEmpty, let scope else { return }
+            model.filePresence.ask(paths, in: scope, api: model.api)
+        }
+    }
+}
+
+extension View {
+    func lookUpFiles(_ paths: [String]) -> some View { modifier(LookUpFiles(paths: paths)) }
+}
+
+/// Reads a file (or lists a directory) on a machine (docs/ios.md「文件查看器」): code colored by its language with
+/// line numbers, JSON as a foldable outline, Markdown rendered (or its source), images and PDFs inline. Text shows
+/// at once and is colored in the background; a file bigger than a page loads the next one as the end comes near.
 struct FileViewer: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var ref: FileRef
-    @State private var file: FileContent?
-    @State private var error: String?
-    @State private var raw = false
+    @State private var page: FileViewerModel?
     @State private var history: [FileRef] = []
 
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(file?.name ?? (ref.path as NSString).lastPathComponent)
+                .navigationTitle(page?.file?.name ?? (ref.path as NSString).lastPathComponent)
                 .navigationSubtitle(model.machine(ref.machineID)?.name ?? ref.machineID)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -123,13 +157,22 @@ struct FileViewer: View {
                     }
                     ToolbarItem(placement: .primaryAction) { menu }
                 }
-                .task(id: ref) { await load() }
+                .task(id: ref) { await open() }
+                .onAppear { FrameMeter.shared.start((ref.path as NSString).lastPathComponent) }
+                .onDisappear { FrameMeter.shared.stop() }
         }
     }
 
+    private func open() async {
+        let p = FileViewerModel(ref: ref, api: model.api)
+        page = p
+        await p.load()
+    }
+
     @ViewBuilder private var content: some View {
-        if let file {
-            if file.isDir {
+        if let page, let file = page.file {
+            switch page.kind {
+            case .directory:
                 List(file.entries ?? [], id: \.self) { e in
                     Button {
                         history.append(ref)
@@ -140,40 +183,36 @@ struct FileViewer: View {
                     }
                 }
                 .themedPage()
-            } else if let text = file.text {
-                if isMarkdown(file) && !raw {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.m) {
-                            meta(file)
-                            Markdown(Links.markdown(MarkdownHTML.simplify(text)), imageBaseURL: URL(fileURLWithPath: (file.path as NSString).deletingLastPathComponent, isDirectory: true))
-                                .markdownTheme(.jarvis)
-                                .markdownImageProvider(MachineImageProvider(load: loadImageFile))
-                                .textSelection(.enabled)
-                        }
-                        .padding(Theme.Space.l)
+            case .markdown where !page.showSource:
+                MarkdownFile(page: page, home: model.machine(ref.machineID)?.home, loadImage: loadImageFile)
+            case .markdown, .json, .code:
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    meta(page).padding(.horizontal, Theme.Space.l)
+                    if let source = page.shownSource {
+                        CodeLines(source: source, version: page.version, onNearEnd: { Task { await page.loadMore() } },
+                                  onFirstLines: page.shown)
+                            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                            .padding(.horizontal, Theme.Space.m)
+                            .accessibilityIdentifier("file-code")
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                } else {
-                    // The code view scrolls both ways by itself (no outer vertical scroll stealing the gesture).
-                    VStack(alignment: .leading, spacing: Theme.Space.m) {
-                        meta(file).padding(.horizontal, Theme.Space.l)
-                        CodeText(text: text).padding(.horizontal, Theme.Space.m)
-                    }
-                    .padding(.top, Theme.Space.m)
                 }
-            } else if let data = file.data, let bytes = Data(base64Encoded: data) {
-                if (file.mime ?? "").hasPrefix("image/") {
-                    ScrollView {
-                        meta(file).padding(.horizontal, Theme.Space.l)
-                        Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: data)).padding(Theme.Space.l)
-                    }
-                } else if (file.mime ?? "") == "application/pdf", let doc = PDFDocument(data: bytes) {
+                .padding(.top, Theme.Space.s)
+            case .image:
+                ScrollView {
+                    meta(page).padding(.horizontal, Theme.Space.l)
+                    Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: file.data ?? "")).padding(Theme.Space.l)
+                }
+            case .pdf:
+                if let data = file.data, let bytes = Data(base64Encoded: data), let doc = PDFDocument(data: bytes) {
                     PDFKitView(document: doc)
-                } else {
-                    EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
-                                   message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
                 }
+            case .binary:
+                EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
+                               message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
             }
-        } else if let error {
+        } else if let error = page?.error {
             EmptyStateView(symbol: Theme.Icon.error, title: "打不开这个文件", message: error)
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -182,46 +221,53 @@ struct FileViewer: View {
 
     private var menu: some View {
         Menu {
-            if let file, isMarkdown(file) {
-                Button { raw.toggle() } label: { Label(raw ? "渲染 Markdown" : "查看源文件", systemImage: raw ? "doc.richtext" : Theme.Icon.code) }
+            if let page {
+                switch page.kind {
+                case .markdown:
+                    Button { page.showSource.toggle() } label: {
+                        Label(page.showSource ? "渲染 Markdown" : "查看源文件", systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
+                    }
+                case .json where page.outline != nil:
+                    Button { page.showSource.toggle() } label: {
+                        Label(page.showSource ? "按层级查看" : "查看源文件", systemImage: page.showSource ? "list.triangle" : Theme.Icon.code)
+                    }
+                    if !page.showSource, let outline = page.outline {
+                        Button { outline.setAll(open: false) } label: { Label("全部折叠", systemImage: "arrow.down.right.and.arrow.up.left") }
+                        if outline.canOpenAll {
+                            Button { outline.setAll(open: true) } label: { Label("全部展开", systemImage: Theme.Icon.enlarge) }
+                        }
+                    }
+                default:
+                    EmptyView()
+                }
             }
             Button { UIPasteboard.general.string = ref.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
-            if let text = file?.text {
+            if let text = page?.text {
                 Button { UIPasteboard.general.string = text } label: { Label("拷贝内容", systemImage: Theme.Icon.copy) }
-                ShareLink(item: text, subject: Text(file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
+                ShareLink(item: text, subject: Text(page?.file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
             }
         } label: { Image(systemName: Theme.Icon.moreMenu) }
     }
 
-    private func meta(_ f: FileContent) -> some View {
-        HStack(spacing: Theme.Space.sm) {
-            Text(Fmt.path(f.path, home: model.machine(ref.machineID)?.home)).lineLimit(1).truncationMode(.head)
-            Text("·")
-            Text(ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file))
-            if f.truncated { Text("· 只显示前 2 MB").foregroundStyle(Theme.cautionText) }
+    /// The path, the size, and what is not shown yet: pages still on the machine, lines past the coloring caps, why
+    /// a .json shows as text.
+    private func meta(_ page: FileViewerModel) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            HStack(spacing: Theme.Space.sm) {
+                Text(Fmt.path(page.file?.path ?? ref.path, home: model.machine(ref.machineID)?.home)).lineLimit(1).truncationMode(.head)
+                Text("·")
+                Text(ByteCountFormatter.string(fromByteCount: page.file?.size ?? 0, countStyle: .file))
+                if let lang = page.language { Text("· " + lang) }
+            }
+            .foregroundStyle(.secondary)
+            if let note = page.shownNote { Text(note).foregroundStyle(Theme.cautionText).lineLimit(2) }
         }
         .font(Theme.Font.code)
-        .foregroundStyle(.secondary)
-    }
-
-    private func isMarkdown(_ f: FileContent) -> Bool {
-        ["md", "markdown", "mdx"].contains((f.name as NSString).pathExtension.lowercased())
     }
 
     /// An image the markdown file refers to, read from the same machine.
     private func loadImageFile(_ path: String) async -> FileContent? {
         try? await model.api?.file(machine: ref.machineID, path: path, cwd: ref.cwd)
-    }
-
-    private func load() async {
-        guard let api = model.api else { return }
-        file = nil
-        error = nil
-        do {
-            file = try await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd)
-        } catch {
-            self.error = error.shown
-        }
     }
 
     static func symbol(for path: String) -> String {
@@ -236,13 +282,226 @@ struct FileViewer: View {
     }
 }
 
-/// Monospaced text with line numbers; no wrapping, scrolls sideways and down like an editor.
-struct CodeText: View {
-    var text: String
+/// A Markdown file rendered, a piece at a time in a lazy stack (`MarkdownChunks`), with the chat's look
+/// (`.jarvis`: fitted tables, links that end where `Links` says) and colored code fences. No text selection: it made
+/// opening 40 % slower and scrolling hitch more (docs/ios.md「文件查看器」); the source view copies lines.
+private struct MarkdownFile: View {
+    var page: FileViewerModel
+    var home: String?
+    var loadImage: (String) async -> FileContent?
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var offset: CGFloat = 0
+    @State private var scroller: AutoScroller?
 
     var body: some View {
-        MonoTextView(text: MonoText.numbered(text))
-            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        if let chunks = page.chunks {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text(Fmt.path(page.file?.path ?? "", home: home))
+                        .font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                        .padding(.bottom, Theme.Space.m)
+                    ForEach(chunks) { c in
+                        Markdown(c.content, imageBaseURL: page.baseURL)
+                            .markdownTheme(.jarvis)
+                            .markdownCodeSyntaxHighlighter(JarvisCodeHighlighter())
+                            .markdownImageProvider(MachineImageProvider(load: loadImage))
+                            .onAppear { if c.id == 0 { page.shown() } }
+                    }
+                    if page.next > 0 {
+                        Button { Task { await page.loadMore() } } label: {
+                            Label(page.loadingMore ? "正在读取…" : "继续读取后面的内容", systemImage: "arrow.down.doc").lineLimit(1)
+                        }
+                        .themedButton()
+                        .disabled(page.loadingMore)
+                        .padding(.top, Theme.Space.l)
+                    }
+                }
+                .padding(Theme.Space.l)
+            }
+            .scrollPosition($position)
+            .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y }) { _, y in
+                offset = y
+                FrameMeter.shared.noteScroll()
+            }
+            .onAppear(perform: autoScroll)
+            .accessibilityIdentifier("file-markdown")
+        } else {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// The measurements' steady scroll (`AutoScroller`, DEBUG flags only).
+    private func autoScroll() {
+        guard AutoScroller.on, scroller == nil else { return }
+        final class Target { var y: CGFloat = 0 }
+        let target = Target()
+        let s = AutoScroller { dy in
+            target.y = max(0, target.y + dy)
+            position.scrollTo(y: target.y)
+        }
+        scroller = s
+        s.start()
+    }
+}
+
+/// Loading and preparing one file for `FileViewer` (MVVM: the page only shows this): picks how to show it, makes
+/// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
+@MainActor @Observable
+final class FileViewerModel {
+    enum Kind { case directory, markdown, json, code, image, pdf, binary }
+
+    let ref: FileRef
+    @ObservationIgnored private let api: APIClient?
+    private(set) var file: FileContent?
+    private(set) var error: String?
+    private(set) var kind: Kind = .code
+    /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
+    private(set) var code: CodeFileSource?
+    private(set) var outline: JSONOutlineSource?
+    private(set) var chunks: [MarkdownChunk]?
+    var showSource = false
+    /// Where the next page starts; 0: none.
+    private(set) var next: Int64 = 0
+    private(set) var loadingMore = false
+    private(set) var language: String?
+    /// What is not shown yet (pages on the machine, why a .json shows as text).
+    private(set) var note: String?
+    /// Lines past the coloring caps: only said where the text itself shows (not over a JSON outline).
+    private(set) var colorNote: String?
+
+    var shownNote: String? {
+        let parts = [note, shownSource === code ? colorNote : nil].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "；")
+    }
+    /// Bumped when the shown source is a new one.
+    private(set) var version = 0
+    @ObservationIgnored private var text_: [String] = []
+    @ObservationIgnored private let perf: FilePerf
+
+    /// JSON is read whole (up to this) before it is parsed into an outline.
+    static let maxJSONBytes: Int64 = 24 << 20
+
+    init(ref: FileRef, api: APIClient?) {
+        self.ref = ref
+        self.api = api
+        perf = FilePerf(ref.path)
+    }
+
+    var text: String? { text_.isEmpty ? nil : text_.joined() }
+
+    var shownSource: CodeLineSource? {
+        if kind == .json, !showSource, let outline { return outline }
+        return code
+    }
+
+    var baseURL: URL { URL(fileURLWithPath: ((file?.path ?? ref.path) as NSString).deletingLastPathComponent, isDirectory: true) }
+
+    func load() async {
+        guard let api else { return }
+        let f: FileContent
+        do {
+            f = try await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd)
+        } catch {
+            self.error = error.shown
+            return
+        }
+        perf.mark("fetched", bytes: f.text?.utf8.count ?? 0)
+        file = f
+        next = f.next ?? 0
+        guard !f.isDir else {
+            kind = .directory
+            return
+        }
+        guard let text = f.text else {
+            let mime = f.mime ?? ""
+            kind = mime.hasPrefix("image/") ? .image : mime == "application/pdf" ? .pdf : .binary
+            return
+        }
+        text_ = [text]
+        let firstLine = text.prefix(200).split(separator: "\n", maxSplits: 1).first.map(String.init)
+        let ext = (f.name as NSString).pathExtension.lowercased()
+        let lang = SyntaxLanguage.detect(name: f.name, firstLine: firstLine)
+            ?? ((f.mime ?? "").contains("json") ? .json : nil)
+        language = lang?.id
+        kind = lang?.id == "markdown" && ext != "" ? .markdown : lang?.id == "json" && !["jsonl", "ndjson"].contains(ext) ? .json : .code
+        let doc = await Task.detached(priority: .userInitiated) { CodeDocument(text: text, language: lang) }.value
+        setCode(CodeFileSource(doc))
+        switch kind {
+        case .markdown: await renderMarkdown()
+        case .json: await buildOutline()
+        default: break
+        }
+        if f.truncated, f.next == nil { note = "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))" }
+    }
+
+    private func setCode(_ source: CodeFileSource) {
+        code = source
+        source.onColored = { [weak self, weak source] in
+            guard let self, let source else { return }
+            self.perf.mark("colored", bytes: 0)
+            self.colorNote = source.doc.capped ? "只给前 \(source.doc.highlightedLines) 行上了色，后面是纯文本" : nil
+        }
+        version += 1
+        updateNote()
+    }
+
+    private func updateNote() {
+        guard let f = file else { return }
+        if next > 0 {
+            let read = ByteCountFormatter.string(fromByteCount: next, countStyle: .file)
+            let all = ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file)
+            note = kind == .json ? "已读 \(read) / \(all)，正在读完整个文件…" : "已读 \(read) / \(all)，往下滑接着读"
+        } else if note?.hasPrefix("已读") == true {
+            note = nil
+        }
+    }
+
+    /// The first content is on screen (the code view's first lines, or the first Markdown piece).
+    func shown() { perf.mark("shown", bytes: 0) }
+
+    /// The next page, appended (code), re-cut (Markdown).
+    func loadMore() async {
+        guard next > 0, !loadingMore, let api else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        guard let f = try? await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd, offset: next), let t = f.text else { return }
+        text_.append(t)
+        next = f.next ?? 0
+        code?.append(t)
+        if kind == .markdown { await renderMarkdown() }
+        updateNote()
+    }
+
+    private func renderMarkdown() async {
+        let text = text_.joined()
+        chunks = await Task.detached(priority: .userInitiated) {
+            MarkdownChunks.split(Links.markdown(MarkdownHTML.simplify(text))).enumerated().map {
+                MarkdownChunk(id: $0.offset, content: MarkdownContent($0.element))
+            }
+        }.value
+    }
+
+    /// JSON is read to the end (up to maxJSONBytes) and parsed; until then (and when it is not valid JSON) the text.
+    private func buildOutline() async {
+        while next > 0, next < Self.maxJSONBytes {
+            let before = next
+            await loadMore()
+            if next == before { break }
+        }
+        let text = text_.joined()
+        let parsed = await Task.detached(priority: .userInitiated) { () -> Result<JSONOutline, Error> in
+            Result { try JSONOutline(text: text) }
+        }.value
+        switch parsed {
+        case .success(let o):
+            outline = JSONOutlineSource(o)
+            if AutoScroller.on { outline?.openBiggest() }
+            version += 1
+            perf.mark("outline", bytes: o.bytes.count)
+        case .failure(let e):
+            let why = (e as? JSONOutline.ParseError).map { "\($0.message)（第 \($0.offset) 字节）" } ?? e.localizedDescription
+            note = next > 0 ? "文件太大，按文本显示" : "不是有效的 JSON，按文本显示：\(why)"
+        }
     }
 }
 

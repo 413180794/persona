@@ -352,6 +352,26 @@ nonisolated enum Theme {
     static var cardStroke: Color { spec.cardStroke }
 
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)
+
+    /// Syntax colors in the file viewer (docs/ios.md「文件查看器」), on `codeBackground` in every style (it does not
+    /// change with the style, so neither do they): GitHub's palette, every one ≥ 4.5:1 on that background in light
+    /// and dark (`SyntaxPaletteTests`). Words that are none of these stay `.primary`.
+    enum Syntax {
+        static let keyword = Color(light: 0xCF222E, dark: 0xFF7B72)
+        /// Types, and variables in languages that mark them ($HOME, @name).
+        static let type = Color(light: 0x953800, dark: 0xFFA657)
+        static let string = Color(light: 0x0A3069, dark: 0xA5D6FF)
+        /// Numbers and constants (true, nil), links in Markdown.
+        static let number = Color(light: 0x0550AE, dark: 0x79C0FF)
+        static let function = Color(light: 0x7547CF, dark: 0xD2A8FF)
+        static let comment = Color(light: 0x57606A, dark: 0x8B949E)
+        /// Markup tags and keys: HTML tags, JSON / YAML / TOML keys, CSS properties.
+        static let tag = Color(light: 0x116329, dark: 0x7EE787)
+        /// Decorators, annotations, preprocessor lines, HTML attribute names.
+        static let attribute = Color(light: 0x7D4E00, dark: 0xD29922)
+        static let all: [(String, Color)] = [("keyword", keyword), ("type", type), ("string", string), ("number", number),
+                                             ("function", function), ("comment", comment), ("tag", tag), ("attribute", attribute)]
+    }
     static let terminalBackground = Color(light: 0x16171B, dark: 0x0E0F12)
     static let terminalText = Color(light: 0xE6E3DA, dark: 0xE6E3DA)
     // Agent states (docs/agent-states.md): the dots. Text and soft backgrounds come from `AgentState.tone`

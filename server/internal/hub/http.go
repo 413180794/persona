@@ -35,7 +35,18 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
-		return map[string]any{"path": r.URL.Query().Get("path"), "cwd": r.URL.Query().Get("cwd")}
+		q := r.URL.Query()
+		return map[string]any{"path": q.Get("path"), "cwd": q.Get("cwd"), "offset": atoi(q.Get("offset"))}
+	}))
+	// Which of the paths a conversation mentions are there on the machine (?paths=a%0Ab or ?path=a&path=b, and cwd):
+	// the phone links only those.
+	api.HandleFunc("GET /api/v1/machines/{mid}/stat", h.proxy("fs.stat", func(r *http.Request) any {
+		q := r.URL.Query()
+		paths := q["path"]
+		if s := q.Get("paths"); s != "" {
+			paths = append(paths, strings.Split(s, "\n")...)
+		}
+		return map[string]any{"paths": paths, "cwd": q.Get("cwd")}
 	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/fs", h.proxy("fs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path"), "cwd": r.URL.Query().Get("cwd")}

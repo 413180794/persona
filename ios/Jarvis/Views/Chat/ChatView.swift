@@ -205,6 +205,7 @@ struct ChatView: View {
         }
         #endif
         .environment(\.openFile, actions.openFile)
+        .environment(\.fileScope, FileScope(machine: key.machineID, cwd: session?.cwd ?? ""))
         .environment(\.chatImages, store.images)
         .environment(\.viewImages, actions.viewImages)
         .environment(\.imageZoom, imageZoom)
@@ -1604,7 +1605,15 @@ struct ChatView: View {
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) {
                 if p == .terminal { showTerminal = true } else { pane = p } // the terminal comes up over the page
             }
-            if let f = UserDefaults.standard.string(forKey: "openFile") { file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd) }
+            if let f = UserDefaults.standard.string(forKey: "openFile") {
+                // Once the session is known (its cwd resolves a relative path) and the push is over: a sheet asked for
+                // during the push is dropped (a fresh install, FileViewerUITests).
+                Task {
+                    for _ in 0..<40 where session == nil { try? await Task.sleep(for: .milliseconds(250)) }
+                    try? await Task.sleep(for: .seconds(1))
+                    file = FileRef(machineID: key.machineID, path: f, cwd: session?.cwd)
+                }
+            }
             if let id = UserDefaults.standard.string(forKey: "openAgent") { // `-openAgent <agent id>`: that subagent
                 Task {
                     try? await Task.sleep(for: .seconds(4))

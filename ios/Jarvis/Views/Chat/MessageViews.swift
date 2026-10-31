@@ -136,6 +136,7 @@ struct UserBubble: View {
             }
             if let openFile { FileChips(paths: d.files, open: openFile) }
         }
+        .lookUpFiles(d.files)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .messageActionBar(id: item.id, text: shown, isUser: true, date: item.ts)
     }
@@ -406,8 +407,8 @@ struct AssistantText: View {
     @Environment(\.openFile) private var openFile
 
     var body: some View {
+        let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
             Markdown(d.markdown)
                 .task(id: item.id) { await Self.preloadLinks(item) }
                 .markdownTheme(.jarvis)
@@ -416,6 +417,7 @@ struct AssistantText: View {
                 .messageLongPress(id: item.id)
             if let openFile { FileChips(paths: d.files, open: openFile) }
         }
+        .lookUpFiles(d.files)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
     }
 

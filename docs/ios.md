@@ -467,13 +467,104 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 调试：`-showConnection waiting|connecting|updating` 固定显示某个状态，再加 `-openConnectionDetails YES` 打开说明；
   `-simulateOffline YES` 让 NWPathMonitor 视为没网（模拟器总是有 Mac 的网）。mock 的断网 / 弱网开关见 `docs/testing.md`。
 
+## 文件查看器（2026-10-31）
+
+会话里提到的文件、工具行里的文件、会话页「文件」里点开的文件，都在 `FileViewer` 里看（`Views/Chat/FileViewer.swift`，`Jarvis/Code/`）。
+
+**只链接真的打得开的路径。**
+- **以前的问题**：消息里识别出的路径（`FilePaths`）一律做成文件块，点开时按会话所在的机器去读。路径要是别的机器的（比如 hub 上的 `~/.jarvis/…`），或者文件早删了，点开只会看到「打不开这个文件」。
+- **现在的做法**：
+  1. 消息行出现时，把它的路径交给 `FilePresence`；
+  2. 一瞬间之后，按「机器 + 会话目录」批量问一次 `GET /api/v1/machines/{mid}/stat`，相对路径在会话的 cwd 里解析；
+  3. 只给 file / dir / denied 的路径做文件块。
+- **缓存**：结果按（机器, 目录, 路径）记住，在的记 30 分钟，不在的记 2 分钟（Agent 可能马上就写出来），问不到的 1 分钟后再问。
+- **问不到时**：答案没回来、旧 node 不认这个接口、没网时，路径都是普通文字，不确定就不链接。
+- **数量**：每条消息最多认 12 个候选路径，显示其中在的前 6 个。
+- **工具行**（Read / Edit 的文件）不查：工具刚用过它。
+
+**怎么显示**
+
+| 文件 | 显示 |
+| --- | --- |
+| 代码、配置、日志 | 按语言上色，带行号，等宽不换行，可以横滑。行号固定在左边，长按一行可以「拷贝这一行 / 拷贝全部」 |
+| JSON | 先显示源码；整个文件读完（最多 24 MB）并解析后，换成可折叠的层级视图（键的顺序不变），见下 |
+| Markdown | 默认渲染，用的是对话里的那套（`.jarvis` 主题、`FittedTable`、`Links`），代码块按语言上色。菜单里能「查看源文件」 |
+| 图片、PDF、目录 | 和以前一样 |
+
+**JSON 层级视图**
+- 格式化后显示，键是绿色，字符串、数字、常量各有颜色。
+- 点容器那一行展开或折叠，左边的三角表示状态。
+- 默认只展开前几层，展开到总行数约 400 行为止；6000 项的数组进来是折叠的。
+- 长按一行可以「拷贝这个值 / 拷贝路径（`.forecasts[3].rain`）」。
+- 菜单里有「全部折叠」；节点不多时（5 万以内）还有「全部展开」。
+- 不是有效 JSON（JSONL、写了一半的）就按文本显示，并说明原因。
+
+**语言**（`SyntaxLanguage`）
+- Swift、Go、Python、JS / TS（含 JSX / TSX）、Rust、Shell（bash / zsh）；
+- YAML、TOML、INI / .env、JSON、SQL；
+- C / C++ / Objective-C、Kotlin、Java / Gradle / Groovy / Scala、C#、Ruby、PHP、Lua、Dart、Protobuf、GraphQL、Terraform / HCL、CMake；
+- HTML / XML（plist、SVG、storyboard）、CSS / SCSS / Less、Dockerfile、Makefile、Markdown 源码、diff。
+
+识别顺序：
+1. 扩展名；
+2. 文件名（Dockerfile、Makefile、Podfile、.zshrc、.env…）；
+3. 第一行（`#!/usr/bin/env python3`、`<?xml`）。
+
+**高亮器是自己写的词法器（`SyntaxLexer`），没有新依赖。**
+- 为什么不用 tree-sitter：每种语言一个 C 语法库，二十多种加起来包很大。
+- 为什么不用 highlight.js：要 JavaScriptCore 或 WebView，又慢又重。
+- 怎么做的：一个通用循环在 UTF-8 字节上跑，各语言只是表格（关键字、类型、常量、注释、字符串的样子）。YAML、TOML、HTML、CSS、Dockerfile、Makefile、Markdown、diff 各有一小段专门处理。
+  - 关键字按字节的哈希查表，不为每个词建 String。
+  - 块注释、多行字符串、HTML 注释和标签、Markdown 代码块、Dockerfile 的续行，都通过 `SyntaxState` 带到下一行。
+- **颜色**：用设计系统的 `Theme.Syntax`（GitHub 的配色）。代码背景在所有界面风格下都一样，所以语法色也不跟风格变；每个颜色在浅色、深色下对代码背景都 ≥ 4.5:1（`SyntaxPaletteTests`）。
+- **踩过的坑**：`emit(s, i, word(…, &i, …))` 里 Swift 先按位置读出参数 `i`，再调用 `word`，宏的 `!` 就没算进 token；先把 `word` 的结果存成变量再用。
+
+**性能**
+- **取文件**：node 读文本文件每页最多 2 MB，停在行尾，再往下滑接着读下一页（`offset` / `next`）。JSON 会一次读完，因为要解析成层级。
+- **切行**：先在后台把字节切成行（`CodeDocument`），立刻显示纯文本。
+- **上色**：在后台从头往下每 2000 行一块，每块做完就刷新屏幕上的那几行。最多上色 10 万行或 8 MB，超过的部分是纯文本，并说明「只给前 N 行上了色」。
+- **超长的行**：超过 4000 字节截断显示（压缩过的 JS / JSON 就是一行）。
+- **代码视图**（`CodeLinesView`）：只把屏幕上的行做成 label，滚动时复用，几万行和十行一样轻。不用以前「整篇放进一个 UITextView」的做法，因为那样的排版跟着文件大小线性变慢。
+- **Markdown**：在顶层块之间切成每段约 12 行（`MarkdownChunks`，不切进代码块、缩进行），放进 LazyVStack，只排屏幕上的段。代码块的上色结果按内容缓存。
+- **不开文本选择**：渲染出来的 Markdown 不开文本选择。实测开了以后，打开慢约 40%（607 ms 对 435 ms），每段进屏的长帧从约 40 ms 变成约 60 ms。要拷贝就切到源码视图，或者用菜单里的「拷贝内容」。
+
+**实测**（2026-10-31）
+- **环境**：iPhone 18 Pro 模拟器（iOS 27，Mac M1 Ultra），`-O` 优化的 Debug 构建，`MOCK_FILES=1` 的 mock hub 经本机回环。
+- **怎么测**：`FileViewerPerfTests` 加 `-showFilePerf YES -showFileAutoScroll YES`，从打开文件开始计时；滚动是 App 内匀速滚动，先往下 4 秒再往上 2 秒。
+- **为什么不用 XCUITest 拖动**：XCUITest 每次手势前都要在 App 主线程上抓一次无障碍快照，自己就会造成 40–100 ms 的长帧。
+- 下表「滚动」一列是滚动那几秒里每秒的帧数和最长的一帧，模拟器是 60 Hz。
+
+| 文件 | 大小 | 取到第一页 | 出现在屏幕上 | 上色完 | 滚动 4000 pt/s |
+| --- | --- | --- | --- | --- | --- |
+| Go，2 万行 | 795 KB | 178 ms | 273 ms | 257 ms | 60 fps，最长 16 ms |
+| JSON，6000 条（读两页） | 2.3 MB | 312 ms | 源码 439 ms，层级 494 ms | 460 ms | 层级展开 6000 项：60 fps，最长 22 ms |
+| 日志（第一页 2 MB，共 5 MB） | 5 MB | 306 ms | 432 ms | 不上色 | 60 fps，最长 16 ms |
+| Markdown，4176 行（含表格和代码块） | 169 KB | 258 ms | 566 ms（渲染） | 365 ms（源码） | 52–58 fps，最长 38–54 ms |
+
+Markdown 的情况再说两点：
+- 按阅读速度 1500 pt/s 滚是 52–58 fps，最长 38–50 ms，慢帧都出在新的一段进屏时（MarkdownUI 排版表格和代码块）。
+- 两种速度下，开始滚的那一秒都有一帧约 0.24 秒。
+
+源码视图、代码、JSON、日志都稳定在 60 fps。
+
+**测试**
+- **单元测试**：
+  - `SyntaxTests`：各语言的词、跨行状态、识别、宽字符的偏移；
+  - `SyntaxPaletteTests`：语法色的对比度；
+  - `FileViewerTests`：切行、分页接上颜色、分块上色和上限、JSON 解析、默认折叠、行文字、Markdown 分块、路径批量查询和缓存。
+- **界面测试** `FileViewerUITests`（要 `MOCK_FILES=1`）：
+  - 只给在的路径做文件块；
+  - Go 打开有行号；
+  - JSON 是层级、点开数组；
+  - README 是渲染的。
+
 ## DEBUG 启动参数（仅 Debug，Release 检查不含这些字符串）
 
 `-pairURL jarvis://pair?...`（免扫码配对、不弹通知授权）、`-openSession <machine>/<session>`、
 `-showNewChat YES`、`-tab dev|mail|settings`、`-openAssistant <machine>/<session>`、`-newAssistant YES`、`-openAssistantSidebar YES`（Jarvis tab 的侧边栏开着）、`-openFirstImage YES`（打开会话里第一张图的查看器）、`-openTerminal YES`、`-showPad YES`、`-showKeyMods locked,once,held`（终端键栏的 ctrl / alt / shift 置成这些状态）、`-terminalWrap NO`、`-terminalTheme ink|midnight|jarvis|solarized`、`-terminalInputMode direct|field`（终端直接打字 / 输入框）、`-terminalTipsSeen YES`（不出「终端小技巧」）、`-openTerminalTips YES`（再出一次）、`-focusTerminalInput YES`（直接打字模式下是弹出键盘）、`-openShortcutsPanel YES`、`-openTerminalSettings YES`、`-lark-connector <feedId>`（直接打开飞书会话，`-lark-connectorName` 标题，`-lark-connectorTopic YES` 话题群，`-lark-connectorAt <position>` 打开到某条消息）、`-larkFocus <messageId>`（滚到该条消息）、`-larkProfile <userId>`（会话里弹出此人资料卡）、`-larkPicker YES`（对最后一条消息弹表情回复）、`-larkMoments <postId>`（打开removed帖子）、`-openInboxFirst YES`（收件箱打开第一件未处理的）、`-larkTop YES`（飞书会话从最早一条开始显示，截长卡片用）、`-addMail YES`（打开管理邮箱 › 添加邮箱）、`-tab settings -openAssistantPage assistant|routines|routine|intervalTask|followup|bypassTask|newRoutine|memory|memoryFile|memoryEdit|about`（设置 › 助手的各页；`routine` 打开第一个定时任务，`intervalTask` / `followup` 第一个按间隔的 / 一次性的，`bypassTask` 在编辑页弹出「全部放行？」确认，`newRoutine` 弹出「下班前盘点」模板的新建浮层，`memoryFile` / `memoryEdit` 打开第一条记忆 / 它的编辑器）。`scripts/sim.sh` 封装了编译、安装、配对、启动（`SIM=<udid>` 换模拟器；多个 agent 同时开发时各用各的模拟器，否则会互相覆盖安装）。
 检查历史渲染：`-loadAll YES`（加载全部历史并滚到顶）、`-fromSeq <seq>`（从包含这条用户消息的那一轮开始显示，长历史里滚动定位会漂）、
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
-`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
+`-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-openFile <路径>`（打开会话后打开这个文件）、`-showFilePerf YES`（把打开文件的耗时和每秒帧数写进 Caches/file-perf.log，`-showFileAutoScroll YES` 让文件自己匀速滚，`-showFileAutoScrollSpeed 1500` 换速度）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
 
 实时更新不打断操作的测试（`LiveUpdateTests`）用到两个：`-openChatsFresh YES` 启动时清掉磁盘上的对话缓存（上一次运行推进去的步骤不留下）；
 `-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读
