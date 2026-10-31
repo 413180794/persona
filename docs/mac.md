@@ -70,6 +70,10 @@
 - 外观：跟随系统深浅色和强调色；界面风格（液态玻璃等）照样生效，Mac 上的玻璃用系统材质；不写死尺寸，跟随「设置 › 字号」。
 - 性能：列表和对话都要在 120 Hz 屏上滚动不掉帧（`List` / `LazyVStack` 懒加载、行的 body 便宜、文字排版缓存），
   打开对话首屏 < 200 ms（有缓存时），窗口拖宽时不卡。用 Instruments（SwiftUI / Animation Hitches）量，量法写进本文。
+  2026-11-01 夜里这一轮没量成：Mac 一直锁屏，锁屏时屏幕的 display link 不走（试过：一个只开 display link 的小程序 2 秒 0 帧），
+  `FrameMeter` / `AutoScroller`（文件查看器的 `-showFilePerf YES -showFileAutoScroll YES`，Mac 上同样能用）和 Instruments 都量不出帧率。
+  解锁后先量文件查看器那条现成的路，再给对话页接同样的匀速滚动（对话列表是倒置的 `ScrollPosition`，往 +y 是更早的消息）。
+  ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
 
 ## 构建、运行、截图
 
@@ -460,6 +464,8 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 - [ ] 打开会话 (foreground) + SessionEntity — Intents/OpenSessionIntent.swift
 - [ ] MachineEntity query — Intents/MachineEntity.swift
 - [ ] Shortcuts phrases — Intents/JarvisShortcuts.swift; texts / picker / errors — Intents/IntentSupport.swift
+  Mac：同一份代码编进 JarvisMac，构建产物的 `Metadata.appintents` 里有这 4 个动作、3 条自动短语、`MachineEntity` / `SessionEntity`（2026-11-01 查过）；
+  「打开会话」在 Mac 上清掉 知识库 / 机器 的侧栏覆盖再打开对话。还没在 Mac 的「快捷指令」App 里实际跑过。
 
 ## 21. Phone tools (phone_* MCP)
 - [ ] Register enabled tools on connect, tool_call → tool_result, write confirmations — PhoneTools/PhoneToolRegistry.swift, PhoneTool.swift, PhoneToolSupport.swift, AppModel.registerPhone
