@@ -68,7 +68,9 @@ final class DemoModeTests: XCTestCase {
             sleep(1)
             if !b.exists || b.frame != frame || !b.isHittable { return }
         }
-        let bar = app.navigationBars.buttons.firstMatch
+        // The bar's back button, not a page's own bar buttons (the Agents list's 新建会话 / 分组 sit there too).
+        let bar = app.navigationBars.buttons.matching(NSPredicate(format: "NOT (label IN %@) AND NOT (label BEGINSWITH %@)",
+                                                                  ["新建会话", "新对话", "更多"], "分组")).firstMatch
         if bar.exists, bar.isHittable {
             bar.tap()
         } else {
@@ -86,7 +88,14 @@ final class DemoModeTests: XCTestCase {
     /// An agent's row in the Agents list (scrolling to it).
     @MainActor private func openAgent(_ title: String) {
         let list = app.buttons["agents.filter.all"]
-        for _ in 0..<3 where !(list.exists && list.isHittable) { back() } // a back that did not take (the page was still settling)
+        // Back on the list already, it can take a moment to be hittable: wait for that first. A back() on the list
+        // itself found no 返回 and tapped the first bar button, 新建会话, and the search went on inside its sheet.
+        func onList() -> Bool { list.exists && list.isHittable }
+        for _ in 0..<3 where !onList() {
+            let settle = Date().addingTimeInterval(3)
+            while !onList(), Date() < settle { usleep(200_000) }
+            if !onList() { back() } // a back that did not take
+        }
         let row = text(title)
         // Clear of the filter bar and the tab bar (a row under the bar is "hittable" but the tap lands on a filter).
         func clear() -> Bool { row.exists && row.frame.minY > 260 && row.frame.maxY < app.frame.maxY - 140 }
