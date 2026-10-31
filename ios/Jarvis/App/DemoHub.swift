@@ -562,6 +562,7 @@ final class DemoHub {
         "macbook": Profile(cpu: 18, mem: 0.55, rx: 4.5e5, tx: 0.2, swap: 1.2, disk: 0.71, diskTotal: 1000),
         "studio": Profile(cpu: 27, mem: 0.31, rx: 1.2e6, tx: 0.6, swap: 0, disk: 0.38, diskTotal: 2000),
         "nas": Profile(cpu: 6, mem: 0.42, rx: 3e5, tx: 1.4, swap: 0.4, disk: 0.93, diskTotal: 4000),
+        "mini": Profile(cpu: 4, mem: 0.28, rx: 8e4, tx: 0.5, swap: 0, disk: 0.46, diskTotal: 1000),
     ]
     private static let gb = Double(1 << 30)
 

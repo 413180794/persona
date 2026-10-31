@@ -48,12 +48,33 @@ EXTRA = [
     ("server", "infra", 2, "给 API 加限流", "working", "working", 3, "按 token 做令牌桶限流，正在补压测。"),
     ("macbook", "weather", 1, "整理小组件的截图素材", "idle", "idle", 900, "六张截图都按 App Store 的尺寸导出了。"),
 ]
+# 细列表 needs every density on screen (docs/ios.md「Agents 列表」): a space with many finished-unread agents, spaces
+# where every agent is idle (空闲的空间), and a machine where nothing runs at all (the Mac mini, filtered to it).
+EXTRA += [("studio", "ios-app", 5, t, "done", "unread", mins, last) for t, mins, last in [
+    ("App Store 截图换成新版界面", 4, "六种尺寸的截图都换好了，深浅色各一套。"),
+    ("修复横屏时键盘挡住输入框", 9, "输入框改成跟着键盘高度走，横竖屏都验证过。"),
+    ("设置页加上导出数据", 14, "导出成 JSON，放进分享面板，可以存到文件。"),
+    ("小组件支持深色图标", 22, "图标跟随系统，主屏幕三种尺寸都看过。"),
+    ("引导页文案再精简", 31, "四页减到三页，每页一句话。"),
+    ("升级依赖并跑完测试", 47, "依赖都升到最新，312 个测试全部通过。"),
+]] + [("studio", "ios-app", 5, "通知分组按会话合并", "working", "working", 2, "正在改通知的 thread id。")]
+EXTRA += [(mid, space, sidx, title, "done", "idle", mins, last) for mid, space, sidx, title, mins, last in [
+    ("studio", "notes", 6, "笔记导出成 Markdown", 60 * 5, "导出脚本写好了，图片一起拷到 assets。"),
+    ("studio", "dotfiles", 7, "终端配色换成浅色主题", 60 * 26, "浅色主题配好了，Vim 和 tmux 一起改了。"),
+    ("studio", "dotfiles", 7, "整理 shell 别名", 60 * 27, "删了 12 个用不到的别名。"),
+    ("mini", "home-server", 1, "家里的媒体库重新扫描", 60 * 3, "重新扫描完成，补上了 41 张封面。"),
+    ("mini", "home-server", 1, "备份脚本加上校验", 60 * 20, "每次备份后对比校验和，不一致会发通知。"),
+    ("mini", "scripts", 2, "照片按年份归档", 60 * 30, "按拍摄日期归到年份目录，重复的跳过。"),
+    ("mini", "router", 3, "路由器配置备份", 60 * 50, "配置导出到备份盘，保留最近 10 份。"),
+]]
 sessions = list(m.SESSIONS)
 for n, (mid, space, sidx, title, status, state, minutes, last) in enumerate(EXTRA):
     sid = "c7e9f1a3-0000-4000-8000-%012d" % (n + 1)
     slot = 10 + n
+    # Tabs as herdr names them when nobody did: a number in their space.
+    tab = str(1 + sum(1 for e in EXTRA[:n] if e[0] == mid and e[1] == space))
     s = m.sess(mid, sid, title, "/Users/me/code/" + space if mid != "server" else "/home/me/code/" + space, status, state,
-               space, sidx, "t%d" % slot, slot, minutes, last, agent="codex" if n % 3 == 1 else "claude")
+               space, sidx, tab, slot, minutes, last, agent="codex" if n % 3 == 1 else "claude")
     if state == "idle":
         s["seen_at"] = m.ago(minutes=minutes - 1)
     sessions.append(s)
@@ -127,8 +148,14 @@ def phone_frames(cols=38, rows=30, ticks=40):
     return out
 
 
+# A machine where every agent is idle (全部空闲 when the list is filtered to it).
+MINI = dict(next(x for x in m.MACHINES if x["id"] == "studio"), id="mini", name="Mac mini", ssh_host="mini", hostname="mini",
+            icon="desktop")
+MINI["system"] = dict(MINI["system"], model="Mac mini", cpu="Apple M4", cores=10, memory=32 * m.GB)
+machines = m.MACHINES + [MINI]
+
 data = {
-    "machines": m.MACHINES,
+    "machines": machines,
     "sessions": sessions + m.ASSISTANT,
     "items": m.ITEMS,
     "full": m.FULL,

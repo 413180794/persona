@@ -122,7 +122,7 @@ final class DemoModeTests: XCTestCase {
         noErrors("agents")
         shot("agents")
         see(app.buttons["agents.filter.unread"], "the 未读 filter").tap()
-        see(text("博客迁移到 Astro"), "an unread agent")
+        see(text("整理待拍板事项"), "an unread agent")
         XCTAssertFalse(text("给天气 App 加主屏幕小组件").exists, "a working agent under 未读")
         shot("agents-unread")
         app.buttons["agents.filter.all"].tap()

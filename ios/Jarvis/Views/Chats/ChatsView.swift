@@ -181,7 +181,7 @@ struct ChatsView: View {
             .sorted { $0.order < $1.order }
             .map(\.session)
         let interactions = model.pendingInteractions.filter { ix in
-            guard let s = model.session(ix.sessionKey), !s.assistant else { return false }
+            guard let s = model.session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineID == machineFilter else { return false }
             return quick == .all || quick == .needsYou
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
@@ -191,10 +191,19 @@ struct ChatsView: View {
                 if !interactions.isEmpty && query.isEmpty {
                     Section {
                         ForEach(interactions) { ix in
-                            InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            if compact {
+                                // 细列表: one row like an agent's; the chat answers it.
+                                NavigationLink(value: ix.sessionKey) {
+                                    CompactInteractionRow(interaction: ix, machine: model.machine(ix.machineID)?.name)
+                                }
+                                .listRowInsets(CompactList.rowInsets)
+                                .accessibilityIdentifier("agents.interaction")
+                            } else {
+                                InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                            }
                         }
                     } header: {
                         SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
@@ -204,12 +213,22 @@ struct ChatsView: View {
                 if quick == .unread && !unreadShown.isEmpty {
                     Section {
                         Button { confirmReadAll = true } label: {
-                            HStack {
-                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
-                                Spacer()
-                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            if compact {
+                                HStack(spacing: CompactList.gap) {
+                                    Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
+                                    Text("全部标为已读").font(CompactList.title).lineLimit(1)
+                                    Spacer()
+                                    Text("\(unreadShown.count) 个完成未看").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            } else {
+                                HStack {
+                                    Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
+                                    Spacer()
+                                    Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
                             }
                         }
+                        .listRowInsets(compact ? CompactList.rowInsets : nil)
                         .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
                             Button("全部标为已读（\(unreadShown.count)）") {
                                 model.markSeen(unreadShown)
@@ -238,6 +257,7 @@ struct ChatsView: View {
                     if !quiet.isEmpty {
                         Section {
                             ForEach(quiet) { g in
+                                if compact { compactQuietSpace(g) } else {
                                 DisclosureGroup(isExpanded: Binding(
                                     get: { expandedQuiet.contains(g.id) || !query.isEmpty },
                                     set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
@@ -245,6 +265,7 @@ struct ChatsView: View {
                                     ForEach(g.sessions) { s in slotRow(s) }
                                 } label: {
                                     QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                                }
                                 }
                             }
                         } header: {
@@ -272,6 +293,8 @@ struct ChatsView: View {
             }
             .listStyle(.insetGrouped)
             .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
+            .environment(\.compactList, compact)
+            .listSectionSpacing(compact ? .compact : .default)
             .themedPage()
             // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone in its safe area.
             .modifier(TopBar(abovePage: widthClass == .regular) {
@@ -396,21 +419,9 @@ struct ChatsView: View {
                 if !idle.isEmpty {
                     if showIdle {
                         ForEach(idle) { s in slotRow(s) }
-                        if query.isEmpty {
-                            Button {
-                                withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(g.id) }
-                            } label: {
-                                Label("收起空闲的 \(idle.count) 个", systemImage: Theme.Icon.collapse)
-                                    .font(Theme.Font.secondaryMedium)
-                                    .lineLimit(1)
-                            }
-                        }
+                        if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: g.id) }
                     } else {
-                        Button {
-                            Haptics.tap()
-                            withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(g.id) }
-                        } label: { IdleFoldRow(sessions: idle) }
-                            .buttonStyle(.plain)
+                        expandRow(idle, key: g.id)
                     }
                 }
             } header: {
@@ -428,12 +439,14 @@ struct ChatsView: View {
             }
             .buttonStyle(.plain)
             Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }) } label: {
-                Image(systemName: Theme.Icon.moreMenu)
-                    .font(Theme.Font.body)
+                Image(systemName: compact ? Theme.Icon.more : Theme.Icon.moreMenu)
+                    .font(compact ? CompactList.metaStrong : Theme.Font.body)
                     .foregroundStyle(.secondary)
                     .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                     .contentShape(.rect)
             }
+            // 细列表: as quiet as the counts beside it (a Menu's label takes the accent otherwise).
+            .tint(compact ? Color.secondary : nil)
             .accessibilityLabel("\(g.name) 的更多操作")
         }
     }
@@ -513,21 +526,53 @@ struct ChatsView: View {
         if !rows.isEmpty {
             if expandedIdle.contains(key) || !query.isEmpty {
                 ForEach(rows) { s in slotRow(s, context: true, inStateSection: inStateSection) }
-                if query.isEmpty {
-                    Button {
-                        withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(key) }
-                    } label: {
-                        Label("收起\(label)的 \(rows.count) 个", systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
-                    }
-                }
+                if query.isEmpty { collapseRow("收起\(label)的 \(rows.count) 个", key: key) }
             } else {
-                Button {
-                    Haptics.tap()
-                    withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
-                } label: { IdleFoldRow(sessions: rows) }
-                    .buttonStyle(.plain)
+                expandRow(rows, key: key)
             }
         }
+    }
+
+    /// 还有 N 个空闲: the idle agents behind one row.
+    private func expandRow(_ rows: [Session], key: String) -> some View {
+        Button {
+            Haptics.tap()
+            withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
+        } label: {
+            if compact { CompactFoldRow(sessions: rows) } else { IdleFoldRow(sessions: rows) }
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(compact ? CompactList.rowInsets : nil)
+    }
+
+    private func collapseRow(_ title: String, key: String) -> some View {
+        Button {
+            withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(key) }
+        } label: {
+            if compact {
+                CompactCollapseRow(title: title)
+            } else {
+                Label(title, systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
+            }
+        }
+        .listRowInsets(compact ? CompactList.rowInsets : nil)
+    }
+
+    /// 细列表: a quiet space as one row like an agent's, its agents under it when opened (a DisclosureGroup's own row
+    /// is taller and its arrow heavier than everything else in the list).
+    @ViewBuilder private func compactQuietSpace(_ g: SpaceGroup) -> some View {
+        let open = expandedQuiet.contains(g.id) || !query.isEmpty
+        Button {
+            withAnimation(Theme.Motion.standard) {
+                if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
+            }
+        } label: {
+            CompactQuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty, expanded: open)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(CompactList.rowInsets)
+        .accessibilityIdentifier("agents.quietSpace")
+        if open { ForEach(g.sessions) { s in slotRow(s) } }
     }
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
@@ -544,7 +589,7 @@ struct ChatsView: View {
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
-            .listRowInsets(compact ? EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 14) : nil)
+            .listRowInsets(compact ? CompactList.rowInsets : nil)
             .swipeActions(edge: .trailing) {
                 if s.state.isLive {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
@@ -735,10 +780,16 @@ struct SectionHeader: View {
     var count: Int?
     /// The count's color: a state's tone, or StatusPalette.idle for a plain count.
     var tone: StatusTone
+    @Environment(\.compactList) private var compact
 
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
-            Text(title)
+            if compact {
+                // Color.primary: a section header dims hierarchical styles a level (CLAUDE.md).
+                Text(title).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            } else {
+                Text(title)
+            }
             if let count { CountBadge(count: count, look: .tone(tone)) }
         }
     }
@@ -753,14 +804,21 @@ struct SpaceHeader: View {
     /// Muted with agents running: quieter than the busy spaces, not fainter than the idle ones.
     var muted = false
     var folded = false
+    @Environment(\.compactList) private var compact
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            Text(group.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
-            if pinned { Image(systemName: Theme.Icon.pinned).font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-            if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+            if compact {
+                // 细列表: the space is the title over its rows (Color.primary: a header dims `.primary` a level).
+                Text(group.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            } else {
+                Text(group.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+            }
+            let small = compact ? CompactList.meta : Theme.Font.label
+            if pinned { Image(systemName: Theme.Icon.pinned).font(small).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+            if muted { Image(systemName: Theme.Icon.muted).font(small).foregroundStyle(Color.secondary).accessibilityLabel("已屏蔽") }
             if showMachine, let machine {
-                Text(machine.name).font(Theme.Font.label).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+                Text(machine.name).font(small).foregroundStyle(Color.secondary).textCase(nil).lineLimit(1)
             }
             Spacer(minLength: 4)
             StateCounts(group: group).opacity(muted ? 0.6 : 1)
@@ -777,6 +835,7 @@ struct SpaceHeader: View {
 
 struct StateCounts: View {
     var group: SpaceGroup
+    @Environment(\.compactList) private var compact
 
     /// "3 个需要你，12 个工作中，35 个完成未看，4 个空闲" for VoiceOver (and the UI tests).
     static func spoken(_ group: SpaceGroup) -> String {
@@ -792,7 +851,8 @@ struct StateCounts: View {
                 if n > 0 {
                     HStack(spacing: Theme.Space.xs) {
                         Circle().fill(st.color).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
-                        Text("\(n)").font(Theme.Font.labelHeavy.monospacedDigit()).foregroundStyle(.secondary)
+                        Text("\(n)").font((compact ? CompactList.metaStrong : Theme.Font.labelHeavy).monospacedDigit())
+                            .foregroundStyle(Color.secondary)
                             .contentTransition(.numericText(value: Double(n)))
                     }
                     .accessibilityElement(children: .ignore)
@@ -804,7 +864,8 @@ struct StateCounts: View {
             if idle > 0 {
                 HStack(spacing: Theme.Space.xs) {
                     Circle().fill(Color.secondary.opacity(0.45)).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
-                    Text("\(idle)").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(idle)").font((compact ? CompactList.metaStrong : Theme.Font.labelStrong).monospacedDigit())
+                        .foregroundStyle(Color.secondary)
                         .contentTransition(.numericText(value: Double(idle)))
                 }
                 .accessibilityLabel("\(idle) 个空闲")
@@ -883,7 +944,8 @@ nonisolated struct SlotRow: View, Equatable {
     }
 }
 
-/// 细列表: one line per agent — state dot, title, where (space › tab, or the tab when the section is the space), when.
+/// 细列表: one line per agent — state dot, title and where (the tab, or space › tab when the section is not the space),
+/// when on the right (alone there, so the times line up). `CompactList`'s scale.
 nonisolated struct CompactSlotRow: View, Equatable {
     var session: Session
     var muted = false
@@ -891,19 +953,22 @@ nonisolated struct CompactSlotRow: View, Equatable {
 
     @MainActor
     var body: some View {
-        HStack(spacing: Theme.Space.s) {
-            StatusDot(state: session.state, size: 8)
-            Text(session.displayTitle)
-                .font(session.state == .unread ? Theme.Font.secondaryStrong : Theme.Font.secondary)
-                .lineLimit(1)
-                .layoutPriority(1)
-            Spacer(minLength: 4)
-            if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
-            if let place, !place.isEmpty {
-                Text(place).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+        HStack(spacing: CompactList.gap) {
+            StatusDot(state: session.state, size: Theme.Size.dot).scaledFrame(width: CompactList.mark)
+            HStack(alignment: .firstTextBaseline, spacing: CompactList.gap) {
+                Text(session.displayTitle)
+                    .font(session.state == .unread ? CompactList.titleUnread : CompactList.title)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                if let place, !place.isEmpty {
+                    // Tail: "photo-sy…" still says where; the head cut to "…to-sync › #1".
+                    Text(place).font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
+            Spacer(minLength: Theme.Space.xs)
+            if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
             TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(CompactList.meta.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
             }
             .fixedSize()
         }
@@ -1071,11 +1136,16 @@ private struct RenameSessionAlert: ViewModifier {
 struct MachineSectionHeader: View {
     var machine: Machine
     var group: SpaceGroup
+    @Environment(\.compactList) private var compact
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: machine.symbol).foregroundStyle(machine.online ? Theme.accent : .secondary)
-            Text(machine.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+            if compact {
+                Text(machine.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            } else {
+                Text(machine.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+            }
             if !machine.online {
                 Text("离线").font(Theme.Font.labelStrong).foregroundStyle(.secondary).textCase(nil)
             }

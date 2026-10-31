@@ -14,7 +14,7 @@ import Testing
 
     @Test func everyPageDecodes() async throws {
         let machines = try await api.machines()
-        #expect(machines.count == 4)
+        #expect(machines.count == 5)
         #expect(machines.contains { !$0.online }, "an offline machine")
         let sessions = try await api.sessions()
         #expect(sessions.count > 15)
@@ -31,7 +31,7 @@ import Testing
         #expect(try await api.launchers(machine: "macbook").count == 2)
         _ = try await api.dirs(machine: "macbook", path: "")
 
-        #expect(try await api.metricsOverview().count == 4)
+        #expect(try await api.metricsOverview().count == 5)
         let day = try await api.machineMetrics("server", range: .day)
         #expect(day.points.count > 300)
         #expect(day.latest != nil)

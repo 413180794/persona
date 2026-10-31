@@ -62,6 +62,12 @@ final class AgentsListTests: XCTestCase {
         XCTAssertFalse(e.exists, what)
     }
 
+    /// A row that can be below the fold (under the 需要你处理 cards and weather; the list builds rows lazily).
+    @discardableResult private func reach(_ e: XCUIElement, _ what: String) -> XCUIElement {
+        for _ in 0..<4 where !e.waitForExistence(timeout: 2) { app.swipeUp(velocity: .slow) }
+        return see(e, what)
+    }
+
     private func text(_ s: String) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "label == %@", s)).firstMatch
     }
@@ -194,7 +200,7 @@ final class AgentsListTests: XCTestCase {
         launch()
         let platform = see(header("platform"), "platform's header")
         XCTAssertTrue(platform.label.contains("已展开"), platform.label)
-        see(text("platform 任务 1"), "platform's first row")
+        reach(text("platform 任务 1"), "platform's first row")
         platform.tap()
         gone(text("platform 任务 1"), "platform's rows fold away")
         let folded = header("platform")
@@ -216,10 +222,11 @@ final class AgentsListTests: XCTestCase {
         shot("agents-folded-all")
         listMenu().tap()
         see(app.buttons["全部展开"], "全部展开").tap()
-        see(text("platform 任务 1"), "platform open again")
+        reach(text("platform 任务 1"), "platform open again")
         XCTAssertTrue(header("platform").label.contains("已展开"))
 
         // A folded space still opens from its menu.
+        for _ in 0..<4 { app.swipeDown(velocity: .fast) }
         header("weather").tap()
         button("weather 的更多操作").tap()
         see(app.buttons["打开空间"], "打开空间 in the space's menu").tap()
