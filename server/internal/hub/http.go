@@ -68,6 +68,17 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.proxyBody("session.rename"))
+	// {"dry_run": true, "all": false}: rename the tabs of running agents nobody named after their task (tabname.go).
+	api.HandleFunc("POST /api/v1/tabs/autoname", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			DryRun bool `json:"dry_run"`
+			All    bool `json:"all"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+		defer cancel()
+		writeJSON(w, map[string]any{"tabs": h.autonameTabs(ctx, in.DryRun, in.All)})
+	})
 	// {"permission_mode": …, "effort": …}: either may be left out (node/modes.go).
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.proxyBody("session.modes"))
 	api.HandleFunc("POST /api/v1/machines/{mid}/spaces/{wid}/rename", h.withMachine(h.renameSpace))
