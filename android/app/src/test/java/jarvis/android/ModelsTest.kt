@@ -114,3 +114,20 @@ class AsyncStartTest {
         org.junit.Assert.assertEquals(null, f.starting)
     }
 }
+
+class SessionModesTest {
+    @Test fun runningSessionsCannotPickBypassButShowItWhenOn() {
+        val ids = jarvis.android.ui.SessionModes.switchable("default").map { it.id }
+        org.junit.Assert.assertEquals(listOf("default", "acceptEdits", "plan", "auto"), ids)
+        org.junit.Assert.assertEquals("bypassPermissions", jarvis.android.ui.SessionModes.switchable("bypassPermissions").last().id)
+        org.junit.Assert.assertEquals("future", jarvis.android.ui.SessionModes.switchable("future").last().title) // a newer mode shows raw
+        org.junit.Assert.assertEquals("手动确认", jarvis.android.ui.SessionModes.modeLabel("default"))
+        org.junit.Assert.assertEquals("很高", jarvis.android.ui.SessionModes.effortLabel("xhigh"))
+    }
+
+    @Test fun modesGoOutAsTheHubReadsThem() {
+        val s = jarvis.android.data.JsonCodec.decodeFromString<jarvis.android.data.Session>(
+            """{"machine_id":"m","session_id":"s","permission_mode":"plan","effort":"max"}""")
+        org.junit.Assert.assertEquals("plan", s.permissionMode); org.junit.Assert.assertEquals("max", s.effort)
+    }
+}

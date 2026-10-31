@@ -469,6 +469,7 @@ fun ChatScreen(
                 }
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
                 session?.takeIf { it.starting == true || it.startError != null }?.let { StartingNote(it.startError, it.agentLabel) }
+                session?.takeIf { it.agent == null || it.agent == "claude" }?.let { SessionModeBar(hub, it) }
                 session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                     AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
                 }

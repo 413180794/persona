@@ -117,6 +117,8 @@ data class Session(
     val launcher: String? = null,
     val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
+    /** Claude Code's effort level (low … max) as the session runs with it. */
+    val effort: String? = null,
     val assistant: Boolean = false,
     @SerialName("workspace_id") val workspaceId: String? = null,
     @SerialName("space_id") val spaceId: String? = null,

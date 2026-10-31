@@ -208,6 +208,15 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun start(machine: String, cwd: String, launcher: String, nameHint: String?, mode: String? = null, workspaceId: String? = null): Session =
         JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint))).session
 
+    @Serializable private data class ModesBody(
+        @SerialName("permission_mode") val permissionMode: String? = null,
+        val effort: String? = null,
+    )
+    /** Switch a running session's permission mode or effort (node/modes.go; bypassPermissions only at start). */
+    suspend fun setModes(k: SessionKey, permissionMode: String? = null, effort: String? = null) {
+        post(sp(k) + "/modes", ModesBody(permissionMode, effort))
+    }
+
     @Serializable data class DirEntry(val name: String = "", val path: String = "", @SerialName("is_git") val isGit: Boolean = false)
     @Serializable data class RecentDir(val path: String = "", val name: String = "")
     @Serializable

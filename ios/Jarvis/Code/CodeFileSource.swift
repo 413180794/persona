@@ -110,7 +110,10 @@ import UIKit
         let doc = doc
         task = Task.detached(priority: .userInitiated) { [weak self] in
             doc.highlight(cancelled: { Task.isCancelled }) { range in
-                Task { @MainActor in self?.colored(range, in: doc) }
+                // Its own weak capture, as in MainActor.run below: Swift 6.2 (Xcode 26.0) treats the outer `self`
+                // as this task's variable and will not send it to the main actor ("sending 'self' risks causing
+                // data races"); 6.3 accepts either.
+                Task { @MainActor [weak self] in self?.colored(range, in: doc) }
             }
             await MainActor.run { [weak self] in
                 guard let self, self.doc === doc else { return }

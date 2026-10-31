@@ -329,6 +329,18 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     fun session(k: SessionKey): Session? = _sessions.value[k.machineId]?.firstOrNull { it.sessionId == k.sessionId }
 
+    /** Changes a running session's modes and shows them at once (the next `sessions` push confirms them). */
+    suspend fun setModes(k: SessionKey, permissionMode: String? = null, effort: String? = null) {
+        api.setModes(k, permissionMode, effort)
+        _sessions.update { map ->
+            val list = map[k.machineId] ?: return@update map
+            map + (k.machineId to list.map {
+                if (it.sessionId != k.sessionId) it
+                else it.copy(permissionMode = permissionMode ?: it.permissionMode, effort = effort ?: it.effort)
+            })
+        }
+    }
+
     /** A session the hub just started (async): listed now, so its chat has it before the next `sessions` push. */
     fun adopt(s: Session) {
         _sessions.update { map ->
