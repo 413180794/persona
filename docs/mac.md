@@ -127,7 +127,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   - 拍照（`UIImagePickerController`）：`isSourceTypeAvailable(.camera)` 为 false，输入框不出「拍照」；图片从文件、剪贴板来。
   - 扫码配对（VisionKit `DataScannerViewController`）：换成「粘贴配对链接」按钮（`Mac/Settings/PairingPaste+Mac.swift`），或直接打开 `jarvis://pair?…` 链接。
   - 远程推送：target 还没有 APNs entitlement，`PushRegistrar` 不注册；App 开着时靠 WebSocket，本地通知照常。
-  - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置里手机数据的健康开关还在，待收掉。
+  - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置 › 连接器 › 这台 Mac 里也没有健康开关（`PhoneDataSource.onThisDevice`，有测试），「N 项已打开」同样不算它。
   - **待定（2026-11-01 查到，没改）**：Mac 版连上真 hub 后也发 `register_phone`（`AppModel.registerPhone`，`simulator: false`，设备名是 Mac 的）。hub 只有一个「手机」
     （`hub.phoneClient`：真机优先于模拟器，再取最近注册的），于是 Mac 一直在线时 phone_* 全落到 Mac 上；iPhone 进后台断开时 hub 看见有「手机」在线，
     不再静默推送唤醒 iPhone（`callPhone` → `wakePhone` 只在一个都没有时才走）；而且 `setPhoneTools` 用 Mac 报的工具表整个替换，Mac 不注册健康，

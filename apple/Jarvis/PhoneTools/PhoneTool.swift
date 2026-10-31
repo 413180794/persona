@@ -15,6 +15,15 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// The sources this device has tools for, in order (设置 › 手机数据).
+    static var onThisDevice: [PhoneDataSource] {
+        #if os(macOS)
+        allCases.filter { $0 != .health } // no health data on a Mac (PhoneToolRegistry.healthTools)
+        #else
+        allCases
+        #endif
+    }
+
     var title: String {
         switch self {
         case .contacts: "通讯录"

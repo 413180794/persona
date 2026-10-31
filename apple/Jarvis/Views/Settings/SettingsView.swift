@@ -265,7 +265,7 @@ struct PhoneDataView: View {
     var body: some View {
         List {
             Section {
-                ForEach(PhoneDataSource.allCases) { s in
+                ForEach(PhoneDataSource.onThisDevice) { s in
                     HStack(spacing: Theme.Space.m) {
                         Image(systemName: s.symbol)
                             .font(Theme.Font.heading)

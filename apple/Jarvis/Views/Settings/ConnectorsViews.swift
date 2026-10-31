@@ -15,7 +15,7 @@ enum ConnectorText {
     }
 
     static func deviceSummary() -> String {
-        let on = PhoneDataSource.allCases.filter(\.isEnabled).count
+        let on = PhoneDataSource.onThisDevice.filter(\.isEnabled).count
         return on == 0 ? "未打开" : "\(on) 项已打开"
     }
 
