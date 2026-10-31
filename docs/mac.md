@@ -159,7 +159,13 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 几个 Agent 可以并排或放到另一块屏幕上。入口：Agents 列表行的右键菜单「在新窗口打开」、Agent 菜单「在新窗口打开」。
 菜单（Commands）没有自己的 `openWindow`，经 `MacShellState.chatWindow` 交给主窗口的 `MacWindowOpener` 打开。
 DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗口另存成 `<名字>.chat.png`。
-待办：对话页自己画的返回箭头在单独的窗口里还显示（点了没有可回的页面）。
+窗口里的对话是这个窗口的第一页（`SplitDetail(isFirstPage: true)`），对话页自己画的返回箭头不显示。
+
+## 显示 / 前往菜单（Mac）
+
+`apple/Mac/App/MacViewCommands.swift`（有测试）。显示 › 放大字号 ⌘+ / 缩小字号 ⌘- / 标准字号 ⌘0：在 设置 › 字号 的 小 / 标准 / 大 之间走一步，到头就停，
+和设置里改是同一个值（整棵视图按新字号重建）。前往 › 上一个 / 下一个 Agent ⌘[ ⌘]：按 Agents 列表的顺序（`AgentListOrder`：需要你 → 完成未看 → 工作中 → 已看），
+循环，不含 Jarvis 对话；没开着 Agent 时从第一个开始。
 
 ## 快速打开、新建（Mac）
 

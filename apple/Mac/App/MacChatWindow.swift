@@ -12,6 +12,8 @@ struct MacChatWindow: View {
             if let key {
                 NavigationStack {
                     ChatView(key: key).id(key)
+                        // The first page of its own window: nothing to go back to (no back arrow).
+                        .environment(\.splitDetail, SplitDetail(isFirstPage: true))
                 }
                 .navigationTitle(model.session(key)?.displayTitle ?? "对话")
             } else {

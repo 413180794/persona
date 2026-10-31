@@ -21,6 +21,7 @@ struct JarvisMacApp: App {
         .commands {
             MacCommands(model: model)
             MacAgentMenu(model: model)
+            MacViewMenu(model: model)
         }
         .onChange(of: phase) { _, new in
             // A Mac app keeps running in the background: the socket stays open (the hub reaches it that way), only
