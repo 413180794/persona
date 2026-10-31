@@ -271,7 +271,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
 - [ ] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
 - [ ] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
-- [ ] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
+- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views
+  - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
 ## 1. Jarvis tab (assistant)
 - [ ] Headless Claude assistant conversations (main conversation `assistant.main` + side branches); first launch opens main — Views/Assistant/AssistantView.swift, App/AppModel.swift (assistantMain, refreshAssistant)
