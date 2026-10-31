@@ -146,6 +146,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? { MacDockMenu.shared.menu(AppModel.shared) }
+
     /// Clicking the Dock icon with no window open brings the main window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { sender.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.makeKeyAndOrderFront(nil) }

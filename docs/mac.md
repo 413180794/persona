@@ -125,6 +125,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 
 ## 菜单栏、Dock 角标、通知（Mac）
 
+Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要你」「做完了」两组（和菜单栏列表同一个排序，各最多 8 个，点一下打开对话），再是「新建 Agent 对话…」。
+
 `apple/Mac/App/MacAttention.swift`、`MacMenuBar.swift`，测试 `apple/JarvisMacTests`（`JarvisMac` scheme 的 test）。
 
 - Mac 没有 APNs（target 没有推送权限），hub 推不到这里：`MacAttentionWatcher` 盯着 AppModel 的会话列表（App 开着时 WebSocket 一直连着），
@@ -297,7 +299,7 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 - [ ] Local chat cache (last 2 turns per chat, 6 MB) + chats-v2 disk cache — Shared/StateCache.swift, Shared/ChatStore.swift
 - [ ] Lazy images on scroll with memory + disk cache — Views/Chat/ChatImageLoader.swift (ChatThumbnail)
 - [ ] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
-- [ ] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)
+- [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Jarvis 页是窗口 sheet
 - [ ] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
 - [ ] Swipe left chat → Files → Git; swipe-back gesture re-enabled — Views/Session/SessionPanes.swift (SessionPane, SessionPaneBar), Views/Chat/SwipeBack.swift
 - [ ] Hide tab bar in single-column chat — Views/Chat/TabBarHiding.swift
