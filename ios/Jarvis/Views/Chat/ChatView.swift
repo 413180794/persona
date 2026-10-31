@@ -533,7 +533,8 @@ struct ChatView: View {
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, WorkCardSlice.inset)
+                .padding(.leading, WorkCardSlice.contentLeading)
+                .padding(.trailing, WorkCardSlice.inset)
                 .padding(.vertical, Theme.Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background { WorkCardSlice(top: false, bottom: true) }
@@ -2526,17 +2527,22 @@ struct WorkStepView: View, Equatable {
             case .step(.thought(let t)) where t.task != nil && t.wake != true:
                 TaskNoteRow(item: t, grouped: true) // a Monitor event between two commands: one line like theirs
             case .step(.thought(let t)):
-                Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) } }
-                    .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, Theme.Space.m)
+                Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: !WorkCardSlice.timeline) } }
+                    .padding(.leading, WorkCardSlice.contentLeading)
+                    .padding(.trailing, WorkCardSlice.inset)
+                    .padding(.vertical, WorkCardSlice.timeline ? Theme.Space.s : Theme.Space.m)
             case .step(.folded(let f)):
                 FoldedWorkRow(fold: f)
-                    .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, Theme.Space.m)
+                    .padding(.leading, WorkCardSlice.contentLeading)
+                    .padding(.trailing, WorkCardSlice.inset)
+                    .padding(.vertical, WorkCardSlice.timeline ? Theme.Space.s : Theme.Space.m)
             case .text(let i):
-                AssistantText(item: i)
-                    .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, Theme.Space.m)
+                // The agent's words between its steps: on the timeline in the quieter type, so they read as part of
+                // the process and not as its answer.
+                AssistantText(item: i, quiet: WorkCardSlice.timeline)
+                    .padding(.leading, WorkCardSlice.contentLeading)
+                    .padding(.trailing, WorkCardSlice.inset)
+                    .padding(.vertical, WorkCardSlice.timeline ? Theme.Space.s : Theme.Space.m)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2599,32 +2605,58 @@ struct WorkStepView: View, Equatable {
 struct WorkCardSlice: View {
     var top: Bool
     var bottom: Bool
-    /// Half the list's spacing (`LazyVStack(spacing: Theme.Space.l)`).
-    static let bridge: CGFloat = 7
+    /// Half the list's spacing (`LazyVStack(spacing: Theme.Space.l)`): the slices meet in the middle of each gap. It was
+    /// 7 from when the spacing was 14; at 16 every seam showed a 2 pt gap (white lines across the card, the rail broken).
+    static let bridge: CGFloat = Theme.Space.l / 2
     static let radius = Theme.Radius.card
     /// The rows' side padding inside the card.
     static let inset: CGFloat = 12
     /// Where a tool row's words start (inset + 24 pt icon + 10): separators start there.
     static let textColumn: CGFloat = 46
+    /// The timeline's rail runs through the middle of the tools' icons.
+    static let railX: CGFloat = inset + Theme.Size.icon / 2
+
+    static var timeline: Bool { StyleSpec.current.workList == .timeline }
+    /// Where a step's own content starts: the card's inset, or (timeline) right of the rail, where the tools' words are.
+    static var contentLeading: CGFloat { timeline ? textColumn : inset }
 
     var body: some View {
+        if Self.timeline { rail } else { card }
+    }
+
+    /// 液态玻璃: no card, a thin line down the left through the steps, reaching into the gaps to meet its neighbours;
+    /// it starts at the first step and stops in the middle of the 收起 foot.
+    private var rail: some View {
+        GeometryReader { g in
+            Rectangle()
+                .fill(Color(uiColor: .separator))
+                .frame(width: Theme.Size.lineMedium, height: bottom ? g.size.height / 2 + (top ? 0 : Self.bridge) : g.size.height + (top ? 0 : Self.bridge) + Self.bridge)
+                .offset(x: Self.railX - Theme.Size.lineMedium / 2, y: top ? Theme.Space.m : -Self.bridge)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var card: some View {
         let r = Self.radius
         let fill = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
                                           bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0,
                                           style: .continuous).fill(Theme.Fill.well)
-        StrokeShapeView(shape: WorkCardEdges(top: top, bottom: bottom, radius: r),
+        return StrokeShapeView(shape: WorkCardEdges(top: top, bottom: bottom, radius: r),
                         style: Theme.cardStroke, strokeStyle: StrokeStyle(lineWidth: 0.5),
                         isAntialiased: true, background: fill)
             .padding(.top, top ? 0 : -Self.bridge)
             .padding(.bottom, bottom ? 0 : -Self.bridge)
     }
 
-    /// The hairline between two steps, in the gap above a row, from the words' column.
-    static var separator: some View {
-        Rectangle().fill(Color(uiColor: .separator)).frame(height: Theme.Size.hairline)
-            .padding(.leading, textColumn)
-            .offset(y: -bridge)
-            .allowsHitTesting(false)
+    /// The hairline between two steps, in the gap above a row, from the words' column (none on the timeline: the rail
+    /// joins the steps).
+    @ViewBuilder static var separator: some View {
+        if !timeline {
+            Rectangle().fill(Color(uiColor: .separator)).frame(height: Theme.Size.hairline)
+                .padding(.leading, textColumn)
+                .offset(y: -bridge)
+                .allowsHitTesting(false)
+        }
     }
 }
 

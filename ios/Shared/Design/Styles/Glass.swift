@@ -11,5 +11,6 @@ nonisolated extension StyleSpec {
         surface: .glass, buttons: .glass, softShadow: defaultSoftShadow, fontDesign: .default, previewCorner: 20,
         components: .jarvis,
         lark: larkFollowing(accent: Palette.systemBlue, card: Theme.systemCard, cardStroke: defaultStroke,
-                            otherBubble: larkGrayBubble))
+                            otherBubble: larkGrayBubble),
+        workList: .timeline)
 }

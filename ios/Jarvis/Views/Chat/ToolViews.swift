@@ -308,10 +308,11 @@ struct ToolCallRow: View {
                 .chatPinned(pinKey)
 
             if base == "TodoWrite" {
-                TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, pad).padding(.bottom, Theme.Space.s)
+                TodoList(todos: call.input["todos"]?.array ?? []).padding(.leading, detailLeading).padding(.trailing, pad).padding(.bottom, Theme.Space.s)
             } else if isOpen {
                 ToolDetail(call: call)
-                    .padding(.horizontal, pad)
+                    .padding(.leading, detailLeading)
+                    .padding(.trailing, pad)
                     .padding(.bottom, Theme.Space.m)
                     .unfolding(unfold)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -321,6 +322,9 @@ struct ToolCallRow: View {
     }
 
     private var pad: CGFloat { grouped ? WorkCardSlice.inset : 10 }
+    /// On the work timeline what a tool shows keeps right of the rail, under its words.
+    private var detailLeading: CGFloat { grouped && WorkCardSlice.timeline ? WorkCardSlice.textColumn : pad }
+    private var onTimeline: Bool { grouped && WorkCardSlice.timeline }
 
     private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.busy : .secondary }
 
@@ -332,6 +336,8 @@ struct ToolCallRow: View {
         } label: {
             HStack(spacing: Theme.Space.m) {
                 ZStack {
+                    // On the timeline the icon sits on the rail: the page under its tint hides the line behind it.
+                    if onTimeline { Circle().fill(Theme.pageBackground).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon) }
                     Circle().fill(tint.opacity(0.14)).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                     if call.isRunning {
                         ProgressView().controlSize(.mini).tint(tint)
@@ -341,7 +347,7 @@ struct ToolCallRow: View {
                             .foregroundStyle(tint)
                     }
                 }
-                Text(ToolPresentation.verb(call.name)).font(Theme.Font.secondaryStrong)
+                Text(ToolPresentation.verb(call.name)).font(onTimeline ? Theme.Font.secondaryMedium : Theme.Font.secondaryStrong)
                 Text(ToolPresentation.subject(call))
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
@@ -355,7 +361,7 @@ struct ToolCallRow: View {
                     .foregroundStyle(.tertiary)
                     .rotationEffect(.degrees(isOpen ? 90 : 0))
             }
-            .padding(.vertical, grouped ? 10 : 7)
+            .padding(.vertical, onTimeline ? Theme.Space.s : grouped ? 10 : 7)
             .padding(.horizontal, pad)
             .contentShape(.rect)
         }

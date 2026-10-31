@@ -31,6 +31,15 @@ nonisolated struct StyleSpec: Sendable {
         case beautiful
     }
 
+    /// How an open work line lists its steps.
+    enum WorkList: Sendable {
+        /// A gray card, the steps its rows with hairlines between them.
+        case card
+        /// On the page like the chat around it: a thin rail down the left that the tools' icons sit on, the agent's
+        /// narration in the quieter type (液态玻璃, 2026-10-31: the card read heavier than the chat).
+        case timeline
+    }
+
     /// 飞书's messages and cards inside the app: links, bubbles and card chrome.
     struct LarkChrome: Sendable {
         var blue: Color
@@ -67,6 +76,7 @@ nonisolated struct StyleSpec: Sendable {
     var larkFollowsAccent = true
     /// The persona's own color (`Theme.persona`), when one is on (docs/persona.md).
     var personaPrimary: Color? = nil
+    var workList: WorkList = .card
 
     /// 飞书 inside a style that is not 飞书: the style's accent for chrome, its cards for cards.
     static func larkFollowing(accent: Color, card: Color, cardStroke: Color, otherBubble: Color? = nil) -> LarkChrome {

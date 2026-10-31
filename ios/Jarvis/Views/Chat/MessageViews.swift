@@ -404,6 +404,8 @@ enum AttachedImageCache {
 
 struct AssistantText: View {
     var item: Item
+    /// The words between an agent's steps (液态玻璃's work timeline): smaller and gray, part of the process.
+    var quiet = false
     @Environment(\.openFile) private var openFile
 
     var body: some View {
@@ -411,6 +413,8 @@ struct AssistantText: View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Markdown(d.markdown)
                 .task(id: item.id) { await Self.preloadLinks(item) }
+                // Inside the theme (applied first), or the theme's text style wins (CLAUDE.md).
+                .modifier(QuietMarkdown(on: quiet))
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
@@ -427,6 +431,18 @@ struct AssistantText: View {
         guard let ts = item.ts, Date.now.timeIntervalSince(ts) < 15 * 60, let text = item.text else { return }
         let links = await Task.detached(priority: .utility) { WebLinks.find(in: text) }.value // data detection is slow
         if !links.isEmpty, !Task.isCancelled { WebViewPool.shared.preload(links) }
+    }
+}
+
+/// Smaller, gray Markdown text (an agent's words between its steps).
+private struct QuietMarkdown: ViewModifier {
+    var on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.markdownTextStyle { FontSize(.em(0.88)); ForegroundColor(.secondary) }
+        } else {
+            content
+        }
     }
 }
 
