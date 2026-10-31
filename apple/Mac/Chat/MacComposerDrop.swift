@@ -40,10 +40,12 @@ extension MacDrop {
         let split = split(urls, already: images)
         if split.folders > 0 { AppModel.shared.toast = Toast("文件夹发不了，拖里面的文件进来", style: .error) }
         guard !split.images.isEmpty || !split.files.isEmpty else { return split.folders > 0 }
+        // A picture NSImage cannot read is uploaded as a file, not dropped.
+        var unreadable: [URL] = []
         for url in split.images {
-            if let img = UIImage(contentsOf: url) { attach(img) }
+            if let img = UIImage(contentsOf: url) { attach(img) } else { unreadable.append(url) }
         }
-        if !split.files.isEmpty { upload(split.files) }
+        if !(split.files + unreadable).isEmpty { upload(split.files + unreadable) }
         return true
     }
 }
@@ -54,6 +56,15 @@ extension MacDrop {
         let scaled = img.scaledDown(maxSide: 1600)
         guard let jpeg = scaled.jpegData(compressionQuality: 0.75) else { return nil }
         return (scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString()))
+    }
+
+    /// Adds a pasted / dropped picture to a starter composer's pictures, with the Agent composer's「一次最多 4 张」.
+    @MainActor static func append(_ img: UIImage, to images: inout [(UIImage, ImagePayload)]) {
+        guard images.count < maxImages else {
+            AppModel.shared.toast = Toast("一次最多 4 张", style: .error)
+            return
+        }
+        if let p = payload(img) { images.append(p) }
     }
 }
 
@@ -76,15 +87,16 @@ nonisolated enum MacPaste {
         case files([URL])
     }
 
-    /// Files first (Finder's ⌘C also puts each file's icon on the pasteboard as an image), then a picture, else text.
-    static func plan(fileURLs: [URL], hasImage: Bool) -> Plan {
+    /// Files first (Finder's ⌘C also puts each file's icon on the pasteboard as an image), then text (Numbers, Excel,
+    /// PDF viewers copy text with a picture of it), and a picture only when it is all there is (a screenshot).
+    static func plan(fileURLs: [URL], hasImage: Bool, hasText: Bool) -> Plan {
         if !fileURLs.isEmpty { return .files(fileURLs) }
-        return hasImage ? .image : .text
+        return hasImage && !hasText ? .image : .text
     }
 
     @MainActor static func current(_ board: NSPasteboard = .general) -> Plan {
         let urls = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        return plan(fileURLs: urls, hasImage: NSImage.canInit(with: board))
+        return plan(fileURLs: urls, hasImage: NSImage.canInit(with: board), hasText: board.string(forType: .string) != nil)
     }
 }
 
@@ -123,7 +135,7 @@ struct MacComposerPaste: ViewModifier {
         guard monitor == nil else { return }
         let ref = window
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard ref.focused, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+            guard ref.focused, event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
                   event.charactersIgnoringModifiers == "v", let w = ref.window, event.window === w else { return event }
             switch MacPaste.current() {
             case .text: return event

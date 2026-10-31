@@ -1176,7 +1176,9 @@ struct ChatView: View {
         let folded = min(max(chrome.collapse - delta, 0), chrome.maxCollapse)
         guard folded != chrome.collapse else { return }
         chrome.collapse = folded
-        if folded > 0, showInfo { showInfo = false }
+        #if os(iOS)
+        if folded > 0, showInfo { showInfo = false } // the sheet goes with the chrome; the Mac's inspector stays
+        #endif
     }
 
     /// The finger lifted: never stay half folded. At the newest the chrome folds (the page is all chat); elsewhere
@@ -1194,7 +1196,9 @@ struct ChatView: View {
     private func hideChrome() {
         guard style == .dev, pane == .chat, chrome.collapse < chrome.maxCollapse else { return }
         withAnimation(.smooth(duration: 0.35)) { chrome.collapse = chrome.maxCollapse }
+        #if os(iOS)
         showInfo = false
+        #endif
     }
 
     private func showChrome() {
@@ -1313,7 +1317,11 @@ struct ChatView: View {
         let link = model.connection.shown
         return Button {
             Haptics.tap()
+            #if os(macOS)
+            if link != .online { showLink = true } else { showInfo.toggle() } // the inspector column opens and closes
+            #else
             if link != .online { showLink = true } else { showInfo = true }
+            #endif
         } label: {
             VStack(spacing: Theme.Space.xxs) {
                 Text(title).font(Theme.Font.heading).lineLimit(1)

@@ -379,9 +379,7 @@ struct StarterComposer: View {
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
-        .macComposerFiles(images: images.count, focused: focused, attach: { img in
-            if images.count < MacDrop.maxImages, let p = MacDrop.payload(img) { images.append(p) }
-        }, upload: { urls in
+        .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
             uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
@@ -476,9 +474,7 @@ struct BeautifulStarterComposer: View {
         }
         #if os(macOS)
         // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
-        .macComposerFiles(images: images.count, focused: focused, attach: { img in
-            if images.count < MacDrop.maxImages, let p = MacDrop.payload(img) { images.append(p) }
-        }, upload: { urls in
+        .macComposerFiles(images: images.count, focused: focused, attach: { MacDrop.append($0, to: &images) }, upload: { urls in
             uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }

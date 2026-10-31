@@ -39,14 +39,19 @@ struct MacDropTests {
 struct MacPasteTests {
     @Test func copiedFilesGoTheDropWay() {
         let urls = [URL(fileURLWithPath: "/a/x.png")]
-        #expect(MacPaste.plan(fileURLs: urls, hasImage: true) == .files(urls))
+        #expect(MacPaste.plan(fileURLs: urls, hasImage: true, hasText: true) == .files(urls))
     }
 
     @Test func aCopiedPictureIsAttached() {
-        #expect(MacPaste.plan(fileURLs: [], hasImage: true) == .image)
+        #expect(MacPaste.plan(fileURLs: [], hasImage: true, hasText: false) == .image)
+    }
+
+    /// Numbers, Excel, a PDF viewer copy text with a picture of it: the text is what was meant.
+    @Test func textWinsOverItsPicture() {
+        #expect(MacPaste.plan(fileURLs: [], hasImage: true, hasText: true) == .text)
     }
 
     @Test func textIsTheFieldsJob() {
-        #expect(MacPaste.plan(fileURLs: [], hasImage: false) == .text)
+        #expect(MacPaste.plan(fileURLs: [], hasImage: false, hasText: true) == .text)
     }
 }

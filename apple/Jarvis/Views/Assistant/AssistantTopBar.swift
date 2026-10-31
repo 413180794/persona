@@ -52,12 +52,29 @@ struct AssistantTopBar: View {
             // 会话信息 is a sheet, like the Agents chat's (SessionInfoSheet).
             .sheet(isPresented: Binding(get: { showInfo && key != nil }, set: { showInfo = $0 })) {
                 if let key {
+                    #if os(macOS)
+                    // A window sheet: SessionInfoSheet has no stack or 完成 of its own on the Mac (it is the chat's inspector there).
+                    NavigationStack {
+                        SessionInfoSheet(key: key, session: session)
+                            .navigationTitle("会话信息")
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) { Button("完成") { showInfo = false }.lineLimit(1) }
+                            }
+                    }
+                    .macSheet()
+                    #else
                     SessionInfoSheet(key: key, session: session)
                         .presentationDetents([.medium, .large])
                         .presentationDragIndicator(.visible)
+                    #endif
                 }
             }
             .onChange(of: key) { showInfo = false }
+            #if DEBUG
+            .task { // `-showInfo YES`: 会话信息 open, for screenshots (the Agents chat reads the same flag)
+                if UserDefaults.standard.bool(forKey: "showInfo") { try? await Task.sleep(for: .seconds(2)); showInfo = true }
+            }
+            #endif
         .task(id: machineID) { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant) }
     }
 
