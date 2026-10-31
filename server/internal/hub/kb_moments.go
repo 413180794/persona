@@ -69,7 +69,12 @@ func (s *momentsSource) Chats(ctx context.Context, limit int) ([]kb.SourceChat, 
 	s.posts = posts
 	s.mu.Unlock()
 	out := make([]kb.SourceChat, 0, len(posts))
+	// Nothing older than a year (2026-11-01: 13 of the first 21 were from 2023–2025; the archive keeps a year).
+	cutoff := time.Now().AddDate(-1, 0, 0)
 	for id, p := range posts {
+		if active[id].Before(cutoff) {
+			continue
+		}
 		out = append(out, kb.SourceChat{ID: id, Name: "removed · " + momentTitle(p.Text), Kind: "moment", UpdatedAt: active[id]})
 		if len(out) >= limit {
 			break

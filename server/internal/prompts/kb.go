@@ -19,6 +19,7 @@ func RenderKBReadme() string { return render("kb/readme", nil) }
 type KnownProject struct {
 	Name    string
 	Aliases []string
+	OneLine string // where it is now: lets the model see that differently named work is the same project
 }
 
 // KBCompressInput is a chat's summary so far and its new messages (kb/compress_input).
@@ -47,6 +48,45 @@ type KBProjectInput struct {
 	Summary    string
 	Log        []string
 	Chats      []KBProjectChat
+	Moments    []KBMoment // removed posts judged to be about it
+}
+
+// KBMoment is a removed post put before a model: who, when, how many comments, its text clipped, and (when judged
+// before) how it bears on the project.
+type KBMoment struct {
+	ID, Author, At, Text, Note string
+	Comments                   int
+}
+
+// KBDedupeProject is one side of a possible duplicate.
+type KBDedupeProject struct {
+	Key                          string // "A" | "B"
+	Name, OneLine, Goal, Summary string
+	Aliases, Chats               []string
+	People                       int
+}
+
+// KBDedupeInput is two projects that may be one (kb/dedupe_input); Shared is how many people they have in common.
+type KBDedupeInput struct {
+	A, B   KBDedupeProject
+	Shared int
+}
+
+// RenderKBDedupe is the system prompt deciding whether two projects are the same work (kb/dedupe).
+func RenderKBDedupe(o KBOwner) string             { return render("kb/dedupe", o) }
+func RenderKBDedupeInput(in KBDedupeInput) string { return render("kb/dedupe_input", in) }
+
+// KBMomentsLinkInput is a project and removed posts its keywords found (kb/moments_link_input).
+type KBMomentsLinkInput struct {
+	Name, OneLine, Goal, Summary string
+	Aliases, Keywords            []string
+	Posts                        []KBMoment
+}
+
+// RenderKBMomentsLink is the system prompt picking the posts that are about a project (kb/moments_link).
+func RenderKBMomentsLink(o KBOwner) string { return render("kb/moments_link", o) }
+func RenderKBMomentsLinkInput(in KBMomentsLinkInput) string {
+	return render("kb/moments_link_input", in)
 }
 
 func RenderKBProjectInput(in KBProjectInput) string { return render("kb/project_input", in) }

@@ -67,6 +67,23 @@ nonisolated struct KBDetail: Decodable, Sendable {
     var log: [String]?
     var recent: String?
     var links: [KBEntry]?
+    /// A project's removed posts (the hub's LinkMoments), newest first.
+    var moments: [KBMomentRef]?
+}
+
+/// A removed post a project shows: who, when, how many comments, the text clipped, how it bears on the project.
+nonisolated struct KBMomentRef: Decodable, Identifiable, Hashable, Sendable {
+    var id: String
+    var author: String
+    var text: String
+    var at: Date?
+    var comments: Int
+    var note: String?
+}
+
+/// One archived removed post: the crawler's Markdown (text and every comment).
+nonisolated struct KBMomentPost: Decodable, Sendable {
+    var markdown: String
 }
 
 nonisolated struct KBDetailResponse: Decodable, Sendable {
@@ -228,6 +245,9 @@ extension APIClient {
     /// `query`: opened from a search, the places it is in come back as `matches`.
     func kbDetail(_ kind: String, id: String, query: String? = nil) async throws -> KBDetailResponse {
         try await get("/api/v1/kb/\(kind)/\(Self.kbID(id))", query: query.map { ["q": $0] } ?? [:])
+    }
+    func kbMoment(_ id: String) async throws -> KBMomentPost {
+        try await get("/api/v1/kb/moments/\(Self.kbID(id))")
     }
     func kbDay(chat: String, day: String) async throws -> KBDay {
         try await get("/api/v1/kb/chats/\(Self.kbID(chat))/days/\(Self.kbID(day))")

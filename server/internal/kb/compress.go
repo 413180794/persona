@@ -73,6 +73,12 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	from := c.CoveredUntil
 	if from.IsZero() {
 		from = c.Created.AddDate(0, 0, -30)
+		// A removed post is archived when it first concerns me, often long after it was written: the 30 days before
+		// that held none of it, so 20 of 21 posts were settled without a model call (2026-11-01). The whole post,
+		// back to a year before it was archived.
+		if c.Kind == "moment" {
+			from = c.Created.AddDate(-1, 0, 0)
+		}
 	}
 	news := e.Store.Since(c.ID, from, compressInput)
 	if strings.TrimSpace(news) == "" {
@@ -168,7 +174,7 @@ func HasPeople(c *Chat) bool {
 func (e *Engine) IgnoreNoiseProjects() int {
 	n := 0
 	for _, p := range e.Store.Projects() {
-		if p.Locked || p.Status == "ignored" || len(p.Chats) == 0 {
+		if p.Locked || p.Status == "ignored" || !p.Live() || len(p.Chats) == 0 {
 			continue
 		}
 		people := false
@@ -249,20 +255,29 @@ func Slug(name string) string {
 
 func normName(s string) string { return strings.ReplaceAll(Slug(s), "-", "") }
 
-// FindProject matches a name against project names and aliases.
+// FindProject matches a name against project names and aliases; a merged project's name leads to the one it went into.
 func (e *Engine) FindProject(name string) *Project {
 	n := normName(name)
 	if n == "" {
 		return nil
 	}
+	var merged *Project
 	for _, p := range e.Store.Projects() {
-		if normName(p.Name) == n || p.Slug == Slug(name) {
+		hit := normName(p.Name) == n || p.Slug == Slug(name)
+		for _, a := range p.Aliases {
+			hit = hit || normName(a) == n
+		}
+		if !hit {
+			continue
+		}
+		if p.Live() {
 			return p
 		}
-		for _, a := range p.Aliases {
-			if normName(a) == n {
-				return p
-			}
+		merged = p
+	}
+	if merged != nil && merged.MergedInto != "" {
+		if p, ok := e.Store.Project(merged.MergedInto); ok && p.Live() {
+			return p
 		}
 	}
 	return nil
@@ -272,10 +287,12 @@ func (e *Engine) FindProject(name string) *Project {
 func (e *Engine) knownProjects() []prompts.KnownProject {
 	var out []prompts.KnownProject
 	for _, p := range e.Store.Projects() {
-		if p.Status == "done" || p.Status == "ignored" {
+		if p.Status == "done" || p.Status == "ignored" || !p.Live() {
 			continue
 		}
-		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases})
+		// With its one line: names alone made the model start a second project for the same work under the name
+		// of the group it was reading (2026-11-01, SS codex 方案 / SS 支持单 agent 多 Session 窗口).
+		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases, OneLine: p.OneLine})
 	}
 	return out
 }
@@ -347,6 +364,7 @@ type projectDigest struct {
 	Importance string   `json:"importance"`
 	Relevance  int      `json:"relevance"`
 	Tags       []string `json:"tags"`
+	Keywords   []string `json:"keywords"`
 }
 
 // RefreshProjects rewrites the summaries of projects with news, at most max per run.
@@ -356,7 +374,7 @@ func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 	}
 	var dirty []*Project
 	for _, p := range e.Store.Projects() {
-		if p.Dirty && p.Status != "ignored" {
+		if p.Dirty && p.Status != "ignored" && p.Live() {
 			dirty = append(dirty, p)
 		}
 	}
@@ -388,6 +406,7 @@ func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
 		}
 		in.Chats = append(in.Chats, prompts.KBProjectChat{ID: cid, Summary: sum})
 	}
+	in.Moments = e.projectMomentsForPrompt(p, 5)
 	var d projectDigest
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
@@ -411,6 +430,9 @@ func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
 		p.Status = d.Status
 	}
 	applyTags(&p.Tagging, d.Importance, d.Relevance, d.Tags, now)
+	if kw := cleanKeywords(d.Keywords); len(kw) > 0 {
+		p.Keywords = kw
+	}
 	p.Dirty = false
 	if err := e.Store.PutProject(p); err != nil {
 		return err

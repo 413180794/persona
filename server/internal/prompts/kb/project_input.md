@@ -12,4 +12,9 @@
 {{range .Chats}}
 ## {{.ID}}
 {{.Summary}}
-{{end}}
+{{end}}{{with .Moments}}
+# 相关removed
+{{range .}}
+- {{.At}} · {{.Author}} · 评论 {{.Comments}}{{with .Note}} · {{.}}{{end}}
+  {{.Text}}
+{{end}}{{end}}

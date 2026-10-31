@@ -329,7 +329,8 @@ func TestGoldenLarkAgentContext(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)
 	h.lark = fakelark-connector(t)
-	at := time.Date(2026, 10, 31, 9, 5, 0, 0, time.Local)
+	h.userTZ = "Asia/Shanghai" // the hub itself runs in UTC; times read in the user's zone
+	at := time.Date(2026, 10, 31, 1, 5, 0, 0, time.UTC)
 	req := lark.Message{ID: "req", Position: "9", Text: "/agent 看下怎么修 https://example.feishu.cn/wiki/Broken1", CreatedAt: at,
 		ReplyTo: &lark.ReplyTo{SenderName: "张三", Text: "构建挂了"}}
 	// No knowledge base, not in a thread: the messages before it.
@@ -347,7 +348,8 @@ func TestGoldenLarkAgentDocContext(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)
 	h.lark = fakelark-connector(t)
-	at := time.Date(2026, 10, 31, 9, 0, 0, 0, time.Local)
+	h.userTZ = "Asia/Shanghai"
+	at := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
 	reply := func(name string, mine bool, text string, min int) lark.CommentReply {
 		r := lark.CommentReply{Content: []lark.CommentSegment{{Kind: "text", Text: text}}, Mine: mine, CreatedAt: at.Add(time.Duration(min) * time.Minute)}
 		r.Author.Name = name

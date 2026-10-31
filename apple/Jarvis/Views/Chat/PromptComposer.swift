@@ -37,6 +37,9 @@ struct PromptComposer: View {
     @State private var dictation = Dictation()
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("PromptComposer")
+        #endif
         var o = PromptBar.Options()
         o.layout = .stacked
         o.attachSources = attach

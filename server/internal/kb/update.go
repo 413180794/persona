@@ -59,6 +59,18 @@ type Detail struct {
 	Recent  string          `json:"recent,omitempty"`
 	// Links are the linked projects, chats and people, named and ranked.
 	Links []Entry `json:"links,omitempty"`
+	// Moments: a project's removed posts (LinkMoments), newest first.
+	Moments []MomentRef `json:"moments,omitempty"`
+}
+
+// MomentRef is a removed post as a project shows it.
+type MomentRef struct {
+	ID       string    `json:"id"`
+	Author   string    `json:"author"`
+	Text     string    `json:"text"` // clipped
+	At       time.Time `json:"at"`
+	Comments int       `json:"comments"`
+	Note     string    `json:"note,omitempty"` // how it bears on the project
 }
 
 var ErrNotFound = errors.New("not found")
@@ -85,6 +97,14 @@ func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
 	d.Meta = raw
 	if kind == KindProject {
 		d.Log = e.Store.Log(id, 30)
+		if p, ok := e.Store.Project(id); ok {
+			for _, x := range p.Moments {
+				if m, ok := e.Store.MomentPost(x.ID); ok {
+					f := momentForPrompt(m, x.Note, 200)
+					d.Moments = append(d.Moments, MomentRef{ID: m.ID, Author: f.Author, Text: f.Text, At: m.At, Comments: m.CommentCount, Note: x.Note})
+				}
+			}
+		}
 	}
 	if kind == KindChat && recentChars > 0 {
 		d.Recent = e.Store.Since(id, time.Now().AddDate(0, 0, -7), recentChars)
@@ -166,6 +186,8 @@ type Update struct {
 	People     []string `json:"people,omitempty"`   // projects: person ids to link
 	Dirs       []string `json:"dirs,omitempty"`     // projects: "<machine>:<path>" code directories
 	Projects   []string `json:"projects,omitempty"` // chats / people / items: project slugs to link
+	// MergeInto (projects): fold this project into that one (MergeProjects); nothing else in the update applies.
+	MergeInto string `json:"merge_into,omitempty"`
 }
 
 func (u Update) tag(t *Tagging) {
@@ -188,6 +210,23 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 	now := time.Now().UTC()
 	switch kind {
 	case KindProject:
+		if u.MergeInto != "" {
+			from, into := e.Store.Project(id)
+			if !into {
+				from = e.FindProject(id)
+			}
+			to, ok := e.Store.Project(u.MergeInto)
+			if !ok {
+				to = e.FindProject(u.MergeInto)
+			}
+			if from == nil || to == nil {
+				return "", ErrNotFound
+			}
+			if err := e.MergeProjects(to.Slug, from.Slug, "手动合并"); err != nil {
+				return "", err
+			}
+			return to.Slug, nil
+		}
 		p, ok := e.Store.Project(id)
 		if !ok {
 			p = e.FindProject(id)
@@ -322,6 +361,9 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 func (e *Engine) ProjectsForDir(machine, dir string) []*Project {
 	var out []*Project
 	for _, p := range e.Store.Projects() {
+		if !p.Live() {
+			continue
+		}
 		for _, d := range p.Dirs {
 			m, path, ok := strings.Cut(d, ":")
 			if !ok {
@@ -340,7 +382,7 @@ func (e *Engine) ProjectsForDir(machine, dir string) []*Project {
 func (e *Engine) entries(projects, chats, people []string) []Entry {
 	var out []Entry
 	for _, slug := range projects {
-		if p, ok := e.Store.Project(slug); ok {
+		if p, ok := e.Store.Project(slug); ok && p.Live() {
 			out = append(out, Entry{Kind: KindProject, ID: p.Slug, Name: p.Name, OneLine: p.OneLine, Importance: p.Importance,
 				Relevance: p.Relevance, Tags: p.Tags, Updated: p.Updated, Extra: p.Kind + " · " + p.Status})
 		}

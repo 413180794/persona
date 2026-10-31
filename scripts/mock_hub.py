@@ -376,9 +376,14 @@ KB_DETAIL = {
                                           "- 2026-10-30 10:15 · 飞书 · 韩梅梅 · 周五前要一版能装的",
                                           "- 2026-10-30 21:05 · Agent · 小组件 · MacBook · 时间线按小时刷新",
                                           "- 2026-10-31 09:30 · Agent · 小组件 · MacBook · 降雨概率格式化的测试过了"],
-                                  "links": [{"kind": "people", "id": "p_han", "name": "韩梅梅", "one_line": "产品经理，周五约了午饭", "importance": "P1"},
-                                            {"kind": "chats", "id": "oc_team", "name": "天气 App 项目群", "one_line": "今天在讨论降雨条的样式", "importance": "P1"},
-                                            {"kind": "docs", "id": "doc_widget", "name": "小组件设计稿 v3", "one_line": "小号、中号两种布局", "importance": "P2"}],
+                                  "links": [{"kind": "people", "id": "p_han", "name": "韩梅梅", "one_line": "产品经理，周五约了午饭", "importance": "P1", "relevance": 70},
+                                            {"kind": "chats", "id": "oc_team", "name": "天气 App 项目群", "one_line": "今天在讨论降雨条的样式", "importance": "P1", "relevance": 64},
+                                            {"kind": "docs", "id": "doc_widget", "name": "小组件设计稿 v3", "one_line": "小号、中号两种布局", "importance": "P2", "relevance": 60}],
+                                  "moments": [{"id": "mo1", "author": "王五", "text": "有人在用天气小组件吗？中号的降雨条看不太清", "at": ago(hours=30), "comments": 12, "note": "用户反馈降雨条看不清"},
+                                              {"id": "mo2", "author": "匿名", "text": "推荐一个天气 App，小组件逐小时刷新", "at": ago(days=3), "comments": 3, "note": "同事推荐"},
+                                              {"id": "mo3", "author": "赵六", "text": "小组件设计分享：信息密度和可读性", "at": ago(days=9), "comments": 0, "note": "设计讨论"},
+                                              {"id": "mo4", "author": "孙七", "text": "iOS 小组件时间线刷新踩坑", "at": ago(days=20), "comments": 7, "note": "技术讨论"},
+                                              {"id": "mo5", "author": "周八", "text": "天气数据源对比", "at": ago(days=40), "comments": 1, "note": "数据源"}],
                                   "meta": {"name": "天气 App", "importance": "P0", "relevance": 92, "tags": ["iOS", "小组件"], "kind": "short",
                                            "status": "active", "dirs": ["macbook:/Users/me/code/weather"]}},
 }
@@ -1015,6 +1020,51 @@ if os.environ.get("MOCK_DRAWER") == "1":
             "```\n\n同一秒拍的会自动加上 -1、-2。")),
     ]
 
+# MOCK_LONG_ASSISTANT=1: the Jarvis tab's main conversation is a long one, like the one a user keeps for weeks: sixty
+# exchanges, each with a few tool calls and a long Markdown reply (headings, lists, a table, a code block), for measuring
+# the Jarvis page's frames (docs/testing.md「卡顿测量」).
+if os.environ.get("MOCK_LONG_ASSISTANT") == "1":
+    _long = []
+    for _n in range(60):
+        _m = 60 * 24 * 3 - _n * 70
+        _long.append(it("user", "text", _m + 2, text="第 %d 件事：帮我看看 weather 项目第 %d 个 PR 的改动，顺便查一下今天的日程。" % (_n + 1, _n + 1)))
+        _long.append(it("assistant", "thinking", _m + 2, text="先看 PR 的改动，再查日历。"))
+        _long += tool("mcp__jarvis__agents_list", {}, "6 个 Agent：2 个需要你，2 个工作中", _m + 1)
+        _long += tool("Bash", {"command": "gh pr diff %d --repo me/weather | head -200" % (_n + 1)}, "".join("+ line %d\n" % k for k in range(40)), _m + 1)
+        _long += tool("mcp__jarvis__phone_calendar_events", {}, "今天 2 个日程", _m + 1)
+        _long.append(it("assistant", "text", _m, text=f"""## PR #{_n + 1} 看完了
+
+改动集中在网络层，**整体没问题**，有三处建议：
+
+1. `WeatherClient.fetch` 的重试没有上限，断网时会一直重试，建议最多 3 次、指数退避。
+2. 缓存的 key 只用了城市名，同名城市（比如两个「朝阳」）会串，建议加上经纬度。
+3. 新加的 `ForecastView` 在深色模式下标题对比度不够，见 https://example.com/pr/{_n + 1}/files 。
+
+| 文件 | 改动 | 结论 |
+| --- | --- | --- |
+| WeatherClient.swift | +120 / -30 | 要改重试 |
+| Cache.swift | +40 / -8 | 要改 key |
+| ForecastView.swift | +200 / -0 | 小问题 |
+
+建议的写法：
+
+```swift
+for attempt in 0..<3 {{
+    do {{ return try await session.data(for: request) }}
+    catch {{ try await Task.sleep(for: .seconds(1 << attempt)) }}
+}}
+```
+
+今天的日程：
+- 14:00 设计评审（会议室 3）
+- 16:30 和李雷 1:1
+
+要我直接在 PR 上留评论吗？"""))
+    ITEMS[ASK1] = _long + ITEMS[ASK1]
+    for _x in ITEMS[ASK1]:  # seq goes up through the conversation
+        _seq[0] += 1
+        _x.update(seq=_seq[0], id=f"{uuid.UUID(int=_seq[0])}#0")
+
 # MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
 # last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
 RICH = "a1f3c2d4-0000-4000-8000-00000000000a"
@@ -1558,7 +1608,7 @@ def churn(rounds, ms, steps=1, final=False):
         CHURN["rounds"] += 1
 
 
-def say(text, user=None, stream=False):
+def say(text, user=None, stream=False, steps=10, ms=300):
     """A reply (after `user`'s message, if given) in every conversation an app has open (/mock/say). `stream`: the
     message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's."""
     import time
@@ -1575,9 +1625,9 @@ def say(text, user=None, stream=False):
                     ITEMS[sid] = ITEMS[sid] + asked
                     send({"type": "items", "machine_id": mid, "session_id": sid, "items": asked, **span(asked, before)})
                     user = None
-                for k in range(1, 11):
-                    time.sleep(0.3)
-                    send({"type": "delta", "machine_id": mid, "session_id": sid, "text": text[:len(text) * k // 10]})
+                for k in range(1, steps + 1):
+                    time.sleep(ms / 1000)
+                    send({"type": "delta", "machine_id": mid, "session_id": sid, "text": text[:len(text) * k // steps]})
                 items = ITEMS[sid]
             before = items[-1]["seq"]
             new = ([it("user", "text", 0, text=user)] if user else []) + [it("assistant", "text", 0, text=text)]
@@ -1643,7 +1693,9 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
-            args = (q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1")
+            # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
+            args = (q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
+                    int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]))
             threading.Thread(target=say, args=args, daemon=True).start()
             return self.send_json({"ok": True})
         if not p.startswith("/mock/") and self.bad_network(): return
@@ -1804,6 +1856,8 @@ class H(BaseHTTPRequestHandler):
                 tag = (q.get("tag") or [""])[0]
                 items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
                 return self.send_json({"items": items, "tags": KB_TAGS.get(kind, [])})
+            if kind == "moments" and len(parts) == 2:  # one archived removed post
+                return self.send_json({"post": {"id": parts[1]}, "markdown": "# removed · 帖子\n\n王五 · 2026-10-30 10:00 · 评论 2\n\n有人在用天气小组件吗？中号的降雨条看不太清\n\n## 评论（2）\n\n- 赵六: 同感，颜色太浅\n- 我: 在改了"})
             if kind == "chats" and len(parts) == 4 and parts[2] == "days":
                 days = sorted(KB_DAYS.get(parts[1], {}))
                 if parts[3] not in days: return self.send_json({"error": "not found"}, 404)

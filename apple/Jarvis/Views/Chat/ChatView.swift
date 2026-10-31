@@ -535,6 +535,7 @@ struct ChatView: View {
                      openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
                 toggleWork(id, fromHeader: true)
             }
+            .equatable()
             .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workStep(let group, let item, let first):
             WorkStepView(item: item, first: first).equatable()
@@ -717,6 +718,9 @@ struct ChatView: View {
         #if DEBUG
         scratch.endJumps += 1
         #endif
+        // Already there, and the stored position says so: setting it again only re-evaluated the whole page (a
+        // streaming reply asks every 40 characters; the flipped list stays at its newest end by itself).
+        if !animated, scratch.atNewest, position.edge == .top { return }
         if animated { withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
     }
 
@@ -941,6 +945,7 @@ struct ChatView: View {
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
+                    .equatable()
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.bottom, Theme.Space.s)
@@ -1064,8 +1069,9 @@ struct ChatView: View {
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(TapGesture().onEnded { menu.dismiss() })
         // Only the user's own scrolling closes the bar; content streaming in also moves the offset (.animating).
-        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x) }) { old, new in
+        .onScrollGeometryChange(for: ListScroll.self, of: { ListScroll(offset: $0.contentOffset.y, height: $0.containerSize.height, x: $0.contentOffset.x, top: $0.contentInsets.top) }) { old, new in
             scratch.offsetX = new.x
+            scratch.atNewest = new.offset <= -new.top + 0.5
             chrome.offset = new.offset
             // A height change (keyboard) moves the offset too: that is not the user scrolling.
             if old.height != new.height { return }
@@ -1632,6 +1638,23 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showAutoScroll") { // profiling: flicks through the history, frames counted
                 Task {
                     try? await Task.sleep(for: .seconds(12)) // the history loads (-loadAll) and the page settles
+                    // Sitting on the page first (a script may push hub updates meanwhile: /mock/churn), then the flicks.
+                    FrameStats.shared.start()
+                    try? await Task.sleep(for: .seconds(8))
+                    FrameStats.shared.stop(label: "idle")
+                    // Typing: a character every 120 ms into the draft, as the text field's binding writes it.
+                    FrameStats.shared.start()
+                    for i in 0..<40 {
+                        model.drafts[key] = String(repeating: "字", count: i + 1)
+                        try? await Task.sleep(for: .milliseconds(120))
+                    }
+                    model.drafts[key] = ""
+                    FrameStats.shared.stop(label: "type")
+                    // A reply streaming in (a script starts it as soon as frames-type.json is written: /mock/say).
+                    FrameStats.shared.start()
+                    try? await Task.sleep(for: .seconds(6))
+                    FrameStats.shared.stop(label: "stream")
+                    try? await Task.sleep(for: .seconds(2))
                     FrameStats.shared.start()
                     // Like a reader flicking: four fast flicks back into the history, then four back to the newest.
                     var y: CGFloat = 0
@@ -1641,6 +1664,17 @@ struct ChatView: View {
                         try? await Task.sleep(for: .seconds(2.8))
                     }
                     FrameStats.shared.stop(label: "sweep")
+                    // The same distance as a finger's glide: the list's own scroll view moved every display frame at
+                    // 2000 pt/s (no SwiftUI state written), four seconds back into the history and four to the newest.
+                    #if os(iOS)
+                    try? await Task.sleep(for: .seconds(2))
+                    if let list = pin.list {
+                        FrameStats.shared.start()
+                        await ListGlide.run(list, seconds: 4, speed: 2000)
+                        await ListGlide.run(list, seconds: 4, speed: -2000)
+                        FrameStats.shared.stop(label: "glide")
+                    }
+                    #endif
                 }
             }
             if UserDefaults.standard.bool(forKey: "showCompactChrome") { // folded, once the header has its height
@@ -1846,9 +1880,9 @@ struct ChatView: View {
             } else if let from = i.from {
                 PeerMessage(item: i, from: from)
             } else {
-                UserBubble(item: i)
+                UserBubble(item: i).equatable()
             }
-        case .assistant(let i): AssistantText(item: i)
+        case .assistant(let i): AssistantText(item: i).equatable()
         case .thinking(let i):
             if style == .dev && live { ThinkingRow(item: i) }
         case .tools(let steps):
@@ -1940,7 +1974,13 @@ struct SuggestionPill: View {
     }
 }
 
-struct Composer: View {
+struct Composer: View, Equatable {
+    /// What the page hands in; the rest it reads from the model itself. The page re-evaluates on every hub push for its
+    /// conversation, and the composer (a text field, its buttons, the mode chips) used to go with it.
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.key == b.key && a.status == b.status && a.placeholder == b.placeholder && (a.onCleared == nil) == (b.onCleared == nil)
+    }
+
     @Environment(AppModel.self) private var model
     let key: SessionKey
     var status: SessionStatus
@@ -1997,6 +2037,9 @@ struct Composer: View {
     }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("Composer")
+        #endif
         VStack(spacing: Theme.Space.s) {
             if let s = model.session(key), s.starting == true || s.startError != nil {
                 StartingNote(error: s.startError, agent: s.agentLabel)
@@ -2813,7 +2856,7 @@ private nonisolated struct WorkCardEdges: Shape {
 /// The quiet line under a message: what the agent did for it. Finished: "工具 3 · 思考 1 · 1 分 20 秒 ›";
 /// running: a spinner and "正在工作 39 秒 · 工具 2" (ticking) with the terminal at the end. Tap to list every
 /// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
-struct WorkSummary {
+nonisolated struct WorkSummary: Equatable {
     let full: [String]
     let short: [String]
 
@@ -2844,7 +2887,13 @@ struct WorkSummary {
     }
 }
 
-struct WorkLine: View {
+struct WorkLine: View, Equatable {
+    /// The closures are the line's own (keyed by its id): a hub push re-evaluating the page leaves unchanged lines alone.
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.isEmpty == b.isEmpty && a.counts == b.counts && a.live == b.live && a.start == b.start && a.end == b.end
+            && a.open == b.open && (a.openTerminal == nil) == (b.openTerminal == nil)
+    }
+
     private let isEmpty: Bool
     private let counts: WorkSummary
     let live: Bool
@@ -2939,6 +2988,8 @@ private struct ListScroll: Equatable {
     var offset: CGFloat
     var height: CGFloat
     var x: CGFloat
+    /// The content inset at the newest end (the offset there is minus this).
+    var top: CGFloat = 0
 }
 
 private struct ChatRegion<Content: View>: View {
@@ -3053,6 +3104,8 @@ final class ChatScratch {
     var visibleLines: [String] = []
     /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.
     var userDragging = false
+    /// The list sits exactly at its newest end (offset at the content inset).
+    var atNewest = false
     /// Between a landing's first jump and its end (`ChatView.landed`): the list is not where it is going yet.
     var landingInFlight = false
     /// Last time the user scrolled or touched the header: the chrome folds itself after a few idle seconds.

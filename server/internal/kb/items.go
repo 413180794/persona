@@ -293,7 +293,7 @@ func (e *Engine) List(kind, tag string) []Entry {
 	switch kind {
 	case KindProject:
 		for _, p := range e.Store.Projects() {
-			if has(p.Tags) {
+			if has(p.Tags) && p.Live() {
 				out = append(out, Entry{Kind: kind, ID: p.Slug, Name: p.Name, OneLine: p.OneLine, Importance: p.Importance,
 					Relevance: p.Relevance, Tags: p.Tags, Updated: p.Updated, Extra: p.Kind + " · " + p.Status})
 			}

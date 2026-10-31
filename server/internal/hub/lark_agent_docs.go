@@ -109,11 +109,12 @@ func (h *Hub) larkAgentDocContext(ctx context.Context, d lark.RecentDoc, t lark.
 	if q := strings.TrimSpace(t.Quote); q != "" && !t.Whole {
 		c.Quote = clipRunes(q, 3000)
 	}
+	loc := h.userLocation()
 	for i, r := range t.Replies {
 		if i > at {
 			break
 		}
-		c.Lines = append(c.Lines, prompts.LarkLine{At: r.CreatedAt.Local(), Who: r.Author.Name, Mine: r.Mine, Text: clipRunes(commentText(r), 2000),
+		c.Lines = append(c.Lines, prompts.LarkLine{At: r.CreatedAt.In(loc), Who: r.Author.Name, Mine: r.Mine, Text: clipRunes(commentText(r), 2000),
 			Request: i == at})
 	}
 	if title, md, err := h.lark.DocMarkdown(ctx, d.URL); err == nil {

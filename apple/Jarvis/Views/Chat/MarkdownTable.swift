@@ -148,6 +148,9 @@ struct FittedTable: View {
     static let border: CGFloat = 1
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("FittedTable")
+        #endif
         let measure = MarkdownTableText.measure(config.content.renderMarkdown(), fontSize: fontSize)
         let n = CGFloat(measure.natural.count)
         let plan = available > 0

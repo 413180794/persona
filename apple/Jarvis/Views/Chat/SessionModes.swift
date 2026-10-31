@@ -53,6 +53,9 @@ struct SessionModeBar: View {
     @State private var changing = false
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("SessionModeBar")
+        #endif
         let mode = session?.permissionMode
         let effort = session?.effort
         HStack(spacing: Theme.Space.s) {

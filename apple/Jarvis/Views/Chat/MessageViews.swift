@@ -107,12 +107,18 @@ struct ImageViewing: Identifiable {
     func set(_ id: String, _ open: Bool) { state[id] = open }
 }
 
-struct UserBubble: View {
+struct UserBubble: View, Equatable {
     var item: Item
+    /// Only the message itself: the chat page re-evaluates its body on every hub push, and without this every row on
+    /// screen (and in the lazy list's buffer) ran its body again too (about 45 a push on a long Jarvis conversation).
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.item == b.item }
     @Environment(\.openFile) private var openFile
     @Environment(\.loadImage) private var loadImage
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("UserBubble")
+        #endif
         let d = RowMemo.user(item.id) { _ in UserRowText(item.text ?? "") } // once per message, keyed by its short id
         let parsed = (refs: d.refs, rest: d.text)
         let shown = d.shown
@@ -402,13 +408,19 @@ enum AttachedImageCache {
     static func put(_ path: String, _ p: ImagePayload) { payloads[path] = p }
 }
 
-struct AssistantText: View {
+struct AssistantText: View, Equatable {
     var item: Item
     /// The words between an agent's steps (液态玻璃's work timeline): smaller and gray, part of the process.
     var quiet = false
+    /// Like `UserBubble`: a hub push re-evaluating the page does not re-run every answer's body (Markdown is the
+    /// heaviest row there is).
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.item == b.item && a.quiet == b.quiet }
     @Environment(\.openFile) private var openFile
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AssistantText")
+        #endif
         let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Markdown(d.markdown)
@@ -466,6 +478,9 @@ struct ThinkingRow: View {
     @State private var unfold = Unfolding()
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ThinkingRow")
+        #endif
         if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
     }
 
@@ -792,10 +807,80 @@ struct RecapDrawer: View {
 struct StreamingText: View {
     var text: String
 
+    /// A delta comes every 80 ms with the whole text so far. Parsing and laying out all of it each time cost a long
+    /// reply 10–20 ms a delta on the simulator: the blocks already finished are their own Markdown views that stay as
+    /// they are (`StreamChunks`), and only the block being written is parsed and laid out again.
     var body: some View {
-        Markdown(MarkdownMemo.content(text + " ▍"))
-            .markdownTheme(.jarvis)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("StreamingText")
+        #endif
+        let parts = StreamChunks.split(text)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(parts.done.enumerated()), id: \.offset) { i, chunk in
+                StreamChunk(text: chunk).equatable()
+                    .padding(.top, i == 0 ? 0 : StreamChunks.gap(after: parts.done[i - 1], before: chunk))
+            }
+            Markdown(MarkdownMemo.content(parts.tail + " ▍"))
+                .markdownTheme(.jarvis)
+                .padding(.top, parts.done.last.map { StreamChunks.gap(after: $0, before: parts.tail) } ?? 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A finished block of a streaming reply: the same text draws the same, so later deltas skip it.
+private struct StreamChunk: View, Equatable {
+    var text: String
+
+    var body: some View {
+        Markdown(MarkdownMemo.content(text)).markdownTheme(.jarvis)
+    }
+}
+
+/// A streaming reply cut where a block has certainly ended: a blank line outside a code fence, followed by an
+/// unindented line (the next block has started). Everything before the last such cut stays the same as the text grows.
+nonisolated enum StreamChunks {
+    static func split(_ text: String) -> (done: [String], tail: String) {
+        let lines = text.components(separatedBy: "\n")
+        var done: [String] = []
+        var start = 0
+        var fence: String?
+        for (i, line) in lines.enumerated() {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if let f = fence {
+                if t.hasPrefix(f) { fence = nil }
+                continue
+            }
+            if t.hasPrefix("```") || t.hasPrefix("~~~") { fence = String(t.prefix(3)); continue }
+            guard t.isEmpty, i > start, i + 1 < lines.count else { continue }
+            let next = lines[i + 1]
+            guard !next.isEmpty, !next.hasPrefix(" "), !next.hasPrefix("\t") else { continue }
+            done.append(lines[start..<i].joined(separator: "\n"))
+            start = i + 1
+        }
+        return (done, lines[start...].joined(separator: "\n"))
+    }
+
+    /// The space MarkdownUI's theme puts between the last block of one piece and the first of the next (the larger
+    /// of the two margins, `MarkdownUI.Theme.jarvis`).
+    static func gap(after prev: String, before next: String) -> CGFloat {
+        let last = prev.split(separator: "\n").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        let first = next.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        func top(_ l: String) -> CGFloat {
+            if l.hasPrefix("# ") { return 16 }
+            if l.hasPrefix("## ") { return 14 }
+            if l.hasPrefix("### ") { return 12 }
+            if l.hasPrefix("```") || l.hasPrefix("~~~") || l.hasPrefix("|") { return 4 }
+            return 0
+        }
+        func bottom(_ l: String) -> CGFloat {
+            if l.hasPrefix("```") || l.hasPrefix("~~~") || l.hasPrefix("|") { return 12 }
+            if l.hasPrefix("# ") { return 8 }
+            if l.hasPrefix("## ") { return 6 }
+            if l.hasPrefix("### ") { return 4 }
+            return 10
+        }
+        return max(top(first), bottom(last))
     }
 }
 

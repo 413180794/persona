@@ -39,6 +39,9 @@ struct JarvisAvatar: View {
     private var moving: Bool { !still && [.thinking, .working, .needsYou].contains(state) }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("JarvisAvatar")
+        #endif
         Group {
             switch design {
             case .visor: visor

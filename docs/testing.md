@@ -230,6 +230,37 @@ App 数据目录的 `Documents/frames.json`：卡顿次数（晚于半帧）、�
 2026-10-26 一轮优化的结果（长会话 `codex 需求 leader`，3 次）：每秒卡顿 149–245ms → 156–171ms，最长一帧 0.5–2.4s → 0.5–0.9s，
 主线程上我们自己代码的采样从 ~1,900 降到 ~400；剩下的是 SwiftUI / CoreText 给新出现的行量文字、画字形。
 
+### Jarvis 页（长主对话）
+
+mock 加 `MOCK_LONG_ASSISTANT=1`（主对话是 60 轮：每轮几个工具、一段带标题 / 列表 / 表格 / 代码块的长回复），`-app.tab assistant -showAutoScroll YES -perfCounts YES`。
+`-showAutoScroll` 现在依次量五段，每段一个 `Documents/frames-<段>.json`（每帧间隔、每帧主线程忙了多久 `busy_*`、
+50 ms 以上的长帧在第几秒 `long`、这段里各视图 body 的次数 `bodies`、hub 推送的主线程耗时 `push_ms`）：
+
+| 段 | 做什么 | 脚本要配合的 |
+| --- | --- | --- |
+| idle | 停 8 秒 | 期间 `GET /mock/churn?n=14&ms=500` 推 14 轮 |
+| type | 每 120 ms 往草稿里加一个字，共 40 个 | — |
+| stream | 6 秒 | `frames-type.json` 一出现就 `GET /mock/say?stream=1&steps=60&ms=80&text=<长回复>`（hub 的节奏：每 80 ms 一个 delta） |
+| sweep | 原来的 8 段动画跳转（`scrollTo(point:)`，每段开头那一帧 SwiftUI 要估一大段行高，50–200 ms，手指滑不会这样） | — |
+| glide | 直接按显示帧移动列表的 `UIScrollView`，2000 pt/s 往历史 4 秒、回来 4 秒，最像手指滑 | — |
+
+2026-11-01 改前（master e51a1a8）/ 改后，模拟器 iPhone 17 Pro（iOS 26.5），各 3–4 次：
+
+| 段 | 指标 | 改前 | 改后 |
+| --- | --- | --- | --- |
+| idle（14 轮推送） | 推送的主线程合计 | 190–228 ms | 43–67 ms |
+| idle | 主线程超过 16 ms 的帧 | 7–14 | 1–4 |
+| idle | 回复 / 气泡 body 次数 | 638 / 603 | 约 30 / 12 |
+| stream | 超过 16 ms 的帧 | 21–40 | 7–12 |
+| stream | `ChatView` body 次数 | 33 | 1 |
+| glide | 掉帧（晚于 1.5 帧） | — | 0 |
+| type | 每个字主线程 | 约 10 ms | 约 10 ms（没变，见下） |
+
+改了什么：用户气泡、回复、工作行、输入框改成 `Equatable`（页面每次推送都会重算，以前屏幕上和懒加载缓冲里的每一行跟着重算）；
+侧边栏关着时不读 `assistantConversations`（它读所有机器的所有会话）；顶栏的状态圆点拆成单独的视图（顶栏和它的菜单不再跟着推送重建）；
+流式回复按块切开（`StreamChunks`），写完的块不再重新解析排版，间距按主题的 margin 补；已经停在最新端时流式的「跟到最新」不再写 `ScrollPosition`。
+打字没变：每个字都让整页从根重新排版一次（输入框和列表在同一个 VStack 里，懒加载列表会重新量可见行），要把输入框放进自己的 hosting controller 才能隔开，还没做。
+
 ## 侧边栏拖动（Jarvis tab）
 
 量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后

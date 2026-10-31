@@ -37,19 +37,20 @@ func TestLarkAgentTask(t *testing.T) {
 }
 
 func TestLarkTranscriptKeepsTheNewestThatFit(t *testing.T) {
-	base := time.Date(2026, 10, 31, 9, 0, 0, 0, time.Local)
+	shanghai, _ := time.LoadLocation("Asia/Shanghai")
+	base := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
 	msgs := []lark.Message{
 		{ID: "3", SenderName: "我", IsMine: true, Text: "/agent 看下", CreatedAt: base.Add(2 * time.Minute)},
 		{ID: "1", SenderName: "张三", Text: strings.Repeat("长", 50), CreatedAt: base},
 		{ID: "2", SenderName: "李四", Text: "报错了", CreatedAt: base.Add(time.Minute), Recalled: true},
 		{ID: "x", Type: "SYSTEM", Text: "加入了群", CreatedAt: base},
 	}
-	got := larkTranscript(msgs, "3", 1000)
+	got := larkTranscript(msgs, "3", 1000, shanghai)
 	want := "10-31 09:00 张三：" + strings.Repeat("长", 50) + "\n10-31 09:01 李四：[已撤回]\n10-31 09:02 我（我）：/agent 看下  ← 请求\n"
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
-	if short := larkTranscript(msgs, "3", 80); strings.Contains(short, "张三") || !strings.Contains(short, "← 请求") {
+	if short := larkTranscript(msgs, "3", 80, shanghai); strings.Contains(short, "张三") || !strings.Contains(short, "← 请求") {
 		t.Fatalf("a short limit keeps the newest lines: %q", short)
 	}
 }

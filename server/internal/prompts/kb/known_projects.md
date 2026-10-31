@@ -1,1 +1,2 @@
-{{range $i, $p := .}}{{if $i}}；{{end}}{{$p.Name}}{{with $p.Aliases}}（{{join . "、"}}）{{end}}{{else}}（还没有）{{end}}
+{{range .}}
+- {{.Name}}{{with .Aliases}}（{{join . "、"}}）{{end}}{{with .OneLine}}：{{.}}{{end}}{{else}}（还没有）{{end}}

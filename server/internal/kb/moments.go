@@ -161,3 +161,13 @@ func momentMarkdown(p *MomentPost, comments []MomentComment) string {
 	}
 	return b.String()
 }
+
+// MomentArchived is one archived post and its Markdown (text and comments), for reading it in the app.
+func (s *Store) MomentArchived(id string) (*MomentPost, string, bool) {
+	p, ok := s.MomentPost(id)
+	if !ok {
+		return nil, "", false
+	}
+	raw, _ := os.ReadFile(filepath.Join(s.momentsDir(), SafeID(id)+".md"))
+	return p, string(raw), true
+}

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,7 +94,8 @@ func TestGoldenCompress(t *testing.T) {
 		ch := c.chat
 		ch.Created, ch.LastAt, ch.Pending = at, at, 2
 		if c.kb {
-			_ = e.Store.PutProject(&Project{Slug: "demo-release", Name: "示例发布", Aliases: []string{"发布", "灰度"}, Status: "active", Tagging: Tagging{Tags: []string{"发布", "后端"}}})
+			_ = e.Store.PutProject(&Project{Slug: "demo-release", Name: "示例发布", Aliases: []string{"发布", "灰度"}, Status: "active", OneLine: "周五灰度", Tagging: Tagging{Tags: []string{"发布", "后端"}}})
+			_ = e.Store.PutProject(&Project{Slug: "demo-old", Name: "合并掉的", Status: "merged", MergedInto: "demo-release"})
 			_ = e.Store.PutProject(&Project{Slug: "demo-done", Name: "做完的", Status: "done"})
 			_ = e.Store.PutProject(&Project{Slug: "demo-infra", Name: "示例基建", Status: "active", Tagging: Tagging{Tags: []string{"后端"}}})
 			ch.Tags = []string{"发布"}
@@ -138,6 +140,10 @@ func TestGoldenProject(t *testing.T) {
 				_ = e.Store.PutSummary(KindChat, id, sum)
 			}
 			p.Chats = append(p.Chats, "lark-none")
+			// Two linked removed posts (the more commented first), one gone from the archive.
+			_ = e.Store.PutMomentPost(&MomentPost{ID: "m1", Author: "王五", Text: "示例发布的新功能好用吗", CommentCount: 3, At: at}, nil)
+			_ = e.Store.PutMomentPost(&MomentPost{ID: "m2", Anonymous: true, Text: "灰度后卡顿\n第二行", CommentCount: 12, At: at.Add(time.Hour)}, nil)
+			p.Moments = []ProjectMoment{{ID: "m1", Note: "用户提问", At: at}, {ID: "m2", Note: "用户反馈卡顿", At: at}, {ID: "gone", At: at}}
 		}
 		if err := e.Store.PutProject(p); err != nil {
 			t.Fatal(err)
@@ -196,4 +202,38 @@ func TestGoldenDigest(t *testing.T) {
 	}
 	golden(t, "digest.full", e.Prompt(6, 8))
 	golden(t, "digest.chats_only", e.Prompt(0, 8))
+}
+
+func TestGoldenDedupe(t *testing.T) {
+	m := &captureModel{reply: `{"same":false}`}
+	e := goldenEngine(t, m)
+	_ = e.Store.PutChat(&Chat{ID: "lark-f1", Kind: "group", Name: "示例需求群"})
+	_ = e.Store.PutChat(&Chat{ID: "lark-f2", Kind: "group", Name: "示例内部群"})
+	people := []string{"lark-u1", "lark-u2", "lark-u3", "lark-u4"}
+	_ = e.Store.PutProject(&Project{Slug: "a", Name: "示例需求", Status: "active", OneLine: "走查中", Goal: "上线多窗口", Chats: []string{"lark-f1"}, People: people})
+	_ = e.Store.PutProject(&Project{Slug: "b", Name: "示例方案", Aliases: []string{"方案二期"}, Status: "active", Chats: []string{"lark-f2", "lark-none"}, People: people[:3]})
+	_ = e.Store.PutSummary(KindProject, "a", "# 示例需求\n\n## 目标\n多窗口")
+	if n := e.DedupeProjects(context.Background(), 5); n != 0 {
+		t.Fatalf("merged %d", n)
+	}
+	m.golden(t, "dedupe")
+}
+
+func TestGoldenMomentsLink(t *testing.T) {
+	m := &captureModel{reply: `{"posts":[]}`}
+	e := goldenEngine(t, m)
+	at := time.Now().Add(-48 * time.Hour).Truncate(24 * time.Hour)
+	_ = e.Store.PutProject(&Project{Slug: "a", Name: "示例发布", Aliases: []string{"发布"}, Keywords: []string{"示例App", "灰度"}, Status: "active", OneLine: "周五灰度"})
+	_ = e.Store.PutSummary(KindProject, "a", "# 示例发布\n\n## 目标\n周五灰度")
+	_ = e.Store.PutMomentPost(&MomentPost{ID: "m1", Author: "王五", Text: "示例App 灰度了吗", CommentCount: 3, At: at}, nil)
+	_ = e.Store.PutMomentPost(&MomentPost{ID: "m2", Anonymous: true, Text: "今天的灰度\n第二行", CommentCount: 0, At: at}, nil)
+	_ = e.Store.PutMomentPost(&MomentPost{ID: "m3", Author: "赵六", Text: "无关的帖子", At: at}, nil)
+	if n := e.LinkMoments(context.Background(), 3); n != 0 {
+		t.Fatalf("linked %d", n)
+	}
+	if len(m.calls) == 1 {
+		// The post dates move with the clock: put a fixed one in the golden.
+		m.calls[0][1] = strings.ReplaceAll(m.calls[0][1], at.Local().Format("2006-01-02"), "2026-10-30")
+	}
+	m.golden(t, "moments_link")
 }

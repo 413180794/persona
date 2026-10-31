@@ -452,6 +452,7 @@ struct KnowledgeDetailView: View {
     @State private var detail: KBDetailResponse?
     @State private var error: String?
     @State private var allMatches = false
+    @State private var allMoments = false
     @State private var link: LinkTarget?
     @State private var editing = false
     @State private var newAgent = false
@@ -501,6 +502,8 @@ struct KnowledgeDetailView: View {
                             .padding(.vertical, Theme.Space.sm)
                     }
                 }
+                if let into = d.meta?["merged_into"]?.string, !into.isEmpty { mergedSection(into) }
+                if let moments = d.moments, !moments.isEmpty { momentsSection(moments) }
                 links(d)
                 if let recent = d.recent, !recent.isEmpty {
                     Section {
@@ -605,6 +608,7 @@ struct KnowledgeDetailView: View {
         case "paused": return "暂停"
         case "done": return "已完成"
         case "ignored": return "不是项目"
+        case "merged": return "已合并"
         default: return nil
         }
     }
@@ -613,6 +617,38 @@ struct KnowledgeDetailView: View {
         HStack(spacing: Theme.Space.sm) {
             Text(title)
             Text("\(count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
+        }
+    }
+
+    // MARK: removed
+
+    /// Posts in removed about this project (the hub finds them by the project's keywords and has the model keep the
+    /// ones really about it): who, when, comments, how it bears on the project; open one for the text and comments.
+    private func momentsSection(_ moments: [KBMomentRef]) -> some View {
+        let shownMoments = allMoments ? moments : Array(moments.prefix(Self.linksShown))
+        return Section {
+            ForEach(shownMoments) { m in
+                NavigationLink { KBMomentView(ref: m) } label: { KBMomentRow(moment: m) }
+                    .accessibilityIdentifier("kb.moment")
+            }
+            if moments.count > Self.linksShown {
+                Button { withAnimation(Theme.Motion.standard) { allMoments.toggle() } } label: {
+                    Text(allMoments ? "收起" : "全部 \(moments.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
+                }
+            }
+        } header: { sectionHeader("相关removed", moments.count) }
+    }
+
+    /// A project merged into another (same work under two names): where it went.
+    private func mergedSection(_ into: String) -> some View {
+        Section {
+            NavigationLink {
+                KnowledgeDetailView(entry: KBEntry(kind: KBKind.projects.rawValue, id: into, name: into, relevance: 0))
+            } label: {
+                Label("已合并到另一个项目", systemImage: Theme.Icon.link).lineLimit(1)
+            }
+        } footer: {
+            Text("和另一个项目是同一件事，时间线、会话和人都并过去了。这里保留合并前的样子。")
         }
     }
 
@@ -786,6 +822,85 @@ struct KnowledgeDetailView: View {
             // Cancelled (the page went away mid-load) is not an error to show.
             if let shown = error.shown { self.error = shown }
         }
+    }
+}
+
+/// A removed post in a project: author, day and comments on a line, how it bears on the project, then the text.
+struct KBMomentRow: View {
+    var moment: KBMomentRef
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(spacing: Theme.Space.sm) {
+                Text(moment.author).font(Theme.Font.labelStrong).lineLimit(1)
+                if let at = moment.at { Text(Fmt.relative(at)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }
+                Spacer(minLength: 0)
+                if moment.comments > 0 {
+                    HStack(spacing: Theme.Space.xxs) {
+                        Image(systemName: Theme.Icon.conversation)
+                        Text("\(moment.comments)").monospacedDigit()
+                    }
+                    .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(moment.comments) 条评论")
+                }
+            }
+            if let note = moment.note, !note.isEmpty {
+                Text(note).font(Theme.Font.secondaryMedium).foregroundStyle(Theme.accent).lineLimit(1)
+            }
+            Text(moment.text).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
+        }
+        .padding(.vertical, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One archived removed post: its text and every comment as the crawler kept them, long ones in chunks.
+struct KBMomentView: View {
+    @Environment(AppModel.self) private var model
+    var ref: KBMomentRef
+    @State private var chunks: [String]?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
+                if let note = ref.note, !note.isEmpty {
+                    Label(note, systemImage: Theme.Icon.link).font(Theme.Font.secondaryMedium).foregroundStyle(Theme.accent)
+                }
+                if let chunks {
+                    ForEach(Array(chunks.enumerated()), id: \.offset) { _, c in
+                        Markdown(c).markdownTheme(.jarvis)
+                    }
+                } else if let error {
+                    Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
+                }
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
+        }
+        .themedPage()
+        .navigationTitle("removed")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let api = model.api else { return }
+        do {
+            let post = try await api.kbMoment(ref.id)
+            chunks = MarkdownChunks.split(Links.markdown(KBMomentView.dropTitle(post.markdown)), lines: 40)
+            error = nil
+        } catch {
+            if let shown = error.shown { self.error = shown }
+        }
+    }
+
+    /// The archive's "# removed · title" line: the page title says it.
+    static func dropTitle(_ md: String) -> String {
+        KnowledgeDetailView.dropTitle(md).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

@@ -294,7 +294,7 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 		}
 	}
 	d := prompts.LarkChatContext{Known: kc != nil, InThread: m.ThreadKind != "", Chat: chat, FeedID: feedID, MessageID: m.ID,
-		At: m.CreatedAt.Local()}
+		At: m.CreatedAt.In(h.userLocation())}
 	if kc != nil {
 		d.Kind = kc.Kind
 	}
@@ -316,7 +316,7 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 		}
 	}
 	if len(msgs) > 0 {
-		d.Transcript = larkTranscript(msgs, m.ID, 30000)
+		d.Transcript = larkTranscript(msgs, m.ID, 30000, h.userLocation())
 	}
 	if q := m.ReplyTo; q != nil && !q.Recalled {
 		d.Quote = &prompts.LarkQuote{Sender: q.SenderName, Text: clipRunes(q.Text, 4000)}
@@ -353,8 +353,9 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 	return chat, prompts.RenderLarkChatContext(d)
 }
 
-// larkTranscript: one line per message, "01-02 15:04 名字：文字", oldest first, the request marked; the newest that fit.
-func larkTranscript(msgs []lark.Message, requestID string, limit int) string {
+// larkTranscript: one line per message, "01-02 15:04 名字：文字" in the user's time zone, oldest first, the request marked;
+// the newest that fit.
+func larkTranscript(msgs []lark.Message, requestID string, limit int, loc *time.Location) string {
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].CreatedAt.Before(msgs[j].CreatedAt) })
 	lines := make([]prompts.LarkLine, 0, len(msgs))
 	for _, m := range msgs {
@@ -365,7 +366,7 @@ func larkTranscript(msgs []lark.Message, requestID string, limit int) string {
 		if text == "" && !m.Recalled {
 			continue
 		}
-		lines = append(lines, prompts.LarkLine{At: m.CreatedAt.Local(), Who: m.SenderName, Mine: m.IsMine, Text: clipRunes(text, 2000),
+		lines = append(lines, prompts.LarkLine{At: m.CreatedAt.In(loc), Who: m.SenderName, Mine: m.IsMine, Text: clipRunes(text, 2000),
 			Recalled: m.Recalled, Request: m.ID == requestID})
 	}
 	return prompts.RenderLarkTranscript(lines, limit)

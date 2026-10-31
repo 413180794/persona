@@ -479,6 +479,7 @@ struct AssistantSidebar: View {
     @State private var searchOpen = false
     @State private var showAll = false
     @State private var ending: Session?
+    @State private var feed = SidebarFeed()
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
     @AppStorage("assistant.pinned") private var pinnedRaw = ""
@@ -491,7 +492,13 @@ struct AssistantSidebar: View {
     private func isPinned(_ s: Session) -> Bool { s.key == model.assistantMain || pinnedIDs.contains(s.sessionID) }
 
     var body: some View {
-        let all = model.assistantConversations
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AssistantSidebar")
+        #endif
+        // Closed in its drawer, the sidebar keeps the list it last showed: `assistantConversations` reads every session
+        // on every machine, so each hub push re-ran this body (three times a push) while nobody could see it. It
+        // reads the live list again as soon as it starts to come out (`isOut`).
+        let all = feed.conversations(drawer?.isOut ?? true ? model.assistantConversations : nil)
         VStack(spacing: 0) {
             topBar
                 .padding(.horizontal, Theme.Space.xl)
@@ -882,5 +889,16 @@ nonisolated enum AssistantSidebarSearch {
         guard !q.isEmpty else { return sessions }
         let opts: String.CompareOptions = [.caseInsensitive, .widthInsensitive, .diacriticInsensitive]
         return sessions.filter { $0.title.range(of: q, options: opts) != nil || ($0.lastText ?? "").range(of: q, options: opts) != nil }
+    }
+}
+
+/// The conversations the sidebar showed last (not observed: keeping them changes nothing on screen).
+final class SidebarFeed {
+    private var last: [Session] = []
+
+    /// `live` when the sidebar can be seen; nil while it is closed, for the list it had.
+    func conversations(_ live: [Session]?) -> [Session] {
+        if let live { last = live }
+        return last
     }
 }

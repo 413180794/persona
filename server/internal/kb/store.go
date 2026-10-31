@@ -82,23 +82,39 @@ type Person struct {
 
 // Project is what a set of people and chats work towards: a short one (a feature, a launch) or a long one (a team's mission).
 type Project struct {
-	Slug    string    `json:"slug"`
-	Name    string    `json:"name"`
-	Kind    string    `json:"kind"`   // short | long
-	Status  string    `json:"status"` // active | paused | done | ignored (not a project: never revived, hidden)
-	Aliases []string  `json:"aliases,omitempty"`
-	Goal    string    `json:"goal,omitempty"`
-	MyRole  string    `json:"my_role,omitempty"`
-	People  []string  `json:"people,omitempty"`
-	Chats   []string  `json:"chats,omitempty"`
-	Items   []string  `json:"items,omitempty"` // "<kind>/<id>" of docs, meetings, events
-	Dirs    []string  `json:"dirs,omitempty"`  // code directories ("<machine>:<path>"): Agents working there belong to it
-	Dirty   bool      `json:"dirty,omitempty"` // has news its summary does not reflect yet
-	OneLine string    `json:"one_line,omitempty"`
-	Created time.Time `json:"created"`
-	Updated time.Time `json:"updated"`
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`   // short | long
+	Status string `json:"status"` // active | paused | done | ignored (not a project: never revived, hidden) | merged
+	// MergedInto: merged (DedupeProjects, or by hand) into this project; kept for its history, hidden from lists.
+	MergedInto string   `json:"merged_into,omitempty"`
+	Aliases    []string `json:"aliases,omitempty"`
+	Goal       string   `json:"goal,omitempty"`
+	MyRole     string   `json:"my_role,omitempty"`
+	People     []string `json:"people,omitempty"`
+	Chats      []string `json:"chats,omitempty"`
+	Items      []string `json:"items,omitempty"` // "<kind>/<id>" of docs, meetings, events
+	Dirs       []string `json:"dirs,omitempty"`  // code directories ("<machine>:<path>"): Agents working there belong to it
+	// Keywords: words the project goes by in public talk (product, feature names), from the project rewrite; what
+	// finds its removed posts. Moments are the posts the model judged to be about it (LinkMoments).
+	Keywords []string        `json:"keywords,omitempty"`
+	Moments  []ProjectMoment `json:"moments,omitempty"`
+	Dirty    bool            `json:"dirty,omitempty"` // has news its summary does not reflect yet
+	OneLine  string          `json:"one_line,omitempty"`
+	Created  time.Time       `json:"created"`
+	Updated  time.Time       `json:"updated"`
 	Tagging
 }
+
+// ProjectMoment is a removed post about a project, with the model's one line on how.
+type ProjectMoment struct {
+	ID   string    `json:"id"`
+	Note string    `json:"note,omitempty"`
+	At   time.Time `json:"at"`
+}
+
+// Live: a project lists and is named (not merged into another).
+func (p *Project) Live() bool { return p.Status != "merged" }
 
 // Item is a document, meeting or calendar event the owner came across.
 type Item struct {

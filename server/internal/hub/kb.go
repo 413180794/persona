@@ -99,6 +99,11 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		}
 	}
 	h.kb.eng, h.kb.cfg, h.kb.kick = e, cfg, make(chan struct{}, 1)
+	// Projects from before keywords existed get them at their next rewrite: the active ones are rewritten now (a
+	// few a run), so their removed posts can be found.
+	if n := e.SeedKeywords(60 * 24 * time.Hour); n > 0 {
+		h.logf("kb: %d project(s) to be rewritten for their keywords", n)
+	}
 	if n := e.IgnoreNoiseProjects(); n > 0 {
 		h.logf("kb: %d project(s) from notifications marked ignored", n)
 	}
@@ -124,7 +129,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 	if attDays <= 0 {
 		attDays = 30
 	}
-	var lastMail, lastItems, lastPrune time.Time
+	var lastMail, lastItems, lastPrune, lastLinks time.Time
 	t := time.NewTicker(kbPoll)
 	defer t.Stop()
 	for {
@@ -146,6 +151,18 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			}
 		}
 		e.RefreshProjects(ctx, 3)
+		// Same work under two names, and the removed posts about each project: a few model calls every half hour.
+		if time.Since(lastLinks) >= kbItemsPoll {
+			lastLinks = time.Now()
+			run(ctx, func() {
+				if n := e.DedupeProjects(ctx, 4); n > 0 {
+					h.logf("kb: merged %d duplicate project(s)", n)
+				}
+				if n := e.LinkMoments(ctx, 3); n > 0 {
+					h.logf("kb: linked %d removed post(s) to projects", n)
+				}
+			})
+		}
 		run(ctx, func() {
 			if n, err := e.Backfill(ctx, textDays, 5, 3); err != nil {
 				h.logf("kb: backfill: %v", err)
@@ -542,6 +559,12 @@ func (h *Hub) runKBTool(name string, args json.RawMessage) (string, error) {
 		if len(d.Log) > 0 {
 			fmt.Fprintf(&b, "\nlog.md (latest):\n%s\n", strings.Join(d.Log, "\n"))
 		}
+		if len(d.Moments) > 0 {
+			b.WriteString("\nremoved posts about it (full text: moments/posts/<id>.md):\n")
+			for _, m := range d.Moments {
+				fmt.Fprintf(&b, "- %s %s · %d comments · %s — %s\n", m.ID, m.At.Local().Format("2006-01-02"), m.Comments, m.Note, m.Text)
+			}
+		}
 		if d.Recent != "" {
 			fmt.Fprintf(&b, "\nMessages, last 7 days:\n%s\n", d.Recent)
 		}
@@ -646,6 +669,19 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 			list = []kb.Entry{}
 		}
 		writeJSON(w, map[string]any{"items": list, "tags": kb.KindTags(all, 30)})
+	})
+	// One archived removed post (a project's 相关removed): what the crawler kept, text and comments as Markdown.
+	api.HandleFunc("GET /api/v1/kb/moments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		e := engine(w)
+		if e == nil {
+			return
+		}
+		p, md, ok := e.Store.MomentArchived(r.PathValue("id"))
+		if !ok {
+			writeErr(w, http.StatusNotFound, kb.ErrNotFound)
+			return
+		}
+		writeJSON(w, map[string]any{"post": p, "markdown": md})
 	})
 	api.HandleFunc("GET /api/v1/kb/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)
