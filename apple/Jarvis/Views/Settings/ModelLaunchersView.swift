@@ -15,6 +15,8 @@ struct ModelLaunchersView: View {
     @State private var query = ""
     /// 已隐藏 starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
     @State private var showHidden = false
+    /// A Jarvis launcher swiped to 删除, waiting for the confirmation.
+    @State private var pendingDelete: LauncherView?
 
     /// Name, model, gateway host, or a machine's name.
     private func matches(_ l: LauncherView) -> Bool {
@@ -92,6 +94,10 @@ struct ModelLaunchersView: View {
         .sheet(isPresented: $adding) {
             LauncherEditor(existing: nil) { await load() }
         }
+        .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                            titleVisibility: .visible, presenting: pendingDelete) { l in
+            Button("删除", role: .destructive) { Task { await delete(l) } }
+        } message: { _ in Text("hub 里存的 Key 也一起删掉，不能恢复。") }
         .task { await load() }
         .refreshable { await load() }
         #if DEBUG
@@ -111,10 +117,12 @@ struct ModelLaunchersView: View {
             LauncherRow(launcher: l, machines: machineNames(l))
         }
         // Swipe left to hide a ~/.zshrc launcher or bring a hidden one back (2026-11-01 user request). No
-        // confirmation: it only changes what Jarvis lists and is undone the same way. A Jarvis one is deleted from
-        // its page, where that is confirmed.
+        // confirmation: it only changes what Jarvis lists and is undone the same way. A Jarvis one is deleted, key
+        // and all, so that one asks first.
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if !l.managed {
+            if l.managed {
+                Button { pendingDelete = l } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
+            } else {
                 if l.hidden == true {
                     Button { Task { await setHidden(l, false) } } label: { Label("恢复", systemImage: Theme.Icon.view) }
                         .tint(Theme.accent)
@@ -123,6 +131,20 @@ struct ModelLaunchersView: View {
                         .tint(Theme.caution)
                 }
             }
+        }
+    }
+
+    /// Takes the row out at once, then asks the hub; a failure puts it back and says why.
+    private func delete(_ l: LauncherView) async {
+        guard let api = model.api, let i = launchers?.firstIndex(where: { $0.name == l.name }) else { return }
+        _ = withAnimation(Theme.Motion.standard) { launchers?.remove(at: i) }
+        do {
+            try await api.deleteLauncher(l.name)
+            model.forgetLaunchers()
+            Haptics.success()
+        } catch {
+            withAnimation(Theme.Motion.standard) { launchers?.insert(l, at: min(i, launchers?.count ?? 0)) }
+            model.show(error)
         }
     }
 

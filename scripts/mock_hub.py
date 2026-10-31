@@ -811,6 +811,8 @@ LAUNCHERS = [
     {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
 ]
+if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Jarvis (LauncherSwipeTests swipes it to 删除)
+    LAUNCHERS.insert(0, {"name": "jv_strong", "source": "jarvis", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True})
 def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
     w = {"label": label, "unit": unit}
     if ratio is not None: w["used_ratio"] = ratio
@@ -1952,7 +1954,8 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
             l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
             if l is None: return self.send_json({"error": "没有这个启动器"}, 404)
-            l["hidden"] = self.command == "DELETE"
+            if l["source"] == "jarvis" and self.command == "DELETE": LAUNCHERS.remove(l)  # a Jarvis one is deleted
+            else: l["hidden"] = self.command == "DELETE"
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/assistant/tasks/"):
             tid = p.split("/")[5]
