@@ -79,10 +79,10 @@ enum AssistantScheduleText {
         return r.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? r.prompt
     }
 
-    /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考 低"; `danger`
+    /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考低"; `danger`
     /// for 全部放行.
     static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
-        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { "思考 \(SessionModes.effortLabel($0) ?? $0)" }]
+        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" }]
             .compactMap { $0 }
         return parts.isEmpty ? nil : (parts.joined(separator: " · "), r.permissionMode == "bypassPermissions")
     }

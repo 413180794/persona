@@ -118,7 +118,7 @@ final class AssistantProfileTests: XCTestCase {
         let patrol = app.descendants(matching: .any)["task-fu_patrol"].firstMatch
         XCTAssertTrue(patrol.waitForExistence(timeout: 5), "the patrol is not on the page:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["每 30 分钟"].exists, "its rule is not in words")
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "自动 · 思考 低")).firstMatch.exists,
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "自动 · 思考低")).firstMatch.exists,
                       "what it runs with is not on its row")
         shot(app, "tasks")
         let oneOffs = app.staticTexts["一次性跟进"]

@@ -77,7 +77,7 @@ struct SessionModeBar: View {
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: effort.map { "思考 \(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
+                         text: effort.map { "思考\(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
             }
             .accessibilityLabel("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
             if changing { ProgressView().controlSize(.mini) }
@@ -151,7 +151,7 @@ struct NewSessionModePicker: View {
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: SessionModes.effort(effort).map { "思考 \($0.title)" } ?? "思考：默认", tint: .secondary, known: !effort.isEmpty)
+                         text: SessionModes.effort(effort).map { "思考\($0.title)" } ?? "思考：默认", tint: .secondary, known: !effort.isEmpty)
             }
         }
     }
