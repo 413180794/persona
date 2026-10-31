@@ -118,6 +118,13 @@ struct TerminalPanel: View {
     @AppStorage(TerminalPrefs.autoHide) private var autoHideKeys = false
     @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
     @AppStorage(TerminalPrefs.tipsSeen) private var tipsSeen = false
+    /// The first-use tips are about touch (double-tap to paste, two-finger swipe, the keyboard button): not on the Mac.
+    /// The key bar stays there: its ⚡ is how saved commands are reached.
+    #if os(macOS)
+    private static let touchTips = false
+    #else
+    private static let touchTips = true
+    #endif
     @AppStorage(TerminalPrefs.size) private var sizeMode = "phone"
     /// A grid change waiting to go out (the keyboard animates, a pinch goes on: the last size is what counts).
     @State private var gridTask: Task<Void, Never>?
@@ -355,7 +362,7 @@ struct TerminalPanel: View {
             .themedButton()
             .padding(Theme.Space.m)
             .transition(.move(edge: .bottom).combined(with: .opacity))
-        } else if !tipsSeen {
+        } else if Self.touchTips, !tipsSeen {
             TerminalTips(direct: direct, openSettings: { tipsSeen = true; showSettings = true }) {
                 withAnimation(Theme.Motion.standard) { tipsSeen = true }
             }
