@@ -43,7 +43,11 @@ struct NotificationSettingsView: View {
                     }
                 }
             } footer: {
+                #if os(macOS)
+                Text("授权和计划的通知上可以直接「允许 / 批准」或「拒绝 / 打回」（把鼠标移到通知上，点「选项」）。")
+                #else
                 Text("授权和计划的通知上可以直接「允许 / 批准」（要先解锁）或「拒绝 / 打回」。")
+                #endif
             }
 
             Section {

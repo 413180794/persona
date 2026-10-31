@@ -207,6 +207,11 @@ struct ChatsView: View {
 
 /// The Agents list itself: what follows the hub's pushes (`ChatsView` holds the navigation and the toolbar).
 private struct AgentsList: View {
+    #if os(macOS)
+    static let emptyMessage = "在任意一台电脑的 herdr 里启动 Claude，在这里实时看、随时接手。"
+    #else
+    static let emptyMessage = "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。"
+    #endif
     @Environment(AppModel.self) private var model
     /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -404,7 +409,7 @@ private struct AgentsList: View {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.agents,
                                    title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
-                                   message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
+                                   message: Self.emptyMessage,
                                    action: ("新建会话", { showNew = true }))
                 }
                 .listRowBackground(Color.clear)

@@ -176,7 +176,11 @@ struct StorageView: View {
                 }
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
+                #if os(macOS)
+                Text("Jarvis 在这台 Mac 上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                #else
                 Text("Jarvis 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                #endif
             }
 
             Section {
