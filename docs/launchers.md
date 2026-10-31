@@ -25,12 +25,39 @@ node 用 `zsh -ic <名字>` 跑）；2026-10-31 起「设置 › 模型」把它
   Key 不进文件、不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
 - hub 重启或 node 重连之前没收到设置时，`jarvisd launch` 报「hub 还没发过来」。
 
+## 启动器页面上的参数（`node/launcherprobe.go`）
+
+只读 ~/.zshrc 里函数的原文看不出 `_claude_proxy URL TOKEN MODEL WINDOW` 这类 helper、局部变量最后设了什么，所以 node 把启动器在
+子 shell 里真跑一遍：`claude` / `codex` / `traex` / `command` / `env` 都换成桩，只打印 Agent 会拿到的环境变量和参数，再和 shell 自己的
+环境比，只算启动器改了的。页面上按电脑显示（各台一样就合成一组）：
+
+- 运行：Agent（Claude Code / Codex / TRAEX）、网关、Key 放在哪个变量（值不显示）
+- 模型：主模型、Fable / Opus / Sonnet / Haiku、小模型、子 Agent，各自的变量名；Codex 看 `-m`
+- 上下文：窗口（`CLAUDE_CODE_MAX_CONTEXT_TOKENS`）、和它不同时的自动压缩窗口、思考强度、请求超时
+- 启动参数，以及其他设置（`ANTHROPIC_*`、`CLAUDE_CODE_*`、代理……，像 Key / Token 的值是 •••）
+- 函数原文收在折叠里；参数里直接写的 Key（`_claude_proxy … sk-…`、`Bearer …`）也打码
+
+跑一遍会执行启动器在 claude 之前做的事（比如取 token 的脚本），所以每个启动器 10 分钟最多跑一次、15 秒超时（连子进程一起杀），
+stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.zsh` 覆盖 helper、带小模型和窗口、helper 前加变量、
+子 shell 里 export、Codex 几种写法。
+
+## 测试可用性（`node/launchercheck.go`）
+
+详情页「测试可用性」：在有这个启动器的每台在线电脑上（Jarvis 管理的在 hub 所在的机器上）真的发一个只回答一个词的请求
+（`claude -p … --output-format json --max-turns 1`，Codex 是 `codex exec`），在空目录里跑，90 秒超时；显示 ✓ / ✗、用时、哪个模型答的、
+失败的原因（打码）。会花几个 token。`POST /api/v1/launchers/{name}/check?machine=`。
+
+## 删除
+
+详情页的「删除启动器 / 在 Jarvis 里隐藏」点一下，在按钮那里弹出「确认删除 / 确认隐藏」（popover，2026-10-31 用户要求），再点才执行。
+
 ## 接口
 
 | 接口 | 用途 |
 | --- | --- |
 | `GET /api/v1/launchers` | 全部（先同步各台电脑的 ~/.zshrc） |
-| `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码） |
+| `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
+| `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
 | `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, args?, api_key}` |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Jarvis 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Jarvis 管理的删除；~/.zshrc 的隐藏 |

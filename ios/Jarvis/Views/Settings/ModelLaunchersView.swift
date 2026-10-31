@@ -143,14 +143,39 @@ struct ModelLauncherDetailView: View {
     @State private var error: String?
     @State private var editing = false
     @State private var confirmDelete = false
+    @State private var showDefinition = false
+    /// 测试可用性: per machine, running (nil) or done.
+    @State private var checks: [String: LauncherCheck?] = [:]
+
+    /// Machines whose launcher sets the same, with that detail.
+    private struct DetailGroup { var machines: [String]; var names: String; var detail: LauncherDetail }
+
+    private func detailGroups(_ l: LauncherView) -> [DetailGroup] {
+        var out: [DetailGroup] = []
+        for (id, d) in (l.details ?? [:]).sorted(by: { $0.key < $1.key }) {
+            let name = model.machine(id)?.name ?? id
+            if let i = out.firstIndex(where: { $0.detail == d }) {
+                out[i].machines.append(id)
+                out[i].names += "、" + name
+            } else {
+                out.append(DetailGroup(machines: [id], names: name, detail: d))
+            }
+        }
+        return out
+    }
+
+    private func groups(_ l: LauncherView) -> Int { detailGroups(l).count }
 
     var body: some View {
         List {
             if let l = launcher {
                 Section {
                     LabeledContent("来源", value: l.managed ? "Jarvis 管理" : "~/.zshrc 里的函数")
-                    if let u = l.baseURL, !u.isEmpty { mono("Base URL", u) }
-                    if let m = l.model, !m.isEmpty { mono("模型", m) }
+                    // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
+                    if l.managed || (l.details ?? [:]).isEmpty {
+                        if let u = l.baseURL, !u.isEmpty { mono("Base URL", u) }
+                        if let m = l.model, !m.isEmpty { mono("模型", m) }
+                    }
                     if let s = l.smallModel, !s.isEmpty { mono("小模型", s) }
                     if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
@@ -164,19 +189,41 @@ struct ModelLauncherDetailView: View {
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
-                ForEach((l.definitions ?? [:]).sorted(by: { $0.key < $1.key }), id: \.key) { id, def in
+                availability(l)
+                // What the launcher really sets, once for the machines where it is the same.
+                ForEach(detailGroups(l), id: \.machines) { g in
+                    LauncherDetailSections(detail: g.detail, place: groups(l) > 1 ? g.names : nil)
+                }
+                if let defs = l.definitions, !defs.isEmpty {
                     Section {
-                        Text(def).font(.caption.monospaced()).textSelection(.enabled)
-                    } header: { Text("\(model.machine(id)?.name ?? id) 上的定义") } footer: {
-                        Text("看起来像 Key、Token 的值已经换成 •••。")
-                    }
+                        DisclosureGroup(isExpanded: $showDefinition) {
+                            ForEach(defs.sorted(by: { $0.key < $1.key }), id: \.key) { id, def in
+                                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                                    if defs.count > 1 { Text(model.machine(id)?.name ?? id).font(Theme.Font.labelStrong).foregroundStyle(.secondary) }
+                                    Text(def).font(.caption.monospaced()).textSelection(.enabled)
+                                }
+                            }
+                        } label: { Label("函数原文", systemImage: "chevron.left.forwardslash.chevron.right").lineLimit(1) }
+                    } footer: { Text("看起来像 Key、Token 的值已经换成 •••。") }
                 }
                 Section {
                     if l.hidden == true {
                         Button { Task { await restore() } } label: { Label("恢复显示", systemImage: "eye").lineLimit(1) }
                     } else {
+                        // The confirmation comes up right where the button is (2026-10-31 user request), not as a sheet.
                         Button(role: .destructive) { confirmDelete = true } label: {
                             Label(l.managed ? "删除启动器" : "在 Jarvis 里隐藏", systemImage: l.managed ? "trash" : "eye.slash").lineLimit(1)
+                        }
+                        .popover(isPresented: $confirmDelete, arrowEdge: .top) {
+                            Button(role: .destructive) {
+                                confirmDelete = false
+                                Task { await delete() }
+                            } label: {
+                                Text(l.managed ? "确认删除" : "确认隐藏").font(Theme.Font.heading).lineLimit(1)
+                                    .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.m)
+                            }
+                            .foregroundStyle(Theme.danger)
+                            .presentationCompactAdaptation(.popover)
                         }
                     }
                 }
@@ -196,19 +243,63 @@ struct ModelLauncherDetailView: View {
         .sheet(isPresented: $editing) {
             LauncherEditor(existing: launcher) { await load() }
         }
-        .confirmationDialog(launcher?.managed == true ? "删除 \(name)？" : "在 Jarvis 里隐藏 \(name)？", isPresented: $confirmDelete,
-                            titleVisibility: .visible) {
-            Button(launcher?.managed == true ? "删除" : "隐藏", role: .destructive) { Task { await delete() } }
-        } message: {
-            Text(launcher?.managed == true ? "用它的会话下次启动会失败，要换一个启动器。" : "~/.zshrc 不会改；新对话、助手的选择器里不再出现，随时可以恢复。")
+        .task {
+            await load()
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "showDeleteConfirm") { try? await Task.sleep(for: .seconds(1)); confirmDelete = true }
+            if UserDefaults.standard.bool(forKey: "showLauncherCheck"), let l = launcher { await check(testMachines(l)) }
+            #endif
         }
-        .task { await load() }
     }
 
     private func mono(_ label: String, _ value: String) -> some View {
         LabeledContent(label) {
             Text(value).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
         }
+    }
+
+    /// The machines to test on: a ~/.zshrc launcher's own (online ones), a Jarvis one on the hub's machine.
+    private func testMachines(_ l: LauncherView) -> [String] {
+        if l.managed { return [""] } // the hub picks (the assistant's machine)
+        return (l.machines ?? []).filter { model.machine($0)?.online != false }
+    }
+
+    @ViewBuilder private func availability(_ l: LauncherView) -> some View {
+        let machines = testMachines(l)
+        let running = checks.values.contains { $0 == nil }
+        Section {
+            ForEach(machines, id: \.self) { id in
+                if let entry = checks[id] {
+                    LauncherCheckRow(machine: id.isEmpty ? nil : (model.machine(id)?.name ?? id), check: entry)
+                }
+            }
+            Button { Task { await check(machines) } } label: {
+                HStack {
+                    Label(checks.isEmpty ? "测试可用性" : "再测一次", systemImage: "bolt.horizontal.circle").lineLimit(1)
+                    if running { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(running || machines.isEmpty)
+        } header: { Text("可用性") } footer: {
+            Text(machines.isEmpty ? "有这个启动器的电脑都不在线。" : "真的发一个只回答一个词的请求（花几个 token），看能不能回答、要多久、是哪个模型答的。")
+        }
+    }
+
+    private func check(_ machines: [String]) async {
+        guard let api = model.api else { return }
+        for id in machines { checks[id] = .some(nil) }
+        await withTaskGroup(of: (String, LauncherCheck).self) { group in
+            for id in machines {
+                group.addTask {
+                    let c = (try? await api.checkLauncher(name, machine: id.isEmpty ? nil : id))
+                        ?? LauncherCheck(ok: false, millis: 0, error: "请求没有完成")
+                    return (id, c)
+                }
+            }
+            for await (id, c) in group { checks[id] = .some(c) }
+        }
+        let allOK = checks.values.allSatisfy { $0?.ok == true }
+        if allOK { Haptics.success() } else { Haptics.error() }
     }
 
     private func load() async {
@@ -325,4 +416,107 @@ struct LauncherEditor: View {
             Haptics.error()
         }
     }
+}
+
+/// A launcher's settings as it really runs them: agent and gateway, each model tier, context and effort, flags,
+/// and every other setting it makes (secrets as •••).
+struct LauncherDetailSections: View {
+    var detail: LauncherDetail
+    /// The machines it is about, when they differ.
+    var place: String?
+
+    var body: some View {
+        if let e = detail.error {
+            Section { Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary) } header: { title("运行") }
+        } else {
+            Section {
+                LabeledContent("Agent", value: detail.agentName)
+                if let u = detail.baseURL, !u.isEmpty { mono("网关", u) }
+                if let a = detail.auth { mono("Key", "已设置 · " + a) }
+            } header: { title("运行") }
+            if let models = detail.models, !models.isEmpty {
+                Section {
+                    ForEach(models, id: \.self) { m in
+                        LabeledContent {
+                            Text(m.model).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(m.role)
+                                Text(m.env).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                } header: { title("模型") }
+            }
+            if detail.contextWindow != nil || detail.compactWindow != nil || detail.effort != nil || detail.timeoutMS != nil {
+                Section {
+                    if let w = detail.contextWindow, w > 0 { LabeledContent("上下文窗口", value: LauncherDetail.tokens(w) + " tokens") }
+                    if let c = detail.compactWindow, c > 0 { LabeledContent("自动压缩窗口", value: LauncherDetail.tokens(c) + " tokens") }
+                    if let e = detail.effort, !e.isEmpty { LabeledContent("思考强度", value: e) }
+                    if let t = detail.timeoutMS, t > 0 { LabeledContent("请求超时", value: t >= 60_000 ? "\(t / 60_000) 分钟" : "\(t / 1000) 秒") }
+                } header: { title("上下文") }
+            }
+            if let args = detail.args, !args.isEmpty {
+                Section {
+                    Text(args.joined(separator: " ")).font(.caption.monospaced()).textSelection(.enabled)
+                } header: { title("启动参数") }
+            }
+            if let env = detail.env, !env.isEmpty {
+                Section {
+                    ForEach(env, id: \.key) { e in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(e.key).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            Text(e.value).font(Theme.Font.body.monospaced()).lineLimit(3).textSelection(.enabled)
+                        }
+                    }
+                } header: { title("其他设置 \(env.count)") }
+            }
+        }
+    }
+
+    private func title(_ s: String) -> Text { Text(place.map { "\(s) · \($0)" } ?? s) }
+
+    private func mono(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) {
+            Text(value).font(Theme.Font.body.monospaced()).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+        }
+    }
+}
+
+/// One machine's test: ✓ with how long and which model, ✗ with why; a spinner while it runs.
+struct LauncherCheckRow: View {
+    var machine: String?
+    var check: LauncherCheck?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
+            Group {
+                if let c = check {
+                    Image(systemName: c.ok ? "checkmark.circle.fill" : "xmark.octagon.fill").foregroundStyle(c.ok ? Theme.positive : Theme.danger)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Theme.Space.sm) {
+                    Text(machine ?? "hub 所在的机器").font(Theme.Font.heading).lineLimit(1)
+                    if let c = check { Text(Self.seconds(c.millis)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary) }
+                }
+                if let c = check {
+                    if c.ok {
+                        Text([c.model, c.answer.map { "回答「\($0)」" }].compactMap { $0 }.joined(separator: " · "))
+                            .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                    } else if let e = c.error {
+                        Text(e).font(.caption.monospaced()).foregroundStyle(Theme.danger).lineLimit(6).textSelection(.enabled)
+                    }
+                } else {
+                    Text("正在请求…").font(Theme.Font.label).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    static func seconds(_ ms: Int) -> String { ms >= 10_000 ? "\(ms / 1000) 秒" : String(format: "%.1f 秒", Double(ms) / 1000) }
 }
