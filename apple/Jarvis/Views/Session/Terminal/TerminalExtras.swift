@@ -106,15 +106,14 @@ struct TerminalSettingsView: View {
             Form {
                 Section {
                     Picker("终端尺寸", selection: $size) {
-                        Text("手机尺寸").tag("phone")
+                        Text(TerminalSizeText.own).tag("phone")
                         Text("电脑尺寸").tag("mirror")
                     }
                     .pickerStyle(.segmented)
                 } header: {
                     Text("尺寸")
                 } footer: {
-                    Text(size == "phone" ? "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。"
-                         : "不改电脑上的窗格，按电脑的宽度显示，长行在手机上折行（或左右滑）。")
+                    Text(size == "phone" ? TerminalSizeText.ownFooter : TerminalSizeText.mirrorFooter)
                 }
                 Section {
                     TerminalPreview(fontSize: fontSize, font: TerminalFont(rawValue: fontID) ?? .jetbrains,
@@ -137,7 +136,7 @@ struct TerminalSettingsView: View {
                     Stepper(value: $fontSize, in: 7...20, step: 0.5) {
                         Text("字号 \(fontSize, specifier: "%.1f")").monospacedDigit()
                     }
-                    Toggle("长行按手机宽度换行", isOn: $wrap)
+                    Toggle(TerminalSizeText.wrap, isOn: $wrap)
                 } header: {
                     Text("文字")
                 } footer: {
@@ -337,4 +336,23 @@ struct SuggestionStrip: View {
         }
         .scrollClipDisabled()
     }
+}
+
+/// The terminal's size wording: the phone's size on iOS, the window's on the Mac (a Mac takes over at its panel's size).
+enum TerminalSizeText {
+    #if os(macOS)
+    static let own = "窗口尺寸"
+    static let ownFooter = "打开终端时由这个窗口接管：电脑上的窗格变成窗口的行列数，Claude 按窗口宽度排版；离开终端或断线后，窗格回到电脑上的尺寸。"
+    static let mirrorFooter = "不改电脑上的窗格，按电脑的宽度显示，长行在窗口里折行（或左右滚动）。"
+    static let wrap = "长行按窗口宽度换行"
+    static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成这个窗口的尺寸；离开终端时窗格回到电脑上的尺寸。"
+    static let icon = Theme.Icon.laptop
+    #else
+    static let own = "手机尺寸"
+    static let ownFooter = "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。"
+    static let mirrorFooter = "不改电脑上的窗格，按电脑的宽度显示，长行在手机上折行（或左右滑）。"
+    static let wrap = "长行按手机宽度换行"
+    static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。"
+    static let icon = Theme.Icon.phone
+    #endif
 }

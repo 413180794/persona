@@ -41,6 +41,12 @@ import SwiftUI
                     let sheetURL = url.deletingPathExtension().appendingPathExtension("sheet").appendingPathExtension(url.pathExtension)
                     let wrote = capture(to: sheetURL, window: sheet)
                     FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(sheetURL.path)\n".utf8))
+                    // A sheet on that sheet (the terminal's 设置 over the 终端 sheet): <name>.sheet2.png.
+                    if let inner = sheet.attachedSheet {
+                        let innerURL = url.deletingPathExtension().appendingPathExtension("sheet2").appendingPathExtension(url.pathExtension)
+                        let wrote = capture(to: innerURL, window: inner)
+                        FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(innerURL.path)\n".utf8))
+                    }
                 }
                 // A conversation opened in its own window (-openChatWindow): next to it as <name>.chat.png.
                 if let chat = NSApp.windows.first(where: { $0.isVisible && $0 !== mainWindow && ($0.identifier?.rawValue.hasPrefix(MacChatWindow.id) == true || $0.identifier?.rawValue.hasPrefix(MacTerminalWindow.id) == true) }) {

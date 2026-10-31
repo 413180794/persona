@@ -174,14 +174,19 @@ struct TerminalPanel: View {
         .animation(Theme.Motion.standard, value: typing)
         .animation(Theme.Motion.standard, value: keyboardUp)
         .onChange(of: keyboardUp) { _, up in onKeyboard?(up) }
-        .sheet(isPresented: $showSettings) { TerminalSettingsView().environment(\.colorScheme, scheme) }
+        .sheet(isPresented: $showSettings) {
+            TerminalSettingsView().environment(\.colorScheme, scheme)
+            #if os(macOS)
+                .macSheet()
+            #endif
+        }
         .alert("电脑上另一个程序正在使用这个终端", isPresented: Binding(get: { feed.control == .busy }, set: { shown in
             if !shown, feed.control == .busy { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
         })) {
             Button("接管") { feed.takeOver(model) }
             Button("只看", role: .cancel) { feed.watchOnly("只看：电脑上另一个程序在用这个终端") }
         } message: {
-            Text("比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。")
+            Text(TerminalSizeText.takeOver)
         }
         .onChange(of: feed.controlNote) { _, note in
             if let note { model.toast = Toast(note, style: .info) }
@@ -467,7 +472,7 @@ struct TerminalPanel: View {
         switch feed.control {
         case .active, .starting:
             let g = feed.phoneGrid
-            Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: Theme.Icon.phone)
+            Label(feed.drives ? "\(TerminalSizeText.own) \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: TerminalSizeText.icon)
                 .font(Theme.Font.labelStrong.monospacedDigit())
                 .lineLimit(1)
                 .fixedSize()
