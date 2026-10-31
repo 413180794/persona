@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens, keyframes and component grammar from Beautiful UI (https://www.beautifului.dev/, MIT,
+ * Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md). Every view reads colors through these. */
+:root {
+  --page: #fafafb;
+  --canvas: #f1f2f3;
+  --surface: #fff;
+  --inset: #f7f8f9;
+  --hover: #f4f5f6;
+  --hover-2: #e7e9eb;
+  --ink: #1f2124;
+  --ink-2: #62656b;
+  --ink-3: #9a9da3;
+  --line: #ecedef;
+  --line-strong: #e0e2e5;
+  --field: #f2f2f3;
+  --stripe: #49494913;
+  --stripe-bg: #f5f5f5;
+  --accent: #0285ff;
+  --accent-ink: #0170dd;
+  --accent-tint: #e9f3ff;
+  --green: #189a4d;
+  --green-tint: #e8f5ed;
+  --orange: #ef720c;
+  --orange-tint: #fdf1e5;
+  --red: #e3474c;
+  --red-tint: #fcecec;
+  --tooltip-bg: #25272b;
+  --tooltip-fg: #f6f7f8;
+  --tooltip-muted: #a5a8ad;
+  --tooltip-border: #3a3c40;
+  --shadow-hairline: 0 0 0 1px var(--line);
+  --shadow-btn: 0 0 0 1px var(--line-strong), 0 1px 2px #1018280d;
+  --shadow-card: 0 0 0 1px var(--line), 0 1px 2px #1018280a, 0 2px 6px #10182808;
+  --shadow-raised: 0 0 0 1px var(--line), 0 2px 10px #0000000b;
+  --shadow-overlay: 0 0 0 1px var(--line), 0 8px 28px #0001;
+  --shadow-inset-field: inset 0 1px 2px #0000001f;
+}
+
+.dark {
+  --page: #17181a;
+  --canvas: #1c1d1f;
+  --surface: #232427;
+  --inset: #1f2022;
+  --hover: #2a2b2e;
+  --hover-2: #313236;
+  --ink: #f2f3f4;
+  --ink-2: #a5a8ad;
+  --ink-3: #6c6f75;
+  --line: #2e3033;
+  --line-strong: #3a3c40;
+  --field: #2b2c2f;
+  --stripe: #ffffff0e;
+  --stripe-bg: #1b1c1e;
+  --accent: #3d9aff;
+  --accent-ink: #7ec0ff;
+  --accent-tint: #3d9aff29;
+  --green: #3dbb72;
+  --green-tint: #3dbb7224;
+  --orange: #f68f3c;
+  --orange-tint: #f68f3c24;
+  --red: #ee5c61;
+  --red-tint: #ee5c6124;
+  --tooltip-bg: #111214;
+  --tooltip-fg: #f2f3f4;
+  --tooltip-muted: #a5a8ad;
+  --tooltip-border: #2e3033;
+  --shadow-hairline: 0 0 0 1px var(--line);
+  --shadow-btn: 0 0 0 1px var(--line-strong), 0 1px 2px #0000004d;
+  --shadow-card: 0 0 0 1px var(--line), 0 1px 2px #0003, 0 2px 6px #0003;
+  --shadow-raised: 0 0 0 1px var(--line), 0 2px 10px #00000038;
+  --shadow-overlay: 0 0 0 1px var(--line-strong), 0 8px 28px #00000057;
+  --shadow-inset-field: inset 0 1px 2px #0006;
+}
+
+/* Expose the tokens as Tailwind utilities. */
+@theme inline {
+  --color-page: var(--page);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-inset: var(--inset);
+  --color-hover: var(--hover);
+  --color-hover-2: var(--hover-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-field: var(--field);
+  --color-stripe: var(--stripe);
+  --color-stripe-bg: var(--stripe-bg);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-green: var(--green);
+  --color-green-tint: var(--green-tint);
+  --color-orange: var(--orange);
+  --color-orange-tint: var(--orange-tint);
+  --color-red: var(--red);
+  --color-red-tint: var(--red-tint);
+  --color-tooltip-bg: var(--tooltip-bg);
+  --color-tooltip-fg: var(--tooltip-fg);
+  --color-tooltip-muted: var(--tooltip-muted);
+  --color-tooltip-border: var(--tooltip-border);
+
+  --shadow-hairline: var(--shadow-hairline);
+  --shadow-btn: var(--shadow-btn);
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+  --shadow-inset-field: var(--shadow-inset-field);
+
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 10px;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-link: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* ── Keyframes ─────────────────────────────────────────── */
+@keyframes shimmer-text{0%{background-position:150%}to{background-position:-50%}}
+@keyframes fade-up{0%{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-in{0%{opacity:0}to{opacity:1}}
+@keyframes eq-bounce{0%,to{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes stream-in{0%{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur()}}
+@keyframes caret-blink{0%,to{opacity:1}50%{opacity:0}}
+@keyframes pop-in{0%{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes spin{to{transform:rotate(1turn)}}
+@keyframes pixel-on{0%,to{opacity:.15}18%,42%{opacity:1}62%{opacity:.15}}
+
+.stream-caret{background:var(--ink);vertical-align:text-bottom;border-radius:1px;width:2px;height:1.05em;margin-left:1.5px;animation:caret-blink 1s step-end infinite;display:inline-block;translate:0 -.5px}
+
+/* ── Jarvis additions ──────────────────────────────────── */
+:root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #f0f1f3; }
+.dark { --user-bubble: #2c2d31; }
+@theme inline { --color-user-bubble: var(--user-bubble); }
+@keyframes breathe{0%,to{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+@keyframes slide-up{0%{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+
+html, body, #root { height: 100%; }
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+::selection { background: var(--accent-tint); }
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+
+/* Assistant prose (react-markdown): reading first, no bubble. */
+.prose-j { font-size: 14px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
+.prose-j > :first-child { margin-top: 0; }
+.prose-j > :last-child { margin-bottom: 0; }
+.prose-j p { margin: .55em 0; }
+.prose-j h1, .prose-j h2, .prose-j h3, .prose-j h4 { font-weight: 600; line-height: 1.35; margin: 1.1em 0 .45em; letter-spacing: -.005em; }
+.prose-j h1 { font-size: 1.3em; } .prose-j h2 { font-size: 1.15em; } .prose-j h3 { font-size: 1.03em; } .prose-j h4 { font-size: 1em; color: var(--ink-2); }
+.prose-j ul, .prose-j ol { margin: .5em 0; padding-left: 1.35em; }
+.prose-j ul { list-style: disc; } .prose-j ol { list-style: decimal; }
+.prose-j li { margin: .2em 0; } .prose-j li::marker { color: var(--ink-3); }
+.prose-j a { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; transition: text-decoration-color .15s; }
+.prose-j a:hover { text-decoration-color: currentColor; }
+.prose-j strong { font-weight: 600; }
+.prose-j blockquote { margin: .7em 0; padding: .1em 0 .1em .9em; border-left: 2px solid var(--line-strong); color: var(--ink-2); }
+.prose-j hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+.prose-j code { font-family: var(--font-mono); font-size: .86em; background: var(--field); border-radius: 5px; padding: .12em .36em; box-shadow: var(--shadow-hairline); }
+.prose-j pre { margin: .7em 0; background: var(--inset); border-radius: 10px; box-shadow: var(--shadow-hairline); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; }
+.prose-j pre code { background: none; box-shadow: none; padding: 0; font-size: inherit; }
+.prose-j table { display: block; max-width: 100%; overflow-x: auto; border-collapse: separate; border-spacing: 0; margin: .8em 0; font-size: 13px; border-radius: 10px; box-shadow: var(--shadow-hairline); }
+.prose-j th, .prose-j td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 4em; }
+.prose-j th { font-weight: 600; color: var(--ink-2); background: var(--inset); white-space: nowrap; }
+.prose-j tr:last-child td { border-bottom: 0; }
+.prose-j input[type=checkbox] { margin-right: .4em; accent-color: var(--ink); }
+.prose-j img { max-width: 100%; border-radius: 8px; }
+.prose-sm { font-size: 13px; line-height: 1.65; }

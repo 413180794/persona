@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -157,6 +158,7 @@ func (h *Hub) routes() http.Handler {
 	}
 	h.tokenRoutes(api)
 	mux.Handle("/api/", h.auth(api))
+	mux.Handle("/", webApp(filepath.Join(h.cfg.dir, "web")))
 	return logRequests(h, mux)
 }
 

@@ -1,0 +1,363 @@
+// What the agent is waiting on (questions, plans, permissions, terminal dialogs), as Beautiful UI's Approval Card.
+import { useState } from "react";
+import { api, ApiError, enc, errorText } from "../../lib/api";
+import type { Interaction } from "../../lib/types";
+import { Button, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { Markdown } from "../../ui/Markdown";
+
+async function resolve(ix: Interaction, body: Record<string, unknown>) {
+  try {
+    await api(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
+    return true;
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "prompt_changed") toast("电脑上的对话框变了，已按新的屏幕重新生成", "error");
+    else toast(`没送到：${errorText(e)}`, "error");
+    return false;
+  }
+}
+
+function Card({ title, kicker, onDismiss, children, footer }: { title: string; kicker: string; onDismiss: () => void; children: React.ReactNode; footer: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 350ms ${EASE} both` }}>
+      <div className="px-3.5 pt-3 pb-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mb-0.5 flex items-center gap-1.5 text-[11px] font-medium text-red">
+              <span className="size-1.5 rounded-full bg-red" style={{ animation: "breathe 1.8s ease-in-out infinite" }} />
+              {kicker}
+            </div>
+            <div className="text-[13.5px] font-medium text-ink">{title}</div>
+          </div>
+          <button
+            type="button"
+            aria-label="交回电脑处理"
+            title="交回电脑处理"
+            onClick={onDismiss}
+            className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+          >
+            <Icon name="x" size={14} stroke={2.2} />
+          </button>
+        </div>
+        <div className="mt-2">{children}</div>
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-line bg-inset px-3 py-2">{footer}</div>
+    </div>
+  );
+}
+
+function Choice({ on, multi, label, desc, onClick }: { on: boolean; multi?: boolean; label: string; desc?: string; onClick: () => void }) {
+  return (
+    <button type="button" aria-pressed={on} onClick={onClick} className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors duration-100 hover:bg-hover">
+      <span
+        className={cx(
+          "mt-[2px] flex size-4 shrink-0 items-center justify-center transition-colors duration-200",
+          multi ? "rounded-[5px]" : "rounded-full",
+          on ? "bg-ink text-canvas" : "text-transparent shadow-[inset_0_0_0_1.5px_var(--line-strong)]",
+        )}
+      >
+        {multi ? <Icon name="check" size={11} stroke={3} /> : <span className="size-1.5 rounded-full bg-canvas transition-transform duration-200" style={{ transform: on ? "scale(1)" : "scale(0)" }} />}
+      </span>
+      <span className="min-w-0">
+        <span className={cx("block text-[13px] transition-colors", on ? "text-ink" : "text-ink-2")}>{label}</span>
+        {desc && <span className="block text-[12px] leading-snug text-ink-3">{desc}</span>}
+      </span>
+    </button>
+  );
+}
+
+function SendArrow({ ready, onClick, label, busy }: { ready: boolean; onClick: () => void; label: string; busy?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={!ready || busy}
+      onClick={onClick}
+      className="flex size-7 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.96]"
+      style={{ background: ready ? "var(--ink)" : "var(--field)", color: ready ? "var(--surface)" : "var(--ink-3)", boxShadow: ready ? "inset 0 1px 0 rgba(255,255,255,0.14)" : "var(--shadow-btn)" }}
+    >
+      <Icon name="up" size={14} stroke={2.5} />
+    </button>
+  );
+}
+
+function QuestionCard({ ix }: { ix: Interaction }) {
+  const qs = ix.questions ?? [];
+  const [qi, setQi] = useState(0);
+  const [picked, setPicked] = useState<Record<number, string[]>>({});
+  const [custom, setCustom] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState(false);
+  const q = qs[qi];
+  if (!q) return null;
+  const last = qi === qs.length - 1;
+  const answered = (i: number) => (picked[i]?.length ?? 0) > 0 || Boolean(custom[i]?.trim());
+  const all = qs.every((_, i) => answered(i));
+
+  const send = async () => {
+    setBusy(true);
+    const answers: Record<string, string> = {};
+    qs.forEach((x, i) => {
+      answers[x.question] = custom[i]?.trim() || (picked[i] ?? []).join(", ");
+    });
+    await resolve(ix, { answers });
+    setBusy(false);
+  };
+
+  const toggle = (label: string) => {
+    setCustom((c) => ({ ...c, [qi]: "" }));
+    setPicked((cur) => {
+      const have = cur[qi] ?? [];
+      const next = q.multi_select ? (have.includes(label) ? have.filter((x) => x !== label) : [...have, label]) : [label];
+      return { ...cur, [qi]: next };
+    });
+    if (!q.multi_select && !last) setTimeout(() => setQi((i) => Math.min(qs.length - 1, i + 1)), 380);
+  };
+
+  return (
+    <Card
+      kicker={q.header || "提问"}
+      title={q.question}
+      onDismiss={() => resolve(ix, { dismiss: true })}
+      footer={
+        <>
+          <span className="flex items-center gap-2">
+            {qs.length > 1 && (
+              <>
+                <button type="button" aria-label="上一题" disabled={qi === 0} onClick={() => setQi(qi - 1)} className="flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                  <Icon name="chevronLeft" size={14} stroke={2.2} />
+                </button>
+                <span className="flex items-center gap-1">
+                  {qs.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      aria-label={`第 ${i + 1} 题`}
+                      onClick={() => setQi(i)}
+                      className="rounded-full transition-all duration-300"
+                      style={i === qi ? { width: 9, height: 9, border: "2.5px solid var(--ink)" } : answered(i) ? { width: 7, height: 7, background: "var(--ink-3)" } : { width: 7, height: 7, border: "1.5px solid var(--ink-3)" }}
+                    />
+                  ))}
+                </span>
+                <button type="button" aria-label="下一题" disabled={last} onClick={() => setQi(qi + 1)} className="flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                  <Icon name="chevronRight" size={14} stroke={2.2} />
+                </button>
+              </>
+            )}
+            {q.multi_select && <span className="text-[11.5px] text-ink-3">可多选</span>}
+          </span>
+          <SendArrow ready={last ? all : answered(qi)} busy={busy} label={last ? "发送回答" : "下一题"} onClick={() => (last ? void send() : setQi(qi + 1))} />
+        </>
+      }
+    >
+      <div key={qi} className="flex flex-col gap-0.5" style={{ animation: `fade-up 300ms ${EASE} both` }}>
+        {q.options.map((o) => (
+          <Choice key={o.label} on={(picked[qi] ?? []).includes(o.label)} multi={q.multi_select} label={o.label} desc={o.description} onClick={() => toggle(o.label)} />
+        ))}
+        <label className="-mx-1.5 flex items-center gap-2 rounded-control px-1.5 py-1.5 transition-colors focus-within:bg-hover hover:bg-hover">
+          <span aria-hidden className="size-4 shrink-0" />
+          <input
+            value={custom[qi] ?? ""}
+            onChange={(e) => {
+              setCustom((c) => ({ ...c, [qi]: e.target.value }));
+              if (e.target.value) setPicked((p) => ({ ...p, [qi]: [] }));
+            }}
+            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (last ? all && void send() : answered(qi) && setQi(qi + 1))}
+            placeholder="或者自己写…"
+            aria-label="自定义回答"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
+          />
+        </label>
+      </div>
+    </Card>
+  );
+}
+
+const MODES = [
+  { key: "acceptEdits", label: "批准，自动接受编辑" },
+  { key: "bypassPermissions", label: "批准，全部放行" },
+  { key: "default", label: "批准，每步确认" },
+];
+
+function PlanCard({ ix }: { ix: Interaction }) {
+  const [feedback, setFeedback] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const menu = useMenu();
+  const go = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    await resolve(ix, body);
+    setBusy(false);
+  };
+  return (
+    <Card
+      kicker="计划待批准"
+      title="Agent 想按这个计划做"
+      onDismiss={() => go({ dismiss: true })}
+      footer={
+        rejecting ? (
+          <>
+            <input
+              autoFocus
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && feedback.trim() && go({ approve: false, feedback: feedback.trim() })}
+              placeholder="要怎么改…"
+              className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
+            />
+            <Button tone="quiet" onClick={() => setRejecting(false)}>
+              取消
+            </Button>
+            <Button tone="primary" busy={busy} disabled={!feedback.trim()} onClick={() => go({ approve: false, feedback: feedback.trim() })}>
+              打回
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button tone="quiet" onClick={() => setRejecting(true)}>
+              打回修改
+            </Button>
+            <span className="flex items-center">
+              <Button tone="primary" busy={busy} className="rounded-r-none" onClick={() => go({ approve: true, mode: "acceptEdits" })}>
+                批准
+              </Button>
+              <button type="button" aria-label="批准方式" onClick={menu.open} className="flex h-8 w-7 items-center justify-center rounded-r-control border-l border-white/15 bg-ink text-surface hover:opacity-90">
+                <Icon name="chevron" size={12} stroke={2.4} />
+              </button>
+              {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" side="top" width={196} items={MODES.map((m) => ({ key: m.key, label: m.label, onSelect: () => go({ approve: true, mode: m.key }) }))} />}
+            </span>
+          </>
+        )
+      }
+    >
+      <div className="max-h-[40vh] overflow-y-auto rounded-[8px] bg-inset px-3 py-2.5 shadow-hairline">
+        <Markdown text={ix.plan ?? ""} small />
+      </div>
+    </Card>
+  );
+}
+
+function PermissionCard({ ix }: { ix: Interaction }) {
+  const [busy, setBusy] = useState(false);
+  const go = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    await resolve(ix, body);
+    setBusy(false);
+  };
+  const detail = ix.summary || JSON.stringify(ix.tool_input ?? {}, null, 2);
+  return (
+    <Card
+      kicker="需要授权"
+      title={`允许使用 ${ix.tool_name ?? "工具"}？`}
+      onDismiss={() => go({ dismiss: true })}
+      footer={
+        <>
+          <Button tone="quiet" onClick={() => go({ allow: false, message: "用户拒绝了" })}>
+            拒绝
+          </Button>
+          <span className="flex gap-1.5">
+            <Button tone="secondary" onClick={() => go({ allow: true, always: true })}>
+              总是允许
+            </Button>
+            <Button tone="primary" busy={busy} onClick={() => go({ allow: true })}>
+              允许
+            </Button>
+          </span>
+        </>
+      }
+    >
+      <pre className="max-h-48 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2 shadow-hairline">{detail}</pre>
+    </Card>
+  );
+}
+
+function ScreenCard({ ix }: { ix: Interaction }) {
+  const d = ix.dialog;
+  const [text, setText] = useState("");
+  const [typing, setTyping] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const go = async (body: Record<string, unknown>, key: string) => {
+    setBusy(key);
+    await resolve(ix, body);
+    setBusy(null);
+  };
+  return (
+    <Card
+      kicker={d?.header || "终端里的对话框"}
+      title={d?.question || "电脑上的 Agent 停在一个对话框上"}
+      onDismiss={() => go({ dismiss: true }, "dismiss")}
+      footer={
+        d?.options?.length ? (
+          <span className="text-[11.5px] text-ink-3">选一项，按键在电脑上按当时的屏幕算</span>
+        ) : (
+          <>
+            <input
+              type={ix.secret ? "password" : "text"}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={ix.secret ? "密码" : "输入文字后回车"}
+              autoComplete="off"
+              className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
+            />
+            <Button tone="primary" busy={busy === "text"} onClick={() => go({ text, keys: ["enter"] }, "text")}>
+              发送
+            </Button>
+          </>
+        )
+      }
+    >
+      {d?.detail && <p className="mb-2 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink-2">{d.detail}</p>}
+      {d?.options?.length ? (
+        <div className="flex flex-col gap-0.5">
+          {d.options.map((o) =>
+            o.kind === "type_something" && typing === o.key ? (
+              <div key={o.key} className="flex items-center gap-1.5 py-1">
+                <input
+                  autoFocus
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && text.trim() && go({ option: o.key, text }, o.key)}
+                  placeholder={o.label}
+                  className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
+                />
+                <Button tone="primary" busy={busy === o.key} disabled={!text.trim()} onClick={() => go({ option: o.key, text }, o.key)}>
+                  发送
+                </Button>
+              </div>
+            ) : (
+              <button
+                key={o.key}
+                type="button"
+                disabled={busy !== null}
+                onClick={() => (o.kind === "type_something" ? setTyping(o.key) : go({ option: o.key }, o.key))}
+                className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
+              >
+                <span className="mt-[1px] flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] bg-field px-1 font-mono text-[10.5px] text-ink-2 shadow-hairline">{o.key}</span>
+                <span className="min-w-0">
+                  <span className="block text-[13px] text-ink">{o.label}</span>
+                  {o.detail && <span className="block text-[12px] text-ink-3">{o.detail}</span>}
+                </span>
+                {busy === o.key && <span className="ml-auto mt-1 size-3 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-ink-2" style={{ animation: "spin 700ms linear infinite" }} />}
+              </button>
+            ),
+          )}
+        </div>
+      ) : (
+        <pre className="max-h-56 overflow-auto rounded-[8px] bg-[#1b1c1f] px-3 py-2 font-mono text-[11.5px] leading-[1.5] whitespace-pre text-[#e6e7e9]">{ix.screen}</pre>
+      )}
+    </Card>
+  );
+}
+
+export function InteractionCard({ ix }: { ix: Interaction }) {
+  switch (ix.kind) {
+    case "question":
+      return <QuestionCard ix={ix} />;
+    case "plan":
+      return <PlanCard ix={ix} />;
+    case "permission":
+      return <PermissionCard ix={ix} />;
+    default:
+      return <ScreenCard ix={ix} />;
+  }
+}

@@ -3,6 +3,7 @@
 #   ./scripts/deploy.sh                 # all machines
 #   ./scripts/deploy.sh <hub machine>   # only the hub
 #   ./scripts/deploy.sh <machine id>    # only one machine (node binary; the hub restarts its connection)
+#   ./scripts/deploy.sh web             # only the web client (web/, docs/web.md): no restart
 set -euo pipefail
 cd "$(dirname "$0")/.."
 eval "$(python3 scripts/jarvis_config.py env)"
@@ -10,6 +11,15 @@ cd server
 VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$(date +%Y%m%d%H%M)"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && read -ra TARGETS <<< "$JARVIS_MACHINES"
+
+# The web client: built here, served by the hub from ~/.jarvis/web (swapped in whole, so a page never sees half).
+deploy_web() {
+  [ -f ../web/package.json ] || return 0
+  (cd ../web && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build) >/dev/null
+  tar -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" 'set -e; rm -rf ~/.jarvis/web.new; mkdir -p ~/.jarvis/web.new; tar -xzf - -C ~/.jarvis/web.new; rm -rf ~/.jarvis/web.old; [ -d ~/.jarvis/web ] && mv ~/.jarvis/web ~/.jarvis/web.old; mv ~/.jarvis/web.new ~/.jarvis/web; rm -rf ~/.jarvis/web.old'
+  echo "web: deployed to $JARVIS_HUB_SSH:~/.jarvis/web"
+}
+if [ "${TARGETS[*]}" = web ]; then deploy_web; exit 0; fi
 HUB="$JARVIS_HUB_MACHINE"
 # Other machines first, the hub (restart) last: the hub only picks up a new node binary when it reconnects.
 ORDERED=()
@@ -71,7 +81,8 @@ systemctl --user restart jarvisd
 sleep 1
 systemctl --user is-active jarvisd
 EOF
-      echo "$t: hub restarted" ;;
+      echo "$t: hub restarted"
+      deploy_web ;;
     *)
       [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
       os=$(field "$t" os); os=${os:-darwin}

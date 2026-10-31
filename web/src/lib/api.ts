@@ -1,0 +1,75 @@
+// REST client for the hub. The page is served by the hub itself (same origin), so every path is relative.
+
+const TOKEN_KEY = "jarvis.token";
+
+export function getToken(): string {
+  return localStorage.getItem(TOKEN_KEY) ?? "";
+}
+
+export function setToken(token: string) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export class ApiError extends Error {
+  status: number;
+  body: Record<string, unknown>;
+  constructor(status: number, message: string, body: Record<string, unknown>) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+  get code(): string | undefined {
+    return typeof this.body.code === "string" ? this.body.code : undefined;
+  }
+}
+
+let onUnauthorized: () => void = () => {};
+export function handleUnauthorized(fn: () => void) {
+  onUnauthorized = fn;
+}
+
+export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string } = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
+  let body = init.body;
+  if (init.json !== undefined) {
+    headers.set("Content-Type", "application/json");
+    body = JSON.stringify(init.json);
+  }
+  const res = await fetch(`/api/v1${path}`, { ...init, headers, body });
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text };
+  }
+  if (!res.ok) {
+    if (res.status === 401 && init.token === undefined) onUnauthorized();
+    const msg = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
+    throw new ApiError(res.status, msg, data);
+  }
+  return data as T;
+}
+
+export const enc = encodeURIComponent;
+
+export function sessionPath(mid: string, sid: string) {
+  return `/sessions/${enc(mid)}/${enc(sid)}`;
+}
+
+// An <img> can't send a header: the hub also takes the token as a query parameter (it never logs queries).
+export function imageURL(mid: string, sid: string, itemID: string) {
+  return `/api/v1${sessionPath(mid, sid)}/items/${enc(itemID)}/image?token=${enc(getToken())}`;
+}
+
+export function isAbort(e: unknown) {
+  return e instanceof DOMException && e.name === "AbortError";
+}
+
+export function errorText(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof TypeError) return "连不上 hub";
+  return e instanceof Error ? e.message : String(e);
+}

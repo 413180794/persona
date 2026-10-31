@@ -48,6 +48,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `server/` | Go 服务端 `jarvisd`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
 | `ios/` | XcodeGen 工程：iOS App `Jarvis`、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
 | `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
+| `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
@@ -77,6 +78,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |
 | `docs/android.md` | Android App：已有的页面、不用推送服务的后台通知、构建安装、还没做的部分 |
 | `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
+| `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面、连接与补洞、细节约定 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
 
 ## 构建与验证
@@ -85,6 +87,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - iOS：`./scripts/sim.sh [-openSession <machine>/<session>]` 编译、装到配置里的模拟器、自动配对 hub；截图 `xcrun simctl io <udid> screenshot`。
   直接用 xcodegen / Xcode 前先 `python3 scripts/jarvis_config.py xcconfig`（生成 bundle id、团队）。
 - Android：`./scripts/android.sh [install|apk|test]`（`docs/android.md`）。
+- 网页：`cd web && npm test && npm run build`；部署 `./scripts/deploy.sh web`（`docs/web.md`）。
 - 发布：`docs/release.md`。**每次发 TestFlight 都内部、外部两个一起发**（2026-10-30 用户要求）：`release.sh` 上传后跑
   `python3 scripts/asc_testflight.py wait 45 <构建号>`（进内部组），再跑 `python3 scripts/asc_testflight.py external`
   （挂到外部组、提交 Beta 审核、打印公开链接），两个都好了再告诉用户构建号和审核状态。

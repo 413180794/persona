@@ -146,6 +146,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 (https://www.beautifului.dev/), copied in as a local Swift package (`ios/Packages/BeautifulUI/VENDORED.md`).
 The package directory keeps both licenses (`LICENSE`, `LICENSE-beautifului`) and `NOTICE`.
 
+The web client (`web/`) uses Beautiful UI's design tokens, keyframes and component grammar directly (`web/src/styles.css`,
+the views under `web/src/`), reimplemented in React against Jarvis's data; Beautiful UI's license is the one in
+`ios/Packages/BeautifulUI/LICENSE-beautifului` (MIT, Copyright (c) 2026 Shane Levine).
+
 BeautifulUI — MIT License, Copyright (c) 2026 ChrisPan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
