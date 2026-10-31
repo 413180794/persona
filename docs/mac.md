@@ -290,6 +290,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 2. Agents tab (dev list)
 - [ ] Always-visible search; quick filters 全部/需要你/未读/工作中 with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
+  - 待查：`-macSnapshot` 截图里，列表顶上快速筛选条那一块是空白（约 50pt，给条加红底后红色只露出窗口顶边一线），换成 `safeAreaInset` 也一样，已还原。分不清是离屏截图没画出来，还是条真的被工具栏挡住了，要解锁后用真截图看。
 - [ ] Grouping menu: 按项目 / 按状态 / 按机器 (`DevGrouping`, remembered); one rank order — ChatsView.swift, Views/Chats/AgentListOrder.swift, Views/Chats/AgentsMenus.swift (AgentsListMenu)
 - [ ] Card vs compact list (`dev.compact`); compact rows on one scale — ChatsView.swift (SessionRow), Views/Chats/CompactList.swift
 - [ ] 「需要你处理」 cards with quick-action buttons (card mode) / CompactInteractionRow — Views/Interactions/InteractionViews.swift (InteractionPreviewCard), CompactList.swift
