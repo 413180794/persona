@@ -26,7 +26,8 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 收件箱 | 第三个 tab，`docs/inbox.md` 的安卓版：飞书和邮件合成一个列表，hub 的 AI 分成需要你 / 知悉即可 / 已折叠，最后是已处理（没分拣的算需要你）。顶部筛选（全部 / 飞书 / 每个邮箱 / @我 / 私聊 / 群聊 / 邮件，只列有东西的），搜索标题、发件人、内容、摘要；左滑到底是已处理，已处理的可以移回；知悉即可「全部看过」、已折叠「全部清除」；tab 角标是需要你的件数。点开一件：摘要、hub 给的原文（不打开飞书页面）、AI 分身的草稿和依据；「AI 草拟 / AI 改」（`/draft`）、「发送」先确认再以本人身份发（`/reply`）、「交给 Jarvis」把这件事作为 `<jarvis-context>` 新开一段助手对话、「已处理」。列表在 WebSocket `inbox` 事件、重连、下拉刷新时重新拉 |
 | 附件 | 对话页输入框左边的「+」：照片（系统的照片选择器，一次最多 4 张，长边缩到 1600、JPEG 0.75，和 iOS 一样，作为 `images` 随消息发出，输入框上方是缩略图、可以移除）；文件（系统的文件选择器，传到会话所在那台电脑的临时目录，`POST /api/v1/machines/{mid}/files`，超过 200 MB 不传，传完把路径插到输入框末尾、带空格或引号的用单引号包起来，**不自动发送**）。只有图片没有字时发「请看图片」 |
 | 手机数据工具 | 设置 › 手机数据：设备信息、剪贴板、通知、通讯录、日历、位置，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`ios/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。还没有：提醒事项、照片、健康（iOS 有） |
-| 设置 | hub 地址和连接状态、各台机器（在线、版本、`node_mismatch` 提示、重新连接）、后台通知设置入口、断开 hub |
+| 界面风格 | 设置 › 外观 › 界面风格：液态玻璃（默认）、Claude、黏土、Island、飞书，和 iOS 同一组（`docs/ios.md`「设计语言」），浅色 / 深色跟系统。选择页上面是当前风格的一段对话示例，下面五张预览卡，点一下整个 App 立刻换；存在手机上（SharedPreferences `ui`，键 `ui.style`），断开 hub 也保留。见下面「界面风格」 |
+| 设置 | 界面风格、hub 地址和连接状态、各台机器（在线、版本、`node_mismatch` 提示、重新连接）、后台通知设置入口、断开 hub |
 
 还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、
 终端的选择复制（现在只能拷贝整屏）、字号和主题、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
@@ -60,6 +61,19 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - hub 默认是 HTTP（内网 / VPN），`network_security.xml` 放开了明文流量；不要把 hub 暴露到公网。
 - 装到真机：手机开 USB 调试连上电脑跑 `./scripts/android.sh`，或者把 APK 发到手机上直接装。
 
+## 界面风格
+
+- token 在 `ui/Theme.kt`：`AppStyle`（五种风格、圆角、阴影、是否圆体）和 `JarvisPalette`（主色、页面、卡片、描边、文字三级、填充、自己的气泡、
+  danger / positive / caution / ai / brand），数值抄 `ios/Shared/Design/Styles/`。`schemeOf` 把它映射成 Material 的 ColorScheme，
+  所以页面照旧只读 `MaterialTheme.colorScheme`，不要 `when (style)`；要风格自己的 token（卡片描边、圆角）读 `JTheme.colors` / `JTheme.style`。
+- 映射约定：`primary` 主色（白字）、`primaryContainer` 自己的气泡（也是新建按钮）、`tertiary` 是 ai（✦ / AI 分身那行）、
+  `surfaceContainerHighest`（Material Card 的底）是风格的卡片、`secondaryContainer` / `surfaceVariant` 是交互卡片和工具行的浅底、
+  `onSurfaceVariant` 是不透明的次要灰（iOS 的半透明 secondaryLabel 在灰页面上只有 3.3:1）、`outline` 加深过（深色下描边按钮和输入框要看得见）。
+- 黏土用 Nunito（SIL OFL，`res/font/nunito_variable.ttf`，许可在 `assets/licenses/nunito-OFL.txt`），只有拉丁字母，中文仍是系统字体。
+- 可读性底线由 `StylesTest` 查（五种 × 深浅）：主色上的白字 ≥ 3.5:1（飞书深色 `#4C88FF` 是飞书自己的蓝，3.35:1，和 iOS 一样放过）、
+  自己气泡的字 ≥ 4.5:1、主色当链接对页面和卡片 ≥ 3:1、正文 / 次要文字在页面、卡片、浅底、错误底上 ≥ 4.5:1。
+- 还没做：iOS 的表面画法（Liquid Glass、黏土的软块、Island 的悬浮卡片阴影）只体现在卡片色和预览上，列表行仍是平铺的 ListItem；字号档位（小 / 标准 / 大）。
+
 ## 代码
 
 | 文件 | 内容 |
@@ -70,7 +84,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 | `data/ChatStore.kt` | 一个会话的 items：`covered`、`history`、补洞（`after_seq`）、往前翻页 |
 | `service/HubService.kt`、`Notifier.kt`、`ActionReceiver.kt` | 前台服务、通知、通知上的按钮 |
 | `terminal/` | 实时终端：`TerminalGrid`（VT 子集，移植自 iOS 的 `TerminalGrid.swift`）、`TerminalFeed`（帧按序应用、接管时自己攒滚出屏幕的行）、`TerminalLink`（订阅 / 续传 / 接管 / 轮询降级）、`TerminalKeys`（键名 → 终端字节）、`BoxDrawing`、`TerminalScreen` |
-| `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`Markdown` |
+| `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`；`Theme` 是界面风格的 token |
 | `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
 
 ## 验证记录
@@ -84,6 +98,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - 实时终端：打开 Mac 上 Claude 的窗格，接管成 46×39（herdr `session control`），打字、退格、^C 写进终端，上下拖滚 Claude 的对话；
   电脑上另一个程序占着时弹「接管 / 只看」；切「电脑尺寸」改成按 120 列镜像；关掉页面后 control 进程退出、窗格回到电脑尺寸
 - hub 重启后几秒内自动重连；长会话往前翻到两天前的内容；深色模式截图检查
+- 界面风格：模拟器连 `scripts/mock_hub.py`，五种风格 × 浅色 / 深色截了 Agents、两种交互卡片、Jarvis 主对话和抽屉、资料页、收件箱、设置、风格选择页、配对页（切风格可以直接写 `shared_prefs/ui.xml` 后重启 App）
 
 真机（Redmi K60 Pro，Android 16，澎湃 OS 3，没有 Google 服务），手机经 USB（`adb reverse tcp:18660 tcp:18660`）连 hub：
 

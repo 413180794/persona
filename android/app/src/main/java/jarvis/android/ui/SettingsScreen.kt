@@ -48,6 +48,12 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
     var confirmUnpair by remember { mutableStateOf(false) }
     val pm = ctx.getSystemService(PowerManager::class.java)
     var unrestricted by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
+    var stylePicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    if (stylePicker) {
+        androidx.activity.compose.BackHandler { stylePicker = false }
+        StylePickerScreen(onBack = { stylePicker = false })
+        return
+    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -63,6 +69,8 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
                     Text(when (conn) { ConnState.Online -> "已连接" + (hub.serverVersion?.let { " · $it" } ?: ""); ConnState.Connecting -> "正在连接"; ConnState.Offline -> "连不上"; ConnState.Unauthorized -> "token 失效，需要重新配对" })
                 },
             )
+            Header("外观")
+            StyleSettingsRow(onClick = { stylePicker = true })
             Header("机器")
             machines.forEach { m ->
                 ListItem(

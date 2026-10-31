@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun Markdown(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     val blocks = remember(text) { parseBlocks(text) }
+    val link = MaterialTheme.colorScheme.primary
     SelectionContainer(modifier) {
         Column {
             blocks.forEachIndexed { i, b ->
@@ -45,13 +46,13 @@ fun Markdown(text: String, modifier: Modifier = Modifier, color: Color = Materia
                             .horizontalScroll(rememberScrollState()).padding(10.dp),
                     )
                     is Block.Heading -> Text(
-                        inline(b.text), color = color, fontWeight = FontWeight.SemiBold,
+                        inline(b.text, link), color = color, fontWeight = FontWeight.SemiBold,
                         style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = top + 2.dp),
                     )
-                    is Block.Para -> Text(inline(b.text), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
+                    is Block.Para -> Text(inline(b.text, link), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
                     is Block.Quote -> Text(
-                        inline(b.text), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
+                        inline(b.text, link), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = top).padding(start = 10.dp),
                     )
                 }
@@ -109,7 +110,7 @@ fun parseBlocks(src: String): List<Block> {
 
 private val inlineRe = Regex("""\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])""")
 
-fun inline(s: String): AnnotatedString = buildAnnotatedString {
+fun inline(s: String, link: Color = Color(0xFF3B82F6)): AnnotatedString = buildAnnotatedString {
     var last = 0
     for (m in inlineRe.findAll(s)) {
         append(s.substring(last, m.range.first))
@@ -117,7 +118,7 @@ fun inline(s: String): AnnotatedString = buildAnnotatedString {
         when {
             g[1] != null -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(g[1]!!.value) }
             g[2] != null -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color(0x22888888))) { append(g[2]!!.value) }
-            g[3] != null -> withStyle(SpanStyle(color = Color(0xFF3B82F6))) { append(g[3]!!.value) }
+            g[3] != null -> withStyle(SpanStyle(color = link)) { append(g[3]!!.value) }
             g[5] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[5]!!.value) }
         }
         last = m.range.last + 1

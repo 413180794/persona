@@ -1627,8 +1627,12 @@ class H(BaseHTTPRequestHandler):
                      "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "")
             SESSIONS.append(s)
             return self.send_json({"session": s})
-        if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades for this device's own token
-            return self.send_json({"id": "dev_new", "token": "mock-device", "role": "phone"})
+        if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades the token for the device's own
+            body = json.loads(self.last_body or b"{}")
+            t = {"id": "dev_" + uuid.uuid4().hex[:6], "name": body.get("name", ""), "kind": body.get("kind", "phone"),
+                 "role": "full", "created_at": ago(), "last_seen": ago()}
+            TOKENS.append(t)
+            return self.send_json({"id": t["id"], "token": "mock", "role": "full", "name": t["name"]})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
                 if t["id"] == p.split("/")[-1]:

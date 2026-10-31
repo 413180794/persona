@@ -226,8 +226,8 @@ private fun InboxRow(item: InboxItem, onClick: () -> Unit, trailing: (@Composabl
             }
             item.agent?.let { a ->
                 when (a.state) {
-                    "running", "queued" -> Text("AI 分身正在处理：${a.task.orEmpty()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    "drafted" -> Text("AI 分身草拟好了回复，点开看", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+                    "running", "queued" -> Text("AI 分身正在处理：${a.task.orEmpty()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    "drafted" -> Text("AI 分身草拟好了回复，点开看", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1)
                 }
             }
         }

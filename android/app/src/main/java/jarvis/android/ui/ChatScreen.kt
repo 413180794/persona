@@ -365,7 +365,7 @@ private fun RowView(hub: Hub, key: SessionKey, r: Row) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     r.from?.let { Text("来自 $it", style = MaterialTheme.typography.labelSmall) }
                     SelectionContainer { Text(r.text, style = MaterialTheme.typography.bodyLarge) }
-                    if (r.queued) Text("工作中输入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (r.queued) Text("工作中输入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                 }
             }
         }
