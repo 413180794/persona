@@ -645,24 +645,33 @@ struct ChatView: View {
         }
     }
 
-    /// The drawer's content: what happened from the first wake on, as messages and work lines.
+    /// The drawer's content: the results — each task's notice and what the agent answered it — in order; the steps in
+    /// between (tools, thoughts, its narration) fold into one line at the end, closed. Opening the drawer's work used
+    /// to unfold every task's steps at once, results and process mixed.
     private func wakeLines(_ t: Turn, live: Bool) -> [ChatLine] {
-        var out: [ChatLine] = []
-        let segments = Self.segments(t.afterWake)
-        for (k, seg) in segments.enumerated() {
-            if let u = seg.user { out.append(.row(u)) }
-            let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
-            let isLive = live && k == segments.count - 1
-            let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
-            if !items.isEmpty || isLive {
-                out.append(.work(id: "dw-" + (seg.rows.first?.id ?? t.id), items: items, live: isLive,
-                                 start: seg.rows.first?.firstTS, end: seg.rows.last?.lastTS))
+        var results: [ChatLine] = []
+        var process: [ChatRow] = []
+        var chunk: [ChatRow] = []
+        func flush() {
+            let answer = chunk.lastIndex { if case .assistant = $0 { true } else { false } }
+            for (i, r) in chunk.enumerated() where i != answer {
+                if case .notice(let n) = r, n.task != nil || n.wake == true { results.append(.row(r)) } else { process.append(r) }
             }
-            if let last { out.append(.row(seg.rows[last])) }
+            if let answer { results.append(.row(chunk[answer])) }
+            chunk = []
         }
-        return out
+        for r in t.afterWake {
+            if case .notice(let n) = r, n.wake == true { flush() } // each wake starts its own answer
+            chunk.append(r)
+        }
+        flush()
+        let items = Self.workItems(process)
+        if !items.isEmpty || live {
+            results.append(.work(id: "dw-" + t.id, items: items, live: live,
+                                 start: process.first?.firstTS, end: process.last?.lastTS))
+        }
+        return results
     }
-
 
     static let bottomID = "chat-bottom"
 

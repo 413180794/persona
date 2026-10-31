@@ -688,6 +688,39 @@ if os.environ.get("MOCK_TASKS") == "1":
     ITEMS[TASKS] = _w
 
 
+# MOCK_WAKES=1: a session whose answer started three background tasks; each woke the agent when it ended (wake notices),
+# and it worked a little and answered each (the 3 个后台任务完成 drawer).
+WAKES = "a1f3c2d4-0000-4000-8000-00000000000b"
+if os.environ.get("MOCK_WAKES") == "1":
+    SESSIONS.append(sess("macbook", WAKES, "发版前检查", "/Users/me/code/weather", "done", "unread", "weather", 1, "check", 6, 2,
+                         "lint 有两处要改，已经改好提交了。"))
+
+    def wake(ts_min, status, title, task_id, text):
+        return it("system", "notice", ts_min, text=text, wake=True,
+                  task={"kind": "shell", "status": status, "title": title, "task_id": task_id})
+    _k = [it("user", "text", 40, text="发版前把测试、构建、lint 都在后台跑一下，好了告诉我")]
+    _k += tool("Bash", {"command": "xcodebuild test", "description": "跑测试", "run_in_background": True},
+               "Command running in background with ID: bkt. Output is being written to: /tmp/claude/bkt.output", 39)
+    _k += tool("Bash", {"command": "xcodebuild build", "description": "构建", "run_in_background": True},
+               "Command running in background with ID: bkb. Output is being written to: /tmp/claude/bkb.output", 39)
+    _k += tool("Bash", {"command": "swiftlint", "description": "lint", "run_in_background": True},
+               "Command running in background with ID: bkl. Output is being written to: /tmp/claude/bkl.output", 39)
+    _k.append(it("assistant", "text", 38, text="三项都在后台跑了，结束了我逐个告诉你。"))
+    _k.append(wake(30, "completed", "跑测试", "bkt", "后台命令完成 · 跑测试"))
+    _k.append(it("assistant", "thinking", 30, text="看一下测试输出有没有警告。"))
+    _k += tool("Read", {"file_path": "/tmp/claude/bkt.output"}, "Test Suite 'All tests' passed", 29)
+    _k.append(it("assistant", "text", 29, text="测试全过了，128 个。"))
+    _k.append(wake(20, "completed", "构建", "bkb", "后台命令完成 · 构建"))
+    _k += tool("Bash", {"command": "ls build/"}, "Weather.app", 19)
+    _k.append(it("assistant", "text", 19, text="构建也好了，产物在 build/Weather.app。"))
+    _k.append(wake(10, "failed", "lint", "bkl", "后台命令失败（退出码 2） · lint"))
+    _k += tool("Read", {"file_path": "/tmp/claude/bkl.output"}, "2 violations", 9)
+    _k += tool("Edit", {"file_path": "/Users/me/code/weather/Widget.swift", "old_string": "let x = 1", "new_string": "let count = 1"}, "ok", 8)
+    _k += tool("Bash", {"command": "git commit -am 'lint'"}, "[main 1a2b3c] lint", 7)
+    _k.append(it("assistant", "text", 6, text="lint 有两处要改，已经改好提交了。"))
+    ITEMS[WAKES] = _k
+
+
 # MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
 # last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
 RICH = "a1f3c2d4-0000-4000-8000-00000000000a"
