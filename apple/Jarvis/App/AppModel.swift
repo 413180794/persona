@@ -275,7 +275,8 @@ final class AppModel {
                     assistantCurrent = SessionKey(machineID: st.machineID, sessionID: newest.sessionID)
                 }
             }
-            // Routines and the assistant's sense of "now" follow the phone's time zone.
+            // Routines and the assistant's sense of "now" follow this device's time zone (the Mac app writes its
+            // own too; the hub keeps whichever came last).
             let tz = TimeZone.current.identifier
             if st.timezone != tz, let updated = try? await api.setAssistant(timezone: tz) { assistantConfig = updated }
         }
