@@ -1,0 +1,67 @@
+{
+ "phone_calendar_create_event": {
+  "properties": [
+   "all_day",
+   "calendar",
+   "end",
+   "location",
+   "notes",
+   "start",
+   "title"
+  ],
+  "required": [
+   "end",
+   "start",
+   "title"
+  ]
+ },
+ "phone_calendar_events": {
+  "properties": [
+   "end",
+   "limit",
+   "query",
+   "start"
+  ],
+  "required": []
+ },
+ "phone_clipboard_get": {
+  "properties": [],
+  "required": []
+ },
+ "phone_clipboard_set": {
+  "properties": [
+   "text"
+  ],
+  "required": [
+   "text"
+  ]
+ },
+ "phone_contacts_search": {
+  "properties": [
+   "limit",
+   "query"
+  ],
+  "required": [
+   "query"
+  ]
+ },
+ "phone_device_info": {
+  "properties": [],
+  "required": []
+ },
+ "phone_location_current": {
+  "properties": [],
+  "required": []
+ },
+ "phone_notify": {
+  "properties": [
+   "body",
+   "delay_seconds",
+   "title"
+  ],
+  "required": [
+   "body",
+   "title"
+  ]
+ }
+}

@@ -5,8 +5,8 @@ import Testing
 /// Jarvis › 定时任务: the rules in words, the times, and what runs next (docs/assistant.md).
 @MainActor
 struct AssistantScheduleTests {
-    private func routine(_ time: String, _ days: [Int], enabled: Bool = true, next: Date? = nil) -> APIClient.Routine {
-        var r = APIClient.Routine(id: "r", title: "早报", prompt: "x", time: time, weekdays: days, enabled: enabled)
+    private func routine(_ time: String, _ days: [Int], enabled: Bool = true, next: Date? = nil) -> APIClient.ScheduledTask {
+        var r = APIClient.ScheduledTask(id: "r", title: "早报", prompt: "x", time: time, weekdays: days, enabled: enabled)
         r.nextRun = next
         return r
     }
@@ -18,6 +18,21 @@ struct AssistantScheduleTests {
         #expect(AssistantScheduleText.sentence(routine("08:15", [6, 7])) == "每个周末 早上 8:15")
         #expect(AssistantScheduleText.sentence(routine("00:05", [1, 3])) == "每周一、三 凌晨 12:05")
         #expect(AssistantScheduleText.clock("12:30") == "中午 12:30")
+        #expect(AssistantScheduleText.sentence(.init(title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)) == "每 30 分钟")
+        #expect(AssistantScheduleText.every(120) == "每 2 小时")
+        #expect(AssistantScheduleText.every(90) == "每 1 小时 30 分钟")
+    }
+
+    @Test func whatATaskRunsWith() {
+        var t = APIClient.ScheduledTask(title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)
+        #expect(AssistantScheduleText.runsWith(t) == nil, "the defaults say nothing")
+        t.launcher = "claude-fast"
+        t.permissionMode = "acceptEdits"
+        t.effort = "low"
+        #expect(AssistantScheduleText.runsWith(t)?.text == "claude-fast · 自动改文件 · 思考 低")
+        #expect(AssistantScheduleText.runsWith(t)?.danger == false)
+        t.permissionMode = "bypassPermissions"
+        #expect(AssistantScheduleText.runsWith(t)?.danger == true)
     }
 
     /// 17:00 is "17:00": the system's two-digit hour without AM/PM is 12-hour in a Chinese locale ("05:00").
@@ -27,14 +42,18 @@ struct AssistantScheduleTests {
         #expect(AssistantScheduleText.moment(d) == "今天 17:05")
     }
 
-    @Test func upcomingMergesRoutinesAndFollowupsSoonestFirst() {
+    @Test func upcomingMergesEveryKindSoonestFirst() {
         let now = Date.now
-        let routines = [routine("09:00", [], next: now.addingTimeInterval(7200)),
-                        routine("10:00", [], enabled: false, next: now.addingTimeInterval(60))]
-        let followups = [APIClient.Followup(id: "f", at: now.addingTimeInterval(600), title: nil, prompt: "看看 CI\n细节",
-                                            machineID: "m", sessionID: "s")]
-        let up = AssistantUpcoming.merge(routines: routines, followups: followups)
-        #expect(up.map(\.id) == ["f-f", "r-r"]) // the switched-off routine is not coming up
+        var off = routine("10:00", [], enabled: false, next: now.addingTimeInterval(60))
+        off.id = "off"
+        var f = APIClient.ScheduledTask(id: "f", title: "", prompt: "看看 CI\n细节", repeats: .once, at: now.addingTimeInterval(600))
+        f.machineID = "m"
+        f.sessionID = "s"
+        var p = APIClient.ScheduledTask(id: "p", title: "巡检", prompt: "x", repeats: .interval, everyMinutes: 30)
+        p.nextRun = now.addingTimeInterval(1200)
+        let up = AssistantUpcoming.merge([routine("09:00", [], next: now.addingTimeInterval(7200)), off, f, p])
+        #expect(up.map(\.id) == ["t-f", "t-p", "t-r"]) // the switched-off one is not coming up
+        #expect(up[1].detail == "每 30 分钟")
         #expect(up[0].title == "看看 CI")
         #expect(up[0].key == SessionKey(machineID: "m", sessionID: "s"))
     }

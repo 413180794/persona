@@ -276,21 +276,48 @@ def next_at(hhmm, weekdays):
             return d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-ROUTINES = [
-    {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "time": "09:00", "weekdays": [1, 2, 3, 4, 5],
-     "enabled": True, "last_run": ago(hours=3), "last_session_id": ASK2, "last_status": "ok", "next_run": next_at("09:00", [1, 2, 3, 4, 5])},
-    {"id": "rt_weekly", "title": "周报", "prompt": "帮我起草这周的周报，先给我草稿。", "time": "17:00", "weekdays": [5],
+# One list, like the hub's (assistant_schedule.go): every day at a time, every N minutes, or once.
+SCHEDULE = [
+    {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "repeat": "daily", "time": "09:00",
+     "weekdays": [1, 2, 3, 4, 5], "enabled": True, "last_run": ago(hours=3), "last_session_id": ASK2, "last_status": "ok",
+     "next_run": next_at("09:00", [1, 2, 3, 4, 5])},
+    {"id": "fu_patrol", "title": "Agent 巡检", "prompt": "看看各台电脑上的 Agent：哪些在等我、哪些卡住了，有要我处理的就列出来；都正常就回一句。",
+     "repeat": "interval", "every_minutes": 30, "at": later(minutes=12), "enabled": True, "created_by": "assistant",
+     "permission_mode": "auto", "effort": "low", "machine_id": "server", "last_run": ago(minutes=18), "last_status": "ok", "last_session_id": ASK1,
+     "next_run": later(minutes=12)},
+    {"id": "rt_weekly", "title": "周报", "prompt": "帮我起草这周的周报，先给我草稿。", "repeat": "daily", "time": "17:00", "weekdays": [5],
      "enabled": True, "created_by": "assistant", "last_run": ago(days=7), "last_status": "failed",
      "last_error": "assistant machine is offline", "next_run": next_at("17:00", [5])},
-    {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "time": "21:30", "weekdays": [1, 2, 3, 4, 5],
+    {"id": "evening", "title": "晚间回顾", "prompt": "今天的晚间回顾。", "repeat": "daily", "time": "21:30", "weekdays": [1, 2, 3, 4, 5],
      "enabled": False, "last_run": ago(days=2), "last_status": "skipped"},
+    {"id": "fu_review", "repeat": "once", "at": later(minutes=40), "next_run": later(minutes=40), "title": "会前准备 · 产品评审",
+     "prompt": "产品评审前 10 分钟：整理上次纪要和要点。", "enabled": True, "created_by": "assistant", "machine_id": "server",
+     "session_id": ASK1, "created_at": ago(hours=1)},
+    {"id": "fu_ci", "repeat": "once", "at": later(hours=2), "next_run": later(hours=2), "title": "看看 CI 跑完没有",
+     "prompt": "看一下 weather-app 的 CI，跑完把结果告诉我。", "enabled": True, "created_by": "assistant", "machine_id": "server",
+     "created_at": ago(minutes=20)},
 ]
-FOLLOWUPS = [
-    {"id": "fu_review", "at": later(minutes=40), "title": "会前准备 · 产品评审", "prompt": "产品评审前 10 分钟：整理上次纪要和要点。",
-     "machine_id": "server", "session_id": ASK1, "created_at": ago(hours=1)},
-    {"id": "fu_ci", "at": later(hours=2), "title": "看看 CI 跑完没有", "prompt": "看一下 weather-app 的 CI，跑完把结果告诉我。",
-     "machine_id": "server", "created_at": ago(minutes=20)},
-]
+TASK_FIELDS = ("title", "prompt", "repeat", "at", "time", "weekdays", "every_minutes", "enabled", "launcher", "permission_mode", "effort")
+
+
+def save_task(old, new):
+    """What the hub keeps of an edit: the editable fields ("" = default), a session that can only be cleared, the next run."""
+    t = {**old, **{k: v for k, v in new.items() if k in TASK_FIELDS}}
+    for k in ("launcher", "permission_mode", "effort"):
+        if not t.get(k): t.pop(k, None)
+    if not new.get("session_id"): t.pop("session_id", None)
+    if t.get("repeat") == "daily":
+        t["next_run"] = next_at(t.get("time", "09:00"), t.get("weekdays") or [])
+    elif t.get("repeat") == "interval":
+        if old.get("every_minutes") != t.get("every_minutes") or not t.get("at"):
+            t["at"] = later(minutes=t.get("every_minutes") or 30)
+        t["next_run"] = t["at"]
+    else:
+        t["next_run"] = t.get("at")
+    if not t.get("enabled"): t.pop("next_run", None)
+    return t
+
+
 RUNS = [
     {"id": "run_1", "kind": "routine", "ref_id": "morning", "title": "早报", "due": ago(hours=3), "at": ago(hours=3), "status": "ok",
      "machine_id": "server", "session_id": ASK2},
@@ -967,8 +994,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"machine_id": "server", "launcher": "claude", "cwd": "/home/me/.jarvis/assistant",
                                    "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
                                    "main": ASK1})
-        if p == "/api/v1/assistant/routines": return self.send_json({"routines": ROUTINES})
-        if p == "/api/v1/assistant/followups": return self.send_json({"followups": FOLLOWUPS})
+        if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
         if p == "/api/v1/assistant/runs":
             ref = parse_qs(urlparse(self.path).query).get("ref", [""])[0]
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
@@ -1093,26 +1119,25 @@ class H(BaseHTTPRequestHandler):
                                 if r["ref"] == ch["ref"] and st["field"] == ch["field"]: st["value"] = ch["value"]
                     x["done_at"], x["done_by"] = ago(minutes=0), "replied"
                     return self.send_json(x)
-        if p == "/api/v1/assistant/routines" and self.command == "PUT":
-            old = {r["id"]: r for r in ROUTINES}
-            new = []
-            for r in json.loads(self.last_body or b"{}").get("routines", []):
-                r["id"] = r.get("id") or "rt_" + uuid.uuid4().hex[:8]
-                keep = {k: v for k, v in old.get(r["id"], {}).items() if k not in ("title", "prompt", "time", "weekdays", "enabled")}
-                new.append({**keep, **r})
-            ROUTINES[:] = new
-            return self.send_json({"routines": ROUTINES})
-        if p.startswith("/api/v1/assistant/routines/") and p.endswith("/run"):
-            SCHEDULE_RAN.append(p.split("/")[5])
-            return self.send_json({"session_id": ASK2, "machine_id": "server"})
-        if p.startswith("/api/v1/assistant/followups/") and p.endswith("/run"):
-            fid = p.split("/")[5]
-            SCHEDULE_RAN.append(fid)
-            FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != fid]
-            return self.send_json({"session_id": ASK1, "machine_id": "server"})
-        if p.startswith("/api/v1/assistant/followups/") and self.command == "DELETE":
-            FOLLOWUPS[:] = [f for f in FOLLOWUPS if f["id"] != p.split("/")[5]]
-            return self.send_json({"ok": True})
+        if p == "/api/v1/assistant/tasks" and self.command == "POST":
+            t = save_task({"id": "task_" + uuid.uuid4().hex[:8], "created_at": ago()}, json.loads(self.last_body or b"{}"))
+            SCHEDULE.append(t)
+            return self.send_json({"task": t})
+        if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/run"):
+            tid = p.split("/")[5]
+            SCHEDULE_RAN.append(tid)
+            t = next((t for t in SCHEDULE if t["id"] == tid), {})
+            if t.get("repeat") == "once": SCHEDULE[:] = [x for x in SCHEDULE if x["id"] != tid]
+            return self.send_json({"session_id": t.get("session_id") or ASK2, "machine_id": "server"})
+        if p.startswith("/api/v1/assistant/tasks/"):
+            tid = p.split("/")[5]
+            i = next((i for i, t in enumerate(SCHEDULE) if t["id"] == tid), None)
+            if i is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
+            if self.command == "DELETE":
+                del SCHEDULE[i]
+                return self.send_json({"ok": True})
+            SCHEDULE[i] = save_task(SCHEDULE[i], json.loads(self.last_body or b"{}"))
+            return self.send_json({"task": SCHEDULE[i]})
         if p.startswith("/api/v1/sessions/") and p.endswith("/seen"):
             mark_seen(p.split("/")[5])
             return self.send_json({"ok": True})

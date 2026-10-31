@@ -1,14 +1,13 @@
 import SwiftUI
 
 /// Jarvis's profile, opened from its avatar on the Jarvis tab (and from 设置 › 助手): who it is and where it runs, what
-/// it will do on its own next, and everything that shapes it — routines, follow-ups, the history of runs, what it
+/// it will do on its own next, and everything that shapes it — its scheduled tasks, the history of runs, what it
 /// remembers, what it is told about the user, and its launcher.
 struct AssistantProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [Launcher] = []
     @State private var selection = ""
-    @State private var routines: [APIClient.Routine]?
-    @State private var followups: [APIClient.Followup]?
+    @State private var tasks: [APIClient.ScheduledTask]?
     @State private var runs: [APIClient.ScheduleRun]?
     @State private var memoryCount: Int?
     #if DEBUG
@@ -38,13 +37,10 @@ struct AssistantProfileView: View {
             }
             Section {
                 NavigationLink { AssistantRoutinesView() } label: {
-                    row("定时任务", "alarm", detail: routines.map { r in
-                        let on = r.filter(\.enabled).count
+                    row("定时任务", "alarm", detail: tasks.map { t in
+                        let on = t.filter(\.enabled).count
                         return on == 0 ? "未开启" : "\(on) 个开启"
                     })
-                }
-                NavigationLink { AssistantFollowupsView() } label: {
-                    row("已安排的跟进", "calendar.badge.clock", detail: followups.flatMap { $0.isEmpty ? nil : "\($0.count)" })
                 }
                 NavigationLink { AssistantRunsView() } label: {
                     row("运行记录", "clock.arrow.circlepath", detail: runs.flatMap(\.first).map { AssistantRunText.statusWord($0) + " · " + Fmt.relative($0.at) })
@@ -114,8 +110,7 @@ struct AssistantProfileView: View {
         }
         .navigationDestination(item: $debugPage) { p in
             switch p {
-            case "routines", "routine", "newRoutine": AssistantRoutinesView()
-            case "followups": AssistantFollowupsView()
+            case "routines", "routine", "newRoutine", "followups", "followup", "intervalTask", "bypassTask": AssistantRoutinesView()
             case "runs": AssistantRunsView()
             case "memory", "memoryFile", "memoryEdit": AssistantMemoryView()
             default: AssistantNotesView()
@@ -154,7 +149,7 @@ struct AssistantProfileView: View {
     }
 
     private var upcoming: [AssistantUpcoming] {
-        AssistantUpcoming.merge(routines: routines ?? [], followups: followups ?? []).prefix(3).map { $0 }
+        AssistantUpcoming.merge(tasks ?? []).prefix(3).map { $0 }
     }
 
     private func row(_ title: String, _ symbol: String, detail: String?) -> some View {
@@ -168,18 +163,16 @@ struct AssistantProfileView: View {
     /// Reloaded each time the page shows (coming back from a sub-page included).
     private func load() async {
         guard let api = model.api else { return }
-        async let r = try? api.routines()
-        async let f = try? api.followups()
+        async let r = try? api.scheduledTasks()
         async let h = try? api.scheduleRuns()
         async let m = try? api.assistantMemory()
-        routines = await r
-        followups = await f
+        tasks = await r
         runs = await h
         if let files = await m { memoryCount = files.filter { $0.name != AssistantMemoryEntry.index }.count }
     }
 }
 
-/// One thing Jarvis will do on its own: a routine's next run or a follow-up.
+/// One thing Jarvis will do on its own: a task's next run.
 struct AssistantUpcoming: Identifiable, Hashable {
     var id: String
     var at: Date
@@ -188,19 +181,19 @@ struct AssistantUpcoming: Identifiable, Hashable {
     var detail: String
     var key: SessionKey?
 
-    /// Soonest first.
-    static func merge(routines: [APIClient.Routine], followups: [APIClient.Followup]) -> [AssistantUpcoming] {
+    /// Soonest first; what is switched off is not coming up.
+    static func merge(_ tasks: [APIClient.ScheduledTask]) -> [AssistantUpcoming] {
         var out: [AssistantUpcoming] = []
-        for r in routines where r.enabled {
-            if let next = r.nextRun {
-                out.append(.init(id: "r-" + r.id, at: next, title: r.title, routine: true, detail: AssistantScheduleText.sentence(r)))
+        for t in tasks where t.enabled {
+            guard let next = t.nextRun ?? t.at else { continue }
+            if t.repeats == .once {
+                out.append(.init(id: "t-" + t.id, at: next, title: AssistantScheduleText.title(t), routine: false,
+                                 detail: t.sessionID == nil ? "跟进 · 新对话" : "跟进 · 接着原来的对话",
+                                 key: t.sessionID.map { SessionKey(machineID: t.machineID ?? "", sessionID: $0) }))
+            } else {
+                out.append(.init(id: "t-" + t.id, at: next, title: AssistantScheduleText.title(t), routine: true,
+                                 detail: AssistantScheduleText.sentence(t)))
             }
-        }
-        for f in followups {
-            let first = f.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? f.prompt
-            out.append(.init(id: "f-" + f.id, at: f.at, title: f.title.flatMap { $0.isEmpty ? nil : $0 } ?? first, routine: false,
-                             detail: f.sessionID == nil ? "跟进 · 新对话" : "跟进 · 接着原来的对话",
-                             key: f.sessionID.map { SessionKey(machineID: f.machineID, sessionID: $0) }))
         }
         return out.sorted { $0.at < $1.at }
     }

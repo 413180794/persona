@@ -26,8 +26,7 @@ final class DemoHub {
     private var interactions: [JSONValue] = []
     private var inbox: [JSONValue] = []
     private var lark: [String: [JSONValue]] = [:]
-    private var routines: [JSONValue] = []
-    private var followups: [JSONValue] = []
+    private var tasks: [JSONValue] = []
     private var memory: [JSONValue] = []
     private var prefs: JSONValue = .object([:])
     private var pins: JSONValue = .object([:])
@@ -76,8 +75,7 @@ final class DemoHub {
         interactions = all["interactions"]?.array ?? []
         inbox = all["inbox"]?.array ?? []
         lark = (all["lark"]?.object ?? [:]).compactMapValues(\.array)
-        routines = all["routines"]?.array ?? []
-        followups = all["followups"]?.array ?? []
+        tasks = all["tasks"]?.array ?? []
         memory = all["memory"]?.array ?? []
         prefs = all["prefs"] ?? .object([:])
         pins = all["pins"] ?? .object([:])
@@ -153,8 +151,7 @@ final class DemoHub {
             var a = data["assistant"]?.object ?? [:]
             a["conversations"] = .array(sessions.filter { $0["assistant"]?.bool == true })
             return .object(a)
-        case ["assistant", "routines"]: return ["routines": .array(routines)]
-        case ["assistant", "followups"]: return ["followups": .array(followups)]
+        case ["assistant", "tasks"]: return ["tasks": .array(tasks)]
         case ["assistant", "runs"]:
             let runs = data["runs"]?.array ?? []
             return ["runs": .array(q["ref"].map { ref in runs.filter { $0["ref_id"]?.string == ref } } ?? runs)]
@@ -251,9 +248,13 @@ final class DemoHub {
             throw APIError(status: 403, message: "体验模式下不能新建会话：连接你自己的 hub 后再试")
         case ["assistant", "conversations"]:
             return ["session": startConversation(body["prompt"]?.string ?? "")]
-        case ["assistant", "routines"]:
-            routines = body["routines"]?.array ?? routines
-            return ["routines": .array(routines)]
+        case ["assistant", "tasks"]: // a new one: saved as it is, next run at its time
+            guard case .object(var t) = body else { throw refuse() }
+            made += 1
+            t["id"] = .string("task_demo\(made)")
+            t["next_run"] = t["at"] ?? .null
+            tasks.append(.object(t))
+            return ["task": .object(t)]
         case ["inbox", "refresh"]: return ["items": .array(inbox)]
         case ["pins"]:
             pins = body
@@ -293,10 +294,17 @@ final class DemoHub {
             }
             return prefs
         case ("devices", 3): return ["ok": true] // live-activity reports
-        case ("assistant", 4) where p[1] == "routines" || p[1] == "followups": throw refuse() // 立即运行
-        case ("assistant", 3) where p[1] == "followups" && method == "DELETE":
-            followups.removeAll { $0["id"]?.string == p[2] }
+        case ("assistant", 4) where p[1] == "tasks": throw refuse() // 立即运行
+        case ("assistant", 3) where p[1] == "tasks" && method == "DELETE":
+            tasks.removeAll { $0["id"]?.string == p[2] }
             return ["ok": true]
+        case ("assistant", 3) where p[1] == "tasks":
+            guard let i = tasks.firstIndex(where: { $0["id"]?.string == p[2] }), case .object(var t) = tasks[i],
+                  case .object(let edit) = body else { throw notFound() }
+            for (k, v) in edit where k != "id" { t[k] = v.string == "" ? .null : v } // "" = the default
+            if edit["enabled"]?.bool == false { t["next_run"] = .null } else if t["repeat"]?.string != "daily" { t["next_run"] = t["at"] ?? .null }
+            tasks[i] = .object(t)
+            return ["task": .object(t)]
         case ("assistant", 3) where p[1] == "memory":
             memory.removeAll { $0["name"]?.string == p[2] }
             if method != "DELETE" {

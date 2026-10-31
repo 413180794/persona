@@ -18,8 +18,8 @@
 | --- | --- |
 | 在手机上问 | MCP `ask_user` → hub 建一个 `question` 交互（`tool_name: ask_user`，session 就是这段对话）→ App 里原有的提问卡片 + 推送（标题「Jarvis 在问你」）→ 答案作为工具结果返回 |
 | 推送 | `notify_user` → APNs（App 关着也到），点开就是这段对话；同一轮结束时不再重复推「完成」 |
-| 自己定时回来 | `schedule_followup` / `list_followups` / `cancel_followup`；到点 hub 把 prompt（以「⏰」开头）发进原对话（`assistant.send` 会 `--resume`），失败就新开一段 |
-| 定时任务 | hub 的 routines（Postgres settings `assistant.routines`），默认「早报」工作日 09:00 开、「晚间回顾」工作日 21:30 关；每次跑是一段新对话，跑完照常推「完成」。对话里说「每天 / 每周几 X 点…」时助手用 `schedule_routine` 建（App 里标「Jarvis 建的」），`delete_routine` 删 |
+| 自己定时回来 | `schedule_followup`（`at` 一次；`every: "30m"` 按间隔重复）/ `list_followups` / `cancel_followup`；到点 hub 把 prompt（以「⏰」开头）发进原对话（`assistant.send` 会 `--resume`），失败就新开一段 |
+| 定时任务 | 一张表（下面「定时任务」一节），默认「早报」工作日 09:00 开、「晚间回顾」工作日 21:30 关；跑完照常推「完成」。对话里说「每天 / 每周几 X 点…」时助手用 `schedule_routine` 建（App 里标「Jarvis 建的」），`delete_routine` 删 |
 | 运行记录 | 每次运行（成功开起对话 / 没跑起来 / 停机错过而跳过）记进 settings `assistant.runs`（最近 200 条），`GET /api/v1/assistant/runs[?ref=]`；定时任务带上次状态 `last_status` |
 | 到点 | 调度按下一个到期时间设定时器（最长睡 30 秒，列表一改就重算），不再是 20 秒轮询；hub 停机期间错过的跟进回来后照跑一次，提示词里写明晚了多久 |
 | 后台任务 / Monitor | 助手可以用 Bash 的 `run_in_background` 和 Monitor 盯事件，然后结束这一轮；命令跑完 / 事件来时 claude 自己开新一轮（node 把它当成工作中，跑完照常推送）。node 从 stream-json 的 `system/background_tasks_changed` 知道还有哪些在跑：有任务时不回收进程（最长 12 小时），任务列表记在 `node_sessions.tasks`；jarvisd 重启（部署）会把它们连同进程一起杀掉，node 起来后给这些对话发一条说明，让助手决定要不要重开 |
@@ -83,12 +83,40 @@
   要随时落库（`node_sessions.tasks`），不能等关机时再记。
 - 中文环境下 `.hour(.twoDigits(amPM: .omitted))` 是 12 小时制（17:00 显示成「05:00」）：时刻一律用 `AssistantScheduleText.hm`（固定 `HH:mm`）。
 
+## 定时任务（2026-10-31 合成一张表）
+
+以前是两套：定时任务（routines，每天几点）和跟进（follow-ups，助手用 `schedule_followup` 安排的一次性唤醒），分存在两个 settings 里，
+App 的「定时任务」页只列前者的开关。用户让助手「每 30 分钟巡检一次」，它只能在每一轮结尾再 `schedule_followup` 下一次接力：
+一轮开始时那条跟进就从列表里拿掉了，这一轮卡在 Bash 审批上（没人点）的一个多小时里，页面上什么都没有，没法看、改、停。
+
+现在 hub 只有一张表 `Task`（`assistant_schedule.go`，settings `assistant.tasks`），`repeat` 三种：
+
+- `once`：一次性跟进，跑完关掉，再留一天（App 不显示）好让「它自己再安排下一次」接得上，然后清掉；
+- `daily`：每天 / 每周几的几点，错过 30 分钟以上跳过并记录；
+- `interval`：每 N 分钟（5 分钟到 7 天），`at` 是下一次，跑的时候按原节奏往后挪；停机错过了就回来跑一次，再从现在起算。
+
+每个任务可以单独设**启动器（模型）、权限模式、思考强度**（空 = 助手的默认，和以前一样），只能在 App 里改，助手的工具改不了
+（不能自己给自己提权）。`bypassPermissions` 只能在 claude 启动时用 `--permission-mode` 给（控制请求切不过去）：node 新开时不用备用进程，
+已经在跑的进程不是这个模式就重启续上（`node/assistant.go`）。App 里选「全部放行」先弹确认，选上以后选择器标红、下面写明后果。
+接着原对话跑的任务（`session_id`）会把那段对话也切到这些设置。
+
+**一轮自己安排下一轮**（「最后用 schedule_followup（at=30m，prompt 和本条相同）安排下一次」）：hub 从运行记录认出这段对话是哪个任务跑出来的，
+标题或提示词一样就不新建：一次性的、用相对时间（`30m`）重排的变成每 30 分钟的 `interval`，之后再收到同样的请求只更新提示词、不动时间，
+用户在 App 里关掉的也不会被它重新打开。提示词开头抄过来的「⏰ …（你之前安排的跟进）」这类行会去掉，不会越叠越长。
+`interval` 的消息里写明「会按时再运行，不用再安排下一次」，助手的说明里也让它用 `every`。
+
+迁移：第一次启动读到没有 `assistant.tasks` 时，把 `assistant.routines` 和 `assistant.followups` 搬进来（id、时间、上次状态不变），
+然后把旧的 follow-ups 清空，免得旧版 hub 再起来时重跑一遍；之后只读新表。读 Postgres 失败时不保存任何东西（以前会用默认值盖掉）。
+旧版 App 用的 `routines` / `followups` 接口还在，读写的是同一张表（`docs/protocol.md`）。
+
 ## 资料页和头像（2026-10-30）
 
 - Jarvis tab 右上角是 Jarvis 的头像，点开是资料页（`AssistantProfileView`）：身份和运行在哪台机器、在线 / 工作中、「接下来」要做的 3 件事，
-  主动做事（定时任务、已安排的跟进、运行记录）、了解你（关于我、记忆）、设置（启动器）、能访问。设置 › 助手打开的是同一页。
-- 定时任务页把定时任务和跟进放在一起：「接下来」时间线（左边大号时刻，像「提醒事项」）、每个定时任务一行（图标、规则的人话「每个工作日 上午 9:00」、
-  下次、上次结果、开关）、跟进（左滑取消、右滑或长按立即运行）、最近运行；定时任务详情多了历史记录。
+  主动做事（定时任务、运行记录）、了解你（关于我、记忆）、设置（启动器）、能访问。设置 › 助手打开的是同一页。
+- 定时任务页：「接下来」时间线（左边大号时刻，像「提醒事项」）、「定时任务」（每天 / 每隔，规则的人话「每个工作日 上午 9:00」「每 30 分钟」）、
+  「一次性跟进」，每行图标、下次、不是默认时的运行方式（「claude-fast · 自动 · 思考 低」，全部放行标红）、上次结果、开关，左滑删除、长按立即运行；
+  最近运行。点开是同一个编辑页：重复（一次 / 每天 / 每隔）、提示词、运行方式（模型、权限模式、思考强度）、接着原来的对话（能关，关了每次新开）、
+  立即运行、历史记录。
 - 头像是 SwiftUI 画的（`JarvisAvatar`），颜色跟着界面风格的强调色走，不用位图。试过三个方案（`-tab assistant -openAssistantPage avatars` 看对比）：
   **面罩**（选用：强调色圆盘 + 深色面罩里两只发光的眼睛，右上一颗火花呼应 App 图标；工作中眼睛左右看）、
   火花（App 图标的火花放进深色圆里，和 App 图标太像，小尺寸时像个按钮）、光环（HUD 式断开的光环 + 发光的核心，酷但冷，28pt 下细节糊成一团）。
@@ -99,7 +127,9 @@
 `docs/testing.md` 的服务端测试覆盖 `nextRun` / `parseWhen` / 跳过过期任务 / ask_user 往返 / agents_list / 工具只给助手；
 2026-10-30 加了 hub 重启前后的调度（`TestScheduleAcrossHubRestart`：不重跑、错过的跟进晚跑一次并说明、错过太久的定时任务跳过、历史保留）、
 `schedule_routine`、有后台任务的进程不回收、重启后告诉对话丢了哪些任务；App 单测 `AssistantScheduleTests`，UI 测试 `AssistantProfileTests`
-（头像进资料页、定时任务列表和详情、定时任务和跟进的立即运行）。
+（头像进资料页、定时任务列表和详情、定时任务和跟进的立即运行）。2026-10-31 合表后：`assistant_schedule_test.go`（迁移不丢不重跑、
+一轮自己重排变成一个 `interval`、间隔任务的节奏、权限模式校验、旧接口）；App `AssistantRoutinesModelTests`；UI `testRepeatingTaskAndItsPermissionMode`
+（巡检在列表里、改成全部放行要先确认、保存到 hub）。
 
 ### 能力实测（2026-10-30，线上 hub，凌晨用户不在用时；测试对话都以「【Jarvis 能力测试，可忽略】」开头）
 

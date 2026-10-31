@@ -40,8 +40,14 @@ import Testing
 
         let a = try await api.assistant()
         #expect(a.conversations.count >= 4)
-        #expect(!(try await api.routines()).isEmpty)
-        #expect(!(try await api.followups()).isEmpty)
+        let tasks = try await api.scheduledTasks()
+        #expect(Set(tasks.map(\.repeats)) == [.once, .daily, .interval], "every kind of task has a demo")
+        #expect(tasks.contains { $0.permissionMode != nil }, "and one runs with its own permission mode")
+        var patrol = try #require(tasks.first { $0.repeats == .interval })
+        patrol.enabled = false
+        patrol.effort = nil
+        let saved = try await api.saveTask(patrol)
+        #expect(!saved.enabled && saved.effort == nil && saved.nextRun == nil)
         #expect(!(try await api.scheduleRuns()).isEmpty)
         #expect(!(try await api.assistantMemory()).isEmpty)
         _ = try await api.kbList(.projects)

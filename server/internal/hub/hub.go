@@ -60,7 +60,7 @@ type Hub struct {
 	usage         usageBook            // token usage of every machine (usage.go)
 	metrics       metricsBook          // OS and load of every machine (metrics.go)
 
-	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
+	sched schedule // the assistant's scheduled tasks (assistant_schedule.go)
 	inbox inbox    // the unified inbox (inbox.go)
 	kb    kbState  // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).

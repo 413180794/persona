@@ -24,9 +24,10 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | Jarvis 的资料页 | Jarvis 左上角菜单「定时任务、记忆、关于我」，和 iOS `AssistantProfileView` 对应：接下来（开着的定时任务的下次运行和跟进，最近三件）；定时任务（列表、开关、编辑名称 / 提示词 / 时间 / 星期、删除、立即运行、新建，「Jarvis 建的」有标记）；跟进（现在做、取消）；运行记录（点开对应的对话）；关于我（编辑后新对话起生效）；记忆（看、改、删） |
 | 收件箱 | 第三个 tab，`docs/inbox.md` 的安卓版：飞书和邮件合成一个列表，hub 的 AI 分成需要你 / 知悉即可 / 已折叠，最后是已处理（没分拣的算需要你）。顶部筛选（全部 / 飞书 / 每个邮箱 / @我 / 私聊 / 群聊 / 邮件，只列有东西的），搜索标题、发件人、内容、摘要；左滑到底是已处理，已处理的可以移回；知悉即可「全部看过」、已折叠「全部清除」；tab 角标是需要你的件数。点开一件：摘要、hub 给的原文（不打开飞书页面）、AI 分身的草稿和依据；「AI 草拟 / AI 改」（`/draft`）、「发送」先确认再以本人身份发（`/reply`）、「交给 Jarvis」把这件事作为 `<jarvis-context>` 新开一段助手对话、「已处理」。列表在 WebSocket `inbox` 事件、重连、下拉刷新时重新拉 |
 | 附件 | 对话页输入框左边的「+」：照片（系统的照片选择器，一次最多 4 张，长边缩到 1600、JPEG 0.75，和 iOS 一样，作为 `images` 随消息发出，输入框上方是缩略图、可以移除）；文件（系统的文件选择器，传到会话所在那台电脑的临时目录，`POST /api/v1/machines/{mid}/files`，超过 200 MB 不传，传完把路径插到输入框末尾、带空格或引号的用单引号包起来，**不自动发送**）。只有图片没有字时发「请看图片」 |
+| 手机数据工具 | 设置 › 手机数据：设备信息、剪贴板、通知、通讯录、日历、位置，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`ios/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。还没有：提醒事项、照片、健康（iOS 有） |
 | 设置 | hub 地址和连接状态、各台机器（在线、版本、`node_mismatch` 提示、重新连接）、后台通知设置入口、断开 hub |
 
-还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、`phone_*` 手机数据工具、实时终端流（`terminal_subscribe`）、
+还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、实时终端流（`terminal_subscribe`）、
 手表。协议都在，后续按 iOS 的做法补。
 
 hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub）时不再无限重连，直接回到配对页并说明原因；已配对时打开配对链接也会回到配对页重新配。
@@ -90,6 +91,9 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
 - herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
 - Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。
+- hub 只存一份 phone_* 工具列表（`setPhoneTools`），每台手机 `register_phone` 时整个替换，调用发给最后注册的那台（`phoneClient`）。
+  所以安卓声明的工具要和 iOS 一模一样，不能多也不能改参数。安卓 10 以后只有在前台的 App 能读剪贴板，后台调 `phone_clipboard_get` 读到的是空，结果里会说明。
+- 模拟器默认没有能写的日历账号，`phone_calendar_create_event` 会报「no writable calendar」；测的时候用 `content insert` 建一个 LOCAL 日历。
 - 已配对时打开配对链接：配对页要等配对做完再清掉 `pendingPair`。先清掉的话 Root 立刻换回正常页面，配对页和它的协程一起被丢掉，链接等于没点。
 - `JsonCodec` 的 `encodeDefaults = false` 会把等于默认值的字段省掉不发，而 hub 把缺的字段当成空 / false：定时任务的 `enabled = true`、
   `time = "09:00"` 被省掉，保存时被关掉或者 400。发给 hub、hub 又按「缺了就是空」处理的字段，要加 `@EncodeDefault`（`SetRoutinesTest` 逐字检查请求）。

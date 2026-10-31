@@ -486,83 +486,92 @@ nonisolated struct APIClient: Sendable {
         _ = try await request("POST", "/api/v1/assistant/warm", body: ["launcher": launcher ?? ""])
     }
 
-    // MARK: Assistant routines, follow-ups, memory (docs/assistant.md)
+    // MARK: Assistant schedule, memory (docs/assistant.md)
 
-    /// A daily prompt the assistant runs on its own (早报…); each run is a new conversation, pushed when done.
-    struct Routine: Codable, Identifiable, Hashable, Sendable {
+    /// Something the assistant does on its own (docs/assistant.md「定时任务」): once (a follow-up it scheduled), every
+    /// day at a time (早报), or every N minutes (a patrol). Runs go into the conversation it came from or a new one,
+    /// with its own launcher / permission mode / effort (nil = the assistant's defaults); pushed when done.
+    struct ScheduledTask: Codable, Identifiable, Hashable, Sendable {
+        enum Repeat: String, Codable, Sendable, CaseIterable { case once, daily, interval }
         var id: String
         var title: String
         var prompt: String
-        var time: String          // "HH:MM" in the phone's time zone
-        var weekdays: [Int]       // 1 = Monday … 7 = Sunday; empty = every day
+        var repeats: Repeat
+        var at: Date?             // once: when; interval: the next run
+        var time: String          // daily: "HH:MM" in the phone's time zone
+        var weekdays: [Int]       // daily: 1 = Monday … 7 = Sunday; empty = every day
+        var everyMinutes: Int     // interval
         var enabled: Bool
+        var machineID: String?
+        var sessionID: String?    // the conversation runs go into; nil = a new one each run
+        var launcher: String?
+        var permissionMode: String?
+        var effort: String?
+        var createdBy: String?    // "assistant": Jarvis set it up from a conversation
         var lastRun: Date?        // read-only, set by the hub
         var lastSessionID: String?
         var lastStatus: String?   // of the last run: ok / failed / skipped
         var lastError: String?
         var nextRun: Date?
-        var createdBy: String?    // "assistant": Jarvis set it up from a conversation
         enum CodingKeys: String, CodingKey {
-            case id, title, prompt, time, weekdays, enabled
+            case id, title, prompt, at, time, weekdays, enabled, launcher, effort
+            case repeats = "repeat", everyMinutes = "every_minutes", machineID = "machine_id", sessionID = "session_id"
+            case permissionMode = "permission_mode", createdBy = "created_by"
             case lastRun = "last_run", lastSessionID = "last_session_id", nextRun = "next_run"
-            case lastStatus = "last_status", lastError = "last_error", createdBy = "created_by"
+            case lastStatus = "last_status", lastError = "last_error"
         }
-        init(id: String = "", title: String, prompt: String, time: String, weekdays: [Int], enabled: Bool) {
-            self.id = id; self.title = title; self.prompt = prompt; self.time = time; self.weekdays = weekdays; self.enabled = enabled
+        init(id: String = "", title: String, prompt: String, repeats: Repeat = .daily, at: Date? = nil, time: String = "09:00",
+             weekdays: [Int] = [], everyMinutes: Int = 30, enabled: Bool = true) {
+            self.id = id; self.title = title; self.prompt = prompt; self.repeats = repeats; self.at = at; self.time = time
+            self.weekdays = weekdays; self.everyMinutes = everyMinutes; self.enabled = enabled
         }
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
+            func text(_ k: CodingKeys) -> String? { (try? c.decodeIfPresent(String.self, forKey: k)).flatMap { $0?.isEmpty == false ? $0 : nil } }
+            func date(_ k: CodingKeys) -> Date? { (try? c.decodeIfPresent(Date.self, forKey: k)).flatMap { $0?.realDate } }
             id = try c.decode(String.self, forKey: .id)
-            title = try c.decode(String.self, forKey: .title)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
             prompt = try c.decode(String.self, forKey: .prompt)
-            time = try c.decode(String.self, forKey: .time)
+            repeats = text(.repeats).flatMap(Repeat.init(rawValue:)) ?? .once
+            at = date(.at)
+            time = text(.time) ?? "09:00"
             weekdays = try c.decodeIfPresent([Int].self, forKey: .weekdays) ?? []
+            everyMinutes = try c.decodeIfPresent(Int.self, forKey: .everyMinutes) ?? 0
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
-            lastRun = (try? c.decodeIfPresent(Date.self, forKey: .lastRun)).flatMap { $0.realDate }
-            lastSessionID = try c.decodeIfPresent(String.self, forKey: .lastSessionID)
-            lastStatus = try c.decodeIfPresent(String.self, forKey: .lastStatus)
-            lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
-            nextRun = (try? c.decodeIfPresent(Date.self, forKey: .nextRun)).flatMap { $0.realDate }
-            createdBy = try c.decodeIfPresent(String.self, forKey: .createdBy)
+            machineID = text(.machineID); sessionID = text(.sessionID)
+            launcher = text(.launcher); permissionMode = text(.permissionMode); effort = text(.effort)
+            createdBy = text(.createdBy)
+            lastRun = date(.lastRun); lastSessionID = text(.lastSessionID); lastStatus = text(.lastStatus); lastError = text(.lastError)
+            nextRun = date(.nextRun)
         }
-        func encode(to e: Encoder) throws { // only what the user edits
+        func encode(to e: Encoder) throws { // only what the user edits; "" = the default
             var c = e.container(keyedBy: CodingKeys.self)
             try c.encode(id, forKey: .id); try c.encode(title, forKey: .title); try c.encode(prompt, forKey: .prompt)
-            try c.encode(time, forKey: .time); try c.encode(weekdays, forKey: .weekdays); try c.encode(enabled, forKey: .enabled)
+            try c.encode(repeats, forKey: .repeats); try c.encodeIfPresent(at, forKey: .at)
+            try c.encode(time, forKey: .time); try c.encode(weekdays, forKey: .weekdays); try c.encode(everyMinutes, forKey: .everyMinutes)
+            try c.encode(enabled, forKey: .enabled); try c.encode(sessionID ?? "", forKey: .sessionID)
+            try c.encode(launcher ?? "", forKey: .launcher); try c.encode(permissionMode ?? "", forKey: .permissionMode)
+            try c.encode(effort ?? "", forKey: .effort)
         }
     }
-    struct RoutinesBody: Codable { var routines: [Routine] }
-    func routines() async throws -> [Routine] { try await get("/api/v1/assistant/routines", as: RoutinesBody.self).routines }
-    func setRoutines(_ list: [Routine]) async throws -> [Routine] {
-        try JSON.decoder.decode(RoutinesBody.self, from: try await request("PUT", "/api/v1/assistant/routines", body: RoutinesBody(routines: list))).routines
+    struct TasksBody: Decodable { var tasks: [ScheduledTask] }
+    struct TaskBody: Codable { var task: ScheduledTask }
+    func scheduledTasks() async throws -> [ScheduledTask] { try await get("/api/v1/assistant/tasks", as: TasksBody.self).tasks }
+    /// Creates `t` (no id yet) or saves the user's changes to it; returns it as the hub has it.
+    func saveTask(_ t: ScheduledTask) async throws -> ScheduledTask {
+        let data = t.id.isEmpty ? try await request("POST", "/api/v1/assistant/tasks", body: t)
+                                : try await request("PUT", "/api/v1/assistant/tasks/\(t.id)", body: t)
+        return try JSON.decoder.decode(TaskBody.self, from: data).task
     }
-    struct RoutineRun: Decodable {
+    func deleteTask(_ id: String) async throws { try await delete("/api/v1/assistant/tasks/\(id)") }
+    struct TaskRun: Decodable {
         var sessionID: String
         var machineID: String
         enum CodingKeys: String, CodingKey { case sessionID = "session_id", machineID = "machine_id" }
     }
-    /// Runs a routine now; returns the new conversation.
-    func runRoutine(_ id: String) async throws -> SessionKey {
-        let r = try await post("/api/v1/assistant/routines/\(id)/run", body: [String: String](), timeout: 130, as: RoutineRun.self)
-        return SessionKey(machineID: r.machineID, sessionID: r.sessionID)
-    }
-
-    /// A wake-up the assistant scheduled for itself (schedule_followup).
-    struct Followup: Decodable, Identifiable, Hashable, Sendable {
-        var id: String
-        var at: Date
-        var title: String?
-        var prompt: String
-        var machineID: String
-        var sessionID: String?   // the conversation it continues; nil = starts a new one
-        enum CodingKeys: String, CodingKey { case id, at, title, prompt; case machineID = "machine_id", sessionID = "session_id" }
-    }
-    struct FollowupsBody: Decodable { var followups: [Followup] }
-    func followups() async throws -> [Followup] { try await get("/api/v1/assistant/followups", as: FollowupsBody.self).followups }
-    func cancelFollowup(_ id: String) async throws { try await delete("/api/v1/assistant/followups/\(id)") }
-    /// Runs a follow-up now instead of at its time; returns the conversation it went to.
-    func runFollowup(_ id: String) async throws -> SessionKey {
-        let r = try await post("/api/v1/assistant/followups/\(id)/run", body: [String: String](), timeout: 130, as: RoutineRun.self)
+    /// Runs a task now instead of at its time; returns the conversation it went to.
+    func runTask(_ id: String) async throws -> SessionKey {
+        let r = try await post("/api/v1/assistant/tasks/\(id)/run", body: [String: String](), timeout: 130, as: TaskRun.self)
         return SessionKey(machineID: r.machineID, sessionID: r.sessionID)
     }
 

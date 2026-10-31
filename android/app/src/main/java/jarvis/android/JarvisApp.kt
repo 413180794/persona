@@ -22,6 +22,8 @@ class JarvisApp : Application() {
         private set
     lateinit var notifier: Notifier
         private set
+    lateinit var phoneTools: jarvis.android.phone.PhoneToolRunner
+        private set
 
     private val _hub = MutableStateFlow<Hub?>(null)
     val hub: StateFlow<Hub?> = _hub.asStateFlow()
@@ -31,6 +33,7 @@ class JarvisApp : Application() {
         instance = this
         pairings = PairingStore(this)
         notifier = Notifier(this)
+        phoneTools = jarvis.android.phone.PhoneToolRunner(this)
         pairings.load()?.let { connect(it) }
     }
 
@@ -41,6 +44,7 @@ class JarvisApp : Application() {
         val hub = Hub(ApiClient(p.url, p.token), scope, deviceName)
         _hub.value = hub
         notifier.attach(hub)
+        phoneTools.attach(hub) // before start: the first connect declares the tools
         hub.start()
         HubService.start(this)
     }

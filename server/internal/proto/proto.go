@@ -132,6 +132,15 @@ type MetricPoint struct {
 // MetricEvery is how often a node samples (and the finest step of the history).
 const MetricEvery = 10 * time.Second
 
+// Claude Code's effort levels and permission modes (node/modes.go sets them; the hub checks a scheduled task's).
+var (
+	EffortLevels    = []string{"low", "medium", "high", "xhigh", "max"}
+	PermissionModes = []string{"default", "acceptEdits", "plan", "auto", "bypassPermissions"}
+)
+
+// ModeBypass skips every permission prompt; a headless claude only takes it at start (--permission-mode).
+const ModeBypass = "bypassPermissions"
+
 type Launcher struct {
 	Name    string `json:"name"`
 	BaseURL string `json:"base_url"`

@@ -20,9 +20,9 @@ import (
 // TUI sessions are driven like a person would: shift+tab cycles the mode, and the /effort picker's "s" sets the
 // level for this session only (`/effort <level>` would also save it as the default for new sessions).
 
-var effortLevels = []string{"low", "medium", "high", "xhigh", "max"}
+var effortLevels = proto.EffortLevels
 
-var permissionModes = []string{"default", "acceptEdits", "plan", "auto", "bypassPermissions"}
+var permissionModes = proto.PermissionModes
 
 // tuiModeCycle is the order shift+tab walks through (Claude Code 2.1.x); bypassPermissions is only in the cycle
 // of sessions started with it.

@@ -34,18 +34,20 @@ func assistantTools(withLark bool) []proto.Tool {
 		{Name: "schedule_followup", Description: "Wake yourself up later: at the given time Jarvis sends `prompt` into this conversation (or a new one) " +
 			"as if the user wrote it, you do the work, and the user gets a push with your answer. Use for \"remind me…\", \"check again in an hour\", " +
 			"meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) " +
-			"or relative (\"30m\", \"2h\", \"1d\").",
-			InputSchema: schema(`{"type":"object","required":["at","prompt"],"properties":{"at":{"type":"string"},"prompt":{"type":"string","description":"what to do then, self-contained"},"title":{"type":"string","description":"short label shown in the app"},"new_conversation":{"type":"boolean","description":"start a fresh conversation instead of continuing this one"}}}`)},
+			"or relative (\"30m\", \"2h\", \"1d\"). For something to do again and again (a patrol every 30 minutes) pass `every` " +
+			"(\"30m\", \"2h\", at least 5m) once: Jarvis repeats it by itself and the user sees, edits and stops it in the app; " +
+			"never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.",
+			InputSchema: schema(`{"type":"object","required":["prompt"],"properties":{"at":{"type":"string","description":"when (the first run, with every); default with every: one interval from now"},"every":{"type":"string","description":"repeat this often, e.g. 30m"},"prompt":{"type":"string","description":"what to do then, self-contained"},"title":{"type":"string","description":"short label shown in the app"},"new_conversation":{"type":"boolean","description":"start a fresh conversation instead of continuing this one"}}}`)},
 		{Name: "schedule_routine", Description: "Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new " +
 			"conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". " +
 			"For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields " +
 			"you give change; `enabled: false` pauses it. Times are in the user's time zone.",
 			InputSchema: schema(`{"type":"object","properties":{"id":{"type":"string","description":"to change an existing routine"},"title":{"type":"string","description":"short name shown in the app, e.g. 早报"},"prompt":{"type":"string","description":"what to do each time, self-contained"},"time":{"type":"string","description":"HH:MM, 24-hour"},"weekdays":{"type":"array","items":{"type":"integer","minimum":1,"maximum":7},"description":"1 = Monday … 7 = Sunday; omit or empty = every day"},"enabled":{"type":"boolean"}}}`)},
-		{Name: "delete_routine", Description: "Delete a recurring routine by id (from list_followups). Confirm with the user first unless they asked for it.",
+		{Name: "delete_routine", Description: "Delete a scheduled task (routine or follow-up) by id (from list_followups). Confirm with the user first unless they asked for it.",
 			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
-		{Name: "list_followups", Description: "List the follow-ups scheduled with schedule_followup that have not run yet, and the recurring routines (with ids).",
+		{Name: "list_followups", Description: "List every scheduled task (with ids): follow-ups that have not run yet, repeating ones, daily routines.",
 			InputSchema: schema(`{"type":"object","properties":{}}`)},
-		{Name: "cancel_followup", Description: "Cancel a scheduled follow-up by id (from list_followups).",
+		{Name: "cancel_followup", Description: "Cancel a scheduled follow-up or a repeating task by id (from list_followups).",
 			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
 		{Name: "agents_list", Description: "The Claude Code / Codex agents running on the user's computers (herdr), with their state: needs_you " +
 			"(waiting for an answer / approval), working, unread (finished, result not looked at), idle. Each line has machine, session id, " +
@@ -124,15 +126,15 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 	case "delete_routine":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)
-		if !h.deleteRoutine(ctx, a.ID) {
-			return "", fmt.Errorf("no routine %q", a.ID)
+		if !h.deleteTask(ctx, a.ID) {
+			return "", fmt.Errorf("no task %q", a.ID)
 		}
 		return "Deleted.", nil
 	case "cancel_followup":
 		var a struct{ ID string }
 		_ = json.Unmarshal(args, &a)
-		if !h.cancelFollowup(ctx, a.ID) {
-			return "", fmt.Errorf("no pending follow-up %q", a.ID)
+		if !h.deleteTask(ctx, a.ID) {
+			return "", fmt.Errorf("no task %q", a.ID)
 		}
 		return "Cancelled.", nil
 	case "inbox_draft":

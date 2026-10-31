@@ -19,11 +19,14 @@ enum AssistantScheduleText {
         return "每周" + d.sorted().map { dayNames[$0 - 1] }.joined(separator: "、")
     }
 
-    /// "工作日 09:00".
-    static func schedule(_ r: APIClient.Routine) -> String { "\(repeats(r.weekdays)) \(r.time)" }
-
-    /// The rule in words, as Reminders says it: "每个工作日 早上 9:00" / "每天 晚上 9:30" / "每周五 下午 5:00".
-    static func sentence(_ r: APIClient.Routine) -> String {
+    /// The rule in words, as Reminders says it: "每个工作日 早上 9:00" / "每天 晚上 9:30" / "每周五 下午 5:00" /
+    /// "每 30 分钟" / "一次 · 今天 15:30".
+    static func sentence(_ r: APIClient.ScheduledTask) -> String {
+        switch r.repeats {
+        case .interval: return every(r.everyMinutes)
+        case .once: return r.at.map { "一次 · \(moment($0))" } ?? "一次"
+        case .daily: break
+        }
         let d = Set(r.weekdays)
         let days: String
         if d.isEmpty || d.count == 7 { days = "每天" }
@@ -61,8 +64,31 @@ enum AssistantScheduleText {
         return "\(cal.component(.month, from: date))月\(cal.component(.day, from: date))日"
     }
 
+    /// "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟".
+    static func every(_ minutes: Int) -> String {
+        if minutes < 60 { return "每 \(minutes) 分钟" }
+        return minutes % 60 == 0 ? "每 \(minutes / 60) 小时" : "每 \(minutes / 60) 小时 \(minutes % 60) 分钟"
+    }
+
+    /// The intervals the editor offers.
+    static let intervals = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440]
+
+    /// Its title, or the first line of the prompt for a follow-up without one.
+    static func title(_ r: APIClient.ScheduledTask) -> String {
+        if !r.title.isEmpty { return r.title }
+        return r.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? r.prompt
+    }
+
+    /// What it runs with when that isn't the default, in a few words: "claude-fast · 自动改文件 · 思考 低"; `danger`
+    /// for 全部放行.
+    static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
+        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { "思考 \(SessionModes.effortLabel($0) ?? $0)" }]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : (parts.joined(separator: " · "), r.permissionMode == "bypassPermissions")
+    }
+
     /// The last run in a few words, nil when it never ran: "上次 今天 09:00 · 成功".
-    static func lastRun(_ r: APIClient.Routine) -> (text: String, failed: Bool)? {
+    static func lastRun(_ r: APIClient.ScheduledTask) -> (text: String, failed: Bool)? {
         guard let at = r.lastRun else { return nil }
         let word = switch r.lastStatus {
         case "failed": "失败"
@@ -73,8 +99,8 @@ enum AssistantScheduleText {
         return ("上次 \(moment(at)) · \(word)", r.lastStatus == "failed")
     }
 
-    /// An SF Symbol for a routine, from its title.
-    static func symbol(_ r: APIClient.Routine) -> String {
+    /// An SF Symbol for a task, from its title.
+    static func symbol(_ r: APIClient.ScheduledTask) -> String {
         let t = r.title
         if t.contains("早") { return "sun.horizon" }
         if t.contains("晚") || t.contains("回顾") { return "moon.stars" }
@@ -82,7 +108,11 @@ enum AssistantScheduleText {
         if t.contains("会") { return "person.2" }
         if t.contains("盘点") || t.contains("待办") { return "checklist" }
         if t.contains("巡检") || t.contains("检查") { return "binoculars" }
-        return "alarm"
+        return switch r.repeats {
+        case .once: "arrow.turn.down.right"
+        case .interval: "arrow.triangle.2.circlepath"
+        case .daily: "alarm"
+        }
     }
 
     /// A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "3 天后".
@@ -122,15 +152,16 @@ enum AssistantScheduleText {
 
 // MARK: - 定时任务
 
-/// Everything Jarvis does on its own, on one page: what runs next, the recurring routines (with their rule in words,
-/// next and last run, an on/off switch), the one-off follow-ups it scheduled, and the history of runs.
+/// Everything Jarvis does on its own, on one page: what runs next, what repeats (every day at a time, every N
+/// minutes; the rule in words, next and last run, an on/off switch), the one-offs it scheduled from a conversation,
+/// and the history of runs. Each opens the same editor: when, the prompt, and what it runs with.
 struct AssistantRoutinesView: View {
     @State private var page = AssistantRoutinesModel()
-    @State private var editing: APIClient.Routine?
-    @State private var creating: APIClient.Routine?
+    @State private var editing: APIClient.ScheduledTask?
+    @State private var creating: APIClient.ScheduledTask?
 
     var body: some View {
-        let routines = page.routines, followups = page.followups, lastRuns = page.lastRuns, upcoming = page.upcoming
+        let repeating = page.repeating, oneOff = page.oneOff, lastRuns = page.lastRuns, upcoming = page.upcoming
         List {
             if !upcoming.isEmpty {
                 Section {
@@ -139,25 +170,22 @@ struct AssistantRoutinesView: View {
                     Text("接下来")
                 }
             }
-            if !routines.isEmpty {
+            if !repeating.isEmpty {
                 Section {
-                    ForEach(routines) { r in row(r) }
+                    ForEach(repeating) { t in row(t) }
                 } header: {
                     Text("定时任务")
                 } footer: {
-                    Text("到点时 Jarvis 开一段新对话跑这段提示词，跑完推送到手机。时间按手机所在的时区。")
+                    Text("到点时 Jarvis 按提示词去做，跑完推送到手机。时间按手机所在的时区。")
                 }
             }
-            if !followups.isEmpty {
+            if !oneOff.isEmpty {
                 Section {
-                    ForEach(followups.prefix(5)) { f in AssistantFollowupRow(followup: f, run: { await page.runFollowup(f) }, cancel: { await page.cancel(f) }) }
-                    if followups.count > 5 {
-                        NavigationLink("全部 \(followups.count) 个跟进") { AssistantFollowupsView() }
-                    }
+                    ForEach(oneOff) { t in row(t) }
                 } header: {
-                    Text("已安排的跟进")
+                    Text("一次性跟进")
                 } footer: {
-                    Text("Jarvis 在对话里替自己安排的一次性跟进。左滑取消，长按可以立即运行。")
+                    Text("Jarvis 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。")
                 }
             }
             if !lastRuns.isEmpty {
@@ -173,11 +201,11 @@ struct AssistantRoutinesView: View {
         .overlay {
             if !page.loaded {
                 ProgressView()
-            } else if let error = page.error, routines.isEmpty {
+            } else if let error = page.error, page.tasks.isEmpty {
                 ContentUnavailableView("读不到定时任务", systemImage: Theme.Icon.error, description: Text(error))
-            } else if routines.isEmpty && followups.isEmpty {
+            } else if page.tasks.isEmpty {
                 ContentUnavailableView("没有定时任务", systemImage: Theme.Icon.schedule,
-                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」，让 Jarvis 定时做一件事。"))
+                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Jarvis 定时做一件事。"))
             }
         }
         .navigationTitle("定时任务")
@@ -196,48 +224,96 @@ struct AssistantRoutinesView: View {
                 .accessibilityLabel("新建定时任务")
             }
         }
-        .navigationDestination(item: $editing) { r in
-            AssistantRoutineEditor(routine: r, save: page.save, delete: page.delete)
+        .navigationDestination(item: $editing) { t in
+            AssistantTaskEditor(task: t, save: page.save, delete: page.delete)
         }
-        .sheet(item: $creating) { r in
-            NavigationStack { AssistantRoutineEditor(routine: r, save: page.save, delete: page.delete) }
+        .sheet(item: $creating) { t in
+            NavigationStack { AssistantTaskEditor(task: t, save: page.save, delete: page.delete) }
         }
         .task { await load() }
         .refreshable { await page.load() }
     }
 
-    private func row(_ r: APIClient.Routine) -> some View {
+    private func row(_ t: APIClient.ScheduledTask) -> some View {
+        AssistantTaskRow(task: t, open: { editing = t }) { on in
+            var changed = t
+            changed.enabled = on
+            Haptics.tap()
+            Task { _ = await page.save(changed) }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: t.repeats == .once) {
+            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
+        }
+        .contextMenu {
+            Button { Task { await page.run(t) } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
+            Button { editing = t } label: { Label("编辑", systemImage: Theme.Icon.compose) }
+            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
+        }
+    }
+
+    private func load() async {
+        await page.load()
+        #if DEBUG
+        switch UserDefaults.standard.string(forKey: "openAssistantPage") {
+        case "routine" where editing == nil: editing = page.repeating.first
+        case "intervalTask" where editing == nil: editing = page.repeating.first { $0.repeats == .interval }
+        case "followup" where editing == nil: editing = page.oneOff.first
+        case "newRoutine" where creating == nil: creating = AssistantRoutineTemplate.all.last?.routine
+        default: break
+        }
+        #endif
+    }
+}
+
+/// One task on 定时任务: its icon, title, the rule in words, next and last run, what it runs with when that isn't the
+/// default, and an on/off switch. Tapping opens the editor.
+struct AssistantTaskRow: View {
+    var task: APIClient.ScheduledTask
+    var open: () -> Void
+    var toggle: (Bool) -> Void
+
+    var body: some View {
+        let t = task
         HStack(spacing: Theme.Space.m) {
-            Image(systemName: AssistantScheduleText.symbol(r))
+            Image(systemName: AssistantScheduleText.symbol(t))
                 .font(Theme.Font.heading)
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background((r.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                .background((t.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Text(r.title).font(Theme.Font.heading).lineLimit(1)
-                    if r.createdBy == "assistant" {
+                    Text(AssistantScheduleText.title(t)).font(Theme.Font.heading).lineLimit(1)
+                    if t.createdBy == "assistant" && t.repeats != .once {
                         Text("Jarvis 建的").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
                             .padding(.horizontal, Theme.Space.sm).padding(.vertical, 1)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                             .lineLimit(1)
+                            .fixedSize()
                     }
                 }
-                Text(AssistantScheduleText.sentence(r))
+                Text(t.repeats == .once ? (t.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : AssistantScheduleText.sentence(t))
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Group {
-                    if !r.enabled {
+                    if !t.enabled {
                         Text("已关闭")
-                    } else if let next = r.nextRun {
+                    } else if let next = t.nextRun ?? t.at {
                         Text("下次 \(AssistantScheduleText.moment(next)) · \(AssistantScheduleText.until(next))")
                     }
                 }
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
+                .monospacedDigit()
                 .lineLimit(1)
-                if let last = AssistantScheduleText.lastRun(r) {
+                if let with = AssistantScheduleText.runsWith(t) {
+                    Label(with.text, systemImage: with.danger ? Theme.Icon.allowEverything : Theme.Icon.effort)
+                        .labelStyle(AssistantCompactLabel())
+                        .font(Theme.Font.label)
+                        .foregroundStyle(with.danger ? Theme.danger : Color.secondary)
+                        .lineLimit(1)
+                }
+                if let last = AssistantScheduleText.lastRun(t) {
                     Label(last.text, systemImage: last.failed ? Theme.Icon.errorFilled : Theme.Icon.done)
                         .labelStyle(AssistantCompactLabel())
                         .font(Theme.Font.label)
@@ -247,105 +323,90 @@ struct AssistantRoutinesView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
-            .onTapGesture { editing = r }
+            .onTapGesture(perform: open)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("routine-\(r.id)")
-            Toggle(r.title, isOn: Binding(get: { r.enabled }, set: { v in
-                var changed = r
-                changed.enabled = v
-                Haptics.tap()
-                Task { _ = await page.save(changed) }
-            }))
-            .labelsHidden()
+            .accessibilityIdentifier("task-\(t.id)")
+            Toggle(AssistantScheduleText.title(t), isOn: Binding(get: { t.enabled }, set: toggle))
+                .labelsHidden()
+                .accessibilityIdentifier("task-switch-\(t.id)")
         }
         .padding(.vertical, Theme.Space.xxs)
-        .opacity(r.enabled ? 1 : 0.75)
-    }
-
-    private func load() async {
-        await page.load()
-        #if DEBUG
-        switch UserDefaults.standard.string(forKey: "openAssistantPage") {
-        case "routine" where editing == nil: editing = page.routines.first
-        case "newRoutine" where creating == nil: creating = AssistantRoutineTemplate.all.last?.routine
-        default: break
-        }
-        #endif
+        .opacity(t.enabled ? 1 : 0.75)
     }
 }
 
 /// Starting points for the ＋ menu.
 struct AssistantRoutineTemplate: Identifiable {
-    var routine: APIClient.Routine
+    var routine: APIClient.ScheduledTask
     var symbol: String
     var id: String { routine.title }
 
-    static let blank = APIClient.Routine(title: "", prompt: "", time: "09:00", weekdays: AssistantScheduleText.workdays, enabled: true)
+    static let blank = APIClient.ScheduledTask(title: "", prompt: "", time: "09:00", weekdays: AssistantScheduleText.workdays)
 
     static let all: [AssistantRoutineTemplate] = [
         .init(routine: .init(title: "会前准备", prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" +
                              "安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。",
-                             time: "08:45", weekdays: AssistantScheduleText.workdays, enabled: true), symbol: "person.2.badge.gearshape"),
+                             time: "08:45", weekdays: AssistantScheduleText.workdays), symbol: "person.2.badge.gearshape"),
         .init(routine: .init(title: "周报", prompt: "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、" +
                              "遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。",
-                             time: "17:00", weekdays: [5], enabled: true), symbol: Theme.Icon.document),
+                             time: "17:00", weekdays: [5]), symbol: Theme.Icon.document),
+        .init(routine: .init(title: "Agent 巡检", prompt: "看看各台电脑上的 Agent：哪些在等我、哪些卡住或报错了、哪些跑完了没人看。" +
+                             "有要我处理的就列出来（一行一个，说清楚在哪台电脑、等什么）；都正常就回一句「都正常」。",
+                             repeats: .interval, everyMinutes: 30), symbol: "binoculars"),
         .init(routine: .init(title: "下班前盘点", prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，" +
                              "明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。",
-                             time: "18:30", weekdays: AssistantScheduleText.workdays, enabled: true), symbol: Theme.Icon.todo),
+                             time: "18:30", weekdays: AssistantScheduleText.workdays), symbol: Theme.Icon.todo),
     ]
 }
 
-/// Edits one routine. An existing one is saved when leaving the page (like iOS Settings); a new one comes up as a
-/// sheet with 取消 / 添加, so trying a template and backing out doesn't create anything.
-struct AssistantRoutineEditor: View {
+/// Edits one task: when (once / every day / every N minutes), the prompt, what it runs with (launcher, permission
+/// mode, effort) and which conversation runs go into. An existing one is saved when leaving the page (like iOS
+/// Settings); a new one comes up as a sheet with 取消 / 添加, so trying a template and backing out doesn't create
+/// anything.
+struct AssistantTaskEditor: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: APIClient.Routine
-    /// What the hub has; nil until a new routine is first saved.
-    @State private var saved: APIClient.Routine?
+    @State private var draft: APIClient.ScheduledTask
+    /// What the hub has; nil until a new task is first saved.
+    @State private var saved: APIClient.ScheduledTask?
     @State private var running = false
     @State private var confirmDelete = false
+    @State private var confirmBypass = false
     @State private var deleted = false
     @State private var runs: [APIClient.ScheduleRun] = []
-    /// Presented as the "new routine" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
+    @State private var launchers: [Launcher] = []
+    /// Presented as the "new task" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
     private let creating: Bool
-    var save: (APIClient.Routine) async -> APIClient.Routine?
-    var delete: (APIClient.Routine) async -> Void
+    /// The conversation it came from, to switch back to after turning 接着原来的对话 off.
+    private let conversation: String?
+    var save: (APIClient.ScheduledTask) async -> APIClient.ScheduledTask?
+    var delete: (APIClient.ScheduledTask) async -> Void
 
-    init(routine: APIClient.Routine, save: @escaping (APIClient.Routine) async -> APIClient.Routine?,
-         delete: @escaping (APIClient.Routine) async -> Void) {
-        _draft = State(initialValue: routine)
-        _saved = State(initialValue: routine.id.isEmpty ? nil : routine)
-        creating = routine.id.isEmpty
+    init(task: APIClient.ScheduledTask, save: @escaping (APIClient.ScheduledTask) async -> APIClient.ScheduledTask?,
+         delete: @escaping (APIClient.ScheduledTask) async -> Void) {
+        _draft = State(initialValue: task)
+        _saved = State(initialValue: task.id.isEmpty ? nil : task)
+        creating = task.id.isEmpty
+        conversation = task.sessionID
         self.save = save
         self.delete = delete
     }
 
     private var isValid: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let titled = draft.repeats == .once || !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return titled && !draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-    private var changed: Bool { saved.map { !same($0, draft) } ?? true }
+    private var changed: Bool { saved.map { !Self.same($0, draft) } ?? true }
+    private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
 
     var body: some View {
         Form {
             Section {
-                TextField("标题，比如「早报」", text: $draft.title)
+                TextField(draft.repeats == .once ? "标题（可不填）" : "标题，比如「早报」", text: $draft.title)
                 Toggle("开启", isOn: $draft.enabled)
             }
-            Section {
-                DatePicker("时间", selection: time, displayedComponents: .hourAndMinute)
-                AssistantWeekdayPicker(days: $draft.weekdays)
-                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
-            } header: {
-                Text("什么时候")
-            } footer: {
-                if draft.enabled, let next = saved?.nextRun, saved.map({ same($0, draft) }) == true {
-                    Text("下次运行：\(AssistantScheduleText.moment(next))（\(AssistantScheduleText.until(next))）")
-                } else {
-                    Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按手机所在的时区。")
-                }
-            }
+            whenSection
             Section {
                 TextField("要 Jarvis 做什么", text: $draft.prompt, axis: .vertical)
                     .lineLimit(8...)
@@ -353,6 +414,14 @@ struct AssistantRoutineEditor: View {
                 Text("提示词")
             } footer: {
                 Text("像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。")
+            }
+            runsWithSection
+            if conversation != nil {
+                Section {
+                    Toggle("接着原来的对话", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
+                } footer: {
+                    Text(draft.sessionID != nil ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。" : "每次运行都开一段新对话。")
+                }
             }
             Section {
                 Button { Task { await runNow() } } label: {
@@ -364,7 +433,7 @@ struct AssistantRoutineEditor: View {
                 }
                 .disabled(running || !isValid)
                 if let last = saved?.lastSessionID, !last.isEmpty {
-                    Button { open(SessionKey(machineID: model.assistantConfig?.machineID ?? model.hubMachineID, sessionID: last)) } label: {
+                    Button { open(SessionKey(machineID: machineID, sessionID: last)) } label: {
                         HStack {
                             Label("查看上次结果", systemImage: Theme.Icon.conversation).lineLimit(1)
                             Spacer()
@@ -378,7 +447,7 @@ struct AssistantRoutineEditor: View {
                 if saved?.lastStatus == "failed", let err = saved?.lastError {
                     Text("上次没有跑起来：\(err)").foregroundStyle(Theme.danger)
                 } else {
-                    Text("立即运行会开一段新对话，跑完在「对话」里看结果。")
+                    Text("立即运行不改它的时间，跑完在「对话」里看结果。")
                 }
             }
             if !runs.isEmpty {
@@ -413,7 +482,7 @@ struct AssistantRoutineEditor: View {
                 }
             }
         }
-        .confirmationDialog("删除「\(draft.title)」？", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .confirmationDialog("删除「\(AssistantScheduleText.title(draft))」？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
                 guard let s = saved else { return }
                 deleted = true
@@ -423,11 +492,156 @@ struct AssistantRoutineEditor: View {
         } message: {
             Text("删除后不再定时运行，已经跑过的对话还在。")
         }
+        .alert("全部放行？", isPresented: $confirmBypass) {
+            Button("全部放行", role: .destructive) { draft.permissionMode = "bypassPermissions" }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这个任务运行时，跑任何命令、改任何文件、用任何工具都不再问你，也没有人能中途拦下。只给你信得过、出了错也能接受的提示词用。")
+        }
         .onDisappear { if !creating { Task { await persist(leaving: true) } } }
         .task(id: saved?.id) {
             guard let id = saved?.id, !id.isEmpty, let api = model.api else { return }
             runs = (try? await api.scheduleRuns(ref: id)) ?? []
         }
+        .task { launchers = (try? await model.launchers(machineID)) ?? [] }
+        #if DEBUG
+        .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") == "bypassTask" { confirmBypass = true } }
+        #endif
+    }
+
+    @ViewBuilder private var whenSection: some View {
+        Section {
+            Picker("重复", selection: repeats) {
+                Text("一次").tag(APIClient.ScheduledTask.Repeat.once)
+                Text("每天").tag(APIClient.ScheduledTask.Repeat.daily)
+                Text("每隔").tag(APIClient.ScheduledTask.Repeat.interval)
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            switch draft.repeats {
+            case .once:
+                DatePicker("时间", selection: at, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+            case .daily:
+                DatePicker("时间", selection: time, displayedComponents: .hourAndMinute)
+                AssistantWeekdayPicker(days: $draft.weekdays)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+            case .interval:
+                Picker("间隔", selection: $draft.everyMinutes) {
+                    ForEach(intervals, id: \.self) { m in Text(AssistantScheduleText.every(m)).tag(m) }
+                }
+            }
+        } header: {
+            Text("什么时候")
+        } footer: {
+            if draft.enabled, let next = saved?.nextRun, saved.map({ Self.same($0, draft) }) == true {
+                Text("下次运行：\(AssistantScheduleText.moment(next))（\(AssistantScheduleText.until(next))）")
+            } else {
+                switch draft.repeats {
+                case .once: Text("到点运行一次，跑完就从列表里拿掉（运行记录里还在）。")
+                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按手机所在的时区。")
+                case .interval: Text("\(AssistantScheduleText.every(draft.everyMinutes))运行一次，从保存时算起。")
+                }
+            }
+        }
+    }
+
+    /// The model (launcher), permission mode and effort a run starts claude with; "" in a picker = the default.
+    private var runsWithSection: some View {
+        Section {
+            Picker(selection: optional(\.launcher)) {
+                Text("跟随 Jarvis（\(model.assistantConfig?.launcher ?? "claude")）").tag("")
+                ForEach(launcherNames, id: \.self) { name in
+                    let l = launchers.first { $0.name == name }
+                    Text([name, Fmt.model(l?.model)].compactMap { $0 }.joined(separator: " · ")).tag(name)
+                }
+            } label: {
+                Label("模型", systemImage: Theme.Icon.cpu).lineLimit(1)
+            }
+            // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and 全部放行 is red.
+            LabeledContent {
+                Menu {
+                    Picker("权限模式", selection: mode) {
+                        Label { Text("默认"); Text("和平时一样：改文件、跑命令前先问你") } icon: { Image(systemName: Theme.Icon.askFirst) }.tag("")
+                        ForEach(SessionModes.permissionModes.filter { $0.id != "default" }) { o in
+                            Label { Text(o.title); Text(o.id == "bypassPermissions" ? "什么都不问，有风险" : o.detail) } icon: { Image(systemName: o.symbol) }
+                                .tag(o.id)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    HStack(spacing: Theme.Space.xs) {
+                        Text(SessionModes.modeLabel(draft.permissionMode) ?? "默认").lineLimit(1)
+                        Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).imageScale(.small)
+                    }
+                    .foregroundStyle(draft.permissionMode == "bypassPermissions" ? Theme.danger : Theme.accent)
+                }
+                .accessibilityIdentifier("task-mode")
+            } label: {
+                Label("权限模式", systemImage: Theme.Icon.askFirst).lineLimit(1)
+            }
+            Picker(selection: optional(\.effort)) {
+                Text("跟随启动器").tag("")
+                ForEach(SessionModes.effortLevels) { o in Text(o.title).tag(o.id) }
+            } label: {
+                Label("思考强度", systemImage: Theme.Icon.effort).lineLimit(1)
+            }
+        } header: {
+            Text("运行方式")
+        } footer: {
+            if draft.permissionMode == "bypassPermissions" {
+                Label("全部放行：运行时跑命令、改文件都不再问你。", systemImage: "exclamationmark.shield.fill")
+                    .foregroundStyle(Theme.danger)
+            } else {
+                Text("定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着。要它跑命令也不问你，可以选「自动」（自己判断风险）。"
+                     + (draft.sessionID != nil ? "接着原来的对话运行时，那段对话也会换成这里的设置。" : ""))
+            }
+        }
+    }
+
+    /// The hub's launchers, plus the task's own when the list doesn't have it (yet).
+    private var launcherNames: [String] {
+        var names = launchers.map(\.name)
+        if let l = draft.launcher, !names.contains(l) { names.append(l) }
+        return names
+    }
+
+    private var intervals: [Int] {
+        var list = AssistantScheduleText.intervals
+        if !list.contains(draft.everyMinutes) { list.append(draft.everyMinutes); list.sort() }
+        return list
+    }
+
+    private func optional(_ path: WritableKeyPath<APIClient.ScheduledTask, String?>) -> Binding<String> {
+        Binding { draft[keyPath: path] ?? "" } set: { draft[keyPath: path] = $0.isEmpty ? nil : $0 }
+    }
+
+    /// 全部放行 asks first.
+    private var mode: Binding<String> {
+        Binding { draft.permissionMode ?? "" } set: { new in
+            if new == "bypassPermissions" && draft.permissionMode != new {
+                confirmBypass = true
+            } else {
+                draft.permissionMode = new.isEmpty ? nil : new
+            }
+        }
+    }
+
+    /// Switching to 一次 picks a time an hour from now; to 每隔, half an hour.
+    private var repeats: Binding<APIClient.ScheduledTask.Repeat> {
+        Binding { draft.repeats } set: { r in
+            withAnimation(Theme.Motion.standard) {
+                draft.repeats = r
+                if r == .once, (draft.at ?? .distantPast) < .now {
+                    let hour = Calendar.current.dateInterval(of: .hour, for: .now.addingTimeInterval(3600))?.start ?? .now
+                    draft.at = hour
+                }
+                if r == .interval, draft.everyMinutes < 5 { draft.everyMinutes = 30 }
+            }
+        }
+    }
+
+    private var at: Binding<Date> {
+        Binding { draft.at ?? .now.addingTimeInterval(3600) } set: { draft.at = $0 }
     }
 
     /// The DatePicker edits "HH:MM" through a date today.
@@ -441,24 +655,30 @@ struct AssistantRoutineEditor: View {
         }
     }
 
-    /// Ignores the hub-only fields (last / next run).
-    private func same(_ a: APIClient.Routine, _ b: APIClient.Routine) -> Bool {
-        a.title == b.title && a.prompt == b.prompt && a.time == b.time && Set(a.weekdays) == Set(b.weekdays) && a.enabled == b.enabled
+    /// Ignores the hub-only fields (last / next run) and, outside its rule, the fields another rule uses.
+    static func same(_ a: APIClient.ScheduledTask, _ b: APIClient.ScheduledTask) -> Bool {
+        guard a.title == b.title, a.prompt == b.prompt, a.repeats == b.repeats, a.enabled == b.enabled, a.sessionID == b.sessionID,
+              a.launcher == b.launcher, a.permissionMode == b.permissionMode, a.effort == b.effort else { return false }
+        return switch a.repeats {
+        case .once: a.at == b.at
+        case .daily: a.time == b.time && Set(a.weekdays) == Set(b.weekdays)
+        case .interval: a.everyMinutes == b.everyMinutes
+        }
     }
 
-    @discardableResult private func persist(leaving: Bool) async -> APIClient.Routine? {
+    @discardableResult private func persist(leaving: Bool) async -> APIClient.ScheduledTask? {
         guard !deleted, changed else { return saved }
         guard isValid else {
             if leaving {
-                model.toast = Toast("标题和提示词都要填，这次的修改没有保存", style: .error)
+                model.toast = Toast(draft.repeats == .once ? "提示词要填，这次的修改没有保存" : "标题和提示词都要填，这次的修改没有保存", style: .error)
             }
             return nil
         }
-        var r = draft
-        r.title = r.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if Set(r.weekdays).count == 7 { r.weekdays = [] }
-        r.weekdays.sort()
-        guard let s = await save(r) else { return nil }
+        var t = draft
+        t.title = t.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if Set(t.weekdays).count == 7 { t.weekdays = [] }
+        t.weekdays.sort()
+        guard let s = await save(t) else { return nil }
         saved = s
         if !leaving { draft.id = s.id }
         return s
@@ -468,9 +688,9 @@ struct AssistantRoutineEditor: View {
         guard let api = model.api else { return }
         running = true
         defer { running = false }
-        guard let r = await persist(leaving: false) else { return }
+        guard let t = await persist(leaving: false) else { return }
         do {
-            let key = try await api.runRoutine(r.id)
+            let key = try await api.runTask(t.id)
             Haptics.success()
             open(key)
         } catch {
@@ -545,100 +765,6 @@ struct AssistantWeekdayPicker: View {
         }
         Haptics.tap()
         withAnimation(Theme.Motion.standard) { days = s.count == 7 ? [] : s.sorted() }
-    }
-}
-
-// MARK: - 已安排的跟进
-
-struct AssistantFollowupsView: View {
-    @State private var page = AssistantFollowupsModel()
-
-    var body: some View {
-        let followups = page.followups.list
-        List {
-            if !followups.isEmpty {
-                Section {
-                    ForEach(followups) { f in AssistantFollowupRow(followup: f, run: { await page.followups.run(f) }, cancel: { await page.followups.cancel(f) }) }
-                } footer: {
-                    Text("Jarvis 在对话里替自己安排的一次性跟进，到点自己醒来接着做。左滑取消，长按可以立即运行。")
-                }
-            }
-        }
-        .themedPage()
-        .overlay {
-            if !page.loaded {
-                ProgressView()
-            } else if let error = page.error, followups.isEmpty {
-                ContentUnavailableView("读不到跟进", systemImage: Theme.Icon.error, description: Text(error))
-            } else if followups.isEmpty {
-                ContentUnavailableView("没有安排的跟进", systemImage: "calendar.badge.clock",
-                                       description: Text("在对话里说「一小时后提醒我……」「明早会前帮我准备」，Jarvis 会安排在这里。"))
-            }
-        }
-        .navigationTitle("已安排的跟进")
-        .task { await page.load() }
-        .refreshable { await page.load() }
-    }
-
-}
-
-/// One follow-up: what, when, and where it goes (back into its conversation or a new one). Tapping opens the
-/// conversation it continues; swipe to cancel, long-press to run it now.
-struct AssistantFollowupRow: View {
-    @Environment(AppModel.self) private var model
-    var followup: APIClient.Followup
-    var run: () async -> Void
-    var cancel: () async -> Void
-
-    var body: some View {
-        let f = followup
-        let firstLine = f.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? f.prompt
-        let title = f.title.flatMap { $0.isEmpty ? nil : $0 } ?? firstLine
-        let content = HStack(spacing: Theme.Space.m) {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(title).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(2)
-                if title != f.prompt {
-                    Text(f.prompt).font(Theme.Font.secondary).foregroundStyle(Color.secondary).lineLimit(2)
-                }
-                HStack(spacing: Theme.Space.m) {
-                    Label("\(AssistantScheduleText.moment(f.at)) · \(AssistantScheduleText.until(f.at))", systemImage: Theme.Icon.time)
-                        .monospacedDigit()
-                    Label(f.sessionID == nil ? "新对话" : "继续对话",
-                          systemImage: f.sessionID == nil ? Theme.Icon.newConversation : Theme.Icon.reply)
-                }
-                .labelStyle(AssistantCompactLabel())
-                .font(Theme.Font.label)
-                .foregroundStyle(Color.secondary)
-                .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if f.sessionID != nil {
-                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(Color(uiColor: .tertiaryLabel))
-            }
-        }
-        .padding(.vertical, Theme.Space.xs)
-        Group {
-            if let sid = f.sessionID {
-                Button {
-                    model.selectedTab = .assistant
-                    model.assistantCurrent = SessionKey(machineID: f.machineID, sessionID: sid)
-                } label: { content }
-            } else {
-                content
-            }
-        }
-        .accessibilityIdentifier("followup-\(f.id)")
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消", systemImage: Theme.Icon.close) }
-        }
-        .swipeActions(edge: .leading) {
-            Button { Task { await run() } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
-                .tint(Theme.accent)
-        }
-        .contextMenu {
-            Button { Task { await run() } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
-            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消这个跟进", systemImage: Theme.Icon.close) }
-        }
     }
 }
 

@@ -1,8 +1,8 @@
 import XCTest
 
-/// Jarvis's profile (详细信息 in its avatar's menu on the Jarvis tab) and its schedule: the routines list and a routine's page, 立即运行
-/// for a routine and for a follow-up. Against scripts/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at
-/// /mock/schedule.
+/// Jarvis's profile (详细信息 in its avatar's menu on the Jarvis tab) and its schedule: one list of tasks (every day, every
+/// 30 minutes, once), a task's page, 立即运行 for a daily task and for a follow-up, and a task's permission mode (全部放行
+/// asks first). Against scripts/mock_hub.py (JARVIS_MOCK_HUB), which records what was run at /mock/schedule.
 final class AssistantProfileTests: XCTestCase {
     private var hub: String!
 
@@ -23,7 +23,8 @@ final class AssistantProfileTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-profile-\(name).png"))
+        let suffix = ProcessInfo.processInfo.environment["SHOT_SUFFIX"].map { "-" + $0 } ?? ""
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/jarvis-profile-\(name)\(suffix).png"))
     }
 
     /// What the mock hub was asked to run.
@@ -49,7 +50,7 @@ final class AssistantProfileTests: XCTestCase {
         let app = launch()
         openProfile(app)
         XCTAssertTrue(app.staticTexts["接下来"].exists || app.staticTexts["接下来".uppercased()].exists, "no 接下来 section")
-        for row in ["定时任务", "已安排的跟进", "运行记录", "关于我", "记忆"] {
+        for row in ["定时任务", "运行记录", "关于我", "记忆"] {
             let b = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", row)).firstMatch
             for _ in 0..<4 where !(b.exists && b.isHittable) { app.swipeUp() }
             XCTAssertTrue(b.exists, "no \(row) row:\n\(app.debugDescription)")
@@ -58,15 +59,18 @@ final class AssistantProfileTests: XCTestCase {
         for _ in 0..<4 { app.swipeDown() }
 
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "定时任务")).firstMatch.tap()
-        let morning = app.descendants(matching: .any)["routine-morning"]
+        let morning = app.descendants(matching: .any)["task-morning"]
         XCTAssertTrue(morning.waitForExistence(timeout: 5), "no 早报 routine:\n\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["每个工作日 上午 9:00"].exists, "the rule is not in words")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "上次")).firstMatch.exists, "no last run")
         shot(app, "routines")
 
         morning.tap()
+        XCTAssertTrue(app.staticTexts["什么时候"].waitForExistence(timeout: 5) || app.staticTexts["什么时候".uppercased()].exists,
+                      "the routine page did not open")
         let runNow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "立即运行")).firstMatch
-        XCTAssertTrue(runNow.waitForExistence(timeout: 5), "the routine page did not open")
+        for _ in 0..<4 where !(runNow.exists && runNow.isHittable) { app.swipeUp() }
+        XCTAssertTrue(runNow.exists, "no 立即运行 on the routine page:\n\(app.debugDescription)")
         let history = app.staticTexts["历史记录"]
         for _ in 0..<4 where !(history.exists && history.isHittable) { app.swipeUp() }
         XCTAssertTrue(history.exists, "no history on the routine page:\n\(app.debugDescription)")
@@ -85,7 +89,7 @@ final class AssistantProfileTests: XCTestCase {
         let app = launch()
         openProfile(app)
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "定时任务")).firstMatch.tap()
-        let ci = app.descendants(matching: .any)["followup-fu_ci"].firstMatch
+        let ci = app.descendants(matching: .any)["task-fu_ci"].firstMatch
         XCTAssertTrue(app.staticTexts["接下来"].waitForExistence(timeout: 5), "the schedule page did not open")
         for _ in 0..<5 where !(ci.exists && ci.isHittable) { app.swipeUp() }
         XCTAssertTrue(ci.exists && ci.isHittable, "no follow-up row on the schedule page:\n\(app.debugDescription)")
@@ -96,5 +100,58 @@ final class AssistantProfileTests: XCTestCase {
         let deadline = Date().addingTimeInterval(10)
         while try !ran().contains("fu_ci"), Date() < deadline { usleep(200_000) }
         XCTAssertTrue(try ran().contains("fu_ci"), "the follow-up was not run")
+    }
+
+    /// The tasks the mock hub has now.
+    private func tasks() throws -> [[String: Any]] {
+        let data = try Data(contentsOf: URL(string: hub + "/api/v1/assistant/tasks")!)
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["tasks"] as? [[String: Any]] ?? []
+    }
+
+    /// A patrol Jarvis set up in a conversation is on the page like any task: every 30 minutes, its next run, what it
+    /// runs with. Its page changes the permission mode; 全部放行 asks first, says so under the picker, and is saved when
+    /// leaving the page.
+    @MainActor func testRepeatingTaskAndItsPermissionMode() throws {
+        let app = launch()
+        openProfile(app)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "定时任务")).firstMatch.tap()
+        let patrol = app.descendants(matching: .any)["task-fu_patrol"].firstMatch
+        XCTAssertTrue(patrol.waitForExistence(timeout: 5), "the patrol is not on the page:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["每 30 分钟"].exists, "its rule is not in words")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "自动 · 思考 低")).firstMatch.exists,
+                      "what it runs with is not on its row")
+        shot(app, "tasks")
+        let oneOffs = app.staticTexts["一次性跟进"]
+        for _ in 0..<4 where !(oneOffs.exists && oneOffs.isHittable) { app.swipeUp() }
+        XCTAssertTrue(oneOffs.exists, "no one-offs section:\n\(app.debugDescription)")
+        shot(app, "tasks-bottom")
+        for _ in 0..<3 { app.swipeDown() }
+
+        patrol.tap()
+        let mode = app.buttons["task-mode"].firstMatch
+        for _ in 0..<4 where !(mode.exists && mode.isHittable) { app.swipeUp() }
+        XCTAssertTrue(mode.waitForExistence(timeout: 5), "no permission mode on the task's page:\n\(app.debugDescription)")
+        shot(app, "task")
+        mode.tap()
+        let bypass = app.buttons["全部放行"].firstMatch
+        XCTAssertTrue(bypass.waitForExistence(timeout: 3), "no 全部放行 among the modes:\n\(app.debugDescription)")
+        bypass.tap()
+        let alert = app.alerts["全部放行？"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 3), "全部放行 did not ask first")
+        shot(app, "bypass-alert")
+        alert.buttons["全部放行"].tap()
+        let warning = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "全部放行：")).firstMatch
+        for _ in 0..<3 where !(warning.exists && warning.isHittable) { app.swipeUp() }
+        XCTAssertTrue(warning.waitForExistence(timeout: 3), "no warning under the picker:\n\(app.debugDescription)")
+        shot(app, "task-bypass")
+
+        app.navigationBars.buttons.firstMatch.tap() // back: saved when leaving
+        let deadline = Date().addingTimeInterval(10)
+        func saved() throws -> Bool { try tasks().first { $0["id"] as? String == "fu_patrol" }?["permission_mode"] as? String == "bypassPermissions" }
+        while try !saved(), Date() < deadline { usleep(200_000) }
+        XCTAssertTrue(try saved(), "the mode did not reach the hub")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "全部放行")).firstMatch.waitForExistence(timeout: 5),
+                      "the row doesn't say it now runs with 全部放行")
+        shot(app, "tasks-bypass")
     }
 }

@@ -210,12 +210,15 @@ func (h *Hub) snapshotSchedule(ctx context.Context, loc *time.Location) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var parts []string
-	for _, f := range s.followups {
-		label := f.Title
-		if label == "" {
-			label = clip(oneLine(f.Prompt), 30)
+	for _, t := range s.tasks {
+		if !t.Enabled || t.Repeat == repeatDaily {
+			continue
 		}
-		parts = append(parts, f.At.In(loc).Format("01-02 15:04")+" "+label)
+		label := t.label()
+		if t.Repeat == repeatInterval {
+			label += "（每 " + everyText(t.EveryMinutes) + "）"
+		}
+		parts = append(parts, t.At.In(loc).Format("01-02 15:04")+" "+label)
 	}
 	if len(parts) == 0 {
 		return ""

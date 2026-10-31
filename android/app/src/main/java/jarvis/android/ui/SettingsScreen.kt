@@ -79,6 +79,7 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
                     },
                 )
             }
+            PhoneDataSection()
             Header("后台通知")
             Text(
                 "这个 App 不用推送服务：它在后台和 hub 保持连接，有事就直接弹通知（通知栏里会常驻一条「已连接 hub」）。" +
@@ -136,5 +137,49 @@ private fun openAutostart(ctx: android.content.Context) {
     )
     for (i in tries) {
         if (runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+    }
+}
+
+/**
+ * 手机数据: which of the phone's data Claude may use through the phone_* tools (docs/phone-tools.md). Off until
+ * turned on; turning one on asks for its Android permission. Only the ones on are declared to the hub.
+ */
+@Composable
+private fun PhoneDataSection() {
+    val runner = jarvis.android.JarvisApp.instance.phoneTools
+    val enabled by runner.enabled.collectAsState()
+    val ctx = LocalContext.current
+    var asking by remember { mutableStateOf<jarvis.android.phone.Source?>(null) }
+    var tick by remember { mutableStateOf(0) } // re-read permissions after a request
+    val request = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { result ->
+        val s = asking ?: return@rememberLauncherForActivityResult
+        asking = null; tick++
+        if (result.values.any { it }) runner.setEnabled(s, true)
+    }
+    Header("手机数据")
+    Text(
+        "让 Claude 用这台手机上的数据（通过 hub 调用 phone_* 工具）。默认都关着；新建日程这类会改数据的操作，执行前会先在手机上问你。" +
+            "同时用 iPhone 和安卓时，最后连上 hub 的那台回答。",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    jarvis.android.phone.Source.entries.forEach { src ->
+        val granted = remember(tick, src) { jarvis.android.phone.PhoneTools.granted(ctx, src) }
+        val on = src in enabled
+        ListItem(
+            headlineContent = { Text(src.title) },
+            supportingContent = { Text(if (on && !granted) "没有权限，在系统设置里给 Jarvis 授权" else src.detail) },
+            trailingContent = {
+                androidx.compose.material3.Switch(on, { want ->
+                    when {
+                        !want -> runner.setEnabled(src, false)
+                        granted -> runner.setEnabled(src, true)
+                        else -> { asking = src; request.launch(src.permissions.toTypedArray()) }
+                    }
+                })
+            },
+        )
     }
 }

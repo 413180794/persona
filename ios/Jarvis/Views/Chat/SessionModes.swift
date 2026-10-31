@@ -14,7 +14,7 @@ nonisolated enum SessionModes {
         Option(id: "acceptEdits", title: "自动改文件", detail: "改文件不问，跑命令还会问", symbol: "pencil.line"),
         Option(id: "plan", title: "只做计划", detail: "只读代码、写计划，批准后才动手", symbol: "list.bullet.clipboard"),
         Option(id: "auto", title: "自动", detail: "自己判断风险，安全的直接做", symbol: "wand.and.sparkles"),
-        Option(id: "bypassPermissions", title: "全部放行", detail: "什么都不问；只能在新开时选", symbol: "exclamationmark.shield"),
+        Option(id: "bypassPermissions", title: "全部放行", detail: "什么都不问；只能在新开时选", symbol: Theme.Icon.allowEverything),
     ]
 
     static let effortLevels: [Option] = [
@@ -114,7 +114,7 @@ struct ModeChip: View {
         HStack(spacing: Theme.Space.xs) {
             Image(systemName: symbol).font(Theme.Font.labelStrong)
             Text(text).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(Theme.Font.labelHeavy).imageScale(.small).opacity(0.6)
+            Image(systemName: Theme.Icon.choices).font(Theme.Font.labelHeavy).imageScale(.small).opacity(0.6)
         }
         .font(Theme.Font.labelMedium)
         .foregroundStyle(known ? (tint == .secondary ? Color.primary : tint) : Color.secondary)

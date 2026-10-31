@@ -82,6 +82,18 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
         }
     }
 
+    // A phone tool that changes data (a calendar event) waits for the user: ask on top of whatever is open.
+    val asks by jarvis.android.JarvisApp.instance.phoneTools.pending.collectAsState()
+    asks.firstOrNull()?.let { p ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Claude 想在手机上操作") },
+            text = { Text(p.summary) },
+            confirmButton = { androidx.compose.material3.TextButton({ jarvis.android.JarvisApp.instance.phoneTools.decide(p.id, true) }) { Text("允许", maxLines = 1) } },
+            dismissButton = { androidx.compose.material3.TextButton({ jarvis.android.JarvisApp.instance.phoneTools.decide(p.id, false) }) { Text("拒绝", maxLines = 1) } },
+        )
+    }
+
     when {
         settings -> {
             BackHandler { settings = false }

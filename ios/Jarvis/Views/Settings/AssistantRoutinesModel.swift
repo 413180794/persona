@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// What the assistant's pages (定时任务, 跟进, 记忆) need from the app: the hub, error reporting, toasts and opening a
+/// What the assistant's pages (定时任务, 记忆) need from the app: the hub, error reporting, toasts and opening a
 /// conversation. `live` is AppModel; tests pass a FakeHub's client and record the rest.
 struct AssistantDeps {
     var api: () -> APIClient?
     var report: (Error) -> Void
     var toast: (Toast) -> Void
-    /// Show a conversation in the Jarvis tab (a follow-up that was run now).
+    /// Show a conversation in the Jarvis tab (a task that was run now).
     var open: (SessionKey) -> Void
 
     static var live: AssistantDeps {
@@ -16,132 +16,84 @@ struct AssistantDeps {
     }
 }
 
-/// Follow-ups Jarvis scheduled for itself: run one now or cancel it, both shown at once and reloaded on failure.
-/// Shared by 定时任务 (the first five) and 已安排的跟进 (all of them).
-@Observable final class AssistantFollowups {
-    private(set) var list: [APIClient.Followup] = []
-    @ObservationIgnored private let deps: AssistantDeps
-
-    init(deps: AssistantDeps) { self.deps = deps }
-
-    /// Soonest first. Throws what the hub said, for a page that shows it.
-    func load() async throws {
-        guard let api = deps.api() else { return }
-        list = try await api.followups().sorted { $0.at < $1.at }
-    }
-
-    func run(_ f: APIClient.Followup) async {
-        guard let api = deps.api() else { return }
-        withAnimation { list.removeAll { $0.id == f.id } }
-        do {
-            let key = try await api.runFollowup(f.id)
-            Haptics.success()
-            deps.open(key)
-        } catch {
-            deps.report(error)
-            try? await load()
-        }
-    }
-
-    func cancel(_ f: APIClient.Followup) async {
-        guard let api = deps.api() else { return }
-        withAnimation { list.removeAll { $0.id == f.id } }
-        do {
-            try await api.cancelFollowup(f.id)
-            Haptics.success()
-        } catch {
-            deps.report(error)
-            try? await load()
-        }
-    }
-}
-
 /// 定时任务's state and everything the page does with the hub (MVVM: ARCH-PLAN.md). The view draws what is here and
-/// calls its methods, so tests run it against a `FakeHub`.
+/// calls its methods, so tests run it against a `FakeHub`. One list: what repeats (every day, every N minutes) and
+/// the one-offs Jarvis scheduled from a conversation.
 @Observable final class AssistantRoutinesModel {
     typealias Deps = AssistantDeps
+    typealias Item = APIClient.ScheduledTask
 
-    private(set) var routines: [APIClient.Routine] = []
-    let followupList: AssistantFollowups
-    var followups: [APIClient.Followup] { followupList.list }
+    private(set) var tasks: [Item] = []
     private(set) var lastRuns: [APIClient.ScheduleRun] = []
     private(set) var loaded = false
-    /// Why the routines could not be read; the page shows it only when it has none to show.
+    /// Why the list could not be read; the page shows it only when it has none to show.
     private(set) var error: String?
     @ObservationIgnored private let deps: Deps
 
-    init(deps: Deps = .live) {
-        self.deps = deps
-        followupList = AssistantFollowups(deps: deps)
-    }
+    init(deps: Deps = .live) { self.deps = deps }
 
-    var upcoming: [AssistantUpcoming] {
-        Array(AssistantUpcoming.merge(routines: routines, followups: followups).prefix(4))
-    }
+    /// Every day / every N minutes, in the hub's order.
+    var repeating: [Item] { tasks.filter { $0.repeats != .once } }
+    /// One-offs, soonest first.
+    var oneOff: [Item] { tasks.filter { $0.repeats == .once }.sorted { ($0.at ?? .distantFuture) < ($1.at ?? .distantFuture) } }
+
+    var upcoming: [AssistantUpcoming] { Array(AssistantUpcoming.merge(tasks).prefix(4)) }
 
     func load() async {
         guard let api = deps.api() else { return }
-        async let f: Void? = try? followupList.load()
         async let h = try? api.scheduleRuns()
         do {
-            routines = try await api.routines()
+            tasks = try await api.scheduledTasks()
             error = nil
         } catch {
             self.error = error.shown ?? self.error
         }
-        _ = await f
         lastRuns = await h ?? []
         loaded = true
     }
 
-    /// Replaces the hub's whole list with `r` added or updated; returns `r` as saved (new ones get their id here).
-    /// Optimistic: the toggle does not bounce back while saving; a failure reloads what the hub has.
-    func save(_ r: APIClient.Routine) async -> APIClient.Routine? {
+    /// Adds `t` (no id yet) or saves it; returns it as saved. Optimistic: a toggle does not bounce back while saving;
+    /// a failure reports and reloads what the hub has.
+    func save(_ t: Item) async -> Item? {
         guard let api = deps.api() else { return nil }
-        var list = routines
-        if let i = list.firstIndex(where: { $0.id == r.id && !r.id.isEmpty }) { list[i] = r } else { list.append(r) }
-        withAnimation(Theme.Motion.standard) { routines = list }
+        if let i = tasks.firstIndex(where: { $0.id == t.id && !t.id.isEmpty }) {
+            withAnimation(Theme.Motion.standard) { tasks[i] = t }
+        }
         do {
-            let saved = try await api.setRoutines(list)
-            routines = saved
-            return r.id.isEmpty ? saved.last : saved.first { $0.id == r.id }
+            let saved = try await api.saveTask(t)
+            if let i = tasks.firstIndex(where: { $0.id == saved.id }) { tasks[i] = saved } else { tasks.append(saved) }
+            return saved
         } catch {
             deps.report(error)
-            if let fresh = try? await api.routines() { routines = fresh }
+            if let fresh = try? await api.scheduledTasks() { tasks = fresh }
             return nil
         }
     }
 
-    func runFollowup(_ f: APIClient.Followup) async { await followupList.run(f) }
-    func cancel(_ f: APIClient.Followup) async { await followupList.cancel(f) }
-
-    func delete(_ r: APIClient.Routine) async {
-        guard let api = deps.api(), !r.id.isEmpty else { return }
+    func delete(_ t: Item) async {
+        guard let api = deps.api(), !t.id.isEmpty else { return }
+        withAnimation { tasks.removeAll { $0.id == t.id } }
         do {
-            routines = try await api.setRoutines(routines.filter { $0.id != r.id })
-            deps.toast(Toast("已删除「\(r.title)」", style: .success))
+            try await api.deleteTask(t.id)
+            deps.toast(Toast("已删除「\(AssistantScheduleText.title(t))」", style: .success))
         } catch {
             deps.report(error)
+            if let fresh = try? await api.scheduledTasks() { tasks = fresh }
         }
     }
-}
 
-/// 已安排的跟进: every follow-up, or why they could not be read.
-@Observable final class AssistantFollowupsModel {
-    let followups: AssistantFollowups
-    private(set) var loaded = false
-    private(set) var error: String?
-
-    init(deps: AssistantDeps = .live) { followups = AssistantFollowups(deps: deps) }
-
-    func load() async {
+    /// 立即运行: opens the conversation it went to. A one-off is done after it (the hub drops it from the list).
+    func run(_ t: Item) async {
+        guard let api = deps.api() else { return }
+        if t.repeats == .once { withAnimation { tasks.removeAll { $0.id == t.id } } }
         do {
-            try await followups.load()
-            error = nil
+            let key = try await api.runTask(t.id)
+            Haptics.success()
+            deps.open(key)
         } catch {
-            self.error = error.shown ?? self.error
+            deps.report(error)
+            if let fresh = try? await api.scheduledTasks() { tasks = fresh }
         }
-        loaded = true
     }
 }
 

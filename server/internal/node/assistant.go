@@ -107,7 +107,8 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	resume := id != ""
 	if id == "" {
-		if p := n.adoptSpare(cwd, launcher); p != nil {
+		// The spare was started without --permission-mode, and bypassPermissions can't be switched to later.
+		if p := n.adoptSpareFor(cwd, launcher, mode); p != nil {
 			id, launcher, cwd = p.id, p.launcher, p.cwd
 		} else {
 			id = newUUID()
@@ -138,8 +139,8 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	n.mu.Lock()
 	p := n.procs[id]
 	n.mu.Unlock()
-	if p != nil && (!p.alive() || p.launcher != launcher) {
-		n.stopAssistant(id) // model switch or dead process: resume in a fresh one
+	if p != nil && (!p.alive() || p.launcher != launcher || (mode == proto.ModeBypass && p.mode != mode)) {
+		n.stopAssistant(id) // model switch, dead process or bypassPermissions (start-only): resume in a fresh one
 		n.rememberTasks(id, nil)
 		p = nil
 	}
@@ -170,6 +171,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 	n.notifySessions()
 	return id, nil
+}
+
+func (n *Node) adoptSpareFor(cwd, launcher, mode string) *assistantProc {
+	if mode == proto.ModeBypass {
+		return nil
+	}
+	return n.adoptSpare(cwd, launcher)
 }
 
 // adoptSpare hands the warm spare process to a new conversation when it fits (same directory and launcher, fresh).
@@ -250,6 +258,14 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	if snap := n.assistantContext(id); snap != "" {
 		args = append(args, "--append-system-prompt", snap)
 	}
+	// bypassPermissions only takes as a flag at start; the other modes are set with a control request (syncAssistantModes).
+	var startMode string
+	if !spare {
+		if mode, _ := n.modesOf(id); mode == proto.ModeBypass {
+			startMode = mode
+			args = append(args, "--permission-mode", mode)
+		}
+	}
 	if resume {
 		args = append(args, "--resume", id)
 	} else {
@@ -282,7 +298,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
 	p := &assistantProc{id: id, launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
-		born: time.Now(), lastActive: time.Now()}
+		born: time.Now(), lastActive: time.Now(), mode: startMode}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p
