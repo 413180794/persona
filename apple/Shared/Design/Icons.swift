@@ -151,6 +151,8 @@ extension Theme {
         /// A computer whose kind is not known.
         static let machine = "desktopcomputer"
         static let laptop = "laptopcomputer"
+        /// This Mac out of the hub's reach (the Jarvis page's device chip on the Mac).
+        static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"
         static let phone = "iphone"
         static let watch = "applewatch"

@@ -298,7 +298,12 @@ struct AssistantHome: View {
                 ForEach(model.machines.filter(\.online)) { m in
                     Chip(text: m.name, symbol: m.symbol)
                 }
+                #if os(macOS)
+                // What this chip shows is this device's own link to the hub: on the Mac, this Mac.
+                Chip(text: ConnectorText.device, symbol: model.live.state == .connected ? Theme.Icon.laptop : Theme.Icon.laptopOffline)
+                #else
                 Chip(text: "iPhone", symbol: model.live.state == .connected ? Theme.Icon.phone : "iphone.slash")
+                #endif
             }
         }
     }
