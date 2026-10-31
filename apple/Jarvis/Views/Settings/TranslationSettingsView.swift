@@ -55,6 +55,10 @@ struct TranslationSettingsView: View {
         .navigationTitle("翻译")
         .navigationBarTitleDisplayMode(.inline)
         .animation(Theme.Motion.state, value: enabled)
+        // The hub translates new mail before it is opened: it needs to know.
+        .onChange(of: TranslatePrefsBody(enabled: enabled, target: target, mail: mail)) { _, _ in
+            Translator.shared.syncPrefs(hubHas: nil)
+        }
         .sheet(isPresented: $picking) {
             TranslationChatPicker(selected: chats) { chatsRaw = TranslationPrefs.encode($0) }
         }

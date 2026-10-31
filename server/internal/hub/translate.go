@@ -146,6 +146,9 @@ func (h *Hub) translateMail(ctx context.Context, accountID string, uid uint32, m
 	if err := h.translateModel(); err != nil {
 		return mailTranslation{}, err
 	}
+	if t, ok := h.storedMailTranslation(accountID, uid, mailbox, target); ok { // translated when it came in
+		return t, nil
+	}
 	key := translateKey("m", accountID, mailbox, fmt.Sprint(uid), target)
 	if v, ok := h.translations.get(key); ok {
 		var t mailTranslation

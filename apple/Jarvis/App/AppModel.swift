@@ -1052,6 +1052,7 @@ final class AppModel {
         Task { await loadPins() }
         Task {
             if let p = try? await api.notifyPrefs(device: PushRegistrar.deviceID) {
+                Translator.shared.syncPrefs(hubHas: p.translate)
                 LiveActivityController.shared.settings(p)
             }
             if let fleet = try? await api.fleet() { LiveActivityController.shared.apply(fleet) }

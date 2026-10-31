@@ -331,6 +331,11 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   邮件按引用翻（`POST /api/v1/translate/mail {account_id, uid, mailbox, target}`，hub 自己读信，HTML 信用 `mail.ReadableText` 转成保留段落的文本，
   正文最多 12000 字，超出的标 `clipped`）；飞书消息批量翻（`POST /api/v1/translate {texts≤30, target}`，App 把 300 ms 内出现的行攒成一批）。
   hub 在内存里按内容缓存，App 在本次运行里缓存。
+- **邮件来了就翻，不等打开**（2026-11-01 用户要求）：App 把 设置 › 翻译 随设备偏好发给 hub（`PUT /api/v1/devices/{id}/prefs {"translate":{enabled,target,mail}}`，
+  连上时和改设置时，`Translator.syncPrefs`）。hub 每次收完邮件，对没处理的邮件里文字和目标语言不是同一种文字的（`inbox_translate.go` 的 `foreignScript`：
+  按文字体系判断，中文目标时汉字少于两成或有假名算外文；拉丁字母的语言之间分不出，英文目标不翻法文），在后台逐封翻译，存在收件箱条目的
+  `translations[目标语言]` 里（库里也有，重启不丢）。列表直接显示译后的标题和摘要（标题旁一个翻译小图标），打开邮件时 `translate/mail` 先取这份，立刻出来。
+  只有某台设备打开了「翻译 › 邮件」才翻；关掉后不再翻新的。
 - 界面：邮件页标题和正文换成译文，正文上方一行「已翻译成简体中文 · 显示原文」；飞书消息气泡下方一行灰色译文（`LarkTranslationLine`）。
 - 截图 / 测试：`mock_hub.py` 的 504 号邮件是英文、「设计评审」（f2）会话里有英文消息，`/api/v1/translate` 回「【译】原文」；
   UI 测试 `TranslationTests`；DEBUG `-openTranslationSettings YES` 打开设置页。

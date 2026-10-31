@@ -73,6 +73,8 @@ type InboxItem struct {
 	Lark        *InboxLark `json:"lark,omitempty"`
 	Mail        *InboxMail `json:"mail,omitempty"`
 	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_docs.go)
+	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
+	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
 
@@ -118,6 +120,14 @@ func (it *InboxItem) listed() InboxItem {
 		d := *it.Doc
 		c.Doc = &d
 	}
+	if len(it.Translations) > 0 { // the list shows subject and preview; the body is fetched when the mail opens
+		c.Translations = map[string]*InboxTranslation{}
+		for k, t := range it.Translations {
+			if t != nil && t.Of == it.Last {
+				c.Translations[k] = &InboxTranslation{Subject: t.Subject, Preview: t.Preview, Clipped: t.Clipped}
+			}
+		}
+	}
 	return c
 }
 
@@ -130,6 +140,7 @@ type inbox struct {
 	running     sync.Mutex // one collection at a time
 	triaging    sync.Mutex // one triage pass at a time (inbox_triage.go)
 	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
+	translating sync.Mutex // one translation pass at a time (inbox_translate.go)
 	me          lark.Me    // the Feishu account (who @me is in documents), read once
 }
 
@@ -245,6 +256,7 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, changed)
 	h.triageInbox(ctx)
+	h.translateInbox(ctx)
 }
 
 // saveInbox persists changed items and tells the apps.

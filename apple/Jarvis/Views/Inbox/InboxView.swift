@@ -271,6 +271,12 @@ struct InboxRow: View {
     var send: ((String) -> Void)?
     var edit: (() -> Void)?
 
+    @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
+    @AppStorage(TranslationPrefs.enabledKey) private var translating = false
+
+    /// 设置 › 翻译: the hub's translation of foreign mail, done as it came in (subject and preview).
+    private var translated: InboxItem.Translated? { translating && TranslationPrefs.mail ? item.translated(translateTarget) : nil }
+
     /// Where the text column starts inside the row (40 avatar + 12): the separator lines up with it.
     static let textColumn: CGFloat = 52
 
@@ -279,7 +285,11 @@ struct InboxRow: View {
             avatar
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Text(item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
+                    Text(translated.map(\.subject).flatMap { $0.isEmpty ? nil : $0 } ?? item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
+                    if translated != nil {
+                        Image(systemName: Theme.Icon.translate).font(Theme.Font.label).foregroundStyle(.tertiary)
+                            .accessibilityLabel("已翻译")
+                    }
                     if let label = item.kindLabel {
                         Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == "@我" ? .tint(Theme.danger) : .neutral)
                     }
@@ -331,6 +341,7 @@ struct InboxRow: View {
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
         if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
+        if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return sender + "：" + t }
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
         return sender + "：" + item.preview
     }

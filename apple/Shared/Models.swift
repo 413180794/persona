@@ -553,6 +553,13 @@ nonisolated struct Resolution: Codable, Sendable {
 
 /// One device's push settings, kept by the hub per device (设置 › 通知). The timings come back from the hub's
 /// hub.json "notify" so the page can say what "long" means; they are not sent back.
+/// 设置 › 翻译 as the hub keeps it with a device's prefs.
+nonisolated struct TranslatePrefsBody: Codable, Equatable, Sendable {
+    var enabled: Bool
+    var target: String
+    var mail: Bool
+}
+
 nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
     var input: Bool = true
@@ -563,12 +570,14 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     var lockDetails: Bool = false
     /// The compact Dynamic Island's two sides (FleetState.swift).
     var island = IslandPrefs()
+    /// 设置 › 翻译, so the hub translates new mail before it is opened (Translator.swift). Kept as the hub sent it.
+    var translate: TranslatePrefsBody?
     var longTurnSeconds: Int?
     var doneDelaySeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case input, done
-        case liveActivity = "live_activity", lockDetails = "lock_details", island
+        case liveActivity = "live_activity", lockDetails = "lock_details", island, translate
         case longTurnSeconds = "long_turn_seconds", doneDelaySeconds = "done_delay_seconds"
     }
 

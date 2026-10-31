@@ -61,6 +61,15 @@ type NotifyPrefs struct {
 	LockDetails bool `json:"lock_details"`
 	// Island: what the compact Dynamic Island shows on each side.
 	Island IslandPrefs `json:"island"`
+	// Translate: the app's 设置 › 翻译, so the hub can translate new mail before it is opened (translate.go).
+	Translate TranslatePrefs `json:"translate"`
+}
+
+// TranslatePrefs mirrors 设置 › 翻译 on a device.
+type TranslatePrefs struct {
+	Enabled bool   `json:"enabled"`
+	Target  string `json:"target,omitempty"` // BCP 47, one of languageNames
+	Mail    bool   `json:"mail"`
 }
 
 // IslandPrefs picks the two sides of the compact Dynamic Island (docs/live-activity.md). "Needs you" always takes the

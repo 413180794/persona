@@ -73,6 +73,11 @@ nonisolated enum TranslationPrefs {
     static func family(_ code: String) -> String { String(code.split(separator: "-").first ?? Substring(code)) }
 }
 
+extension TranslationPrefs {
+    /// What the hub keeps for this device, so it translates new mail as it comes in.
+    static var body: TranslatePrefsBody { .init(enabled: enabled, target: target, mail: mail) }
+}
+
 /// A mail's translation (POST /api/v1/translate/mail).
 nonisolated struct MailTranslation: Codable, Hashable, Sendable {
     var subject: String
@@ -86,6 +91,13 @@ extension APIClient {
     private nonisolated struct TranslateMailBody: Encodable {
         var accountID: String, uid: UInt32, mailbox: String, target: String
         enum CodingKeys: String, CodingKey { case uid, mailbox, target; case accountID = "account_id" }
+    }
+
+    private nonisolated struct TranslatePrefsPut: Encodable { var translate: TranslatePrefsBody }
+
+    /// Tells the hub this device's 设置 › 翻译 (only that field: the rest of its prefs stay as they are).
+    func setTranslatePrefs(device: String, _ prefs: TranslatePrefsBody) async throws {
+        _ = try await request("PUT", "/api/v1/devices/\(device)/prefs", body: TranslatePrefsPut(translate: prefs))
     }
 
     /// Short texts translated in order ("" where the model gave nothing).
@@ -158,6 +170,13 @@ final class Translator {
                 failed.formUnion(keys) // not again this session; the original stays readable
             }
         }
+    }
+
+    /// Sends 设置 › 翻译 to the hub (on connect and when it changes) unless it already has it.
+    func syncPrefs(hubHas: TranslatePrefsBody?) {
+        let mine = TranslationPrefs.body
+        guard hubHas != mine, let api = AppModel.shared.api else { return }
+        Task { try? await api.setTranslatePrefs(device: PushRegistrar.deviceID, mine) }
     }
 
     /// A mail's translation, asked once per message and target.

@@ -25,6 +25,9 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var mail: Mail?
     /// A Feishu document's @me / comment: the rows about the user with their status columns (docs/inbox.md「云文档」).
     var doc: Doc?
+    /// New foreign mail translated by the hub as it came in, by target language (subject and preview here; the body
+    /// comes with the mail).
+    var translations: [String: Translated]?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
     /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
@@ -76,6 +79,14 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
             case mentionPosition = "mention_position", atAll = "at_all"
         }
     }
+
+    nonisolated struct Translated: Codable, Hashable, Sendable {
+        var subject: String
+        var preview: String
+    }
+
+    /// The hub's translation into `target` (mail only); whether to show it is the app's setting.
+    func translated(_ target: String) -> Translated? { mail != nil ? translations?[target] : nil }
 
     nonisolated struct Doc: Codable, Hashable, Sendable {
         var url: String
@@ -159,7 +170,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, context, agent
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, context, agent, translations
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -212,6 +213,23 @@ func (p *Pusher) setPrefs(id string, prefs NotifyPrefs) error {
 		return p.store.SetDevicePrefs(context.Background(), id, raw)
 	}
 	return nil
+}
+
+// mailTargets are the languages some device wants its mail translated into (设置 › 翻译 on, mail in scope).
+func (p *Pusher) mailTargets() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	seen := map[string]bool{}
+	var out []string
+	for _, d := range p.devices {
+		t := devicePrefs(d.Prefs).Translate
+		if t.Enabled && t.Mail && languageNames[t.Target] != "" && !seen[t.Target] {
+			seen[t.Target] = true
+			out = append(out, t.Target)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // ready reports whether pushes can go anywhere (APNs key loaded and a device registered).
