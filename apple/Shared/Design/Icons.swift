@@ -182,7 +182,11 @@ extension Theme {
         /// 设置 › 连接器: the data sources Jarvis reads and acts in (this device, mail, 飞书).
         static let connectors = "point.3.connected.trianglepath.dotted"
         /// This device as a connector (its contacts, calendar, photos…): iPhone, iPad or Mac.
+        #if os(macOS)
+        static let thisDevice = "laptopcomputer"
+        #else
         static let thisDevice = "iphone.gen3"
+        #endif
         /// AI 草拟回复: a reply drafted in the user's voice.
         static let draftReply = "pencil.and.scribble"
         /// 交给 AI: an inbox item handed to Jarvis or an agent.

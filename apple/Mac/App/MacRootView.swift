@@ -129,6 +129,9 @@ extension View {
             .dynamicTypeSize(model.textSize.applied(to: .large))
             .buiTheme(.jarvis(model.style))
             .scrollIndicators(.automatic)
+            // Every iOS Form grouped (System Settings' look), pages and sheets alike: the Mac's default two-column
+            // form put the iPhone's section rows (pickers, editors) in the label column and cut them off.
+            .formStyle(.grouped)
     }
 }
 
