@@ -213,6 +213,12 @@ struct ChatView: View {
             return try await api.fullItem(shownKey, id: id).text ?? ""
         }
         .onAppear(perform: appeared)
+        // The same chat was already open (the app left on it) when its "完成" notification was tapped: no new entry.
+        .onChange(of: model.latestAnswerFor) { _, k in
+            guard style == .dev, k == key, entered, takeLatestAnswer() else { return }
+            entry = .latestAnswer
+            landEntry(currentLines())
+        }
         // Going to the background is the last chance before iOS may end the app: a cold relaunch (the dev chat is
         // restored, AppModel.rememberChat) then opens at the same line, not only after leaving the chat.
         .onChange(of: scenePhase) { _, phase in if phase == .background { rememberReadPosition() } }
@@ -1407,12 +1413,19 @@ struct ChatView: View {
         return (place.isEmpty ? title : place) + " · " + pane.title
     }
 
+    /// A "完成" notification for this chat asked for its latest answer (AppModel.latestAnswerFor); taken once.
+    private func takeLatestAnswer() -> Bool {
+        guard model.latestAnswerFor == key else { return false }
+        model.latestAnswerFor = nil
+        return true
+    }
+
     private func appeared() {
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
                 entered = true
-                if style == .dev, session?.state == .unread || Self.debugAsUnread {
-                    entry = .latestAnswer // finished, not seen: read the latest answer from its start
+                if style == .dev, session?.state == .unread || takeLatestAnswer() || Self.debugAsUnread {
+                    entry = .latestAnswer // finished, not seen (or opened from its notification): the latest answer from its start
                 } else if style == .dev, let saved = UserDefaults.standard.string(forKey: readKey) {
                     entry = .line(saved) // where you left off
                 }

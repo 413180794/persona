@@ -34,6 +34,10 @@ final class AppModel {
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
     var toast: Toast?
     var openChat: SessionKey?
+    /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
+    /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
+    /// hub's next list), so the chat cannot tell by itself that this turn finished unseen (2026-10-31).
+    var latestAnswerFor: SessionKey?
     var pendingConfirmation: PhoneConfirmation?
     /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
     var selectedTab: AppTab = .assistant {
@@ -297,8 +301,9 @@ final class AppModel {
         } catch { show(error) }
     }
 
-    /// Routes a notification / deep link to the right tab.
-    func open(_ key: SessionKey) {
+    /// Routes a notification / deep link to the right tab; `latestAnswer` lands on the start of the agent's last answer.
+    func open(_ key: SessionKey, latestAnswer: Bool = false) {
+        if latestAnswer { latestAnswerFor = key }
         if session(key)?.assistant == true {
             selectedTab = .assistant
             assistantCurrent = key

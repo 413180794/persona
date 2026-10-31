@@ -60,8 +60,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         default: break
         }
         if let open = d.string(forKey: "openSession"), let slash = open.firstIndex(of: "/") {
-            AppModel.shared.selectedTab = .chats
-            AppModel.shared.openChat = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+            let key = SessionKey(machineID: String(open[..<slash]), sessionID: String(open[open.index(after: slash)...]))
+            // `-openFromDoneNotice YES`: as a tap on its "完成" notification (lands on the latest answer).
+            if d.bool(forKey: "openFromDoneNotice") {
+                AppDelegate.openFromNotification(key, finished: true)
+            } else {
+                AppModel.shared.selectedTab = .chats
+                AppModel.shared.openChat = key
+            }
         }
         if d.string(forKey: "lark-connector") != nil { AppModel.shared.selectedTab = .mail }
         if let open = d.string(forKey: "openAssistant"), let slash = open.firstIndex(of: "/") {
@@ -147,7 +153,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                     AppDelegate.resolveFromNotification(ixID, resolution, action: action, done: done)
                     return
                 }
-                if action != UNNotificationDismissActionIdentifier { AppDelegate.openFromNotification(key) }
+                // No interaction: a turn finished ("完成"), opened at its answer like from the list.
+                if action != UNNotificationDismissActionIdentifier { AppDelegate.openFromNotification(key, finished: ixID == nil) }
                 done()
             }
         }
@@ -204,9 +211,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// Opens the session a notification is about. On a cold launch the tap arrives before the UI exists: `open`
     /// only sets state (tab + chat to open) that the views pick up when they appear.
-    static func openFromNotification(_ key: SessionKey?) {
+    static func openFromNotification(_ key: SessionKey?, finished: Bool = false) {
         guard let key else { return }
-        AppModel.shared.open(key)
+        AppModel.shared.open(key, latestAnswer: finished)
     }
 }
 
