@@ -547,6 +547,10 @@ struct KnowledgeDetailView: View {
         .sheet(isPresented: $editing) {
             KBTagEditor(entry: shown) { await load() }
         }
+        #if DEBUG && os(macOS)
+        // `-showKBEditor YES` with `-showKnowledgeEntry <kind>/<id>`: the tag editor open (Mac screenshots).
+        .onAppear { if UserDefaults.standard.bool(forKey: "showKBEditor") { editing = true } }
+        #endif
         .sheet(isPresented: $newAgent) {
             NewChatView(initialPrompt: agentPrompt) { s in
                 newAgent = false
@@ -1186,9 +1190,17 @@ struct KBTagEditor: View {
                 }
                 Section {
                     Slider(value: $relevance, in: 0...100, step: 5)
+                    #if os(macOS)
+                        .labelsHidden() // its empty label column took the left half of the row
+                    #endif
                 } header: { Text("与我相关 \(Int(relevance))") }
                 Section {
+                    #if os(macOS)
+                    // A grouped Mac form shows a titled field as label + trailing value: the hint read as a label.
+                    TextField("用空格分隔", text: $tags, prompt: Text("用空格分隔")).labelsHidden()
+                    #else
                     TextField("用空格分隔", text: $tags)
+                    #endif
                 } header: { Text("标签") }
                 if entry.kind == KBKind.projects.rawValue {
                     Section("项目") {
@@ -1228,6 +1240,10 @@ struct KBTagEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+        #if os(macOS)
+        // From a pushed page the sheet did not pick up macLook's grouped form: the two-column one cut rows off.
+        .macSheet()
+        #endif
     }
 
     private func save() async {
