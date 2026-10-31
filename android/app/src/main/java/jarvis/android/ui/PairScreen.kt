@@ -52,7 +52,7 @@ fun PairScreen(reason: String? = null) {
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun pair(p: Pairing) {
+    fun pair(p: Pairing, fromLink: Boolean = false) {
         busy = true; error = null
         scope.launch {
             error = try {
@@ -72,6 +72,9 @@ fun PairScreen(reason: String? = null) {
                 "连不上 ${p.url}：${e.message ?: e.javaClass.simpleName}。手机和 hub 要在同一个网络或 VPN 里"
             }
             busy = false
+            // Only now: while a link is pending, Root keeps this screen up. Clearing it earlier took the screen
+            // (and this coroutine) away mid-pairing when the phone was already paired, so the link did nothing.
+            if (fromLink) MainActivity.pendingPair.value = null
         }
     }
 
@@ -81,7 +84,7 @@ fun PairScreen(reason: String? = null) {
     }
     val link = MainActivity.pendingPair.value
     LaunchedEffect(link) {
-        if (link != null) { url = link.url; token = link.token; MainActivity.pendingPair.value = null; pair(link) }
+        if (link != null) { url = link.url; token = link.token; pair(link, fromLink = true) }
     }
 
     Surface(Modifier.fillMaxSize()) {

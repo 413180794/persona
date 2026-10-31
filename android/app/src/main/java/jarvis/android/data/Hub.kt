@@ -56,6 +56,21 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private val _interactions = MutableStateFlow<List<Interaction>>(emptyList())
     val interactions: StateFlow<List<Interaction>> = _interactions.asStateFlow()
 
+    /** The inbox list; refreshed when the hub says it changed (WebSocket `inbox`), on (re)connect and on demand. */
+    private val _inbox = MutableStateFlow<List<InboxItem>>(emptyList())
+    val inbox: StateFlow<List<InboxItem>> = _inbox.asStateFlow()
+
+    suspend fun loadInbox() { runCatching { _inbox.value = api.inbox() } }
+
+    /** Marks done / back at once; put back if the hub refuses. */
+    suspend fun setInboxDone(item: InboxItem, done: Boolean) {
+        val before = _inbox.value
+        val now = java.time.Instant.now().toString()
+        _inbox.update { list -> list.map { if (it.id == item.id) it.copy(doneAt = if (done) now else null, doneBy = if (done) "user" else null) else it } }
+        runCatching { api.setInboxDone(item.id, done) }.onSuccess { up -> _inbox.update { l -> l.map { if (it.id == up.id) up else it } } }
+            .onFailure { _inbox.value = before; throw it }
+    }
+
     /** Pinned / muted spaces and agents, kept by the hub (Postgres) so every device sees the same. */
     private val _pins = MutableStateFlow(Pins())
     val pins: StateFlow<Pins> = _pins.asStateFlow()
@@ -119,8 +134,8 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 _conn.value = ConnState.Online
                 phoneTools?.let { registerPhone(webSocket, it) }
                 synchronized(chats) { chats.values.toList() }.forEach { it.resubscribe() }
-                // Pins and mutes have no WebSocket event: read them on every (re)connect.
-                scope.launch { loadPins() }
+                // Pins and mutes have no WebSocket event: read them on every (re)connect; the inbox too.
+                scope.launch { loadPins(); loadInbox() }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -226,6 +241,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 val sid = msg["session_id"]?.jsonPrimitive?.content ?: return
                 chat(SessionKey(mid, sid), create = false)?.onDelta(msg["text"]?.jsonPrimitive?.content.orEmpty())
             }
+            "inbox" -> scope.launch { loadInbox() } // no content: the app pulls the list
             "tool_call" -> {
                 val id = msg["call_id"]?.jsonPrimitive?.content ?: return
                 val name = msg["name"]?.jsonPrimitive?.content ?: return

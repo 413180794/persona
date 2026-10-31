@@ -69,7 +69,11 @@ import java.time.Instant
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
+fun AssistantScreen(
+    hub: Hub, bottomBar: @Composable () -> Unit,
+    /** Something another tab handed to Jarvis (the inbox's 交给 Jarvis): started as a new conversation, then cleared. */
+    incoming: String? = null, onIncomingTaken: () -> Unit = {},
+) {
     val byMachine by hub.sessions.collectAsState()
     var state by remember { mutableStateOf<ApiClient.AssistantState?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -111,6 +115,10 @@ fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
                 .onSuccess { s -> reload(); current = s.sessionId; chose = true; pending = null }
                 .onFailure { e -> startError = "没开起来：${e.message?.lineSequence()?.firstOrNull()}"; pending = null }
         }
+    }
+
+    LaunchedEffect(incoming, state != null) {
+        if (incoming != null && state != null) { profile = false; start(incoming); onIncomingTaken() }
     }
 
     ModalNavigationDrawer(
@@ -191,9 +199,13 @@ fun AssistantScreen(hub: Hub, bottomBar: @Composable () -> Unit) {
 
 private fun List<Session>.newest() = maxByOrNull { it.updated ?: Instant.EPOCH }
 
-/** A conversation's name in the history: its title, else its first words. */
-private fun Session.conversationTitle(): String =
-    title.takeIf { it.isNotBlank() && it != "Claude Code" } ?: lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(30) ?: "对话"
+/** A conversation's name in the history: its title, else its first words; a hand-off shows what it was about. */
+fun Session.conversationTitle(): String {
+    val t = title.takeIf { it.isNotBlank() && it != "Claude Code" } ?: lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(30) ?: return "对话"
+    // Started from 交给 Jarvis: the first message is a <jarvis-context title="…"> tag (claude names it after it).
+    Regex("""<jarvis-context[^>]*title="([^"]*)"""").find(t)?.let { return "交给 Jarvis：" + it.groupValues[1] }
+    return if (t.startsWith("<jarvis-context")) "交给 Jarvis" else t
+}
 
 /** The same suggestions as the iOS home screen. */
 private val SUGGESTIONS = listOf(

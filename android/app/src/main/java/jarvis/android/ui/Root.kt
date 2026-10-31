@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -15,6 +16,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import jarvis.android.MainActivity
@@ -23,7 +25,7 @@ import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
 
-enum class Tab(val title: String) { Jarvis("Jarvis"), Agents("Agents") }
+enum class Tab(val title: String) { Jarvis("Jarvis"), Agents("Agents"), Inbox("收件箱") }
 
 /**
  * Pairing until a hub is paired; then two tabs, Jarvis (the assistant) and Agents, as on iOS. Agents can push a
@@ -44,6 +46,7 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     var tab by rememberSaveable { mutableStateOf(Tab.Agents) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var space by rememberSaveable { mutableStateOf<String?>(null) }
+    var handoff by remember { mutableStateOf<String?>(null) } // inbox → Jarvis
     val open = openSession.value
     if (open != null) tab = Tab.Agents
     openTab.value?.let { if (it == "jarvis") { tab = Tab.Jarvis; settings = false }; openTab.value = null }
@@ -55,6 +58,8 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     val unread = byMachine.values.flatten().count { !it.assistant && it.agentState == AgentState.Unread }
     val assistantWaiting = pending.any { it.sessionKey in assistantKeys } ||
         byMachine.values.flatten().any { it.assistant && it.agentState == AgentState.NeedsYou }
+    val inbox by hub.inbox.collectAsState()
+    val inboxAction = inbox.count { it.bucket == jarvis.android.data.InboxBucket.Action }
     val bar: @Composable () -> Unit = {
         NavigationBar {
             NavigationBarItem(
@@ -69,6 +74,11 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
                 },
                 label = { Text(Tab.Agents.title, maxLines = 1) },
             )
+            NavigationBarItem(
+                selected = tab == Tab.Inbox, onClick = { tab = Tab.Inbox },
+                icon = { BadgedBox(badge = { if (inboxAction > 0) Badge { Text("$inboxAction") } }) { Icon(Icons.Default.Inbox, null) } },
+                label = { Text(Tab.Inbox.title, maxLines = 1) },
+            )
         }
     }
 
@@ -77,7 +87,8 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
             BackHandler { settings = false }
             SettingsScreen(hub, onBack = { settings = false })
         }
-        tab == Tab.Jarvis -> AssistantScreen(hub, bottomBar = bar)
+        tab == Tab.Jarvis -> AssistantScreen(hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null })
+        tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
         open != null -> {
             BackHandler { openSession.value = null }
             ChatScreen(hub, open, onBack = { openSession.value = null })

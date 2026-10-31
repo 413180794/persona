@@ -10,6 +10,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okio.source
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -133,11 +134,40 @@ class ApiClient(val baseUrl: String, val token: String) {
         val text: String,
         @SerialName("client_msg_id") val clientMsgId: String,
         @SerialName("clear_draft") val clearDraft: String? = null,
+        val images: List<ImagePayload>? = null,
     )
 
-    /** clientMsgId stays the same on a retry: the node types a message once (docs/protocol.md「发消息」). */
-    suspend fun send(k: SessionKey, text: String, clientMsgId: String, clearDraft: String? = null) {
-        post(sp(k) + "/messages", SendBody(text, clientMsgId, clearDraft))
+    /**
+     * clientMsgId stays the same on a retry: the node types a message once (docs/protocol.md「发消息」).
+     * Images go inline as base64 (JPEG, the long side at most 1600 px, as iOS sends them).
+     */
+    suspend fun send(k: SessionKey, text: String, clientMsgId: String, clearDraft: String? = null, images: List<ImagePayload> = emptyList()) {
+        post(sp(k) + "/messages", SendBody(text, clientMsgId, clearDraft, images.ifEmpty { null }))
+    }
+
+    @Serializable data class Uploaded(val path: String = "", val name: String = "", val size: Long = 0)
+
+    /**
+     * Streams a file to `machine`'s temp directory (docs/protocol.md「发送文件」) and returns where it landed; the app
+     * puts that path in the composer, it doesn't send anything by itself. `size` must be exact (Content-Length).
+     */
+    suspend fun upload(machine: String, name: String, size: Long, open: () -> java.io.InputStream): Uploaded = withContext(Dispatchers.IO) {
+        val body = object : okhttp3.RequestBody() {
+            override fun contentType() = "application/octet-stream".toMediaType()
+            override fun contentLength() = size
+            override fun writeTo(sink: okio.BufferedSink) { open().use { sink.writeAll(it.source()) } }
+        }
+        val req = Request.Builder().url(url("/api/v1/machines/$machine/files", mapOf("name" to name)))
+            .header("Authorization", "Bearer $token").post(body).build()
+        // Big files: the hub relays them to the node in 1 MB chunks, which can take minutes.
+        http.newBuilder().writeTimeout(10, TimeUnit.MINUTES).readTimeout(10, TimeUnit.MINUTES).build().newCall(req).execute().use { resp ->
+            val text = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) {
+                val obj = runCatching { JsonCodec.parseToJsonElement(text) as? JsonObject }.getOrNull()
+                throw HubException(resp.code, obj?.get("error")?.jsonPrimitive?.content ?: "HTTP ${resp.code}", obj?.get("code")?.jsonPrimitive?.content, obj)
+            }
+            JsonCodec.decodeFromString(text)
+        }
     }
 
     suspend fun interrupt(k: SessionKey) { raw("POST", sp(k) + "/interrupt") }
@@ -287,6 +317,24 @@ class ApiClient(val baseUrl: String, val token: String) {
         raw("PUT", "/api/v1/assistant/memory/" + name.replace("/", "_"), JsonCodec.encodeToString(Content(content)))
     }
     suspend fun deleteMemory(name: String) { raw("DELETE", "/api/v1/assistant/memory/" + name.replace("/", "_")) }
+
+    // --- Inbox (docs/inbox.md) ---
+
+    @Serializable private data class InboxList(val items: List<InboxItem> = emptyList())
+    suspend fun inbox(): List<InboxItem> = get<InboxList>("/api/v1/inbox").items
+    /** One item with its `context` (the conversation / mail as text). */
+    suspend fun inboxItem(id: String): InboxItem = get("/api/v1/inbox/$id")
+    @Serializable private data class Done(val done: Boolean) // no default: always on the wire, false included
+    suspend fun setInboxDone(id: String, done: Boolean): InboxItem = JsonCodec.decodeFromString(post("/api/v1/inbox/$id/done", Done(done)))
+    @Serializable private data class Instruction(val instruction: String = "")
+    @Serializable private data class DraftText(val text: String = "")
+    /** A reply drafted in the user's voice; not sent. */
+    suspend fun inboxDraft(id: String, instruction: String = ""): String =
+        JsonCodec.decodeFromString<DraftText>(post("/api/v1/inbox/$id/draft", Instruction(instruction))).text
+    @Serializable private data class ReplyText(val text: String)
+    /** Sends: Feishu in the original chat, mail as a reply; the hub then marks it done (done_by=replied). */
+    suspend fun inboxReply(id: String, text: String): InboxItem = JsonCodec.decodeFromString(post("/api/v1/inbox/$id/reply", ReplyText(text)))
+    suspend fun refreshInbox(): List<InboxItem> = JsonCodec.decodeFromString<InboxList>(raw("POST", "/api/v1/inbox/refresh", "{}")).items
 
     @Serializable private data class NewConversation(val prompt: String, val main: Boolean? = null)
     /** Starts a conversation with `prompt` as its first message; the first one becomes the main conversation. */

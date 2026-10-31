@@ -29,6 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -135,15 +138,56 @@ fun ChatScreen(
     var notice by remember { mutableStateOf<String?>(null) }
     var terminal by remember { mutableStateOf(false) }
 
+    // Attachments (docs/protocol.md「发送文件」): photos go with the message; files are uploaded to the session's
+    // computer first and their paths dropped into the text, which the user then sends (or not).
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var images by remember(key.path) { mutableStateOf(listOf<jarvis.android.data.ImagePayload>()) }
+    var uploading by remember { mutableStateOf<String?>(null) }
+    var attachMenu by remember { mutableStateOf(false) }
+    val pickPhotos = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(jarvis.android.data.MAX_IMAGES),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            val room = jarvis.android.data.MAX_IMAGES - images.size
+            if (uris.size > room) notice = "一次最多 ${jarvis.android.data.MAX_IMAGES} 张"
+            val picked = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                uris.take(room.coerceAtLeast(0)).map { jarvis.android.data.imagePayload(context, it) }
+            }
+            if (picked.any { it == null }) notice = "有 ${picked.count { it == null }} 张照片读不出来"
+            images = images + picked.filterNotNull()
+        }
+    }
+    val pickFiles = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            val paths = mutableListOf<String>()
+            for (u in uris) {
+                val info = jarvis.android.data.fileInfo(context, u)
+                if (info == null) { notice = "读不到这个文件的大小，传不了"; continue }
+                val (name, size) = info
+                if (size > jarvis.android.data.MAX_UPLOAD_BYTES) { notice = "「$name」超过 200 MB，传不了"; continue }
+                uploading = name
+                runCatching { hub.api.upload(key.machineId, name, size) { context.contentResolver.openInputStream(u)!! } }
+                    .onSuccess { paths += it.path }
+                    .onFailure { e -> notice = "「$name」没传上去：${e.message}" }
+            }
+            uploading = null
+            if (paths.isNotEmpty()) { draft = jarvis.android.data.withPaths(draft, paths); pendingMsgId = null }
+        }
+    }
+
     fun send(clearDraft: String? = null) {
-        val text = draft.trim()
+        val text = draft.trim().ifEmpty { if (images.isNotEmpty()) "请看图片" else "" }
         if (text.isEmpty()) return
         val id = pendingMsgId ?: UUID.randomUUID().toString().also { pendingMsgId = it }
         sending = true; notice = null
         scope.launch {
             try {
-                hub.api.send(key, text, id, clearDraft)
-                draft = ""; pendingMsgId = null
+                hub.api.send(key, text, id, clearDraft, images)
+                draft = ""; pendingMsgId = null; images = emptyList()
                 follow = true; list.scrollToItem(0) // what you sent and its answer show, wherever you had scrolled
             } catch (e: HubException) {
                 when (e.code) {
@@ -235,7 +279,36 @@ fun ChatScreen(
             session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                 AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
             }
+            if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                images.forEachIndexed { i, img ->
+                    Box {
+                        val bmp = remember(img.data) {
+                            runCatching { android.util.Base64.decode(img.data, android.util.Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                        }
+                        bmp?.let { Image(it.asImageBitmap(), "第 ${i + 1} 张", Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                        IconButton({ images = images.filterIndexed { j, _ -> j != i } }, Modifier.size(24.dp).align(Alignment.TopEnd)) {
+                            Icon(Icons.Default.Cancel, "移除这张", tint = androidx.compose.ui.graphics.Color.White)
+                        }
+                    }
+                }
+            }
+            uploading?.let { name ->
+                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Text("  正在传「$name」到电脑上…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
+                Box {
+                    IconButton({ attachMenu = true }, enabled = !sending && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
+                    androidx.compose.material3.DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
+                        androidx.compose.material3.DropdownMenuItem({ Text("照片") }, {
+                            attachMenu = false
+                            pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
+                        androidx.compose.material3.DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
+                    }
+                }
                 OutlinedTextField(
                     draft, { draft = it; pendingMsgId = null },
                     placeholder = {
@@ -249,7 +322,7 @@ fun ChatScreen(
                     },
                     modifier = Modifier.weight(1f).heightIn(max = 180.dp), shape = RoundedCornerShape(20.dp),
                 )
-                IconButton(onClick = { send() }, enabled = !sending && draft.isNotBlank()) {
+                IconButton(onClick = { send() }, enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty())) {
                     if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")
                 }
             }

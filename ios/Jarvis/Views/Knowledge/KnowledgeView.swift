@@ -52,7 +52,9 @@ struct KnowledgeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { tagMenu }
         }
-        .searchable(text: $query, prompt: "搜索档案和聊天记录")
+        // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
+        // section goes), taking the typed text out of sight (2026-10-31).
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
         .task(id: query) {
             guard !query.isEmpty, let api = model.api else { hits = nil; return }
             try? await Task.sleep(for: .milliseconds(300)) // typing
