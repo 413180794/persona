@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -19,67 +20,26 @@ import (
 // AskUserQuestion), pushing, waking itself up later, the coding agents the hub already tracks, and Feishu through
 // the hub's lark-connector client. They answer from the hub's own state, so no ssh, no tokens, no scraping.
 
-func schema(s string) json.RawMessage { return json.RawMessage(s) }
-
+// assistantTools are the tools only assistant conversations get; their descriptions and schemas are in
+// prompts/mcp (docs/prompts.md).
 func assistantTools(withLark bool) []proto.Tool {
-	tools := []proto.Tool{
-		{Name: "ask_user", Description: "Ask the user one or more multiple-choice questions on their iPhone (a card in this conversation plus a push " +
-			"notification) and wait for the answers. Use it to confirm anything risky (sending messages / email for them, deleting, " +
-			"changing live systems) or to let them pick between options. AskUserQuestion does not work here; use this instead. " +
-			"The user can also type a free-form answer. Waits up to 30 minutes.",
-			InputSchema: schema(`{"type":"object","required":["questions"],"properties":{"questions":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"object","required":["question","options"],"properties":{"question":{"type":"string"},"header":{"type":"string","description":"short label, ≤12 chars"},"multiSelect":{"type":"boolean"},"options":{"type":"array","minItems":2,"maxItems":4,"items":{"type":"object","required":["label"],"properties":{"label":{"type":"string"},"description":{"type":"string"}}}}}}}}}`)},
-		{Name: "notify_user", Description: "Send the user a push notification right now (works when the app is closed). Tapping it opens this conversation. " +
-			"Use for results of scheduled runs and anything time-sensitive; don't notify for ordinary replies (they get one automatically).",
-			InputSchema: schema(`{"type":"object","required":["title","body"],"properties":{"title":{"type":"string"},"body":{"type":"string"}}}`)},
-		{Name: "schedule_followup", Description: "Wake yourself up later: at the given time Jarvis sends `prompt` into this conversation (or a new one) " +
-			"as if the user wrote it, you do the work, and the user gets a push with your answer. Use for \"remind me…\", \"check again in an hour\", " +
-			"meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) " +
-			"or relative (\"30m\", \"2h\", \"1d\"). For something to do again and again (a patrol every 30 minutes) pass `every` " +
-			"(\"30m\", \"2h\", at least 5m) once: Jarvis repeats it by itself and the user sees, edits and stops it in the app; " +
-			"never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.",
-			InputSchema: schema(`{"type":"object","required":["prompt"],"properties":{"at":{"type":"string","description":"when (the first run, with every); default with every: one interval from now"},"every":{"type":"string","description":"repeat this often, e.g. 30m"},"prompt":{"type":"string","description":"what to do then, self-contained"},"title":{"type":"string","description":"short label shown in the app"},"new_conversation":{"type":"boolean","description":"start a fresh conversation instead of continuing this one"}}}`)},
-		{Name: "schedule_routine", Description: "Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new " +
-			"conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". " +
-			"For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields " +
-			"you give change; `enabled: false` pauses it. Times are in the user's time zone.",
-			InputSchema: schema(`{"type":"object","properties":{"id":{"type":"string","description":"to change an existing routine"},"title":{"type":"string","description":"short name shown in the app, e.g. 早报"},"prompt":{"type":"string","description":"what to do each time, self-contained"},"time":{"type":"string","description":"HH:MM, 24-hour"},"weekdays":{"type":"array","items":{"type":"integer","minimum":1,"maximum":7},"description":"1 = Monday … 7 = Sunday; omit or empty = every day"},"enabled":{"type":"boolean"}}}`)},
-		{Name: "delete_routine", Description: "Delete a scheduled task (routine or follow-up) by id (from list_followups). Confirm with the user first unless they asked for it.",
-			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
-		{Name: "list_followups", Description: "List every scheduled task (with ids): follow-ups that have not run yet, repeating ones, daily routines.",
-			InputSchema: schema(`{"type":"object","properties":{}}`)},
-		{Name: "cancel_followup", Description: "Cancel a scheduled follow-up or a repeating task by id (from list_followups).",
-			InputSchema: schema(`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`)},
-		{Name: "agents_list", Description: "The Claude Code / Codex agents running on the user's computers (herdr), with their state: needs_you " +
-			"(waiting for an answer / approval), working, unread (finished, result not looked at), idle. Each line has machine, session id, " +
-			"project, title, last update and the last thing the agent said. Much faster and more accurate than ssh + herdr.",
-			InputSchema: schema(`{"type":"object","properties":{"state":{"type":"string","enum":["active","needs_you","working","unread","idle","all"],"description":"default active = needs_you + working + unread"},"machine":{"type":"string"},"query":{"type":"string","description":"filter by title / project / directory"}}}`)},
-		{Name: "agent_read", Description: "Read the recent conversation of one agent (from agents_list): the user's messages, what the agent said, " +
-			"tool calls in short form. `turns` = how many recent exchanges (default 2, max 10).",
-			InputSchema: schema(`{"type":"object","required":["machine","session_id"],"properties":{"machine":{"type":"string"},"session_id":{"type":"string","description":"full id or its first 8 characters"},"turns":{"type":"integer"}}}`)},
-		{Name: "agent_send", Description: "Send a message to an agent as the user would type it (answers its question, tells it to continue, gives " +
-			"new instructions). Queued if the agent is working. Only send what the user asked for.",
-			InputSchema: schema(`{"type":"object","required":["machine","session_id","text"],"properties":{"machine":{"type":"string"},"session_id":{"type":"string"},"text":{"type":"string"}}}`)},
-		{Name: "agent_start", Description: "Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first " +
-			"prompt. Use for real development work instead of doing it here. Returns the new session id.",
-			InputSchema: schema(`{"type":"object","required":["machine","cwd","prompt"],"properties":{"machine":{"type":"string"},"cwd":{"type":"string","description":"absolute path or ~/…"},"prompt":{"type":"string"},"launcher":{"type":"string","description":"shell command that starts claude (default: the machine's default)"}}}`)},
-		inboxDraftTool,
-		larkAgentReplyTool,
-	}
-	tools = append(tools, kbTools...)
+	names := []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
+		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
+		"kb_search", "kb_list", "kb_get", "kb_update"}
 	if withLark {
-		tools = append(tools,
-			proto.Tool{Name: "lark_chats", Description: "The user's Feishu (Lark) chats from their own account: unread ones by default, or the ones " +
-				"that @mention them, or the latest. Each line has the chat id (for lark_messages; the lark-connector skill calls it feedId), name, unread count, @me, muted, " +
-				"last message preview and time.",
-				InputSchema: schema(`{"type":"object","properties":{"filter":{"type":"string","enum":["unread","at_me","recent"],"description":"default unread"},"limit":{"type":"integer","description":"default 30"}}}`)},
-			proto.Tool{Name: "lark_messages", Description: "Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. " +
-				"Pass `before` (a message position from an earlier page) to read further back. Reading does not mark anything as read.",
-				InputSchema: schema(`{"type":"object","required":["chat_id"],"properties":{"chat_id":{"type":"string"},"limit":{"type":"integer","description":"default 40, max 100"},"before":{"type":"string"}}}`)},
-			proto.Tool{Name: "lark_search", Description: "Search the user's Feishu: messages, docs, people, chats, calendar events, meeting minutes, tasks, mail.",
-				InputSchema: schema(`{"type":"object","required":["query"],"properties":{"query":{"type":"string"},"kind":{"type":"string","enum":["messages","docs","people","chats","calendar","minutes","todos","mail"],"description":"default messages"}}}`)},
-		)
+		names = append(names, "lark_chats", "lark_messages", "lark_search")
+	}
+	tools := make([]proto.Tool, 0, len(names))
+	for _, n := range names {
+		tools = append(tools, mcpTool(n))
 	}
 	return tools
+}
+
+// mcpTool is one tool's definition from prompts/mcp.
+func mcpTool(name string) proto.Tool {
+	t := prompts.Tool(name)
+	return proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema}
 }
 
 func isAssistantTool(name string) bool {

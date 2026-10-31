@@ -377,11 +377,6 @@ func larkAgentPrompt(owner, chat, task, contextText string, resumed bool) string
 
 // --- replying ---
 
-var larkAgentReplyTool = proto.Tool{Name: "lark_agent_reply", Description: "Answer the Feishu /agent request this conversation " +
-	"was started for: the hub posts `text` (Markdown) as the user's reply to the request, in its thread if it was asked in one, " +
-	"with a footer saying an agent wrote it. Call it once, at the end, with the answer for the people in that chat.",
-	InputSchema: schema(`{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}`)}
-
 func (h *Hub) isLarkAgent(sessionID string) bool {
 	h.larkAgent.mu.Lock()
 	defer h.larkAgent.mu.Unlock()

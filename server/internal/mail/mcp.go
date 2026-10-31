@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -18,67 +19,14 @@ const (
 	ToolSend     = "mail_send"
 )
 
-// Tools returns the MCP tool definitions for mail.
+// Tools returns the MCP tool definitions for mail (descriptions and schemas in prompts/mcp/mail).
 func (s *Service) Tools() []proto.Tool {
-	return []proto.Tool{
-		{
-			Name:        ToolAccounts,
-			Description: "List the mail accounts the user has configured (name, address, provider). Call this before searching or sending mail so you know which account_id to use.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-		},
-		{
-			Name:        ToolSearch,
-			Description: "Search mail. Returns message summaries (uid, subject, from, date, snippet). Use account_id from mail_accounts; omit it to search every account's inbox at once. For Gmail the query uses Gmail search syntax (from:, subject:, has:attachment, newer_than:7d); other providers treat it as a full-text search.",
-			InputSchema: json.RawMessage(`{
-				"type":"object",
-				"properties":{
-					"account_id":{"type":"string","description":"Account id from mail_accounts; omit to search all inboxes"},
-					"mailbox":{"type":"string","description":"Mailbox name, default INBOX"},
-					"query":{"type":"string","description":"Search text or Gmail query"},
-					"limit":{"type":"integer","description":"Max results, default 20, max 200"},
-					"before_uid":{"type":"integer","description":"Return messages with UID lower than this, for paging"}
-				},
-				"additionalProperties":false
-			}`),
-		},
-		{
-			Name:        ToolRead,
-			Description: "Read one message in full: headers, plain text, HTML and the attachment list. Does not mark the message as read.",
-			InputSchema: json.RawMessage(`{
-				"type":"object",
-				"properties":{
-					"account_id":{"type":"string"},
-					"uid":{"type":"integer"},
-					"mailbox":{"type":"string","description":"Mailbox name, default INBOX"}
-				},
-				"required":["account_id","uid"],
-				"additionalProperties":false
-			}`),
-		},
-		{
-			Name:        ToolSend,
-			Description: "Send an email from one of the user's accounts. The user must approve each send on their phone before it goes out, so fill in a clear subject and body. To reply, pass in_reply_to with the original Message-ID and references with the original References chain plus that Message-ID.",
-			InputSchema: json.RawMessage(`{
-				"type":"object",
-				"properties":{
-					"account_id":{"type":"string"},
-					"to":{"type":"array","items":{"$ref":"#/$defs/address"}},
-					"cc":{"type":"array","items":{"$ref":"#/$defs/address"}},
-					"bcc":{"type":"array","items":{"$ref":"#/$defs/address"}},
-					"subject":{"type":"string"},
-					"text":{"type":"string","description":"Plain-text body"},
-					"html":{"type":"string","description":"Optional HTML body"},
-					"in_reply_to":{"type":"string","description":"Message-ID being replied to"},
-					"references":{"type":"string","description":"Space-separated Message-IDs from the original thread"}
-				},
-				"required":["account_id","to","subject","text"],
-				"$defs":{
-					"address":{"type":"object","properties":{"name":{"type":"string"},"email":{"type":"string"}},"required":["email"]}
-				},
-				"additionalProperties":false
-			}`),
-		},
+	var out []proto.Tool
+	for _, n := range []string{ToolAccounts, ToolSearch, ToolRead, ToolSend} {
+		t := prompts.Tool(n)
+		out = append(out, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
 	}
+	return out
 }
 
 // Call dispatches one MCP tool invocation. approve is called before sending a

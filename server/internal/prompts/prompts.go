@@ -8,6 +8,7 @@
 //     {{template "shared/user_rules" .}}.
 //   - The file's last newline is not part of the prompt (editors add one). A prompt that ends with a newline
 //     has an empty last line.
+//   - mcp/<scene>/<tool>.md are the MCP tools' descriptions and input schemas, read as they are (mcp.go).
 package prompts
 
 import (
@@ -19,7 +20,7 @@ import (
 	"text/template"
 )
 
-//go:embed assistant lark inbox kb tools shared
+//go:embed assistant lark inbox kb tools shared mcp
 var files embed.FS
 
 var tmpl = parse()
@@ -27,8 +28,8 @@ var tmpl = parse()
 func parse() *template.Template {
 	root := template.New("").Option("missingkey=error").Funcs(funcs)
 	err := fs.WalkDir(files, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
-			return err
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") || strings.HasPrefix(path, "mcp/") {
+			return err // mcp/ holds tool definitions, not templates (mcp.go)
 		}
 		raw, err := files.ReadFile(path)
 		if err != nil {

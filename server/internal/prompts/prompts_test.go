@@ -91,3 +91,39 @@ func TestLarkTranscriptKeepsTheNewestThatFit(t *testing.T) {
 		t.Fatalf("no lines: %q", got)
 	}
 }
+
+// Every MCP tool file is offered by some server code (named in a Go file outside this package), and has a
+// description and an object schema.
+func TestEveryMCPToolIsUsed(t *testing.T) {
+	var src strings.Builder
+	_ = filepath.WalkDir("..", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") &&
+			!strings.HasPrefix(path, filepath.Join("..", "prompts")) {
+			raw, _ := os.ReadFile(path)
+			src.Write(raw)
+		}
+		return nil
+	})
+	names := ToolNames()
+	if len(names) < 20 {
+		t.Fatalf("only %d MCP tools", len(names))
+	}
+	for _, n := range names {
+		tool := Tool(n)
+		if !strings.Contains(src.String(), `"`+n+`"`) {
+			t.Errorf("MCP tool %s is never offered", n)
+		}
+		if strings.TrimSpace(tool.Description) == "" || !strings.HasPrefix(string(tool.InputSchema), `{"type":"object"`) {
+			t.Errorf("%s: description %q, schema %s", n, tool.Description, tool.InputSchema)
+		}
+	}
+}
+
+func TestUnknownToolPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("an unknown tool should panic")
+		}
+	}()
+	Tool("no_such_tool")
+}

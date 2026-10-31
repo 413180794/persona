@@ -1,0 +1,21 @@
+The Claude Code / Codex agents running on the user's computers (herdr), with their state: needs_you (waiting for an answer / approval), working, unread (finished, result not looked at), idle. Each line has machine, session id, project, title, last update and the last thing the agent said. Much faster and more accurate than ssh + herdr.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": ["active", "needs_you", "working", "unread", "idle", "all"],
+      "description": "default active = needs_you + working + unread"
+    },
+    "machine": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string",
+      "description": "filter by title / project / directory"
+    }
+  }
+}
+```

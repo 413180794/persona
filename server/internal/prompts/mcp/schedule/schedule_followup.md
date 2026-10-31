@@ -1,0 +1,30 @@
+Wake yourself up later: at the given time Jarvis sends `prompt` into this conversation (or a new one) as if the user wrote it, you do the work, and the user gets a push with your answer. Use for "remind me…", "check again in an hour", meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) or relative ("30m", "2h", "1d"). For something to do again and again (a patrol every 30 minutes) pass `every` ("30m", "2h", at least 5m) once: Jarvis repeats it by itself and the user sees, edits and stops it in the app; never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.
+
+```json
+{
+  "type": "object",
+  "required": ["prompt"],
+  "properties": {
+    "at": {
+      "type": "string",
+      "description": "when (the first run, with every); default with every: one interval from now"
+    },
+    "every": {
+      "type": "string",
+      "description": "repeat this often, e.g. 30m"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "what to do then, self-contained"
+    },
+    "title": {
+      "type": "string",
+      "description": "short label shown in the app"
+    },
+    "new_conversation": {
+      "type": "boolean",
+      "description": "start a fresh conversation instead of continuing this one"
+    }
+  }
+}
+```

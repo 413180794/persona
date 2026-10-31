@@ -6,7 +6,7 @@ jarvisd 写给模型的每一段提示词都在 `server/internal/prompts/`：一
 
 什么算提示词：交给模型的 system / user 文字、写进助手目录的 CLAUDE.md、`--append-system-prompt` 的快照、发进对话的第一条消息，
 以及「把数据放进提示词的那段说明文字」（`<jarvis-context>` 块、「类型：飞书私聊」这类行）。用户的原话、收集到的聊天记录和文档正文是**数据**，不在模板里。
-MCP 工具的描述（`proto.Tool` 的 `Description`）和工具返回给模型的结果文字暂时还在各自的代码里。
+MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见下面「MCP 工具」）。工具返回给模型的结果文字还在各自的代码里。
 
 ## 目录
 
@@ -43,6 +43,30 @@ MCP 工具的描述（`proto.Tool` 的 `Description`）和工具返回给模型�
 
 Go 那一侧：`prompts.go`（解析、模板函数），`assistant.go`、`lark.go`、`inbox.go`、`kb.go`、`tools.go`（每个提示词一个数据结构和一个 `RenderXxx`）。
 
+## MCP 工具
+
+hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/<工具名>.md`。文件名就是工具名；内容是描述（一段，给模型看的）、一个空行、
+再一个 ```json 代码块，里面是 input schema（参数和每个参数的说明）。这些文件**不是模板**，原样读进来；schema 加载时 `json.Compact`，
+格式随便排（短的数组写一行），发出去的字节和排版无关。
+
+| 目录 | 工具 | 谁提供 |
+| --- | --- | --- |
+| `mcp/assistant/` | `ask_user`、`notify_user` | 助手对话（`hub/assistant_tools.go` 的 `assistantTools`） |
+| `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
+| `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start` | 同上 |
+| `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
+| `mcp/lark/` | `lark_agent_reply`（飞书 /agent 交答案）；`lark_chats`、`lark_messages`、`lark_search`（配了 lark-connector 才有） | 同上 |
+| `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
+| `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
+
+工具的**列表和顺序**还在代码里（上面两个函数按名字取 `prompts.Tool(name)`），处理调用的代码也在原处。加一个工具：在对应目录加文件，
+把名字加进列表，写处理代码，`UPDATE_GOLDEN=1` 更新 `mcp_tools.*` / `mail_tools` 的 golden。`TestEveryMCPToolIsUsed` 抓没人提供的工具文件。
+
+`phone_*`（通讯录、日历、提醒事项、照片、健康、位置、设备信息、剪贴板、本地通知）**不在服务端**：App 连上 hub 时把自己的工具列表
+（名字、描述、schema）发过来，hub 存进 Postgres、原样转给 Agent（`hub/http.go` 的 `setPhoneTools`，`docs/phone-tools.md`）。
+描述在 iOS 的 `apple/Jarvis/PhoneTools/*Tool.swift`（`PhoneToolRegistry.swift` 汇总），Android 的
+`android/app/src/main/java/jarvis/android/phone/PhoneTools.kt`，改它们要发 App 新版本。
+
 ## 模板的规矩
 
 - 模板名是去掉 `.md` 的路径（`inbox/triage`）；一个提示词引用另一个用 `{{template "shared/user_rules" .}}`。
@@ -73,6 +97,8 @@ Go 那一侧：`prompts.go`（解析、模板函数），`assistant.go`、`lark.
    输入一律用占位数据（`示例用户`、`example.com`），`scripts/privacy_check.py` 会查。
 
 ## 金标准测试
+
+MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞书、普通对话三种列表）和 `mail/mcp_golden_test.go`，比的是 `json.Marshal` 发出去的内容（golden 里缩进了方便看，缩进前后一一对应）。
 
 `hub/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
 system / user、临时目录的知识库），所以数据转换也一起测到。快照里的时钟两行换成 `HH:MM` 占位后再比。

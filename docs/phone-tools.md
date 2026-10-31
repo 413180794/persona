@@ -5,6 +5,8 @@
 链路：Claude 调 `phone_*` 工具 → `jarvisd mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
 App 在本地查询/写入 → `tool_result` 原路返回。
 
+工具的描述和 schema 由 App 注册（iOS `apple/Jarvis/PhoneTools/`，Android `android/.../phone/PhoneTools.kt`），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
+
 ## 注册与开关
 
 | 入口 | 作用 |
