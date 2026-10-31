@@ -39,9 +39,19 @@ install_bin() { # machine-id binary
   host=$(field "$id" ssh); host=${host:-$id}
   here=" $(field "$id" hostnames) "
   # This machine (listed by host name in the config): copy instead of going through ssh.
+  via=$(field "$id" via)
   if [[ "$here" == *" $(hostname -s) "* || "$here" == *" $(scutil --get LocalHostName 2>/dev/null) "* ]]; then
     mkdir -p ~/.jarvis/bin && cp "$bin" ~/.jarvis/bin/jarvisd.new && mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd
     restart_resident
+  elif [ -n "$via" ]; then
+    # Only reachable from another machine of the config (keys or routes this one lacks): copy through it; `ssh` is
+    # then its name there.
+    local vh tmp=".jarvis/bin/jarvisd.for-$id"
+    vh=$(field "$via" ssh); vh=${vh:-$via}
+    ssh -o ConnectTimeout=10 "$vh" 'mkdir -p ~/.jarvis/bin' && scp -q "$bin" "$vh:$tmp" &&
+      ssh "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host 'mkdir -p ~/.jarvis/bin' &&
+        scp -q ~/$tmp $host:.jarvis/bin/jarvisd.new &&
+        ssh -o BatchMode=yes $host 'mv ~/.jarvis/bin/jarvisd.new ~/.jarvis/bin/jarvisd && chmod 755 ~/.jarvis/bin/jarvisd'; rc=\$?; rm -f ~/$tmp; exit \$rc"
   else
     ssh -o ConnectTimeout=10 "$host" 'mkdir -p ~/.jarvis/bin' &&
       scp -q "$bin" "$host:.jarvis/bin/jarvisd.new" &&

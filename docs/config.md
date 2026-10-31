@@ -40,6 +40,8 @@
    ```
 
    `ssh` 是**开发机** SSH 到这台的主机名；`os` 决定装哪个二进制；`hostnames` 只在部署脚本就跑在这台上时有用（直接本地拷贝，不走 SSH）。
+   开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
+   部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
 
 2. **部署**：`./scripts/deploy.sh`。编译 Linux / macOS 两份 `jarvisd`，按 `os` 装到每台电脑的 `~/.jarvis/bin/`；在 hub 机器上
    起 Postgres 容器、把 `jarvisd hub` 装成 systemd 用户服务并启动。

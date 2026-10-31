@@ -277,3 +277,16 @@ func TestLastLines(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestParseClaudeVersion(t *testing.T) {
+	for out, want := range map[string]string{
+		"2.1.309 (Claude Code)\n": "2.1.309",
+		"[oh-my-zsh] autojump not found. Please install it first.\n2.1.303 (Claude Code)\n": "2.1.303",
+		"-----\n  欢迎使用 开发机\n║ 1.2.3 is not this ║\n2.1.304 (Claude Code)": "2.1.304",
+		"zsh: command not found: claude": "",
+	} {
+		if got := parseClaudeVersion(out); got != want {
+			t.Errorf("%q: %q, want %q", out, got, want)
+		}
+	}
+}

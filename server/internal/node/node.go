@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -607,8 +608,22 @@ func claudeVersion(ctx context.Context) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(string(out)), "(Claude Code)"))
+	return parseClaudeVersion(string(out))
 }
+
+// parseClaudeVersion takes the version out of `claude --version` run in an interactive shell, whose ~/.zshrc may
+// print first (oh-my-zsh warnings, a machine's welcome banner): the last line that is one.
+func parseClaudeVersion(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if m := claudeVersionLine.FindStringSubmatch(lines[i]); m != nil {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+var claudeVersionLine = regexp.MustCompile(`^\s*v?(\d+\.\d+\.\d+\S*)\s*(\(Claude Code\))?\s*$`)
 
 // loginShell runs a command in an interactive zsh so ~/.zshrc functions and PATH are available.
 func loginShell(ctx context.Context, script string) *exec.Cmd {
