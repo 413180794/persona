@@ -150,6 +150,33 @@ type Launcher struct {
 	Source string `json:"source,omitempty"`
 }
 
+// LauncherDetail is what a ~/.zshrc launcher really sets (the node runs it with the agent stubbed out,
+// node/launcherprobe.go): every field the page shows; secrets are never in it.
+type LauncherDetail struct {
+	Agent         string          `json:"agent"` // claude, codex, traex
+	BaseURL       string          `json:"base_url,omitempty"`
+	Auth          string          `json:"auth,omitempty"` // which variable carries the key (its value is not here)
+	Models        []LauncherModel `json:"models,omitempty"`
+	ContextWindow int             `json:"context_window,omitempty"`
+	CompactWindow int             `json:"compact_window,omitempty"` // when it differs from the window
+	Effort        string          `json:"effort,omitempty"`
+	TimeoutMS     int             `json:"timeout_ms,omitempty"`
+	Args          []string        `json:"args,omitempty"`
+	Env           []LauncherEnv   `json:"env,omitempty"` // the other settings, secrets as •••
+	Error         string          `json:"error,omitempty"`
+}
+
+type LauncherModel struct {
+	Role  string `json:"role"` // 主模型, Opus, 小模型, 子 Agent…
+	Env   string `json:"env"`
+	Model string `json:"model"`
+}
+
+type LauncherEnv struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 // ManagedLauncher is a launcher kept by the hub (设置 › 模型): what `jarvisd launch <name>` sets before it runs claude.
 // The key only goes to nodes (in memory), never to the app.
 type ManagedLauncher struct {

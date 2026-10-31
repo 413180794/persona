@@ -56,6 +56,8 @@ type LauncherView struct {
 	Hidden     bool     `json:"hidden,omitempty"`
 	// Definition per machine (zshrc launchers, detail only): the function body, secrets masked.
 	Definitions map[string]string `json:"definitions,omitempty"`
+	// Details per machine (zshrc launchers, detail only): what the launcher really sets when run (node/launcherprobe.go).
+	Details map[string]proto.LauncherDetail `json:"details,omitempty"`
 }
 
 type launcherState struct {
@@ -340,14 +342,18 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				continue
 			}
 			if v.Source == "zshrc" {
-				v.Definitions = map[string]string{}
+				v.Definitions, v.Details = map[string]string{}, map[string]proto.LauncherDetail{}
 				for _, id := range v.Machines {
 					if m := h.byID[id]; m != nil {
 						var res struct {
-							Definition string `json:"definition"`
+							Definition string                `json:"definition"`
+							Detail     *proto.LauncherDetail `json:"detail"`
 						}
 						if err := m.call(ctx, "launchers.show", map[string]any{"name": name}, &res); err == nil {
 							v.Definitions[id] = res.Definition
+							if res.Detail != nil {
+								v.Details[id] = *res.Detail
+							}
 						}
 					}
 				}

@@ -1,0 +1,169 @@
+package node
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// probe runs probeScript against testdata/launchers.zsh (zsh, as on the machines).
+func probe(t *testing.T, name string) proto.LauncherDetail {
+	t.Helper()
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("no zsh")
+	}
+	defs, err := os.ReadFile("testdata/launchers.zsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(context.Background(), zsh, "-fc", string(defs)+"\n"+probeScript(name))
+	cmd.Env = append(os.Environ(), "ANTHROPIC_MODEL=from-the-shell", "USER=tester")
+	out, _ := cmd.Output()
+	p, ok := parseProbe(string(out))
+	if !ok {
+		t.Fatalf("%s: no probe output:\n%s", name, out)
+	}
+	return LauncherDetail(p)
+}
+
+func models(d proto.LauncherDetail) map[string]string {
+	m := map[string]string{}
+	for _, x := range d.Models {
+		m[x.Role] = x.Model
+	}
+	return m
+}
+
+func env(d proto.LauncherDetail, key string) (string, bool) {
+	for _, e := range d.Env {
+		if e.Key == key {
+			return e.Value, true
+		}
+	}
+	return "", false
+}
+
+func TestProbeHelperWithWindow(t *testing.T) {
+	d := probe(t, "cc_proxy")
+	if d.Agent != "claude" || d.BaseURL != "https://gw.example.com" || d.Auth != "ANTHROPIC_AUTH_TOKEN" {
+		t.Fatalf("%+v", d)
+	}
+	m := models(d)
+	for _, role := range []string{"主模型", "Opus", "Sonnet", "Haiku", "小模型"} {
+		if m[role] != "vendor/model-a" {
+			t.Errorf("%s = %q", role, m[role])
+		}
+	}
+	if d.ContextWindow != 700000 || d.CompactWindow != 0 || d.Effort != "max" || d.TimeoutMS != 3000000 {
+		t.Errorf("window %d compact %d effort %q timeout %d", d.ContextWindow, d.CompactWindow, d.Effort, d.TimeoutMS)
+	}
+	if !slices.Equal(d.Args, []string{"--teammate-mode", "in-process", "--dangerously-skip-permissions"}) {
+		t.Errorf("args %v", d.Args)
+	}
+	if v, ok := env(d, "CLAUDE_CODE_FORK_SUBAGENT"); !ok || v != "1" {
+		t.Errorf("other settings are listed: %v", d.Env)
+	}
+	if v, _ := env(d, "ANTHROPIC_AUTH_TOKEN"); v != "" {
+		t.Errorf("the token's variable is the auth, not a setting shown with its value: %q", v)
+	}
+	assertNoSecret(t, d, "sk-test-0123456789abcdef")
+}
+
+func TestProbeSmallModelAndWindow(t *testing.T) {
+	d := probe(t, "cc_proxy2")
+	m := models(d)
+	if m["主模型"] != "model-b[1m]" || m["小模型"] != "model-b-flash" || m["Haiku"] != "model-b-flash" || m["子 Agent"] != "model-b-flash" {
+		t.Errorf("models %v", m)
+	}
+	if d.ContextWindow != 786432 || d.BaseURL != "https://gw.example.com/v1" {
+		t.Errorf("%+v", d)
+	}
+	assertNoSecret(t, d, "test-0123456789abcdef0123")
+}
+
+func TestProbeVariablesAroundAHelper(t *testing.T) {
+	d := probe(t, "cc_headers")
+	if m := models(d); m["主模型"] != "model-c" || m["子 Agent"] != "model-c" {
+		t.Errorf("models %v", m)
+	}
+	if d.ContextWindow != 1000000 {
+		t.Errorf("window %d", d.ContextWindow)
+	}
+	if v, _ := env(d, "ANTHROPIC_CUSTOM_HEADERS"); v != "x-source: dogfood" {
+		t.Errorf("custom headers %q (%v)", v, d.Env)
+	}
+}
+
+func TestProbeExportsInASubshell(t *testing.T) {
+	d := probe(t, "cc_exports")
+	if d.Agent != "claude" || d.BaseURL != "http://127.0.0.1:18000" || d.Auth != "ANTHROPIC_API_KEY" || d.Effort != "high" {
+		t.Fatalf("%+v", d)
+	}
+	m := models(d)
+	if m["主模型"] != "vendor/model-d" || m["Fable"] != "vendor/model-d" || m["Haiku"] != "vendor/model-d-mini" ||
+		m["小模型"] != "vendor/model-d-mini" || m["子 Agent"] != "vendor/model-d" {
+		t.Errorf("models %v", m)
+	}
+	if d.ContextWindow != 0 {
+		t.Errorf("no window set: %d", d.ContextWindow)
+	}
+	assertNoSecret(t, d, "fake-key-from-file")
+}
+
+func TestProbeCodex(t *testing.T) {
+	d := probe(t, "cx")
+	if d.Agent != "codex" || d.BaseURL != "https://gw.example.com/openai" || d.Auth != "OPENAI_API_KEY" {
+		t.Fatalf("%+v", d)
+	}
+	if m := models(d); m["主模型"] != "gpt-x" {
+		t.Errorf("codex's -m is its model: %v", m)
+	}
+	assertNoSecret(t, d, "sk-fake-codex-0123456789")
+}
+
+func TestProbeOfANonLauncher(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("no zsh")
+	}
+	out, _ := exec.Command(zsh, "-fc", "not_a_launcher() { echo hi }\n"+probeScript("not_a_launcher")).Output()
+	if _, ok := parseProbe(string(out)); ok {
+		t.Fatal("a function that starts no agent has no probe")
+	}
+}
+
+func assertNoSecret(t *testing.T, d proto.LauncherDetail, secret string) {
+	t.Helper()
+	for _, e := range d.Env {
+		if strings.Contains(e.Value, secret) {
+			t.Errorf("secret shown in %s", e.Key)
+		}
+	}
+}
+
+func TestRedactSecretsInHelperCalls(t *testing.T) {
+	api := "sk-test-" + strings.Repeat("a1", 16)
+	bearer := "test-bearer-" + strings.Repeat("b2", 16)
+	vendor := "plat_" + strings.Repeat("c3", 24)
+	got := redactSecrets("_claude_proxy https://gw.example.com " + api + ` "model-alpha" 786432 "on"
+_claude_proxy https://gw.example.com "Bearer ` + bearer + `" model-beta "on"
+_claude_proxy https://gw.example.com ` + vendor + ` model-gamma 700000 "on"
+unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ANTHROPIC_AUTH_TOKEN`)
+	for _, secret := range []string{api, bearer, vendor, api[:12], bearer[len(bearer)-12:], vendor[:12]} {
+		if strings.Contains(got, secret) {
+			t.Errorf("a synthetic secret or excerpt remains in the redacted helper output")
+		}
+	}
+	for _, kept := range []string{"https://gw.example.com", "model-alpha", "model-beta", "model-gamma", "786432", "700000", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", "ANTHROPIC_AUTH_TOKEN"} {
+		if !strings.Contains(got, kept) {
+			t.Errorf("a non-secret helper option or environment-variable name was removed: %s", kept)
+		}
+	}
+}
+

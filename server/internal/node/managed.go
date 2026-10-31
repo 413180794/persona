@@ -139,7 +139,24 @@ func (n *Node) launcherDefinition(ctx context.Context, name string) (string, err
 	return redactSecrets(strings.TrimSpace(string(out))), nil
 }
 
+// tokenLike: a literal that looks like a key wherever it sits (an argument to _claude_proxy, "Bearer …"): a known
+// prefix, or a long run of letters and digits with no path or URL in it.
+var tokenLike = regexp.MustCompile(`Bearer\s+[^\s"']+|\b(?:sk|vk|at|ak|pk|rk|plat|trxp_ak|ghp|gho|xox[bp])[-_][A-Za-z0-9._+/=-]{8,}|[A-Za-z0-9_+=-]{28,}`)
+
 func redactSecrets(s string) string {
+	s = tokenLike.ReplaceAllStringFunc(s, func(m string) string {
+		if strings.HasPrefix(m, "Bearer") {
+			return "Bearer •••"
+		}
+		hasDigit, hasLetter := strings.ContainsAny(m, "0123456789"), strings.ContainsAny(strings.ToLower(m), "abcdefghijklmnopqrstuvwxyz")
+		if len(m) >= 28 && !(hasDigit && hasLetter) {
+			return m // a long word, not a key
+		}
+		if len(m) >= 28 && strings.Count(m, "_") > 3 && !strings.ContainsAny(m, "0123456789") {
+			return m
+		}
+		return "•••"
+	})
 	return secretValue.ReplaceAllStringFunc(s, func(m string) string {
 		sub := secretValue.FindStringSubmatch(m)
 		v := sub[2]
