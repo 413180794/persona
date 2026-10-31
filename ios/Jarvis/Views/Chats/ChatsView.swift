@@ -285,7 +285,7 @@ private struct AgentsList: View {
         let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
                                    foldAll: { setFolded(folded.union($0)); expandedQuiet = [] },
                                    unfoldAll: { setFolded([]) },
-                                   openMonitor: { openFromList(MachineDashboardRoute()) })
+                                   onMonitor: { openFromList(MachineDashboardRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         List {

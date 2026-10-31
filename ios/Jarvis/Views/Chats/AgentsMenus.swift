@@ -31,20 +31,22 @@ struct AgentsListMenu: View {
         private(set) var sections: [String] = []
         private var foldAll: ([String]) -> Void = { _ in }
         private var unfoldAll: () -> Void = {}
-        private var openMonitor: () -> Void = {}
+        /// Not `openMonitor`: a stored property's name is in the Release binary, and `-openMonitor` is a DEBUG launch
+        /// argument the release check looks for (TestFlight 50 stopped on it).
+        private var onMonitor: () -> Void = {}
 
         /// `sections`: the fold ids of what the list shows now.
         func update(sections: [String], foldAll: @escaping ([String]) -> Void, unfoldAll: @escaping () -> Void,
-                    openMonitor: @escaping () -> Void) {
+                    onMonitor: @escaping () -> Void) {
             self.sections = sections
             self.foldAll = foldAll
             self.unfoldAll = unfoldAll
-            self.openMonitor = openMonitor
+            self.onMonitor = onMonitor
         }
 
         func collapse() { foldAll(sections) }
         func expand() { unfoldAll() }
-        func monitor() { openMonitor() }
+        func monitor() { onMonitor() }
     }
 
     @AppStorage("dev.machineFilter") private var machineFilter = ""
