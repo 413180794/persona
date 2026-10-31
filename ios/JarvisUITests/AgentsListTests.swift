@@ -62,7 +62,8 @@ final class AgentsListTests: XCTestCase {
         XCTAssertFalse(e.exists, what)
     }
 
-    /// A row that can be below the fold (under the 需要你处理 cards and weather; the list builds rows lazily).
+    /// A row or header that can be below the fold (under the 需要你处理 cards and weather on a 6.3" phone; the list
+    /// builds rows lazily, so it is not there to find until scrolled to).
     @discardableResult private func reach(_ e: XCUIElement, _ what: String) -> XCUIElement {
         for _ in 0..<4 where !e.waitForExistence(timeout: 2) { app.swipeUp(velocity: .slow) }
         return see(e, what)
@@ -198,7 +199,7 @@ final class AgentsListTests: XCTestCase {
     /// Tapping a space's header folds it (its counts stay on the header) and back; remembered; 全部折叠 / 全部展开.
     @MainActor func testFoldingSpaces() throws {
         launch()
-        let platform = see(header("platform"), "platform's header")
+        let platform = reach(header("platform"), "platform's header")
         XCTAssertTrue(platform.label.contains("已展开"), platform.label)
         reach(text("platform 任务 1"), "platform's first row")
         platform.tap()
@@ -210,7 +211,7 @@ final class AgentsListTests: XCTestCase {
 
         app.terminate()
         launch(fresh: false)
-        XCTAssertTrue(see(header("platform"), "platform's header").label.contains("已折叠"), "still folded after a relaunch")
+        XCTAssertTrue(reach(header("platform"), "platform's header").label.contains("已折叠"), "still folded after a relaunch")
         XCTAssertFalse(text("platform 任务 1").exists)
 
         listMenu().tap()
@@ -238,7 +239,7 @@ final class AgentsListTests: XCTestCase {
     /// A space's ⋯ › 全部标为已读 marks its finished-unread agents seen in one go.
     @MainActor func testMarkSpaceRead() throws {
         launch()
-        see(header("platform"), "platform's header")
+        reach(header("platform"), "platform's header")
         button("platform 的更多操作").tap()
         see(app.buttons["全部标为已读（35）"], "全部标为已读 with the count").tap()
         wait("the hub hears of 35 seen (\(seen().count))") { seen().count == 35 }

@@ -210,8 +210,7 @@ private struct AgentsList: View {
     @Binding var showNew: Bool
     var menuActions: AgentsListMenu.Actions
 
-    /// How long the system search field takes to fold away.
-    private static let searchCloses = Duration.milliseconds(350)
+    @State private var searchClose = SearchCloseWatcher()
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     /// 细列表: one line per agent.
@@ -241,6 +240,10 @@ private struct AgentsList: View {
     }
 
     private var folded: Set<String> { Set(foldedList.split(separator: "\n").map(String.init)) }
+
+    /// Folded as shown: a search opens every folded section, so no match hides behind a fold (folded spaces showed
+    /// only their header, and the agent searched for was not there to open; quiet spaces and idle rows already open).
+    private func isFolded(_ id: String) -> Bool { query.isEmpty && folded.contains(id) }
 
     private func setFolded(_ ids: Set<String>) { foldedList = ids.sorted().joined(separator: "\n") }
 
@@ -408,6 +411,7 @@ private struct AgentsList: View {
         // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
         // (toolbar(removing: .title) would hide that too).
         .navigationBarTitleDisplayMode(.inline)
+        .background { SearchCloseProbe(watcher: searchClose) }
         // The search field always shows: when scrolling folded it away, the filter bar (safeAreaBar) stayed where
         // it sat under the open field on device (TestFlight 35), ~120 pt of blurred list between it and the bar.
         // On the list itself, before the alerts, as it always was.
@@ -450,10 +454,7 @@ private struct AgentsList: View {
     private func openFromSearch(_ key: SessionKey) {
         searchedBeforePush = query
         searching = false
-        Task { @MainActor in
-            try? await Task.sleep(for: Self.searchCloses)
-            path.append(key)
-        }
+        searchClose.whenClosed { path.append(key) }
     }
 
     @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool) -> some View {
@@ -473,7 +474,7 @@ private struct AgentsList: View {
     /// A space: tap its header to fold it (the counts stay on it); busy (and pinned / looping) agents first, idle ones
     /// fold into one row so a big workspace stays compact. Under a quick filter every agent it left shows.
     @ViewBuilder private func spaceSection(_ g: SpaceGroup) -> some View {
-        if folded.contains(g.id) {
+        if isFolded(g.id) {
             // Folded: the header alone, as a plain row. As an empty section each kept a header's and a section's
             // padding (全部折叠 showed six a screen).
             Section {
@@ -552,7 +553,7 @@ private struct AgentsList: View {
             let id = "state/" + b.key
             if !rows.isEmpty {
                 Section {
-                    if folded.contains(id) {
+                    if isFolded(id) {
                     } else if b.key == "idle" {
                         foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
                     } else {
@@ -560,11 +561,11 @@ private struct AgentsList: View {
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    FoldButton(title: b.title, folded: folded.contains(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
+                    FoldButton(title: b.title, folded: isFolded(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
                         SectionHeader(title: b.title, count: rows.count, tone: b.tint)
                     }
                 }
-                .listSectionSpacing(folded.contains(id) ? .custom(0) : .default)
+                .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
             }
         }
     }
@@ -577,7 +578,7 @@ private struct AgentsList: View {
             let id = "machine/" + m.id
             let group = SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: rows)
             Section {
-                if !folded.contains(id) {
+                if !isFolded(id) {
                     if quick == .all {
                         ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
                         foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.id, label: "空闲")
@@ -586,11 +587,11 @@ private struct AgentsList: View {
                     }
                 }
             } header: {
-                FoldButton(title: m.name, folded: folded.contains(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
+                FoldButton(title: m.name, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
                     MachineSectionHeader(machine: m, group: group)
                 }
             }
-            .listSectionSpacing(folded.contains(id) ? .custom(0) : .default)
+            .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
         }
     }
 
@@ -1214,4 +1215,57 @@ private struct TopBar<Bar: View>: ViewModifier {
             content.safeAreaBar(edge: .top) { bar }
         }
     }
+}
+
+
+/// Runs something once the system search has really closed. Closing it (`isPresented = false`) only starts the fold:
+/// a push made while it still folds away is dropped by the navigation stack, which keeps the path it was given (the
+/// chat in the path, the list on screen). A fixed wait from the tap was too short whenever the list took a while to
+/// redraw for the closed search (SearchOpenTests, 2026-10-31).
+@MainActor final class SearchCloseWatcher {
+    fileprivate weak var view: UIView?
+
+    func whenClosed(_ done: @escaping () -> Void) {
+        let start = Date.now
+        func check() {
+            let busy = searchController.map { $0.isActive || $0.isBeingDismissed || $0.transitionCoordinator != nil } ?? false
+            if !busy || Date.now.timeIntervalSince(start) > 2 {
+                done()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: check)
+            }
+        }
+        DispatchQueue.main.async(execute: check)
+    }
+
+    /// The search controller SwiftUI put on the navigation item of the page the list is in.
+    private var searchController: UISearchController? {
+        var r: UIResponder? = view
+        while let next = r?.next {
+            if let vc = next as? UIViewController {
+                var c: UIViewController? = vc
+                while let v = c {
+                    if let sc = v.navigationItem.searchController { return sc }
+                    c = v.parent
+                }
+                return vc.navigationController?.topViewController?.navigationItem.searchController
+            }
+            r = next
+        }
+        return nil
+    }
+}
+
+/// Where `SearchCloseWatcher` finds the page's search controller from.
+private struct SearchCloseProbe: UIViewRepresentable {
+    let watcher: SearchCloseWatcher
+
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        watcher.view = v
+        return v
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) { watcher.view = uiView }
 }

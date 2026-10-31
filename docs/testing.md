@@ -105,7 +105,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`
 （mock 的 `GET /mock/keys` 回放收到的按键）。
 
-从搜索结果打开会话只有一行标题、返回后搜索结果还在（`SearchOpenTests`，另有不搜索的对照）连普通 mock：
+从搜索结果打开会话只有一行标题、返回后搜索结果还在、搜索时折叠的空间里的 Agent 也搜得到点得开（`SearchOpenTests`，另有不搜索的对照，对照里再右滑返回列表；
+测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
 `PORT=18793 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
 
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
