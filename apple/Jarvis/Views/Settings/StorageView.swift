@@ -96,8 +96,14 @@ nonisolated enum StorageUsage {
     /// the folder is the app's own; a Mac build without one (an ad-hoc debug build) shares ~/Library/Caches with
     /// every other app, so only the folders Jarvis writes count there.
     static func owned(cachesEntry name: String, sandboxed: Bool, bundleID: String) -> Bool {
-        sandboxed || name == bundleID || ["chats-v2", "chats", "chat-images", "lark-media", "state"].contains(name)
+        // chats-v<N>: ChatCache's folder goes up a version whenever its items change.
+        sandboxed || name == bundleID || name.hasPrefix("chats-v")
+            || ["chats", "chat-images", "lark-media", "state"].contains(name)
     }
+
+    /// Whether an entry of the temp folder is Jarvis's: all of it in a sandbox; outside one $TMPDIR is the user's
+    /// (another program's lark- folder could be there), so none of it.
+    static func owned(tempEntry name: String, sandboxed: Bool) -> Bool { sandboxed }
 
     /// Whether the app runs in a sandbox (its own caches, temp and Library). Always on iOS.
     private static var sandboxed: Bool {
@@ -113,9 +119,9 @@ nonisolated enum StorageUsage {
         children(caches).filter { owned(cachesEntry: $0.lastPathComponent, sandboxed: sandboxed, bundleID: bundleID) }
     }
 
-    /// The temp folder's entries that are Jarvis's: outside a sandbox $TMPDIR is shared, only lark- files are ours.
+    /// The temp folder's entries that are Jarvis's (`owned(tempEntry:)`).
     private static func ownTemp() -> [URL] {
-        children(URL.temporaryDirectory).filter { sandboxed || $0.lastPathComponent.hasPrefix("lark-") }
+        children(URL.temporaryDirectory).filter { owned(tempEntry: $0.lastPathComponent, sandboxed: sandboxed) }
     }
 
     private static func kind(cachesEntry name: String) -> StorageKind {
