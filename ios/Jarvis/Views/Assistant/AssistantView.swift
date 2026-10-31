@@ -247,6 +247,10 @@ struct AssistantHome: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it. Before
+        // the composer is added: margins reach every scroll view below them, and the chips' row above the field stood
+        // the top bar's height tall, over the suggestion cards.
+        .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         .themedGroupedPage()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -272,8 +276,6 @@ struct AssistantHome: View {
             // machine chips scrolled under them read through.
             .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))
         }
-        // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it.
-        .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         .navigationTitle("Jarvis")
         .task(id: launcher) { if pending == nil { await model.warmAssistant(launcher: launcher) } }
     }
