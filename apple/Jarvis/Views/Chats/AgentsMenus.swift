@@ -139,6 +139,10 @@ struct AgentRowMenu: View, Equatable {
         #endif
         // The session as it is when an item is tapped.
         let now = { model.session(key) }
+        #if os(macOS)
+        MacOpenInWindowButton(key: key)
+        Divider()
+        #endif
         Button { model.togglePin(key) } label: {
             Label(pinned ? "取消置顶" : "置顶", systemImage: pinned ? Theme.Icon.unpin : Theme.Icon.pin)
         }

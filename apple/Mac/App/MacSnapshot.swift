@@ -42,6 +42,13 @@ import SwiftUI
                     let wrote = capture(to: sheetURL, window: sheet)
                     FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(sheetURL.path)\n".utf8))
                 }
+                // A conversation opened in its own window (-openChatWindow): next to it as <name>.chat.png.
+                if let chat = NSApp.windows.first(where: { $0.isVisible && $0 !== mainWindow && $0.identifier?.rawValue.hasPrefix(MacChatWindow.id) == true }) {
+                    let url = URL(fileURLWithPath: path)
+                    let chatURL = url.deletingPathExtension().appendingPathExtension("chat").appendingPathExtension(url.pathExtension)
+                    let wrote = capture(to: chatURL, window: chat)
+                    FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(chatURL.path)\n".utf8))
+                }
                 if d.bool(forKey: "macSnapshotQuit") {
                     NSApp.terminate(nil)
                     // A sheet with a text editor in it holds termination off: leave anyway.

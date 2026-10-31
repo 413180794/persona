@@ -64,6 +64,8 @@ struct MacAgentMenu: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command, .control]) // ⌥⌘N is 收件箱's 写邮件
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
+            Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
+                .disabled(key == nil)
             Divider()
             Button("标为已读") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)

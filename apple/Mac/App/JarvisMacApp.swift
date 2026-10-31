@@ -31,6 +31,12 @@ struct JarvisMacApp: App {
             }
         }
 
+        // A conversation on its own (「在新窗口打开」, MacChatWindow).
+        WindowGroup("对话", id: MacChatWindow.id, for: SessionKey.self) { $key in
+            MacChatWindow(key: key).environment(model)
+        }
+        .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
+
         // A link dragged out of the panel, an inbox item opened on its own (Mac/Link, Mac/Inbox).
         WindowGroup("网页", id: MacLinkWindow.id, for: URL.self) { $url in
             MacLinkWindow(url: url).environment(model)
@@ -235,6 +241,10 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // `-openChatWindow <machine>/<session>`: that conversation in a window of its own.
+        if let key = sessionKey(d.string(forKey: "openChatWindow")) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.chatWindow = key }
+        }
         // `-macSection knowledge|machines|…`: that sidebar section.
         if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
         if let key = sessionKey(d.string(forKey: "simulateTap")) {

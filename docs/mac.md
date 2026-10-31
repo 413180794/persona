@@ -152,6 +152,14 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 快捷键和清单最早写的不一样，因为撞了：⌘⏎ 是输入框的发送（`ComposerParts`），⌘⌫ 在输入框里是删到行首（菜单快捷键会抢走），
 ⇧⌘N 是新建 Jarvis 对话，⌥⌘N 是收件箱的写邮件。
 
+## 对话单独开窗口（Mac）
+
+`apple/Mac/App/MacChatWindow.swift`：`WindowGroup("对话", id: "chat", for: SessionKey.self)`，里面就是对话页本身，窗口标题是对话标题，
+几个 Agent 可以并排或放到另一块屏幕上。入口：Agents 列表行的右键菜单「在新窗口打开」、Agent 菜单「在新窗口打开」。
+菜单（Commands）没有自己的 `openWindow`，经 `MacShellState.chatWindow` 交给主窗口的 `MacWindowOpener` 打开。
+DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗口另存成 `<名字>.chat.png`。
+待办：对话页自己画的返回箭头在单独的窗口里还显示（点了没有可回的页面）。
+
 ## 快速打开、新建（Mac）
 
 `apple/Mac/App/MacQuickOpen.swift`（搜索、排序，有测试）、`MacQuickOpenPanel.swift`（浮层）。

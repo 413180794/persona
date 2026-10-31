@@ -8,6 +8,8 @@ import SwiftUI
     var newAgent = false
     /// 知识库 or 机器 while picked (they are not iPhone tabs); nil shows the tab's section.
     var section: MacSection?
+    /// A conversation the menus asked to open in its own window (MacWindowOpener does it).
+    var chatWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
 }

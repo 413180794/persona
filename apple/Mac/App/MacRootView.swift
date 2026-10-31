@@ -90,6 +90,7 @@ struct MacRootView: View {
         }
         .sendRefusalAlert(model)
         .overlay { if model.isPaired { MacQuickOpenLayer() } }
+        .modifier(MacWindowOpener())
         .sheet(isPresented: Binding(get: { MacShellState.shared.newAgent }, set: { MacShellState.shared.newAgent = $0 })) {
             // 新建 Agent (⌘N, the menu bar, ⌘K): the iOS form in a window sheet; the new agent opens in Agents.
             NavigationStack {
