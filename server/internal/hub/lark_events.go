@@ -33,6 +33,7 @@ func (h *Hub) larkEvents(ctx context.Context) {
 		h.kbKick()
 	}
 	h.lark.Events(ctx, func(ev lark.Event) {
+		h.larkLastEvent.Store(time.Now().Unix())
 		h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
 		mu.Lock()
 		defer mu.Unlock()

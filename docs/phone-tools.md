@@ -1,6 +1,6 @@
 # 手机数据工具
 
-`apple/Jarvis/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。
+`apple/Jarvis/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
 
 链路：Claude 调 `phone_*` 工具 → `jarvisd mcp` → node.sock → hub → 在线的 iPhone（WebSocket `tool_call`）→
 App 在本地查询/写入 → `tool_result` 原路返回。

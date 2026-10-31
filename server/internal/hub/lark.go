@@ -1,18 +1,23 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/lark"
 )
 
 // larkRoutes exposes Feishu chats from the user's lark-connector instance to the app's 信息 tab.
 func (h *Hub) larkRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/lark/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, h.larkStatus(r.Context()))
+	})
 	api.HandleFunc("GET /api/v1/lark/conversations", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		convs, next, err := h.lark.Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
@@ -242,4 +247,30 @@ func (h *Hub) larkMedia(w http.ResponseWriter, r *http.Request, path string) {
 	if err := h.lark.Media(r.Context(), w, path, q, r.Header); err != nil {
 		writeErr(w, http.StatusBadGateway, err)
 	}
+}
+
+// LarkStatus is 设置 › 连接器 › 飞书: whether the hub has an lark-connector to talk to, who is signed in there, and when its
+// realtime events last came. Configured is hub.json's lark (a container to read the token from, or a token).
+type LarkStatus struct {
+	Configured  bool   `json:"configured"`
+	Connected   bool   `json:"connected"`
+	Name        string `json:"name,omitempty"`
+	Error       string `json:"error,omitempty"`
+	LastEventAt int64  `json:"last_event_at,omitempty"`
+}
+
+func (h *Hub) larkStatus(ctx context.Context) LarkStatus {
+	st := LarkStatus{Configured: h.cfg.Lark.Container != "" || h.cfg.Lark.Token != "", LastEventAt: h.larkLastEvent.Load()}
+	if !st.Configured || h.lark == nil {
+		return st
+	}
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	me, err := h.lark.Me(ctx) // asked each time: the page is where one checks the connection works now
+	if err != nil {
+		st.Error = err.Error()
+		return st
+	}
+	st.Connected, st.Name = true, me.Name
+	return st
 }

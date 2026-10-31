@@ -80,15 +80,12 @@ struct SettingsView: View {
                     }
                 }
 
+                ConnectorsSection()
+
                 Section {
-                    NavigationLink(value: SettingsPage.phoneData) {
-                        Label("手机数据", systemImage: "iphone.gen3")
-                    }
                     NavigationLink(value: SettingsPage.notifications) {
                         Label("通知", systemImage: Theme.Icon.notifications)
                     }
-                } footer: {
-                    Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
                 }
 
                 if !model.isDemo { watchSection }
@@ -170,6 +167,9 @@ struct SettingsView: View {
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
+        else if d.bool(forKey: "openConnectorMail") || d.bool(forKey: "addMail") { p.append(SettingsPage.mail) }
+        else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
+        else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
         else if d.bool(forKey: "openAppearance") { p.append(SettingsPage.appearance) }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
@@ -203,7 +203,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case appearance, assistant, claude, devices, phoneData, notifications, storage, translation
+    case appearance, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
 
 }
 
@@ -227,6 +227,8 @@ private struct SettingsDestinations: ViewModifier {
         case .claude: ClaudeSettingsView()
         case .devices: DevicesView()
         case .phoneData: PhoneDataView()
+        case .mail: MailAccountsView(inSheet: false)
+        case .feishu: FeishuConnectorView()
         case .notifications: NotificationSettingsView()
         case .storage: StorageView()
         case .translation: TranslationSettingsView()
@@ -302,11 +304,12 @@ struct PhoneDataView: View {
                     .padding(.vertical, Theme.Space.xxs)
                 }
             } footer: {
-                Text("Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
+                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
             }
         }
         .themedPage()
-        .navigationTitle("手机数据")
+        .navigationTitle(ConnectorText.device)
+        .navigationBarTitleDisplayMode(.inline) // like the other connectors' pages
         .task {
             for s in PhoneDataSource.allCases { statuses[s] = PhoneAuthorization.status(s) }
         }

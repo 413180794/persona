@@ -387,9 +387,18 @@ struct MailAccountsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var accounts: [MailAccount] = []
     @State private var adding = false
+    /// A sheet of its own (with 完成), or a page pushed in 设置 › 连接器 › 邮箱.
+    var inSheet = true
 
     var body: some View {
-        NavigationStack {
+        if inSheet {
+            NavigationStack { page.toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } } }
+        } else {
+            page
+        }
+    }
+
+    private var page: some View {
             List {
                 Section {
                     ForEach(accounts) { a in
@@ -417,13 +426,11 @@ struct MailAccountsView: View {
             .themedPage()
             .navigationTitle("邮箱")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
             .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddMailAccountView() }
             .task { await load() }
             #if DEBUG
             .onAppear { if UserDefaults.standard.bool(forKey: "addMail") { adding = true } }
             #endif
-        }
     }
 
     private func load() async { accounts = (try? await model.api?.mailAccounts()) ?? [] }

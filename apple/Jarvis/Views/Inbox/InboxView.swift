@@ -22,7 +22,6 @@ struct InboxView: View {
     }
     /// Sections shown open: tiers (action, fyi, noise) and "done". 已折叠 and 已处理 start closed.
     @State private var expanded: Set<String> = ["action", "fyi"]
-    @State private var showAccounts = false
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
     @State private var path = NavigationPath()
@@ -58,21 +57,16 @@ struct InboxView: View {
                 .toolbar {
                     ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
                     ToolbarItem(placement: .topBarTrailing) {
+                        // Mail accounts are managed in 设置 › 连接器 › 邮箱 (2026-11-01, with this device's data and 飞书).
                         Menu {
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
-                            Button { showAccounts = true } label: { Label("管理邮箱", systemImage: Theme.Icon.mailAccounts) }
                         } label: { Image(systemName: Theme.Icon.moreMenu) }
                         .accessibilityLabel("更多")
                     }
                 }
-                .sheet(isPresented: $showAccounts, onDismiss: { Task { await loadAccounts() } }) { MailAccountsView() }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
-                #if DEBUG
-                // `-addMail YES`: open 管理邮箱 › 添加邮箱 for screenshots.
-                .onAppear { if UserDefaults.standard.bool(forKey: "addMail") { showAccounts = true } }
-                #endif
                 .task {
                     store.reload()
                     await loadAccounts()

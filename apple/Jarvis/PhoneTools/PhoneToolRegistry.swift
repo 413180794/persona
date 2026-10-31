@@ -111,7 +111,7 @@ enum PhoneToolRegistry {
         }
         guard tool.source.isEnabled else {
             return ([.text("“\(tool.source.title)” 已在手机上关闭 / The \(tool.source.rawValue) data source is turned off on the phone. "
-                + "The user can enable it in Jarvis › 设置 › 手机数据.")], true)
+                + "The user can enable it in Jarvis › 设置 › 连接器 › 这台 iPhone.")], true)
         }
         if let summary = tool.confirmation?(args) {
             let allowed = await confirm(summary)

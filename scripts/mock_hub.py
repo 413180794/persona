@@ -1784,6 +1784,8 @@ class H(BaseHTTPRequestHandler):
                 "text": MAIL_BODIES.get(uid, it["preview"]), "seen": False}})
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
+        if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
+            return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
             return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": ""})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):

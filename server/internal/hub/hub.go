@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
@@ -38,6 +39,7 @@ type Hub struct {
 	translations      translateCache // translate.go
 	quotas            quotaCache     // launcherquota.go
 	lark              *lark.Client
+	larkLastEvent     atomic.Int64 // Unix seconds of the last realtime event from lark-connector (设置 › 连接器 › 飞书)
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 

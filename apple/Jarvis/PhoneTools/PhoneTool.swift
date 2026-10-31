@@ -9,7 +9,7 @@ struct PhoneTool {
     var run: (JSONValue) async throws -> [ToolContent]
 }
 
-/// Groups of tools the user can switch on or off in Settings › 手机数据.
+/// Groups of tools the user can switch on or off in Settings › 连接器 › 这台 iPhone (was 手机数据).
 enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
     case contacts, calendar, reminders, location, health, photos, device, clipboard, notifications
 
@@ -72,7 +72,7 @@ enum PhoneToolError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Jarvis › 设置 › 手机数据 里授权。"
+        case .denied(let s): "没有权限：\(s)。请在 iPhone 的 Jarvis › 设置 › 连接器 › 这台 iPhone 里授权。"
         case .invalidArgument(let s): "参数错误：\(s)"
         case .unavailable(let s): s
         }

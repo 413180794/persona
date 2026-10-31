@@ -160,6 +160,7 @@ final class DemoHub {
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
         case ["mail", "messages"]: return ["messages": .array([]), "has_more": false]
         case ["lark", "unread-count"]: return ["count": 4]
+        case ["lark", "status"]: return ["configured": true, "connected": true, "name": "我", "last_event_at": .number((Date.now.timeIntervalSince1970 - 95).rounded(.down))]
         case ["lark", "conversations"], ["lark", "pinned"]: return ["conversations": .array([]), "next_cursor": ""]
         case ["lark", "labels"]: return ["labels": .array([])]
         case ["lark", "flags"]: return ["conversations": .array([]), "messages": .array([])]
