@@ -1324,7 +1324,8 @@ struct ChatView: View {
     }
 
     /// Agents: the title's second line — the state (and for how long it has worked this turn), then where it runs.
-    /// The state's words take its color; the place stays secondary. Short of room, the machine goes, then the place.
+    /// The state's words take its color; the place stays secondary. Short of room the machine goes, then the space
+    /// name; the tab's name always stays (cut short if it must), so the line keeps one shape whatever the state.
     private func devSubtitle(_ s: Session) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let words = stateWords(s, now: ctx.date)
@@ -1335,7 +1336,7 @@ struct ChatView: View {
                 ViewThatFits(in: .horizontal) {
                     subtitleLine(s, words, [machine, place])
                     subtitleLine(s, words, [place.isEmpty ? machine : place])
-                    subtitleLine(s, words, [])
+                    subtitleLine(s, words, [s.slotLabel ?? (place.isEmpty ? machine : place)]) // truncates when it must
                 }
             }
         }
