@@ -379,7 +379,11 @@ struct FeishuDocReader: View {
             open(.doc(url: link.absoluteString, title: nil))
             return .handled
         }
+        #if os(macOS)
+        return LinkPolicy.system(link) // NSWorkspace would run any scheme it names
+        #else
         return .systemAction
+        #endif
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {

@@ -149,6 +149,16 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   不是 iOS 浮在底部的大按钮；开起来后在 Agents 里打开。新建 Jarvis 对话 ⇧⌘N：切到 Jarvis 的新对话。没配对时这几条命令不可用。DEBUG：`-openNewAgent YES`。
 - 截图里 ⌘K 面板后面透出列表：离屏截图把 `List` 的行单独再画一遍贴回原处（见上面「截图和屏幕上的差别」），盖在了浮层上面，屏幕上不会这样。
 
+## 链接交给系统时（Mac）
+
+`apple/Mac/Link/LinkPolicy.swift`。Mac 上 `NSWorkspace.open` 不问就照 URL 去做（`file://` 的 App 直接启动、`smb://` 挂共享、别的 App 的 scheme），
+而链接来自 Agent 的回复和别人的消息：App 自己不显示的链接，只有 http / https / mailto / `jarvis://` 交给系统，别的拷贝到剪贴板并提示。
+对话、飞书消息 / 文档、链接面板、定时任务说明里的 `.systemAction`，和兼容层的 `UIApplication.open`，Mac 上都走这里（iOS 不变）。
+
+从网页版 Mac App（PR #162，已关）带过来的几项健壮性修复，在这一版里逐个对过：401 不清配对（iOS 的 AppModel 从不因 401 解除配对，不用改）、
+退出体验模式不清钥匙串（体验模式只在钥匙串里没有配对时才开，退出时没有东西可清）、发送途中输入不丢（发送走 ChatStore 的待发气泡和 Outbox，失败可重试）、
+对话图片解码不在主线程（`ChatThumbnail` 本来就在 `Task.detached` 里解码）。只有链接这一项需要改。
+
 ## 收件箱、飞书、邮件、链接（Mac）
 
 `apple/Mac/Inbox/`、`apple/Mac/Link/MacLinkPanel.swift`。逻辑和行、会话、邮件页都是 iOS 那一份，Mac 只换了外面的组织方式：

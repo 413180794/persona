@@ -280,11 +280,11 @@ nonisolated struct UIGraphicsImageRenderer {
     }
 
     func open(_ url: URL, options: [String: Any] = [:], completionHandler: ((Bool) -> Void)? = nil) {
-        completionHandler?(NSWorkspace.shared.open(url))
+        completionHandler?(LinkPolicy.open(url))
     }
 
     @discardableResult
-    func open(_ url: URL) async -> Bool { NSWorkspace.shared.open(url) }
+    func open(_ url: URL) async -> Bool { LinkPolicy.open(url) }
 
     func canOpenURL(_ url: URL) -> Bool { NSWorkspace.shared.urlForApplication(toOpen: url) != nil }
 

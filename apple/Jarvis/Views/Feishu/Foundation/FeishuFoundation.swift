@@ -53,7 +53,11 @@ extension View {
                 open(route)
                 return .handled
             }
+            #if os(macOS)
+            return LinkPolicy.system(url) // NSWorkspace would run any scheme it names
+            #else
             return .systemAction
+            #endif
         })
     }
 }

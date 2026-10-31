@@ -988,7 +988,13 @@ struct AssistantMemoryDetail: View {
                 Markdown(entry.body.isEmpty ? "（空）" : Links.markdown(entry.body))
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
-                    .environment(\.openURL, OpenURLAction { url in url.scheme == nil ? .discarded : .systemAction })
+                    .environment(\.openURL, OpenURLAction { url in
+                        #if os(macOS)
+                        url.scheme == nil ? .discarded : LinkPolicy.system(url) // NSWorkspace would run any scheme
+                        #else
+                        url.scheme == nil ? .discarded : .systemAction
+                        #endif
+                    })
                 Text(entry.file.name).font(Theme.Font.code).foregroundStyle(.tertiary).padding(.top, Theme.Space.s)
             }
             .padding(Theme.Space.xl)

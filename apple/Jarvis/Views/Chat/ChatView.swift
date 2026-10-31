@@ -2633,7 +2633,14 @@ struct WorkStepView: View, Equatable {
     private(set) lazy var jumpToCall: (String) -> Void = { [weak self] in self?.handlers.jumpToCall($0) }
     /// Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
     private(set) lazy var openURL = OpenURLAction { [weak self] url in
-        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let self else { return .systemAction }
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let self else {
+            // Mac: NSWorkspace would run any scheme it names (LinkPolicy).
+            #if os(macOS)
+            return LinkPolicy.system(url)
+            #else
+            return .systemAction
+            #endif
+        }
         handlers.openLink(url)
         return .handled
     }

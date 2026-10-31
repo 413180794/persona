@@ -18,7 +18,7 @@ extension View {
     /// Links followed inside this view (`openURL`) open in the panel; the Feishu ones in the native reader there.
     func macOpensLinksInPanel(_ link: Binding<LinkTarget?>) -> some View {
         environment(\.openURL, OpenURLAction { url in
-            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return .systemAction }
+            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return LinkPolicy.system(url) }
             link.wrappedValue = LinkTarget(url: url)
             return .handled
         })
