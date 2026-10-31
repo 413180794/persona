@@ -74,7 +74,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
-| `site/` | 静态站：只有首页 + 隐私政策 + 服务条款（noindex），Google OAuth 同意屏幕发布正式版必须有；不是官网 |
+| `site/` | 官网 + 隐私政策 + 服务条款（静态，Cloudflare Workers 托管；Google OAuth 同意屏幕要求有隐私政策）。截图只用体验模式（`-demo.on YES`）拍的演示数据，深浅色各一张放 `site/public/img/` |
 
 ## 文档索引
 
