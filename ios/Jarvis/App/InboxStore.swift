@@ -92,23 +92,36 @@ final class InboxStore {
     /// Items whose reply is being sent from the list (the row shows a spinner, a second tap does nothing).
     private(set) var sending: Set<String> = []
 
+    /// Replies that did not go out, by item: the reply sheet opens with that text again.
+    var unsentReplies: [String: String] = [:]
+
     /// 发送 on the AI 分身's draft: the hub replies in the chat / by mail / in the document (moving the rows' status
-    /// in `changes` first) and files the item as done.
+    /// in `changes` first) and files the item as done. Filed at once (the reply takes Feishu / the mail server a few
+    /// seconds); a failure puts the item back and keeps the text for the reply sheet.
+    @discardableResult
     func send(_ item: InboxItem, text: String, changes: [InboxItem.DocChange] = []) async -> Bool {
         guard let api = AppModel.shared.api, !sending.contains(item.id) else { return false }
         sending.insert(item.id)
         defer { sending.remove(item.id) }
+        let before = items.first { $0.id == item.id }
+        if let i = items.firstIndex(where: { $0.id == item.id }) {
+            items[i].doneAt = .now
+            items[i].doneBy = "replied"
+        }
+        unsentReplies[item.id] = nil
+        Haptics.tap()
         do {
             try await api.inboxReply(item.id, text: text, changes: changes)
-            if let i = items.firstIndex(where: { $0.id == item.id }) {
-                items[i].doneAt = .now
-                items[i].doneBy = "replied"
-            }
             Haptics.success()
             AppModel.shared.toast = Toast("已发送，标为已处理", style: .success)
             return true
         } catch {
-            AppModel.shared.show(error)
+            if let before, let i = items.firstIndex(where: { $0.id == item.id }) { items[i] = before }
+            if !text.isEmpty { unsentReplies[item.id] = text }
+            if let shown = error.shown {
+                AppModel.shared.toast = Toast("回复没发出去：\(shown)", style: .error)
+                Haptics.error()
+            }
             return false
         }
     }

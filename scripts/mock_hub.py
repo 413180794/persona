@@ -1778,6 +1778,15 @@ class H(BaseHTTPRequestHandler):
                 if kind == "projects": meta["kind"], meta["status"] = e["extra"].split(" · ")
             KB_UPDATES.append({"kind": kind, "id": eid, **body})
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):  # 飞书发消息: lark-connector takes a moment
+            body, feed = json.loads(self.last_body or b"{}"), p.split("/")[5]
+            time.sleep(float(os.environ.get("MOCK_LARK_SEND_SECONDS", "2")))
+            if "#fail" in body.get("text", ""):
+                return self.send_json({"error": "lark-connector: send timed out"}, 502)
+            msgs = LARK_MESSAGES.setdefault(feed, [])
+            pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
+            msgs.append(_lm(pos, "我", body.get("text", ""), mine=True, mins=0))
+            return self.send_json({"ok": True})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
@@ -1851,6 +1860,11 @@ class H(BaseHTTPRequestHandler):
             n = len(STARTED)
             s = sess(body["machine_id"], "d4e6f8a0-0000-4000-8000-%012d" % n, body.get("prompt") or "新会话", body.get("cwd", ""),
                      "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "")
+            if body.get("async"):  # answered at once, claude still starting (node/starting.go); MOCK_START_SECONDS later it is up
+                s.update(status="idle", state="idle", starting=True, title=body.get("name_hint") or s["title"])
+                def started(s=s):
+                    s.pop("starting", None)
+                threading.Timer(float(os.environ.get("MOCK_START_SECONDS", "6")), started).start()
             SESSIONS.append(s)
             return self.send_json({"session": s})
         if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades the token for the device's own

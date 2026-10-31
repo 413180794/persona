@@ -28,7 +28,9 @@ struct LarkChatView: View {
     @State private var loadingNewer = false
     @State private var error: String?
     @State private var text = ""
-    @State private var sending = false
+    /// What I wrote that is on its way (on screen at once, sent one after another in the background).
+    @State private var outgoing: [LarkOutgoing] = []
+    @State private var sendChain: Task<Void, Never>?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var fileRequest: (url: String, name: String)?
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
@@ -67,13 +69,15 @@ struct LarkChatView: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.m)
                         }
                         LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
-                            .padding(.top, Self.continues(m, after: prev) ? 3 : 12)
+                            .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
                     }
                     .onAppear { markSeen(m) }
                 }
                 if pager.hasNewer {
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
                         .onAppear { Task { await loadNewer() } }
+                } else {
+                    outgoingRows
                 }
             }
             .padding(.horizontal, Theme.Space.m)
@@ -97,6 +101,7 @@ struct LarkChatView: View {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
         }
         .safeAreaInset(edge: .bottom) { composer }
+        .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
         .themedPage()
         .navigationTitle(conversation.name)
         .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
@@ -141,13 +146,13 @@ struct LarkChatView: View {
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.vertical, Theme.Space.s)
                 .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-            Button { Task { await send() } } label: {
-                Group { if sending { ProgressView().tint(.white) } else { Image(systemName: Theme.Icon.send).font(Theme.Font.heading) } }
+            Button { send() } label: {
+                Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
                     .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
             }
             .themedButton(prominent: true)
             .clipShape(.circle)
-            .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("发送")
         }
         .padding(.horizontal, Theme.Space.m)
@@ -210,6 +215,9 @@ struct LarkChatView: View {
     #else
     static let debugTop = false
     #endif
+
+    /// Space above a message: tight under the same sender's previous one.
+    static func gap(grouped: Bool) -> CGFloat { grouped ? 3 : Theme.Space.m }
 
     /// Same sender within five minutes: no second avatar / name.
     static func continues(_ m: LarkMessage, after prev: LarkMessage?) -> Bool {
@@ -372,20 +380,74 @@ struct LarkChatView: View {
         Task { try? await api.larkRead(feed, report) }
     }
 
-    private func send() async {
-        guard let api = model.api else { return }
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        sending = true
-        defer { sending = false }
-        do {
-            try await api.larkSend(conversation.id, text: t)
-            text = ""
-            Haptics.success()
-            try? await Task.sleep(for: .milliseconds(800))
-            if pager.hasNewer { await jumpToLatest() } else { await refreshLatest(); position.scrollTo(edge: .bottom) }
-        } catch {
-            model.show(error)
+    // MARK: Sending
+
+    @ViewBuilder private var outgoingRows: some View {
+        let mine = pager.messages.last(where: \.isMine)
+        ForEach(Array(outgoing.enumerated()), id: \.element.id) { i, o in
+            let m = o.message(like: mine)
+            let prev = i > 0 ? outgoing[i - 1].message(like: mine) : pager.messages.last
+            LarkOutgoingRow(outgoing: o, message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup,
+                            retry: { resend(o.id) },
+                            edit: { discard(o.id); text = text.isEmpty ? o.text : text + "\n" + o.text },
+                            discard: { discard(o.id) })
+                .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
         }
+    }
+
+    /// On screen at once; Feishu gets it in the background, after what was written before it.
+    private func send() {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        text = ""
+        let o = LarkOutgoing(text: t)
+        withAnimation(Theme.Motion.standard) { outgoing.append(o) }
+        Haptics.tap()
+        deliver(o.id)
+        if pager.hasNewer { Task { await jumpToLatest() } } else { position.scrollTo(edge: .bottom) }
+    }
+
+    private func resend(_ id: UUID) {
+        guard let i = outgoing.firstIndex(where: { $0.id == id }) else { return }
+        outgoing[i].state = .sending
+        outgoing[i].at = .now
+        deliver(id)
+    }
+
+    private func discard(_ id: UUID) {
+        withAnimation(Theme.Motion.standard) { outgoing.removeAll { $0.id == id } }
+    }
+
+    private func deliver(_ id: UUID) {
+        let before = sendChain
+        sendChain = Task {
+            await before?.value // in the order written
+            guard let api = model.api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
+            do {
+                try await api.larkSend(conversation.id, text: o.text)
+                setState(id, .sent)
+                // Its copy replaces it (settleOutgoing); the push usually brings it, a refresh makes sure.
+                await refreshLatest()
+                try? await Task.sleep(for: .seconds(2))
+                await refreshLatest()
+                try? await Task.sleep(for: .seconds(LarkOutbox.copyWait))
+                settleOutgoing(pager.messages)
+            } catch {
+                setState(id, .failed(error.shown ?? error.localizedDescription))
+                Haptics.error()
+            }
+        }
+    }
+
+    private func setState(_ id: UUID, _ state: LarkOutgoing.State) {
+        guard let i = outgoing.firstIndex(where: { $0.id == id }) else { return }
+        outgoing[i].state = state
+        settleOutgoing(pager.messages)
+    }
+
+    private func settleOutgoing(_ messages: [LarkMessage]) {
+        let left = LarkOutbox.remaining(outgoing, messages: messages)
+        if left != outgoing { outgoing = left }
     }
 
     private func askJarvis() async {
@@ -664,7 +726,7 @@ struct LarkThreadView: View {
                     ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
                         let prev = i > 0 ? replies[i - 1] : nil
                         LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
-                            .padding(.top, LarkChatView.continues(m, after: prev) ? 3 : 12)
+                            .padding(.top, LarkChatView.gap(grouped: LarkChatView.continues(m, after: prev)))
                     }
                 }
                 .padding(Theme.Space.m)

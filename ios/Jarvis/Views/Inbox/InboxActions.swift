@@ -55,7 +55,6 @@ struct InboxDraftSheet: View {
     @State private var text = ""
     @State private var instruction = ""
     @State private var loading = false
-    @State private var sending = false
     @State private var error: String?
     @FocusState private var editing: Bool
     /// The AI 分身's proposed status moves the user keeps (all of them to start with).
@@ -112,14 +111,14 @@ struct InboxDraftSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        if sending { ProgressView() } else { Text("发送").lineLimit(1) }
+                        Text("发送").lineLimit(1)
                     }
-                    .disabled(sending || loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && keptChanges.isEmpty)
+                    .disabled(loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && keptChanges.isEmpty)
                 }
             }
             .task {
                 guard text.isEmpty else { return }
-                if let d = item.agentDraft { text = d } else { await load() }
+                if let u = InboxStore.shared.unsentReplies[item.id] { text = u } else if let d = item.agentDraft { text = d } else { await load() }
             }
         }
         .presentationDetents([.medium, .large])
@@ -188,20 +187,12 @@ struct InboxDraftSheet: View {
         }
     }
 
+    /// Closes at once: the store files the item and sends in the background (a failure puts it back, with this text).
     private func send() async {
-        guard let api = model.api else { return }
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        sending = true
-        defer { sending = false }
-        do {
-            try await api.inboxReply(item.id, text: body, changes: keptChanges) // the hub sends it and files the item
-            InboxStore.shared.setDone(item, true, haptic: false)
-            Haptics.success()
-            model.toast = Toast("已发送，标为已处理", style: .success)
-            dismiss()
-        } catch {
-            if let shown = error.shown { self.error = shown }
-        }
+        let it = item, changes = keptChanges
+        Task { await InboxStore.shared.send(it, text: body, changes: changes) }
+        dismiss()
     }
 }
 
