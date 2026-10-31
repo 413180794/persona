@@ -93,8 +93,8 @@ struct SiblingTabs: View {
             .presentationDragIndicator(.visible)
         }
         #if DEBUG
-        // `-showSpaceTabs YES`: open this sheet (screenshots).
-        .task { if UserDefaults.standard.bool(forKey: "showSpaceTabs") { try? await Task.sleep(for: .seconds(2)); showAll = true } }
+        // `-showSpaceTabs YES`: open this sheet (screenshots); `new` opens its new-tab form on top.
+        .task { if ["YES", "new"].contains(UserDefaults.standard.string(forKey: "showSpaceTabs")) { try? await Task.sleep(for: .seconds(2)); showAll = true } }
         #endif
     }
 }
@@ -107,10 +107,29 @@ private struct SiblingList: View {
     var pick: (SessionKey) -> Void
     var openSpace: (String) -> Void
 
+    @State private var showNew = false
+
+    /// Where a new tab goes: the space this chat is in (its machine, directory and herdr workspace).
+    private var preset: SpacePreset? {
+        guard let s = space, let ws = s.spaceID else { return nil }
+        return SpacePreset(machineID: s.machineID, cwd: s.cwd, workspaceID: ws, spaceName: s.spaceName ?? "")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(siblings.count) 个标签页").font(Theme.Font.heading).padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
+                HStack(spacing: Theme.Space.s) {
+                    Text("\(siblings.count) 个标签页").font(Theme.Font.heading).lineLimit(1)
+                    Spacer(minLength: Theme.Space.s)
+                    if preset != nil {
+                        Button { Haptics.tap(); showNew = true } label: {
+                            Label("新标签", systemImage: Theme.Icon.add).font(Theme.Font.secondaryStrong).lineLimit(1)
+                        }
+                        .themedButton()
+                        .accessibilityLabel("在这个空间开新标签")
+                    }
+                }
+                .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
                 if let s = space, let name = s.spaceName, let k = s.spaceKey {
                     Button { openSpace(k) } label: {
                         HStack(spacing: Theme.Space.m) {
@@ -153,6 +172,19 @@ private struct SiblingList: View {
             .padding(.vertical, Theme.Space.sm)
         }
         .scrollBounceBehavior(.basedOnSize)
+        // The new tab opens in place of this one, like picking a tab (pick closes this sheet and the form with it).
+        .sheet(isPresented: $showNew) {
+            if let preset {
+                NewChatView(preset: preset) { s in
+                    showNew = false
+                    pick(s.key)
+                }
+            }
+        }
+        #if DEBUG
+        // `-showSpaceTabs new`: open the new-tab form too (screenshots).
+        .task { if UserDefaults.standard.string(forKey: "showSpaceTabs") == "new" { try? await Task.sleep(for: .seconds(1)); showNew = true } }
+        #endif
     }
 }
 

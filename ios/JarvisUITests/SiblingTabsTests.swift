@@ -26,6 +26,42 @@ final class SiblingTabsTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label + "，")).firstMatch
     }
 
+    /// Opens ⋯'s list (the header folds itself after a few idle seconds, so it is unfolded before each try).
+    @MainActor private func openList() {
+        let slim = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
+        _ = slim.waitForExistence(timeout: 15)
+        let all = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "同一空间的")).firstMatch
+        for _ in 0..<3 where !app.buttons["空间 weather 的所有 Agent"].exists {
+            if slim.exists, slim.isHittable { slim.tap() }
+            usleep(600_000)
+            if all.exists { all.tap() }
+            _ = app.buttons["空间 weather 的所有 Agent"].waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].waitForExistence(timeout: 3), "the list did not open:\n\(app.debugDescription)")
+    }
+
+    /// ⋯'s list starts another tab in the same space: the form is preset to it, and the chat switches to the new tab.
+    @MainActor func testNewTabFromTheList() throws {
+        openList()
+        let new = app.buttons["在这个空间开新标签"]
+        XCTAssertTrue(new.exists, "no 新标签 in the list")
+        new.tap()
+        XCTAssertTrue(app.staticTexts["加入空间"].waitForExistence(timeout: 5), "the form did not open:\n\(app.debugDescription)")
+        XCTAssertTrue(app.staticTexts["weather"].exists, "the form is not preset to the space")
+        // The form's first message, not the chat's composer underneath.
+        let first = NSPredicate(format: "placeholderValue BEGINSWITH %@", "想让 Claude")
+        let field = app.textViews.matching(first).firstMatch.exists ? app.textViews.matching(first).firstMatch : app.textFields.matching(first).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 3), "no first-message field:\n\(app.debugDescription)")
+        field.tap()
+        field.typeText("给小组件加深色模式")
+        shot("new-form")
+        app.buttons["开始对话"].tap()
+        XCTAssertTrue(app.buttons["空间 weather 的所有 Agent"].waitForNonExistence(timeout: 5), "the list stayed")
+        let title = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "给小组件加深色模式")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "did not switch to the new tab:\n\(app.debugDescription)")
+        shot("new-tab")
+    }
+
     @MainActor func testTabsStripAndList() throws {
         // The header folds itself after a moment: open it.
         let slim = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
