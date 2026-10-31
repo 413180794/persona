@@ -54,7 +54,7 @@ import kotlin.coroutines.resume
 /**
  * phone_* tools (docs/phone-tools.md): Claude calls them through the hub, which sends a WebSocket `tool_call` to
  * the phone that registered last. The names, descriptions and parameters are the iOS app's
- * (ios/Jarvis/PhoneTools), so a call reads the same whichever phone answers, and one phone registering doesn't
+ * (apple/Jarvis/PhoneTools), so a call reads the same whichever phone answers, and one phone registering doesn't
  * change what the other's tools look like to Claude. Each data source is off until the user turns it on.
  */
 enum class Source(val title: String, val detail: String, val permissions: List<String>) {

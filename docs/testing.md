@@ -4,7 +4,7 @@
 
 ```sh
 cd server && go test ./... && go vet ./...                    # 服务端
-cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
+cd apple && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test   # iOS 单测（ChatStore、ScreenParser、手机工具注册表）
 ./scripts/sim.sh [-openSession <machine>/<id>]                    # 模拟器里跑，自动配对真实 hub
 ```
@@ -67,7 +67,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   `chat.scrollState`：bottom / follows / frozen / arrow / newestShown / withheld…，`visible` 时画在屏幕上），XCUITest 读不准倒置列表里行的位置。
   `testRealHubChats` 连真实 hub 拍改前改后（`TEST_RUNNER_JARVIS_REAL_PAIR` 等环境变量，不给就跳过；只开自己的会话，打开会标已读）。
 - 终端实时流：`MOCK_TERMINAL_STREAM=1` 启动 mock（hello 带 `terminal_stream`，订阅后先发一个编造的 Claude 界面整帧，再每秒一帧让 spinner 走秒；
-  再加 `MOCK_TERMINAL_FIXTURE=ios/JarvisTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
+  再加 `MOCK_TERMINAL_FIXTURE=apple/JarvisTests/Fixtures/terminal-observe.jsonl` 改为回放从 herdr 录下的真实帧：颜色、框里的中文、emoji、链接、200 字的长行），
   `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
@@ -91,7 +91,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 ## UI 测试（`scripts/ui-test.sh`）
 
-`ios/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
+`apple/JarvisUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
 `SIM=<udid> ./scripts/ui-test.sh [machine/session]`。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
 长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock_hub.py`，不用真实 hub：
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:JarvisUITests/MessageMenuTests`。
@@ -104,7 +104,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 授权会保留到下次，所以 App 要等进了后台才排这条通知，否则它在测试还在等弹窗时就弹过去了。
 
 终端直接打字（`TerminalTypingTests`：点终端弹出键盘、打的字和回车按顺序发出且被合并成少数几个请求、键栏的 ctrl 作用于键盘打的下一个字、键盘按钮收起键盘）同样连 mock。
-`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=ios/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
+`MOCK_TERMINAL_INTERVAL=0.02` 让 mock 一口气回放录制的帧（默认每秒一帧），配 `MOCK_TERMINAL_FIXTURE=apple/JarvisTests/Fixtures/terminal-observe-mixed.jsonl`
 （中英混排长回答）或 `-permission.jsonl`（权限框）截终端的样子。
 终端键栏和选择（`TerminalKeysTests`：单击 / 双击锁定 / 按住 ctrl、alt、shift，输入框里打的字带 ctrl，⌃C，发出的键名和顺序；长按出「拷贝」；快捷命令双击直接发送、输入框的补全）也连 mock：
 `PORT=18792 python3 scripts/mock_hub.py &`，再 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18792 xcodebuild test … -only-testing:JarvisUITests/TerminalKeysTests`

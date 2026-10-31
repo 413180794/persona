@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 eval "$(python3 scripts/jarvis_config.py env)"
 python3 scripts/jarvis_config.py xcconfig
-cd ios
+cd apple
 SIM="${SIM:-$JARVIS_SIM}"
 [ -n "$SIM" ] || { echo "set SIM=<udid> or \"simulator\" in the config (docs/config.md)" >&2; exit 2; }
 xcodegen generate -q

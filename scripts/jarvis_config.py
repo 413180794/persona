@@ -5,7 +5,7 @@ The config lives outside the repository so clean worktrees (releases) see it too
   $JARVIS_CONFIG, else ~/.config/jarvis/config.json   (template: config.example.json)
 
   python3 scripts/jarvis_config.py env              # shell exports: eval "$(python3 scripts/jarvis_config.py env)"
-  python3 scripts/jarvis_config.py xcconfig         # writes ios/Config.xcconfig (bundle id, team) for XcodeGen / Xcode
+  python3 scripts/jarvis_config.py xcconfig         # writes apple/Config.xcconfig (bundle id, team) for XcodeGen / Xcode
   python3 scripts/jarvis_config.py export-options <out.plist> [upload|export]
   python3 scripts/jarvis_config.py get <dotted.key>  # one value, e.g. hub.url
 """
@@ -74,7 +74,7 @@ def env(cfg: dict) -> dict:
 
 def xcconfig(cfg: dict):
     # Generated, git-ignored: the committed project only says $(JARVIS_BUNDLE_ID).
-    out = os.path.join(ROOT, "ios", "Config.xcconfig")
+    out = os.path.join(ROOT, "apple", "Config.xcconfig")
     with open(out, "w") as f:
         f.write("// Generated from %s by scripts/jarvis_config.py; do not edit or commit.\n" % path())
         f.write("JARVIS_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))

@@ -41,7 +41,7 @@ final class MessageMenu {
         }
     }
     #else
-    /// The Mac's secondary click (LongPressAt in ios/Mac/Media/MessageGestures.swift) reports the same phases.
+    /// The Mac's secondary click (LongPressAt in apple/Mac/Media/MessageGestures.swift) reports the same phases.
     func pressChanged(_ state: PressPhase) {
         switch state {
         case .began: pressing = true

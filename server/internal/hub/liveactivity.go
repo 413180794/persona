@@ -36,7 +36,7 @@ const (
 	fleetMaxAge     = 8 * time.Hour // the system ends an activity after about this long; past it, start a new one
 )
 
-// FleetState is the activity's ContentState, field for field (ios/LiveActivity/FleetActivity.swift). Times are Unix
+// FleetState is the activity's ContentState, field for field (apple/LiveActivity/FleetActivity.swift). Times are Unix
 // seconds: ActivityKit decodes pushed JSON with a default JSONDecoder, which would read a Date as seconds since 2001.
 type FleetState struct {
 	Phase    string      `json:"phase"` // needsYou | working | done | "" (nothing to show)

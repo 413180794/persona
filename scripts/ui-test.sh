@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the UI tests (ios/JarvisUITests) in the simulator against the configured hub (docs/config.md).
+# Run the UI tests (apple/JarvisUITests) in the simulator against the configured hub (docs/config.md).
 #   ./scripts/ui-test.sh [machine/session to open]   # default: the newest session of the hub's machine
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,7 +16,7 @@ d=json.load(sys.stdin); ss=d if isinstance(d,list) else d.get("sessions",[])
 live=[s for s in ss if s.get("pane_id") and not s.get("assistant")]
 print(live[0]["machine_id"]+"/"+live[0]["session_id"] if live else "")')
 fi
-cd ios && xcodegen generate -q
+cd apple && xcodegen generate -q
 TEST_RUNNER_JARVIS_PAIR_URL="jarvis://pair?url=$URL&token=$TOKEN" TEST_RUNNER_JARVIS_OPEN_SESSION="$SESSION" \
   xcodebuild test -project Jarvis.xcodeproj -scheme Jarvis -destination "id=$SIM" -derivedDataPath ../build/DerivedData \
   -only-testing:JarvisUITests 2>&1 | grep -E "error:|Test Case|✘|✔|TEST (SUCCEEDED|FAILED)|XCTAssert" | sed 's/token=[^ &]*/token=…/g'

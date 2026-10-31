@@ -1,14 +1,14 @@
 # macOS App
 
-原生 macOS 版 Jarvis（`ios/` 里的 `JarvisMac` target）：和 iOS App 同一套逻辑层（`Shared/`、`Jarvis/App`）和内容视图，
-外面是 Mac 自己的壳（`ios/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、设置窗口、菜单栏。目标是 iOS App 的全部功能一个不少，
+原生 macOS 版 Jarvis（`apple/` 里的 `JarvisMac` target）：和 iOS App 同一套逻辑层（`Shared/`、`Jarvis/App`）和内容视图，
+外面是 Mac 自己的壳（`apple/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、设置窗口、菜单栏。目标是 iOS App 的全部功能一个不少，
 交互按 macOS 原生的方式做，滚动和动画 60 fps 起（ProMotion 屏 120 fps）。
 
 ## 做法
 
 - iOS 的代码不为 Mac 改样子：iOS 专用的东西用 `#if os(iOS)` / `#if canImport(UIKit)` 隔开；SwiftUI 里 iOS 专用的修饰符
-  （`navigationBarTitleDisplayMode`、`.topBarTrailing`、`.insetGrouped`…）在 `ios/Mac/Compat/` 里给同名的 Mac 版本，页面代码照常写。
-- UIKit 写的视图（终端、代码行、等宽文本、图片查看、链接页、长按菜单…）在 Mac 上用 AppKit 重写同名类型，放 `ios/Mac/`。
+  （`navigationBarTitleDisplayMode`、`.topBarTrailing`、`.insetGrouped`…）在 `apple/Mac/Compat/` 里给同名的 Mac 版本，页面代码照常写。
+- UIKit 写的视图（终端、代码行、等宽文本、图片查看、链接页、长按菜单…）在 Mac 上用 AppKit 重写同名类型，放 `apple/Mac/`。
 - Mac 上没有的能力换成 Mac 的做法：灵动岛 / 实时活动 → 菜单栏；Apple Watch 同步、健康数据 → 不做（说明原因）；拍照扫码 → 粘贴配对链接。
 
 ## 交互设计（Mac 版的样子，所有 worker 按这个做）
@@ -71,7 +71,7 @@
 ## 构建、运行、截图
 
 ```sh
-cd ios
+cd apple
 python3 ../scripts/jarvis_config.py xcconfig && xcodegen generate
 eval "$(python3 ../scripts/jarvis_config.py env)"
 xcodebuild build -project Jarvis.xcodeproj -scheme JarvisMac -configuration Debug -destination "platform=macOS" \

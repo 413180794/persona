@@ -22,11 +22,11 @@ ARCHIVE="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/Jarvis $BUILD.
 AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
 mkdir -p "$OUT"
-cd ios
+cd apple
 xcodegen generate -q
 cd ..
 
-xcodebuild -project ios/Jarvis.xcodeproj -scheme Jarvis -configuration Release \
+xcodebuild -project apple/Jarvis.xcodeproj -scheme Jarvis -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$OUT/DerivedData" \
   CURRENT_PROJECT_VERSION="$BUILD" "${AUTH[@]}" clean archive | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)"
 
@@ -39,7 +39,7 @@ if [ -d "$WATCH" ]; then python3 scripts/check_bundle_strings.py "$WATCH"; fi
 python3 scripts/check_bundle_privacy.py "$APP"
 # Siri / Shortcuts only see the intents if their metadata was extracted at build time.
 [ -f "$APP/Metadata.appintents/extract.actionsdata" ] || { echo "missing AppIntents metadata in $APP"; exit 1; }
-# Release must not contain the DEBUG-only simulator switches (ios/Jarvis/App/JarvisApp.swift).
+# Release must not contain the DEBUG-only simulator switches (apple/Jarvis/App/JarvisApp.swift).
 if strings "$APP/Jarvis" | grep -qxE '(pairURL|openSession|showNewChat|openAssistant|openAssistantSidebar|newAssistant|openFirstImage|openTerminal|showPad|showKeyMods|focusTerminalInput|openShortcutsPanel|openTerminalSettings|openTerminalTips|showInfo|loadAll|fromSeq|lark-connector|lark-connectorName|larkTop|lark-connectorTopic|larkFocus|inboxDrawer|larkProfile|larkPicker|lark-connectorAt|larkMoments|openWorkbench|addMail|dropUsers|openPane|simulateTap|showMenu|openFile|jumpEnd|showOldest|openWork|openAgent|focusComposer|terminalPages|openEditor|openLinkURL|openChatInfo|openChatInfoPage|openChatInfoFrom|openThreadAt|openPeople|openMomentsTab|openMailLabel|openPeopleQuery|openFeishuDoc|openFeishuDocHeading|showFeishuDocSheet|openFeishuWikiSpace|openFeishuWikiNode|showFeishuWikiUpdates|openSearch|openSearchTab|openSearchFeed|openSearchFilter|openSearchFirst|openCalendarDate|openCalendarEvent|showCalendarNow|showDetailBottom|openMeeting|openMinutes|showMinutesTab|showMinutesPlaying|showMinutesSearch|openTask|openTaskScope|openApprovalTab|openApproval|openOKR|showWorkBottom|showFeishuDocTableEnd|openMailThread|showMailAttachment|showMailBottom|showCloseAgent|openSpaceFromChat|showShareCard|showCompactChrome|showWakeDrawer|showSampleQuestion|showRecapDrawer|openAssistantPage|showAutoScroll|showScrollToOldest|openStorage|showFoldProbe|openInboxFirst|showInboxAction|openMachinePage|showAsUnread|showSampleScreen|showTestNotification|openNotificationSettings|openSendMessage|openUploadDemo|showFleetSample|fleetDetails|fleetIsland|openIslandSettings|showConnection|simulateOffline|openConnectionDetails|openSendDelay|openMonitor|openAgentsFresh|openChatsFresh|perfCounts|openWelcome|openMonitorRange|openMonitorScrub|openMachines|openMachineDetail|openDevices|showFullOutput|showFreezeProbe|showScrollState|showChatDump|showClearConfirm|showPromptMenu|openModelLaunchers|showModelSearch|showDeleteConfirm|showLauncherCheck|openModelLauncher|showKnowledgeEntry|showKnowledgeSearch|showKnowledgeLower|showKnowledgeKind|openFromDoneNotice|holdChromeOpen|showErrorDetails|openPersona|showPersonaState|openTranslationSettings|openLauncherPage|showFilePerf|showFileAutoScroll|showFileAutoScrollSpeed|showSpaceTabs|showDrawerProbe|showDrawerAutoDrag)'; then
   echo "DEBUG switches found in the Release binary" >&2; exit 1
 fi

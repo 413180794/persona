@@ -4,11 +4,11 @@
 
 | 配置 | 位置 | 谁读 | 管什么 |
 | --- | --- | --- | --- |
-| 构建 / 部署配置 | 开发机上的 `~/.config/jarvis/config.json`（可用 `JARVIS_CONFIG` 指到别处），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/jarvis_config.py`）、XcodeGen（经生成的 `ios/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
+| 构建 / 部署配置 | 开发机上的 `~/.config/jarvis/config.json`（可用 `JARVIS_CONFIG` 指到别处），模板是仓库根目录的 `config.example.json` | `scripts/*`（经 `scripts/jarvis_config.py`）、XcodeGen（经生成的 `apple/Config.xcconfig`） | App 的 bundle id 和团队、App Store Connect 账号、TestFlight 测试员、hub 在哪台机器 / 地址、要部署的机器、模拟器 |
 | hub 运行配置 | hub 所在机器的 `~/.jarvis/hub.json`（0600，含 token、数据库密码，第一次运行 `jarvisd hub` 自动生成） | `jarvisd hub` | 监听地址、对外地址、接入哪些机器、助手是谁的助手和它该知道什么、Gmail 代理、AI 网关、lark-connector |
 
 配置放在仓库外面：发布在干净的 worktree 里跑（`docs/release.md`），worktree 里没有仓库外的东西就会缺；也避免误提交。
-`ios/Config.xcconfig` 和 `CLAUDE.local.md` 在 `.gitignore` 里。
+`apple/Config.xcconfig` 和 `CLAUDE.local.md` 在 `.gitignore` 里。
 
 ## 快速开始：接入多台机器
 
@@ -97,7 +97,7 @@
 
 | 字段 | 用途 |
 | --- | --- |
-| `app.bundle_id` | iPhone App 的 bundle id；手表是 `<id>.watchkitapp`，测试是 `<id>.tests`。写进 `ios/Config.xcconfig` 的 `JARVIS_BUNDLE_ID` |
+| `app.bundle_id` | iPhone App 的 bundle id；手表是 `<id>.watchkitapp`，测试是 `<id>.tests`。写进 `apple/Config.xcconfig` 的 `JARVIS_BUNDLE_ID` |
 | `app.team_id` | 开发者团队，写进 `Config.xcconfig` 的 `DEVELOPMENT_TEAM`；导出时的 ExportOptions 也用它 |
 | `app_store.*` | `release.sh` / `asc*.py`：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖 |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
@@ -109,7 +109,7 @@
 | `xcode` | 可选：编译和发版用哪个 Xcode（`.app` 的路径），`jarvis_config.py env` 据此导出 `DEVELOPER_DIR`（环境里已有的优先）。适配 iPhone Duo 要 Xcode 27 及以上，旧版本编出来的 App 在 Duo 上不会延伸到状态栏和摄像头下面 |
 | `android.application_id` | Android App 的 application id（`scripts/android.sh`，`docs/android.md`）；不写就用 `app.bundle_id` |
 
-`python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `ios/Config.xcconfig`；
+`python3 scripts/jarvis_config.py env` 打印 shell 变量（脚本开头都 `eval` 它），`xcconfig` 生成 `apple/Config.xcconfig`；
 `sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/jarvis_config.py xcconfig`。
 仓库里提交的 `project.yml` 和 `Info.plist` 只写 `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`，钥匙串的 service 用运行时的 bundle id。
 

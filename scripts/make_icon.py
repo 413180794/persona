@@ -13,8 +13,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 S = 1024
 K = 4
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IOS = os.path.join(ROOT, "ios/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset")
-WATCH = os.path.join(ROOT, "ios/JarvisWatch/Assets.xcassets/AppIcon.appiconset")
+IOS = os.path.join(ROOT, "apple/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset")
+WATCH = os.path.join(ROOT, "apple/JarvisWatch/Assets.xcassets/AppIcon.appiconset")
 
 CORAL = (238, 124, 84)
 PEACH = (255, 196, 160)

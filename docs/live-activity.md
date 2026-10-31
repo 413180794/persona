@@ -1,7 +1,7 @@
 # 锁屏 / 灵动岛实时活动（Fleet）
 
 整台手机只有一个实时活动「Fleet」：把所有需要你、在工作、做完未看的 Agent 汇总到锁屏和灵动岛。hub 算内容、经 APNs 推送；
-App 负责开始活动、上报 token；Widget 扩展（`ios/JarvisWidgets`）负责画。设计依据见车道笔记（ChatGPT Codex / Sand 的活动分析），
+App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）负责画。设计依据见车道笔记（ChatGPT Codex / Sand 的活动分析），
 这里只写实现和约定。
 
 ## 显示什么
@@ -23,7 +23,7 @@ App 负责开始活动、上报 token；Widget 扩展（`ios/JarvisWidgets`）�
 自定义          左右各选：状态数量 / 每分钟 token / 今日 token / 今日请求数 / Jarvis 助手 / 机器负载 / 最久那一轮的计时 / 不显示
 ```
 
-- 「需要你」永远占左侧（盖过自定义的选择），红色；右侧选了「状态数量」时显示左侧之后的下一类。规则在 `IslandCell.sides`（`ios/Shared/FleetState.swift`），单元测试钉住。
+- 「需要你」永远占左侧（盖过自定义的选择），红色；右侧选了「状态数量」时显示左侧之后的下一类。规则在 `IslandCell.sides`（`apple/Shared/FleetState.swift`），单元测试钉住。
 - 最小态（和别的 App 的活动并存时只剩一个圈）：最急的那一类的符号 + 数量。
 - 展开态：左上是三类数量，右上是选了的数字（如「12k/分」），下面照旧是 Agent 列表和按钮。锁屏头部同样：数量 + 选了的数字；选了两个数字时数量只留符号和数字，免得挤成「3 在…」。
 - 齿轮不转：实时活动里 `symbolEffect(.rotate, options: .repeating)` 不动（隔 0.4 秒拍两张，齿轮区域像素差 ≤1，和静止区域一样），所以用静态齿轮；脉冲之类的重复动画同理。
@@ -41,7 +41,7 @@ App 负责开始活动、上报 token；Widget 扩展（`ios/JarvisWidgets`）�
 
 ## ContentState（`FleetState`）
 
-Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐字段对应，`liveactivity_test.go TestFleetStateJSON` 和
+Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）逐字段对应，`liveactivity_test.go TestFleetStateJSON` 和
 `FleetStateTests` 两边钉住同一段 JSON：
 
 ```json
@@ -99,7 +99,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`ios/Shared/FleetState.swift`）逐
 - 点活动本身（紧凑态、锁屏）：只有一个 Agent 时打开它（`jarvis://open?machine=…&session=…`），有好几个时只是回到 App（`jarvis://open`），停在离开时的页面和位置（列表就是列表，对话页还是那个对话、同一行；App 被系统结束过的话，冷启动恢复上次的对话页，进后台时记下的阅读位置）；展开态每一行打开各自的会话。2026-10-29 以前一律打开第一条，用户反馈「点灵动岛进了某个 Agent」。
 - 模拟器自动化（`-pairURL`）不上报 token，免得 hub 把真机的活动当成模拟器的。
 
-## 按钮（`ios/LiveActivity/FleetIntents.swift`）
+## 按钮（`apple/LiveActivity/FleetIntents.swift`）
 
 - 第一条能用按钮处理的请求（授权、计划）带按钮：授权「拒绝 / 允许」，计划「查看（打开会话）/ 批准」。打回计划要写意见，留给 App。
   锁屏和展开态都只放这一条 + 按钮 + 「+N 个」（高度放不下第二条）。

@@ -48,12 +48,12 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
 | --- | --- | --- | --- |
 | A1 | **【确认】WS 补发超过 500 条时静默截断，留下永久断档**。node `After(since, 500)` 返回 `more_after`，hub `sendBacklog` 解码的结构体没有这个字段，直接丢了；App 照常合并，`lastSeq` 前进，之后只收增量；已订阅的会话 AgentSync 也跳过（`AgentSync.swift:71-72`） | `server/internal/hub/http.go:595-621`；`node/node.go:285-289`；node 自己的 catch-up 同样只发 500 条且无标记（`node/control.go:425-428`、`403-405`） | 打开对话页→App 切后台→让 Codex 跑 250+ 次工具调用（每次 2 条）→回前台：中间缺一大段，往上翻也翻不到 |
 | A2 | **【确认】`File.After` 会把同一行的多个 item 切开**。`Page`/`PageTurns` 有「不切开同一行」的处理，`After` 没有；Codex 每个工具调用 = 同一 seq 的 use + result 两条，上限恰好落在中间时 result 丢失、工具永远显示「运行中」（下一批从 `last.Seq` 之后开始） | `transcript/transcript.go:927-941`（对比 `869-889`） | A1 同场景；单测可直接构造（阶段 0） |
-| A3 | **【确认】冷启动时 HTTP 首页和磁盘缓存之间有断档**。WS 还没收到 hello 时 `subscribe` 走 `loadInitial`（只拿最新两轮），和缓存里的旧两轮合并；HTTP 先回来的话 `didConnect` 用新的 `lastSeq`，中间的轮永远不补；`loadOlder` 从缓存里最早一条往前翻，也跳过断档 | `ios/Jarvis/App/AppModel.swift:187-194`、`205-213`、`215-226`、`230-241` | 杀掉 App→电脑上让 Agent 再跑 3 轮以上→点推送冷启动：「旧两轮 + 新两轮」，中间没了 |
+| A3 | **【确认】冷启动时 HTTP 首页和磁盘缓存之间有断档**。WS 还没收到 hello 时 `subscribe` 走 `loadInitial`（只拿最新两轮），和缓存里的旧两轮合并；HTTP 先回来的话 `didConnect` 用新的 `lastSeq`，中间的轮永远不补；`loadOlder` 从缓存里最早一条往前翻，也跳过断档 | `apple/Jarvis/App/AppModel.swift:187-194`、`205-213`、`215-226`、`230-241` | 杀掉 App→电脑上让 Agent 再跑 3 轮以上→点推送冷启动：「旧两轮 + 新两轮」，中间没了 |
 | A4 | **【确认】transcript 被截短 / 替换后，服务端从第 1 行重新编号，App 不知道**。没有历史身份（Ovis 的 `history_id`），App 的 `after_seq` 比新文件行数大就什么都拿不到；`line<seq>#n` 这类兜底 id 还会和旧的撞上被去重吞掉。只判断了「变小」，同大小替换、变大的替换都检测不到 | `transcript.go:834-836`；`ChatStore.swift:278` | 少见（Claude Code 不改写；外部工具、`--fork-session`、手工编辑会触发）。单测构造 |
 | A5 | **【确认】`watch(since=0)` 时 Refresh 解析出的新行不推送**：`if since > 0` 才补发，但 Refresh 已经把这批行消费掉了，之后 watchLoop 只推更新的。hub 重启后 `lastSeq` 为 0 时走到这里；App 侧的 `sendBacklog` 通常能补上，但是时序相关 | `node/control.go:424-428` | hub 重启瞬间 Agent 正在输出 |
 | A6 | **【确认逻辑，高概率】同一会话开两个对话页时，订阅被后关的那页取消**。App 的 `subscribed` 是 Set、hub 每个客户端每个会话是 bool，都没有引用计数；新页面先 onAppear 订阅，旧页面后 onDisappear 取消，正在看的页不再实时更新，`visibleSession` 也被置空（会照常弹推送） | `AppModel.swift:43`、`187-203`；`ChatView.swift:181-186`；`hub/http.go:553-578` | 对话页→顶部同伴条进空间页→再点同一个 Agent；或在空间页里点这个会话的推送 |
 | A7 | **【确认】助手 tab 中间回复显示两次**。`message_stop` 把整段文字作为 delta 发出，`message_start` 只清缓冲不发事件，只有 `result` 才发空串；一条消息是「文字 + tool_use」时 `rows.last` 是工具行，`ChatView` 的去重判断失效，工具运行期间这段话既是正式行又带光标再显示一遍 | `node/assistant.go:315-350`；`ChatView.swift:734-741` | 问助手「先告诉我你要做什么，再查日历」 |
-| A8 | **【怀疑】客户端没有心跳**。前台切换网络时 `receive` 可能长时间挂着，`state` 一直 `.connected`，对话页静默停更；hub 侧慢消费者直接断开（`http.go:364-372`），也依赖 App 重连补发（受 A1 影响） | `ios/Shared/LiveConnection.swift:123-126`、`158-189` | 前台时 Wi-Fi ↔ 蜂窝切换 |
+| A8 | **【怀疑】客户端没有心跳**。前台切换网络时 `receive` 可能长时间挂着，`state` 一直 `.connected`，对话页静默停更；hub 侧慢消费者直接断开（`http.go:364-372`），也依赖 App 重连补发（受 A1 影响） | `apple/Shared/LiveConnection.swift:123-126`、`158-189` | 前台时 Wi-Fi ↔ 蜂窝切换 |
 | A9 | **【确认】App 内重连后，已处理的交互卡片残留**：`didConnect` 不重拉交互列表，只有回前台的 `refresh` 才纠正 | `AppModel.swift:230-241`；`hub/http.go:521-523` | 前台断网→电脑上回答问题→恢复网络：卡片还在，点了 410 |
 | A10 | **【确认，低】排序与缓存截尾的小坑**：同 seq 按 id 字符串排序，`#10` 排在 `#2` 前（`ChatStore.swift:295`）；`ChatCache.tail` 没有「不切开同一行」（`ChatStore.swift:607-614`）；待发送消息用双向 `contains` 匹配，「好」「继续」这类短消息会被任何包含它的消息消掉（`ChatStore.swift:637-641`） | 同左 | 单测 |
 
@@ -100,7 +100,7 @@ hooks（PreToolUse / PermissionRequest）▶ interaction ───────�
 | E1 | **【确认逻辑，怀疑界面】「冻结」锚点的行 id 会变**：工作中的轮收到新回复后，原来的答案行被收进工作行；轮结束时 `w-*` 变成 `mu-` / `wt-`；`firstIndex` 找不到锚点，冻结失效，正在往上看的内容被挤走 | `ChatView.swift:226-260`、`718`、`833` |
 | E2 | **【确认】保存的阅读位置一直挂着**：保存的行不在缓存的两轮里时 `entry` 不清，之后手动往上翻加载到那一页，列表被强行拉过去，还关掉跟随 | `ChatView.swift:498-509`、`836` |
 | E3 | **【怀疑】流式文字 / 待发送气泡不受冻结约束**，往上翻时也会挤动 | `ChatView.swift:728-741` |
-| E4 | **【确认】手表对话页只在打开时拉一次**，不刷新、状态不变，原文里的 `<jarvis-context>` / `<attached_images>` 没去掉 | `ios/JarvisWatch/JarvisWatchApp.swift:370-373` |
+| E4 | **【确认】手表对话页只在打开时拉一次**，不刷新、状态不变，原文里的 `<jarvis-context>` / `<attached_images>` 没去掉 | `apple/JarvisWatch/JarvisWatchApp.swift:370-373` |
 
 ---
 

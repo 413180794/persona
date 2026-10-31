@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 /// The app's text uses `Theme.Font` levels and its vertical spacing `Theme.Space` (docs/ios.md, 设计语言). These read
-/// the sources (ios/Jarvis, next to this file on the Mac the tests run from) so a system text style or a size written
+/// the sources (apple/Jarvis, next to this file on the Mac the tests run from) so a system text style or a size written
 /// on a page fails here instead of slowly coming back.
 struct TypeScaleTests {
     /// Pages that draw at sizes of their own: the share card is a picture with a fixed layout.

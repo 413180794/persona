@@ -43,7 +43,7 @@ git push --tags
 
 `release.sh` 做的事：
 
-1. `xcodegen generate`（工程由 `ios/project.yml` 生成，`.xcodeproj` 不入库）。
+1. `xcodegen generate`（工程由 `apple/project.yml` 生成，`.xcodeproj` 不入库）。
 2. Release 归档到 `~/Library/Developer/Xcode/Archives/<日期>/Jarvis <构建号>.xcarchive`（dSYM 留给 Organizer 符号化），
    同时嵌入手表 App。
 3. `check_bundle_strings.py` 检查 `Jarvis.app` 和 `Jarvis.app/Watch/Jarvis.app`：Info.plist 里的 `*UsageDescription`
@@ -81,7 +81,7 @@ App Store Connect 的 API key 只能做 App Manager 能做的事，cloud-managed
   脚本遇到 409 会提示去网页把这个人加进本 App 的 `Internal` 群组。
 - **归档里的 `aps-environment` 总是 `development`**：归档用的是开发描述文件，最终签名在导出环节完成，别在归档产物上检查。
 - **推送和生产环境**：`UIBackgroundModes` 用 `remote-notification`（手表 App 没有后台模式）；`ITSAppUsesNonExemptEncryption=false`
-  已经在 `ios/project.yml` 里，省掉每次上传的出口合规问答。
+  已经在 `apple/project.yml` 里，省掉每次上传的出口合规问答。
 - **不用 iCloud 目录**：这台 Mac 没解锁，涉及 `~/Library/Mobile Documents` 的一律跳过。
 
 ## 待 leader 处理

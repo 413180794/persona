@@ -307,7 +307,7 @@ func (p *Pusher) notifyInteraction(ix proto.Interaction, machine string) {
 }
 
 // interactionPayload is the alert for a new interaction. `category` must match a UNNotificationCategory the app
-// registers (ios/Jarvis/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
+// registers (apple/Jarvis/App/NotificationActions.swift): that is what puts 允许 / 拒绝 / 批准 on the notification, and the
 // buttons answer `interaction_id` through the resolve API.
 func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	title := map[string]string{

@@ -1,6 +1,6 @@
 # App Intents（Siri / 快捷指令）
 
-`ios/Jarvis/Intents/` 里是 4 个 AppIntent，用来在不解锁、不打开 App 的情况下驱动 hub：问 Claude、看状态、批准第一个待处理。
+`apple/Jarvis/Intents/` 里是 4 个 AppIntent，用来在不解锁、不打开 App 的情况下驱动 hub：问 Claude、看状态、批准第一个待处理。
 它们不依赖 App 在前台，也不用 WebSocket：每次调用都现读 `Keychain.serverConfig`，用 `APIClient` 直连 hub 的 REST 接口。
 
 | Intent | 标题 | 作用 | 运行模式 |
@@ -83,17 +83,17 @@ hub 是公司内网的明文 HTTP：intent 用 `.background` 模式，不会因�
 ## 测试
 
 ```sh
-cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
+cd apple && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test -only-testing:JarvisTests/IntentsTests
 ```
 
-`ios/JarvisTests/IntentsTests.swift` 只测纯函数：按机器 / 会话 / 待处理的选择规则、每种交互类型的文案、错误句子、
+`apple/JarvisTests/IntentsTests.swift` 只测纯函数：按机器 / 会话 / 待处理的选择规则、每种交互类型的文案、错误句子、
 `Resolution` 的构造、实体 id。网络部分不测（要真 hub）。
 
 ## 编译与元数据
 
 ```sh
-cd ios && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
+cd apple && xcodegen generate -q && xcodebuild -project Jarvis.xcodeproj -scheme Jarvis \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath ../build/DerivedDataWorker build
 ```
 

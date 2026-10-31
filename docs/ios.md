@@ -1,6 +1,6 @@
 # iOS / watchOS App
 
-XcodeGen 工程 `ios/project.yml`（`Jarvis.xcodeproj` 不入库）。iOS 26 / watchOS 26，Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
+XcodeGen 工程 `apple/project.yml`（`Jarvis.xcodeproj` 不入库）。iOS 26 / watchOS 26，Swift 6，默认 MainActor 隔离。依赖 MarkdownUI。
 Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/config.md`）。界面中文。
 
 ## 信息架构
@@ -402,7 +402,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - 标签和计数各只有一种画法（`Components.swift`）：`Chip` 是不能点的小标签，三种样子——中性（次要灰字 + 浅灰底：模型、版本、tab 名、私聊）、
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
-- BeautifulUI（`ios/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
+- BeautifulUI（`apple/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
   **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，颜色和表面同液态玻璃），其他风格的思考过程、工具行、工作卡、输入框都是 Jarvis 原来的。
   2026-10-30 它曾直接替换原来的界面（#93、#94），用户觉得太丑，整体 revert 后改成这个主题。这个风格下：
   - 对话页的思考过程是它的 `ThinkingState`（✦ + 首行，展开后正文在一条引导线右边）。
@@ -458,7 +458,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
   `APIClient.request`（以及 `image` / `fullItem`）对它不走 URLSession，交给 `APIClient.local`；`LiveConnection` 对它不开 WebSocket，
   用 `LiveConnection.makeLocal` 做的本地 socket。两者都由 `DemoHub`（`Jarvis/App/DemoHub.swift`）注册和回答，回的是和 hub 一样的 JSON，
   所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
-- **数据**：`scripts/make_demo_data.py` 从 `scripts/mock_hub.py`（UI 测试用的假 hub）导出 `ios/Jarvis/Resources/Demo.json`，再加几个 Agent
+- **数据**：`scripts/make_demo_data.py` 从 `scripts/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Jarvis/Resources/Demo.json`，再加几个 Agent
   （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
   全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器监控的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
   改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。

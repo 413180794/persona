@@ -30,7 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * 设置 › 界面风格 (ios/Shared/Theme.swift `AppStyle`, docs/ios.md「设计语言」): the look of the whole app, switchable at
+ * 设置 › 界面风格 (apple/Shared/Theme.swift `AppStyle`, docs/ios.md「设计语言」): the look of the whole app, switchable at
  * runtime. Each style is a set of fixed color tokens per appearance ([JarvisPalette], light / dark follow the system),
  * mapped onto Material's color scheme so every screen, also those that only read `MaterialTheme.colorScheme`, follows.
  */
@@ -104,7 +104,7 @@ data class JarvisPalette(
 
 private fun hex(v: Long) = Color(0xFF000000 or v)
 
-/** The palette of [style] in light or [dark] (also the previews in 设置 › 界面风格). Values from ios/Shared/Theme.swift. */
+/** The palette of [style] in light or [dark] (also the previews in 设置 › 界面风格). Values from apple/Shared/Theme.swift. */
 fun paletteOf(style: AppStyle, dark: Boolean): JarvisPalette {
     fun pick(light: Long, darkV: Long) = hex(if (dark) darkV else light)
     val label = if (dark) Color.White else Color.Black

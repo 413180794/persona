@@ -41,7 +41,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 界面的每个数值、颜色、图标都取自设计系统；页面里不出现字面量。细节和每档的取值见 `docs/ios.md`「设计语言」。
 
-| 要什么 | 用什么（`ios/Shared/Design`，手表 / 小组件也编译） |
+| 要什么 | 用什么（`apple/Shared/Design`，手表 / 小组件也编译） |
 | --- | --- |
 | 字号、强调、行高 | `Theme.Font` 的级别（display / title / heading / body / secondary / caption / sectionHeader / label / code）和强调 token（`labelStrong`、`secondaryMedium`…），`.lineHeight(_:)` |
 | 间距 | `Theme.Space`：4pt 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32 |
@@ -52,7 +52,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 图标、标志 | `Theme.Icon`（一个意思一个 SF Symbol）、`Theme.Brand`（官方标志，原样用） |
 | 风格 | `StyleSpec.current`；`Shared/Design/Styles/` 每种风格一个文件；形象的配色叠在上面（`StyleSpec.tinted`，`docs/persona.md`） |
 
-- **组件和配方**在 `ios/Jarvis/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
+- **组件和配方**在 `apple/Jarvis/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
   `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
 - **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `StyleSpec` 加一个 `AppStyle` case，别处只读 `StyleSpec.current`、不 `switch AppStyle`。
   换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Jarvis 里改。
@@ -68,7 +68,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 路径 | 内容 |
 | --- | --- |
 | `server/` | Go 服务端 `jarvisd`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
-| `ios/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
+| `apple/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
 | `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）和公开的 jarvisd（`publish.sh`、`install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
@@ -105,7 +105,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/launchers.md` | 启动器与「设置 › 模型」：~/.zshrc 的自动同步 / 隐藏，App 里加的（Key 加密存 hub、`jarvisd launch` 运行），接口 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
-| `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`ios/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
+| `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 
 ## 构建与验证
@@ -138,6 +138,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   自己的修复在 `git worktree add --detach /tmp/x origin/master` 里做。
 - 数据库迁移号按车道分段（00x1…），挑号前先看所有 worktree 的 `server/internal/db/migrations/` 和 `jarvis_test` 库的 `schema_migrations`：
   别的车道没合的迁移可能已经占了号（2026-10-30 0051 撞号，改用 0061）。
+- 2026-11-01 `ios/` 改名为 `apple/`（iOS、手表、macOS 三个 App 和共享代码在同一个 XcodeGen 工程里）：老的分支 / worktree rebase 时，
+  新建在 `ios/` 下的文件要手动挪到 `apple/`（改动已有文件 git 会跟着改名走）。
 - 2026-10-28 改写过一次全部 git 历史（去掉内网信息和个人信息，GitHub 仓库删了重建）：此前的提交号全部失效，
   别的机器上的旧克隆要删掉重新 clone，不能 push，否则旧历史会被推回去。
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论（2026-10-29 一个只等成功的 `until grep` 空等了五个多小时）。
@@ -349,7 +351,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   找不到 id 冻结就失效、可见内容被顶走（修前实测 319pt）。按「离开最新端时的 item 快照」重建行（`ChatView.Frozen`），验证用 `-showFreezeProbe`。
 - BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，
   在长工作卡里滑动会明显掉帧：ThinkingState 原样放进 650 步的工作卡，Debug 模拟器上卡顿时长从约 11 涨到约 21 ms/s，去掉这两样后约 13.7。
-  这类问题改在 BeautifulUI 仓库里，再整个拷进 `ios/Packages/BeautifulUI`（`VENDORED.md`），不在 Jarvis 里改库代码。
+  这类问题改在 BeautifulUI 仓库里，再整个拷进 `apple/Packages/BeautifulUI`（`VENDORED.md`），不在 Jarvis 里改库代码。
 - 倒置聊天列表里点开 / 收起的东西要按住表头（`ChatPin`，2026-10-31）：长出来的内容会把表头和它上面的一切往上推（思考跳 40pt，工作卡跳约 440pt、第二下点到别的步骤上）。
   表头按「同一次布局里的屏幕位置 + 内容坐标」报位置（内容坐标不随滚动变），偏移 = 点下时的偏移 + 表头在内容里挪了多少；别用回报的 offset 算（晚一帧就过冲、来回跳）。
   `ScrollPosition.scrollTo(point:)` 先落在要的点、过一会儿又差一个内容边距（10pt）、再回来；存着的 `ScrollPosition`（`edge: .top`）在内容变化时会被重新套用，
@@ -465,7 +467,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - Swift 的尾随闭包按位置匹配第一个闭包参数：一个类型有两个可选闭包属性（`SpaceMenuItems` 的 `rename`、`open`），
   新加的那个放在前面，原来 `SpaceMenuItems(group:) { 重命名 }` 的调用就悄悄变成了另一个。新加的可选闭包放最后，调用处写标签。
 - 中文环境下 SwiftUI 的 `.dateTime.hour(.twoDigits(amPM: .omitted))` 是 12 小时制，17:00 显示成「05:00」：要 24 小时的时刻用固定 `HH:mm` 的格式（`AssistantScheduleText.hm`）。
-- `ios/Shared` 里的类型默认是 MainActor 隔离：新加的纯数据 enum（被 nonisolated 的 struct 用到）要标 `nonisolated`，否则报 isolated conformance 错。
+- `apple/Shared` 里的类型默认是 MainActor 隔离：新加的纯数据 enum（被 nonisolated 的 struct 用到）要标 `nonisolated`，否则报 isolated conformance 错。
   JarvisTests 目标没有默认隔离：测试里用到 App 的类型（静态方法、属性、key path）时整个测试 struct 标 `@MainActor`（和 `ChatStoreTests` 等一样），
   别靠在 App 里去掉隔离来迁就测试；提交前跑一遍整个 JarvisTests，一个文件编译不过整个目标都跑不起来（2026-10-31 `KnowledgeTests`）。
 - App 目标默认 MainActor 隔离：交给系统、由系统在自己队列上调用的闭包（`PHPhotoLibrary.performChanges`、`SFSpeechRecognizer.requestAuthorization`、
@@ -508,8 +510,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 ### macOS
 
-- Mac 版（`JarvisMac`，`docs/mac.md`）和 iOS 共用页面：iOS 专用的 SwiftUI 修饰符 / 枚举成员在 `ios/Mac/Compat/` 里写同名的 Mac 版本（被标成 unavailable 的系统符号会让位给模块里的同名声明），
-  UIKit 视图在 `ios/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
+- Mac 版（`JarvisMac`，`docs/mac.md`）和 iOS 共用页面：iOS 专用的 SwiftUI 修饰符 / 枚举成员在 `apple/Mac/Compat/` 里写同名的 Mac 版本（被标成 unavailable 的系统符号会让位给模块里的同名声明），
+  UIKit 视图在 `apple/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
 - 别把页面的分栏（`SplitNavigation`、Jarvis 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，
   对话整个往右挪一个侧栏宽、输入框被裁掉（2026-10-31）。Mac 壳的四项侧栏是 HStack 里的一列。
 - Mac 锁屏时 `screencapture` 只拍到锁屏：截图用 `scripts/mac_shot.sh`（App 自己 `cacheDisplay` 出 PNG，`docs/mac.md`「构建、运行、截图」）。

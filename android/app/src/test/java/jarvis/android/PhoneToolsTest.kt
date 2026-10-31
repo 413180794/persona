@@ -17,7 +17,7 @@ import java.time.Instant
 
 /**
  * The hub keeps one phone tool list, from whichever phone registered last: Android's must look exactly like the
- * iOS app's, or a phone switching changes what Claude sees. The fixture is read from ios/Jarvis/PhoneTools.
+ * iOS app's, or a phone switching changes what Claude sees. The fixture is read from apple/Jarvis/PhoneTools.
  */
 class PhoneToolsTest {
     private val ios: JsonObject = JsonCodec.parseToJsonElement(javaClass.classLoader!!.getResource("ios-phone-tools.json").readText()).jsonObject

@@ -24,7 +24,7 @@ app=${APP:-$derived/Build/Products/Debug/Jarvis.app}
 
 if [[ "${BUILD:-0}" == 1 ]]; then
     (
-        cd "$root/ios"
+        cd "$root/apple"
         python3 ../scripts/jarvis_config.py xcconfig >/dev/null
         xcodegen generate -q
         eval "$(python3 ../scripts/jarvis_config.py env)"

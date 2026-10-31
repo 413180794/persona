@@ -85,7 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-// The chat's message rows (ios/Jarvis/Views/Chat/MessageViews.swift). Tools are in chat/ToolViews.kt.
+// The chat's message rows (apple/Jarvis/Views/Chat/MessageViews.swift). Tools are in chat/ToolViews.kt.
 
 // --- User ------------------------------------------------------------------------------------------------------------
 

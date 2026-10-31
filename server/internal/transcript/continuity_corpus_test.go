@@ -6,7 +6,7 @@ package transcript
 //	./corpus.test -test.run CorpusContinuity -corpus <dirs> -sim 3 -out continuity.jsonl
 //
 // The file is written in random pieces (mid-line too). After each piece the node reads what is new and pushes it with
-// its span; two clients follow the pushes with ChatStore.apply's rules (ios/Shared/ChatStore.swift): some pushes are
+// its span; two clients follow the pushes with ChatStore.apply's rules (apple/Shared/ChatStore.swift): some pushes are
 // lost on the way, one client joins late from a stale cache and catches up the way the hub does it (after_seq pages
 // of up to 500 items, at most 8, then more_after), holes are filled with after_seq pages of random sizes, and the
 // file may be cut back and rewritten or replaced (a new history). At the end each client reconnects, scrolls back to
@@ -504,7 +504,7 @@ func firstDiff(got, want []proto.Item) string {
 
 var dumpDir = flag.String("dumpitems", "", "write each -corpus file's items (as pages carry them) to <dir>/<n>.json")
 
-// TestCorpusDumpItems writes real sessions' items for the app's rebuild benchmark (ios/JarvisTests/RebuildTests.swift).
+// TestCorpusDumpItems writes real sessions' items for the app's rebuild benchmark (apple/JarvisTests/RebuildTests.swift).
 func TestCorpusDumpItems(t *testing.T) {
 	if *dumpDir == "" {
 		t.Skip("-dumpitems")

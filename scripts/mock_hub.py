@@ -582,7 +582,7 @@ TERMINAL_STREAM = bool(os.environ.get("MOCK_TERMINAL_STREAM"))
 
 
 def terminal_frames(cols=96, rows=24, ticks=40):
-    if os.environ.get("MOCK_TERMINAL_FIXTURE"):  # frames recorded from herdr (ios/JarvisTests/Fixtures/terminal-observe.jsonl)
+    if os.environ.get("MOCK_TERMINAL_FIXTURE"):  # frames recorded from herdr (apple/JarvisTests/Fixtures/terminal-observe.jsonl)
         recorded = [json.loads(l) for l in open(os.environ["MOCK_TERMINAL_FIXTURE"]) if l.startswith("{")]
         return [{"seq": i + 1, "full": f["full"], "cols": f["width"], "rows": f["height"], "data": f["bytes"]}
                 for i, f in enumerate(recorded)]

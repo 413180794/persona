@@ -7,7 +7,7 @@
 | 采集（解析 /proc、vm_stat、iostat、sw_vers 等） | `server/internal/sysmon/`（`sysmon.go` 纯解析，`linux.go` / `darwin.go` 读系统） |
 | node 发送 | `server/internal/node/metrics.go` |
 | hub 存储、降采样、清理、API | `server/internal/hub/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
-| App | `ios/Jarvis/Views/Machines/`（`MachineDashboardView`、`MachineMonitorView`、`MetricCharts`、`OSBadge`），模型 `ios/Shared/MachineMetrics.swift` |
+| App | `apple/Jarvis/Views/Machines/`（`MachineDashboardView`、`MachineMonitorView`、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
 | 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 jarvisd 的 CPU |
 
 ## 系统信息

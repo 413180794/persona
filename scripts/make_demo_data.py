@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Writes the app's 体验模式 data (ios/Jarvis/Resources/Demo.json) from scripts/mock_hub.py's made-up hub.
+"""Writes the app's 体验模式 data (apple/Jarvis/Resources/Demo.json) from scripts/mock_hub.py's made-up hub.
 
     python3 scripts/make_demo_data.py        # rerun after changing mock_hub.py's data; commit the JSON
 
 体验模式 (docs/ios.md) lets someone without a hub, App Review included, walk through every page: the app answers its
-own requests from this file (ios/Jarvis/App/DemoHub.swift) and never connects anywhere. Everything here is made up,
+own requests from this file (apple/Jarvis/App/DemoHub.swift) and never connects anywhere. Everything here is made up,
 like the mock hub's: no real names, hosts or messages (scripts/privacy_check.py scans the file, check_bundle_privacy.py
 the built app). Times are stored relative to when this ran ("@rel:<seconds>", "@unix:<seconds>") and the app puts
 them next to its own clock, so the demo always looks current. Machine metrics are drawn by the app itself.
@@ -15,7 +15,7 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "ios", "Jarvis", "Resources", "Demo.json")
+OUT = os.path.join(HERE, "..", "apple", "Jarvis", "Resources", "Demo.json")
 
 os.environ.update(MOCK_TASKS="1", MOCK_RICH="1")
 sys.path.insert(0, HERE)

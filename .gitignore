@@ -2,15 +2,15 @@
 /server/bin/
 /build/
 /build-release/
-/ios/*.xcodeproj
-/ios/build/
+/apple/*.xcodeproj
+/apple/build/
 *.xcuserstate
 xcuserdata/
 DerivedData/
 __pycache__/
 /tmp/
 florak/
-/ios/Config.xcconfig
+/apple/Config.xcconfig
 # Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
 /CLAUDE.local.md
 /build-publish/

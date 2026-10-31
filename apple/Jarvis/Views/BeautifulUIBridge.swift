@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// BeautifulUI (ios/Packages/BeautifulUI) reads its colors, radii and type size from `BUITheme` in the environment.
+// BeautifulUI (apple/Packages/BeautifulUI) reads its colors, radii and type size from `BUITheme` in the environment.
 // RootView puts in the one built here from the current style, so its components follow the five styles like the rest
 // of the app. The library's own palette is never used.
 

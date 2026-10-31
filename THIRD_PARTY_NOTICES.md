@@ -2,7 +2,7 @@
 
 ## Brand marks
 
-`ios/Jarvis/Resources/Assets.xcassets/Brands` and `ios/JarvisWatch/Assets.xcassets/Brands` hold other products' marks,
+`apple/Jarvis/Resources/Assets.xcassets/Brands` and `apple/JarvisWatch/Assets.xcassets/Brands` hold other products' marks,
 shown next to the service Jarvis connects to. The marks are trademarks of their owners; using them here does not imply
 endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
 redrawn.
@@ -42,7 +42,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## JetBrains Mono
 
-The terminal font (`ios/Jarvis/Resources/Fonts/JetBrainsMono-*.ttf`, v2.304, unmodified).
+The terminal font (`apple/Jarvis/Resources/Fonts/JetBrainsMono-*.ttf`, v2.304, unmodified).
 
 https://github.com/JetBrains/JetBrainsMono
 
@@ -142,13 +142,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ## BeautifulUI
 
-`ios/Packages/BeautifulUI` (the chat's thoughts and tool chips) is BeautifulUI, a SwiftUI port of Beautiful UI
-(https://www.beautifului.dev/), copied in as a local Swift package (`ios/Packages/BeautifulUI/VENDORED.md`).
+`apple/Packages/BeautifulUI` (the chat's thoughts and tool chips) is BeautifulUI, a SwiftUI port of Beautiful UI
+(https://www.beautifului.dev/), copied in as a local Swift package (`apple/Packages/BeautifulUI/VENDORED.md`).
 The package directory keeps both licenses (`LICENSE`, `LICENSE-beautifului`) and `NOTICE`.
 
 The web client (`web/`) uses Beautiful UI's design tokens, keyframes and component grammar directly (`web/src/styles.css`,
 the views under `web/src/`), reimplemented in React against Jarvis's data; Beautiful UI's license is the one in
-`ios/Packages/BeautifulUI/LICENSE-beautifului` (MIT, Copyright (c) 2026 Shane Levine).
+`apple/Packages/BeautifulUI/LICENSE-beautifului` (MIT, Copyright (c) 2026 Shane Levine).
 
 BeautifulUI — MIT License, Copyright (c) 2026 ChrisPan
 

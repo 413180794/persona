@@ -207,8 +207,8 @@
 | 测试 | 内容 |
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
-| `ios/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；叠在风格上（飞书风格保留飞书蓝）；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
-| `ios/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
+| `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；叠在风格上（飞书风格保留飞书蓝）；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
+| `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
 
 截图和录屏用的 DEBUG 启动参数：
 

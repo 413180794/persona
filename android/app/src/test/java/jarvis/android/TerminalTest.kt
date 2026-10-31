@@ -17,7 +17,7 @@ import org.junit.Test
 import java.util.Base64
 
 /**
- * The terminal's VT subset, against herdr observe frames the iOS app's tests use (ios/JarvisTests/Fixtures): a scratch
+ * The terminal's VT subset, against herdr observe frames the iOS app's tests use (apple/JarvisTests/Fixtures): a scratch
  * pane (172×45) running a sample script — colors, a box with Chinese in it, an emoji, an OSC 8 link, a 200-character line.
  */
 class TerminalTest {
