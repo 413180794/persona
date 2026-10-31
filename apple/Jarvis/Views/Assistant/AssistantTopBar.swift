@@ -184,6 +184,8 @@ struct AssistantTopBar: View {
 
     /// The conversation's launcher (the next message uses it) or, on the new-conversation page, the default one.
     private var launcher: String {
+        // The main conversation follows 设置 › 助手 (the hub sends it there), side ones keep their own.
+        if let key, key == model.assistantMain, let l = model.assistantLaunchers[key] ?? model.assistantConfig?.launcher { return l }
         if let key { return model.assistantLaunchers[key] ?? session?.launcher ?? model.assistantConfig?.launcher ?? "claude" }
         return model.assistantConfig?.launcher ?? "claude"
     }

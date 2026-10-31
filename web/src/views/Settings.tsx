@@ -236,7 +236,7 @@ function General() {
         </div>
       </Group>
 
-      <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行一个 Claude。换启动器只影响新对话；启动器在「模型」里管理。`}>
+      <Group title="Jarvis 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.jarvis/assistant"} 里后台运行一个 Claude。换启动器后主对话从下一条消息起用它（接着原来的上下文），新对话也用它；启动器在「模型」里管理。`}>
         <Row label="启动器（模型）" hint={launchers?.find((l) => l.name === assistant?.launcher)?.model}>
           {!launchers ? (
             <Spinner />

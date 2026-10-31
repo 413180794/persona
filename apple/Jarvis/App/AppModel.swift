@@ -321,7 +321,9 @@ final class AppModel {
         guard let api else { return }
         do {
             assistantConfig = try await api.setAssistant(launcher: launcher)
-            toast = Toast("新对话将使用 \(launcher)", style: .success)
+            // The main conversation follows the setting (the hub resumes it on this launcher): drop a one-off pick.
+            if let main = assistantMain { assistantLaunchers[main] = nil }
+            toast = Toast("Jarvis 下一条消息起使用 \(launcher)", style: .success)
         } catch { show(error) }
     }
 

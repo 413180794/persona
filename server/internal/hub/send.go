@@ -77,6 +77,13 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	sid := r.PathValue("sid")
 	p["session_id"] = sid
+	// Jarvis' main conversation follows 设置 › 助手's launcher (the next message resumes it on that one) unless the
+	// app picked one for this send; side conversations keep the launcher they started with.
+	if l, _ := p["launcher"].(string); l == "" {
+		if cfg := h.assistantConfig(r.Context()); cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID {
+			p["launcher"] = cfg.Launcher
+		}
+	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and
 	// its outcome is what the retry gets. Resuming an offline session can take a while (shell + claude startup).
 	// One sent while the session still starts waits for claude to be ready (node/starting.go).

@@ -80,7 +80,7 @@ struct AssistantProfileView: View {
             } header: {
                 Text("设置")
             } footer: {
-                Text("每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器只影响新对话。")
+                Text("每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。")
             }
             Section {
                 Label(machinesLine, systemImage: Theme.Icon.machines)
