@@ -206,7 +206,7 @@ footer a { text-decoration: none; } footer a:hover { color: var(--fg); }
 
 /* ── responsive ── */
 @media (max-width: 960px) {
-  .top nav { display: none; } .top .btn-small { margin-left: auto; }
+  .top nav { display: none; }
   .hero { grid-template-columns: 1fr; min-height: auto; padding-top: 40px; }
   .hero-stage { height: 560px; }
   .split, .split.reverse { grid-template-columns: 1fr; gap: 50px; }
