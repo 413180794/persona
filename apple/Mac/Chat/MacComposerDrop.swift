@@ -32,6 +32,42 @@ nonisolated enum MacDrop {
     }
 }
 
+extension MacDrop {
+    /// Files dropped or pasted on a composer holding `images` pictures: pictures read and `attach`ed, other files
+    /// handed to `upload` (the composer's FileUploads, which types the path in), folders refused with a toast.
+    @MainActor @discardableResult
+    static func take(_ urls: [URL], images: Int, attach: (UIImage) -> Void, upload: ([URL]) -> Void) -> Bool {
+        let split = split(urls, already: images)
+        if split.folders > 0 { AppModel.shared.toast = Toast("文件夹发不了，拖里面的文件进来", style: .error) }
+        guard !split.images.isEmpty || !split.files.isEmpty else { return split.folders > 0 }
+        for url in split.images {
+            if let img = UIImage(contentsOf: url) { attach(img) }
+        }
+        if !split.files.isEmpty { upload(split.files) }
+        return true
+    }
+}
+
+extension MacDrop {
+    /// A picture as the composers send it: at most 1600 px on the long side, JPEG (the + menu's 照片 does the same).
+    @MainActor static func payload(_ img: UIImage) -> (UIImage, ImagePayload)? {
+        let scaled = img.scaledDown(maxSide: 1600)
+        guard let jpeg = scaled.jpegData(compressionQuality: 0.75) else { return nil }
+        return (scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString()))
+    }
+}
+
+extension View {
+    /// Drop and ⌘V of pictures and files on a composer (see `MacDrop.take`).
+    func macComposerFiles(images: Int, focused: Bool, attach: @escaping (UIImage) -> Void,
+                          upload: @escaping ([URL]) -> Void) -> some View {
+        dropDestination(for: URL.self) { urls, _ in MacDrop.take(urls, images: images, attach: attach, upload: upload) }
+            .modifier(MacComposerPaste(focused: focused, image: attach, files: {
+                MacDrop.take($0, images: images, attach: attach, upload: upload)
+            }))
+    }
+}
+
 /// What ⌘V in a composer does with the pasteboard.
 nonisolated enum MacPaste {
     enum Plan: Equatable {

@@ -377,6 +377,16 @@ struct StarterComposer: View {
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
+        #if os(macOS)
+        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
+        .macComposerFiles(images: images.count, focused: focused, attach: { img in
+            if images.count < MacDrop.maxImages, let p = MacDrop.payload(img) { images.append(p) }
+        }, upload: { urls in
+            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+                text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
+            }
+        })
+        #endif
         .onChange(of: picks) { _, items in
             Task {
                 guard !items.isEmpty else { return }
@@ -464,6 +474,16 @@ struct BeautifulStarterComposer: View {
                 text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
             }
         }
+        #if os(macOS)
+        // Finder drags and ⌘V of pictures / copied files, as in an Agent's composer (docs/mac.md「细节」).
+        .macComposerFiles(images: images.count, focused: focused, attach: { img in
+            if images.count < MacDrop.maxImages, let p = MacDrop.payload(img) { images.append(p) }
+        }, upload: { urls in
+            uploads.start(urls, machine: model.assistantConfig?.machineID ?? model.hubMachineID, model: model) { path in
+                text = PathInsert.edit(path, text: text, selection: $selection, focused: $focused)
+            }
+        })
+        #endif
         .onChange(of: picks) { _, items in
             Task {
                 guard !items.isEmpty else { return }

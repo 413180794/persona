@@ -2079,9 +2079,8 @@ struct Composer: View {
         }
         #if os(macOS)
         // Finder drags: pictures are attached like 照片, other files uploaded to the machine like 文件 (docs/mac.md).
-        .dropDestination(for: URL.self) { urls, _ in take(urls) }
         // ⌘V of a screenshot or of files copied in Finder does the same; text is pasted as usual.
-        .modifier(MacComposerPaste(focused: focused, image: { add($0) }, files: { take($0) }))
+        .macComposerFiles(images: images.count, focused: focused, attach: { add($0) }, upload: { upload($0) })
         #if DEBUG
         .task { // `-openDropDemo a.png,b.md`: those files dropped on the composer 2 s after opening, for screenshots
             if let list = UserDefaults.standard.string(forKey: "openDropDemo") {
@@ -2142,18 +2141,13 @@ struct Composer: View {
 
     #if os(macOS)
     /// Files dropped or pasted: pictures attached, other files uploaded to the machine, folders refused.
-    @discardableResult private func take(_ urls: [URL]) -> Bool {
-        let split = MacDrop.split(urls, already: images.count)
-        if split.folders > 0 { model.toast = Toast("文件夹发不了，拖里面的文件进来", style: .error) }
-        guard !split.images.isEmpty || !split.files.isEmpty else { return split.folders > 0 }
-        for url in split.images {
-            if let img = UIImage(contentsOf: url) { add(img) }
-        }
-        if !split.files.isEmpty {
-            uploads.start(split.files, machine: key.machineID, model: model) { insertPath($0) }
-        }
+    private func take(_ urls: [URL]) {
+        MacDrop.take(urls, images: images.count, attach: { add($0) }, upload: { upload($0) })
+    }
+
+    private func upload(_ urls: [URL]) {
+        uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }
         focused = true
-        return true
     }
     #endif
 
