@@ -194,7 +194,20 @@ data class Item(
 }
 
 @Serializable
-data class QuestionOption(val label: String = "", val description: String? = null)
+data class QuestionOption(val label: String = "", val description: String? = null) {
+    /** The label without "(Recommended)" (answers send [label] verbatim). */
+    val displayLabel: String get() = splitRecommended(label).first
+    val recommended: Boolean get() = splitRecommended(label).second
+
+    companion object {
+        fun splitRecommended(label: String): Pair<String, Boolean> {
+            for (suffix in listOf(" (Recommended)", "(Recommended)", "（推荐）", "(推荐)")) {
+                if (label.endsWith(suffix)) return label.dropLast(suffix.length).trim() to true
+            }
+            return label to false
+        }
+    }
+}
 
 @Serializable
 data class Question(
@@ -205,7 +218,10 @@ data class Question(
 )
 
 @Serializable
-data class DialogOption(val key: String = "", val label: String = "", val detail: String? = null, val kind: String? = null)
+data class DialogOption(val key: String = "", val label: String = "", val detail: String? = null, val kind: String? = null) {
+    /** "Type something": the answer is typed text. */
+    val needsText: Boolean get() = kind == "type_something"
+}
 
 /** A terminal dialog the hub parsed (server/internal/screen); answer with Resolution.option. */
 @Serializable

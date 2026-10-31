@@ -83,6 +83,14 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     var serverVersion: String? = null
         private set
+
+    /** A subscribe backlog arrived for this session (`items` with `backlog: true`): the chat's 更新中… can end. */
+    private val _backlogs = MutableSharedFlow<SessionKey>(extraBufferCapacity = 64)
+    val backlogs: SharedFlow<SessionKey> = _backlogs.asSharedFlow()
+
+    /** The open socket, if any (the chat title's weak-link check reads OkHttp's ping / pong counters). */
+    val socket: WebSocket? get() = ws
+
     /** What the hub can do (hello `features`): terminal_stream, terminal_control, terminal_scroll, terminal_click, … */
     @Volatile var features: Set<String> = emptySet()
         private set
@@ -292,6 +300,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
                 val mid = msg["machine_id"]?.jsonPrimitive?.content ?: return
                 val sid = msg["session_id"]?.jsonPrimitive?.content ?: return
                 val items: List<Item> = decode(msg["items"]) ?: emptyList()
+                if (msg["backlog"]?.jsonPrimitive?.booleanOrNull == true) _backlogs.tryEmit(SessionKey(mid, sid))
                 chat(SessionKey(mid, sid), create = false)?.onPush(
                     items,
                     history = msg["history"]?.jsonPrimitive?.content,

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,11 +81,15 @@ import jarvis.android.data.AgentState
 import jarvis.android.data.Hub
 import jarvis.android.data.HubException
 import jarvis.android.data.SessionKey
+import jarvis.android.chat.ConnectionWatch
+import jarvis.android.chat.Outbox
+import jarvis.android.chat.PendingMessage
 import jarvis.android.ui.chat.ChatEnv
 import jarvis.android.ui.web.LinkText
 import jarvis.android.ui.web.Links
 import jarvis.android.ui.web.LocalLinkSource
 import jarvis.android.ui.web.WebViewPool
+import jarvis.android.ui.chat.PendingBubble
 import jarvis.android.ui.chat.ImageRow
 import jarvis.android.ui.chat.LocalChatEnv
 import jarvis.android.ui.chat.MessageMenuHost
@@ -123,7 +129,7 @@ import java.util.UUID
 private sealed interface ChatLine {
     val key: String
 
-    data class Card(val ix: jarvis.android.data.Interaction) : ChatLine { override val key get() = "ix/" + ix.id }
+    data class Pending(val p: PendingMessage) : ChatLine { override val key get() = "p:" + p.clientMsgId }
     data class Live(val text: String) : ChatLine { override val key get() = "live" }
     data class Working(val label: String) : ChatLine { override val key get() = "working" }
     data class Queued(val text: String) : ChatLine { override val key get() = "queued" }
@@ -136,7 +142,7 @@ private sealed interface ChatLine {
  * under the user's message (iOS `chatLines`, docs/ios.md「展示逻辑」); a long press on a message opens its menu;
  * files, Git and pictures open over the page.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     hub: Hub, key: SessionKey, onBack: () -> Unit,
@@ -153,7 +159,13 @@ fun ChatScreen(
     focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
 ) {
     val store = remember(key) { hub.chat(key) }
-    DisposableEffect(key) { onDispose { hub.release(key) } }
+    DisposableEffect(key) {
+        ConnectionWatch.chatOpened(key) // its backlog ends the title's 更新中…
+        onDispose { ConnectionWatch.chatClosed(key); hub.release(key) }
+    }
+    // Messages sent from this phone that the transcript doesn't show yet (iOS Outbox): drawn at once, sent in the
+    // background; written offline they wait (on disk) and go out in order once connected.
+    val outbox by remember(key) { Outbox.of(key) }.collectAsState(emptyList())
     val state by store.state.collectAsState()
     val byMachine by hub.sessions.collectAsState()
     val session = byMachine[key.machineId]?.firstOrNull { it.sessionId == key.sessionId }
@@ -186,7 +198,10 @@ fun ChatScreen(
     // Rows are rebuilt off the main thread on each new item list; only the first frame builds them here.
     var rows by remember(key) { mutableStateOf(buildRows(state.items)) }
     val items = state.items
-    LaunchedEffect(items) { rows = withContext(Dispatchers.Default) { buildRows(items) } }
+    LaunchedEffect(items) {
+        rows = withContext(Dispatchers.Default) { buildRows(items) }
+        Outbox.arrived(key, items) // a pending bubble gives way to the transcript's copy
+    }
     // Work lines the user opened (by the id of their first step).
     var expandedWork by remember(key) { mutableStateOf(setOf<String>()) }
     val toggleWork: (String) -> Unit = { id -> expandedWork = if (id in expandedWork) expandedWork - id else expandedWork + id }
@@ -204,13 +219,13 @@ fun ChatScreen(
     val lastText = ((rows.lastOrNull() as? ChatRow.Assistant)?.item?.cutText)
     val live = state.live.takeIf { assistant && it.isNotBlank() && !(lastText != null && lastText.startsWith(it)) }
     val runningWork = folded.any { it is FoldedRow.Work && it.running }
-    val lines = remember(folded, cards, live, working, runningWork, session?.queued, state.loadingOlder) {
+    val lines = remember(folded, outbox, live, working, runningWork, session?.queued, state.loadingOlder) {
         buildList {
-            cards.forEach { add(ChatLine.Card(it)) }
             when {
                 live != null -> add(ChatLine.Live(live))
                 working && !runningWork -> add(ChatLine.Working(if (assistant) "Jarvis 正在思考…" else "${session?.agentLabel ?: "Claude"} 正在工作…"))
             }
+            for (i in outbox.indices.reversed()) add(ChatLine.Pending(outbox[i]))
             session?.queued?.takeIf { it.isNotEmpty() }?.let { add(ChatLine.Queued("排队中：" + it.joinToString(" / "))) }
             for (i in folded.indices.reversed()) add(ChatLine.Line(folded[i]))
             if (state.loadingOlder) add(ChatLine.Older)
@@ -238,7 +253,7 @@ fun ChatScreen(
     }
     // A drag closes the message menu (as on iOS: scrolling dismisses it).
     LaunchedEffect(list) { list.interactionSource.interactions.collect { if (it is DragInteraction.Start) menu.close() } }
-    LaunchedEffect(lines.firstOrNull { it !is ChatLine.Card }?.key, state.live.length / 80, cards.size) {
+    LaunchedEffect(lines.firstOrNull()?.key, state.live.length / 80) {
         if (follow && lines.isNotEmpty()) list.scrollToItem(0)
     }
     val farFromEnd by remember { derivedStateOf { list.firstVisibleItemIndex > 2 } }
@@ -251,9 +266,8 @@ fun ChatScreen(
     }
 
     var draft by rememberSaveable(key.path) { mutableStateOf("") }
-    var sending by remember { mutableStateOf(false) }
-    var refusal by remember { mutableStateOf<HubException?>(null) }
-    var pendingMsgId by remember { mutableStateOf<String?>(null) }
+    // Refusals already explained (the dialog shows once per message; the bubble keeps its red mark).
+    var refusalsShown by remember(key) { mutableStateOf(setOf<String>()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var terminal by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -300,39 +314,27 @@ fun ChatScreen(
                     .onFailure { e -> notice = "「$name」没传上去：${e.message}" }
             }
             uploading = null
-            if (paths.isNotEmpty()) { draft = jarvis.android.data.withPaths(draft, paths); pendingMsgId = null }
+            if (paths.isNotEmpty()) draft = jarvis.android.data.withPaths(draft, paths)
         }
     }
 
-    fun send(clearDraft: String? = null) {
+    // The message leaves the input box at once: the outbox draws it, sends it (or keeps it until connected) with one
+    // client_msg_id, and puts a refusal or failure on the bubble (重发 / 删除 there).
+    fun send() {
         val sentContexts = contexts
         val text = composeMessage(draft, images.isNotEmpty(), sentContexts) ?: return
-        val id = pendingMsgId ?: UUID.randomUUID().toString().also { pendingMsgId = it }
-        sending = true; notice = null
-        scope.launch {
-            try {
-                hub.api.send(key, text, id, clearDraft, images)
-                draft = ""; pendingMsgId = null; images = emptyList()
-                sentContexts.forEach { Links.removeContext(key, it) }
-                follow = true; list.scrollToItem(0) // what you sent and its answer show, wherever you had scrolled
-            } catch (e: HubException) {
-                when (e.code) {
-                    "dialog_open", "input_draft" -> { refusal = e; if (e.fields?.get("delivered")?.jsonPrimitive?.content == "none") pendingMsgId = null }
-                    else -> notice = e.message
-                }
-            } catch (e: Exception) {
-                notice = "没有送达：${e.message}" // keep the id: a retry is typed at most once
-            }
-            sending = false
-        }
+        Outbox.send(hub, key, text, images)
+        draft = ""; images = emptyList(); notice = null
+        sentContexts.forEach { Links.removeContext(key, it) } // page picks live in Links.contexts
+        follow = true; scope.launch { list.scrollToItem(0) } // what you sent and its answer show, wherever you had scrolled
     }
 
     // The message menu's actions (iOS `MessageMenu`): 引用 / 编辑 fill the input box, 交给 Jarvis starts an assistant
     // conversation about it (the inbox's path), 作为上下文 rides along with this chat's next message.
     val title = if (assistant) session?.title?.takeIf { it.isNotBlank() && it != "Claude Code" } ?: "Jarvis"
     else session?.displayTitle ?: key.sessionId.take(8)
-    menu.quote = { text -> draft = quoted(text, draft); pendingMsgId = null; runCatching { focus.requestFocus() } }
-    menu.edit = { text -> draft = text; pendingMsgId = null; runCatching { focus.requestFocus() } }
+    menu.quote = { text -> draft = quoted(text, draft); runCatching { focus.requestFocus() } }
+    menu.edit = { text -> draft = text; runCatching { focus.requestFocus() } }
     menu.askJarvis = onHandToJarvis?.let { hand ->
         { text: String -> hand(ContextRef("context", "$title · 消息", "", text).xml + "\n\n看看这条消息，告诉我该怎么处理。") }
     }
@@ -377,7 +379,16 @@ fun ChatScreen(
                                 session?.spaceName?.takeIf { it.isNotBlank() },
                                 session?.agentState?.label(),
                             ).joinToString(" · ")
-                            Text(where, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            // While the hub is out of reach the subtitle says so, with a small spinner (docs/ios.md「连接状态」).
+                            val link by ConnectionWatch.label.collectAsState()
+                            val l = link
+                            if (l != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (l != "需要重新配对") CircularProgressIndicator(Modifier.size(11.dp), strokeWidth = 1.5.dp)
+                                Spacer(Modifier.size(6.dp))
+                                Text(l, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            } else {
+                                Text(where, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
                         }
                     },
                     actions = {
@@ -423,7 +434,7 @@ fun ChatScreen(
                         ) {
                             items(lines, key = { it.key }, contentType = { contentType(it) }) { line ->
                                 when (line) {
-                                    is ChatLine.Card -> InteractionCard(hub, line.ix)
+                                    is ChatLine.Pending -> PendingBubble(line.p, key)
                                     is ChatLine.Live -> Markdown(line.text, Modifier.fillMaxWidth().padding(vertical = 2.dp))
                                     is ChatLine.Working -> WorkingIndicator(line.label)
                                     is ChatLine.Queued -> Text(line.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -444,13 +455,16 @@ fun ChatScreen(
                         ) { Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "回到最新", tint = MaterialTheme.colorScheme.onSurface) }
                     }
                 }
-                // Live updates come over the WebSocket: say when it's down, or a reply that never shows looks like silence.
-                val conn by hub.conn.collectAsState()
-                if (conn != jarvis.android.data.ConnState.Online) Text(
-                    if (conn == jarvis.android.data.ConnState.Connecting) "正在连接 hub…，新消息稍后显示" else "和 hub 的连接断了，正在重连；发出去的消息不受影响",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                )
+                // What the agent waits on, pinned above the input box (iOS InteractionPanel): each folds to one line.
+                if (cards.isNotEmpty()) {
+                    // While typing, the keyboard takes half the screen: the cards get less, so the conversation stays in view.
+                    val share = if (androidx.compose.foundation.layout.WindowInsets.isImeVisible) 0.25f else 0.55f
+                    val maxH = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * share).dp
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = maxH).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) { cards.forEach { ix -> androidx.compose.runtime.key(ix.id) { InteractionCard(hub, ix) } } }
+                }
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
                 session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                     AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
@@ -482,7 +496,7 @@ fun ChatScreen(
                 }
                 Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
                     Box {
-                        IconButton({ attachMenu = true }, enabled = !sending && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
+                        IconButton({ attachMenu = true }, enabled = uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
                         DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
                             DropdownMenuItem({ Text("照片") }, {
                                 attachMenu = false
@@ -492,7 +506,7 @@ fun ChatScreen(
                         }
                     }
                     OutlinedTextField(
-                        draft, { draft = it; pendingMsgId = null },
+                        draft, { draft = it },
                         placeholder = {
                             Text(
                                 when {
@@ -506,10 +520,8 @@ fun ChatScreen(
                     )
                     IconButton(
                         onClick = { send() },
-                        enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
-                    ) {
-                        if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")
-                    }
+                        enabled = uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
+                    ) { Icon(Icons.AutoMirrored.Filled.Send, "发送") }
                 }
             }
         }
@@ -517,23 +529,25 @@ fun ChatScreen(
         menu.selecting?.let { text -> SelectTextDialog(text) { menu.selecting = null } }
     }
 
-    refusal?.let { e ->
-        val clearable = e.fields?.get("clearable")?.jsonPrimitive?.content
-        val draftOnPc = e.fields?.get("draft")?.jsonPrimitive?.content
+    // A send the computer refused: say so once (清空并发送 when the node can clear a one-line draft).
+    outbox.firstOrNull { it.phase == PendingMessage.Phase.REFUSED && it.clientMsgId !in refusalsShown }?.let { r ->
+        val clearable = r.canClearDraft
+        val dialog = r.fields["code"] == "dialog_open"
+        val done = { refusalsShown = refusalsShown + r.clientMsgId }
         AlertDialog(
-            onDismissRequest = { refusal = null },
-            title = { Text(if (e.code == "dialog_open") "电脑上有对话框" else "电脑的输入框里有没发出去的字") },
+            onDismissRequest = done,
+            title = { Text(if (dialog) "电脑上有对话框" else "电脑的输入框里有没发出去的字") },
             text = {
                 Text(
-                    if (e.code == "dialog_open") "先处理掉电脑上的对话框（或在终端里按键），再发送。什么都没有打进去。"
-                    else "输入框里是：${draftOnPc ?: "（读不到）"}\n什么都没有打进去。" + if (clearable == null) "\n多行草稿只能在电脑上处理。" else "",
+                    if (dialog) "先处理掉电脑上的对话框（或在终端里按键），再点消息旁的感叹号重发。什么都没有打进去。"
+                    else "输入框里是：${r.fields["draft"] ?: "（读不到）"}\n什么都没有打进去。" + if (!clearable) "\n多行草稿只能在电脑上处理。" else "",
                 )
             },
             confirmButton = {
-                if (clearable != null) TextButton(onClick = { refusal = null; send(clearDraft = clearable) }) { Text("清空并发送", maxLines = 1) }
-                else TextButton(onClick = { refusal = null; terminal = true }) { Text("打开终端", maxLines = 1) }
+                if (clearable) TextButton(onClick = { done(); Outbox.retry(hub, key, r.clientMsgId, clearDraft = true) }) { Text("清空并发送", maxLines = 1) }
+                else if (openTerminal != null) TextButton(onClick = { done(); terminal = true }) { Text("打开终端", maxLines = 1) }
             },
-            dismissButton = { TextButton(onClick = { refusal = null }) { Text("取消", maxLines = 1) } },
+            dismissButton = { TextButton(onClick = done) { Text("好", maxLines = 1) } },
         )
     }
 
@@ -541,7 +555,7 @@ fun ChatScreen(
     viewer?.let { args ->
         ImageViewerOverlay(hub, args, onClose = { viewer = null }, onEdited = { payload ->
             if (images.size >= jarvis.android.data.MAX_IMAGES) notice = "一次最多 ${jarvis.android.data.MAX_IMAGES} 张"
-            else { images = images + payload; pendingMsgId = null }
+            else images = images + payload
         })
     }
 }

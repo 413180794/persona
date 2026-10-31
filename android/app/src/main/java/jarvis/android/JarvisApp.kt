@@ -37,6 +37,8 @@ class JarvisApp : Application() {
         notifier = Notifier(this)
         phoneTools = jarvis.android.phone.PhoneToolRunner(this)
         jarvis.android.shortcuts.Shortcuts.publish(this)
+        jarvis.android.chat.Outbox.init(this) // messages written offline, kept on disk
+        jarvis.android.chat.ConnectionWatch.init(this)
         pairings.load()?.let { connect(it) }
     }
 
@@ -54,6 +56,7 @@ class JarvisApp : Application() {
         _hub.value = hub
         notifier.attach(hub)
         phoneTools.attach(hub) // before start: the first connect declares the tools
+        jarvis.android.chat.ConnectionWatch.attach(hub)
         hub.start()
         HubService.start(this)
         // The ongoing notification, widget and tile follow the same summary (fleet/).
@@ -63,6 +66,8 @@ class JarvisApp : Application() {
     fun unpair() {
         _hub.value?.stop()
         _hub.value = null
+        jarvis.android.chat.ConnectionWatch.detach()
+        jarvis.android.chat.Outbox.clear()
         pairings.clear()
         jarvis.android.settings.SettingsPrefs.forgetHub()
         HubService.stop(this)

@@ -64,6 +64,8 @@ import jarvis.android.ui.files.DiffText
 import jarvis.android.ui.files.DiffLine
 import jarvis.android.ui.files.DiffContent
 import jarvis.android.ui.files.readFile
+import jarvis.android.chat.Outbox
+import jarvis.android.chat.PendingMessage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -239,6 +241,83 @@ fun FileChips(paths: List<String>, alignEnd: Boolean = false) {
                 Icon(fileIcon(p), null, Modifier.size(12.dp), tint = c.accent)
                 Text(p.trimEnd('/').substringAfterLast('/').ifEmpty { p }, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.accent, maxLines = 1)
             }
+        }
+    }
+}
+
+/**
+ * A message just sent from this phone, before the transcript has it (iOS `PendingBubble`): drawn like a sent bubble
+ * at once, a quiet clock while it goes, a red mark (重发 / 删除) when it failed.
+ */
+@Composable
+fun PendingBubble(p: PendingMessage, key: SessionKey) {
+    val hub = LocalChatEnv.current?.hub
+    val c = chatColors
+    val bad = p.phase == PendingMessage.Phase.FAILED || p.phase == PendingMessage.Phase.REFUSED || p.phase == PendingMessage.Phase.UNKNOWN
+    var menu by remember { mutableStateOf(false) }
+    val parsed = remember(p.text) { parseContexts(p.text) }
+    val text = parsed.second
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (parsed.first.isNotEmpty()) ContextCards(parsed.first)
+        if (p.images.isNotEmpty()) {
+            val side = if (p.images.size == 1) 120.dp else 76.dp
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                p.images.forEach { SquareThumb(remember(it) { ViewerImage(data = it.data, mime = it.mime) }, side, null) }
+            }
+        }
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                bad -> Box {
+                    Icon(
+                        Icons.Rounded.Error, contentDescription = "发送失败，重发或删除", tint = c.danger,
+                        modifier = Modifier.padding(bottom = 10.dp).size(22.dp).clip(CircleShape).clickable { menu = true },
+                    )
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        if (p.canClearDraft) DropdownMenuItem(text = { Text("清空并发送", maxLines = 1) },
+                            onClick = { menu = false; hub?.let { Outbox.retry(it, key, p.clientMsgId, clearDraft = true) } })
+                        DropdownMenuItem(text = { Text(if (p.phase == PendingMessage.Phase.UNKNOWN) "再发一次" else "重发", maxLines = 1) },
+                            onClick = { menu = false; hub?.let { Outbox.retry(it, key, p.clientMsgId) } })
+                        DropdownMenuItem(text = { Text("删除", color = c.danger, maxLines = 1) },
+                            onClick = { menu = false; Outbox.discard(key, p.clientMsgId) })
+                    }
+                }
+                p.phase == PendingMessage.Phase.SENDING ->
+                    Icon(Icons.Rounded.Schedule, contentDescription = "发送中", tint = c.tertiaryLabel, modifier = Modifier.padding(bottom = 12.dp).size(13.dp))
+                // Written offline: a clock that offers 现在重试 / 不发了 (iOS Outbox).
+                p.phase == PendingMessage.Phase.WAITING -> Box {
+                    Icon(
+                        Icons.Rounded.Schedule, contentDescription = "连上后自动发送，点按可以现在重试或不发了", tint = c.secondaryLabel,
+                        modifier = Modifier.padding(bottom = 10.dp).size(22.dp).clip(CircleShape).clickable { menu = true }.padding(3.dp),
+                    )
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("现在重试", maxLines = 1) },
+                            onClick = { menu = false; hub?.let { Outbox.sendNow(it, key, p.clientMsgId) } })
+                        DropdownMenuItem(text = { Text("不发了", color = c.danger, maxLines = 1) },
+                            onClick = { menu = false; Outbox.discard(key, p.clientMsgId) })
+                    }
+                }
+                else -> Unit
+            }
+            Box(Modifier.weight(1f, fill = false)) { Bubble(text.ifEmpty { "图片" }, faded = bad, fill = false) }
+        }
+        if (p.phase == PendingMessage.Phase.WAITING) {
+            Text("连上后自动发送", fontSize = 12.sp, color = c.secondaryLabel, textAlign = TextAlign.End, maxLines = 1)
+        }
+        if (bad) {
+            Text(
+                when (p.phase) {
+                    // The hub's own error text is English; say it in the app's words.
+                    PendingMessage.Phase.REFUSED -> if (p.fields["code"] == "dialog_open") "电脑上有对话框，没有发送" else "电脑上的输入框里有内容，没有发送"
+                    PendingMessage.Phase.UNKNOWN -> "可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发"
+                    else -> p.error ?: "没发出去"
+                },
+                fontSize = 12.sp,
+                color = c.danger,
+                textAlign = TextAlign.End,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 48.dp),
+            )
         }
     }
 }
