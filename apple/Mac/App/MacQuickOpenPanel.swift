@@ -12,6 +12,13 @@ import SwiftUI
     var chatWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
+    /// 显示会话信息 ⌥⌘I: the chat showing this session opens / closes its inspector (a new value each time).
+    var inspector: InspectorToggle?
+
+    struct InspectorToggle: Equatable {
+        let key: SessionKey
+        let id = UUID()
+    }
 }
 
 /// ⌘K: a floating panel near the window's top, like Xcode's Open Quickly / Spotlight. The field keeps the focus;

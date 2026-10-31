@@ -34,6 +34,10 @@ extension Theme.Size {
     static let macQuickOpenWidth: CGFloat = 600
     static let macQuickOpenListMax: CGFloat = 420
     static let macQuickOpenTop: CGFloat = 96
+    /// The chat's inspector (会话信息, ⌥⌘I).
+    static let macInspectorMin: CGFloat = 260
+    static let macInspector: CGFloat = 300
+    static let macInspectorMax: CGFloat = 420
 }
 
 extension Theme.Fill {

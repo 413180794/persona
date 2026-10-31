@@ -153,11 +153,21 @@ struct ChatView: View {
         }
         // The session's details come up from the bottom (2026-10-31: the card that dropped from the title covered the
         // chat and needed a second tap on the title; a sheet closes with a swipe or a tap above it).
+        #if os(iOS)
         .sheet(isPresented: $showInfo) {
             SessionInfoSheet(key: key, session: session)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        #else
+        // On the Mac the details are an inspector beside the chat (Agent › 显示会话信息 ⌥⌘I, or the title).
+        .macInspector(isPresented: $showInfo) {
+            SessionInfoSheet(key: key, session: session)
+        }
+        .onChange(of: MacShellState.shared.inspector) { _, t in
+            if let t, t.key == key { showInfo.toggle() }
+        }
+        #endif
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         // Left alone for a few seconds, the open chrome folds away by itself (the page goes back to being all chat).
         .task(id: style == .dev && pane == .chat) {
@@ -2347,7 +2357,7 @@ struct SessionInfoSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
+        InfoContainer {
             List {
                 Section { header }
                     .listRowBackground(Color.clear)
@@ -2387,14 +2397,30 @@ struct SessionInfoSheet: View {
             }
             .listStyle(.insetGrouped)
             .listSectionSpacing(.compact)
+            #if os(iOS)
             .navigationTitle("会话信息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
             }
+            #endif
         }
         .task(id: key) {
             do { info = try await model.api?.sessionInfo(key) } catch { self.error = error.shown }
+        }
+    }
+
+    /// A sheet of its own on iOS; on the Mac an inspector column inside the chat page, where a second
+    /// NavigationStack would take over the page's (the chat is a pushed page of the Agents split view) and the title
+    /// would replace the window's.
+    private struct InfoContainer<Content: View>: View {
+        @ViewBuilder var content: Content
+        var body: some View {
+            #if os(iOS)
+            NavigationStack { content }
+            #else
+            content
+            #endif
         }
     }
 

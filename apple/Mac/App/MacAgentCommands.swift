@@ -65,6 +65,9 @@ struct MacAgentMenu: Commands {
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
+            Button("显示会话信息") { if let key { MacShellState.shared.inspector = .init(key: key) } }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(key == nil)
             Divider()
             Button("标为已读") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)
