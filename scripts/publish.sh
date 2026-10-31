@@ -56,6 +56,9 @@ if [ -n "${NO_DEPLOY:-}" ]; then
   exit 0
 fi
 WRANGLER="${JARVIS_WRANGLER:-}"
+# cf's OAuth token lasts about an hour and wrangler does not renew it; any cf call that finds it stale does (twice a
+# release failed here with "Authentication error" until `cf auth whoami` ran).
+command -v cf >/dev/null && cf auth whoami >/dev/null 2>&1 || true
 (cd "$OUT/site" && if [ -n "$WRANGLER" ]; then "$WRANGLER" deploy; else npx wrangler deploy; fi) >"$OUT/deploy.log" 2>&1 \
   || { tail -20 "$OUT/deploy.log" >&2; echo "deploy failed (cf auth expired? run: cf auth login)" >&2; exit 1; }
 
