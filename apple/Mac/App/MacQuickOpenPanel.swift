@@ -19,11 +19,19 @@ import SwiftUI
     var chatRequest: ChatRequest?
     /// The Agents list's 全部折叠 / 全部展开 (its own ⋯ menu's), for 显示 › 全部折叠 / 全部展开.
     var agentsList: AgentsListMenu.Actions?
+    /// The key window's number, and the chat each window shows (ChatView registers itself): what the Agent menu acts on.
+    var keyWindow: Int?
+    var chatsByWindow: [Int: SessionKey] = [:]
+    /// `openWindow(id: "main")`, from a view that is always there (the menu bar item's label).
+    @ObservationIgnored var openMain: (() -> Void)?
+    @ObservationIgnored private var keyObservers: [Any] = []
 
     struct ChatRequest: Equatable {
         enum Kind { case inspector, rename, clear, close }
         let key: SessionKey
         let kind: Kind
+        /// The window it is for: only the chat in that window answers (the same chat can be open in two).
+        var window: Int?
         let id = UUID()
     }
 }
@@ -181,6 +189,40 @@ extension MacShellState {
         let p = MacSection.pick(s)
         section = p.override
         if let tab = p.tab { model.selectedTab = tab }
+    }
+}
+
+extension MacShellState {
+    /// The chat the menus act on: the key window's; with no key window (the app in the background, the menu bar's
+    /// menu open), the last one shown. A key window without a chat (知识库, a sheet) has none.
+    nonisolated static func focusedChat(keyWindow: Int?, chats: [Int: SessionKey], fallback: SessionKey?) -> SessionKey? {
+        guard let keyWindow else { return fallback }
+        return chats[keyWindow]
+    }
+
+    func focusedChat(_ model: AppModel) -> SessionKey? {
+        Self.focusedChat(keyWindow: keyWindow, chats: chatsByWindow, fallback: model.visibleSession)
+    }
+
+    /// Follows the key window (the menus are rebuilt when it changes). Started once at launch.
+    func watchKeyWindow() {
+        guard keyObservers.isEmpty else { return }
+        let update: (Notification) -> Void = { _ in
+            MainActor.assumeIsolated { MacShellState.shared.keyWindow = NSApp.keyWindow?.windowNumber }
+        }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            keyObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main, using: update))
+        }
+    }
+
+    /// The main window to the front, opened again if it was closed (the Dock menu, the menu bar list).
+    func showMain() {
+        NSApp.activate()
+        if let w = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true }) {
+            w.makeKeyAndOrderFront(nil)
+        } else {
+            openMain?()
+        }
     }
 }
 

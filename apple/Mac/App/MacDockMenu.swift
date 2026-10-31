@@ -37,12 +37,12 @@ import AppKit
 
     @objc private func open(_ item: NSMenuItem) {
         guard let key = item.representedObject as? SessionKey else { return }
-        NSApp.activate()
+        MacShellState.shared.showMain() // the main window may have been closed
         MacShellState.shared.open(key, AppModel.shared)
     }
 
     @objc private func newAgent() {
-        NSApp.activate()
+        MacShellState.shared.showMain()
         MacShellState.shared.newAgent = true
     }
 }

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The Agent menu (docs/mac.md「菜单和快捷键」): what the chat on screen (`AppModel.visibleSession`) can be told
+/// The Agent menu (docs/mac.md「菜单和快捷键」): what the key window's chat (`MacShellState.focusedChat`) can be told
 /// from the keyboard. Questions and terminal dialogs need their choices, a plan sent back needs words: those stay in
 /// the chat's card; the menu says yes to a tool or a plan, no to a tool.
 enum MacAgentCommands {
@@ -37,7 +37,7 @@ struct MacAgentMenu: Commands {
 
     var body: some Commands {
         CommandMenu("Agent") {
-            let key = model.visibleSession
+            let key = MacShellState.shared.focusedChat(model)
             let ix = key.flatMap { model.interactions(for: $0).first }
             Button("中断") { if let key { Task { await model.interrupt(key) } } }
                 .keyboardShortcut(".", modifiers: .command)
@@ -68,6 +68,7 @@ struct MacAgentMenu: Commands {
             // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
             Button("交给 Jarvis") {
                 if let key, let s = model.session(key) {
+                    MacShellState.shared.willOpen() // 知识库 / 机器 make way for the Jarvis page
                     Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) }
                 }
             }
@@ -82,7 +83,7 @@ struct MacAgentMenu: Commands {
             Button("重命名…") { ask(.rename) }
                 .disabled(agent == nil)
             Button("清空上下文…") { ask(.clear) }
-                .disabled(agent.map { $0.paneID == nil || $0.isCodex || $0.isTraex } ?? true)
+                .disabled(agent.map { $0.paneID == nil || $0.isCodex || $0.isTraex || $0.state == .working } ?? true)
             Button("关闭 Agent…") { ask(.close) }
                 .disabled(agent?.status.isLive != true)
             Divider()
@@ -105,7 +106,8 @@ struct MacAgentMenu: Commands {
     }
 
     private func ask(_ kind: MacShellState.ChatRequest.Kind) {
-        if let key = model.visibleSession { MacShellState.shared.chatRequest = .init(key: key, kind: kind) }
+        let shell = MacShellState.shared
+        if let key = shell.focusedChat(model) { shell.chatRequest = .init(key: key, kind: kind, window: shell.keyWindow) }
     }
 
     private func copy(_ text: String, _ toast: String) {

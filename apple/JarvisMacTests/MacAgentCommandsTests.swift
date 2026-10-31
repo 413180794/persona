@@ -46,3 +46,23 @@ struct MacAgentCommandsTests {
         #expect(MacAgentCommands.nextNeedsYou(after: nil, in: [session("c", .working)], muted: { _ in false }) == nil)
     }
 }
+
+/// Which chat the Agent menu acts on: the key window's (a chat can be open in the main window and in a window of its
+/// own at once), not just the last one that appeared.
+struct MacFocusedChatTests {
+    let a = SessionKey(machineID: "m", sessionID: "a"), b = SessionKey(machineID: "m", sessionID: "b")
+
+    @Test func theKeyWindowsChat() {
+        #expect(MacShellState.focusedChat(keyWindow: 1, chats: [1: a, 2: b], fallback: b) == a)
+    }
+
+    /// The key window shows no chat (知识库, settings): nothing to act on, not the other window's chat.
+    @Test func aKeyWindowWithoutAChat() {
+        #expect(MacShellState.focusedChat(keyWindow: 3, chats: [1: a], fallback: a) == nil)
+    }
+
+    /// No key window (the app is in the background, a menu bar menu is open): the last chat shown.
+    @Test func noKeyWindow() {
+        #expect(MacShellState.focusedChat(keyWindow: nil, chats: [1: a], fallback: b) == b)
+    }
+}

@@ -26,6 +26,10 @@ struct ChatView: View {
     @State private var file: FileRef?
     @State private var showActivity = false
     @State private var debugImages: [ImagePayload]?
+    #if os(macOS)
+    /// The window this chat is in (the Agent menu's requests are per window).
+    @State private var macWindow: Int?
+    #endif
     @State private var showInfo = false
     @State private var showLink = false
     @State private var pane: SessionPane = .chat
@@ -164,8 +168,10 @@ struct ChatView: View {
         .macInspector(isPresented: $showInfo) {
             SessionInfoSheet(key: key, session: session)
         }
+        .macWindowNumber($macWindow)
+        .macRegistersChat(key, window: macWindow)
         .onChange(of: MacShellState.shared.chatRequest) { _, r in // the Agent menu (MacAgentMenu)
-            guard let r, r.key == key else { return }
+            guard let r, r.key == key, r.window == nil || r.window == macWindow else { return }
             switch r.kind {
             case .inspector: showInfo.toggle()
             case .rename: renaming = session
@@ -2002,6 +2008,9 @@ struct Composer: View, Equatable {
     @State private var selection: TextSelection?
     @State private var confirmClear = false
     @State private var clearing = false
+    #if os(macOS)
+    @State private var macWindow: Int?
+    #endif
     @FocusState private var focused: Bool
 
     /// /clear only for Claude in a herdr pane (the headless assistant and Codex / TRAEX have no such command here).
@@ -2134,8 +2143,10 @@ struct Composer: View, Equatable {
         }
         #endif
         #if os(macOS)
+        .macWindowNumber($macWindow)
         .onChange(of: MacShellState.shared.chatRequest) { _, r in // Agent › 清空上下文…
-            if let r, r.key == key, r.kind == .clear { confirmClear = canClear }
+            guard let r, r.key == key, r.kind == .clear, r.window == nil || r.window == macWindow else { return }
+            confirmClear = canClear && !status.isActive && !clearing // as the composer's own /clear item
         }
         #endif
         .confirmationDialog("清空上下文？", isPresented: $confirmClear, titleVisibility: .visible) {

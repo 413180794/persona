@@ -39,6 +39,7 @@ enum MacMenuBar {
 /// The icon in the menu bar: the Jarvis mark and how many need you.
 struct MacMenuBarLabel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let n = MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }).needsYou.count
@@ -47,6 +48,8 @@ struct MacMenuBarLabel: View {
             if let c = MacMenuBar.count(needsYou: n) { Text(c).monospacedDigit() }
         }
         .accessibilityLabel(n > 0 ? "Jarvis，\(n) 个需要你" : "Jarvis")
+        // Always there (unlike the main window): what reopens the main window for the Dock menu and notifications.
+        .onAppear { MacShellState.shared.openMain = { openWindow(id: "main") } }
     }
 }
 
@@ -115,12 +118,8 @@ struct MacMenuBarMenu: View {
     }
 
     private func show() {
-        NSApp.activate()
-        if let w = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true }) {
-            w.makeKeyAndOrderFront(nil)
-        } else {
-            openWindow(id: "main")
-        }
+        MacShellState.shared.openMain = { openWindow(id: "main") }
+        MacShellState.shared.showMain()
     }
 }
 

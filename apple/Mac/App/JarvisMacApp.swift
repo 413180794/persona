@@ -152,6 +152,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         #endif
         AppModel.shared.start()
         MacAttentionWatcher.shared.start(AppModel.shared)
+        MacShellState.shared.watchKeyWindow()
         #if DEBUG
         MacSnapshot.scheduleIfAsked()
         #endif
@@ -200,7 +201,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
                     return
                 }
                 if action != UNNotificationDismissActionIdentifier, let key {
-                    NSApp.activate()
+                    MacShellState.shared.showMain() // the main window may have been closed
                     MacShellState.shared.open(key, AppModel.shared, latestAnswer: ixID == nil)
                 }
                 done()
@@ -275,7 +276,11 @@ enum MacLaunchArguments {
         if let key = sessionKey(d.string(forKey: "openSession")), let ask = d.string(forKey: "macAgentAsk") {
             let kinds: [String: MacShellState.ChatRequest.Kind] = ["rename": .rename, "clear": .clear, "close": .close, "inspector": .inspector]
             if let kind = kinds[ask] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MacShellState.shared.chatRequest = .init(key: key, kind: kind) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    // For the main window, as the menu would with it key (`-openChatWindow` opens the same chat in a second one).
+                    let main = NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }?.windowNumber
+                    MacShellState.shared.chatRequest = .init(key: key, kind: kind, window: main)
+                }
             }
         }
         // `-macOpenURL <jarvis://…>`: what handing the app that link does, 2 s in.

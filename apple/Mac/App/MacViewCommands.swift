@@ -61,7 +61,7 @@ struct MacViewMenu: Commands {
 
     private func go(_ delta: Int) {
         let order = AgentListOrder(isPinned: { model.isPinned($0) }, isMuted: { model.isMuted($0) })
-        let current = model.visibleSession.flatMap { model.session($0)?.assistant == true ? nil : $0 }
+        let current = MacShellState.shared.focusedChat(model).flatMap { model.session($0)?.assistant == true ? nil : $0 }
         if let next = MacViewCommands.neighbour(of: current, by: delta, in: model.allSessions, order: order) {
             MacShellState.shared.open(next, model)
         }
