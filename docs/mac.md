@@ -341,14 +341,15 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Optimistic send with pending bubble, client_msg_id, retry/discard — Shared/ChatStore.swift, AppModel.send/retry/discard
 
 ## 6. Interactions (questions / plans / tool approvals / terminal dialogs)
-- [ ] Interaction panel above composer — Views/Interactions/InteractionViews.swift (InteractionPanel)
-- [ ] QuestionForm: numbered options, 推荐 tag, 其他回答…, multi-question paging, auto-submit — InteractionViews.swift (QuestionForm, RecommendedTag)
-- [ ] PlanForm: markdown preview + fullscreen, 批准并自动执行 / 批准并自动接受编辑 / 打回 with comment — InteractionViews.swift (PlanForm)
+- [x] Interaction panel above composer — Views/Interactions/InteractionViews.swift (InteractionPanel)
+- [x] QuestionForm: numbered options, 推荐 tag, 其他回答…, multi-question paging, auto-submit — InteractionViews.swift (QuestionForm, RecommendedTag)
+- [x] PlanForm: markdown preview + fullscreen, 批准并自动执行 / 批准并自动接受编辑 / 打回 with comment — InteractionViews.swift (PlanForm)
 - [ ] PermissionForm: 允许 / 拒绝 / 本会话总是允许 — InteractionViews.swift (PermissionForm)
 - [ ] ScreenForm 「终端在问你」: parsed dialog → keys, 其他回答 preKeys, 改在对话里说, 查看终端 — InteractionViews.swift (ScreenForm, ScreenSteps, TerminalText)
-- [ ] Preview cards in lists with quick buttons — InteractionViews.swift (InteractionPreviewCard, FlowButtons)
+- [x] Preview cards in lists with quick buttons — InteractionViews.swift (InteractionPreviewCard, FlowButtons)
 - [ ] Phone-tool write confirmation card — AppModel.pendingConfirmation, PhoneTools/PhoneToolRegistry.swift
 - [ ] Resolve API — AppModel.resolve
+  Mac（2026-11-01 体验模式截图）：提问卡（编号选项、推荐、其他回答…）、计划卡（三个按钮）、列表里的预览卡都对；授权卡、「终端在问你」还没在 Mac 上看过。
 
 ## 7. Terminal
 - [ ] Terminal cover (bottom-up full page, drag to dismiss, size/handle/settings bar) — Views/Chat/ChatView.swift (TerminalCover), Views/Session/SessionPanes.swift (TerminalPanel)
