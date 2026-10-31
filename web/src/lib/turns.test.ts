@@ -56,6 +56,11 @@ describe("mergeItems", () => {
 });
 
 describe("parseUserText", () => {
+  it("drops the attached_images block and image markers", () => {
+    expect(parseUserText("[Image #1] 像这样合并。\n<attached_images>\n/tmp/a.jpg\n</attached_images>").text).toBe("像这样合并。");
+    expect(parseUserText("像这样合并。\n<attached_images>\n</attached_images>").text).toBe("像这样合并。");
+  });
+
   it("pulls out jarvis-context tags", () => {
     const p = parseUserText('<jarvis-context kind="edit" title="Doc &amp; co" url="https://x">sel</jarvis-context>fix it');
     expect(p.text).toBe("fix it");

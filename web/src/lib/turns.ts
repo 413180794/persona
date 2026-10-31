@@ -80,6 +80,8 @@ export function parseUserText(raw: string): { text: string; contexts: Context[] 
   });
   text = text
     .replace(/<pasted_content\b[^>]*>([\s\S]*?)<\/pasted_content>/g, "$1")
+    // the paths of images sent from the phone (the images themselves show as images), like the app
+    .replace(/<attached_images>[\s\S]*?<\/attached_images>/g, "")
     .replace(/\[Image #\d+\]\s?/g, "")
     .trim();
   return { text, contexts };

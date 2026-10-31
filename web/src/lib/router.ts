@@ -5,13 +5,15 @@ export type Route =
   | { name: "home" }
   | { name: "session"; mid: string; sid: string }
   | { name: "jarvis"; sid?: string }
-  | { name: "machines" };
+  | { name: "machines" }
+  | { name: "settings" };
 
 export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
   if (p[0] === "j") return { name: "jarvis", sid: p[1] };
   if (p[0] === "machines") return { name: "machines" };
+  if (p[0] === "settings") return { name: "settings" };
   return { name: "home" };
 }
 
@@ -23,6 +25,8 @@ export function href(r: Route): string {
       return r.sid ? `/j/${encodeURIComponent(r.sid)}` : "/j";
     case "machines":
       return "/machines";
+    case "settings":
+      return "/settings";
     default:
       return "/";
   }

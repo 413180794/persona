@@ -373,7 +373,8 @@ export function Thumb({ item, mid, sid, size = 132 }: { item: Item; mid: string;
         type="button"
         onClick={() => setOpen(true)}
         className="block overflow-hidden rounded-[10px] bg-field shadow-hairline transition-transform duration-150 active:scale-[0.98]"
-        style={{ width: Math.round(Math.min(size * 1.6, size * ratio)), height: size }}
+        // a phone screenshot (tall) gets more height, so it is not a sliver
+        style={ratio < 1 ? { width: Math.round(size * 1.5 * ratio), height: Math.round(size * 1.5) } : { width: Math.round(Math.min(size * 1.6, size * ratio)), height: size }}
         aria-label="查看图片"
       >
         <img src={src} alt="" loading="lazy" decoding="async" className="size-full object-cover" />

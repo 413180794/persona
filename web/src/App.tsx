@@ -10,6 +10,7 @@ import { Login } from "./views/Login";
 import { Machines } from "./views/Machines";
 import { NewAgent } from "./views/NewAgent";
 import { Palette } from "./views/Palette";
+import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
 
 export function App() {
@@ -59,7 +60,7 @@ function Shell() {
   useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : ""]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "machines" ? "机器" : "总览";
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Jarvis" : route.name === "machines" ? "机器" : route.name === "settings" ? "设置" : "总览";
   useEffect(() => {
     document.title = `${title} · Jarvis`;
   }, [title]);
@@ -74,6 +75,9 @@ function Shell() {
       break;
     case "machines":
       main = <Machines onToggleSidebar={toggle} />;
+      break;
+    case "settings":
+      main = <Settings onToggleSidebar={toggle} />;
       break;
     default:
       main = <Home onNewAgent={() => setNewAgent(true)} onToggleSidebar={toggle} />;

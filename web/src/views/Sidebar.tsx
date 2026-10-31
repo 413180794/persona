@@ -41,7 +41,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
 
   const activeKey =
-    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "machines" ? "machines" : "home";
+    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new") : route.name === "machines" ? "machines" : route.name === "settings" ? "settings" : "home";
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: (typeof spaces)[number]) => sp.sessions.some((s) => ["needs_you", "working", "unread"].includes(stateOf(s)) || activeKey === `s:${s.machine_id}/${s.session_id}`);
@@ -109,6 +109,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />
           <NavRow k="j:new" reg={reg} hover={setHovered} active={activeKey === "j:new"} to={{ name: "jarvis" }} go={go} icon="spark" label="Jarvis" />
           <NavRow k="machines" reg={reg} hover={setHovered} active={activeKey === "machines"} to={{ name: "machines" }} go={go} icon="machine" label="机器" hint={machines.length ? `${online}/${machines.length}` : undefined} />
+          <NavRow k="settings" reg={reg} hover={setHovered} active={activeKey === "settings"} to={{ name: "settings" }} go={go} icon="gear" label="设置" />
         </div>
 
         {convs.length > 0 && (
@@ -197,6 +198,7 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
           header="外观"
           items={[
             ...themes.map((t) => ({ key: t.k, label: t.label, icon: t.icon, checked: theme === t.k, onSelect: () => setTheme(t.k) })),
+            { key: "settings", label: "设置", icon: "gear", onSelect: () => navigate({ name: "settings" }) },
             { key: "logout", label: "断开这个浏览器", icon: "logout", danger: true, onSelect: () => void logout() },
           ]}
         />
