@@ -73,6 +73,10 @@
   2026-11-01 夜里这一轮没量成：Mac 一直锁屏，锁屏时屏幕的 display link 不走（试过：一个只开 display link 的小程序 2 秒 0 帧），
   `FrameMeter` / `AutoScroller`（文件查看器的 `-showFilePerf YES -showFileAutoScroll YES`，Mac 上同样能用）和 Instruments 都量不出帧率。
   解锁后先量文件查看器那条现成的路，再给对话页接同样的匀速滚动（对话列表是倒置的 `ScrollPosition`，往 +y 是更早的消息）。
+  锁屏时能量的是 hub 推送的主线程开销（和 iOS `LiveUpdateTests` 同一套 `PerfCount`）：本机起 mock hub，App 配对过去、开着 Agents 列表和一个工作中的对话，
+  `/mock/churn?n=20&ms=400` 推 20 轮（每轮 5 条），`-perfCounts YES -macPerfLog YES` 每 2 秒打一行（`-macSnapshot … -macSnapshotDelay 60` 让它不读钥匙串）。
+  2026-11-01：每轮主线程约 52 ms（约 10 ms 一次），和 iOS 修过之后的「对话，过程卡展开」50 ms 一档；每轮多算的 body：对话页 2、Agents 列表 2、
+  空间标题 5、没变的用户气泡 2、回复正文 2.3。没变的行每轮还在重算，是下一步要减的。
   ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
 
 ## 构建、运行、截图

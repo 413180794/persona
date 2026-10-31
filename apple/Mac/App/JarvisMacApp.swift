@@ -320,6 +320,13 @@ enum MacLaunchArguments {
                       String(describing: (r as? NSText)?.delegate.map { type(of: $0) }))
             }
         }
+        // `-perfCounts YES -macPerfLog YES`: what hub pushes cost (PerfCount: bodies, main-thread ms), logged every 2 s,
+        // for measuring against the mock hub's /mock/churn without a UI test (docs/mac.md「性能」).
+        if PerfCount.enabled, d.bool(forKey: "macPerfLog") {
+            Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+                MainActor.assumeIsolated { NSLog("macPerf %@", PerfCount.summary) }
+            }
+        }
         // `-macSection knowledge|machines|…`: that sidebar section.
         if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
         if let key = sessionKey(d.string(forKey: "simulateTap")) {
