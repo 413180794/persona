@@ -154,6 +154,11 @@ private struct MacShell: View {
             if !sidebarHidden { sections; Divider() }
             page
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The connection state lives at the sidebar's foot; folded away, it comes to the page's (only while
+                // the hub is out of reach: 知识库 and 机器 have no title spot of their own that says so).
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if sidebarHidden { MacConnectionFooter().background(Theme.systemSidebar) }
+                }
         }
         // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
         .onChange(of: model.selectedTab) { shell.section = nil }

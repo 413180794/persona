@@ -47,7 +47,9 @@ struct MacMenuShortcutTests {
             "隐藏侧边栏": "⌃⌘s",
         ]
         for (title, shortcut) in promised {
-            #expect(titles[title] == shortcut, "\(title)")
+            // The sidebar item says 显示侧边栏 while it is folded (remembered across launches, the tests run in the app).
+            let found = title == "隐藏侧边栏" ? titles[title] ?? titles["显示侧边栏"] : titles[title]
+            #expect(found == shortcut, "\(title)")
         }
     }
 
