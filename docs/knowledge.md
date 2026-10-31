@@ -71,12 +71,14 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 5c. **removed全量**（2026-11-01，`hub/kb_moments_crawl.go`，`kb/moments.go`，默认关）：每 30 分钟把每个 tab（推荐 + 各分类）往后翻，
    一帖一个文件存在 `moments/posts/<id>.md`（正文 + 全部评论）和 `<id>.json`（作者、分类、点赞、评论数、和我有没有关系），
    `moments/index.jsonl` 一帖一行，`moments/stats.json` 是最近一轮的统计。**只存档、不调模型**；和我有关的帖子另外照常是 `chats/moments-<id>`。
-   - 接口按热度排序，不按时间：一个 tab 翻到「这一页没有新帖也没有评论数变化」或页数用完（`pages_per_tab`，10 页 × 50）就停，同一轮里一个帖子只算第一次见到；
-     所以是越来越接近全量，不保证一条不漏。
-   - 评论：评论数变了（或从没读过）才重读，新帖先，每轮最多 `comments_per_round`（150）个帖子，剩下的下一轮接着读；请求之间隔 `delay_ms`（300）。
+   - 接口按热度排序，不按时间。每轮每个 tab 先读顶上 `head_pages`（3 页 × 50）找新帖，遇到一页没有新帖也没有评论数变化就停；
+     再从上一轮停下的地方往下读 `pages_per_tab`（10 页），翻到底就记下这个 tab 读完了（`moments/tabs.json`；翻页 token 失效就从头再来）。
+     同一轮里一个帖子只算第一次见到。所以是越来越接近全量，不保证一条不漏。
+   - 第一轮实测（2026-11-01）：12 个 tab、114 页、190 个请求、3 分 24 秒，5073 个帖子、9.2 MB（评论只读了 76 个帖子）。
+   - 评论：评论数变了（或从没读过）才重读，新帖先，每轮最多读 `comments_per_round`（150）个帖子的评论（没有评论的不占名额），剩下的下一轮接着读；请求之间隔 `delay_ms`（300）。
      遇到限流（429 / rate）这一轮就停。
    - 搜索（`kb_search`）也读这些帖子，但排在所有别的内容之后，不会把会话、项目挤掉。按 `text_days` 删过期的帖子。
-   - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300}}`。
+   - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300}}`。
      它用你的账号读全公司的removed，所以默认不开。
 6. **清理**：每天一次，删 365 天前的 `messages/*.md`、30 天前的 `attachments/*`（天数在 `hub.json` 的 `kb` 里改）。
 

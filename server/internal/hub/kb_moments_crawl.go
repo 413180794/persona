@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,7 +23,8 @@ import (
 type MomentsCrawl struct {
 	Enabled          bool `json:"enabled"`
 	IntervalMinutes  int  `json:"interval_minutes,omitempty"`   // between rounds (30)
-	PagesPerTab      int  `json:"pages_per_tab,omitempty"`      // feed pages (50 posts) a tab is read at most per round (10)
+	HeadPages        int  `json:"head_pages,omitempty"`         // pages from the top of a tab read for what is new (3)
+	PagesPerTab      int  `json:"pages_per_tab,omitempty"`      // pages further down a tab read per round, from where the last stopped (10)
 	CommentsPerRound int  `json:"comments_per_round,omitempty"` // posts whose comments are read per round (150)
 	DelayMS          int  `json:"delay_ms,omitempty"`           // between two requests (300)
 }
@@ -39,6 +41,12 @@ func or(v, d int) int {
 		return v
 	}
 	return d
+}
+
+// momentsTab is how far down a tab the deep pass has read.
+type momentsTab struct {
+	Token string `json:"token,omitempty"`
+	Done  bool   `json:"done,omitempty"` // reached the end of the tab
 }
 
 // MomentsRound is what one round did (logged, and kept in moments/stats.json).
@@ -105,24 +113,29 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		r.Error = "tabs: " + err.Error()
 		return r
 	}
+	// Where each tab's deep pass got to (a page token), and whether it reached the end: the feed is longer than one
+	// round reads, so every round reads the head for what is new and then goes on from where the last one stopped.
+	deepPath := filepath.Join(st.Dir, "moments", "tabs.json")
+	deep := map[string]momentsTab{}
+	if raw, err := os.ReadFile(deepPath); err == nil {
+		_ = json.Unmarshal(raw, &deep)
+	}
+	defer func() {
+		raw, _ := json.MarshalIndent(deep, "", "  ")
+		_ = os.WriteFile(deepPath, append(raw, '\n'), 0o600)
+	}()
 	seen := map[string]bool{}
-	for _, tab := range tabs {
-		if tab.ID == "" {
-			continue
-		}
-		r.Tabs++
-		token := ""
-		for page := 0; page < or(cfg.PagesPerTab, 10); page++ {
+	// read pages a tab from token on; head stops at a page with nothing new. Returns the next token ("" at the end)
+	// and whether it may go on (false on errors, the end, or a rate limit).
+	read := func(tab lark.MomentTab, token string, pages int, head bool) (string, bool) {
+		for page := 0; page < pages; page++ {
 			if !wait() {
-				return r
+				return token, false
 			}
 			posts, next, err := h.lark.MomentFeed(ctx, tab.ID, token, 50)
 			if err != nil {
 				r.Error = tab.Name + ": " + err.Error()
-				if rateLimited(err) {
-					return r // back off until the next round
-				}
-				break
+				return token, false
 			}
 			r.Pages++
 			fresh := 0
@@ -144,13 +157,48 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 					fresh++
 				}
 			}
-			// Heat order: a page with nothing new or changed means the rest of this tab is what we have already
-			// (posts already met in another tab this round count as nothing new).
-			if next == "" || next == token || len(posts) == 0 || fresh == 0 {
-				break
+			if next == "" || next == token || len(posts) == 0 {
+				return "", false
 			}
 			token = next
+			// Heat order: a head page with nothing new or changed means the rest is what the deep pass covers.
+			if head && fresh == 0 {
+				return token, true
+			}
 		}
+		return token, true
+	}
+	for _, tab := range tabs {
+		if tab.ID == "" {
+			continue
+		}
+		r.Tabs++
+		headToken, ok := read(tab, "", or(cfg.HeadPages, 3), true)
+		if r.Error != "" && rateLimited(errors.New(r.Error)) {
+			return r // back off until the next round
+		}
+		d := deep[tab.ID]
+		if d.Done || !ok {
+			if !ok && headToken == "" && r.Error == "" {
+				d.Done = true // the head alone reached the end
+			}
+			deep[tab.ID] = d
+			continue
+		}
+		from := d.Token
+		if from == "" {
+			from = headToken
+		}
+		next, _ := read(tab, from, or(cfg.PagesPerTab, 10), false)
+		if r.Error != "" && rateLimited(errors.New(r.Error)) {
+			return r
+		}
+		if strings.Contains(r.Error, tab.Name+":") {
+			d.Token = "" // a token the feed no longer takes: start the deep pass over from the top
+		} else {
+			d.Token, d.Done = next, next == ""
+		}
+		deep[tab.ID] = d
 	}
 	// Comments of the posts whose count moved (newest first), within the round's budget.
 	var todo []*kb.MomentPost
@@ -160,12 +208,13 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		}
 	}
 	sort.Slice(todo, func(i, j int) bool { return todo[i].At.After(todo[j].At) })
+	fetched := 0
 	for i, p := range todo {
-		if i >= or(cfg.CommentsPerRound, 150) || ctx.Err() != nil {
+		if fetched >= or(cfg.CommentsPerRound, 150) || ctx.Err() != nil {
 			r.CommentsLeft = len(todo) - i
 			break
 		}
-		if p.CommentCount == 0 {
+		if p.CommentCount == 0 { // nothing to read: no request, no budget
 			p.CommentsOf, p.CommentsAt = 0, time.Now().UTC()
 			_ = st.PutMomentPost(p, []kb.MomentComment{})
 			continue
@@ -174,6 +223,7 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 			r.CommentsLeft = len(todo) - i
 			break
 		}
+		fetched++
 		cs, err := h.lark.MomentCommentList(ctx, p.ID, 1000)
 		if err != nil {
 			r.Error = "comments: " + err.Error()

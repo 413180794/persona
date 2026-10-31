@@ -60,7 +60,7 @@ struct MachineCard: View {
                 HStack(spacing: 0) {
                     stat("\(live.count)", "运行中")
                     Divider().scaledFrame(height: Theme.Size.wellXS)
-                    stat("\(working)", "工作中", tint: working > 0 ? StatusPalette.working.text : nil)
+                    stat("\(working)", "工作中", tint: working > 0 ? StatusPalette.working.dot : nil) // the orange the working dots are
                     Divider().scaledFrame(height: Theme.Size.wellXS)
                     stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
                 }
