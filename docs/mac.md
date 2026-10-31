@@ -480,8 +480,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 17. Personas & styles
 - [ ] Persona picker / gallery (follow style colors), persona store (download, cache by rev, APNG frames) — Views/Settings/PersonaSettingsView.swift, Persona/PersonaStore.swift, Persona/Persona.swift, Persona/PersonaViews.swift (PersonaAvatar, PersonaDot, PersonaFramesView)
 - [ ] Persona dot states idle/thinking/working/needs_you/offline, reduce-motion = frame 0 — PersonaViews.swift, AssistantTopBar.swift
-- [ ] UI styles 液态玻璃 / Claude / 黏土 / Island / 飞书 / BeautifulUI with preview cards — Views/Settings/SettingsView.swift (StylePicker, StyleCard), Shared/Design/StyleSpec.swift, Shared/Design/Styles/*.swift
-- [ ] Text size 小/标准/大 over Dynamic Type — DesignSystem/TextSize.swift
+  - 外观页「空闲 / 思考中 / 工作中 / 等你处理 / 离线」5 个状态 Mac 截图看过；减弱动态效果时停在第 0 帧没在 Mac 上试。
+- [x] UI styles 液态玻璃 / Claude / 黏土 / Island / 飞书 / BeautifulUI with preview cards — Views/Settings/SettingsView.swift (StylePicker, StyleCard), Shared/Design/StyleSpec.swift, Shared/Design/Styles/*.swift
+  - Mac 截图看过（`-tab settings -openAppearance YES`）：6 张风格卡片都画出来，选中的带勾；液态玻璃的说明在 Mac 上是「系统原生，简洁」（`Styles/Glass.swift`）。各风格整套界面在 Mac 上没逐个截。
+- [x] Text size 小/标准/大 over Dynamic Type — DesignSystem/TextSize.swift
+  - 外观页的 小 / 标准 / 大 截图看过；显示 › 放大 / 缩小 / 标准字号 ⌘+ ⌘- ⌘0 改的是同一个值（有测试）。
 - [ ] Theme tokens, icons, palettes, status palette — Shared/Design/Theme.swift, Icons.swift, Palette.swift, PersonaPalette.swift, Shared/StatusPalette.swift
 - [ ] Components (StatusDot, Chip, CountBadge, EmptyStateView, Monogram…) and surfaces/buttons — DesignSystem/Components.swift, DesignSystem/Styling.swift
 
@@ -492,6 +495,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Tap opens session (main-queue completion handler), suppress while viewing — JarvisApp.swift（Mac：`MacAppDelegate`，本地通知见「菜单栏、Dock 角标、通知」）
 - [ ] Silent push handling (wake / disconnect) — JarvisApp.swift
 - [ ] Settings: 需要你处理时, Agent 做完时 (不推送/只推长任务/每次都推), per-device prefs on hub, system-disabled warning + open settings — Views/Settings/NotificationSettingsView.swift
+  - Mac 深色截图看过：「通知没有打开」提示 + 系统通知设置按钮、需要你处理时、Agent 做完时三选一；按设备存在 hub 上那部分没连真 hub。
 
 ## 19. Live Activity
 - [x] Fleet activity (needsYou/working/done), push-to-start + push token upload, start/update/end (1 min grace), stale handling — App/LiveActivityController.swift, LiveActivity/JarvisActivityAttributes.swift, Shared/FleetState.swift（Mac：菜单栏 `MacMenuBar`，从会话列表算，不用 fleet 推送）
