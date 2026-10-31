@@ -285,6 +285,37 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // `-macMenuLog YES`: the Agent menu's items and shortcuts as built for the chat on screen (the 回答 submenu).
+        if d.bool(forKey: "macMenuLog") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                // A closed menu is brought up to date only when it opens: tell it so, as opening it would.
+                if let m = NSApp.mainMenu?.items.first(where: { $0.title == "Agent" })?.submenu {
+                    m.delegate?.menuNeedsUpdate?(m)
+                    m.delegate?.menuWillOpen?(m)
+                    m.update()
+                }
+                func walk(_ m: NSMenu, _ depth: Int) {
+                    for it in m.items where !it.isSeparatorItem {
+                        let mods = it.keyEquivalentModifierMask
+                        let k = it.keyEquivalent.isEmpty ? "" : (mods.contains(.option) ? "⌥" : "") + (mods.contains(.shift) ? "⇧" : "")
+                            + (mods.contains(.command) ? "⌘" : "") + it.keyEquivalent
+                        NSLog("macMenuLog: %@%@ %@%@", String(repeating: "  ", count: depth), it.title, k, it.isEnabled ? "" : " (off)")
+                        if let sub = it.submenu { walk(sub, depth + 1) }
+                    }
+                }
+                let shell = MacShellState.shared
+                NSLog("macMenuLog: keyWindow %@ chats %@ visible %@ → %@", String(describing: shell.keyWindow),
+                      String(describing: shell.chatsByWindow), String(describing: AppModel.shared.visibleSession),
+                      String(describing: shell.focusedChat(AppModel.shared)))
+                if let k = shell.focusedChat(AppModel.shared) {
+                    for ix in AppModel.shared.interactions(for: k) {
+                        NSLog("macMenuLog: interaction %@ questions %d choices %d", ix.kind.rawValue, ix.questions?.count ?? -1,
+                              MacAgentCommands.choices(ix).count)
+                    }
+                }
+                if let agent = NSApp.mainMenu?.items.first(where: { $0.title == "Agent" })?.submenu { walk(agent, 0) }
+            }
+        }
         // With `-macWindowLog YES`: how many chat / terminal windows the launch left (two openers, one window each).
         if d.bool(forKey: "macWindowLog") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {

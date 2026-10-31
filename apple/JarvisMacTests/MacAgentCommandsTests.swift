@@ -35,6 +35,34 @@ struct MacAgentCommandsTests {
         #expect(MacAgentCommands.reject(plan) == nil)
     }
 
+    /// ⌥⌘1…9 answer a single question by its options, in order, at most nine.
+    @Test func choicesAreASingleQuestionsOptions() throws {
+        let labels = (1...11).map { #"{"label":"选项\#($0)"}"# }.joined(separator: ",")
+        let q = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"用哪个?","multi_select":false,"options":[\#(labels)]}]}"#)
+        let c = MacAgentCommands.choices(q)
+        #expect(c.count == 9)
+        #expect(c.first?.title == "选项1")
+        #expect(c.dropFirst(2).first?.resolution.answers == ["用哪个?": "选项3"])
+    }
+
+    /// Claude's "(Recommended)" reads as the card's 推荐 in the menu; the answer sent back keeps the label as it came.
+    @Test func aRecommendedChoiceSaysSo() throws {
+        let q = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"框架?","multi_select":false,"options":[{"label":"Swift Testing (Recommended)"},{"label":"XCTest"}]}]}"#)
+        let c = MacAgentCommands.choices(q)
+        #expect(c.map(\.title) == ["Swift Testing（推荐）", "XCTest"])
+        #expect(c.first?.resolution.answers == ["框架?": "Swift Testing (Recommended)"])
+    }
+
+    /// Several questions or a multi-select need the card; a tool or a plan has 批准 / 拒绝.
+    @Test func noChoicesWhenOneKeyCannotAnswer() throws {
+        let multi = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"哪些?","multi_select":true,"options":[{"label":"A"}]}]}"#)
+        #expect(MacAgentCommands.choices(multi).isEmpty)
+        let two = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"一","multi_select":false,"options":[{"label":"A"}]},{"question":"二","multi_select":false,"options":[{"label":"B"}]}]}"#)
+        #expect(MacAgentCommands.choices(two).isEmpty)
+        let p = try ix(#"{"id":"1","machine_id":"m","session_id":"a","kind":"permission"}"#)
+        #expect(MacAgentCommands.choices(p).isEmpty)
+    }
+
     @Test func nextNeedsYouCyclesLongestWaitingFirst() {
         let list = [session("a", .needsYou, ago: 10), session("b", .needsYou, ago: 300), session("c", .working),
                     session("d", .needsYou, ago: 60), session("j", .needsYou, ago: 999, assistant: true)]

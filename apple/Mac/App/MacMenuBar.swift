@@ -141,7 +141,11 @@ extension MacMenuBar {
         switch ix.kind {
         case .question:
             guard let qs = ix.questions, qs.count == 1, let q = qs.first, !q.multiSelect, q.options.count <= 4 else { return nil }
-            return q.options.map { QuickAnswer(title: $0.label, resolution: Resolution(answers: [q.question: $0.label])) }
+            return q.options.map { o in
+                // The card's 推荐 tag, in words; the answer keeps the label as it came.
+                let (name, recommended) = QuestionOption.display(o.label)
+                return QuickAnswer(title: recommended ? name + "（推荐）" : name, resolution: Resolution(answers: [q.question: o.label]))
+            }
         case .permission:
             return [QuickAnswer(title: "允许", resolution: Resolution(allow: true)),
                     QuickAnswer(title: "拒绝", resolution: Resolution(allow: false))]

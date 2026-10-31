@@ -20,6 +20,25 @@ enum MacAgentCommands {
         ix.kind == .permission ? Resolution(allow: false) : nil
     }
 
+    /// ⌥⌘1…9: the options a key can pick on its own (a single question's choices, a terminal dialog's).
+    /// A tool or a plan has 批准 / 拒绝 above; several questions, a multi-select or a dialog asking for text need the card.
+    static func choices(_ ix: Interaction) -> [MacMenuBar.QuickAnswer] {
+        switch ix.kind {
+        case .question:
+            guard let qs = ix.questions, qs.count == 1, let q = qs.first, !q.multiSelect else { return [] }
+            return q.options.prefix(9).map { o in
+                // The card's 推荐 tag, in words: a menu item is text only. The answer keeps the label as it came.
+                let (name, recommended) = QuestionOption.display(o.label)
+                return .init(title: recommended ? name + "（推荐）" : name, resolution: Resolution(answers: [q.question: o.label]))
+            }
+        case .screen:
+            guard ix.dialog != nil, let d = ix.screenDialog else { return [] }
+            return d.options.filter { $0.kind == .plain }.prefix(9).map { .init(title: $0.label, resolution: Resolution(option: $0.key)) }
+        case .permission, .plan:
+            return []
+        }
+    }
+
     /// ⌃⌘N: the next agent or Jarvis conversation that needs you, longest waiting first, wrapping around.
     static func nextNeedsYou(after current: SessionKey?, in sessions: [Session], muted: (Session) -> Bool) -> SessionKey? {
         let order = sessions.filter { $0.state == .needsYou && !muted($0) }
@@ -55,6 +74,15 @@ struct MacAgentMenu: Commands {
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
             .disabled(ix.flatMap(MacAgentCommands.reject) == nil)
+            // ⌥⌘1…9 (⌘1…6 are the sections): pick an option of the question or terminal dialog on screen.
+            let choices = ix.map(MacAgentCommands.choices) ?? []
+            Menu("回答") {
+                ForEach(Array(choices.enumerated()), id: \.offset) { i, c in
+                    Button(c.title) { if let ix { Task { await model.resolve(ix, c.resolution) } } }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
+                }
+            }
+            .disabled(choices.isEmpty)
             Divider()
             Button("下一个需要你的") {
                 if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.allSessions, muted: { model.isMuted($0) }) {
