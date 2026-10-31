@@ -323,6 +323,9 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   - 和 BeautifulUI 一样，层次主要靠字重和颜色：行标题是 body 大小加粗，分组头是 caption 大小加粗、次要色，比行标题小；
     Markdown 的一级标题是 title，其余标题是 heading，靠上方的空白分开；代码块是 code。
   - 间距 `Theme.Space` 是 4pt 网格（2 4 6 8 12 16 24 32），竖向的 `VStack(spacing:)` 都用它；横向间距在按钮文字旁边，没有统一改。
+  - 尺寸 `Theme.Size`（2026-10-31 用户要求）：图标框、圆点、头像、点按区域、缩略图、标签列宽这类挨着文字的尺寸都有名字，默认字号下和原来的点数一样，
+    用 `.scaledFrame(width:height:)` / `.scaledFrame(minWidth:…)` 随字号缩放，到辅助功能大字号最多 1.6×（44pt 的按钮不至于占掉三分之一屏幕）。
+    4pt 及以下的线、分隔条、进度条不缩，用普通 `frame`；按视图自己的几何算出来的尺寸照旧；手表不跟 App 的字号，保留自己的尺寸。
   - 字号跟随动态字体；设置 › 界面风格 › 字号（小 / 标准 / 大，`TextSize`，`ui.textSize`）在系统档位上再挪一档：RootView 设 `.dynamicTypeSize`，
     所以文本样式、`@ScaledMetric`、MarkdownUI 和 BeautifulUI 的字号一起变，比例不变。
   - 飞书消息和卡片保留飞书自己的字号（落在上面的级别上），通过 `LarkTextBase.scale`（`Theme.textScale`）一样跟随。
