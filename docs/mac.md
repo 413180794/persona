@@ -505,6 +505,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 23. Pairing / credentials / watch
 - [ ] Welcome page, QR scan (VisionKit), manual entry, jarvis://pair link — Views/Settings/SettingsView.swift (WelcomeView, PairView, QRScanner)
+  - 欢迎页的介绍改成 Mac 的说法（收进一个窗口、在窗口里拍板、带上这台 Mac，没有健康），截图看过；扫码和手动输入没在 Mac 上试。
 - [ ] Keychain storage — Shared/Keychain.swift
 - [ ] Device token exchange, 设置 › 设备 list + revoke — App/DeviceCredentials.swift (DevicesView)
 - [ ] 重新配对, 断开并忘记服务器 — SettingsView.swift

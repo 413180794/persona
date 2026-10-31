@@ -339,6 +339,11 @@ struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showPair = false
     @State private var appear = false
+    #if os(macOS)
+    private static let tagline = "把每台电脑上的 Claude 收进一个窗口"
+    #else
+    private static let tagline = "把每台电脑上的 Claude 装进口袋"
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -349,15 +354,21 @@ struct WelcomeView: View {
             Text("Jarvis")
                 .font(Theme.Font.display)
                 .padding(.top, Theme.Space.xl)
-            Text("把每台电脑上的 Claude 装进口袋")
+            Text(Self.tagline)
                 .font(Theme.Font.title)
                 .foregroundStyle(.secondary)
                 .padding(.top, Theme.Space.sm)
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "你的每台电脑，herdr 里的同一个会话")
                 feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
+                #if os(macOS)
+                // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
+                feature("hand.tap", "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
+                feature(Theme.Icon.laptop, "带上这台 Mac 和邮箱", "日历、提醒、通讯录、照片、Gmail")
+                #else
                 feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
                 feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")
+                #endif
             }
             .padding(.top, 40)
             .padding(.horizontal, Theme.Space.xxl)
