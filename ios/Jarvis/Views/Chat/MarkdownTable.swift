@@ -166,14 +166,14 @@ struct FittedTable: View {
             HStack(spacing: 0) {
                 Color.black
                 if plan?.scrolls == true && !atEnd {
-                    LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .leading, endPoint: .trailing).frame(width: 36)
+                    LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .leading, endPoint: .trailing).scaledFrame(width: Theme.Size.wellL)
                 }
             }
         }
         .overlay(alignment: .trailing) {
             if plan?.scrolls == true && !atEnd {
                 Color.clear // the fade says it; this says it to VoiceOver (a chevron here sat on the last column's words)
-                    .frame(width: 36)
+                    .scaledFrame(width: Theme.Size.wellL)
                     .allowsHitTesting(false)
                     .accessibilityElement()
                     .accessibilityLabel("表格可以横向滑动")

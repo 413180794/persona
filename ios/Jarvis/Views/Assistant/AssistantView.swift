@@ -232,7 +232,7 @@ struct AssistantHome: View {
                                         .foregroundStyle(Theme.accent)
                                     Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
                                 }
-                                .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+                                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box72, alignment: .topLeading)
                                 .card(padding: 14)
                             }
                             .buttonStyle(.plain)
@@ -317,7 +317,7 @@ struct TypingIndicator: View {
                 ForEach(0..<3) { i in
                     Circle()
                         .fill(Theme.accent)
-                        .frame(width: 7, height: 7)
+                        .scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                         .opacity(0.35 + 0.65 * max(0, sin(phase + Double(i) * 0.9)))
                 }
             }

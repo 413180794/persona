@@ -707,7 +707,7 @@ struct ChatView: View {
             // A hairline above the list: a scroll view touching the top safe area extends under it and adds its
             // inset — at the wrong end once flipped. Not touching it, the list gets no safe area at all (the
             // composer below keeps it off the bottom and the keyboard).
-            Color.clear.frame(height: 1)
+            Color.clear.frame(height: Theme.Size.line)
             ChatRegion(name: "ChatTranscript.body") {
                 chatScroll()
                     .overlay(alignment: .bottomTrailing) { jumpArrow }
@@ -783,7 +783,7 @@ struct ChatView: View {
     @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
-                    Image(systemName: "arrow.down").font(Theme.Font.bodyStrong).frame(width: 40, height: 40)
+                    Image(systemName: "arrow.down").font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
                 .accessibilityLabel("回到最新")
                 .themedButton()
@@ -868,7 +868,7 @@ struct ChatView: View {
             LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
                 // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
                 Color.clear
-                    .frame(height: 1)
+                    .frame(height: Theme.Size.line)
                     .id(Self.bottomID)
                     .onScrollVisibilityChange(threshold: 0.01) { visible in
                         atBottom = visible
@@ -1084,7 +1084,7 @@ struct ChatView: View {
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
-                Image(systemName: Theme.Icon.back).font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
+                Image(systemName: Theme.Icon.back).font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
@@ -1104,7 +1104,7 @@ struct ChatView: View {
                 .animation(Theme.Motion.standard, value: model.connection.shown)
                 .font(Theme.Font.captionStrong)
                 .padding(.horizontal, Theme.Space.m)
-                .frame(height: 28)
+                .scaledFrame(height: Theme.Size.wellXS)
                 .background(Theme.Fill.chip, in: .capsule)
                 .contentShape(.capsule)
             }
@@ -1118,11 +1118,11 @@ struct ChatView: View {
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
-                        .frame(width: 44, height: 34)
+                        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
                         .accessibilityLabel("循环与后台任务，点按查看")
                 }
             }
-            .frame(minWidth: 44)
+            .scaledFrame(minWidth: Theme.Size.tapTarget)
         }
         .padding(.horizontal, Theme.Space.xs)
         .frame(height: ChatChrome.compactHeight)
@@ -1138,7 +1138,7 @@ struct ChatView: View {
             if bg > 0 { Text("\(bg)").font(Theme.Font.labelHeavy.monospacedDigit()) }
         }
         .foregroundStyle(bg > 0 ? Theme.busy : Theme.loop)
-        .frame(width: 44, height: 34)
+        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
         .contentShape(.rect)
     }
 
@@ -1208,7 +1208,7 @@ struct ChatView: View {
                 }
                 .animation(Theme.Motion.standard, value: link)
             }
-            .frame(maxWidth: 260)
+            .scaledFrame(maxWidth: Theme.Size.box260)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -1267,7 +1267,7 @@ struct ChatView: View {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: Theme.Space.s) {
                         Button { back() } label: {
-                            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                                 .contentShape(.circle)
                         }
                         .buttonStyle(.plain)
@@ -1280,7 +1280,7 @@ struct ChatView: View {
                         // The terminal (it comes up from the bottom over the page, TerminalCover), files and Git are in
                         // the ··· menu; files and Git also a swipe to the left away — no tab row (docs/ios.md).
                         Menu { moreMenuItems } label: {
-                            Image(systemName: Theme.Icon.more).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: Theme.Icon.more).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                                 .contentShape(.circle)
                         }
                         .surface(interactive: true, in: .circle)
@@ -1710,7 +1710,7 @@ struct ChatView: View {
         case .recap(let i): RecapCard(item: i)
         case .image(let i):
             if let p = i.image {
-                HStack { if i.role == "user" { Spacer(minLength: 60) }; Base64Image(payload: p).frame(maxWidth: 240) }
+                HStack { if i.role == "user" { Spacer(minLength: 60) }; Base64Image(payload: p).scaledFrame(maxWidth: Theme.Size.box240) }
             }
         }
     }
@@ -1724,7 +1724,7 @@ struct ChatSkeleton: View {
             ForEach(0..<5, id: \.self) { i in
                 RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .fill(on ? Theme.Fill.chip : Theme.Fill.well)
-                    .frame(width: [220, 300, 180, 260, 140][i], height: 14)
+                    .scaledFrame(width: [220, 300, 180, 260, 140][i], height: Theme.Size.markS)
                     .frame(maxWidth: .infinity, alignment: i == 0 ? .trailing : .leading)
             }
         }
@@ -2100,7 +2100,7 @@ struct QueueStrip: View {
                         Text("\(i + 1)")
                             .font(Theme.Font.labelHeavy.monospacedDigit())
                             .foregroundStyle(Theme.accent)
-                            .frame(width: 18, height: 18)
+                            .scaledFrame(width: Theme.Size.badge, height: Theme.Size.badge)
                             .background(Theme.accent.opacity(0.14), in: .circle)
                         Text(q).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
@@ -2458,7 +2458,7 @@ struct WorkCardSlice: View {
 
     /// The hairline between two steps, in the gap above a row, from the words' column.
     static var separator: some View {
-        Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
+        Rectangle().fill(Color(uiColor: .separator)).frame(height: Theme.Size.hairline)
             .padding(.leading, textColumn)
             .offset(y: -bridge)
             .allowsHitTesting(false)

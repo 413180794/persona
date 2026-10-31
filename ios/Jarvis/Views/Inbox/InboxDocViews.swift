@@ -30,7 +30,7 @@ struct DocStatusMenu: View {
                 if moving {
                     ProgressView().controlSize(.mini)
                 } else {
-                    Circle().fill(DocStatusColor.dot(status, in: status.value)).frame(width: 7, height: 7)
+                    Circle().fill(DocStatusColor.dot(status, in: status.value)).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 }
                 Text((showName ? status.name + "：" : "") + (status.value.isEmpty ? "未设置" : status.value))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
@@ -101,7 +101,7 @@ struct InboxDocIcon: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(tint.opacity(0.15))
-            .frame(width: 40, height: 40)
+            .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
             .overlay(Image(systemName: doc.symbol).font(.body.weight(.semibold)).foregroundStyle(tint))
     }
 

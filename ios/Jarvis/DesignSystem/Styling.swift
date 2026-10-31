@@ -112,7 +112,7 @@ private struct SoftButtonStyle: ButtonStyle {
         configuration.label
             .padding(.horizontal, Theme.Space.m)
             .padding(.vertical, Theme.Space.s)
-            .frame(minHeight: 44)
+            .scaledFrame(minHeight: Theme.Size.tapTarget)
             .foregroundStyle(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint))
             .background {
                 ZStack {

@@ -236,7 +236,7 @@ struct LarkImageGallery: View {
             if chrome {
                 VStack {
                     HStack {
-                        Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40) }
+                        Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar) }
                             .themedButton()
                             .clipShape(.circle)
                             .accessibilityLabel("关闭")
@@ -257,7 +257,7 @@ struct LarkImageGallery: View {
                                 UIPasteboard.general.image = img
                                 Haptics.success()
                                 AppModel.shared.toast = Toast("已拷贝图片", style: .success)
-                            } label: { Image(systemName: Theme.Icon.copy).frame(width: 24) }
+                            } label: { Image(systemName: Theme.Icon.copy).scaledFrame(width: Theme.Size.icon) }
                                 .themedButton()
                                 .accessibilityLabel("拷贝")
                         }
@@ -287,7 +287,7 @@ struct LarkPlayerView: View {
             } else {
                 ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40) }
+            Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar) }
                 .themedButton()
                 .clipShape(.circle)
                 .padding(Theme.Space.l)

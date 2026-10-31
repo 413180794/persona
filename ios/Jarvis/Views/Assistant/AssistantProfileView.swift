@@ -210,7 +210,7 @@ struct AssistantUpcomingRow: View {
                     .font(Theme.Font.heading.monospacedDigit())
                 Text(AssistantScheduleText.day(item.at)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
-            .frame(width: 58, alignment: .leading)
+            .scaledFrame(width: Theme.Size.box58, alignment: .leading)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: item.routine ? Theme.Icon.recurring : "arrow.turn.down.right")

@@ -111,7 +111,7 @@ struct TerminalKeyBar: View {
         }
         .padding(.horizontal, Theme.Space.sm)
         .padding(.vertical, Theme.Space.xs)
-        .frame(height: 44)
+        .scaledFrame(height: Theme.Size.tapTarget)
         .surface(in: .capsule)
         #if DEBUG
         // `-showKeyMods locked,once,held`: ctrl, alt, shift in those states, for screenshots.
@@ -276,7 +276,7 @@ struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(Theme.Font.secondaryMedium).dynamicTypeSize(...DynamicTypeSize.large).frame(width: 36)
+                Image(systemName: symbol).font(Theme.Font.secondaryMedium).dynamicTypeSize(...DynamicTypeSize.large).scaledFrame(width: Theme.Size.wellL)
             } else {
                 Text(label)
                     .font(Font(TerminalFont.jetbrains.font(size: 14, bold: false))) // the terminal's own JetBrains Mono
@@ -286,12 +286,12 @@ struct KeyCap: View {
             }
         }
         .foregroundStyle(state == .locked ? Color.white : state == .off ? Color.primary : Theme.accent)
-        .frame(minWidth: 36, minHeight: 36)
+        .scaledFrame(minWidth: Theme.Size.wellL, minHeight: Theme.Size.wellL)
         // As in Moshi: plain labels and icons on the bar; only an armed or locked key gets a fill.
         .background(state == .locked ? Theme.accent : state == .off ? Color.clear : Theme.accent.opacity(0.18), in: .capsule)
         .overlay(Capsule().stroke(state == .once || state == .held ? Theme.accent : .clear, lineWidth: 1.5))
         .overlay(alignment: .bottom) {
-            if state == .locked { Capsule().fill(.white).frame(width: 12, height: 2).padding(.bottom, Theme.Space.sm) }
+            if state == .locked { Capsule().fill(.white).scaledFrame(width: Theme.Size.markXS, height: Theme.Size.rule).padding(.bottom, Theme.Space.sm) }
         }
         .scaleEffect(state == .held ? 0.94 : 1)
         .animation(.snappy(duration: 0.15), value: state)

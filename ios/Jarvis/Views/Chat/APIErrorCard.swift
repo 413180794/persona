@@ -156,7 +156,7 @@ struct APIErrorCard: View {
 
     private func field(_ name: String, _ value: String, copyable: Bool = true) -> some View {
         HStack(spacing: Theme.Space.s) {
-            Text(name).font(Theme.Font.caption).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
+            Text(name).font(Theme.Font.caption).foregroundStyle(.secondary).scaledFrame(width: Theme.Size.box64, alignment: .leading)
             Text(value).font(Theme.Font.code).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             Spacer(minLength: 0)
             if copyable {

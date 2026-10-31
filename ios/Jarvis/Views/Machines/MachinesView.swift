@@ -59,9 +59,9 @@ struct MachineCard: View {
             if machine.online {
                 HStack(spacing: 0) {
                     stat("\(live.count)", "运行中")
-                    Divider().frame(height: 28)
+                    Divider().scaledFrame(height: Theme.Size.wellXS)
                     stat("\(working)", "工作中", tint: working > 0 ? StatusPalette.working.text : nil)
-                    Divider().frame(height: 28)
+                    Divider().scaledFrame(height: Theme.Size.wellXS)
                     stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
                 }
                 HStack(spacing: Theme.Space.sm) {

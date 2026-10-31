@@ -91,7 +91,7 @@ private struct DotLabel: LabelStyle {
     var color: Color
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: Theme.Space.sm) {
-            Circle().fill(color).frame(width: 7, height: 7)
+            Circle().fill(color).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
             configuration.title
         }
     }
@@ -169,7 +169,7 @@ struct MachineMetricsCard: View {
     @ViewBuilder private var status: some View {
         if metrics.online {
             HStack(spacing: Theme.Space.sm) {
-                Circle().fill(Theme.positive).frame(width: 7, height: 7)
+                Circle().fill(Theme.positive).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 Text("在线").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
             }
             .fixedSize()
@@ -195,7 +195,7 @@ struct MachineMetricsCard: View {
             }
             Text(value).font(Theme.Font.bodyStrong.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
             Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
-            chart().frame(height: 30).padding(.top, Theme.Space.xxs)
+            chart().scaledFrame(height: Theme.Size.wellS).padding(.top, Theme.Space.xxs)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

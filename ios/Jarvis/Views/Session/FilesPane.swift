@@ -50,7 +50,7 @@ struct FilesPane: View {
                     Haptics.tap()
                     stack.removeLast()
                 } label: {
-                    Image(systemName: Theme.Icon.back).font(Theme.Font.captionStrong).frame(width: 30, height: 30)
+                    Image(systemName: Theme.Icon.back).font(Theme.Font.captionStrong).scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -73,7 +73,7 @@ struct FilesPane: View {
                 Toggle(isOn: $showHidden) { Label("显示隐藏文件", systemImage: Theme.Icon.view) }
                 Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
             } label: {
-                Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).frame(width: 30, height: 30)
+                Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
             }
             .themedButton()
             .clipShape(.circle)
@@ -116,7 +116,7 @@ struct FilesPane: View {
                 Image(systemName: e.dir ? Theme.Icon.folderFilled : FileViewer.symbol(for: e.name))
                     .font(Theme.Font.body)
                     .foregroundStyle(e.dir ? Theme.accent : Color.secondary)
-                    .frame(width: 24)
+                    .scaledFrame(width: Theme.Size.icon)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     HStack(spacing: Theme.Space.xs) {
                         Text(e.name).font(Theme.Font.secondary).foregroundStyle(e.name.hasPrefix(".") ? Color.secondary : Color.primary).lineLimit(1)
@@ -133,7 +133,7 @@ struct FilesPane: View {
                 Spacer(minLength: 6)
                 if let mark {
                     if e.dir {
-                        Circle().fill(GitBadge(letter: mark).color).frame(width: 7, height: 7)
+                        Circle().fill(GitBadge(letter: mark).color).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                     } else {
                         GitBadge(letter: mark)
                     }

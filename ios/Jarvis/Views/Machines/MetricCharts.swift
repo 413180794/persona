@@ -151,7 +151,7 @@ struct MetricChart: View {
                             PointMark(x: .value("时间", picked.date), y: .value(series[i].name, v))
                                 .symbolSize(64)
                                 .foregroundStyle(series[i].color)
-                                .symbol { Circle().fill(series[i].color).frame(width: 9, height: 9)
+                                .symbol { Circle().fill(series[i].color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL)
                                     .overlay(Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 2)) }
                         }
                     }
@@ -177,7 +177,7 @@ struct MetricChart: View {
             .chartLegend(.hidden)
             .chartPlotStyle { $0.clipped() } // a point a step before the range would draw past the y axis
             .chartXSelection(value: $selection)
-            .frame(height: 150)
+            .scaledFrame(height: Theme.Size.box150)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(title)
             .accessibilityValue(summary)
@@ -200,7 +200,7 @@ struct MetricChart: View {
                 let v = picked.map { series[i].value($0) } ?? (i < now.count ? now[i] : nil)
                 HStack(spacing: Theme.Space.sm) {
                     if series.count > 1 {
-                        Circle().fill(series[i].color).frame(width: 8, height: 8)
+                        Circle().fill(series[i].color).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
                         Text(series[i].name).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                     Text(v.map(format) ?? "—")
@@ -239,7 +239,7 @@ struct MeterBar: View {
                 Capsule().fill(color).frame(width: max(4, g.size.width * min(max(fraction, 0), 1)))
             }
         }
-        .frame(height: 6)
+        .scaledFrame(height: Theme.Size.dotXS)
         .accessibilityHidden(true)
     }
 }

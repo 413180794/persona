@@ -172,7 +172,7 @@ struct NewChatView: View {
                         Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(Theme.Font.heading)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton(prominent: true)
                 .controlSize(.large)
@@ -208,12 +208,12 @@ struct NewChatView: View {
                 HStack {
                     Image(systemName: m.symbol).font(Theme.Font.title)
                     Spacer()
-                    Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).frame(width: 8, height: 8)
+                    Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
                 }
                 Text(m.name).font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(m.online ? (m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
-            .frame(width: 120, alignment: .leading)
+            .scaledFrame(width: Theme.Size.box120, alignment: .leading)
             .padding(Theme.Space.m)
             .background(selected ? Theme.accent.opacity(0.14) : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))

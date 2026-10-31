@@ -231,6 +231,71 @@ nonisolated enum Theme {
         static let bubblePadding: CGFloat = 8
     }
 
+    /// Sizes of what is drawn next to text, at the default text size. Use them with `scaledFrame` so they follow
+    /// 小 / 标准 / 大 and the system's text size (up to 1.6 ×, `Theme.sizeScale`); the lines stay as they are, in a
+    /// plain `.frame`. Nothing on a page writes a size as a number (`TokenRatchetTests`).
+    enum Size {
+        // Lines, rules and bars: do not scale.
+        static let hairline: CGFloat = 0.5
+        static let line: CGFloat = 1
+        static let lineMedium: CGFloat = 1.5
+        static let rule: CGFloat = 2
+        static let ruleWide: CGFloat = 2.5
+        static let bar: CGFloat = 3
+        static let barWide: CGFloat = 4
+        // Dots and small marks.
+        static let grabber: CGFloat = 5
+        static let dotXS: CGFloat = 6
+        static let dotS: CGFloat = 7
+        static let dot: CGFloat = 8
+        static let dotL: CGFloat = 9
+        static let dotXL: CGFloat = 10
+        static let markXS: CGFloat = 12
+        static let markS: CGFloat = 14
+        static let mark: CGFloat = 15
+        static let markM: CGFloat = 16
+        static let markL: CGFloat = 17
+        static let badge: CGFloat = 18
+        // Icons and the wells behind them.
+        static let iconXS: CGFloat = 20
+        static let iconS: CGFloat = 22
+        static let icon: CGFloat = 24
+        static let iconL: CGFloat = 26
+        static let wellXS: CGFloat = 28
+        static let wellS: CGFloat = 30
+        static let well: CGFloat = 32
+        static let wellM: CGFloat = 34
+        static let wellL: CGFloat = 36
+        static let wellXL: CGFloat = 38
+        // Faces and touch.
+        static let avatar: CGFloat = 40
+        static let avatarM: CGFloat = 42
+        /// The smallest thing a finger should hit.
+        static let tapTarget: CGFloat = 44
+        static let avatarL: CGFloat = 46
+        static let avatarXL: CGFloat = 48
+        // Boxes: label columns, thumbnails, charts, previews and panels, by their size at the default text size.
+        static let box50: CGFloat = 50
+        static let box56: CGFloat = 56
+        static let box58: CGFloat = 58
+        static let box60: CGFloat = 60
+        static let box64: CGFloat = 64
+        static let box72: CGFloat = 72
+        static let box76: CGFloat = 76
+        static let box80: CGFloat = 80
+        static let box110: CGFloat = 110
+        static let box120: CGFloat = 120
+        static let box140: CGFloat = 140
+        static let box150: CGFloat = 150
+        static let box180: CGFloat = 180
+        static let box200: CGFloat = 200
+        static let box240: CGFloat = 240
+        static let box260: CGFloat = 260
+        static let box280: CGFloat = 280
+        static let box300: CGFloat = 300
+        static let box380: CGFloat = 380
+    }
+
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot and the work spinner,
     /// and those stop with Reduce Motion (the spinner is the system's).
     enum Motion {

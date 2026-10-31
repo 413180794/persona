@@ -43,7 +43,7 @@ extension MarkdownUI.Theme {
         .blockquote { config in
             config.label
                 .padding(.leading, Theme.Space.m)
-                .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: 3) }
+                .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: Theme.Size.bar) }
                 .markdownTextStyle { ForegroundColor(.secondary) }
         }
         .table { config in FittedTable(config: config) } // fits the width it gets; scrolls only when it cannot
@@ -195,7 +195,7 @@ struct PendingBubble: View {
                     Spacer(minLength: 48)
                     ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
                         Theme.Fill.chip
-                            .frame(width: msg.images.count == 1 ? 120 : 76, height: msg.images.count == 1 ? 120 : 76)
+                            .scaledFrame(width: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76, height: msg.images.count == 1 ? Theme.Size.box120 : Theme.Size.box76)
                             .overlay { ChatThumbnail(payload: p) }
                             .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     }
@@ -212,7 +212,7 @@ struct PendingBubble: View {
                         Button(role: .destructive, action: discard) { Label("不发了", systemImage: Theme.Icon.delete) }
                     } label: {
                         Image(systemName: Theme.Icon.time).font(Theme.Font.caption).foregroundStyle(.secondary)
-                            .frame(width: 24, height: 24)
+                            .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                             .contentShape(.rect)
                     }
                     .accessibilityLabel("等网络，连上后自动发送")
@@ -254,7 +254,7 @@ struct MergedUserBubble: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
                     if n > 0 {
-                        Capsule().fill(Theme.userBubbleText.opacity(0.22)).frame(width: 36, height: 1.5)
+                        Capsule().fill(Theme.userBubbleText.opacity(0.22)).scaledFrame(width: Theme.Size.wellL, height: Theme.Size.lineMedium)
                             .frame(maxWidth: .infinity) // centered in the bubble
                     }
                     Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText)
@@ -432,7 +432,7 @@ struct ThinkingRow: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .padding(.leading, Theme.Space.m)
-                    .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: 2) }
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: Theme.Size.rule) }
                     .padding(.horizontal, compact ? 10 : 0)
             }
         }
@@ -646,7 +646,7 @@ struct RecapStrip: View {
             close()
         } label: {
             HStack(alignment: .top, spacing: Theme.Space.m) {
-                Capsule().fill(Theme.accent).frame(width: 3)
+                Capsule().fill(Theme.accent).frame(width: Theme.Size.bar)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)

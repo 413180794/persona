@@ -240,13 +240,13 @@ struct AssistantSidebar: View {
                 }
             }
             .padding(.horizontal, Theme.Space.m)
-            .frame(height: 40)
+            .scaledFrame(height: Theme.Size.avatar)
             .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             Button(action: newConversation) {
                 Image(systemName: Theme.Icon.compose)
                     .font(Theme.Font.heading)
                     .foregroundStyle(Theme.accent)
-                    .frame(width: 40, height: 40)
+                    .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                     .background(Theme.accent.opacity(0.12), in: .circle)
                     .contentShape(.circle)
             }
@@ -270,7 +270,7 @@ struct AssistantSidebar: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text("Jarvis").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {
-                        Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
+                        Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
                         Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
                             .lineLimit(1)
                     }
@@ -302,7 +302,7 @@ struct AssistantSidebar: View {
                 Image(systemName: symbol)
                     .font(Theme.Font.secondaryStrong)
                     .foregroundStyle(Theme.accent)
-                    .frame(width: 28, height: 28)
+                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                     .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
@@ -438,10 +438,10 @@ struct AssistantSidebar: View {
     /// Waiting for you, working or unread as a small mark under the time; nothing otherwise.
     @ViewBuilder private func mark(_ s: Session) -> some View {
         switch s.state {
-        case .working: ProgressView().controlSize(.mini).frame(height: 8)
-        case .needsYou: Circle().fill(Theme.needsYou).frame(width: 8, height: 8)
-        case .unread: Circle().fill(Theme.accent).frame(width: 8, height: 8)
-        default: Color.clear.frame(width: 8, height: 8)
+        case .working: ProgressView().controlSize(.mini).scaledFrame(height: Theme.Size.dot)
+        case .needsYou: Circle().fill(Theme.needsYou).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
+        case .unread: Circle().fill(Theme.accent).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
+        default: Color.clear.scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
         }
     }
 
@@ -465,12 +465,12 @@ struct AssistantSidebar: View {
             Divider().padding(.horizontal, Theme.Space.l)
             Button(action: action) {
                 HStack(spacing: Theme.Space.m) {
-                    Image(systemName: Theme.Icon.settings).font(Theme.Font.heading).foregroundStyle(.secondary).frame(width: 28)
+                    Image(systemName: Theme.Icon.settings).font(Theme.Font.heading).foregroundStyle(.secondary).scaledFrame(width: Theme.Size.wellXS)
                     Text("设置").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, Theme.Space.xl)
-                .frame(height: 50)
+                .scaledFrame(height: Theme.Size.box50)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)

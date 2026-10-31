@@ -98,7 +98,7 @@ struct ConnectionDetails: View {
                 }
             }
             .padding(Theme.Space.l)
-            .frame(width: 300, alignment: .leading)
+            .scaledFrame(width: Theme.Size.box300, alignment: .leading)
         }
     }
 

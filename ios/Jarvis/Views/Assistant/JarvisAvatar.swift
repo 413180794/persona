@@ -135,7 +135,7 @@ struct JarvisAvatarGallery: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             ForEach(JarvisAvatar.Design.allCases) { d in
                 HStack(spacing: Theme.Space.l) {
-                    Text(d.title).font(Theme.Font.secondaryStrong).frame(width: 40, alignment: .leading)
+                    Text(d.title).font(Theme.Font.secondaryStrong).scaledFrame(width: Theme.Size.avatar, alignment: .leading)
                     JarvisAvatar(size: 28, design: d)
                     JarvisAvatar(size: 44, design: d)
                     JarvisAvatar(size: 84, design: d)

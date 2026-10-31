@@ -83,7 +83,7 @@ struct AssistantTopBar: View {
             Image(systemName: symbol)
                 .font(Theme.Font.heading)
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                .frame(width: 44, height: 44)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
@@ -104,7 +104,7 @@ struct AssistantTopBar: View {
                 }
                 .font(Theme.Font.labelStrong)
                 .padding(.horizontal, Theme.Space.m)
-                .frame(height: 24)
+                .scaledFrame(height: Theme.Size.icon)
                 .fixedSize()
                 .background(.regularMaterial, in: .capsule)
                 .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
@@ -137,8 +137,8 @@ struct AssistantTopBar: View {
                     }
                 }
                 .padding(.horizontal, Theme.Space.m)
-                .frame(height: 24)
-                .frame(maxWidth: 200)
+                .scaledFrame(height: Theme.Size.icon)
+                .scaledFrame(maxWidth: Theme.Size.box200)
                 .fixedSize() // as wide as the name, at most 200
                 // Not the glass `surface`: inside a Menu's label the glass spreads over the whole label (face included).
                 .background(.regularMaterial, in: .capsule)

@@ -61,11 +61,11 @@ struct MachineSpacesView: View {
             Image(systemName: m.symbol)
                 .font(Theme.Font.title)
                 .foregroundStyle(m.online ? Theme.accent : .secondary)
-                .frame(width: 44, height: 44)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Circle().fill(m.online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
+                    Circle().fill(m.online ? Theme.positive : Color.secondary).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                     Text(m.online ? "在线" : "离线").font(Theme.Font.secondaryStrong)
                     if let h = m.hostname, !h.isEmpty { Text(h).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1) }
                 }

@@ -71,7 +71,7 @@ struct ImageViewer: View {
         VStack {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40)
+                    Image(systemName: Theme.Icon.close).font(Theme.Font.heading).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -102,7 +102,7 @@ struct ImageViewer: View {
                 }
                 if let img = decoded[index] {
                     ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
-                        Image(systemName: Theme.Icon.share).frame(width: 24)
+                        Image(systemName: Theme.Icon.share).scaledFrame(width: Theme.Size.icon)
                     }
                     .themedButton()
                     .accessibilityLabel("分享")
@@ -110,7 +110,7 @@ struct ImageViewer: View {
                         UIPasteboard.general.image = img
                         Haptics.success()
                         AppModel.shared.toast = Toast("已拷贝图片", style: .success)
-                    } label: { Image(systemName: Theme.Icon.copy).frame(width: 24) }
+                    } label: { Image(systemName: Theme.Icon.copy).scaledFrame(width: Theme.Size.icon) }
                         .themedButton()
                         .accessibilityLabel("拷贝")
                 }

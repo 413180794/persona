@@ -352,7 +352,7 @@ struct LarkCardNodeView: View {
             return AnyView(LarkCardFlow(nodes: n.children, inMarkdown: true)
                 .environment(\.larkTextBase, LarkTextBase(size: base.size, color: .secondary))
                 .padding(.leading, Theme.Space.m)
-                .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: 3) })
+                .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: Theme.Size.bar) })
         case "code_block":
             return AnyView(LarkCodeBlock(code: n.text ?? n.plainText, language: n.raw["language"]?.string))
         case "heading":
@@ -369,7 +369,7 @@ struct LarkCardNodeView: View {
             return AnyView(LarkFlowLayout(spacing: 6) {
                 ForEach(Array((n.raw["options"]?.array ?? []).enumerated()), id: \.offset) { _, o in
                     if let u = o["image"]?["url"]?.string {
-                        LarkRemoteImage(url: u, maxPixel: 300).frame(width: 72, height: 72).clipShape(.rect(cornerRadius: Theme.Radius.control))
+                        LarkRemoteImage(url: u, maxPixel: 300).scaledFrame(width: Theme.Size.box72, height: Theme.Size.box72).clipShape(.rect(cornerRadius: Theme.Radius.control))
                             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(o["selected"]?.bool == true ? LarkColor.blue : .clear, lineWidth: 2))
                     }
                 }
@@ -749,7 +749,7 @@ struct LarkCardButton: View {
             }
             .font(Theme.Font.secondaryMedium)
             .padding(.horizontal, fill ? 6 : 14)
-            .frame(minHeight: 32)
+            .scaledFrame(minHeight: Theme.Size.well)
             .frame(maxWidth: fill ? .infinity : nil)
             .foregroundStyle(Self.foreground(kind))
             .background(Self.background(kind), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
@@ -827,7 +827,7 @@ struct LarkCardNote: View {
         HStack(alignment: .center, spacing: Theme.Space.sm) {
             ForEach(Array(kids.enumerated()), id: \.offset) { _, k in
                 if k.tag == "img", let u = k.imageURL {
-                    LarkRemoteImage(url: u, size: larkThumbEdge(points: 16), maxPixel: 64).frame(width: 16, height: 16).clipShape(.rect(cornerRadius: 3))
+                    LarkRemoteImage(url: u, size: larkThumbEdge(points: 16), maxPixel: 64).scaledFrame(width: Theme.Size.markM, height: Theme.Size.markM).clipShape(.rect(cornerRadius: 3))
                 } else if k.isIcon {
                     LarkCardIcon(node: k, size: 12)
                 } else {
@@ -920,7 +920,7 @@ struct LarkCardField: View {
             }
             .font(Theme.Font.secondary)
             .padding(.horizontal, Theme.Space.m)
-            .frame(minHeight: 34)
+            .scaledFrame(minHeight: Theme.Size.wellM)
             .frame(maxWidth: .infinity)
             .background(Color.primary.opacity(0.03), in: .rect(cornerRadius: Theme.Radius.badge))
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge).strokeBorder(LarkColor.cardStroke))
@@ -964,7 +964,7 @@ struct LarkCardOverflow: View {
         } label: {
             Image(systemName: Theme.Icon.more)
                 .font(Theme.Font.secondaryStrong)
-                .frame(width: 32, height: 32)
+                .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge).strokeBorder(LarkColor.cardStroke))
         }
         .foregroundStyle(.primary)
@@ -1040,10 +1040,10 @@ struct LarkCardTable: View {
     private func grid(_ rows: [LarkCardNode], columns: Int, cellWidth: CGFloat?) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { ri, row in
-                if ri > 0 { Rectangle().fill(LarkColor.cardStroke).frame(height: 1) }
+                if ri > 0 { Rectangle().fill(LarkColor.cardStroke).frame(height: Theme.Size.line) }
                 HStack(spacing: 0) {
                     ForEach(0..<columns, id: \.self) { ci in
-                        if ci > 0 { Rectangle().fill(LarkColor.cardStroke).frame(width: 1) }
+                        if ci > 0 { Rectangle().fill(LarkColor.cardStroke).frame(width: Theme.Size.line) }
                         let cell = ci < row.children.count ? row.children[ci] : nil
                         let header = cell?.tag == "markdown_table_header"
                         Group {
@@ -1090,7 +1090,7 @@ struct LarkCardChart: View {
             if let title = spec["title"]?["text"]?.string { Text(title).font(Theme.Font.secondaryStrong) }
             if pts.isEmpty {
                 Label("图表", systemImage: "chart.bar.xaxis").font(Theme.Font.secondary).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 80).background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control))
+                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box80).background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control))
             } else {
                 Chart(pts) { p in
                     switch type {
@@ -1100,7 +1100,7 @@ struct LarkCardChart: View {
                     default: BarMark(x: .value("X", p.x), y: .value("Y", p.y)).foregroundStyle(by: .value("系列", p.series))
                     }
                 }
-                .frame(height: 180)
+                .scaledFrame(height: Theme.Size.box180)
             }
         }
     }

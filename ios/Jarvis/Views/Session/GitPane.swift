@@ -152,7 +152,7 @@ struct GitBadge: View {
         Text(letter)
             .font(Theme.Font.labelHeavy.monospaced()).dynamicTypeSize(...DynamicTypeSize.xLarge)
             .foregroundStyle(color)
-            .frame(width: 20, height: 20)
+            .scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
             .background(color.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
     }
 

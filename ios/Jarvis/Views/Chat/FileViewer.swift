@@ -291,7 +291,7 @@ struct MachineMarkdownImage: View {
                     .background(Color.primary.opacity(0.05), in: .capsule)
             } else {
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Color.primary.opacity(0.05))
-                    .frame(height: 120)
+                    .scaledFrame(height: Theme.Size.box120)
                     .overlay { ProgressView() }
             }
         }

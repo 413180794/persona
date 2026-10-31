@@ -371,7 +371,7 @@ struct MailProviderMark: View {
             default: Image(systemName: "envelope.circle.fill").resizable().scaledToFit().foregroundStyle(Theme.accent)
             }
         }
-        .frame(width: 28, height: 28)
+        .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
     }
 }
 
@@ -386,12 +386,12 @@ struct GoogleSignInLabel: View {
         let dark = scheme == .dark
         HStack(spacing: Theme.Space.m) {
             if busy { ProgressView().controlSize(.small) } else {
-                Image(Theme.Brand.google).resizable().scaledToFit().frame(width: 20, height: 20)
+                Image(Theme.Brand.google).resizable().scaledToFit().scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
             }
             Text(title).font(Theme.Font.heading).lineLimit(1)
         }
         .foregroundStyle(Color(hex: dark ? 0xE3E3E3 : 0x1F1F1F))
-        .frame(maxWidth: .infinity, minHeight: 48)
+        .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.avatarXL)
         .background(Color(hex: dark ? 0x131314 : 0xFFFFFF), in: .capsule)
         .overlay(Capsule().stroke(Color(hex: dark ? 0x8E918F : 0x747775), lineWidth: 1))
         .contentShape(.capsule)

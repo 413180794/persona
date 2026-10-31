@@ -175,7 +175,7 @@ struct LarkMomentsPostView: View {
                             .padding(.vertical, Theme.Space.xs)
                         }
                     } else if error == nil {
-                        ProgressView().frame(maxWidth: .infinity, minHeight: 200)
+                        ProgressView().scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box200)
                     }
                 }
                 .padding(Theme.Space.l)

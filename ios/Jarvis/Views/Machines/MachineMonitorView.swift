@@ -89,7 +89,7 @@ struct MachineMonitorView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(system?.name ?? m?.os ?? "未知系统").font(Theme.Font.heading).lineLimit(2)
                 HStack(spacing: Theme.Space.sm) {
-                    Circle().fill(online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
+                    Circle().fill(online ? Theme.positive : Color.secondary).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                     Text(online ? "在线" : "离线").font(Theme.Font.secondaryStrong).foregroundStyle(online ? Theme.positive : .secondary)
                     if online, let boot = system?.bootDate {
                         Text("已运行 " + MetricFormat.uptime(since: boot)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
@@ -180,7 +180,7 @@ private struct NowGrid: View {
             Text(value).font(Theme.Font.title.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
             Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
             if let fraction { MeterBar(fraction: fraction, color: level > .normal ? MetricColor.level(level) : color) }
-            else { Color.clear.frame(height: 6) } // every tile the same height
+            else { Color.clear.scaledFrame(height: Theme.Size.dotXS) } // every tile the same height
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(padding: 12)
@@ -213,7 +213,7 @@ private struct CoreBars: View {
                     }
                 }
             }
-            .frame(height: 44)
+            .scaledFrame(height: Theme.Size.tapTarget)
         }
         .card(padding: 14)
         .accessibilityElement(children: .ignore)

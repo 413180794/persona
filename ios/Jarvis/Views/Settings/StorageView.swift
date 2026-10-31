@@ -224,7 +224,7 @@ struct StorageView: View {
             .background(Theme.Fill.chip)
             .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
         }
-        .frame(height: 12)
+        .scaledFrame(height: Theme.Size.markXS)
         .animation(Theme.Motion.standard, value: usage)
         .accessibilityHidden(true)
     }
@@ -234,7 +234,7 @@ struct StorageView: View {
             Image(systemName: kind.icon)
                 .font(Theme.Font.bodyStrong)
                 .foregroundStyle(.white)
-                .frame(width: 30, height: 30)
+                .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
                 .background(kind == .appData ? Color.gray : kind.color, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(kind.title).lineLimit(1)

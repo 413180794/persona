@@ -255,7 +255,7 @@ struct CloseAgentSheet: View {
             Image(systemName: Theme.Icon.close)
                 .font(Theme.Font.title)
                 .foregroundStyle(Theme.danger)
-                .frame(width: 56, height: 56)
+                .scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                 .background(Theme.danger.opacity(0.12), in: .circle)
                 .padding(.top, 28)
             Text("关闭这个 Agent？")
@@ -300,13 +300,13 @@ struct CloseAgentSheet: View {
                         if closing { ProgressView().tint(.white) } else { Text("关闭 Agent").lineLimit(1) }
                     }
                     .font(Theme.Font.heading)
-                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton(prominent: true)
                 .tint(Theme.danger)
                 .disabled(closing)
                 Button { dismiss() } label: {
-                    Text("取消").lineLimit(1).font(Theme.Font.heading).frame(maxWidth: .infinity, minHeight: 30)
+                    Text("取消").lineLimit(1).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton()
                 .disabled(closing)
@@ -327,7 +327,7 @@ struct CloseAgentSheet: View {
         Label {
             Text(text).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
         } icon: {
-            Image(systemName: symbol).font(Theme.Font.secondary).foregroundStyle(.secondary).frame(width: 22)
+            Image(systemName: symbol).font(Theme.Font.secondary).foregroundStyle(.secondary).scaledFrame(width: Theme.Size.iconS)
         }
     }
 }

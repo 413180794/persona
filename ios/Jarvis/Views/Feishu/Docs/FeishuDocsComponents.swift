@@ -64,7 +64,7 @@ struct FeishuDocsListState: View {
     var body: some View {
         Group {
             if loading {
-                ProgressView().controlSize(.large).frame(maxWidth: .infinity, minHeight: 260)
+                ProgressView().controlSize(.large).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box260)
             } else if let error {
                 EmptyStateView(symbol: Theme.Icon.offline, title: "加载失败", message: error, action: ("重试", { Task { await retry() } }))
             } else {

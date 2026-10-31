@@ -201,7 +201,7 @@ struct FeishuDocsBlock: View {
         case "blockquote":
             FeishuDocsBlocks(nodes: node.children, spacing: 6)
                 .padding(.leading, Theme.Space.m)
-                .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 3) }
+                .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.35)).frame(width: Theme.Size.bar) }
                 .foregroundStyle(.secondary)
         case "callout":
             callout
@@ -276,7 +276,7 @@ struct FeishuDocsBlock: View {
 
     @ViewBuilder private var paragraph: some View {
         if node.children.isEmpty {
-            Color.clear.frame(height: 4)
+            Color.clear.frame(height: Theme.Size.barWide)
         } else {
             inline(node.children)
                 .frame(maxWidth: .infinity, alignment: alignment)
@@ -422,7 +422,7 @@ struct FeishuDocsListItem: View {
                     Text("•").foregroundStyle(.secondary)
                 }
             }
-            .frame(minWidth: 16, alignment: .trailing)
+            .scaledFrame(minWidth: Theme.Size.markM, alignment: .trailing)
             FeishuDocsBlocks(nodes: item.children, spacing: 4)
                 .opacity(todo && done ? 0.55 : 1)
         }
@@ -530,7 +530,7 @@ struct FeishuDocsTableGrid<Cell: View>: View {
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(slots.enumerated()), id: \.offset) { _, slot in
                         let empty = slot.cell == nil
-                        Group { if empty { Color.clear.frame(height: 1) } else { cell(r, slot) } }
+                        Group { if empty { Color.clear.frame(height: Theme.Size.line) } else { cell(r, slot) } }
                             .padding(.horizontal, Theme.Space.s)
                             .padding(.vertical, Theme.Space.sm)
                             .frame(width: FeishuDocsTableSizing.width(widths, column: slot.column, colspan: slot.colspan), alignment: .topLeading)
@@ -549,7 +549,7 @@ struct FeishuDocsTableGrid<Cell: View>: View {
     private func fade(_ edge: HorizontalEdge) -> some View {
         LinearGradient(colors: [Theme.pageBackground, Theme.pageBackground.opacity(0)],
                        startPoint: edge == .leading ? .leading : .trailing, endPoint: edge == .leading ? .trailing : .leading)
-            .frame(width: 22)
+            .scaledFrame(width: Theme.Size.iconS)
             .allowsHitTesting(false)
     }
 
@@ -639,7 +639,7 @@ struct FeishuDocsLinkCard: View {
                 Image(systemName: symbol)
                     .font(Theme.Font.secondaryStrong)
                     .foregroundStyle(quiet ? Color.secondary : LarkColor.hue(hue))
-                    .frame(width: 28, height: 28)
+                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                     .background((quiet ? Color.secondary : LarkColor.hue(hue)).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(title).font(quiet ? Theme.Font.caption : Theme.Font.secondaryMedium)

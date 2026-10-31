@@ -281,9 +281,9 @@ struct ContextCards: View {
                         Text(r.host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     .padding(Theme.Space.m)
-                    .frame(maxWidth: 300, alignment: .leading)
+                    .scaledFrame(maxWidth: Theme.Size.box300, alignment: .leading)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-                    .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: 3).padding(.vertical, Theme.Space.s) }
+                    .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: Theme.Size.bar).padding(.vertical, Theme.Space.s) }
                 }
                 .buttonStyle(.plain)
             }

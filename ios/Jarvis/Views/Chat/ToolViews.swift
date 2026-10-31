@@ -314,7 +314,7 @@ struct ToolCallRow: View {
         } label: {
             HStack(spacing: Theme.Space.m) {
                 ZStack {
-                    Circle().fill(tint.opacity(0.14)).frame(width: 24, height: 24)
+                    Circle().fill(tint.opacity(0.14)).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                     if call.isRunning {
                         ProgressView().controlSize(.mini).tint(tint)
                     } else {
@@ -722,7 +722,7 @@ struct DiffView: View {
             .overlay(alignment: .trailing) {
                 if moreRight {
                     LinearGradient(colors: [Theme.codeBackground.opacity(0), Theme.codeBackground], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: 28)
+                        .scaledFrame(width: Theme.Size.wellXS)
                         .allowsHitTesting(false)
                 }
             }
@@ -743,7 +743,7 @@ struct DiffView: View {
         }
         let quiet = l.kind == .hunk || l.kind == .info
         return HStack(spacing: Theme.Space.sm) {
-            Text(sign).foregroundStyle(color).frame(width: 10)
+            Text(sign).foregroundStyle(color).scaledFrame(width: Theme.Size.dotXL)
             Text(l.text.isEmpty ? " " : l.text).foregroundStyle(quiet ? Color.secondary : .primary)
         }
         .font(Theme.Font.code)
@@ -797,7 +797,7 @@ struct Base64Image: View {
                 Image(uiImage: image).resizable().scaledToFit()
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
-                    .frame(maxHeight: 280)
+                    .scaledFrame(maxHeight: Theme.Size.box280)
                     .contentShape(.rect)
                     .onTapGesture { showViewer = true }
                     .matchedTransitionSource(id: "image", in: zoom)
@@ -806,10 +806,10 @@ struct Base64Image: View {
             } else if let aspect = payload.aspect { // lazy: hold the image's shape while it downloads
                 RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well)
                     .aspectRatio(aspect, contentMode: .fit)
-                    .frame(maxHeight: 280)
+                    .scaledFrame(maxHeight: Theme.Size.box280)
                     .overlay { ProgressView().controlSize(.small) }
             } else {
-                RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well).frame(height: 120)
+                RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well).scaledFrame(height: Theme.Size.box120)
             }
         }
         .fullScreenCover(isPresented: $showViewer) {
@@ -859,7 +859,7 @@ struct FoldedWorkRow: View {
         }
         .font(Theme.Font.caption)
         .foregroundStyle(.secondary)
-        .frame(minHeight: 28)
+        .scaledFrame(minHeight: Theme.Size.wellXS)
         .task(id: attempt) {
             guard let openFold else { return }
             do {

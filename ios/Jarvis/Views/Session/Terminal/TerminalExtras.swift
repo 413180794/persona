@@ -265,7 +265,7 @@ struct ThemeRow: View {
             Spacer(minLength: 8)
             HStack(spacing: Theme.Space.xs) {
                 ForEach([side.background, side.foreground, side.ansi[1], side.ansi[2], side.ansi[4]], id: \.self) { c in
-                    Circle().fill(Color(hex: c)).frame(width: 14, height: 14)
+                    Circle().fill(Color(hex: c)).scaledFrame(width: Theme.Size.markS, height: Theme.Size.markS)
                         .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
                 }
             }

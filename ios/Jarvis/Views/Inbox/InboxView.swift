@@ -220,7 +220,7 @@ struct InboxView: View {
                 ForEach(accounts) { a in
                     chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
-                Divider().frame(height: 18)
+                Divider().scaledFrame(height: Theme.Size.badge)
                 ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
                     chip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
@@ -359,11 +359,11 @@ struct InboxRow: View {
                         .background(Color(uiColor: .systemGray), in: .circle)
                 }
             }
-            .frame(width: 18, height: 18)
+            .scaledFrame(width: Theme.Size.badge, height: Theme.Size.badge)
             .overlay(Circle().stroke(Theme.pageBackground, lineWidth: 1.5))
             .offset(x: 4, y: 4)
         }
-        .frame(width: 40, height: 40)
+        .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
     }
 }
 

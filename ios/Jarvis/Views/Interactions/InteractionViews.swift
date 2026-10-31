@@ -158,7 +158,7 @@ struct InteractionPanel: View {
                         Image(systemName: Theme.Icon.enlarge)
                             .font(Theme.Font.captionStrong)
                             .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
+                            .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
@@ -172,14 +172,14 @@ struct InteractionPanel: View {
                     Image(systemName: Theme.Icon.more)
                         .font(Theme.Font.captionStrong)
                         .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
+                        .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                         .contentShape(.rect)
                 }
                 Image(systemName: Theme.Icon.expand)
                     .font(Theme.Font.captionStrong)
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(collapsed ? 180 : 0))
-                    .frame(width: 28, height: 28)
+                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
             }
             .contentShape(.rect)
             .onTapGesture { withAnimation(Theme.Motion.standard) { collapsed.toggle() } }
@@ -293,7 +293,7 @@ struct QuestionForm: View {
                         Text("\(number)").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
-                .frame(width: 24, height: 24)
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: Theme.Space.sm) {
                         Text(label).font(Theme.Font.heading).foregroundStyle(.primary)
@@ -323,7 +323,7 @@ struct QuestionForm: View {
             Image(systemName: Theme.Icon.edit)
                 .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Theme.Fill.chip, in: .circle)
             if writing {
                 TextField("写下你的回答", text: text, axis: .vertical)
@@ -449,7 +449,7 @@ struct PlanForm: View {
                     .markdownTheme(.jarvis)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 200)
+            .scaledFrame(maxHeight: Theme.Size.box200)
             .scrollBounceBehavior(.basedOnSize)
             if rejecting {
                 TextField("告诉 Claude 要怎么改…", text: $feedback, axis: .vertical)
@@ -608,7 +608,7 @@ struct ScreenForm: View {
                         Text(opt.key).font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
-                .frame(width: 24, height: 24)
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: Theme.Space.sm) {
                         Text(label).font(Theme.Font.heading).foregroundStyle(.primary)
@@ -637,7 +637,7 @@ struct ScreenForm: View {
             Image(systemName: Theme.Icon.edit)
                 .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
+                .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Theme.Fill.chip, in: .circle)
             if writing {
                 TextField("写下你的回答", text: $text, axis: .vertical)
@@ -729,7 +729,7 @@ struct ScreenSteps: View {
                             else { Text("\(i + 1)").font(.system(size: 9, weight: .bold).monospacedDigit()) } // type-scale: glyph (a step number in a 16 pt circle)
                         }
                         .foregroundStyle(s.done ? .white : .secondary)
-                        .frame(width: 15, height: 15)
+                        .scaledFrame(width: Theme.Size.mark, height: Theme.Size.mark)
                         .background(s.done ? Theme.positive : Color.primary.opacity(0.1), in: .circle)
                         Text(s.label).lineLimit(1)
                     }

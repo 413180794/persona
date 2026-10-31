@@ -71,7 +71,7 @@ private struct PaneSegment: View {
         .font(on ? Theme.Font.captionStrong : Theme.Font.captionMedium)
         .foregroundStyle(on ? Theme.accent : Color.secondary)
         .frame(maxWidth: .infinity)
-        .frame(height: 30)
+        .scaledFrame(height: Theme.Size.wellS)
         .background { if on { Capsule().fill(Theme.accent.opacity(0.13)).matchedGeometryEffect(id: "pane", in: ns) } }
         .contentShape(.capsule)
     }
@@ -273,7 +273,7 @@ struct TerminalPanel: View {
                     suggestions = TerminalCompletion.suggestions(for: input, rows: feed.content.rows)
                 }
             Button(action: sendInput) {
-                Image(systemName: Theme.Icon.enter).frame(width: 24, height: 24)
+                Image(systemName: Theme.Icon.enter).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
             }
             .themedButton(prominent: true)
             .disabled(input.isEmpty)
@@ -385,8 +385,8 @@ struct TerminalPanel: View {
     private func grabBar(_ g: TerminalGrab) -> some View {
         let fg = Color(hex: side.foreground)
         return ZStack {
-            Capsule().fill(fg.opacity(0.35)).frame(width: 38, height: 5)
-                .frame(width: 110, height: 30)
+            Capsule().fill(fg.opacity(0.35)).scaledFrame(width: Theme.Size.wellXL, height: Theme.Size.grabber)
+                .scaledFrame(width: Theme.Size.box110, height: Theme.Size.wellS)
                 .contentShape(.rect)
                 .onTapGesture { Haptics.tap(); g.close() }
                 .accessibilityElement()
@@ -398,7 +398,7 @@ struct TerminalPanel: View {
                 if feed.loading { ProgressView().controlSize(.mini).tint(fg) }
                 Spacer(minLength: 0)
                 Button { Haptics.tap(); showSettings = true } label: {
-                    Image(systemName: Theme.Icon.options).font(Theme.Font.captionStrong).frame(width: 32, height: 26)
+                    Image(systemName: Theme.Icon.options).font(Theme.Font.captionStrong).scaledFrame(width: Theme.Size.well, height: Theme.Size.iconL)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(fg.opacity(0.75))
@@ -406,7 +406,7 @@ struct TerminalPanel: View {
             }
         }
         .padding(.horizontal, Theme.Space.m)
-        .frame(height: 34)
+        .scaledFrame(height: Theme.Size.wellM)
         .contentShape(.rect)
         .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { g.dragged($0.translation.height) }
@@ -720,13 +720,13 @@ struct TerminalTips: View {
             .font(Theme.Font.captionStrong)
         }
         .padding(Theme.Space.l)
-        .frame(maxWidth: 380, alignment: .leading)
+        .scaledFrame(maxWidth: Theme.Size.box380, alignment: .leading)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
 
     private func tip(_ symbol: String, _ text: String) -> some View {
         Label { Text(text).lineLimit(1).minimumScaleFactor(0.8) } icon: {
-            Image(systemName: symbol).foregroundStyle(Theme.accent).frame(width: 20)
+            Image(systemName: symbol).foregroundStyle(Theme.accent).scaledFrame(width: Theme.Size.iconXS)
         }
     }
 }
@@ -758,7 +758,7 @@ struct TerminalLinkStatus: View {
                         Text("重试").font(Theme.Font.captionStrong).lineLimit(1)
                             .foregroundStyle(.black)
                             .padding(.horizontal, Theme.Space.l)
-                            .frame(height: 30)
+                            .scaledFrame(height: Theme.Size.wellS)
                             .background(.white, in: .capsule)
                     }
                     .buttonStyle(.plain)
@@ -839,7 +839,7 @@ struct BackgroundTasksStrip: View {
                 Image(systemName: t.isAgent ? "person.2" : Theme.Icon.terminal)
                     .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.secondary)
-                    .frame(width: 18, height: 18)
+                    .scaledFrame(width: Theme.Size.badge, height: Theme.Size.badge)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(t.title).font(Theme.Font.secondaryMedium).foregroundStyle(Color.primary).lineLimit(1)
                     if let cmd = t.command, !cmd.isEmpty, cmd != t.title {

@@ -431,7 +431,7 @@ struct ChatsView: View {
                 Image(systemName: Theme.Icon.moreMenu)
                     .font(Theme.Font.body)
                     .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
+                    .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                     .contentShape(.rect)
             }
             .accessibilityLabel("\(g.name) 的更多操作")
@@ -668,7 +668,7 @@ struct QuickFilterBar: View {
             let tint = tone?.text ?? Theme.accent
             Button { if !on { choose(f) } } label: {
                 HStack(spacing: Theme.Space.sm) {
-                    if let tone { Circle().fill(tone.dot).frame(width: 7, height: 7) }
+                    if let tone { Circle().fill(tone.dot).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS) }
                     Text(f.title)
                     if let n = counts[f] {
                         Text("\(n)").monospacedDigit().foregroundStyle(on ? tint : Color.secondary)
@@ -791,7 +791,7 @@ struct StateCounts: View {
                 let n = group.count(st)
                 if n > 0 {
                     HStack(spacing: Theme.Space.xs) {
-                        Circle().fill(st.color).frame(width: 6, height: 6)
+                        Circle().fill(st.color).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
                         Text("\(n)").font(Theme.Font.labelHeavy.monospacedDigit()).foregroundStyle(.secondary)
                             .contentTransition(.numericText(value: Double(n)))
                     }
@@ -803,7 +803,7 @@ struct StateCounts: View {
             let idle = group.count(.idle) + group.count(.unknown)
             if idle > 0 {
                 HStack(spacing: Theme.Space.xs) {
-                    Circle().fill(Color.secondary.opacity(0.45)).frame(width: 6, height: 6)
+                    Circle().fill(Color.secondary.opacity(0.45)).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
                     Text("\(idle)").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                         .contentTransition(.numericText(value: Double(idle)))
                 }

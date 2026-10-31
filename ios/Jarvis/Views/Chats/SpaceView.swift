@@ -52,7 +52,7 @@ struct SiblingTabs: View {
                 .lineLimit(1)
                 .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
                 .padding(.horizontal, Theme.Space.m)
-                .frame(height: 30)
+                .scaledFrame(height: Theme.Size.wellS)
                 // The state is the capsule's color; a quiet (seen, idle) one is the plain gray.
                 .background(quiet ? AnyShapeStyle(Theme.Fill.chip) : AnyShapeStyle(tone.dot.opacity(on ? 0.26 : 0.16)), in: .capsule)
                 .overlay(Capsule().strokeBorder(on ? (quiet ? Color.primary.opacity(0.45) : tone.dot.opacity(0.8)) : .clear, lineWidth: 1.5))
@@ -72,10 +72,10 @@ struct SiblingTabs: View {
             Image(systemName: Theme.Icon.more)
                 .font(Theme.Font.captionHeavy)
                 .foregroundStyle(.secondary)
-                .frame(width: 34, height: 30)
+                .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellS)
                 .background(Theme.Fill.chip, in: .capsule)
                 .overlay(alignment: .topTrailing) {
-                    if waiting { Circle().fill(Theme.needsYou).frame(width: 8, height: 8).offset(x: 1, y: -1) } // still, not pulsing
+                    if waiting { Circle().fill(Theme.needsYou).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot).offset(x: 1, y: -1) } // still, not pulsing
                 }
                 .contentShape(.capsule)
         }
@@ -110,13 +110,13 @@ private struct SiblingList: View {
                 if let s = space, let name = s.spaceName, let k = s.spaceKey {
                     Button { openSpace(k) } label: {
                         HStack(spacing: Theme.Space.m) {
-                            Image(systemName: Theme.Icon.space).foregroundStyle(Theme.accent).frame(width: 22)
+                            Image(systemName: Theme.Icon.space).foregroundStyle(Theme.accent).scaledFrame(width: Theme.Size.iconS)
                             Text("空间 \(name) 的所有 Agent").font(Theme.Font.secondaryStrong).lineLimit(1)
                             Spacer(minLength: 8)
                             Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, Theme.Space.l)
-                        .frame(minHeight: 46)
+                        .scaledFrame(minHeight: Theme.Size.avatarL)
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
@@ -126,7 +126,7 @@ private struct SiblingList: View {
                     let on = s.key == current
                     Button { pick(s.key) } label: {
                         HStack(spacing: Theme.Space.m) {
-                            Circle().fill(s.state.color).frame(width: 9, height: 9).frame(width: 22) // a still dot
+                            Circle().fill(s.state.color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL).scaledFrame(width: Theme.Size.iconS) // a still dot
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.slotLabel ?? s.displayTitle).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 Text(s.state.label).font(Theme.Font.label).foregroundStyle(s.state.tone.text).lineLimit(1)
@@ -135,7 +135,7 @@ private struct SiblingList: View {
                             if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
                         }
                         .padding(.horizontal, Theme.Space.l)
-                        .frame(minHeight: 50)
+                        .scaledFrame(minHeight: Theme.Size.box50)
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
@@ -202,7 +202,7 @@ struct SpaceView: View {
                             Text("在这个空间开新标签").font(Theme.Font.captionMedium)
                         }
                         .foregroundStyle(Theme.accent)
-                        .frame(maxWidth: .infinity, minHeight: 150)
+                        .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box150)
                         .background(Theme.accent.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Theme.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
                     }
@@ -272,7 +272,7 @@ struct SlotCard: View {
             Spacer(minLength: 0)
             if let m = Fmt.model(session.model) { Text(m).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }
         }
-        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+        .scaledFrame(minWidth: 0, maxWidth: .infinity, minHeight: Theme.Size.box150, alignment: .topLeading)
         .card(padding: 12)
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(session.state == .needsYou ? Theme.needsYou.opacity(0.5) : .clear, lineWidth: 1.5))
     }

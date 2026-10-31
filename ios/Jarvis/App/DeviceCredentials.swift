@@ -88,7 +88,7 @@ struct DevicesView: View {
     private func row(_ t: APIClient.DeviceToken) -> some View {
         HStack(spacing: Theme.Space.m) {
             Image(systemName: t.kind == "watch" ? Theme.Icon.watch : t.kind == "phone" ? Theme.Icon.phone : Theme.Icon.laptop)
-                .frame(width: 24)
+                .scaledFrame(width: Theme.Size.icon)
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {

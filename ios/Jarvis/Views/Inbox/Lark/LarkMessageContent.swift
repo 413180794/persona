@@ -173,7 +173,7 @@ struct LarkNodeView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { i, item in
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                         Text(Self.marker(b, index: i)).font(.system(size: base.size * Theme.textScale(typeSize)).monospacedDigit()).foregroundStyle(.secondary)
-                            .frame(minWidth: 14, alignment: .trailing)
+                            .scaledFrame(minWidth: Theme.Size.markS, alignment: .trailing)
                         LarkNodeView(node: item, base: base)
                     }
                 }
@@ -183,7 +183,7 @@ struct LarkNodeView: View {
         case "quote":
             return AnyView(LarkNodesView(nodes: children, structured: true, base: LarkTextBase(size: base.size, color: .secondary))
                 .padding(.leading, Theme.Space.m)
-                .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: 3) })
+                .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: Theme.Size.bar) })
         case let t where t.hasPrefix("heading-"):
             let level = Int(t.dropFirst(8)) ?? 3
             let size: CGFloat = level == 1 ? 22 : 17 // Jarvis' title and heading levels, as in a chat's Markdown
@@ -412,7 +412,7 @@ struct LarkSticker: View {
                     Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
                         .frame(width: image.size.width * r, height: image.size.height * r)
                 } else {
-                    RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Color.primary.opacity(0.05)).frame(width: 80, height: 80)
+                    RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Color.primary.opacity(0.05)).scaledFrame(width: Theme.Size.box80, height: Theme.Size.box80)
                 }
             }
             .accessibilityLabel(part.text ?? "贴纸")
@@ -441,7 +441,7 @@ struct LarkFileCard: View {
                 Self.badge(ext)
             }
             .padding(Theme.Space.m)
-            .frame(width: 260)
+            .scaledFrame(width: Theme.Size.box260)
             .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke))
         }
@@ -466,7 +466,7 @@ struct LarkFileCard: View {
         return Image(systemName: symbol)
             .font(.system(size: 20)) // type-scale: glyph (in a 42 pt tile)
             .foregroundStyle(.white)
-            .frame(width: 42, height: 42)
+            .scaledFrame(width: Theme.Size.avatarM, height: Theme.Size.avatarM)
             .background(color.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
@@ -487,7 +487,7 @@ struct LarkVideoPart: View {
             Image(systemName: Theme.Icon.run)
                 .font(.system(size: 20)) // type-scale: glyph (in a 48 pt play button)
                 .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
+                .scaledFrame(width: Theme.Size.avatarXL, height: Theme.Size.avatarXL)
                 .background(.black.opacity(0.45), in: .circle)
         }
         .frame(width: size.width, height: size.height)
@@ -519,7 +519,7 @@ struct LarkVoicePart: View {
                 Image(systemName: "play.circle.fill").font(Theme.Font.title).foregroundStyle(LarkColor.blue)
                 HStack(spacing: Theme.Space.xxs) {
                     ForEach(0..<min(18, max(5, Int(ms / 1500))), id: \.self) { i in
-                        Capsule().fill(Color.primary.opacity(0.35)).frame(width: 2.5, height: [8, 14, 10, 18, 12, 6][i % 6])
+                        Capsule().fill(Color.primary.opacity(0.35)).frame(width: Theme.Size.ruleWide, height: [8, 14, 10, 18, 12, 6][i % 6])
                     }
                 }
                 Text(LarkFormat.duration(ms: ms)).font(Theme.Font.secondary.monospacedDigit()).foregroundStyle(.secondary)

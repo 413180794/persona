@@ -152,7 +152,7 @@ struct LarkGenericSummaryCard: View {
         }
         let accent = Self.accent(variant)
         HStack(spacing: 0) {
-            Rectangle().fill(accent).frame(width: 4)
+            Rectangle().fill(accent).frame(width: Theme.Size.barWide)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     Group {
@@ -163,7 +163,7 @@ struct LarkGenericSummaryCard: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity).background(accent.opacity(0.12))
                         }
                     }
-                    .frame(width: 36, height: 36)
+                    .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         if let eyebrow = meta["eyebrow"]?.string { Text(eyebrow).font(Theme.Font.label).foregroundStyle(.secondary) }

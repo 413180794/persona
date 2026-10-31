@@ -278,7 +278,7 @@ struct AssistantTaskRow: View {
             Image(systemName: AssistantScheduleText.symbol(t))
                 .font(Theme.Font.heading)
                 .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
+                .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
                 .background((t.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
@@ -720,7 +720,7 @@ struct AssistantWeekdayPicker: View {
                         Text(AssistantScheduleText.dayNames[d - 1])
                             .font(Theme.Font.secondaryStrong)
                             .foregroundStyle(on ? Color.white : Color.primary)
-                            .frame(width: 38, height: 38)
+                            .scaledFrame(width: Theme.Size.wellXL, height: Theme.Size.wellXL)
                             .background(Circle().fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.14))))
                     }
                     .buttonStyle(.plain)
@@ -1079,7 +1079,7 @@ struct AssistantNotesView: View {
             Section {
                 TextEditor(text: $text)
                     .font(Theme.Font.body)
-                    .frame(minHeight: 380)
+                    .scaledFrame(minHeight: Theme.Size.box380)
                     .focused($focused)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             } footer: {

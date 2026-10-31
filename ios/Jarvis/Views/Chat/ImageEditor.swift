@@ -75,7 +75,7 @@ struct ImageEditor: View {
             HStack(spacing: Theme.Space.l) {
                 ForEach(Self.colors, id: \.self) { c in
                     Button { color = c } label: {
-                        Circle().fill(Color(uiColor: c)).frame(width: 26, height: 26)
+                        Circle().fill(Color(uiColor: c)).scaledFrame(width: Theme.Size.iconL, height: Theme.Size.iconL)
                             .overlay(Circle().stroke(.white, lineWidth: color == c ? 3 : 1).opacity(color == c ? 1 : 0.4))
                     }
                     .buttonStyle(.plain)
@@ -86,9 +86,9 @@ struct ImageEditor: View {
                 toolButton(.box, "框选", "rectangle")
                 toolButton(.pen, "画笔", "scribble")
                 Spacer(minLength: 0)
-                Button { _ = marks.popLast() } label: { Image(systemName: Theme.Icon.undo).frame(width: 24) }
+                Button { _ = marks.popLast() } label: { Image(systemName: Theme.Icon.undo).scaledFrame(width: Theme.Size.icon) }
                     .themedButton().disabled(marks.isEmpty).accessibilityLabel("撤销")
-                Button { marks = [] } label: { Image(systemName: Theme.Icon.delete).frame(width: 24) }
+                Button { marks = [] } label: { Image(systemName: Theme.Icon.delete).scaledFrame(width: Theme.Size.icon) }
                     .themedButton().disabled(marks.isEmpty).accessibilityLabel("清除")
             }
         }

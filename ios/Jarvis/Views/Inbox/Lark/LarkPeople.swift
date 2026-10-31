@@ -82,7 +82,7 @@ struct LarkProfileView: View {
                         LinearGradient(colors: [LarkColor.blue.opacity(0.35), LarkColor.blue.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     }
                 }
-                .frame(height: 150)
+                .scaledFrame(height: Theme.Size.box150)
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .padding(.horizontal, -16)
@@ -134,7 +134,7 @@ struct LarkProfileView: View {
         } label: {
             Group { if opening { ProgressView() } else { Label("发消息", systemImage: Theme.Icon.message).lineLimit(1) } }
                 .font(Theme.Font.secondaryStrong)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
         }
         .buttonStyle(.borderedProminent)
         .tint(LarkColor.blue)
@@ -162,7 +162,7 @@ struct LarkProfileView: View {
                     Divider()
                     Button { withAnimation(Theme.Motion.standard) { showAll.toggle() } } label: {
                         Text(showAll ? "收起" : "查看更多信息").font(Theme.Font.secondary).foregroundStyle(LarkColor.blue).lineLimit(1)
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
                     }
                     .buttonStyle(.plain)
                 }
@@ -183,7 +183,7 @@ struct LarkProfileView: View {
         let leader = f.url.flatMap { u in u.hasPrefix("lark://client/profile") ? URLComponents(string: u)?.queryItems?.first { $0.name == "uid" }?.value : nil }
         let link = f.url.flatMap { $0.hasPrefix("http") ? URL(string: $0) : nil }
         return HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
-            Text(label).font(Theme.Font.secondary).foregroundStyle(.secondary).frame(width: 76, alignment: .leading).lineLimit(2)
+            Text(label).font(Theme.Font.secondary).foregroundStyle(.secondary).scaledFrame(width: Theme.Size.box76, alignment: .leading).lineLimit(2)
             Group {
                 if let leader {
                     Button { push(.profile(LarkPersonRef(id: leader, name: value))) } label: { Text(value).foregroundStyle(LarkColor.blue) }.buttonStyle(.plain)

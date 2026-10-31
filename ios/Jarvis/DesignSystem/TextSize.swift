@@ -65,3 +65,45 @@ private struct LineHeight: ViewModifier {
         content.lineSpacing(level.extraLeading * Theme.textScale(typeSize))
     }
 }
+
+extension Theme {
+    /// How much a size that goes with text (`Theme.Size`, `scaledFrame`) grows: the text's scale, up to 1.6 × at the
+    /// accessibility sizes, where a 44 pt button at the text's 3 × would push everything off screen.
+    static func sizeScale(_ size: DynamicTypeSize) -> CGFloat { min(textScale(size), 1.6) }
+}
+
+extension View {
+    /// A frame whose sizes (`Theme.Size`) follow the text size: the same points at the default size, larger or smaller
+    /// with 小 / 标准 / 大 and the system's text size (`Theme.sizeScale`). Fixed and flexible frames as SwiftUI's.
+    func scaledFrame(width: CGFloat? = nil, height: CGFloat? = nil, alignment: Alignment = .center) -> some View {
+        modifier(ScaledFrame(width: width, height: height, alignment: alignment))
+    }
+
+    func scaledFrame(minWidth: CGFloat? = nil, maxWidth: CGFloat? = nil, minHeight: CGFloat? = nil, maxHeight: CGFloat? = nil,
+                     alignment: Alignment = .center) -> some View {
+        modifier(ScaledFlexibleFrame(minWidth: minWidth, maxWidth: maxWidth, minHeight: minHeight, maxHeight: maxHeight, alignment: alignment))
+    }
+}
+
+private struct ScaledFrame: ViewModifier {
+    let width: CGFloat?, height: CGFloat?, alignment: Alignment
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        let k = Theme.sizeScale(typeSize)
+        content.frame(width: width.map { $0 * k }, height: height.map { $0 * k }, alignment: alignment)
+    }
+}
+
+private struct ScaledFlexibleFrame: ViewModifier {
+    let minWidth: CGFloat?, maxWidth: CGFloat?, minHeight: CGFloat?, maxHeight: CGFloat?, alignment: Alignment
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        content.frame(minWidth: scaled(minWidth), maxWidth: scaled(maxWidth), minHeight: scaled(minHeight), maxHeight: scaled(maxHeight),
+                      alignment: alignment)
+    }
+
+    /// .infinity stays infinite.
+    private func scaled(_ v: CGFloat?) -> CGFloat? { v.map { $0.isFinite ? $0 * Theme.sizeScale(typeSize) : $0 } }
+}

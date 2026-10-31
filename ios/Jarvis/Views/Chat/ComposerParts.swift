@@ -31,7 +31,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .focused(focused)
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.vertical, Theme.Space.m)
-                .frame(minHeight: 44)
+                .scaledFrame(minHeight: Theme.Size.tapTarget)
                 .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
             if let stop, !canSend {
@@ -65,7 +65,7 @@ struct ComposerImages: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
                 ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
-                    Image(uiImage: pair.0).resizable().scaledToFill().frame(width: 56, height: 56)
+                    Image(uiImage: pair.0).resizable().scaledToFill().scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                         .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         .overlay(alignment: .bottomLeading) {
                             if edit != nil {

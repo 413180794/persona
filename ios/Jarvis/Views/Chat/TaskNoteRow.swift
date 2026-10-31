@@ -98,7 +98,7 @@ struct TaskNoteRow: View {
                 } label: {
                     HStack(spacing: Theme.Space.m) {
                         ZStack {
-                            Circle().fill(tint(n).opacity(0.14)).frame(width: 24, height: 24)
+                            Circle().fill(tint(n).opacity(0.14)).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                             Image(systemName: TaskNoteText.symbol(n))
                                 .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xLarge)
                                 .foregroundStyle(tint(n))

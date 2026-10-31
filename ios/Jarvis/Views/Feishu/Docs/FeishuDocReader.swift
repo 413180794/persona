@@ -396,7 +396,7 @@ struct FeishuDocReader: View {
                                     .font(.system(size: 9, weight: .bold).monospacedDigit()) // type-scale: glyph (a count on an icon)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, Theme.Space.xs)
-                                    .frame(minWidth: 14, minHeight: 14)
+                                    .scaledFrame(minWidth: Theme.Size.markS, minHeight: Theme.Size.markS)
                                     .background(LarkColor.hue("red"), in: .capsule)
                                     .offset(x: 9, y: -7)
                             }
@@ -435,7 +435,7 @@ struct FeishuDocsImageProvider: ImageProvider {
         let src = url?.absoluteString ?? ""
         return Button { open(src) } label: {
             LarkRemoteImage(url: src, maxPixel: 1600, contentMode: .fit)
-                .frame(maxWidth: .infinity, minHeight: 60)
+                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box60)
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -480,7 +480,7 @@ struct FeishuDocsSkeleton: View {
             } else {
                 bar(0.7, height: 26)
             }
-            HStack(spacing: Theme.Space.s) { Circle().fill(Color.primary.opacity(0.08)).frame(width: 22, height: 22); bar(0.35, height: 12) }
+            HStack(spacing: Theme.Space.s) { Circle().fill(Color.primary.opacity(0.08)).scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS); bar(0.35, height: 12) }
             ForEach(0..<9, id: \.self) { i in bar([0.95, 0.88, 0.6, 0.92, 0.8, 0.45, 0.9, 0.85, 0.5][i], height: 14) }
             ProgressView().frame(maxWidth: .infinity).padding(.top, Theme.Space.s)
         }
@@ -507,7 +507,7 @@ struct FeishuDocsUnsupportedView: View {
             if let image = info.image {
                 Button { gallery = FeishuDocsGallery(urls: [image], index: 0) } label: {
                     LarkRemoteImage(url: image, maxPixel: 2000, contentMode: .fit)
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                        .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box200)
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
                 }
@@ -525,12 +525,12 @@ struct FeishuDocsUnsupportedView: View {
                     Button {
                         request = ("/api/v1/lark/raw/documents/drive/files/\(f.token)/download", info.title)
                     } label: {
-                        Label("预览文件", systemImage: Theme.Icon.view).lineLimit(1).frame(minWidth: 180)
+                        Label("预览文件", systemImage: Theme.Icon.view).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
                     }
                     .themedButton(prominent: true)
                 }
                 Button { FeishuDocsLinks.openInFeishu(url) } label: {
-                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(minWidth: 180)
+                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
                 }
                 .themedButton(prominent: info.file == nil)
             }
@@ -646,7 +646,7 @@ struct FeishuDocsThreadCard: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .padding(.leading, Theme.Space.s)
-                        .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: 3) }
+                        .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: Theme.Size.bar) }
                 }
                 Spacer(minLength: 0)
                 if thread.resolved { FeishuDocsTag(text: "已解决", hue: "green") }

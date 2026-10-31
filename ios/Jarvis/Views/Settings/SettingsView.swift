@@ -26,7 +26,7 @@ struct SettingsView: View {
                             } else {
                                 Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
                                 HStack(spacing: Theme.Space.sm) {
-                                    Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
+                                    Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                                     Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
                             }
@@ -237,7 +237,7 @@ struct PhoneDataView: View {
                         Image(systemName: s.symbol)
                             .font(Theme.Font.heading)
                             .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
+                            .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
                             .background(Theme.accent.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text(s.title)
@@ -325,7 +325,7 @@ struct WelcomeView: View {
             .padding(.horizontal, Theme.Space.xxl)
             Spacer()
             Button { showPair = true } label: {
-                Label("连接 hub", systemImage: "qrcode.viewfinder").font(Theme.Font.heading).frame(maxWidth: .infinity, minHeight: 32)
+                Label("连接 hub", systemImage: "qrcode.viewfinder").font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
@@ -339,7 +339,7 @@ struct WelcomeView: View {
                 .padding(.top, Theme.Space.m)
             // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
             Button { model.enterDemo() } label: {
-                Label("没有 hub？先体验一下", systemImage: "play.circle").font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 32)
+                Label("没有 hub？先体验一下", systemImage: "play.circle").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
             }
             .themedButton()
             .controlSize(.large)
@@ -363,7 +363,7 @@ struct WelcomeView: View {
             Image(systemName: symbol)
                 .font(Theme.Font.title)
                 .foregroundStyle(Theme.accent)
-                .frame(width: 30)
+                .scaledFrame(width: Theme.Size.wellS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(title).font(Theme.Font.heading)
                 Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary)
@@ -394,7 +394,7 @@ struct PairView: View {
                                 Task { await connect() }
                             }
                         }
-                        .frame(height: 280)
+                        .scaledFrame(height: Theme.Size.box280)
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .listRowInsets(EdgeInsets())
                     } footer: {
@@ -611,19 +611,19 @@ private struct StyleCard: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
-                        .frame(height: 16)
+                        .scaledFrame(height: Theme.Size.markM)
                         .shadow(color: [.puffy, .floating].contains(style.spec.surface) ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
-                    HStack { Spacer(); Capsule().fill(bubble).frame(width: 40, height: 12) }
-                    Capsule().fill(Color.secondary.opacity(0.25)).frame(width: 46, height: 8)
+                    HStack { Spacer(); Capsule().fill(bubble).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.markXS) }
+                    Capsule().fill(Color.secondary.opacity(0.25)).scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.dot)
                     HStack(spacing: Theme.Space.xs) {
-                        Circle().fill(accent).frame(width: 10, height: 10)
-                        Capsule().fill(accent.opacity(0.35)).frame(height: 8)
+                        Circle().fill(accent).scaledFrame(width: Theme.Size.dotXL, height: Theme.Size.dotXL)
+                        Capsule().fill(accent.opacity(0.35)).scaledFrame(height: Theme.Size.dot)
                     }
                 }
                 .padding(Theme.Space.m)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 120)
+            .scaledFrame(height: Theme.Size.box120)
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
             VStack(spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.xs) {

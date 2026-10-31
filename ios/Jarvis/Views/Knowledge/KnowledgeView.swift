@@ -709,14 +709,14 @@ struct KBTimelineRow: View {
             ZStack(alignment: .top) {
                 // The rail joins the dots: none above the newest, none below the oldest shown.
                 VStack(spacing: 0) {
-                    Rectangle().fill(first ? Color.clear : Self.rail).frame(width: 2, height: 14)
-                    Rectangle().fill(last ? Color.clear : Self.rail).frame(width: 2).frame(maxHeight: .infinity)
+                    Rectangle().fill(first ? Color.clear : Self.rail).scaledFrame(width: Theme.Size.rule, height: Theme.Size.markS)
+                    Rectangle().fill(last ? Color.clear : Self.rail).frame(width: Theme.Size.rule).frame(maxHeight: .infinity)
                 }
                 Circle().fill(first ? Theme.accent : Color.secondary.opacity(0.45))
-                    .frame(width: 9, height: 9)
+                    .scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL)
                     .padding(.top, Theme.Space.m)
             }
-            .frame(width: 12)
+            .scaledFrame(width: Theme.Size.markXS)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
                     if !line.when.isEmpty { Text(line.shortWhen()).font(Theme.Font.labelStrong.monospacedDigit()) }

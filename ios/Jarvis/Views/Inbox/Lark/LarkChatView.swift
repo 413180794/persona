@@ -52,7 +52,7 @@ struct LarkChatView: View {
                     Button { Task { await loadOlder() } } label: {
                         Group { if loadingOlder { ProgressView().controlSize(.small) } else { Text("加载更早的消息").lineLimit(1) } }
                             .font(Theme.Font.labelMedium)
-                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(LarkColor.blue)
@@ -72,7 +72,7 @@ struct LarkChatView: View {
                     .onAppear { markSeen(m) }
                 }
                 if pager.hasNewer {
-                    ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 44)
+                    ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
                         .onAppear { Task { await loadNewer() } }
                 }
             }
@@ -143,7 +143,7 @@ struct LarkChatView: View {
                 .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
             Button { Task { await send() } } label: {
                 Group { if sending { ProgressView().tint(.white) } else { Image(systemName: Theme.Icon.send).font(Theme.Font.heading) } }
-                    .frame(width: 36, height: 36)
+                    .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
             }
             .themedButton(prominent: true)
             .clipShape(.circle)
@@ -173,7 +173,7 @@ struct LarkChatView: View {
                 }
                 .foregroundStyle(LarkColor.blue)
                 .padding(.horizontal, n > 0 ? 12 : 0)
-                .frame(minWidth: 38, minHeight: 38)
+                .scaledFrame(minWidth: Theme.Size.wellXL, minHeight: Theme.Size.wellXL)
                 .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
@@ -189,7 +189,7 @@ struct LarkChatView: View {
             Button { Task { await jump(to: mention) } } label: {
                 Label("有人@你", systemImage: "at").font(Theme.Font.captionMedium).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
-                    .padding(.horizontal, Theme.Space.m).frame(minHeight: 34)
+                    .padding(.horizontal, Theme.Space.m).scaledFrame(minHeight: Theme.Size.wellM)
                     .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
@@ -405,9 +405,9 @@ struct LarkChatView: View {
 struct LarkNewMessagesDivider: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
-            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
+            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: Theme.Size.line)
             Text("以下为新消息").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
-            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
+            Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: Theme.Size.line)
         }
         .padding(.vertical, Theme.Space.m)
         .accessibilityAddTraits(.isHeader)
@@ -448,7 +448,7 @@ struct LarkMessageRow: View {
                             .accessibilityLabel("\(m.senderName) 的资料")
                     }
                 }
-                .frame(width: 34, height: grouped ? 1 : 34)
+                .scaledFrame(width: Theme.Size.wellM, height: grouped ? Theme.Size.line : Theme.Size.wellM)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     if !grouped && isGroup {
                         HStack(spacing: Theme.Space.xs) {
@@ -545,13 +545,13 @@ struct LarkMessageRow: View {
                 if react != nil {
                     Button { picking = true } label: {
                         Image(systemName: "face.smiling").font(.system(size: 14)).foregroundStyle(.secondary)
-                            .frame(width: 32, height: 26).background(Color.primary.opacity(0.05), in: .capsule)
+                            .scaledFrame(width: Theme.Size.well, height: Theme.Size.iconL).background(Color.primary.opacity(0.05), in: .capsule)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("表情回复")
                 }
             }
-            .frame(maxWidth: 300, alignment: .leading)
+            .scaledFrame(maxWidth: Theme.Size.box300, alignment: .leading)
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         if replies > 0 || m.edited == true || !LarkChatView.continues(m, after: nil) {
@@ -620,7 +620,7 @@ struct LarkThreadView: View {
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
                         Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
-                        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
+                        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: Theme.Size.line)
                     }
                     .padding(.vertical, Theme.Space.m)
                     if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
@@ -660,7 +660,7 @@ struct LarkReplyQuote: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
-            Capsule().fill(Color.primary.opacity(0.2)).frame(width: 2.5)
+            Capsule().fill(Color.primary.opacity(0.2)).frame(width: Theme.Size.ruleWide)
             Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.text))")
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
@@ -679,7 +679,7 @@ struct LarkReactionChip: View {
         let users = reaction.users ?? []
         HStack(spacing: Theme.Space.xs) {
             if let url = media.emoji(reaction.key)?.url {
-                LarkRemoteImage(url: url, maxPixel: 64, contentMode: .fit).frame(width: 17, height: 17)
+                LarkRemoteImage(url: url, maxPixel: 64, contentMode: .fit).scaledFrame(width: Theme.Size.markL, height: Theme.Size.markL)
             } else {
                 Text(LarkMedia.labelFallback(reaction.key, text: nil)).font(Theme.Font.label)
             }
