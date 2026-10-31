@@ -18,10 +18,10 @@ struct MachinesView: View {
                             .buttonStyle(.plain)
                     }
                     if model.machines.isEmpty {
-                        EmptyStateView(symbol: "macbook.and.iphone", title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
+                        EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
                     }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
         .themedGroupedPage()
         .navigationTitle("机器")
@@ -29,7 +29,7 @@ struct MachinesView: View {
         .toolbar {
             ToolbarItem(placement: .principal) { ConnectionTitle() }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { MachineDashboardView() } label: { Label("机器监控", systemImage: "gauge.with.dots.needle.33percent") }
+                NavigationLink { MachineDashboardView() } label: { Label("机器监控", systemImage: Theme.Icon.context) }
             }
         }
         .refreshable { await model.refresh() }
@@ -54,7 +54,7 @@ struct MachineCard: View {
                     Text(machine.hostname ?? machine.sshHost ?? machine.id).font(Theme.Font.code).foregroundStyle(Color.secondary)
                 }
                 Spacer()
-                Chip(text: machine.online ? "在线" : "离线", symbol: "circle.fill", look: machine.online ? .tint(Theme.positive) : .neutral)
+                Chip(text: machine.online ? "在线" : "离线", symbol: Theme.Icon.dot, look: machine.online ? .tint(Theme.positive) : .neutral)
             }
             if machine.online {
                 HStack(spacing: 0) {
@@ -64,14 +64,14 @@ struct MachineCard: View {
                     Divider().frame(height: 28)
                     stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
                 }
-                HStack(spacing: 6) {
-                    if let sys = machine.system { Chip(text: sys.name, symbol: "cpu") }
-                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: "cpu") }
+                HStack(spacing: Theme.Space.sm) {
+                    if let sys = machine.system { Chip(text: sys.name, symbol: Theme.Icon.cpu) }
+                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: Theme.Icon.cpu) }
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
                     if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
                 }
                 if machine.nodeMismatch == true {
-                    Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: "exclamationmark.triangle.fill")
+                    Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: Theme.Icon.errorFilled)
                         .font(Theme.Font.label)
                         .foregroundStyle(Theme.cautionText)
                 }
@@ -119,21 +119,21 @@ struct MachineDetailView: View {
                     // The card is the header, not a row: as a row it was tappable and pushed this page again.
                     VStack(alignment: .leading, spacing: Theme.Space.l) {
                         MachineCard(machine: machine)
-                        Text("运行中的 Claude").padding(.leading, 16) // where the header text sits by default
+                        Text("运行中的 Claude").padding(.leading, Theme.Space.l) // where the header text sits by default
                     }
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
                 Section {
                     NavigationLink { MachineMonitorView(machineID: machineID) } label: {
-                        Label("系统与监控", systemImage: "gauge.with.dots.needle.33percent")
+                        Label("系统与监控", systemImage: Theme.Icon.context)
                     }
                 }
                 Section {
                     if !machine.online {
                         Text("机器离线，连上后显示").foregroundStyle(.secondary)
                     } else if let launcherError, launchers.isEmpty {
-                        Label(launcherError, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                        Label(launcherError, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
                     }
                     ForEach(launchers) { l in
                         HStack {
@@ -148,7 +148,7 @@ struct MachineDetailView: View {
                         Task { await reconnect() }
                     } label: {
                         HStack {
-                            Label(reconnecting ? "正在重新连接…" : "重新连接", systemImage: "arrow.clockwise").lineLimit(1)
+                            Label(reconnecting ? "正在重新连接…" : "重新连接", systemImage: Theme.Icon.retry).lineLimit(1)
                             if reconnecting { Spacer(); ProgressView() }
                         }
                     }

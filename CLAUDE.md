@@ -33,6 +33,12 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **不许直接改已有界面的样子**（2026-10-30 用户要求：BeautifulUI 的工作过程和输入框直接替换了原来的，太丑，已整体 revert）：
   换一种视觉风格（组件库、设计语言、整套配色）一律做成新的**主题**（设置 › 界面风格，`AppStyle`），只在选了它时生效，
   默认和其他主题的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
+- **界面只用设计系统**（2026-10-31 用户要求：设计系统是仓库的约束）：字号和强调、间距、圆角、动画、颜色、图标、品牌标志、风格一律取自
+  `ios/Shared/Design`（`Theme.Font` / `Space` / `Radius` / `Motion`、`Theme.Icon`、`Theme.Brand`、`Palette`、`StyleSpec`）和
+  `ios/Jarvis/DesignSystem` 的组件；页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色。缺什么先在设计系统里加一个有名字的
+  token 或组件，再用。加风格就是在 `Shared/Design/Styles/` 加一个 `StyleSpec`，别处不 `switch AppStyle`。滚动条全局隐藏（RootView 的
+  `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）。`TypeScaleTests`、`IconVocabularyTests`、`TokenRatchetTests`、`StyleSpecTests`
+  守着这些：不许为了过测试加豁免或调高基线（写死的数只能减少）。说明见 `docs/ios.md`「设计语言」。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ## 目录

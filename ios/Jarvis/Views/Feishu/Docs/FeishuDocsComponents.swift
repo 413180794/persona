@@ -43,10 +43,10 @@ struct FeishuDocsTag: View {
 
     var body: some View {
         Text(text)
-            .font(Theme.Font.label.weight(.medium))
+            .font(Theme.Font.labelMedium)
             .foregroundStyle(LarkColor.hue(hue))
             .lineLimit(1)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, Theme.Space.xs)
             .padding(.vertical, 1)
             .background(LarkColor.hue(hue).opacity(0.13), in: .rect(cornerRadius: 3))
             .fixedSize()
@@ -66,13 +66,13 @@ struct FeishuDocsListState: View {
             if loading {
                 ProgressView().controlSize(.large).frame(maxWidth: .infinity, minHeight: 260)
             } else if let error {
-                EmptyStateView(symbol: "wifi.exclamationmark", title: "加载失败", message: error, action: ("重试", { Task { await retry() } }))
+                EmptyStateView(symbol: Theme.Icon.offline, title: "加载失败", message: error, action: ("重试", { Task { await retry() } }))
             } else {
                 EmptyStateView(symbol: empty.symbol, title: empty.title, message: empty.message)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 24)
+        .padding(.top, Theme.Space.xl)
     }
 }
 

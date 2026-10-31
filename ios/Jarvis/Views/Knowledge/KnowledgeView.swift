@@ -40,9 +40,9 @@ struct KnowledgeView: View {
             } else if let list {
                 content(list)
             } else if let error {
-                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
+                Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             } else {
-                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24) }.listRowBackground(Color.clear)
+                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
         .listStyle(.insetGrouped)
@@ -104,12 +104,12 @@ struct KnowledgeView: View {
             if !done.isEmpty { Section { rows(done) } header: { header("已完成", done.count) } }
             if !ignored.isEmpty {
                 Section {
-                    Button { withAnimation(.snappy) { showIgnored.toggle() } } label: {
+                    Button { withAnimation(Theme.Motion.standard) { showIgnored.toggle() } } label: {
                         HStack {
                             Text("不是项目").foregroundStyle(.secondary)
                             Text("\(ignored.count)").foregroundStyle(.tertiary).monospacedDigit()
                             Spacer()
-                            Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                            Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
                                 .rotationEffect(.degrees(showIgnored ? 90 : 0))
                         }
                         .contentShape(.rect)
@@ -132,7 +132,7 @@ struct KnowledgeView: View {
     }
 
     private func header(_ title: String, _ count: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Text(title)
             Text("\(count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
         }
@@ -143,12 +143,12 @@ struct KnowledgeView: View {
     private var tagMenu: some View {
         Menu {
             Button { tag = nil } label: {
-                if tag == nil { Label("全部", systemImage: "checkmark") } else { Text("全部") }
+                if tag == nil { Label("全部", systemImage: Theme.Icon.done) } else { Text("全部") }
             }
             Section("常用标签") {
                 ForEach(list?.tags ?? [], id: \.self) { t in
                     Button { Haptics.tap(); tag = t } label: {
-                        if tag == t { Label("#" + t, systemImage: "checkmark") } else { Text("#" + t) }
+                        if tag == t { Label("#" + t, systemImage: Theme.Icon.done) } else { Text("#" + t) }
                     }
                 }
             }
@@ -176,7 +176,7 @@ struct KnowledgeView: View {
                 }
             }
         } else {
-            Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24) }.listRowBackground(Color.clear)
+            Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
         }
     }
 
@@ -214,21 +214,21 @@ struct KBKindBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Space.s) {
                     ForEach(KBKind.allCases) { k in
                         let on = k == kind
                         Button {
                             Haptics.tap()
-                            withAnimation(.snappy) { kind = k }
+                            withAnimation(Theme.Motion.standard) { kind = k }
                         } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: k.symbol).font(Theme.Font.caption.weight(.semibold))
+                            HStack(spacing: Theme.Space.sm) {
+                                Image(systemName: k.symbol).font(Theme.Font.captionStrong)
                                 Text(k.title).lineLimit(1)
                                 if let n = counts[k], on { Text("\(n)").monospacedDigit().opacity(0.75) }
                             }
-                            .font(Theme.Font.secondary.weight(on ? .semibold : .medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
+                            .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondaryMedium)
+                            .padding(.horizontal, Theme.Space.m)
+                            .padding(.vertical, Theme.Space.s)
                             .foregroundStyle(on ? Color.white : Color.primary)
                             .background(on ? Theme.accent : Color.primary.opacity(0.06), in: .capsule)
                             .contentShape(.capsule)
@@ -239,11 +239,11 @@ struct KBKindBar: View {
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.horizontal, 2)
+                .padding(.horizontal, Theme.Space.xxs)
         }
         .scrollPosition(id: $shown, anchor: .center)
         .onAppear { shown = kind }
-        .onChange(of: kind) { _, k in withAnimation(.snappy) { shown = k } }
+        .onChange(of: kind) { _, k in withAnimation(Theme.Motion.standard) { shown = k } }
     }
 }
 
@@ -252,10 +252,10 @@ struct KBRow: View {
     var entry: KBEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             KBAvatar(entry: entry)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                     Text(entry.name).font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: 4)
                     if let d = entry.updated, d.realDate != nil {
@@ -274,12 +274,12 @@ struct KBRow: View {
                 .padding(.top, 1)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, Theme.Space.xs)
         .accessibilityElement(children: .combine)
     }
 
     private func badges(tags: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             ImportanceBadge(importance: entry.importance)
             if let k = entry.projectKind { KBPill(text: k, tint: k == "长期" ? Theme.Hue.blue : nil) }
             if entry.relevance > 0 { KBPill(text: "相关 \(entry.relevance)", tint: RelevanceMeter.tint(entry.relevance)) }
@@ -303,7 +303,7 @@ struct KBAvatar: View {
             if kind == .people || kind == .chats, let c = entry.name.first(where: { !$0.isWhitespace && !"#@（(【[「『《〈\"'“‘".contains($0) }) {
                 Text(String(c).uppercased()).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(tint)
             } else {
-                Image(systemName: kind?.symbol ?? "circle").font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(tint)
+                Image(systemName: kind?.symbol ?? Theme.Icon.unchecked).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(tint)
             }
         }
         .frame(width: size, height: size)
@@ -341,10 +341,10 @@ struct KBPill: View {
 
     var body: some View {
         Text(text)
-            .font(Theme.Font.label.weight(bold ? .bold : .medium).monospacedDigit())
+            .font(bold ? Theme.Font.labelHeavy.monospacedDigit() : Theme.Font.labelMedium.monospacedDigit())
             .lineLimit(1)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, Theme.Space.xxs)
             .foregroundStyle(tint ?? Color.secondary)
             .background((tint ?? Color.primary).opacity(tint == nil ? 0.06 : 0.13), in: .capsule)
             .fixedSize()
@@ -391,11 +391,11 @@ struct KBHitRow: View {
     var query: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             KBAvatar(entry: entry, size: 30)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
-                    Text(named ? entry.name : group.kind.title).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                HStack(spacing: Theme.Space.sm) {
+                    Text(named ? entry.name : group.kind.title).font(Theme.Font.secondaryStrong).lineLimit(1)
                     if group.hits.count > 2 {
                         Text("\(group.hits.count) 处").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     }
@@ -408,7 +408,7 @@ struct KBHitRow: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     static func marked(_ text: String, _ query: String) -> AttributedString {
@@ -470,16 +470,16 @@ struct KnowledgeDetailView: View {
                 if let sum = d.summary, !sum.isEmpty {
                     Section("档案") {
                         Markdown(Links.markdown(Self.profile(sum, oneLine: shown.oneLine))).markdownTheme(.jarvis).textSelection(.enabled)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, Theme.Space.sm)
                     }
                 }
                 links(d)
                 if let recent = d.recent, !recent.isEmpty {
                     Section {
                         DisclosureGroup(isExpanded: $showRecent) {
-                            Text(recent).font(Theme.Font.code).textSelection(.enabled)
+                            Text(recent).font(Theme.Font.secondary).textSelection(.enabled)
                         } label: {
-                            Label("最近 7 天的消息", systemImage: "text.bubble")
+                            Label("最近 7 天的消息", systemImage: Theme.Icon.conversation)
                         }
                     }
                 }
@@ -491,9 +491,9 @@ struct KnowledgeDetailView: View {
                     Text("Jarvis、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
                 }
             } else if let error {
-                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
+                Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             } else {
-                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24) }.listRowBackground(Color.clear)
+                Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
         .listStyle(.insetGrouped)
@@ -524,11 +524,11 @@ struct KnowledgeDetailView: View {
     private var header: some View {
         let e = shown
         return VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: Theme.Space.m) {
                 KBAvatar(entry: e, size: 48)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(e.name).font(Theme.Font.title).lineLimit(3)
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         ImportanceBadge(importance: e.importance)
                         if let k = e.projectKind { KBPill(text: k + "项目", tint: k == "长期" ? Theme.Hue.blue : nil) }
                         if let st = projectStatus { KBPill(text: st) }
@@ -544,22 +544,22 @@ struct KnowledgeDetailView: View {
                     ForEach(tags, id: \.self) { t in KBPill(text: "#" + t) }
                 }
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 Button { Task { await ask() } } label: {
                     // White on the prominent fill: the symbol took the tint and vanished into the blue.
-                    Label("问 Jarvis", systemImage: "sparkles").lineLimit(1).frame(maxWidth: .infinity)
+                    Label("问 Jarvis", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: .infinity)
                         .foregroundStyle(.white)
                 }
                 .themedButton(prominent: true)
                 if entry.kind == KBKind.projects.rawValue {
                     Button { newAgent = true } label: {
-                        Label("开 Agent", systemImage: "plus.bubble").lineLimit(1).frame(maxWidth: .infinity)
+                        Label("开 Agent", systemImage: Theme.Icon.newConversation).lineLimit(1).frame(maxWidth: .infinity)
                     }
                     .themedButton()
                 }
             }
             .controlSize(.large)
-            .padding(.top, 2)
+            .padding(.top, Theme.Space.xxs)
         }
     }
 
@@ -575,7 +575,7 @@ struct KnowledgeDetailView: View {
     }
 
     private func sectionHeader(_ title: String, _ count: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Text(title)
             Text("\(count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
         }
@@ -594,8 +594,8 @@ struct KnowledgeDetailView: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
             if lines.count > Self.logShown {
-                Button { withAnimation(.snappy) { allLog.toggle() } } label: {
-                    Text(allLog ? "收起" : "显示全部 \(lines.count) 条").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                Button { withAnimation(Theme.Motion.standard) { allLog.toggle() } } label: {
+                    Text(allLog ? "收起" : "显示全部 \(lines.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
                 .listRowSeparator(.hidden)
             }
@@ -618,11 +618,11 @@ struct KnowledgeDetailView: View {
                     }
                     if group.count > Self.linksShown {
                         Button {
-                            withAnimation(.snappy) {
+                            withAnimation(Theme.Motion.standard) {
                                 if open { openKinds.remove(k.rawValue) } else { openKinds.insert(k.rawValue) }
                             }
                         } label: {
-                            Text(open ? "收起" : "全部 \(group.count) 个").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                            Text(open ? "收起" : "全部 \(group.count) 个").font(Theme.Font.secondaryMedium).lineLimit(1)
                         }
                     }
                 } header: { sectionHeader("关联的" + k.title, group.count) }
@@ -634,7 +634,7 @@ struct KnowledgeDetailView: View {
                     Label {
                         Text(dir).font(Theme.Font.secondary.monospaced()).lineLimit(1).truncationMode(.head)
                     } icon: {
-                        Image(systemName: "folder").foregroundStyle(.secondary)
+                        Image(systemName: Theme.Icon.folder).foregroundStyle(.secondary)
                     }
                 }
             } header: { sectionHeader("代码目录", dirs.count) }
@@ -705,7 +705,7 @@ struct KBTimelineRow: View {
     static let rail = Color.primary.opacity(0.1)
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             ZStack(alignment: .top) {
                 // The rail joins the dots: none above the newest, none below the oldest shown.
                 VStack(spacing: 0) {
@@ -714,18 +714,18 @@ struct KBTimelineRow: View {
                 }
                 Circle().fill(first ? Theme.accent : Color.secondary.opacity(0.45))
                     .frame(width: 9, height: 9)
-                    .padding(.top, 10)
+                    .padding(.top, Theme.Space.m)
             }
             .frame(width: 12)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
-                    if !line.when.isEmpty { Text(line.shortWhen()).font(Theme.Font.label.weight(.semibold).monospacedDigit()) }
+                HStack(spacing: Theme.Space.sm) {
+                    if !line.when.isEmpty { Text(line.shortWhen()).font(Theme.Font.labelStrong.monospacedDigit()) }
                     if !line.source.isEmpty { Text(line.source).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 .foregroundStyle(first ? Theme.accent : .secondary)
                 Text(line.text).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, Theme.Space.s)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
@@ -737,10 +737,10 @@ struct KBLinkRow: View {
     var entry: KBEntry
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             KBAvatar(entry: entry, size: 30)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(entry.name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                Text(entry.name).font(Theme.Font.secondaryMedium).lineLimit(1)
                 if let l = entry.oneLine, !l.isEmpty { Text(l).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
             }
         }
@@ -790,7 +790,7 @@ struct KBTagEditor: View {
                     }
                 }
                 if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
+                    Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
                 }
             }
             .navigationTitle(entry.name)

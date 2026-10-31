@@ -236,36 +236,36 @@ struct LarkImageGallery: View {
             if chrome {
                 VStack {
                     HStack {
-                        Button { dismiss() } label: { Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40) }
+                        Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40) }
                             .themedButton()
                             .clipShape(.circle)
                             .accessibilityLabel("关闭")
                         Spacer()
                         if urls.count > 1 {
-                            Text("\(index + 1) / \(urls.count)").font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
-                                .padding(.horizontal, 12).padding(.vertical, 7).surface(in: .capsule)
+                            Text("\(index + 1) / \(urls.count)").font(Theme.Font.secondaryStrong.monospacedDigit())
+                                .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s).surface(in: .capsule)
                         }
                     }
                     Spacer()
                     if let img = loaded[index] {
-                        HStack(spacing: 12) {
+                        HStack(spacing: Theme.Space.m) {
                             ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
-                                Label("分享", systemImage: "square.and.arrow.up").lineLimit(1).font(Theme.Font.secondary.weight(.semibold))
+                                Label("分享", systemImage: Theme.Icon.share).lineLimit(1).font(Theme.Font.secondaryStrong)
                             }
                             .themedButton(prominent: true)
                             Button {
                                 UIPasteboard.general.image = img
                                 Haptics.success()
                                 AppModel.shared.toast = Toast("已拷贝图片", style: .success)
-                            } label: { Image(systemName: "doc.on.doc").frame(width: 24) }
+                            } label: { Image(systemName: Theme.Icon.copy).frame(width: 24) }
                                 .themedButton()
                                 .accessibilityLabel("拷贝")
                         }
                         .controlSize(.large)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.s)
                 .transition(.opacity)
             }
         }
@@ -287,10 +287,10 @@ struct LarkPlayerView: View {
             } else {
                 ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Button { dismiss() } label: { Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40) }
+            Button { dismiss() } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40) }
                 .themedButton()
                 .clipShape(.circle)
-                .padding(16)
+                .padding(Theme.Space.l)
                 .accessibilityLabel("关闭")
         }
         .task {
@@ -316,7 +316,7 @@ struct LarkFileOpener: ViewModifier {
             .quickLookPreview($local)
             .overlay {
                 if loading {
-                    ProgressView("下载中…").padding(20).surface(in: .rect(cornerRadius: 16))
+                    ProgressView("下载中…").padding(Theme.Space.xl).surface(in: .rect(cornerRadius: Theme.Radius.card))
                 }
             }
             .onChange(of: request?.url) {

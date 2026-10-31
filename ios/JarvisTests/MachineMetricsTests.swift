@@ -51,8 +51,8 @@ struct MachineMetricsTests {
         #expect(MetricFormat.percent(93.6) == "94%")
         #expect(MetricFormat.percent(0) == "0%")
         let now = Date(timeIntervalSince1970: 1_000_000)
-        #expect(MetricFormat.uptime(since: now.addingTimeInterval(-(3 * 86400 + 4 * 3600 + 60)), now: now) == "3 天 4 小时")
-        #expect(MetricFormat.uptime(since: now.addingTimeInterval(-(5 * 3600 + 12 * 60)), now: now) == "5 小时 12 分钟")
+        #expect(MetricFormat.uptime(since: now.addingTimeInterval(-273_660), now: now) == "3 天 4 小时")
+        #expect(MetricFormat.uptime(since: now.addingTimeInterval(-18_720), now: now) == "5 小时 12 分钟")
     }
 
     /// A gap starts a new line: no segment of the chart spans a time the machine sent nothing.

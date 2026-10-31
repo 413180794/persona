@@ -83,8 +83,12 @@ nonisolated enum DemoText {
 
 /// REST client for the hub. All endpoints return JSON objects; errors are `{"error": "..."}`.
 nonisolated struct APIClient: Sendable {
+    typealias Transport = @Sendable (LocalRequest) async throws -> Data
+
     var config: ServerConfig
     var session: URLSession = .shared
+    /// Answers every request in place of the network: unit tests' `FakeHub`. The demo config uses `local`.
+    var transport: Transport?
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
@@ -118,11 +122,11 @@ nonisolated struct APIClient: Sendable {
 
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
                  timeout: TimeInterval = 30) async throws -> Data {
-        if config.isDemo {
-            guard let local = Self.local else { throw APIError(status: 503, message: "体验模式不可用") }
-            return try await local(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
-                                                body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }))
+        if let answer = transport ?? (config.isDemo ? Self.local : nil) {
+            return try await answer(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
+                                                 body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }))
         }
+        if config.isDemo { throw APIError(status: 503, message: "体验模式不可用") }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")

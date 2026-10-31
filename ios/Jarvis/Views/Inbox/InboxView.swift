@@ -59,10 +59,10 @@ struct InboxView: View {
                     ToolbarItem(placement: .principal) { ConnectionTitle(title: "收件箱") }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: "square.and.pencil") }
+                            Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
                             Button { showAccounts = true } label: { Label("管理邮箱", systemImage: "envelope.badge") }
-                        } label: { Image(systemName: "ellipsis.circle") }
+                        } label: { Image(systemName: Theme.Icon.moreMenu) }
                         .accessibilityLabel("更多")
                     }
                 }
@@ -85,7 +85,7 @@ struct InboxView: View {
                     #endif
                 }
         } empty: {
-            SplitPlaceholder(symbol: "tray.full", title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
         }
         .environment(\.feishuOpen) { path.append($0) }
         .feishuHandlesLinks { path.append($0) }
@@ -105,7 +105,7 @@ struct InboxView: View {
                 .listRowSeparator(.hidden)
                 .themedRow()
             if let error = store.error, store.items.isEmpty {
-                Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
                     .themedRow()
             }
             if openItems.isEmpty && waitingAgents.isEmpty && !store.loading {
@@ -147,13 +147,13 @@ struct InboxView: View {
     /// A section title that opens / closes the section, with an optional action on the right (List headers take no
     /// context menu, so it is a visible button).
     private func sectionHeader(_ title: String, count: Int, key: String, clear: (String, () -> Void)?) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Button {
-                withAnimation(.snappy) { if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) } }
+                withAnimation(Theme.Motion.standard) { if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) } }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text("\(title) · \(count)").font(Theme.Font.sectionHeader).foregroundStyle(key == "action" ? Color.primary : .secondary)
-                    Image(systemName: "chevron.right").font(Theme.Font.label.weight(.bold)).foregroundStyle(.secondary)
+                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelHeavy).foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded.contains(key) ? 90 : 0))
                     Spacer(minLength: 0)
                 }
@@ -162,14 +162,14 @@ struct InboxView: View {
             }
             .buttonStyle(.plain)
             if let clear {
-                Button(clear.0) { withAnimation(.snappy) { clear.1() } }
+                Button(clear.0) { withAnimation(Theme.Motion.standard) { clear.1() } }
                     .font(Theme.Font.secondary)
                     .lineLimit(1)
                     .buttonStyle(.borderless)
             }
         }
         .textCase(nil)
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     private func agentRow(_ ix: Interaction) -> some View {
@@ -199,9 +199,9 @@ struct InboxView: View {
             .background { NavigationLink(value: it) { EmptyView() }.opacity(0) }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
-                    Button { store.setDone(it, false) } label: { Label("移回", systemImage: "arrow.uturn.backward") }.tint(Theme.accent)
+                    Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
                 } else {
-                    Button { store.setDone(it, true) } label: { Label("已处理", systemImage: "checkmark") }.tint(Theme.positive)
+                    Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }.tint(Theme.positive)
                 }
             }
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
@@ -214,34 +214,34 @@ struct InboxView: View {
     /// Sources (all, 飞书, each mail account) then kinds, as one row of chips.
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 chip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
                 chip("飞书", symbol: "bubble.left.and.bubble.right", on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
-                    chip(Self.short(a.email), symbol: "envelope", on: source == a.id) { source = source == a.id ? "" : a.id }
+                    chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
                 Divider().frame(height: 18)
                 ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
                     chip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, Theme.Space.l)
         }
     }
 
     private func chip(_ title: String, symbol: String? = nil, on: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(.snappy) { action() }
+            withAnimation(Theme.Motion.standard) { action() }
             Haptics.tap()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 if let symbol { Image(systemName: symbol).font(Theme.Font.label) }
                 Text(title)
             }
-            .font(Theme.Font.secondary.weight(on ? .semibold : .regular))
+            .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary)
             .lineLimit(1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
             .foregroundStyle(on ? Color.white : Color.primary)
             .background(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.12)), in: .capsule)
         }
@@ -275,10 +275,10 @@ struct InboxRow: View {
     static let textColumn: CGFloat = 52
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             avatar
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
                         Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
@@ -286,10 +286,10 @@ struct InboxRow: View {
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
                 }
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: Theme.Space.sm) {
                     if let summary = item.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + summary))
+                            (Text(Image(systemName: Theme.Icon.ai)).foregroundStyle(Theme.ai) + Text(" " + summary))
                                 .font(Theme.Font.secondary).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
                             Text(from).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -308,19 +308,19 @@ struct InboxRow: View {
                 if !item.isDone {
                     if let draft = item.agentDraft, let send {
                         InboxDraftCard(draft: draft, sending: sending, send: { send(draft) }, edit: edit)
-                            .padding(.top, 5)
+                            .padding(.top, Theme.Space.sm)
                     } else if item.agentWorking {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Theme.Space.sm) {
                             ProgressView().controlSize(.mini)
                             Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        .padding(.top, 2)
+                        .padding(.top, Theme.Space.xxs)
                     }
                 }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.Space.m)
         .contentShape(.rect)
     }
 
@@ -336,19 +336,25 @@ struct InboxRow: View {
             if item.isLark {
                 LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
             } else {
-                Circle().fill(Theme.monogramFill).frame(width: 40, height: 40)
-                    .overlay(Text(String((item.sender ?? "?").prefix(1))).font(Theme.Font.heading).foregroundStyle(.primary))
+                Monogram(name: item.sender ?? "", fill: Theme.monogramFill)
             }
             }
             .opacity(item.isDone ? 0.6 : 1)
-            // The source: Feishu's own blue (the same in both appearances), mail a neutral gray, not the accent.
-            Image(systemName: item.isLark ? "bubble.left.fill" : "envelope.fill")
-                .font(Theme.Font.label.weight(.bold)).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
-                .foregroundStyle(.white)
-                .frame(width: 18, height: 18)
-                .background(item.isLark ? Color(hex: 0x3370FF) : Color(uiColor: .systemGray), in: .circle)
-                .overlay(Circle().stroke(Theme.pageBackground, lineWidth: 1.5))
-                .offset(x: 4, y: 4)
+            // The source: 飞书's own mark on white, mail a neutral gray, not the accent.
+            Group {
+                if item.isLark {
+                    Image(Theme.Brand.lark).resizable().scaledToFit().padding(1.5).background(.white, in: .circle)
+                } else {
+                    Image(systemName: Theme.Icon.mailFilled)
+                        .font(Theme.Font.labelHeavy).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(uiColor: .systemGray), in: .circle)
+                }
+            }
+            .frame(width: 18, height: 18)
+            .overlay(Circle().stroke(Theme.pageBackground, lineWidth: 1.5))
+            .offset(x: 4, y: 4)
         }
         .frame(width: 40, height: 40)
     }
@@ -363,8 +369,8 @@ struct InboxDraftCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Label("AI 分身草拟的回复", systemImage: "sparkles")
-                .font(Theme.Font.label.weight(.semibold))
+            Label("AI 分身草拟的回复", systemImage: Theme.Icon.ai)
+                .font(Theme.Font.labelStrong)
                 .foregroundStyle(Theme.ai)
                 .lineLimit(1)
             Text(draft)
@@ -372,24 +378,24 @@ struct InboxDraftCard: View {
                 .foregroundStyle(.primary)
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 Spacer(minLength: 0)
                 if let edit {
                     Button(action: edit) {
-                        Text("修改").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
-                            .padding(.horizontal, 14).padding(.vertical, 6)
+                        Text("修改").font(Theme.Font.secondaryMedium).lineLimit(1)
+                            .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
                             .foregroundStyle(Theme.accent)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                     }
                     .buttonStyle(.borderless)
                 }
                 Button(action: send) {
-                    HStack(spacing: 4) {
-                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: "paperplane.fill").font(Theme.Font.label) }
+                    HStack(spacing: Theme.Space.xs) {
+                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: Theme.Icon.sendMail).font(Theme.Font.label) }
                         Text("发送")
                     }
-                    .font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
-                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .font(Theme.Font.secondaryStrong).lineLimit(1)
+                    .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
                     .foregroundStyle(.white)
                     .background(Theme.accent, in: .capsule)
                 }
@@ -398,9 +404,9 @@ struct InboxDraftCard: View {
                 .accessibilityLabel("发送 AI 分身草拟的回复")
             }
         }
-        .padding(10)
-        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.18), lineWidth: 0.5))
+        .padding(Theme.Space.m)
+        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: Theme.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).stroke(Theme.accent.opacity(0.18), lineWidth: 0.5))
     }
 }
 
@@ -414,11 +420,11 @@ struct InboxAgentRow: View {
     var body: some View {
         let ix = interaction
         let asks = ix.summary ?? ix.questions?.first?.question
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             // The rounded square of the Agents rows (SessionAvatar), with what kind of request it is.
             SessionAvatar(machine: machine, state: .needsYou, size: 40, symbol: ix.kind.symbol, dot: false)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(ix.sessionTitle?.isEmpty == false ? ix.sessionTitle! : (ix.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Agent"))
                         .font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: 4)
@@ -430,12 +436,12 @@ struct InboxAgentRow: View {
                         + Text(" · " + machineName).foregroundStyle(.secondary))
                         .font(Theme.Font.caption).lineLimit(1)
                 } else {
-                    Text(ix.title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+                    Text(ix.title).font(Theme.Font.secondaryStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
                     Text(machineName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.Space.m)
         .contentShape(.rect)
     }
 }
@@ -473,12 +479,12 @@ struct InboxDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if current.isDone {
-                        Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: "arrow.uturn.backward") }
+                        Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
                     } else {
                         Button {
                             InboxStore.shared.setDone(current, true)
                             dismiss()
-                        } label: { Label("已处理", systemImage: "checkmark") }
+                        } label: { Label("已处理", systemImage: Theme.Icon.done) }
                     }
                 }
             }

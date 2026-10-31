@@ -111,10 +111,10 @@ struct LinkSheet: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : target.url.host ?? "网页") : title)
-                    .font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                    .font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
@@ -124,17 +124,17 @@ struct LinkSheet: View {
                     .accessibilityLabel("把这篇文档作为上下文")
             }
             Menu {
-                Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: "link") }
+                Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
                 Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: "safari") }
-                ShareLink(item: target.url) { Label("分享", systemImage: "square.and.arrow.up") }
-            } label: { Image(systemName: "ellipsis.circle") }
-            Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical) }
+                ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
+            } label: { Image(systemName: Theme.Icon.moreMenu) }
+            Button { dismiss() } label: { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
                 .accessibilityLabel("关闭")
         }
         .font(Theme.Font.title)
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.l)
+        .padding(.bottom, Theme.Space.s)
     }
 
     private func pick(_ text: String, kind: String) {
@@ -181,6 +181,8 @@ final class WebViewPool {
         let key = url.absoluteString
         if let v = views[key] { touch(key); return v }
         let v = SelectableWebView(frame: .zero, configuration: config)
+        v.scrollView.showsVerticalScrollIndicator = false
+        v.scrollView.showsHorizontalScrollIndicator = false
         v.allowsBackForwardNavigationGestures = true
         var req = URLRequest(url: url)
         req.cachePolicy = .returnCacheDataElseLoad // a page seen before paints from disk at once
@@ -213,7 +215,7 @@ final class SelectableWebView: WKWebView {
     override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         let actions = UIMenu(options: .displayInline, children: [
-            UIAction(title: "AI 修改", image: UIImage(systemName: "sparkles")) { [weak self] _ in self?.pickSelection("edit") },
+            UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
             UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pickSelection("context") },
         ])
         builder.insertChild(actions, atStartOfMenu: .root)
@@ -273,15 +275,15 @@ struct ContextCards: View {
                 Button { if let u = URL(string: r.url) { openLink?(u) } } label: {
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         Label(r.kind == "edit" ? "要改的内容 · \(r.title)" : "上下文 · \(r.title)",
-                              systemImage: r.kind == "edit" ? "sparkles" : "text.quote")
-                            .font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
+                              systemImage: r.kind == "edit" ? Theme.Icon.ai : "text.quote")
+                            .font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1)
                         Text(r.text).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
                         Text(r.host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     }
-                    .padding(10)
+                    .padding(Theme.Space.m)
                     .frame(maxWidth: 300, alignment: .leading)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-                    .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: 3).padding(.vertical, 8) }
+                    .overlay(alignment: .leading) { Capsule().fill(Theme.accent.opacity(0.5)).frame(width: 3).padding(.vertical, Theme.Space.s) }
                 }
                 .buttonStyle(.plain)
             }
@@ -296,17 +298,17 @@ struct ContextChips: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 ForEach(refs) { r in
-                    HStack(spacing: 5) {
+                    HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "text.quote").font(Theme.Font.label)
                         Text(r.text == "（整篇）" ? r.title : String(r.text.prefix(24))).font(Theme.Font.label).lineLimit(1)
-                        Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: "xmark").font(Theme.Font.label.weight(.bold)) }
+                        Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: Theme.Icon.close).font(Theme.Font.labelHeavy) }
                             .buttonStyle(.plain)
                             .accessibilityLabel("移除这个上下文")
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.sm)
                     .background(Theme.accent.opacity(0.12), in: .capsule)
                     .foregroundStyle(Theme.accent)
                 }
@@ -324,10 +326,10 @@ struct DocPickMenu: View {
     @Binding var selecting: Bool
 
     var body: some View {
-        Button { pick(text, "edit") } label: { Label("AI 修改这段", systemImage: "sparkles") }
+        Button { pick(text, "edit") } label: { Label("AI 修改这段", systemImage: Theme.Icon.ai) }
         Button { pick(text, "context") } label: { Label("这段作为上下文", systemImage: "text.badge.plus") }
-        Button { selecting = true } label: { Label("选择文字…", systemImage: "selection.pin.in.out") }
-        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: "doc.on.doc") }
+        Button { selecting = true } label: { Label("选择文字…", systemImage: Theme.Icon.select) }
+        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
     }
 }
 
@@ -380,7 +382,7 @@ struct PickTextView: UIViewRepresentable {
             let selected = (textView.text as NSString).substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !selected.isEmpty else { return UIMenu(children: suggestedActions) }
             let ours = UIMenu(options: .displayInline, children: [
-                UIAction(title: "AI 修改", image: UIImage(systemName: "sparkles")) { [weak self] _ in self?.pick(selected, "edit") },
+                UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pick(selected, "edit") },
                 UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pick(selected, "context") },
             ])
             return UIMenu(children: [ours] + suggestedActions)

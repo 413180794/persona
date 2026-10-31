@@ -19,9 +19,9 @@ struct ComposerRow<MenuItems: View>: View {
     private static var glyph: CGFloat { 31 }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: Theme.Space.s) {
             Menu { menu() } label: {
-                Image(systemName: "plus").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
+                Image(systemName: Theme.Icon.add).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
             }
             .themedButton()
             .clipShape(.circle)
@@ -29,14 +29,14 @@ struct ComposerRow<MenuItems: View>: View {
             TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
                 .lineLimit(1...6)
                 .focused(focused)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.m)
                 .frame(minHeight: 44)
                 .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
             if let stop, !canSend {
                 Button(action: stop) {
-                    Image(systemName: "stop.fill").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
+                    Image(systemName: Theme.Icon.interrupt).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
                 .themedButton(prominent: true)
                 .tint(Theme.danger)
@@ -44,7 +44,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .accessibilityLabel("中断")
             } else {
                 Button(action: send) {
-                    Image(systemName: "arrow.up").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
+                    Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
                 .themedButton(prominent: true)
                 .clipShape(.circle)
@@ -70,21 +70,21 @@ struct ComposerImages: View {
                         .overlay(alignment: .bottomLeading) {
                             if edit != nil {
                                 Image(systemName: "pencil.tip.crop.circle.fill").font(Theme.Font.label).foregroundStyle(.white)
-                                    .shadow(radius: 2).padding(3)
+                                    .shadow(radius: 2).padding(Theme.Space.xs)
                             }
                         }
                         .onTapGesture { edit?(idx) }
                         .accessibilityLabel(edit == nil ? "图片 \(idx + 1)" : "图片 \(idx + 1)，点按编辑")
                         .overlay(alignment: .topTrailing) {
                             Button { images.remove(at: idx) } label: {
-                                Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
+                                Image(systemName: Theme.Icon.clear).symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, .black.opacity(0.6))
                             }
                             .offset(x: 5, y: -5)
                         }
                 }
             }
-            .padding(.top, 6)
+            .padding(.top, Theme.Space.sm)
         }
     }
 }

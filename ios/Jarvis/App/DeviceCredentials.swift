@@ -68,7 +68,7 @@ struct DevicesView: View {
         }
         .overlay {
             if loaded, tokens.isEmpty {
-                ContentUnavailableView("还没有设备凭据", systemImage: "key",
+                ContentUnavailableView("还没有设备凭据", systemImage: Theme.Icon.credentials,
                                        description: Text(model.deviceID == nil ? "hub 更新后，这台 iPhone 会自动换成自己的凭据。" : ""))
             }
         }
@@ -86,12 +86,12 @@ struct DevicesView: View {
     }
 
     private func row(_ t: APIClient.DeviceToken) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: t.kind == "watch" ? "applewatch" : t.kind == "phone" ? "iphone" : "laptopcomputer")
+        HStack(spacing: Theme.Space.m) {
+            Image(systemName: t.kind == "watch" ? Theme.Icon.watch : t.kind == "phone" ? Theme.Icon.phone : Theme.Icon.laptop)
                 .frame(width: 24)
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(t.name).lineLimit(1)
                     if t.id == current { Chip(text: "本机", look: .outline) }
                     if t.role == "answer" { Chip(text: "只能回答") }

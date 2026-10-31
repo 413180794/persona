@@ -34,7 +34,8 @@ final class MonoScrollView: UIScrollView, UIScrollViewDelegate {
     override init(frame: CGRect) {
         super.init(frame: frame)
         alwaysBounceVertical = true
-        showsHorizontalScrollIndicator = true
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
         textView.isEditable = false
         textView.isSelectable = true
         textView.isScrollEnabled = false

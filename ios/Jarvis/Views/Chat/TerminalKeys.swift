@@ -100,7 +100,7 @@ struct TerminalKeyBar: View {
     var body: some View {
         // One low glass capsule holding every key (as Moshi's toolbar: 44 high, 36-point keys 6 apart, 5 / 4 inside):
         // the terminal keeps the height.
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             ViewThatFits(in: .horizontal) {
                 keys
                 ScrollView(.horizontal, showsIndicators: false) { keys }
@@ -109,8 +109,8 @@ struct TerminalKeyBar: View {
             if visible.contains("pad") { padButton }
             if let keyboard { keyboardButton(keyboard) }
         }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 4)
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.vertical, Theme.Space.xs)
         .frame(height: 44)
         .surface(in: .capsule)
         #if DEBUG
@@ -134,7 +134,7 @@ struct TerminalKeyBar: View {
     }
 
     private var keys: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             modifier(.ctrl, "Ctrl", name: "Control")
             if visible.contains("esc") { key("Esc", name: "esc") { press("esc") } }
             if visible.contains("tab") { key("Tab", name: "tab") { press("tab") } }
@@ -147,7 +147,7 @@ struct TerminalKeyBar: View {
                 .accessibilityLabel("快捷命令")
             }
             if visible.contains("paste"), let paste {
-                Button { Haptics.tap(); paste() } label: { KeyCap(symbol: "doc.on.clipboard", state: .off) }
+                Button { Haptics.tap(); paste() } label: { KeyCap(symbol: Theme.Icon.paste, state: .off) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("粘贴")
             }
@@ -161,7 +161,7 @@ struct TerminalKeyBar: View {
             Haptics.tap()
             up.wrappedValue.toggle()
         } label: {
-            KeyCap(symbol: up.wrappedValue ? "keyboard.chevron.compact.down" : "keyboard", state: .off)
+            KeyCap(symbol: up.wrappedValue ? "keyboard.chevron.compact.down" : Theme.Icon.keyboard, state: .off)
         }
         .buttonStyle(.plain)
         // A double tap is return (as in Moshi); a single one waits for it not to be one.
@@ -276,13 +276,13 @@ struct KeyCap: View {
     var body: some View {
         Group {
             if let symbol {
-                Image(systemName: symbol).font(Theme.Font.secondary.weight(.medium)).dynamicTypeSize(...DynamicTypeSize.large).frame(width: 36)
+                Image(systemName: symbol).font(Theme.Font.secondaryMedium).dynamicTypeSize(...DynamicTypeSize.large).frame(width: 36)
             } else {
                 Text(label)
                     .font(Font(TerminalFont.jetbrains.font(size: 14, bold: false))) // the terminal's own JetBrains Mono
                     .lineLimit(1)
                     .fixedSize()
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, Theme.Space.s)
             }
         }
         .foregroundStyle(state == .locked ? Color.white : state == .off ? Color.primary : Theme.accent)
@@ -291,7 +291,7 @@ struct KeyCap: View {
         .background(state == .locked ? Theme.accent : state == .off ? Color.clear : Theme.accent.opacity(0.18), in: .capsule)
         .overlay(Capsule().stroke(state == .once || state == .held ? Theme.accent : .clear, lineWidth: 1.5))
         .overlay(alignment: .bottom) {
-            if state == .locked { Capsule().fill(.white).frame(width: 12, height: 2).padding(.bottom, 6) }
+            if state == .locked { Capsule().fill(.white).frame(width: 12, height: 2).padding(.bottom, Theme.Space.sm) }
         }
         .scaleEffect(state == .held ? 0.94 : 1)
         .animation(.snappy(duration: 0.15), value: state)
@@ -322,7 +322,7 @@ struct DirectionPad: View {
                 Color.clear.frame(width: size, height: size)
             }
         }
-        .padding(10)
+        .padding(Theme.Space.m)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
 

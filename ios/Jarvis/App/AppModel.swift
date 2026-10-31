@@ -898,77 +898,38 @@ final class AppModel {
         }
     }
 
-    // MARK: Pins
+    // MARK: Pins and mutes
 
-    /// Pinned spaces / agents (saved on the hub; cached here so the list orders right before it answers).
-    var pins: Pins = {
-        guard let data = UserDefaults.standard.data(forKey: "dev.pins"), let p = try? JSON.decoder.decode(Pins.self, from: data) else { return Pins() }
-        return p
-    }() {
-        didSet { if let data = try? JSON.encoder.encode(pins) { UserDefaults.standard.set(data, forKey: "dev.pins") } }
+    /// Pinned / muted spaces and agents (`PinsStore`); the views ask through the methods below.
+    @ObservationIgnored private(set) lazy var pinsStore = PinsStore(deps: .init(api: { [weak self] in self?.api },
+                                                                              report: { [weak self] in self?.show($0) }))
+    var pins: Pins {
+        get { pinsStore.pins }
+        set { pinsStore.pins = newValue }
+    }
+    var mutes: Pins {
+        get { pinsStore.mutes }
+        set { pinsStore.mutes = newValue }
     }
 
     static func pinKey(space g: SpaceGroup) -> String { "\(g.machineID)/\(g.name)" }
     static func pinKey(session k: SessionKey) -> String { "\(k.machineID)/\(k.sessionID)" }
 
-    func isPinned(_ g: SpaceGroup) -> Bool { pins.spaces.contains(Self.pinKey(space: g)) }
-    func isPinned(_ k: SessionKey) -> Bool { pins.sessions.contains(Self.pinKey(session: k)) }
+    func isPinned(_ g: SpaceGroup) -> Bool { pinsStore.isPinned(space: Self.pinKey(space: g)) }
+    func isPinned(_ k: SessionKey) -> Bool { pinsStore.isPinned(session: Self.pinKey(session: k)) }
+    func togglePin(_ g: SpaceGroup) { pinsStore.togglePin(space: Self.pinKey(space: g)) }
+    func togglePin(_ k: SessionKey) { pinsStore.togglePin(session: Self.pinKey(session: k)) }
+    func loadPins() async { await pinsStore.load() }
 
-    func togglePin(_ g: SpaceGroup) { updatePins { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
-    func togglePin(_ k: SessionKey) { updatePins { p in Self.toggle(&p.sessions, Self.pinKey(session: k)) } }
-
-    private static func toggle(_ list: inout [String], _ key: String) {
-        if let i = list.firstIndex(of: key) { list.remove(at: i) } else { list.insert(key, at: 0) }
-    }
-
-    private func updatePins(_ change: (inout Pins) -> Void) {
-        Haptics.tap()
-        var p = pins
-        change(&p)
-        withAnimation(.snappy) { pins = p } // optimistic; the hub keeps the truth
-        Task { do { try await api?.setPins(p) } catch { show(error) } }
-    }
-
-    func loadPins() async {
-        if let p = try? await api?.pins() { pins = p }
-        if let m = try? await api?.mutes() { mutes = m }
-    }
-
-    // MARK: Mutes
-
-    /// Muted spaces / agents: the hub sends no notifications about them and the list shows them quietly.
-    var mutes: Pins = {
-        guard let data = UserDefaults.standard.data(forKey: "dev.mutes"), let p = try? JSON.decoder.decode(Pins.self, from: data) else { return Pins() }
-        return p
-    }() {
-        didSet { if let data = try? JSON.encoder.encode(mutes) { UserDefaults.standard.set(data, forKey: "dev.mutes") } }
-    }
-
-    func isMuted(_ g: SpaceGroup) -> Bool { mutes.spaces.contains(Self.pinKey(space: g)) }
+    func isMuted(_ g: SpaceGroup) -> Bool { pinsStore.isMuted(space: Self.pinKey(space: g)) }
     /// Muted: the agent itself, or its space unless the agent was turned back on there (same rule as the hub).
-    func isMuted(_ k: SessionKey) -> Bool { mutes.mutes(session: Self.pinKey(session: k), space: spaceKey(k)) }
-
+    func isMuted(_ k: SessionKey) -> Bool { pinsStore.isMuted(session: Self.pinKey(session: k), space: spaceKey(k)) }
     func isMuted(_ s: Session) -> Bool {
-        mutes.mutes(session: Self.pinKey(session: s.key), space: s.spaceName.map { "\(s.machineID)/\($0)" })
+        pinsStore.isMuted(session: Self.pinKey(session: s.key), space: s.spaceName.map { "\(s.machineID)/\($0)" })
     }
-
     private func spaceKey(_ k: SessionKey) -> String? { session(k)?.spaceName.map { "\(k.machineID)/\($0)" } }
-
-    func toggleMute(_ g: SpaceGroup) { updateMutes { p in Self.toggle(&p.spaces, Self.pinKey(space: g)) } }
-    /// One agent's own switch, on top of its space's: muting adds it to the muted agents; turning it on inside a
-    /// muted space adds it to the allowed ones.
-    func toggleMute(_ k: SessionKey) {
-        let key = Self.pinKey(session: k), space = spaceKey(k)
-        updateMutes { p in p = p.togglingMute(session: key, space: space) }
-    }
-
-    private func updateMutes(_ change: (inout Pins) -> Void) {
-        Haptics.tap()
-        var p = mutes
-        change(&p)
-        withAnimation(.snappy) { mutes = p }
-        Task { do { try await api?.setMutes(p) } catch { show(error) } }
-    }
+    func toggleMute(_ g: SpaceGroup) { pinsStore.toggleMute(space: Self.pinKey(space: g)) }
+    func toggleMute(_ k: SessionKey) { pinsStore.toggleMute(session: Self.pinKey(session: k), space: spaceKey(k)) }
 
     // MARK: Attachments
 
@@ -985,8 +946,7 @@ final class AppModel {
         guard let api, !name.isEmpty, name != g.name else { return }
         let oldKey = Self.pinKey(space: g), newKey = "\(g.machineID)/\(name)"
         edit(machine: g.machineID) { s in if s.spaceID == g.spaceID { s.spaceName = name } }
-        pins.spaces = pins.spaces.map { $0 == oldKey ? newKey : $0 }
-        mutes.spaces = mutes.spaces.map { $0 == oldKey ? newKey : $0 }
+        pinsStore.renameSpace(oldKey, to: newKey)
         do { try await api.renameSpace(machine: g.machineID, workspaceID: g.spaceID, name: name) } catch { show(error) }
         await refresh()
     }

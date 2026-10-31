@@ -200,7 +200,7 @@ struct FeishuDocsBlock: View {
             FeishuDocsListItem(item: node, marker: nil)
         case "blockquote":
             FeishuDocsBlocks(nodes: node.children, spacing: 6)
-                .padding(.leading, 12)
+                .padding(.leading, Theme.Space.m)
                 .overlay(alignment: .leading) { Capsule().fill(Color.secondary.opacity(0.35)).frame(width: 3) }
                 .foregroundStyle(.secondary)
         case "callout":
@@ -213,12 +213,12 @@ struct FeishuDocsBlock: View {
             FeishuDocsBlocks(nodes: node.children)
         case "agendaItem":
             FeishuDocsBlocks(nodes: node.children)
-                .padding(12)
-                .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 12, style: .continuous))
+                .padding(Theme.Space.m)
+                .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         case "agendaTitle":
             inline(node.children).font(Theme.Font.heading)
         case "horizontalRule":
-            Divider().padding(.vertical, 6)
+            Divider().padding(.vertical, Theme.Space.sm)
         case "codeBlock":
             FeishuDocsCodeBlock(node: node)
         case "table":
@@ -228,7 +228,7 @@ struct FeishuDocsBlock: View {
         case "missingImage":
             placeholder("photo", node.attr("caption").flatMap { $0.isEmpty ? nil : $0 } ?? "图片无法显示")
         case "bookmark":
-            card(symbol: "link", hue: "blue", title: node.attr("title") ?? node.attr("href") ?? "", subtitle: node.attr("summary"), href: node.attr("href"))
+            card(symbol: Theme.Icon.link, hue: "blue", title: node.attr("title") ?? node.attr("href") ?? "", subtitle: node.attr("summary"), href: node.attr("href"))
         case "embedLink":
             embed
         case "file":
@@ -246,12 +246,12 @@ struct FeishuDocsBlock: View {
             inline(node.children)
         case "slide":
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Text("第 \(Int(node.number("index") ?? 0)) 页").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
+                Text("第 \(Int(node.number("index") ?? 0)) 页").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                 FeishuDocsBlocks(nodes: node.children)
             }
-            .padding(14)
+            .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 14, style: .continuous))
+            .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         case "toc", "readReceipt", "widgetEmpty":
             EmptyView()
         case "unsupported":
@@ -320,29 +320,29 @@ struct FeishuDocsBlock: View {
     private var callout: some View {
         let tint = FeishuDocsColor.background(node.attr("backgroundColor")) ?? LarkColor.hue("blue").opacity(0.08)
         let stroke = FeishuDocsColor.background(node.attr("borderColor")) ?? .clear
-        return HStack(alignment: .top, spacing: 10) {
+        return HStack(alignment: .top, spacing: Theme.Space.m) {
             if let e = node.attr("emoji"), !e.isEmpty { Text(e).font(Theme.Font.title) }
             FeishuDocsBlocks(nodes: node.children, spacing: 6)
                 .foregroundStyle(FeishuDocsColor.text(node.attr("color")) ?? .primary)
         }
-        .padding(12)
+        .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint, in: .rect(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(stroke, lineWidth: 1))
+        .background(tint, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(stroke, lineWidth: 1))
     }
 
     private var docTask: some View {
         let done = node.flag("checked")
         let assignees = node.attr("assignees").flatMap { try? JSON.decoder.decode([FeishuDocsPerson].self, from: Data($0.utf8)) } ?? []
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+        return HStack(alignment: .top, spacing: Theme.Space.m) {
+            Image(systemName: done ? Theme.Icon.successFilled : Theme.Icon.unchecked)
                 .foregroundStyle(done ? LarkColor.hue("green") : .secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(node.attr("summary").flatMap { $0.isEmpty ? nil : $0 } ?? node.plainText)
                     .strikethrough(done)
                     .foregroundStyle(done ? .secondary : .primary)
                 if !assignees.isEmpty || node.attr("due") != nil {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         ForEach(Array(assignees.prefix(3).enumerated()), id: \.offset) { _, p in
                             LarkAvatarImage(name: p.name, url: p.avatarUrl, size: 16)
                         }
@@ -353,9 +353,9 @@ struct FeishuDocsBlock: View {
                 }
             }
         }
-        .padding(10)
+        .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 10, style: .continuous))
+        .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 
     @ViewBuilder private var embed: some View {
@@ -411,10 +411,10 @@ struct FeishuDocsListItem: View {
     var body: some View {
         let todo = item.flag("todo")
         let done = item.flag("checked")
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
             Group {
                 if todo {
-                    Image(systemName: done ? "checkmark.square.fill" : "square")
+                    Image(systemName: done ? "checkmark.square.fill" : Theme.Icon.uncheckedBox)
                         .foregroundStyle(done ? LarkColor.blue : .secondary)
                 } else if let marker {
                     Text(marker).monospacedDigit().foregroundStyle(.secondary)
@@ -436,15 +436,15 @@ struct FeishuDocsCodeBlock: View {
         let text = node.plainText
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if let lang = node.attr("language"), !lang.isEmpty, lang.lowercased() != "plaintext" {
-                Text(lang).font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
+                Text(lang).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(text).font(Theme.Font.code).fixedSize().textSelection(.enabled)
             }
         }
-        .padding(12)
+        .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.codeBackground, in: .rect(cornerRadius: 12, style: .continuous))
+        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 }
 
@@ -459,7 +459,7 @@ struct FeishuDocsTable: View {
         FeishuDocsTableGrid(layout: layout, natural: layout.naturalWidths { r, slot in node(r, slot)?.plainText ?? "" }) { r, slot in
             if let n = node(r, slot) {
                 FeishuDocsBlocks(nodes: n.children, spacing: 4)
-                    .font(Theme.Font.secondary.weight(slot.header ? .semibold : .regular))
+                    .font(slot.header ? Theme.Font.secondaryStrong : Theme.Font.secondary)
             }
         } background: { r, slot in
             node(r, slot).flatMap { FeishuDocsColor.background($0.attr("backgroundColor")) }
@@ -478,7 +478,7 @@ struct FeishuDocsMarkdownTableView: View {
         let texts = grid.map { $0.map { Self.attributed(FeishuDocsMarkdownTable.cellMarkdown($0)) } }
         FeishuDocsTableGrid(layout: layout, natural: layout.naturalWidths { r, slot in String(texts[r][slot.column].characters) }) { r, slot in
             FeishuDocsText(text: texts[r][slot.column])
-                .font(Theme.Font.secondary.weight(slot.header ? .semibold : .regular))
+                .font(slot.header ? Theme.Font.secondaryStrong : Theme.Font.secondary)
         } background: { _, _ in nil }
     }
 
@@ -506,7 +506,6 @@ struct FeishuDocsTableGrid<Cell: View>: View {
         Group {
             if fit.scrolls {
                 ScrollView(.horizontal) { grid(fit.widths) }
-                    .scrollIndicators(.visible)
                     .defaultScrollAnchor(Self.debugEnd ? .trailing : .leading)
                     .onScrollGeometryChange(for: [Bool].self) { g in
                         [g.contentOffset.x + g.contentInsets.leading > 1,
@@ -532,8 +531,8 @@ struct FeishuDocsTableGrid<Cell: View>: View {
                     ForEach(Array(slots.enumerated()), id: \.offset) { _, slot in
                         let empty = slot.cell == nil
                         Group { if empty { Color.clear.frame(height: 1) } else { cell(r, slot) } }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, Theme.Space.s)
+                            .padding(.vertical, Theme.Space.sm)
                             .frame(width: FeishuDocsTableSizing.width(widths, column: slot.column, colspan: slot.colspan), alignment: .topLeading)
                             .frame(maxHeight: .infinity, alignment: .topLeading)
                             .background(background(r, slot) ?? (slot.header ? Color.primary.opacity(0.05) : .clear))
@@ -544,7 +543,7 @@ struct FeishuDocsTableGrid<Cell: View>: View {
             }
         }
         .overlay(Rectangle().strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5))
-        .clipShape(.rect(cornerRadius: 6))
+        .clipShape(.rect(cornerRadius: Theme.Radius.badge))
     }
 
     private func fade(_ edge: HorizontalEdge) -> some View {
@@ -576,7 +575,7 @@ struct FeishuDocsImage: View {
                 LarkRemoteImage(url: src, maxPixel: 1600, contentMode: .fit)
                     .aspectRatio(ratio.map { CGFloat($0) }, contentMode: .fit)
                     .frame(maxWidth: w > 0 ? CGFloat(w) : .infinity, minHeight: ratio == nil ? 120 : nil)
-                    .clipShape(.rect(cornerRadius: 8, style: .continuous))
+                    .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(node.attr("alt").flatMap { $0.isEmpty ? nil : $0 } ?? "图片")
@@ -603,18 +602,18 @@ struct FeishuDocsFileBlock: View {
                 FeishuDocsLinks.openInFeishu(s)
             }
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 FeishuAppIcon(symbol: icon.symbol, hue: icon.hue, size: 36)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                    Text(name).font(Theme.Font.secondaryMedium).lineLimit(1)
                     Text(size ?? "附件").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.down.circle").foregroundStyle(LarkColor.blue)
             }
-            .padding(10)
-            .background(LarkColor.cardBackground, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
+            .padding(Theme.Space.m)
+            .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -636,25 +635,25 @@ struct FeishuDocsLinkCard: View {
         Button {
             if let href, let u = URL(string: href) { openURL(u) }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 Image(systemName: symbol)
-                    .font(Theme.Font.secondary.weight(.semibold))
+                    .font(Theme.Font.secondaryStrong)
                     .foregroundStyle(quiet ? Color.secondary : LarkColor.hue(hue))
                     .frame(width: 28, height: 28)
-                    .background((quiet ? Color.secondary : LarkColor.hue(hue)).opacity(0.12), in: .rect(cornerRadius: 7, style: .continuous))
+                    .background((quiet ? Color.secondary : LarkColor.hue(hue)).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(title).font(quiet ? Theme.Font.caption : Theme.Font.secondary.weight(.medium))
+                    Text(title).font(quiet ? Theme.Font.caption : Theme.Font.secondaryMedium)
                         .foregroundStyle(quiet ? .secondary : .primary).lineLimit(2).multilineTextAlignment(.leading)
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
                     }
                 }
                 Spacer(minLength: 0)
-                if href != nil { Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary) }
+                if href != nil { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary) }
             }
-            .padding(10)
-            .background(quiet ? Color.primary.opacity(0.035) : LarkColor.cardBackground, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(quiet ? .clear : LarkColor.cardStroke, lineWidth: 0.5))
+            .padding(Theme.Space.m)
+            .background(quiet ? Color.primary.opacity(0.035) : LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(quiet ? .clear : LarkColor.cardStroke, lineWidth: 0.5))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

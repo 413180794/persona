@@ -42,7 +42,7 @@ struct LarkReactionPicker: View {
                     }
                     ForEach(media.emojiGroups, id: \.title) { g in
                         VStack(alignment: .leading, spacing: Theme.Space.s) {
-                            Text(g.title).font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            Text(g.title).font(Theme.Font.captionStrong).foregroundStyle(.secondary)
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 8) {
                                 ForEach(g.keys, id: \.self) { key in cell(key, size: 30, selected: mine.contains(key.lowercased())) }
                             }
@@ -50,7 +50,7 @@ struct LarkReactionPicker: View {
                     }
                     if media.emojiGroups.isEmpty { ProgressView().frame(maxWidth: .infinity) }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .navigationTitle("表情回复")
             .navigationBarTitleDisplayMode(.inline)
@@ -67,7 +67,7 @@ struct LarkReactionPicker: View {
         } label: {
             LarkEmojiImage(key: key, size: size)
                 .frame(maxWidth: .infinity, minHeight: size + 12)
-                .background(selected ? LarkColor.blue.opacity(0.15) : .clear, in: .rect(cornerRadius: 8))
+                .background(selected ? LarkColor.blue.opacity(0.15) : .clear, in: .rect(cornerRadius: Theme.Radius.control))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(LarkMedia.shared.emoji(key)?.label ?? key)
@@ -96,15 +96,15 @@ struct LarkMomentsCard: View {
         let card = preview?.card
         Button { reading = true } label: {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "circle.hexagongrid.fill").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
-                    Text(preview?.title ?? "removed动态").font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                    Text(preview?.title ?? "removed动态").font(Theme.Font.secondaryStrong).lineLimit(1)
                 }
                 if let author = card?.author {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         LarkAvatarImage(name: author, url: card?.avatarUrl, size: 28)
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text(author).font(Theme.Font.caption.weight(.medium)).lineLimit(1)
+                            Text(author).font(Theme.Font.captionMedium).lineLimit(1)
                             if let sub = card?.subtitle { Text(sub).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
@@ -116,10 +116,10 @@ struct LarkMomentsCard: View {
                 }
                 if let footer = card?.footer { Text(footer).font(Theme.Font.label).foregroundStyle(.secondary) }
             }
-            .padding(12)
+            .padding(Theme.Space.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(LarkColor.cardBackground, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke))
+            .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -148,7 +148,7 @@ struct LarkMomentsPostView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger) }
+                    if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                     if let p = post {
                         author(name: p.userName ?? "", avatar: p.userAvatarUrl, id: p.userId, time: p.createTime)
                         LarkInlineText(runs: Self.runs(p.content), base: LarkTextBase(size: 17)).textSelection(.enabled)
@@ -156,29 +156,29 @@ struct LarkMomentsPostView: View {
                         if let groups = p.reactionGroups, !groups.isEmpty {
                             LarkFlowLayout(spacing: 6, lineSpacing: 6) {
                                 ForEach(groups, id: \.type) { g in
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: Theme.Space.xs) {
                                         LarkEmojiImage(key: g.type, size: 17)
                                         Text("\(g.count)").font(Theme.Font.label).foregroundStyle(g.selfInvolved == true ? LarkColor.blue : .secondary)
                                     }
-                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                    .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xs)
                                     .background(Color.primary.opacity(0.05), in: .capsule)
                                 }
                             }
                         }
                         Divider()
-                        Text("\(p.commentCount ?? comments.count) 条评论").font(Theme.Font.secondary.weight(.semibold))
+                        Text("\(p.commentCount ?? comments.count) 条评论").font(Theme.Font.secondaryStrong)
                         ForEach(comments) { c in
                             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                                 author(name: c.userName ?? "", avatar: c.userAvatarUrl, id: c.userId, time: c.createTime, small: true)
                                 LarkInlineText(runs: Self.runs(c.content), base: LarkTextBase(size: 15)).padding(.leading, 40)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, Theme.Space.xs)
                         }
                     } else if error == nil {
                         ProgressView().frame(maxWidth: .infinity, minHeight: 200)
                     }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .navigationTitle("removed")
             .navigationBarTitleDisplayMode(.inline)
@@ -186,7 +186,7 @@ struct LarkMomentsPostView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
                 if let link, let u = URL(string: link) {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { openURL(u) } label: { Label("在飞书中打开", systemImage: "arrow.up.forward.app") }
+                        Button { openURL(u) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
                     }
                 }
             }
@@ -208,10 +208,10 @@ struct LarkMomentsPostView: View {
 
     private func author(name: String, avatar: String?, id: String?, time: Double?, small: Bool = false) -> some View {
         Button { if let id { person = LarkPersonRef(id: id, name: name, avatar: avatar) } } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 LarkAvatarImage(name: name, url: avatar, size: small ? 30 : 40)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(name).font(small ? Theme.Font.caption.weight(.semibold) : Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                    Text(name).font(small ? Theme.Font.captionStrong : Theme.Font.secondaryStrong).lineLimit(1)
                     if let time { Text(Date(timeIntervalSince1970: time / 1000).formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.label).foregroundStyle(.secondary) }
                 }
             }
@@ -224,13 +224,13 @@ struct LarkMomentsPostView: View {
         if urls.count == 1, let img = imgs.first, let u = img.url {
             let size = LarkImagePart.displaySize(width: img.width ?? 0, height: img.height ?? 0, maxW: 300, maxH: 360)
             LarkRemoteImage(url: u, maxPixel: 1200).frame(width: size.width, height: size.height)
-                .clipShape(.rect(cornerRadius: 10, style: .continuous)).onTapGesture { gallery = 0 }
+                .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous)).onTapGesture { gallery = 0 }
         } else if !urls.isEmpty {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
                 ForEach(Array(urls.enumerated()), id: \.offset) { i, u in
                     Color.clear.aspectRatio(1, contentMode: .fit)
                         .overlay { LarkRemoteImage(url: u, maxPixel: 600) }
-                        .clipShape(.rect(cornerRadius: 6, style: .continuous))
+                        .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
                         .onTapGesture { gallery = i }
                 }
             }

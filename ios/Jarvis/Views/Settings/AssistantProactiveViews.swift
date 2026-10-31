@@ -125,20 +125,12 @@ enum AssistantScheduleText {
 /// Everything Jarvis does on its own, on one page: what runs next, the recurring routines (with their rule in words,
 /// next and last run, an on/off switch), the one-off follow-ups it scheduled, and the history of runs.
 struct AssistantRoutinesView: View {
-    @Environment(AppModel.self) private var model
-    @State private var routines: [APIClient.Routine] = []
-    @State private var followups: [APIClient.Followup] = []
-    @State private var lastRuns: [APIClient.ScheduleRun] = []
-    @State private var loaded = false
-    @State private var error: String?
+    @State private var page = AssistantRoutinesModel()
     @State private var editing: APIClient.Routine?
     @State private var creating: APIClient.Routine?
 
-    private var upcoming: [AssistantUpcoming] {
-        Array(AssistantUpcoming.merge(routines: routines, followups: followups).prefix(4))
-    }
-
     var body: some View {
+        let routines = page.routines, followups = page.followups, lastRuns = page.lastRuns, upcoming = page.upcoming
         List {
             if !upcoming.isEmpty {
                 Section {
@@ -158,7 +150,7 @@ struct AssistantRoutinesView: View {
             }
             if !followups.isEmpty {
                 Section {
-                    ForEach(followups.prefix(5)) { f in AssistantFollowupRow(followup: f, run: { await runFollowup(f) }, cancel: { await cancel(f) }) }
+                    ForEach(followups.prefix(5)) { f in AssistantFollowupRow(followup: f, run: { await page.runFollowup(f) }, cancel: { await page.cancel(f) }) }
                     if followups.count > 5 {
                         NavigationLink("全部 \(followups.count) 个跟进") { AssistantFollowupsView() }
                     }
@@ -179,12 +171,12 @@ struct AssistantRoutinesView: View {
         }
         .themedPage()
         .overlay {
-            if !loaded {
+            if !page.loaded {
                 ProgressView()
-            } else if let error, routines.isEmpty {
-                ContentUnavailableView("读不到定时任务", systemImage: "exclamationmark.triangle", description: Text(error))
+            } else if let error = page.error, routines.isEmpty {
+                ContentUnavailableView("读不到定时任务", systemImage: Theme.Icon.error, description: Text(error))
             } else if routines.isEmpty && followups.isEmpty {
-                ContentUnavailableView("没有定时任务", systemImage: "alarm",
+                ContentUnavailableView("没有定时任务", systemImage: Theme.Icon.schedule,
                                        description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」，让 Jarvis 定时做一件事。"))
             }
         }
@@ -197,36 +189,36 @@ struct AssistantRoutinesView: View {
                             Button { creating = t.routine } label: { Label(t.routine.title, systemImage: t.symbol) }
                         }
                     }
-                    Button { creating = AssistantRoutineTemplate.blank } label: { Label("空白", systemImage: "square.and.pencil") }
+                    Button { creating = AssistantRoutineTemplate.blank } label: { Label("空白", systemImage: Theme.Icon.compose) }
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: Theme.Icon.add)
                 }
                 .accessibilityLabel("新建定时任务")
             }
         }
         .navigationDestination(item: $editing) { r in
-            AssistantRoutineEditor(routine: r, save: save, delete: delete)
+            AssistantRoutineEditor(routine: r, save: page.save, delete: page.delete)
         }
         .sheet(item: $creating) { r in
-            NavigationStack { AssistantRoutineEditor(routine: r, save: save, delete: delete) }
+            NavigationStack { AssistantRoutineEditor(routine: r, save: page.save, delete: page.delete) }
         }
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await page.load() }
     }
 
     private func row(_ r: APIClient.Routine) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             Image(systemName: AssistantScheduleText.symbol(r))
                 .font(Theme.Font.heading)
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background((r.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: 9, style: .continuous))
+                .background((r.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(r.title).font(Theme.Font.heading).lineLimit(1)
                     if r.createdBy == "assistant" {
-                        Text("Jarvis 建的").font(Theme.Font.label.weight(.medium)).foregroundStyle(Theme.accent)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
+                        Text("Jarvis 建的").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
+                            .padding(.horizontal, Theme.Space.sm).padding(.vertical, 1)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                             .lineLimit(1)
                     }
@@ -246,7 +238,7 @@ struct AssistantRoutinesView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 if let last = AssistantScheduleText.lastRun(r) {
-                    Label(last.text, systemImage: last.failed ? "exclamationmark.triangle.fill" : "checkmark")
+                    Label(last.text, systemImage: last.failed ? Theme.Icon.errorFilled : Theme.Icon.done)
                         .labelStyle(AssistantCompactLabel())
                         .font(Theme.Font.label)
                         .foregroundStyle(last.failed ? Theme.danger : Color.secondary)
@@ -263,88 +255,23 @@ struct AssistantRoutinesView: View {
                 var changed = r
                 changed.enabled = v
                 Haptics.tap()
-                Task { _ = await save(changed) }
+                Task { _ = await page.save(changed) }
             }))
             .labelsHidden()
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
         .opacity(r.enabled ? 1 : 0.75)
     }
 
     private func load() async {
-        guard let api = model.api else { return }
-        async let f = try? api.followups()
-        async let h = try? api.scheduleRuns()
-        do {
-            routines = try await api.routines()
-            error = nil
-        } catch {
-            self.error = error.shown ?? self.error
-        }
-        followups = (await f ?? []).sorted { $0.at < $1.at }
-        lastRuns = await h ?? []
-        loaded = true
+        await page.load()
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "openAssistantPage") {
-        case "routine" where editing == nil: editing = routines.first
+        case "routine" where editing == nil: editing = page.routines.first
         case "newRoutine" where creating == nil: creating = AssistantRoutineTemplate.all.last?.routine
         default: break
         }
         #endif
-    }
-
-    /// Replaces the hub's whole list with `r` added or updated; returns `r` as saved (new ones get their id here).
-    private func save(_ r: APIClient.Routine) async -> APIClient.Routine? {
-        guard let api = model.api else { return nil }
-        var list = routines
-        if let i = list.firstIndex(where: { $0.id == r.id && !r.id.isEmpty }) { list[i] = r } else { list.append(r) }
-        withAnimation(.snappy) { routines = list } // optimistic: the toggle shouldn't bounce back while saving
-        do {
-            let saved = try await api.setRoutines(list)
-            routines = saved
-            return r.id.isEmpty ? saved.last : saved.first { $0.id == r.id }
-        } catch {
-            model.show(error)
-            if let fresh = try? await api.routines() { routines = fresh }
-            return nil
-        }
-    }
-
-    private func runFollowup(_ f: APIClient.Followup) async {
-        guard let api = model.api else { return }
-        withAnimation { followups.removeAll { $0.id == f.id } }
-        do {
-            let key = try await api.runFollowup(f.id)
-            Haptics.success()
-            model.selectedTab = .assistant
-            model.assistantCurrent = key
-        } catch {
-            model.show(error)
-            await load()
-        }
-    }
-
-    private func cancel(_ f: APIClient.Followup) async {
-        guard let api = model.api else { return }
-        withAnimation { followups.removeAll { $0.id == f.id } }
-        do {
-            try await api.cancelFollowup(f.id)
-            Haptics.success()
-        } catch {
-            model.show(error)
-            await load()
-        }
-    }
-
-    private func delete(_ r: APIClient.Routine) async {
-        guard let api = model.api, !r.id.isEmpty else { return }
-        let list = routines.filter { $0.id != r.id }
-        do {
-            routines = try await api.setRoutines(list)
-            model.toast = Toast("已删除「\(r.title)」", style: .success)
-        } catch {
-            model.show(error)
-        }
     }
 }
 
@@ -362,10 +289,10 @@ struct AssistantRoutineTemplate: Identifiable {
                              time: "08:45", weekdays: AssistantScheduleText.workdays, enabled: true), symbol: "person.2.badge.gearshape"),
         .init(routine: .init(title: "周报", prompt: "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、" +
                              "遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。",
-                             time: "17:00", weekdays: [5], enabled: true), symbol: "doc.text"),
+                             time: "17:00", weekdays: [5], enabled: true), symbol: Theme.Icon.document),
         .init(routine: .init(title: "下班前盘点", prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，" +
                              "明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。",
-                             time: "18:30", weekdays: AssistantScheduleText.workdays, enabled: true), symbol: "checklist"),
+                             time: "18:30", weekdays: AssistantScheduleText.workdays, enabled: true), symbol: Theme.Icon.todo),
     ]
 }
 
@@ -430,7 +357,7 @@ struct AssistantRoutineEditor: View {
             Section {
                 Button { Task { await runNow() } } label: {
                     HStack {
-                        Label("立即运行", systemImage: "play.fill").lineLimit(1)
+                        Label("立即运行", systemImage: Theme.Icon.run).lineLimit(1)
                         Spacer()
                         if running { ProgressView() }
                     }
@@ -439,7 +366,7 @@ struct AssistantRoutineEditor: View {
                 if let last = saved?.lastSessionID, !last.isEmpty {
                     Button { open(SessionKey(machineID: model.assistantConfig?.machineID ?? model.hubMachineID, sessionID: last)) } label: {
                         HStack {
-                            Label("查看上次结果", systemImage: "text.bubble").lineLimit(1)
+                            Label("查看上次结果", systemImage: Theme.Icon.conversation).lineLimit(1)
                             Spacer()
                             if let at = saved?.lastRun {
                                 Text(Fmt.relative(at)).font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
@@ -467,7 +394,7 @@ struct AssistantRoutineEditor: View {
             if !creating {
                 Section {
                     Button(role: .destructive) { confirmDelete = true } label: {
-                        Label("删除定时任务", systemImage: "trash").lineLimit(1)
+                        Label("删除定时任务", systemImage: Theme.Icon.delete).lineLimit(1)
                     }
                 }
             }
@@ -571,7 +498,7 @@ struct AssistantWeekdayPicker: View {
                     let on = selected.contains(d)
                     Button { toggle(d) } label: {
                         Text(AssistantScheduleText.dayNames[d - 1])
-                            .font(Theme.Font.secondary.weight(.semibold))
+                            .font(Theme.Font.secondaryStrong)
                             .foregroundStyle(on ? Color.white : Color.primary)
                             .frame(width: 38, height: 38)
                             .background(Circle().fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.14))))
@@ -582,7 +509,7 @@ struct AssistantWeekdayPicker: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 shortcut("每天", [])
                 shortcut("工作日", AssistantScheduleText.workdays)
                 shortcut("周末", [6, 7])
@@ -595,13 +522,13 @@ struct AssistantWeekdayPicker: View {
         let on = AssistantScheduleText.repeats(days) == AssistantScheduleText.repeats(value)
         return Button {
             Haptics.tap()
-            withAnimation(.snappy) { days = value }
+            withAnimation(Theme.Motion.standard) { days = value }
         } label: {
             Text(title)
-                .font(Theme.Font.caption.weight(.medium))
+                .font(Theme.Font.captionMedium)
                 .lineLimit(1)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.sm)
                 .foregroundStyle(on ? Theme.accent : Color.secondary)
                 .background(Capsule().fill(on ? Theme.accent.opacity(0.14) : Color.secondary.opacity(0.1)))
         }
@@ -617,23 +544,21 @@ struct AssistantWeekdayPicker: View {
             s.insert(d)
         }
         Haptics.tap()
-        withAnimation(.snappy) { days = s.count == 7 ? [] : s.sorted() }
+        withAnimation(Theme.Motion.standard) { days = s.count == 7 ? [] : s.sorted() }
     }
 }
 
 // MARK: - 已安排的跟进
 
 struct AssistantFollowupsView: View {
-    @Environment(AppModel.self) private var model
-    @State private var followups: [APIClient.Followup] = []
-    @State private var loaded = false
-    @State private var error: String?
+    @State private var page = AssistantFollowupsModel()
 
     var body: some View {
+        let followups = page.followups.list
         List {
             if !followups.isEmpty {
                 Section {
-                    ForEach(followups) { f in AssistantFollowupRow(followup: f, run: { await run(f) }, cancel: { await cancel(f) }) }
+                    ForEach(followups) { f in AssistantFollowupRow(followup: f, run: { await page.followups.run(f) }, cancel: { await page.followups.cancel(f) }) }
                 } footer: {
                     Text("Jarvis 在对话里替自己安排的一次性跟进，到点自己醒来接着做。左滑取消，长按可以立即运行。")
                 }
@@ -641,56 +566,20 @@ struct AssistantFollowupsView: View {
         }
         .themedPage()
         .overlay {
-            if !loaded {
+            if !page.loaded {
                 ProgressView()
-            } else if let error, followups.isEmpty {
-                ContentUnavailableView("读不到跟进", systemImage: "exclamationmark.triangle", description: Text(error))
+            } else if let error = page.error, followups.isEmpty {
+                ContentUnavailableView("读不到跟进", systemImage: Theme.Icon.error, description: Text(error))
             } else if followups.isEmpty {
                 ContentUnavailableView("没有安排的跟进", systemImage: "calendar.badge.clock",
                                        description: Text("在对话里说「一小时后提醒我……」「明早会前帮我准备」，Jarvis 会安排在这里。"))
             }
         }
         .navigationTitle("已安排的跟进")
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await page.load() }
+        .refreshable { await page.load() }
     }
 
-    private func load() async {
-        guard let api = model.api else { return }
-        do {
-            followups = try await api.followups().sorted { $0.at < $1.at }
-            error = nil
-        } catch {
-            self.error = error.shown ?? self.error
-        }
-        loaded = true
-    }
-
-    private func cancel(_ f: APIClient.Followup) async {
-        guard let api = model.api else { return }
-        withAnimation { followups.removeAll { $0.id == f.id } }
-        do {
-            try await api.cancelFollowup(f.id)
-            Haptics.success()
-        } catch {
-            model.show(error)
-            await load()
-        }
-    }
-
-    private func run(_ f: APIClient.Followup) async {
-        guard let api = model.api else { return }
-        withAnimation { followups.removeAll { $0.id == f.id } }
-        do {
-            let key = try await api.runFollowup(f.id)
-            Haptics.success()
-            model.selectedTab = .assistant
-            model.assistantCurrent = key
-        } catch {
-            model.show(error)
-            await load()
-        }
-    }
 }
 
 /// One follow-up: what, when, and where it goes (back into its conversation or a new one). Tapping opens the
@@ -705,17 +594,17 @@ struct AssistantFollowupRow: View {
         let f = followup
         let firstLine = f.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? f.prompt
         let title = f.title.flatMap { $0.isEmpty ? nil : $0 } ?? firstLine
-        let content = HStack(spacing: 10) {
+        let content = HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(title).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(2)
                 if title != f.prompt {
                     Text(f.prompt).font(Theme.Font.secondary).foregroundStyle(Color.secondary).lineLimit(2)
                 }
-                HStack(spacing: 10) {
-                    Label("\(AssistantScheduleText.moment(f.at)) · \(AssistantScheduleText.until(f.at))", systemImage: "clock")
+                HStack(spacing: Theme.Space.m) {
+                    Label("\(AssistantScheduleText.moment(f.at)) · \(AssistantScheduleText.until(f.at))", systemImage: Theme.Icon.time)
                         .monospacedDigit()
                     Label(f.sessionID == nil ? "新对话" : "继续对话",
-                          systemImage: f.sessionID == nil ? "plus.bubble" : "arrowshape.turn.up.left")
+                          systemImage: f.sessionID == nil ? Theme.Icon.newConversation : Theme.Icon.reply)
                 }
                 .labelStyle(AssistantCompactLabel())
                 .font(Theme.Font.label)
@@ -724,10 +613,10 @@ struct AssistantFollowupRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if f.sessionID != nil {
-                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(Color(uiColor: .tertiaryLabel))
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, Theme.Space.xs)
         Group {
             if let sid = f.sessionID {
                 Button {
@@ -740,15 +629,15 @@ struct AssistantFollowupRow: View {
         }
         .accessibilityIdentifier("followup-\(f.id)")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消", systemImage: "xmark") }
+            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消", systemImage: Theme.Icon.close) }
         }
         .swipeActions(edge: .leading) {
-            Button { Task { await run() } } label: { Label("立即运行", systemImage: "play.fill") }
+            Button { Task { await run() } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
                 .tint(Theme.accent)
         }
         .contextMenu {
-            Button { Task { await run() } } label: { Label("立即运行", systemImage: "play.fill") }
-            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消这个跟进", systemImage: "xmark") }
+            Button { Task { await run() } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
+            Button(role: .destructive) { Task { await cancel() } } label: { Label("取消这个跟进", systemImage: Theme.Icon.close) }
         }
     }
 }
@@ -756,7 +645,7 @@ struct AssistantFollowupRow: View {
 /// Icon and text closer together than the default label.
 struct AssistantCompactLabel: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) { configuration.icon; configuration.title }
+        HStack(spacing: Theme.Space.xs) { configuration.icon; configuration.title }
     }
 }
 
@@ -817,12 +706,13 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 }
 
 struct AssistantMemoryView: View {
-    @Environment(AppModel.self) private var model
-    @State private var files: [APIClient.MemoryFile] = []
-    @State private var loaded = false
-    @State private var error: String?
+    @State private var page = AssistantMemoryModel()
     @State private var pendingDelete: AssistantMemoryEntry?
     @State private var debugOpen: AssistantMemoryEntry?
+
+    private var files: [APIClient.MemoryFile] { page.files }
+    private var loaded: Bool { page.loaded }
+    private var error: String? { page.error }
 
     private var entries: [AssistantMemoryEntry] {
         files.filter { $0.name != AssistantMemoryEntry.index }.map(AssistantMemoryEntry.init)
@@ -859,7 +749,7 @@ struct AssistantMemoryView: View {
                             row(e, title: t?.title ?? e.name ?? e.file.name, detail: e.description ?? t?.hook)
                         }
                         .swipeActions(edge: .trailing) {
-                            Button { pendingDelete = e } label: { Label("删除", systemImage: "trash") }.tint(Theme.danger)
+                            Button { pendingDelete = e } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
                         }
                     }
                 } footer: {
@@ -871,7 +761,7 @@ struct AssistantMemoryView: View {
                     NavigationLink {
                         AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: "索引", onSaved: nil)
                     } label: {
-                        Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: "list.bullet.rectangle") }
+                        Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
                     }
                 } footer: {
                     Text("MEMORY.md：Jarvis 自己维护的目录，删除记忆时会一起更新。")
@@ -883,9 +773,9 @@ struct AssistantMemoryView: View {
             if !loaded {
                 ProgressView()
             } else if let error, files.isEmpty {
-                ContentUnavailableView("读不到记忆", systemImage: "exclamationmark.triangle", description: Text(error))
+                ContentUnavailableView("读不到记忆", systemImage: Theme.Icon.error, description: Text(error))
             } else if entries.isEmpty {
-                ContentUnavailableView("还没有记忆", systemImage: "brain",
+                ContentUnavailableView("还没有记忆", systemImage: Theme.Icon.memory,
                                        description: Text("Jarvis 会把你的偏好、纠正过它的地方记在这里。"))
             }
         }
@@ -905,7 +795,7 @@ struct AssistantMemoryView: View {
 
     private func row(_ e: AssistantMemoryEntry, title: String, detail: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                 Text(title).font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: 4)
                 if let t = e.typeTitle { AssistantMemoryTag(title: t, color: e.typeColor) }
@@ -914,18 +804,11 @@ struct AssistantMemoryView: View {
                 Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     private func load() async {
-        guard let api = model.api else { return }
-        do {
-            files = try await api.assistantMemory()
-            error = nil
-        } catch {
-            self.error = error.shown ?? self.error
-        }
-        loaded = true
+        await page.load()
         #if DEBUG
         if ["memoryFile", "memoryEdit"].contains(UserDefaults.standard.string(forKey: "openAssistantPage")), debugOpen == nil {
             debugOpen = entries.first
@@ -933,16 +816,7 @@ struct AssistantMemoryView: View {
         #endif
     }
 
-    private func delete(_ e: AssistantMemoryEntry) async {
-        guard let api = model.api else { return }
-        do {
-            try await api.deleteMemory(name: e.file.name)
-            Haptics.success()
-            await load()
-        } catch {
-            model.show(error)
-        }
-    }
+    private func delete(_ e: AssistantMemoryEntry) async { await page.delete(e.file.name) }
 }
 
 struct AssistantMemoryTag: View {
@@ -951,11 +825,11 @@ struct AssistantMemoryTag: View {
 
     var body: some View {
         Text(title)
-            .font(Theme.Font.label.weight(.semibold))
+            .font(Theme.Font.labelStrong)
             .lineLimit(1)
             .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
+            .padding(.horizontal, Theme.Space.s)
+            .padding(.vertical, Theme.Space.xxs)
             .background(Capsule().fill(color.opacity(0.14)))
     }
 }
@@ -973,7 +847,7 @@ struct AssistantMemoryDetail: View {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 if onSaved != nil {
                     VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Theme.Space.s) {
                             if let t = entry.typeTitle { AssistantMemoryTag(title: t, color: entry.typeColor) }
                             if let at = entry.file.updatedAt {
                                 Text("更新于 \(Fmt.relative(at))").font(Theme.Font.label).foregroundStyle(.secondary)
@@ -989,9 +863,9 @@ struct AssistantMemoryDetail: View {
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in url.scheme == nil ? .discarded : .systemAction })
-                Text(entry.file.name).font(Theme.Font.code).foregroundStyle(.tertiary).padding(.top, 8)
+                Text(entry.file.name).font(Theme.Font.code).foregroundStyle(.tertiary).padding(.top, Theme.Space.s)
             }
-            .padding(20)
+            .padding(Theme.Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .themedPage()
@@ -1028,11 +902,11 @@ struct AssistantMemoryEditor: View {
     var body: some View {
         NavigationStack {
             TextEditor(text: $text)
-                .font(Theme.Font.body.monospaced())
+                .font(Theme.Font.body)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .scrollContentBackground(.hidden)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, Theme.Space.m)
                 .background(Theme.pageBackground)
                 .navigationTitle(name)
                 .navigationBarTitleDisplayMode(.inline)

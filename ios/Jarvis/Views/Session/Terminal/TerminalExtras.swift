@@ -45,16 +45,16 @@ struct ShortcutsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Text(hint).font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+            HStack(spacing: Theme.Space.s) {
+                Text(hint).font(Theme.Font.labelStrong).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 4)
-                Button("编辑", action: edit).font(Theme.Font.label.weight(.semibold)).lineLimit(1)
+                Button("编辑", action: edit).font(Theme.Font.labelStrong).lineLimit(1)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
             if items.isEmpty {
                 Text("还没有快捷命令，点「编辑」添加").font(Theme.Font.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 14).padding(.bottom, 12)
+                    .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.m)
             }
             ScrollView {
                 VStack(spacing: 0) {
@@ -63,15 +63,15 @@ struct ShortcutsPanel: View {
                             .font(Theme.Font.secondary.monospaced())
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, Theme.Space.l)
+                            .padding(.vertical, Theme.Space.m)
                             .contentShape(.rect)
                             .onTapGesture(count: 2) { Haptics.success(); send(item) }
                             .onTapGesture { Haptics.tap(); fill(item) }
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint("单击填入输入框，双击直接发送")
                             .accessibilityAction(named: "直接发送") { send(item) }
-                        Divider().padding(.leading, 14)
+                        Divider().padding(.leading, Theme.Space.l)
                     }
                 }
             }
@@ -188,12 +188,12 @@ struct TerminalSettingsView: View {
                 Section("手势") {
                     Label("点终端：点在终端里（Claude 的「Jump to bottom」、顶上的提问）", systemImage: "hand.tap")
                     Label("上下拖：在终端里滚动（Claude 往回翻对话）", systemImage: "arrow.up.and.down")
-                    Label("键栏的键盘按钮：弹出键盘；双击是回车", systemImage: "keyboard")
-                    Label("捏合调字号", systemImage: "arrow.up.left.and.arrow.down.right")
+                    Label("键栏的键盘按钮：弹出键盘；双击是回车", systemImage: Theme.Icon.keyboard)
+                    Label("捏合调字号", systemImage: Theme.Icon.enlarge)
                     Label("双指左右滑：切换同一空间里的 Agent", systemImage: "arrow.left.arrow.right")
-                    Label("双指上下滑：切换到相邻的空间", systemImage: "arrow.up.arrow.down")
-                    Label("双击终端：粘贴剪贴板", systemImage: "doc.on.clipboard")
-                    Label("长按：选择、拷贝", systemImage: "text.cursor")
+                    Label("双指上下滑：切换到相邻的空间", systemImage: Theme.Icon.upDown)
+                    Label("双击终端：粘贴剪贴板", systemImage: Theme.Icon.paste)
+                    Label("长按：选择、拷贝", systemImage: Theme.Icon.insert)
                     Label("听写：键盘上的麦克风", systemImage: "mic")
                 }
                 .font(Theme.Font.secondary)
@@ -260,16 +260,16 @@ struct ThemeRow: View {
 
     var body: some View {
         let side = theme.side(scheme == .dark)
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             Text(theme.name).lineLimit(1)
             Spacer(minLength: 8)
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 ForEach([side.background, side.foreground, side.ansi[1], side.ansi[2], side.ansi[4]], id: \.self) { c in
                     Circle().fill(Color(hex: c)).frame(width: 14, height: 14)
                         .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
                 }
             }
-            Image(systemName: "checkmark").font(Theme.Font.heading).foregroundStyle(Theme.accent).opacity(on ? 1 : 0)
+            Image(systemName: Theme.Icon.done).font(Theme.Font.heading).foregroundStyle(Theme.accent).opacity(on ? 1 : 0)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
@@ -324,11 +324,11 @@ struct SuggestionStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 ForEach(items, id: \.self) { s in
                     Button { Haptics.tap(); pick(s) } label: {
                         Text(s).font(Theme.Font.code).lineLimit(1)
-                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.sm)
                             .background(Theme.Fill.chip, in: .capsule)
                     }
                     .buttonStyle(.plain)

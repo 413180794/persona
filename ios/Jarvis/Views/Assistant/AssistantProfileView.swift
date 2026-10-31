@@ -82,12 +82,12 @@ struct AssistantProfileView: View {
                 Text("每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器只影响新对话。")
             }
             Section {
-                Label(machinesLine, systemImage: "macbook.and.iphone")
+                Label(machinesLine, systemImage: Theme.Icon.machines)
                 Label("各台电脑上的 Agent：看状态、读对话、发消息、开新的", systemImage: "rectangle.stack.badge.person.crop")
                 Label("飞书：消息、日历、文档、会议纪要、任务、邮件", systemImage: "building.2")
-                Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: "iphone")
-                Label("你添加的所有邮箱", systemImage: "envelope")
-                Label("在手机上问你、给你推送", systemImage: "bell.badge")
+                Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: Theme.Icon.phone)
+                Label("你添加的所有邮箱", systemImage: Theme.Icon.mail)
+                Label("在手机上问你、给你推送", systemImage: Theme.Icon.notifications)
             } header: {
                 Text("能访问")
             } footer: {
@@ -133,19 +133,19 @@ struct AssistantProfileView: View {
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 let online = model.machine(machineID)?.online ?? false
-                Chip(text: online ? "在线" : "离线", symbol: online ? "checkmark.circle.fill" : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
-                if working { Chip(text: "工作中", symbol: "ellipsis", look: .tint(Theme.accent)) }
+                Chip(text: online ? "在线" : "离线", symbol: online ? Theme.Icon.successFilled : "moon.zzz", look: online ? .tint(Theme.positive) : .neutral)
+                if working { Chip(text: "工作中", symbol: Theme.Icon.more, look: .tint(Theme.accent)) }
                 if let next = upcoming.first {
-                    Chip(text: "下一件 \(AssistantScheduleText.moment(next.at))", symbol: "alarm")
+                    Chip(text: "下一件 \(AssistantScheduleText.moment(next.at))", symbol: Theme.Icon.schedule)
                 }
             }
         }
         .frame(maxWidth: .infinity)
         // Room above for the face's glow (radius 16): the list row clips what sticks out, as a hard square edge.
         .padding(.top, 28)
-        .padding(.bottom, 12)
+        .padding(.bottom, Theme.Space.m)
     }
 
     /// Any assistant conversation running a turn right now.
@@ -211,7 +211,7 @@ struct AssistantUpcomingRow: View {
     var item: AssistantUpcoming
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(AssistantScheduleText.hm(item.at))
                     .font(Theme.Font.heading.monospacedDigit())
@@ -219,9 +219,9 @@ struct AssistantUpcomingRow: View {
             }
             .frame(width: 58, alignment: .leading)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
-                    Image(systemName: item.routine ? "repeat" : "arrow.turn.down.right")
-                        .font(Theme.Font.label.weight(.bold))
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: item.routine ? Theme.Icon.recurring : "arrow.turn.down.right")
+                        .font(Theme.Font.labelHeavy)
                         .foregroundStyle(Theme.accent)
                     Text(item.title).font(Theme.Font.heading).lineLimit(1)
                 }
@@ -231,7 +231,7 @@ struct AssistantUpcomingRow: View {
                     .lineLimit(1)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -249,9 +249,9 @@ enum AssistantRunText {
 
     static func symbol(_ r: APIClient.ScheduleRun) -> (String, Color) {
         switch r.status {
-        case "ok": ("checkmark.circle.fill", Theme.positive)
+        case "ok": (Theme.Icon.successFilled, Theme.positive)
         case "skipped": ("forward.end.circle.fill", .secondary)
-        default: ("exclamationmark.octagon.fill", Theme.danger)
+        default: (Theme.Icon.errorFilled, Theme.danger)
         }
     }
 
@@ -288,9 +288,9 @@ struct AssistantRunsView: View {
             if !loaded {
                 ProgressView()
             } else if let error, runs.isEmpty {
-                ContentUnavailableView("读不到运行记录", systemImage: "exclamationmark.triangle", description: Text(error))
+                ContentUnavailableView("读不到运行记录", systemImage: Theme.Icon.error, description: Text(error))
             } else if runs.isEmpty {
-                ContentUnavailableView("还没有运行过", systemImage: "clock.arrow.circlepath",
+                ContentUnavailableView("还没有运行过", systemImage: Theme.Icon.recent,
                                        description: Text("定时任务和跟进每跑一次（包括失败和跳过的）都记在这里。"))
             }
         }
@@ -328,7 +328,7 @@ struct AssistantRunRow: View {
 
     var body: some View {
         let (symbol, tint) = AssistantRunText.symbol(run)
-        let content = HStack(spacing: 12) {
+        let content = HStack(spacing: Theme.Space.m) {
             Image(systemName: symbol).font(Theme.Font.title).foregroundStyle(tint)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(showTitle ? run.title : AssistantScheduleText.moment(run.at))
@@ -341,7 +341,7 @@ struct AssistantRunRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if run.key != nil {
-                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(Color(uiColor: .tertiaryLabel))
             }
         }
         if let key = run.key {

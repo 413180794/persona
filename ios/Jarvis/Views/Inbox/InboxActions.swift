@@ -12,18 +12,18 @@ struct InboxActionBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let s = item.summary, !s.isEmpty {
-                (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + s))
+                (Text(Image(systemName: Theme.Icon.ai)).foregroundStyle(Theme.ai) + Text(" " + s))
                     .font(Theme.Font.secondary)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: "pencil.and.scribble", prominent: true, perform: draft)
                 action("交给 AI", symbol: "paperplane", prominent: false, perform: handOff)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -31,11 +31,11 @@ struct InboxActionBar: View {
     private func action(_ title: String, symbol: String, prominent: Bool, perform: @escaping () -> Void) -> some View {
         Button(action: perform) {
             Label(title, systemImage: symbol)
-                .font(Theme.Font.secondary.weight(.semibold))
+                .font(Theme.Font.secondaryStrong)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, Theme.Space.s)
                 .foregroundStyle(prominent ? Color.white : Theme.accent)
                 .background(prominent ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.accent.opacity(0.12)), in: .capsule)
         }
@@ -69,37 +69,37 @@ struct InboxDraftSheet: View {
                     TextEditor(text: $text)
                         .focused($editing)
                         .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
+                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.top, Theme.Space.s)
                         .disabled(loading)
                         .opacity(loading ? 0.4 : 1)
                     if loading {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Theme.Space.s) {
                             ProgressView()
                             Text("AI 正在起草…").foregroundStyle(.secondary)
                         }
-                        .padding(20)
+                        .padding(Theme.Space.xl)
                     }
                 }
                 if let error {
-                    Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.bottom, 6)
+                    Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.sm)
                 }
                 Divider()
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Space.s) {
                     TextField("让 AI 改：语气、要点…", text: $instruction, axis: .vertical)
                         .lineLimit(1...3)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                         .background(Color.secondary.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.card))
                         .onSubmit { Task { await load() } }
                     Button { Task { await load() } } label: {
-                        Label("重写", systemImage: "arrow.clockwise").labelStyle(.titleAndIcon).lineLimit(1)
+                        Label("重写", systemImage: Theme.Icon.retry).labelStyle(.titleAndIcon).lineLimit(1)
                     }
                     .buttonStyle(.bordered)
                     .disabled(loading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.m)
             }
             .themedPage()
             .navigationTitle(item.isLark ? "回复 " + item.title : "回复邮件")
@@ -125,7 +125,7 @@ struct InboxDraftSheet: View {
     private func agentNote(_ a: InboxItem.Agent) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if let note = a.note, !note.isEmpty {
-                (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + note))
+                (Text(Image(systemName: Theme.Icon.ai)).foregroundStyle(Theme.accent) + Text(" " + note))
                     .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(4)
             }
             if let key = a.sessionKey {
@@ -134,14 +134,14 @@ struct InboxDraftSheet: View {
                     model.selectedTab = .assistant
                     dismiss()
                 } label: {
-                    Label("查看 AI 分身的处理过程", systemImage: "list.bullet.rectangle").font(Theme.Font.caption.weight(.medium)).lineLimit(1)
+                    Label("查看 AI 分身的处理过程", systemImage: Theme.Icon.list).font(Theme.Font.captionMedium).lineLimit(1)
                 }
                 .buttonStyle(.borderless)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .background(Theme.accent.opacity(0.06))
     }
 
@@ -203,11 +203,11 @@ struct InboxHandOffSheet: View {
                 Section("要它做什么") {
                     TextField(Self.presets[0], text: $instruction, axis: .vertical).lineLimit(2...6)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: Theme.Space.s) {
                             ForEach(Self.presets, id: \.self) { p in
                                 Button { instruction = p } label: {
                                     Text(p).font(Theme.Font.caption).lineLimit(1)
-                                        .padding(.horizontal, 10).padding(.vertical, 5)
+                                        .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.sm)
                                         .background(Color.secondary.opacity(0.12), in: .capsule)
                                 }
                                 .buttonStyle(.plain)
@@ -217,7 +217,7 @@ struct InboxHandOffSheet: View {
                 }
                 Section("交给谁") {
                     Picker("交给谁", selection: $target) {
-                        Label("Jarvis（新对话）", systemImage: "sparkles").tag(SessionKey?.none)
+                        Label("Jarvis（新对话）", systemImage: Theme.Icon.ai).tag(SessionKey?.none)
                         ForEach(agents) { s in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.displayTitle).lineLimit(1)

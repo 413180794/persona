@@ -11,10 +11,10 @@ struct LarkNameTag: View {
         default: LarkColor.blue
         }
         Text(text)
-            .font(Theme.Font.label.weight(.medium))
+            .font(Theme.Font.labelMedium)
             .foregroundStyle(hue)
             .lineLimit(1)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, Theme.Space.xs)
             .padding(.vertical, 1.5)
             .background(hue.opacity(0.13), in: .rect(cornerRadius: 4, style: .continuous))
             .fixedSize()

@@ -202,7 +202,7 @@ struct WatchRootView: View {
                                     Text(e).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                                 }
                             } icon: {
-                                Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.danger)
+                                Image(systemName: Theme.Icon.offline).foregroundStyle(Theme.danger)
                             }
                             .watchCard()
                             Button { Task { await model.refresh() } } label: { Text("重试").lineLimit(1) }
@@ -212,7 +212,7 @@ struct WatchRootView: View {
                     if model.lastUpdate != nil || model.error == nil {
                     Section("运行中") {
                         if model.lastUpdate == nil {
-                            HStack(spacing: 8) {
+                            HStack(spacing: Theme.Space.s) {
                                 ProgressView().frame(width: 22, height: 22)
                                 Text("加载中").font(.footnote).foregroundStyle(.secondary)
                             }
@@ -223,7 +223,7 @@ struct WatchRootView: View {
                         }
                         ForEach(model.sessions) { s in
                             NavigationLink { WatchSessionView(session: s) } label: {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                                     // On the title's first line (titles wrap to two), not centered on the row.
                                     Circle().fill(s.state.color).frame(width: 8, height: 8)
                                         .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 2 }
@@ -342,7 +342,7 @@ struct WatchInteractionView: View {
                             } label: {
                                 // One line, like every button: "(Recommended)" becomes the 推荐 tag the phone shows.
                                 let (text, recommended) = QuestionOption.display(opt.label)
-                                HStack(spacing: 6) {
+                                HStack(spacing: Theme.Space.sm) {
                                     Text(text).font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
                                     if recommended {
                                         Text("推荐").font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
@@ -351,7 +351,7 @@ struct WatchInteractionView: View {
                                             .fixedSize()
                                     }
                                     Spacer(minLength: 0)
-                                    if picks[q.question, default: []].contains(opt.label) { Image(systemName: "checkmark") }
+                                    if picks[q.question, default: []].contains(opt.label) { Image(systemName: Theme.Icon.done) }
                                 }
                             }
                         }
@@ -426,7 +426,7 @@ struct WatchSessionView: View {
         let session = current
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Circle().fill(session.state.color).frame(width: 7, height: 7)
                     Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
@@ -450,7 +450,7 @@ struct WatchSessionView: View {
                 HStack {
                     Button("继续") { Task { await model.send(session.key, "继续") } }
                     if session.status.isActive {
-                        Button { Task { await model.interrupt(session.key) } } label: { Image(systemName: "stop.fill") }
+                        Button { Task { await model.interrupt(session.key) } } label: { Image(systemName: Theme.Icon.interrupt) }
                             .tint(Theme.danger)
                     }
                 }
@@ -479,7 +479,7 @@ struct WatchPairView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                Image(systemName: "iphone.and.arrow.forward").font(.title2).foregroundStyle(Theme.accent)
+                Image(systemName: Theme.Icon.handoff).font(.title2).foregroundStyle(Theme.accent)
                 Text("还没有配对").font(.headline)
                 Text("iPhone 上的 Jarvis 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -517,7 +517,12 @@ struct WatchInboxRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
-            Label(item.isLark ? (item.kindLabel ?? "飞书") : "邮件", systemImage: item.isLark ? "bubble.left.fill" : "envelope.fill")
+            Label {
+                Text(item.isLark ? (item.kindLabel ?? "飞书") : "邮件")
+            } icon: {
+                if item.isLark { Image(Theme.Brand.lark).resizable().scaledToFit().frame(width: 14, height: 14) }
+                else { Image(systemName: Theme.Icon.mailFilled) }
+            }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(item.kind == "mention" ? Theme.danger : Theme.accent)
             Text(item.title).font(.headline).lineLimit(2)
@@ -570,7 +575,7 @@ struct WatchInboxItemView: View {
                             if draft == nil { WKInterfaceDevice.current().play(.failure) }
                         }
                     } label: {
-                        if drafting { ProgressView() } else { Label("AI 回复", systemImage: "sparkles").lineLimit(1) }
+                        if drafting { ProgressView() } else { Label("AI 回复", systemImage: Theme.Icon.ai).lineLimit(1) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(drafting)
@@ -580,7 +585,7 @@ struct WatchInboxItemView: View {
                         await model.setDone(item)
                         dismiss()
                     }
-                } label: { Label("已处理", systemImage: "checkmark").lineLimit(1) }
+                } label: { Label("已处理", systemImage: Theme.Icon.done).lineLimit(1) }
             }
         }
         .navigationTitle(item.title)

@@ -20,7 +20,7 @@ struct SiblingTabs: View {
     var body: some View {
         let siblings = model.siblings(of: current)
         if siblings.count > 1 {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 strip(siblings)
                 allButton(siblings)
             }
@@ -29,17 +29,17 @@ struct SiblingTabs: View {
 
     private func strip(_ siblings: [Session]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 ForEach(siblings) { s in tab(s) }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Theme.Space.xxs)
         }
         .scrollTargetBehavior(.viewAligned)
         // A space with many tabs opens on the current one and its neighbours, not the first few.
         .scrollPosition(id: $shown, anchor: .center)
         .onAppear { shown = current }
-        .onChange(of: current) { _, k in withAnimation(.snappy) { shown = k } }
+        .onChange(of: current) { _, k in withAnimation(Theme.Motion.standard) { shown = k } }
         .frame(maxWidth: .infinity)
     }
 
@@ -50,8 +50,8 @@ struct SiblingTabs: View {
         return Button { if !on { Haptics.tap(); select(s.key) } } label: {
             Text(s.slotLabel ?? s.displayTitle)
                 .lineLimit(1)
-                .font(Theme.Font.label.weight(on ? .bold : .medium))
-                .padding(.horizontal, 12)
+                .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
+                .padding(.horizontal, Theme.Space.m)
                 .frame(height: 30)
                 // The state is the capsule's color; a quiet (seen, idle) one is the plain gray.
                 .background(quiet ? AnyShapeStyle(Theme.Fill.chip) : AnyShapeStyle(tone.dot.opacity(on ? 0.26 : 0.16)), in: .capsule)
@@ -69,8 +69,8 @@ struct SiblingTabs: View {
     private func allButton(_ siblings: [Session]) -> some View {
         let waiting = siblings.contains { $0.key != current && $0.state == .needsYou }
         return Button { Haptics.tap(); showAll = true } label: {
-            Image(systemName: "ellipsis")
-                .font(Theme.Font.caption.weight(.bold))
+            Image(systemName: Theme.Icon.more)
+                .font(Theme.Font.captionHeavy)
                 .foregroundStyle(.secondary)
                 .frame(width: 34, height: 30)
                 .background(Theme.Fill.chip, in: .capsule)
@@ -106,35 +106,35 @@ private struct SiblingList: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(siblings.count) 个标签页").font(Theme.Font.heading).padding(.horizontal, 14).padding(.top, 18).padding(.bottom, 8)
+                Text("\(siblings.count) 个标签页").font(Theme.Font.heading).padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
                 if let s = space, let name = s.spaceName, let k = s.spaceKey {
                     Button { openSpace(k) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "square.stack.3d.up").foregroundStyle(Theme.accent).frame(width: 22)
-                            Text("空间 \(name) 的所有 Agent").font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                        HStack(spacing: Theme.Space.m) {
+                            Image(systemName: Theme.Icon.space).foregroundStyle(Theme.accent).frame(width: 22)
+                            Text("空间 \(name) 的所有 Agent").font(Theme.Font.secondaryStrong).lineLimit(1)
                             Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary)
+                            Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
                         }
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, Theme.Space.l)
                         .frame(minHeight: 46)
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    Divider().padding(.leading, 14)
+                    Divider().padding(.leading, Theme.Space.l)
                 }
                 ForEach(siblings) { s in
                     let on = s.key == current
                     Button { pick(s.key) } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Theme.Space.m) {
                             Circle().fill(s.state.color).frame(width: 9, height: 9).frame(width: 22) // a still dot
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(s.slotLabel ?? s.displayTitle).font(Theme.Font.secondary.weight(on ? .semibold : .regular)).lineLimit(1)
+                                Text(s.slotLabel ?? s.displayTitle).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 Text(s.state.label).font(Theme.Font.label).foregroundStyle(s.state.tone.text).lineLimit(1)
                             }
                             Spacer(minLength: 8)
-                            if on { Image(systemName: "checkmark").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(Theme.accent) }
+                            if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
                         }
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, Theme.Space.l)
                         .frame(minHeight: 50)
                         .contentShape(.rect)
                     }
@@ -143,7 +143,7 @@ private struct SiblingList: View {
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, Theme.Space.sm)
         }
         .scrollBounceBehavior(.basedOnSize)
     }
@@ -168,18 +168,18 @@ struct SpaceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 if let first {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         // The machine opens its own list of projects.
                         NavigationLink(value: MachineRoute(id: first.machineID)) {
-                            HStack(spacing: 5) {
-                                Image(systemName: model.machine(first.machineID)?.symbol ?? "laptopcomputer")
+                            HStack(spacing: Theme.Space.sm) {
+                                Image(systemName: model.machine(first.machineID)?.symbol ?? Theme.Icon.machine)
                                 Text(model.machine(first.machineID)?.name ?? first.machineID).lineLimit(1)
-                                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.bold))
+                                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelHeavy)
                             }
                             .fontWeight(.semibold)
                             .foregroundStyle(Theme.accent)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.horizontal, Theme.Space.m)
+                            .padding(.vertical, Theme.Space.sm)
                             .background(Theme.accent.opacity(0.1), in: .capsule)
                             .contentShape(.capsule)
                         }
@@ -198,8 +198,8 @@ struct SpaceView: View {
                     }
                     Button { showNew = true } label: {
                         VStack(spacing: Theme.Space.s) {
-                            Image(systemName: "plus").font(Theme.Font.title)
-                            Text("在这个空间开新标签").font(Theme.Font.caption.weight(.medium))
+                            Image(systemName: Theme.Icon.add).font(Theme.Font.title)
+                            Text("在这个空间开新标签").font(Theme.Font.captionMedium)
                         }
                         .foregroundStyle(Theme.accent)
                         .frame(maxWidth: .infinity, minHeight: 150)
@@ -210,7 +210,7 @@ struct SpaceView: View {
                     .disabled(first == nil)
                 }
             }
-            .padding(16)
+            .padding(Theme.Space.l)
         }
         .themedGroupedPage()
         .navigationTitle(first?.spaceName ?? "空间")
@@ -219,7 +219,7 @@ struct SpaceView: View {
             if let g = SpaceGroup.build(sessions).first {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu { SpaceMenuItems(group: g) { renaming = g } } label: {
-                        Label("空间设置", systemImage: model.isMuted(g) ? "bell.slash" : "ellipsis")
+                        Label("空间设置", systemImage: model.isMuted(g) ? Theme.Icon.mute : Theme.Icon.more)
                     }
                     .accessibilityLabel("空间操作")
                 }
@@ -250,21 +250,21 @@ struct SlotCard: View {
             ViewThatFits(in: .horizontal) {
                 header(agent: true)
                 header(agent: false)
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.xs) {
                     Text(session.slotLabel ?? "—")
-                        .font(Theme.Font.label.weight(.medium))
+                        .font(Theme.Font.labelMedium)
                         .foregroundStyle(tone.text)
                         .lineLimit(1)
-                        .padding(.horizontal, 7)
+                        .padding(.horizontal, Theme.Space.s)
                         .padding(.vertical, 2.5)
                         .background(tone.tint, in: .capsule)
                     Spacer(minLength: 4)
                     StatusDot(state: session.state, size: 9)
                 }
             }
-            Text(session.displayTitle).font(Theme.Font.secondary.weight(.semibold)).lineLimit(2)
+            Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
             Text(session.state.label + (pending > 0 ? " · \(pending) 件待处理" : ""))
-                .font(Theme.Font.label.weight(.semibold))
+                .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
             if let t = session.lastText, !t.isEmpty {
                 Text(Fmt.plain(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)

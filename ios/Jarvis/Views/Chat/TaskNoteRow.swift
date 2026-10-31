@@ -94,16 +94,16 @@ struct TaskNoteRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     Haptics.tap()
-                    withAnimation(.snappy(duration: 0.25)) { open.toggle() }
+                    withAnimation(Theme.Motion.state) { open.toggle() }
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Theme.Space.m) {
                         ZStack {
                             Circle().fill(tint(n).opacity(0.14)).frame(width: 24, height: 24)
                             Image(systemName: TaskNoteText.symbol(n))
-                                .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
+                                .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xLarge)
                                 .foregroundStyle(tint(n))
                         }
-                        Text(TaskNoteText.label(n)).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1).fixedSize()
+                        Text(TaskNoteText.label(n)).font(Theme.Font.secondaryStrong).lineLimit(1).fixedSize()
                         Text(TaskNoteText.subject(n, description: call.flatMap { index.descriptions[$0] }))
                             .font(Theme.Font.secondary)
                             .foregroundStyle(.secondary)
@@ -115,8 +115,8 @@ struct TaskNoteRow: View {
                                 .foregroundStyle(n.failed ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.tertiary))
                                 .lineLimit(1).fixedSize()
                         }
-                        Image(systemName: "chevron.right")
-                            .font(Theme.Font.label.weight(.semibold))
+                        Image(systemName: Theme.Icon.disclosure)
+                            .font(Theme.Font.labelStrong)
                             .foregroundStyle(.tertiary)
                             .rotationEffect(.degrees(open ? 90 : 0))
                     }
@@ -129,7 +129,7 @@ struct TaskNoteRow: View {
                 if open {
                     detail(n, call: call)
                         .padding(.horizontal, pad)
-                        .padding(.bottom, 10)
+                        .padding(.bottom, Theme.Space.m)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -149,15 +149,15 @@ struct TaskNoteRow: View {
             if n.kind == "monitor", n.status == "event" || n.detail == nil {
                 Text(n.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
             }
-            HStack(spacing: 16) {
+            HStack(spacing: Theme.Space.l) {
                 if let f = n.outputFile, !f.isEmpty, let openFile {
-                    Button { openFile(f) } label: { Label("查看输出", systemImage: "doc.text").lineLimit(1) }
+                    Button { openFile(f) } label: { Label("查看输出", systemImage: Theme.Icon.document).lineLimit(1) }
                 }
                 if let call, let jumpToCall {
                     Button { jumpToCall(call) } label: { Label("跳到发起的这一步", systemImage: "arrow.up.forward").lineLimit(1) }
                 }
             }
-            .font(Theme.Font.caption.weight(.medium))
+            .font(Theme.Font.captionMedium)
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
         }

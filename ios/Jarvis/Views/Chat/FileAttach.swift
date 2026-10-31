@@ -171,8 +171,8 @@ struct UploadsBar: View {
     var body: some View {
         VStack(spacing: Theme.Space.sm) {
             ForEach(uploads.items) { item in
-                HStack(spacing: 10) {
-                    Image(systemName: "doc").font(Theme.Font.body).foregroundStyle(.secondary)
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: Theme.Icon.file).font(Theme.Font.body).foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         HStack {
                             Text(item.name).font(Theme.Font.secondary).lineLimit(1).truncationMode(.middle)
@@ -184,14 +184,14 @@ struct UploadsBar: View {
                             .tint(Theme.accent)
                     }
                     Button { uploads.cancel(item.id) } label: {
-                        Image(systemName: "xmark.circle.fill").font(Theme.Font.title).symbolRenderingMode(.hierarchical)
+                        Image(systemName: Theme.Icon.clear).font(Theme.Font.title).symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("取消上传 \(item.name)")
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
                 .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
         }

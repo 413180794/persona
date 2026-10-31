@@ -29,11 +29,7 @@ struct MessageShareCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             HStack(spacing: 10) {
-                Image(systemName: message.isUser ? "person.fill" : Self.symbol(message.agent))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(message.isUser ? AnyShapeStyle(Color.gray) : AnyShapeStyle(Self.fill(message.agent)), in: .circle)
+                avatar
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(message.isUser ? "我" : message.agent).font(.system(size: 15, weight: .semibold))
                     if !message.source.isEmpty {
@@ -50,7 +46,7 @@ struct MessageShareCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 11, weight: .semibold))
+                Image(systemName: Theme.Icon.ai).font(.system(size: 11, weight: .semibold))
                 Text("Jarvis").font(.system(size: 12, weight: .semibold))
                 Spacer()
             }
@@ -67,24 +63,22 @@ struct MessageShareCard: View {
         .environment(\.colorScheme, dark ? .dark : .light)
     }
 
-    private static let claude = LinearGradient(colors: [Color(hex: 0xE0875A), Color(hex: 0xC9643C)], startPoint: .top, endPoint: .bottom)
-    private static let codex = LinearGradient(colors: [Color(hex: 0x3A3A3C), Color(hex: 0x111111)], startPoint: .top, endPoint: .bottom)
-    private static let traex = LinearGradient(colors: [Color(hex: 0x2FD38F), Color(hex: 0x12935E)], startPoint: .top, endPoint: .bottom)
-
-    /// Each agent its own mark on the card: Claude's sparkle, Codex's code brackets, TRAEX's terminal.
-    private static func symbol(_ agent: String) -> String {
-        switch agent {
-        case "Codex": "chevron.left.forwardslash.chevron.right"
-        case "TRAEX": "terminal.fill"
-        default: "sparkle"
-        }
-    }
-
-    private static func fill(_ agent: String) -> LinearGradient {
-        switch agent {
-        case "Codex": codex
-        case "TRAEX": traex
-        default: claude
+    /// Who wrote it: the user, or the agent's own mark (Claude's, OpenAI's for Codex). TRAEX has no public mark and
+    /// keeps a terminal on green.
+    @ViewBuilder private var avatar: some View {
+        if message.isUser {
+            Image(systemName: Theme.Icon.user).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 32, height: 32).background(Color.gray, in: .circle)
+        } else if message.agent == "TRAEX" {
+            Image(systemName: Theme.Icon.terminalFilled).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(LinearGradient(colors: [Color(hex: 0x2FD38F), Color(hex: 0x12935E)], startPoint: .top, endPoint: .bottom), in: .circle)
+        } else {
+            Image(message.agent == "Codex" ? Theme.Brand.openAI : Theme.Brand.claude)
+                .resizable().scaledToFit().foregroundStyle(.primary)
+                .padding(7)
+                .frame(width: 32, height: 32)
+                .background(Color(.secondarySystemBackground), in: .circle)
         }
     }
 
@@ -168,20 +162,20 @@ struct MessageShareSheet: View {
     private var actions: some View {
         HStack(spacing: 12) {
             Button { Task { await save() } } label: {
-                Label(saving ? "正在保存" : "保存图片", systemImage: "square.and.arrow.down")
+                Label(saving ? "正在保存" : "保存图片", systemImage: Theme.Icon.save)
                     .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
             }
             .themedButton(prominent: false)
             .disabled(image == nil || saving)
             if let image {
                 ShareLink(item: Image(uiImage: image), preview: SharePreview("消息卡片", image: Image(uiImage: image))) {
-                    Label("分享图片", systemImage: "square.and.arrow.up")
+                    Label("分享图片", systemImage: Theme.Icon.share)
                         .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .themedButton(prominent: true)
             }
             ShareLink(item: message.text) {
-                Image(systemName: "text.alignleft").font(Theme.Font.heading).frame(width: 50, height: 50)
+                Image(systemName: Theme.Icon.text).font(Theme.Font.heading).frame(width: 50, height: 50)
             }
             .themedButton(prominent: false)
             .accessibilityLabel("分享文字")

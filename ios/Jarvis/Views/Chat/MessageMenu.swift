@@ -176,7 +176,7 @@ struct MessageActionBar: View {
                 action("编辑", "pencil") { menu.edit?(text) }
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, Theme.Space.sm)
         .frame(height: Self.height)
         .background(Color(white: 0.17), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)

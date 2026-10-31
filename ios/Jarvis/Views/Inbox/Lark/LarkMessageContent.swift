@@ -171,7 +171,7 @@ struct LarkNodeView: View {
             let items = children
             return AnyView(VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 ForEach(Array(items.enumerated()), id: \.offset) { i, item in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                         Text(Self.marker(b, index: i)).font(.system(size: base.size * Theme.textScale(typeSize)).monospacedDigit()).foregroundStyle(.secondary)
                             .frame(minWidth: 14, alignment: .trailing)
                         LarkNodeView(node: item, base: base)
@@ -182,7 +182,7 @@ struct LarkNodeView: View {
             return AnyView(LarkNodesView(nodes: children, structured: true, base: base))
         case "quote":
             return AnyView(LarkNodesView(nodes: children, structured: true, base: LarkTextBase(size: base.size, color: .secondary))
-                .padding(.leading, 10)
+                .padding(.leading, Theme.Space.m)
                 .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: 3) })
         case let t where t.hasPrefix("heading-"):
             let level = Int(t.dropFirst(8)) ?? 3
@@ -376,8 +376,8 @@ struct LarkImagePart: View {
         if let url = part.url {
             LarkRemoteImage(url: url, maxPixel: 900)
                 .frame(width: size.width, height: size.height)
-                .clipShape(.rect(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
+                .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
                 .contentShape(.rect)
                 .onTapGesture { viewing = true }
                 .fullScreenCover(isPresented: $viewing) {
@@ -386,7 +386,7 @@ struct LarkImagePart: View {
                 }
                 .accessibilityLabel("图片")
         } else {
-            Label("图片已失效", systemImage: "photo").font(Theme.Font.secondary).foregroundStyle(.secondary)
+            Label("图片已失效", systemImage: Theme.Icon.photo).font(Theme.Font.secondary).foregroundStyle(.secondary)
         }
     }
 
@@ -412,7 +412,7 @@ struct LarkSticker: View {
                     Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
                         .frame(width: image.size.width * r, height: image.size.height * r)
                 } else {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)).frame(width: 80, height: 80)
+                    RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Color.primary.opacity(0.05)).frame(width: 80, height: 80)
                 }
             }
             .accessibilityLabel(part.text ?? "贴纸")
@@ -432,18 +432,18 @@ struct LarkFileCard: View {
         Button {
             if let url = part.url { openFile?(url, name) }
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text(name).font(Theme.Font.secondary.weight(.medium)).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(name).font(Theme.Font.secondaryMedium).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
                     Text(LarkFormat.fileSize(part.metaString("size"))).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
                 Self.badge(ext)
             }
-            .padding(12)
+            .padding(Theme.Space.m)
             .frame(width: 260)
-            .background(LarkColor.cardBackground, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke))
+            .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke))
         }
         .buttonStyle(.plain)
         .disabled(part.url == nil || part.metaBool("destroyed"))
@@ -467,7 +467,7 @@ struct LarkFileCard: View {
             .font(.system(size: 20)) // type-scale: glyph (in a 42 pt tile)
             .foregroundStyle(.white)
             .frame(width: 42, height: 42)
-            .background(color.gradient, in: .rect(cornerRadius: 9, style: .continuous))
+            .background(color.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
 
@@ -484,7 +484,7 @@ struct LarkVideoPart: View {
             } else {
                 Rectangle().fill(Color.black.opacity(0.85))
             }
-            Image(systemName: "play.fill")
+            Image(systemName: Theme.Icon.run)
                 .font(.system(size: 20)) // type-scale: glyph (in a 48 pt play button)
                 .foregroundStyle(.white)
                 .frame(width: 48, height: 48)
@@ -493,13 +493,13 @@ struct LarkVideoPart: View {
         .frame(width: size.width, height: size.height)
         .overlay(alignment: .bottomTrailing) {
             Text(LarkFormat.duration(ms: part.meta("duration")?.double))
-                .font(Theme.Font.label.weight(.semibold).monospacedDigit())
+                .font(Theme.Font.labelStrong.monospacedDigit())
                 .foregroundStyle(.white)
-                .padding(.horizontal, 6).padding(.vertical, 2)
+                .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
                 .background(.black.opacity(0.5), in: .capsule)
-                .padding(6)
+                .padding(Theme.Space.sm)
         }
-        .clipShape(.rect(cornerRadius: 10, style: .continuous))
+        .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
         .contentShape(.rect)
         .onTapGesture { if part.url != nil { playing = true } }
         .fullScreenCover(isPresented: $playing) { if let url = part.url { LarkPlayerView(url: url) } }
@@ -515,9 +515,9 @@ struct LarkVoicePart: View {
     var body: some View {
         let ms = part.meta("duration")?.double ?? 0
         Button { playing = true } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 Image(systemName: "play.circle.fill").font(Theme.Font.title).foregroundStyle(LarkColor.blue)
-                HStack(spacing: 2) {
+                HStack(spacing: Theme.Space.xxs) {
                     ForEach(0..<min(18, max(5, Int(ms / 1500))), id: \.self) { i in
                         Capsule().fill(Color.primary.opacity(0.35)).frame(width: 2.5, height: [8, 14, 10, 18, 12, 6][i % 6])
                     }
@@ -538,27 +538,27 @@ struct LarkCodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.isEmpty == false ? language! : "代码").font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
+                Text(language?.isEmpty == false ? language! : "代码").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                     Haptics.success()
                     AppModel.shared.toast = Toast("已拷贝代码", style: .success)
-                } label: { Image(systemName: "doc.on.doc").font(Theme.Font.label) }
+                } label: { Image(systemName: Theme.Icon.copy).font(Theme.Font.label) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("拷贝代码")
             }
-            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 4)
+            .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.s).padding(.bottom, Theme.Space.xs)
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(LarkSyntax.highlight(code))
                     .font(Theme.Font.code)
                     .fixedSize(horizontal: true, vertical: true)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12).padding(.bottom, 10)
+                    .padding(.horizontal, Theme.Space.m).padding(.bottom, Theme.Space.m)
             }
         }
-        .background(Theme.codeBackground, in: .rect(cornerRadius: 10, style: .continuous))
+        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
 

@@ -71,7 +71,7 @@ struct ImageViewer: View {
         VStack {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40)
+                    Image(systemName: Theme.Icon.close).font(Theme.Font.heading).frame(width: 40, height: 40)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -79,30 +79,30 @@ struct ImageViewer: View {
                 Spacer()
                 if images.count > 1 {
                     Text("\(index + 1) / \(images.count)")
-                        .font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .font(Theme.Font.secondaryStrong.monospacedDigit())
+                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.vertical, Theme.Space.s)
                         .surface(in: .capsule)
                 }
             }
             Spacer()
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 Button { Task { await save() } } label: {
-                    Label(saving ? "保存中" : "保存", systemImage: "square.and.arrow.down").lineLimit(1).fixedSize()
-                        .font(Theme.Font.secondary.weight(.semibold))
-                        .padding(.horizontal, 6)
+                    Label(saving ? "保存中" : "保存", systemImage: Theme.Icon.save).lineLimit(1).fixedSize()
+                        .font(Theme.Font.secondaryStrong)
+                        .padding(.horizontal, Theme.Space.sm)
                 }
                 .themedButton(prominent: true)
                 .disabled(saving || decoded[index] == nil)
                 if attach != nil, let img = decoded[index] {
                     Button { editing = img } label: {
-                        Label("编辑", systemImage: "pencil.tip.crop.circle").lineLimit(1).fixedSize().font(Theme.Font.secondary.weight(.semibold))
+                        Label("编辑", systemImage: "pencil.tip.crop.circle").lineLimit(1).fixedSize().font(Theme.Font.secondaryStrong)
                     }
                     .themedButton()
                 }
                 if let img = decoded[index] {
                     ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
-                        Image(systemName: "square.and.arrow.up").frame(width: 24)
+                        Image(systemName: Theme.Icon.share).frame(width: 24)
                     }
                     .themedButton()
                     .accessibilityLabel("分享")
@@ -110,15 +110,15 @@ struct ImageViewer: View {
                         UIPasteboard.general.image = img
                         Haptics.success()
                         AppModel.shared.toast = Toast("已拷贝图片", style: .success)
-                    } label: { Image(systemName: "doc.on.doc").frame(width: 24) }
+                    } label: { Image(systemName: Theme.Icon.copy).frame(width: 24) }
                         .themedButton()
                         .accessibilityLabel("拷贝")
                 }
             }
             .controlSize(.large)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.s)
     }
 
     private func decode(_ i: Int) async {

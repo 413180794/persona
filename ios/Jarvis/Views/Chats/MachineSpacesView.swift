@@ -38,7 +38,7 @@ struct MachineSpacesView: View {
             }
             if groups.isEmpty {
                 Section {
-                    EmptyStateView(symbol: machine?.symbol ?? "desktopcomputer", title: "没有在跑的 Agent",
+                    EmptyStateView(symbol: machine?.symbol ?? Theme.Icon.machine, title: "没有在跑的 Agent",
                                    message: machine?.online == false ? "这台机器现在离线。" : "在这台机器的 herdr 里启动 Claude、Codex 或 TRAEX，就会出现在这里。")
                 }
                 .listRowBackground(Color.clear)
@@ -51,22 +51,22 @@ struct MachineSpacesView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // By value, like the chats the details page opens (MachineDetailRoute).
-                NavigationLink(value: MachineDetailRoute(id: machineID)) { Label("机器详情", systemImage: "info.circle") }
+                NavigationLink(value: MachineDetailRoute(id: machineID)) { Label("机器详情", systemImage: Theme.Icon.info) }
             }
         }
     }
 
     private func summary(_ m: Machine, sessions: [Session], spaces: Int) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             Image(systemName: m.symbol)
                 .font(Theme.Font.title)
                 .foregroundStyle(m.online ? Theme.accent : .secondary)
                 .frame(width: 44, height: 44)
                 .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Circle().fill(m.online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
-                    Text(m.online ? "在线" : "离线").font(Theme.Font.secondary.weight(.semibold))
+                    Text(m.online ? "在线" : "离线").font(Theme.Font.secondaryStrong)
                     if let h = m.hostname, !h.isEmpty { Text(h).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 Text("\(spaces) 个项目 · \(sessions.count) 个 Agent").font(Theme.Font.label).foregroundStyle(.secondary)
@@ -74,7 +74,7 @@ struct MachineSpacesView: View {
             Spacer(minLength: 4)
             StateCounts(group: SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: sessions))
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     /// A project: opens its page. Agents outside any herdr space have no page: the row opens the agent itself.
@@ -101,16 +101,16 @@ private struct BusySpaceRow: View {
     var body: some View {
         let lead = group.sessions.min { ($0.state.priority, -($0.updatedAt ?? .distantPast).timeIntervalSince1970) < ($1.state.priority, -($1.updatedAt ?? .distantPast).timeIntervalSince1970) }
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(spacing: 8) {
-                Image(systemName: "square.stack.3d.up.fill").foregroundStyle(muted ? Color.secondary : group.state.color)
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.spaceFilled).foregroundStyle(muted ? Color.secondary : group.state.color)
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                if pinned { Image(systemName: "pin.fill").font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-                if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+                if pinned { Image(systemName: Theme.Icon.pinned).font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+                if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
                 Spacer(minLength: 4)
                 StateCounts(group: group).opacity(muted ? 0.6 : 1)
             }
             if let lead {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(lead.slotLabel ?? lead.displayTitle).fontWeight(.medium).lineLimit(1).layoutPriority(1)
                     if let t = lead.lastText, !t.isEmpty { Text(t).foregroundStyle(.secondary).lineLimit(1) }
                     Spacer(minLength: 4)
@@ -120,7 +120,7 @@ private struct BusySpaceRow: View {
                 .padding(.leading, 28)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
         .opacity(muted ? 0.8 : 1)
     }
 }

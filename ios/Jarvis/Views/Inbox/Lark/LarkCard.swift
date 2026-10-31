@@ -63,20 +63,20 @@ struct LarkCardView: View {
                 }
                 if let body = LarkCardNode(meta["body"]) {
                     LarkCardFlow(nodes: body.children, spacing: Self.spacing(body) ?? 10)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.vertical, Theme.Space.m)
                 } else if let fallback = meta["fallback"]?.array, !fallback.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.Space.sm) {
                         ForEach(Array(fallback.compactMap(\.string).enumerated()), id: \.offset) { _, t in Text(t).font(Theme.Font.secondary) }
                     }
-                    .padding(12)
+                    .padding(Theme.Space.m)
                 }
             }
             .environment(\.larkTextBase, LarkTextBase(size: 15))
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(LarkColor.cardBackground)
-            .clipShape(.rect(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke))
+            .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke))
         }
     }
 
@@ -97,7 +97,7 @@ struct LarkCardHeader: View {
         let extras = kids.filter { $0.tag != "plain_text" && $0.tag != "text_tag" }
         let tinted = !(theme.isEmpty || theme == "default" || theme == "white")
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                 ForEach(Array(extras.enumerated()), id: \.offset) { _, e in LarkCardNodeView(node: e) }
                 if let title = texts.first {
                     LarkInlineText(runs: LarkCardRuns.runs(title, inMarkdown: false), base: LarkTextBase(size: 17, bold: true))
@@ -111,8 +111,8 @@ struct LarkCardHeader: View {
                 LarkInlineText(runs: LarkCardRuns.runs(texts[1], inMarkdown: false), base: LarkTextBase(size: 13, color: .secondary))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tinted ? LarkColor.hue(theme).opacity(0.13) : Color.clear)
         .overlay(alignment: .bottom) { if !tinted { Divider() } }
@@ -315,7 +315,7 @@ struct LarkCardNodeView: View {
         case "markdown", "lark_md":
             let kids = n.children
             if let first = kids.first, first.isIcon {
-                return AnyView(HStack(alignment: .firstTextBaseline, spacing: 6) {
+                return AnyView(HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                     LarkCardIcon(node: first, size: base.size)
                     LarkCardFlow(nodes: Array(kids.dropFirst()), inMarkdown: true)
                 })
@@ -332,7 +332,7 @@ struct LarkCardNodeView: View {
         case "interactive_container":
             return AnyView(LarkCardContainer(node: n))
         case "hr":
-            return AnyView(Divider().padding(.vertical, 2))
+            return AnyView(Divider().padding(.vertical, Theme.Space.xxs))
         case "img":
             return AnyView(LarkCardImage(node: n))
         case "img_combination":
@@ -351,7 +351,7 @@ struct LarkCardNodeView: View {
         case "blockquote":
             return AnyView(LarkCardFlow(nodes: n.children, inMarkdown: true)
                 .environment(\.larkTextBase, LarkTextBase(size: base.size, color: .secondary))
-                .padding(.leading, 10)
+                .padding(.leading, Theme.Space.m)
                 .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: 3) })
         case "code_block":
             return AnyView(LarkCodeBlock(code: n.text ?? n.plainText, language: n.raw["language"]?.string))
@@ -369,14 +369,14 @@ struct LarkCardNodeView: View {
             return AnyView(LarkFlowLayout(spacing: 6) {
                 ForEach(Array((n.raw["options"]?.array ?? []).enumerated()), id: \.offset) { _, o in
                     if let u = o["image"]?["url"]?.string {
-                        LarkRemoteImage(url: u, maxPixel: 300).frame(width: 72, height: 72).clipShape(.rect(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(o["selected"]?.bool == true ? LarkColor.blue : .clear, lineWidth: 2))
+                        LarkRemoteImage(url: u, maxPixel: 300).frame(width: 72, height: 72).clipShape(.rect(cornerRadius: Theme.Radius.control))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control).strokeBorder(o["selected"]?.bool == true ? LarkColor.blue : .clear, lineWidth: 2))
                     }
                 }
             })
         case "checker":
-            return AnyView(HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: n.raw["checked"]?.bool == true ? "checkmark.circle.fill" : "circle")
+            return AnyView(HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                Image(systemName: n.raw["checked"]?.bool == true ? Theme.Icon.successFilled : Theme.Icon.unchecked)
                     .foregroundStyle(n.raw["checked"]?.bool == true ? LarkColor.blue : .secondary)
                 LarkCardFlow(nodes: n.children)
                     .opacity(n.raw["checked"]?.bool == true ? 0.6 : 1)
@@ -394,11 +394,11 @@ struct LarkCardNodeView: View {
         case "avatar":
             return AnyView(LarkAvatarImage(name: n.text ?? "?", url: n.imageURL, size: 24))
         case "audio", "markdown_audio", "video":
-            return AnyView(Label(n.text ?? (n.tag == "video" ? "视频" : "音频"), systemImage: "play.fill")
+            return AnyView(Label(n.text ?? (n.tag == "video" ? "视频" : "音频"), systemImage: Theme.Icon.run)
                 .font(Theme.Font.secondary)
-                .padding(.horizontal, 12).padding(.vertical, 9)
+                .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 8)))
+                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: Theme.Radius.control)))
         case "fallback_text":
             return AnyView(Text(n.plainText).font(Theme.Font.secondary).foregroundStyle(.secondary))
         case "collapse_divider":
@@ -701,7 +701,7 @@ struct LarkCardImage: View {
                         .clipped()
                 }
             }
-            .clipShape(.rect(cornerRadius: 8, style: .continuous))
+            .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .contentShape(.rect)
             .onTapGesture { if node.raw["preview"]?.bool != false { viewing = true } }
             .fullScreenCover(isPresented: $viewing) { LarkImageGallery(urls: [url], index: 0) }
@@ -743,19 +743,19 @@ struct LarkCardButton: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 if pending { ProgressView().controlSize(.mini) } else if let icon { LarkCardIcon(node: icon, size: 14) }
                 if !label.isEmpty { Text(label).lineLimit(1).minimumScaleFactor(0.7) }
             }
-            .font(Theme.Font.secondary.weight(.medium))
+            .font(Theme.Font.secondaryMedium)
             .padding(.horizontal, fill ? 6 : 14)
             .frame(minHeight: 32)
             .frame(maxWidth: fill ? .infinity : nil)
             .foregroundStyle(Self.foreground(kind))
-            .background(Self.background(kind), in: .rect(cornerRadius: 7, style: .continuous))
+            .background(Self.background(kind), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
             .overlay {
                 if Self.bordered(kind) {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(kind.hasPrefix("danger") ? Color.red.opacity(0.5) : LarkColor.cardStroke)
+                    RoundedRectangle(cornerRadius: Theme.Radius.badge, style: .continuous).strokeBorder(kind.hasPrefix("danger") ? Color.red.opacity(0.5) : LarkColor.cardStroke)
                 }
             }
         }
@@ -796,7 +796,7 @@ struct LarkCardList: View {
         let markers = Self.markers(items)
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array(items.enumerated()), id: \.offset) { i, item in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                     Text(markers[i]).font(.system(size: base.size * Theme.textScale(typeSize)).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
                     LarkCardFlow(nodes: (item["children"]?.array ?? []).compactMap { LarkCardNode($0) }, inMarkdown: true)
                 }
@@ -824,7 +824,7 @@ struct LarkCardNote: View {
 
     var body: some View {
         let kids = node.children
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .center, spacing: Theme.Space.sm) {
             ForEach(Array(kids.enumerated()), id: \.offset) { _, k in
                 if k.tag == "img", let u = k.imageURL {
                     LarkRemoteImage(url: u, size: larkThumbEdge(points: 16), maxPixel: 64).frame(width: 16, height: 16).clipShape(.rect(cornerRadius: 3))
@@ -845,11 +845,11 @@ struct LarkCardTag: View {
     var body: some View {
         let hue = LarkColor.hue(node.styleString("color"))
         Text(node.plainText)
-            .font(Theme.Font.label.weight(.medium))
+            .font(Theme.Font.labelMedium)
             .lineLimit(1)
             .foregroundStyle(node.styleString("color") == "neutral" || node.styleString("color") == "grey" ? .secondary : hue)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, Theme.Space.xxs)
             .background(hue.opacity(0.14), in: .rect(cornerRadius: 4, style: .continuous))
     }
 }
@@ -864,7 +864,7 @@ struct LarkCardIcon: View {
         } else if let url = node.imageURL {
             LarkRemoteImage(url: url, size: larkThumbEdge(points: size), maxPixel: 96, contentMode: .fit).frame(width: size, height: size)
         } else {
-            Image(systemName: "circle.fill").font(.system(size: size * 0.4)).foregroundStyle(.secondary)
+            Image(systemName: Theme.Icon.dot).font(.system(size: size * 0.4)).foregroundStyle(.secondary)
         }
     }
 
@@ -873,7 +873,7 @@ struct LarkCardIcon: View {
         guard let t = token?.lowercased(), !t.isEmpty else { return nil }
         let table: [(String, String, Color?)] = [
             ("warning", "exclamationmark.triangle.fill", .orange), ("alert", "exclamationmark.triangle.fill", .orange),
-            ("error", "xmark.octagon.fill", .red), ("close", "xmark.circle.fill", .red), ("cancel", "xmark.circle.fill", .red),
+            ("error", "xmark.octagon.fill", .red), ("close", "xmark.circle.fill", .red), ("cancel", "xmark.circle.fill", .red), // icon: as Lark draws its card icons // icon: as Lark draws its card icons
             ("info", "info.circle", nil), ("maybe", "questionmark.circle", nil), ("help", "questionmark.circle", nil), ("question", "questionmark.circle", nil),
             ("succeed", "checkmark.circle.fill", .green), ("success", "checkmark.circle.fill", .green), ("done", "checkmark.circle.fill", .green), ("check", "checkmark.circle.fill", .green), ("yes", "checkmark.circle.fill", .green),
             ("time", "clock", nil), ("clock", "clock", nil), ("calendar", "calendar", nil), ("alarm", "alarm", nil),
@@ -910,20 +910,20 @@ struct LarkCardField: View {
         }
         Menu {
             ForEach(Array(options.enumerated()), id: \.offset) { _, o in
-                Label(o["text"]?.string ?? o["value"]?.string ?? "", systemImage: o["selected"]?.bool == true ? "checkmark" : "")
+                Label(o["text"]?.string ?? o["value"]?.string ?? "", systemImage: o["selected"]?.bool == true ? Theme.Icon.done : "")
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 Text(shown ?? (node.text ?? "请选择")).foregroundStyle(shown == nil ? Color(.placeholderText) : Color.primary).lineLimit(1)
                 Spacer(minLength: 4)
                 Image(systemName: symbol).font(Theme.Font.label).foregroundStyle(Color.secondary)
             }
             .font(Theme.Font.secondary)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, Theme.Space.m)
             .frame(minHeight: 34)
             .frame(maxWidth: .infinity)
-            .background(Color.primary.opacity(0.03), in: .rect(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(LarkColor.cardStroke))
+            .background(Color.primary.opacity(0.03), in: .rect(cornerRadius: Theme.Radius.badge))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge).strokeBorder(LarkColor.cardStroke))
         }
         .tint(.primary)
         .disabled(options.isEmpty)
@@ -944,7 +944,7 @@ struct LarkCardOverflow: View {
             ForEach(Array(options.enumerated()), id: \.offset) { _, o in
                 let text = o["text"]?.string ?? o["value"]?.string ?? ""
                 if let u = o["url"]?.string.flatMap(LarkPartRenderer.safeURL) {
-                    Button { openURL(u) } label: { Label(text, systemImage: "arrow.up.right") }
+                    Button { openURL(u) } label: { Label(text, systemImage: Theme.Icon.open) }
                 } else if let aid = o["actionId"]?.string, o["actionMethod"]?.int == 2, let mid = context.messageID {
                     Button {
                         Task {
@@ -962,10 +962,10 @@ struct LarkCardOverflow: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(Theme.Font.secondary.weight(.semibold))
+            Image(systemName: Theme.Icon.more)
+                .font(Theme.Font.secondaryStrong)
                 .frame(width: 32, height: 32)
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(LarkColor.cardStroke))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge).strokeBorder(LarkColor.cardStroke))
         }
         .foregroundStyle(.primary)
         .accessibilityLabel("更多")
@@ -991,9 +991,9 @@ struct LarkCardPanel: View {
         let bottom = node.raw["headerPosition"]?.string == "bottom"
         let iconLeft = node.raw["headerIconPosition"]?.string == "left"
         let header = Button {
-            withAnimation(.snappy(duration: 0.25)) { open.toggle() }
+            withAnimation(Theme.Motion.state) { open.toggle() }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if iconLeft { chevron }
                 Group {
                     if let title { LarkCardFlow(nodes: [title]) } else { Text(node.text ?? "详情").font(Theme.Font.secondary) }
@@ -1015,8 +1015,8 @@ struct LarkCardPanel: View {
     }
 
     private var chevron: some View {
-        Image(systemName: "chevron.down")
-            .font(Theme.Font.label.weight(.semibold))
+        Image(systemName: Theme.Icon.expand)
+            .font(Theme.Font.labelStrong)
             .foregroundStyle(.secondary)
             .rotationEffect(.degrees(open ? 180 : 0))
     }
@@ -1050,8 +1050,8 @@ struct LarkCardTable: View {
                             if let cell { LarkCardFlow(nodes: cell.children.isEmpty ? [cell] : cell.children, inMarkdown: true) } else { Color.clear }
                         }
                         .environment(\.larkTextBase, LarkTextBase(size: 13, bold: header))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, Theme.Space.s)
+                        .padding(.vertical, Theme.Space.sm)
                         .frame(width: cellWidth)
                         .frame(maxWidth: cellWidth == nil ? .infinity : nil, maxHeight: .infinity, alignment: .topLeading)
                         .background(header ? Color.primary.opacity(0.05) : .clear)
@@ -1060,8 +1060,8 @@ struct LarkCardTable: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .clipShape(.rect(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(LarkColor.cardStroke))
+        .clipShape(.rect(cornerRadius: Theme.Radius.badge))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.badge).strokeBorder(LarkColor.cardStroke))
     }
 }
 
@@ -1087,10 +1087,10 @@ struct LarkCardChart: View {
         let type = spec["type"]?.string ?? ""
         let pts = points
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            if let title = spec["title"]?["text"]?.string { Text(title).font(Theme.Font.secondary.weight(.semibold)) }
+            if let title = spec["title"]?["text"]?.string { Text(title).font(Theme.Font.secondaryStrong) }
             if pts.isEmpty {
                 Label("图表", systemImage: "chart.bar.xaxis").font(Theme.Font.secondary).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 80).background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8))
+                    .frame(maxWidth: .infinity, minHeight: 80).background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control))
             } else {
                 Chart(pts) { p in
                     switch type {

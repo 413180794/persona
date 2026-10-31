@@ -23,11 +23,7 @@ nonisolated enum LarkPosition {
 struct LarkChatView: View {
     @Environment(AppModel.self) private var model
     var conversation: LarkConversation
-    @State private var messages: [LarkMessage] = []
-    @State private var hasOlder = false
-    @State private var hasNewer = false
-    @State private var olderCursor: String?
-    @State private var newerCursor: String?
+    @State private var pager = LarkPager()
     @State private var loadingOlder = false
     @State private var loadingNewer = false
     @State private var error: String?
@@ -38,8 +34,6 @@ struct LarkChatView: View {
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
     @State private var anchor: String?
     /// Highest position already reported as read.
-    @State private var readCursor: String?
-    @State private var seen = Set<String>()
     @State private var reportTask: Task<Void, Never>?
     @State private var atBottom = true
     @State private var mention: String?
@@ -54,36 +48,36 @@ struct LarkChatView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if hasOlder {
+                if pager.hasOlder {
                     Button { Task { await loadOlder() } } label: {
                         Group { if loadingOlder { ProgressView().controlSize(.small) } else { Text("加载更早的消息").lineLimit(1) } }
-                            .font(Theme.Font.label.weight(.medium))
+                            .font(Theme.Font.labelMedium)
                             .frame(maxWidth: .infinity, minHeight: 32)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(LarkColor.blue)
                 }
-                if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, 8) }
-                ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
-                    let prev = i > 0 ? messages[i - 1] : nil
+                if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
+                ForEach(Array(pager.messages.enumerated()), id: \.element.id) { i, m in
+                    let prev = i > 0 ? pager.messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
                         if Self.startsDay(m, after: prev) {
-                            Text(Self.dayLabel(m.createdAt)).font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            Text(Self.dayLabel(m.createdAt)).font(Theme.Font.labelMedium).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.m)
                         }
                         LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
                             .padding(.top, Self.continues(m, after: prev) ? 3 : 12)
                     }
                     .onAppear { markSeen(m) }
                 }
-                if hasNewer {
+                if pager.hasNewer {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 44)
                         .onAppear { Task { await loadNewer() } }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.m)
         }
         .scrollPosition($position)
         .defaultScrollAnchor(Self.debugTop || opensAtMessage ? .top : .bottom)
@@ -110,7 +104,7 @@ struct LarkChatView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await askJarvis() } } label: { Label("让 Jarvis 总结", systemImage: "sparkles") }
+                Button { Task { await askJarvis() } } label: { Label("让 Jarvis 总结", systemImage: Theme.Icon.ai) }
             }
         }
         .task {
@@ -118,13 +112,13 @@ struct LarkChatView: View {
             // The last messages seen here paint at once (offline too); the network only brings them up to date.
             // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
             // opens at its first unread message: the cache serves when it reaches back that far.
-            if messages.isEmpty, conversation.focus == nil,
+            if pager.messages.isEmpty, conversation.focus == nil,
                let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty,
                !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
-                messages = cached
-                hasOlder = true
-                olderCursor = cached.first?.position
-                newerCursor = cached.last?.position
+                pager.messages = cached
+                pager.hasOlder = true
+                pager.olderCursor = cached.first?.position
+                pager.newerCursor = cached.last?.position
                 let read = conversation.readPosition ?? "0"
                 if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
             }
@@ -141,14 +135,14 @@ struct LarkChatView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: Theme.Space.s) {
             TextField("回复 \(conversation.name)", text: $text, axis: .vertical)
                 .lineLimit(1...5)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.s)
+                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
             Button { Task { await send() } } label: {
-                Group { if sending { ProgressView().tint(.white) } else { Image(systemName: "arrow.up").font(Theme.Font.heading) } }
+                Group { if sending { ProgressView().tint(.white) } else { Image(systemName: Theme.Icon.send).font(Theme.Font.heading) } }
                     .frame(width: 36, height: 36)
             }
             .themedButton(prominent: true)
@@ -156,8 +150,8 @@ struct LarkChatView: View {
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("发送")
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.bottom, Theme.Space.s)
     }
 
     // MARK: Jumps
@@ -165,17 +159,17 @@ struct LarkChatView: View {
     /// Unread messages from others that have not been on screen yet.
     private var unseenNew: Int {
         guard let anchor else { return 0 }
-        let seenUnread = messages.filter { !$0.isMine && !$0.isSystem && seen.contains($0.position) && LarkPosition.less(anchor, $0.position) }.count
+        let seenUnread = pager.messages.filter { !$0.isMine && !$0.isSystem && pager.seen.contains($0.position) && LarkPosition.less(anchor, $0.position) }.count
         return max(0, conversation.unread - seenUnread)
     }
 
     @ViewBuilder private var jumpToLatestButton: some View {
-        if hasNewer || !atBottom {
+        if pager.hasNewer || !atBottom {
             let n = unseenNew
             Button { Task { await jumpToLatest() } } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold))
-                    if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(Theme.Font.caption.weight(.medium)).lineLimit(1) }
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.expand).font(.system(size: 13, weight: .bold))
+                    if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(Theme.Font.captionMedium).lineLimit(1) }
                 }
                 .foregroundStyle(LarkColor.blue)
                 .padding(.horizontal, n > 0 ? 12 : 0)
@@ -183,24 +177,24 @@ struct LarkChatView: View {
                 .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 14)
-            .padding(.bottom, 8)
+            .padding(.trailing, Theme.Space.l)
+            .padding(.bottom, Theme.Space.s)
             .accessibilityLabel(n > 0 ? "\(n) 条新消息，回到最新" : "回到最新")
             .transition(.scale.combined(with: .opacity))
         }
     }
 
     @ViewBuilder private var mentionButton: some View {
-        if let mention, !seen.contains(mention) {
+        if let mention, !pager.seen.contains(mention) {
             Button { Task { await jump(to: mention) } } label: {
-                Label("有人@你", systemImage: "at").font(Theme.Font.caption.weight(.medium)).lineLimit(1)
+                Label("有人@你", systemImage: "at").font(Theme.Font.captionMedium).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
-                    .padding(.horizontal, 12).frame(minHeight: 34)
+                    .padding(.horizontal, Theme.Space.m).frame(minHeight: 34)
                     .surface(interactive: true, in: .capsule)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 14)
-            .padding(.top, 8)
+            .padding(.trailing, Theme.Space.l)
+            .padding(.top, Theme.Space.s)
         }
     }
 
@@ -243,12 +237,8 @@ struct LarkChatView: View {
     // MARK: Loading
 
     private func apply(_ r: APIClient.LarkMessages) {
-        messages = r.messages
+        pager.replace(with: r)
         if !r.hasNewer.map({ $0 }).isTrue { StateCache.save("lark-chat-\(conversation.id)", Array(r.messages.suffix(80))) }
-        hasOlder = r.hasOlder
-        hasNewer = r.hasNewer ?? false
-        olderCursor = r.olderCursor ?? r.messages.first?.position
-        newerCursor = r.newerCursor ?? r.messages.last?.position
     }
 
     private func load() async {
@@ -256,23 +246,23 @@ struct LarkChatView: View {
         do {
             if let focus = conversation.focus {
                 apply(try await api.larkMessages(conversation.id, around: focus))
-                readCursor = messages.last?.position
-                if let m = messages.first(where: { $0.position == focus }) { await scroll(to: m.id) }
+                pager.readCursor = pager.messages.last?.position
+                if let m = pager.messages.first(where: { $0.position == focus }) { await scroll(to: m.id) }
             } else if opensAtMessage {
                 // Feishu opens an unread chat at its read position: the page around the first unread message.
                 let read = conversation.readPosition ?? "0"
                 anchor = read
-                readCursor = read
+                pager.readCursor = read
                 if let p = conversation.mentionPosition, LarkPosition.less(read, p) { mention = p }
                 apply(try await api.larkMessages(conversation.id, around: LarkPosition.next(read)))
-                if let first = messages.first(where: { LarkPosition.less(read, $0.position) }) {
+                if let first = pager.messages.first(where: { LarkPosition.less(read, $0.position) }) {
                     await scroll(to: first.id)
                 } else {
                     position.scrollTo(edge: .bottom)
                 }
             } else {
                 apply(try await api.larkMessages(conversation.id, topic: isTopic))
-                readCursor = messages.last?.position
+                pager.readCursor = pager.messages.last?.position
             }
             error = nil
             #if DEBUG
@@ -280,7 +270,7 @@ struct LarkChatView: View {
             if let focus = UserDefaults.standard.string(forKey: "larkFocus") { await scroll(to: focus) }
             // `-larkProfile <userId>` opens that person's card, `-larkPicker YES` the reaction picker on the last message.
             if let uid = UserDefaults.standard.string(forKey: "larkProfile") { person = LarkPersonRef(id: uid, name: "", feedID: conversation.id) }
-            if UserDefaults.standard.bool(forKey: "larkPicker"), let last = messages.last(where: { !$0.isSystem }) { debugPick = last }
+            if UserDefaults.standard.bool(forKey: "larkPicker"), let last = pager.messages.last(where: { !$0.isSystem }) { debugPick = last }
             // `-larkMoments <postId>` opens that removed post.
             if let post = UserDefaults.standard.string(forKey: "larkMoments") { debugPost = post }
             #endif
@@ -299,75 +289,65 @@ struct LarkChatView: View {
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
     private func refreshLatest() async {
-        guard !hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
-        let byID = Dictionary(r.messages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let updated = messages.map { byID[$0.id] ?? $0 }
-        let fresh = r.messages.filter { m in !messages.contains { $0.id == m.id } && (messages.last.map { LarkPosition.less($0.position, m.position) } ?? true) }
-        if updated != messages { messages = updated }
+        guard !pager.hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
+        let fresh = pager.refresh(with: r)
         guard !fresh.isEmpty else { return }
         let follow = atBottom
-        withAnimation(.snappy) { messages += fresh }
-        newerCursor = messages.last?.position
+        withAnimation(Theme.Motion.standard) { pager.add(fresh) }
         if follow { position.scrollTo(edge: .bottom) }
     }
 
     private func loadOlder() async {
-        guard let api = model.api, let cursor = olderCursor ?? messages.first?.position, !loadingOlder else { return }
+        guard let api = model.api, let cursor = pager.olderRequest, !loadingOlder else { return }
         loadingOlder = true
         defer { loadingOlder = false }
         guard let r = try? await api.larkMessages(conversation.id, before: cursor, topic: isTopic) else { return }
-        let have = Set(messages.map(\.id))
-        messages = r.messages.filter { !have.contains($0.id) } + messages
-        hasOlder = r.hasOlder
-        olderCursor = r.olderCursor ?? r.messages.first?.position
+        pager.prepend(r)
     }
 
     private func loadNewer() async {
-        guard let api = model.api, let cursor = newerCursor ?? messages.last?.position, !loadingNewer, hasNewer else { return }
+        guard let api = model.api, let cursor = pager.newerRequest, !loadingNewer, pager.hasNewer else { return }
         loadingNewer = true
         defer { loadingNewer = false }
         guard let r = try? await api.larkMessages(conversation.id, after: cursor) else { return }
-        let have = Set(messages.map(\.id))
-        messages += r.messages.filter { !have.contains($0.id) }
-        hasNewer = r.hasNewer ?? false
-        newerCursor = r.newerCursor ?? r.messages.last?.position ?? cursor
+        pager.append(r, from: cursor)
     }
 
     /// 回到最新: the latest page; the new-messages line goes away.
     private func jumpToLatest() async {
-        if hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
+        if pager.hasNewer, let api = model.api, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
             apply(r)
             anchor = nil
         }
-        withAnimation(.snappy) { position.scrollTo(edge: .bottom) }
+        withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .bottom) }
     }
 
     /// 有人@你: to the mention, loading the page around it if needed.
     private func jump(to target: String) async {
-        if let m = messages.first(where: { $0.position == target }) {
-            withAnimation(.snappy) { position.scrollTo(id: m.id, anchor: .top) }
+        if let m = pager.messages.first(where: { $0.position == target }) {
+            withAnimation(Theme.Motion.standard) { position.scrollTo(id: m.id, anchor: .top) }
             return
         }
         guard let api = model.api, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
         apply(r)
-        if let m = messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
+        if let m = pager.messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
     }
 
     // MARK: Reactions
 
     /// Toggles my reaction at once, then tells Feishu; the next poll brings the server's version (names…).
     private func react(_ m: LarkMessage, _ key: String) {
-        guard let i = messages.firstIndex(where: { $0.id == m.id }) else { return }
-        let me = messages.last(where: \.isMine)?.senderName ?? "我"
-        let (next, remove) = messages[i].togglingReaction(key, me: me)
-        withAnimation(.snappy) { messages[i] = next }
+        guard let i = pager.messages.firstIndex(where: { $0.id == m.id }) else { return }
+        let me = pager.messages.last(where: \.isMine)?.senderName ?? "我"
+        let (next, remove) = pager.messages[i].togglingReaction(key, me: me)
+        withAnimation(Theme.Motion.standard) { pager.messages[i] = next }
         Haptics.tap()
         Task {
             do {
                 try await model.api?.larkReact(m.id, key: key, remove: remove)
             } catch {
                 model.show(error)
-                if let j = messages.firstIndex(where: { $0.id == m.id }) { messages[j] = m }
+                if let j = pager.messages.firstIndex(where: { $0.id == m.id }) { pager.messages[j] = m }
             }
         }
     }
@@ -376,8 +356,7 @@ struct LarkChatView: View {
 
     /// A message reached the screen: once rows stop arriving, report everything up to the newest one seen.
     private func markSeen(_ m: LarkMessage) {
-        guard !seen.contains(m.position) else { return }
-        seen.insert(m.position)
+        guard pager.see(m) else { return }
         guard !isTopic else { return }
         reportTask?.cancel()
         reportTask = Task {
@@ -388,13 +367,7 @@ struct LarkChatView: View {
     }
 
     private func flushRead() {
-        guard !isTopic, let api = model.api else { return }
-        let cursor = readCursor ?? "0"
-        let newer = messages.filter { seen.contains($0.position) && LarkPosition.less(cursor, $0.position) }
-        guard let top = newer.max(by: { LarkPosition.less($0.position, $1.position) }) else { return }
-        let ids = messages.filter { m in !m.isMine && m.isRead != true && !m.isSystem && LarkPosition.less(cursor, m.position) && !LarkPosition.less(top.position, m.position) }.map(\.id)
-        readCursor = top.position
-        let report = APIClient.LarkReadReport(position: top.position, badgeCount: top.badgeCount, messageIDs: ids.isEmpty ? nil : ids)
+        guard !isTopic, let api = model.api, let report = pager.readReport() else { return }
         let feed = conversation.id
         Task { try? await api.larkRead(feed, report) }
     }
@@ -409,7 +382,7 @@ struct LarkChatView: View {
             text = ""
             Haptics.success()
             try? await Task.sleep(for: .milliseconds(800))
-            if hasNewer { await jumpToLatest() } else { await refreshLatest(); position.scrollTo(edge: .bottom) }
+            if pager.hasNewer { await jumpToLatest() } else { await refreshLatest(); position.scrollTo(edge: .bottom) }
         } catch {
             model.show(error)
         }
@@ -431,12 +404,12 @@ struct LarkChatView: View {
 /// Feishu's 以下为新消息 line above the first unread message.
 struct LarkNewMessagesDivider: View {
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
-            Text("以下为新消息").font(Theme.Font.label.weight(.medium)).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
+            Text("以下为新消息").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.Space.m)
         .accessibilityAddTraits(.isHeader)
     }
 }
@@ -463,10 +436,10 @@ struct LarkMessageRow: View {
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.vertical, Theme.Space.xs)
         } else {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Theme.Space.s) {
                 Group {
                     if grouped { Color.clear } else {
                         LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: 34)
@@ -478,12 +451,12 @@ struct LarkMessageRow: View {
                 .frame(width: 34, height: grouped ? 1 : 34)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     if !grouped && isGroup {
-                        HStack(spacing: 4) {
+                        HStack(spacing: Theme.Space.xs) {
                             Text(m.senderName).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 .onTapGesture { showProfile() }
                             if m.senderType == "bot" {
-                                Text("机器人").font(Theme.Font.label.weight(.semibold)).foregroundStyle(LarkColor.blue)
-                                    .padding(.horizontal, 4).padding(.vertical, 1).background(LarkColor.blue.opacity(0.12), in: .rect(cornerRadius: 3))
+                                Text("机器人").font(Theme.Font.labelStrong).foregroundStyle(LarkColor.blue)
+                                    .padding(.horizontal, Theme.Space.xs).padding(.vertical, 1).background(LarkColor.blue.opacity(0.12), in: .rect(cornerRadius: 3))
                             }
                         }
                     }
@@ -508,12 +481,12 @@ struct LarkMessageRow: View {
         let parts = m.parts ?? []
         if m.recalled {
             Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
+                .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         } else if parts.isEmpty {
             bubble { Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body) }
         } else if LarkPartsView.isBare(parts) {
-            if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, 4) }
+            if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, Theme.Space.xs) }
             LarkPartsView(parts: parts)
                 .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
                 .frame(maxWidth: parts.contains { $0.kind == "card" || $0.kind == "link" } ? .infinity : nil, alignment: .leading)
@@ -531,9 +504,9 @@ struct LarkMessageRow: View {
 
     private func bubble<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         c()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(message.isMine ? LarkColor.myBubble : LarkColor.otherBubble, in: .rect(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.m)
+            .background(message.isMine ? LarkColor.myBubble : LarkColor.otherBubble, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .contextMenu { menu }
     }
 
@@ -553,9 +526,9 @@ struct LarkMessageRow: View {
         Button {
             UIPasteboard.general.string = message.text
             Haptics.success()
-        } label: { Label("拷贝", systemImage: "doc.on.doc") }
+        } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
         if let id = message.senderID, !id.isEmpty, openProfile != nil {
-            Button { showProfile() } label: { Label("查看 \(message.senderName) 的资料", systemImage: "person.crop.circle") }
+            Button { showProfile() } label: { Label("查看 \(message.senderName) 的资料", systemImage: Theme.Icon.person) }
         }
     }
 
@@ -582,10 +555,10 @@ struct LarkMessageRow: View {
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         if replies > 0 || m.edited == true || !LarkChatView.continues(m, after: nil) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 if replies > 0 && !inThread {
                     Button { showThread = true } label: {
-                        Label("\(replies) 条回复", systemImage: "arrowshape.turn.up.left").foregroundStyle(LarkColor.blue)
+                        Label("\(replies) 条回复", systemImage: Theme.Icon.reply).foregroundStyle(LarkColor.blue)
                     }
                     .buttonStyle(.plain)
                 }
@@ -646,18 +619,18 @@ struct LarkThreadView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
-                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
+                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
                     }
-                    .padding(.vertical, 12)
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger) }
+                    .padding(.vertical, Theme.Space.m)
+                    if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
                     ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
                         let prev = i > 0 ? replies[i - 1] : nil
                         LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
                             .padding(.top, LarkChatView.continues(m, after: prev) ? 3 : 12)
                     }
                 }
-                .padding(12)
+                .padding(Theme.Space.m)
             }
             .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
             .environment(\.larkOpenProfile, { person = $0 })
@@ -686,7 +659,7 @@ struct LarkReplyQuote: View {
     var reply: LarkReplyTo
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Capsule().fill(Color.primary.opacity(0.2)).frame(width: 2.5)
             Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.text))")
                 .font(Theme.Font.caption)
@@ -704,7 +677,7 @@ struct LarkReactionChip: View {
     var body: some View {
         let media = LarkMedia.shared
         let users = reaction.users ?? []
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.xs) {
             if let url = media.emoji(reaction.key)?.url {
                 LarkRemoteImage(url: url, maxPixel: 64, contentMode: .fit).frame(width: 17, height: 17)
             } else {
@@ -715,8 +688,8 @@ struct LarkReactionChip: View {
                 .foregroundStyle(reaction.mine == true ? LarkColor.blue : .secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.xs)
         .background(reaction.mine == true ? LarkColor.blue.opacity(0.12) : Color.primary.opacity(0.05), in: .capsule)
         .accessibilityLabel("\(media.emoji(reaction.key)?.label ?? reaction.key) \(reaction.count)")
     }

@@ -102,11 +102,10 @@ struct MailDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 Text(summary.subject?.isEmpty == false ? summary.subject! : "（无主题）").font(Theme.Font.title)
-                HStack(alignment: .top, spacing: 12) {
-                    Circle().fill(Theme.accent.opacity(0.15)).frame(width: 40, height: 40)
-                        .overlay(Text(String((summary.from?.display ?? "?").prefix(1))).font(Theme.Font.heading).foregroundStyle(Theme.accent))
+                HStack(alignment: .top, spacing: Theme.Space.m) {
+                    Monogram(name: summary.from?.display ?? "", fill: Theme.accent.opacity(0.15), ink: Theme.accent)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(summary.from?.display ?? "").font(Theme.Font.secondary.weight(.semibold))
+                        Text(summary.from?.display ?? "").font(Theme.Font.secondaryStrong)
                         Text(summary.from?.email ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                         if let to = message?.to, !to.isEmpty {
                             Text("收件人：" + to.map(\.display).joined(separator: "，")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -137,15 +136,15 @@ struct MailDetailView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(40)
                 }
             }
-            .padding(20)
+            .padding(Theme.Space.xl)
         }
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
-                Button { askClaude = true } label: { Label("让 Claude 处理", systemImage: "sparkles") }
+                Button { askClaude = true } label: { Label("让 Claude 处理", systemImage: Theme.Icon.ai) }
                 Spacer()
                 Button {
                     reply = ComposeDraft.reply(to: summary, message: message)
-                } label: { Image(systemName: "arrowshape.turn.up.left") }
+                } label: { Image(systemName: Theme.Icon.reply) }
                     .disabled(message == nil)
             }
         }
@@ -283,7 +282,7 @@ struct ComposeView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        if sending { ProgressView() } else { Label("发送", systemImage: "paperplane.fill") }
+                        if sending { ProgressView() } else { Label("发送", systemImage: Theme.Icon.sendMail) }
                     }
                     .disabled(sending || draft.to.isEmpty)
                 }
@@ -325,8 +324,7 @@ struct MailAccountsView: View {
                 Section {
                     ForEach(accounts) { a in
                         HStack {
-                            Image(systemName: a.provider == "gmail" ? "g.circle.fill" : a.provider == "feishu" ? "paperplane.circle.fill" : "envelope.circle.fill")
-                                .font(Theme.Font.title).foregroundStyle(Theme.accent)
+                            MailProviderMark(provider: a.provider ?? "")
                             VStack(alignment: .leading) {
                                 Text(a.email).font(Theme.Font.heading)
                                 Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? "Gmail · Google 账号登录" : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
@@ -361,18 +359,51 @@ struct MailAccountsView: View {
     private func load() async { accounts = (try? await model.api?.mailAccounts()) ?? [] }
 }
 
+/// An account's provider: Gmail's and 飞书's own marks, an envelope for any other IMAP server.
+struct MailProviderMark: View {
+    var provider: String
+
+    var body: some View {
+        Group {
+            switch provider {
+            case "gmail": Image(Theme.Brand.gmail).resizable().scaledToFit()
+            case "feishu": Image(Theme.Brand.lark).resizable().scaledToFit()
+            default: Image(systemName: "envelope.circle.fill").resizable().scaledToFit().foregroundStyle(Theme.accent)
+            }
+        }
+        .frame(width: 28, height: 28)
+    }
+}
+
+/// Google's sign-in button as its branding guidelines draw it (developers.google.com/identity/branding-guidelines):
+/// the G on white with a gray outline in light mode, on #131314 in dark mode; not the app's accent.
+struct GoogleSignInLabel: View {
+    @Environment(\.colorScheme) private var scheme
+    var title: String
+    var busy = false
+
+    var body: some View {
+        let dark = scheme == .dark
+        HStack(spacing: Theme.Space.m) {
+            if busy { ProgressView().controlSize(.small) } else {
+                Image(Theme.Brand.google).resizable().scaledToFit().frame(width: 20, height: 20)
+            }
+            Text(title).font(Theme.Font.heading).lineLimit(1)
+        }
+        .foregroundStyle(Color(hex: dark ? 0xE3E3E3 : 0x1F1F1F))
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .background(Color(hex: dark ? 0x131314 : 0xFFFFFF), in: .capsule)
+        .overlay(Capsule().stroke(Color(hex: dark ? 0x8E918F : 0x747775), lineWidth: 1))
+        .contentShape(.capsule)
+    }
+}
+
 struct AddMailAccountView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.webAuthenticationSession) private var webAuth
-    enum Kind: String, CaseIterable, Identifiable { case gmail = "Gmail", feishu = "飞书", imap = "其他 IMAP"; var id: String { rawValue } }
-    @State private var kind: Kind = .gmail
-    @State private var email = ""
-    @State private var password = ""
-    @State private var imapHost = ""
-    @State private var imapPort = "993"
-    @State private var smtpHost = ""
-    @State private var smtpPort = "465"
+    typealias Kind = MailAccountForm.Kind
+    @State private var form = MailAccountForm()
     @State private var saving = false
     @State private var error: String?
     @State private var pasted = ""
@@ -389,11 +420,11 @@ struct AddMailAccountView: View {
                         Button {
                             if let s = UIPasteboard.general.string { pasted = s }
                             Task { await guess() }
-                        } label: { Label("从剪贴板识别", systemImage: "doc.on.clipboard") }
+                        } label: { Label("从剪贴板识别", systemImage: Theme.Icon.paste) }
                             .themedButton()
                         Spacer()
                         Button { Task { await guess() } } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: Theme.Space.sm) {
                                 if guessing { ProgressView().controlSize(.small) }
                                 Text("识别并添加")
                             }
@@ -402,24 +433,19 @@ struct AddMailAccountView: View {
                         .disabled(guessing || pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 } header: {
-                    Label("AI 一键添加", systemImage: "sparkles")
+                    Label("AI 一键添加", systemImage: Theme.Icon.ai)
                 } footer: {
                     if let aiNote { Text(aiNote) } else { Text("信息齐全会直接连接并添加；缺什么会填进下面的表单让你补。") }
                 }
-                Picker("类型", selection: $kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
+                Picker("类型", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
-                if kind == .gmail {
+                if form.kind == .gmail {
                     Section {
                         Button { Task { await signInWithGoogle() } } label: {
-                            HStack(spacing: 8) {
-                                if saving { ProgressView().controlSize(.small) } else { Image(systemName: "g.circle.fill") }
-                                Text(saving ? "正在连接 Gmail…" : "使用 Google 账号登录").lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity)
+                            GoogleSignInLabel(title: saving ? "正在连接 Gmail…" : "使用 Google 账号登录", busy: saving)
                         }
-                        .themedButton(prominent: true)
-                        .controlSize(.large)
+                        .buttonStyle(.plain)
                         .disabled(saving)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
@@ -428,22 +454,22 @@ struct AddMailAccountView: View {
                     }
                 } else {
                     Section {
-                        TextField("邮箱地址", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        SecureField("密码 / 授权码", text: $password)
+                        TextField("邮箱地址", text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        SecureField("密码 / 授权码", text: $form.password)
                     } footer: {
-                        switch kind {
+                        switch form.kind {
                         case .gmail: EmptyView()
                         case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
                         case .imap: Text("QQ / 163 / Outlook / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。")
                         }
                     }
                 }
-                if kind == .imap {
+                if form.kind == .imap {
                     Section("服务器（可留空自动识别）") {
-                        TextField("IMAP 服务器", text: $imapHost).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("IMAP 端口", text: $imapPort).keyboardType(.numberPad)
-                        TextField("SMTP 服务器", text: $smtpHost).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("SMTP 端口", text: $smtpPort).keyboardType(.numberPad)
+                        TextField("IMAP 服务器", text: $form.imapHost).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField("IMAP 端口", text: $form.imapPort).keyboardType(.numberPad)
+                        TextField("SMTP 服务器", text: $form.smtpHost).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField("SMTP 端口", text: $form.smtpPort).keyboardType(.numberPad)
                     }
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
@@ -453,10 +479,10 @@ struct AddMailAccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                if kind != .gmail {
+                if form.kind != .gmail {
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
-                            .disabled(saving || email.isEmpty || password.isEmpty)
+                            .disabled(saving || form.email.isEmpty || form.password.isEmpty)
                     }
                 }
             }
@@ -471,29 +497,16 @@ struct AddMailAccountView: View {
         error = nil
         do {
             let g = try await api.guessMailAccount(pasted)
-            let a = g.account
-            email = a.email
-            password = a.password ?? ""
-            switch a.provider {
-            case "gmail": kind = .gmail
-            case "feishu": kind = .feishu
-            default:
-                kind = .imap
-                imapHost = a.imapHost ?? ""
-                imapPort = a.imapPort.map(String.init) ?? "993"
-                smtpHost = a.smtpHost ?? ""
-                smtpPort = a.smtpPort.map(String.init) ?? "465"
-            }
             aiNote = g.note
-            if kind == .gmail {
-                // Gmail no longer takes passwords from third-party clients.
+            switch form.fill(from: g) {
+            case .signIn(let note):
                 Haptics.attention()
-                aiNote = "Gmail 不再支持用密码登录第三方客户端，点「使用 Google 账号登录」授权。"
-            } else if g.missing.isEmpty {
+                aiNote = note
+            case .save:
                 await save()
-            } else {
+            case .ask(let note):
                 Haptics.attention()
-                aiNote = (g.note.map { $0 + " " } ?? "") + "还缺：" + g.missing.map { ["email": "邮箱", "password": "密码"][$0] ?? $0 }.joined(separator: "、")
+                aiNote = note
             }
         } catch {
             if !error.isCancellation { self.error = "识别失败：\(error.localizedDescription)" }
@@ -525,22 +538,9 @@ struct AddMailAccountView: View {
     }
 
     private func save() async {
-        guard let api = model.api else { return }
+        guard let api = model.api, let req = form.request else { return }
         saving = true
         defer { saving = false }
-        var req = APIClient.AddAccount(name: email, email: email, auth: "password")
-        switch kind {
-        case .gmail:
-            return
-        case .feishu:
-            req.provider = "feishu"
-            req.password = password
-        case .imap:
-            req.provider = "imap"
-            req.password = password
-            if !imapHost.isEmpty { req.imapHost = imapHost; req.imapPort = Int(imapPort) }
-            if !smtpHost.isEmpty { req.smtpHost = smtpHost; req.smtpPort = Int(smtpPort); req.smtpSecurity = smtpPort == "587" ? "starttls" : "tls" }
-        }
         do {
             _ = try await api.addMailAccount(req)
             Haptics.success()

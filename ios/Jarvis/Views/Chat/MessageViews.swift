@@ -35,14 +35,14 @@ extension MarkdownUI.Theme {
                 config.label
                     .relativeLineSpacing(.em(0.2))
                     .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(13.0 / 17)) }
-                    .padding(12)
+                    .padding(Theme.Space.m)
             }
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .markdownMargin(top: 4, bottom: 12)
         }
         .blockquote { config in
             config.label
-                .padding(.leading, 12)
+                .padding(.leading, Theme.Space.m)
                 .overlay(alignment: .leading) { Rectangle().fill(Theme.accent.opacity(0.5)).frame(width: 3) }
                 .markdownTextStyle { ForegroundColor(.secondary) }
         }
@@ -102,8 +102,8 @@ struct UserBubble: View {
                     Text(shown)
                         .font(Theme.Font.body).lineHeight(.body)
                         .foregroundStyle(Theme.userBubbleText)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.vertical, Theme.Space.m)
                         .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                         .messageLongPress(id: item.id)
                 }
@@ -163,7 +163,7 @@ struct PeerMessage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Label("来自 \(from)", systemImage: "arrow.left.arrow.right.circle")
-                .font(Theme.Font.label.weight(.semibold))
+                .font(Theme.Font.labelStrong)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Text(item.text ?? "")
@@ -171,10 +171,10 @@ struct PeerMessage: View {
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
+        .padding(Theme.Space.m)
         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
-        .padding(.trailing, 32)
+        .padding(.trailing, Theme.Space.xxl)
         .messageLongPress(id: item.id)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
     }
@@ -191,7 +191,7 @@ struct PendingBubble: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             if !msg.images.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Spacer(minLength: 48)
                     ForEach(Array(msg.images.enumerated()), id: \.offset) { _, p in
                         Theme.Fill.chip
@@ -201,35 +201,35 @@ struct PendingBubble: View {
                     }
                 }
             }
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: Theme.Space.s) {
                 Spacer(minLength: 40)
                 switch msg.state {
-                case .sending: Image(systemName: "clock").font(Theme.Font.label).foregroundStyle(.tertiary)
+                case .sending: Image(systemName: Theme.Icon.time).font(Theme.Font.label).foregroundStyle(.tertiary)
                 case .sent: EmptyView()
                 case .waiting:
                     Menu {
-                        Button(action: retry) { Label("现在重试", systemImage: "arrow.clockwise") }
-                        Button(role: .destructive, action: discard) { Label("不发了", systemImage: "trash") }
+                        Button(action: retry) { Label("现在重试", systemImage: Theme.Icon.retry) }
+                        Button(role: .destructive, action: discard) { Label("不发了", systemImage: Theme.Icon.delete) }
                     } label: {
-                        Image(systemName: "clock").font(Theme.Font.caption).foregroundStyle(.secondary)
+                        Image(systemName: Theme.Icon.time).font(Theme.Font.caption).foregroundStyle(.secondary)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
                     }
                     .accessibilityLabel("等网络，连上后自动发送")
                 case .failed:
                     Menu {
-                        Button(action: retry) { Label("重发", systemImage: "arrow.clockwise") }
-                        Button(role: .destructive, action: discard) { Label("删除", systemImage: "trash") }
+                        Button(action: retry) { Label("重发", systemImage: Theme.Icon.retry) }
+                        Button(role: .destructive, action: discard) { Label("删除", systemImage: Theme.Icon.delete) }
                     } label: {
-                        Image(systemName: "exclamationmark.circle.fill").font(Theme.Font.body).foregroundStyle(Theme.danger)
+                        Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.body).foregroundStyle(Theme.danger)
                     }
                     .accessibilityLabel("发送失败，重发或删除")
                 }
                 Text(ContextRef.parse(msg.text).rest)
                     .font(Theme.Font.body).lineHeight(.body)
                     .foregroundStyle(Theme.userBubbleText)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.vertical, Theme.Space.m)
                     .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
@@ -260,8 +260,8 @@ struct MergedUserBubble: View {
                     Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
             .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
             .messageLongPress(id: items.first?.id ?? "")
         }
@@ -280,7 +280,7 @@ struct SentPhotos: View {
     @State private var viewer: Int?
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Spacer(minLength: 48)
             ForEach(Array(images.enumerated()), id: \.offset) { i, p in
                 let side: CGFloat = images.count == 1 ? 140 : 84
@@ -312,7 +312,7 @@ struct AttachedImages: View {
     @State private var viewer: Int?
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Spacer(minLength: 48)
             ForEach(Array(paths.enumerated()), id: \.element) { i, path in
                 Button { if loaded[path] != nil { viewer = i } } label: { thumb(path) }
@@ -391,8 +391,8 @@ struct AssistantText: View {
 struct CopyButton: View {
     var text: String
     var body: some View {
-        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: "doc.on.doc") }
-        ShareLink(item: text) { Label("分享", systemImage: "square.and.arrow.up") }
+        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+        ShareLink(item: text) { Label("分享", systemImage: Theme.Icon.share) }
     }
 }
 
@@ -410,15 +410,15 @@ struct ThinkingRow: View {
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {
-                withAnimation(.snappy) { open.toggle() }
+                withAnimation(Theme.Motion.standard) { open.toggle() }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "brain").font(Theme.Font.label)
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.memory).font(Theme.Font.label)
                     Text(open ? "思考过程" : ToolPresentation.firstLine(item.text ?? ""))
                         .font(Theme.Font.label)
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(Theme.Font.label).rotationEffect(.degrees(open ? 90 : 0))
+                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.label).rotationEffect(.degrees(open ? 90 : 0))
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, compact ? 10 : 0)
@@ -431,7 +431,7 @@ struct ThinkingRow: View {
                     .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                    .padding(.leading, 10)
+                    .padding(.leading, Theme.Space.m)
                     .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: 2) }
                     .padding(.horizontal, compact ? 10 : 0)
             }
@@ -467,10 +467,10 @@ struct NoticeRow: View {
 
     private var long: some View {
         Button {
-            withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+            withAnimation(Theme.Motion.state) { expanded.toggle() }
         } label: {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle").font(Theme.Font.label).foregroundStyle(.tertiary)
+            HStack(alignment: .top, spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.info).font(Theme.Font.label).foregroundStyle(.tertiary)
                 Text(item.text ?? "")
                     .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
@@ -478,8 +478,8 @@ struct NoticeRow: View {
                     .lineLimit(expanded ? nil : 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contentShape(.rect)
         }
@@ -492,8 +492,8 @@ struct NoticeRow: View {
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
             .background(Theme.Fill.well, in: .capsule)
             .frame(maxWidth: .infinity)
     }
@@ -501,14 +501,14 @@ struct NoticeRow: View {
     /// A background task woke the agent: opens the work that follows, like a message would.
     private var wake: some View {
         let w = Self.wakeSummary(item)
-        return HStack(spacing: 6) {
-            Image(systemName: w.failed ? "exclamationmark.circle.fill" : "bell.fill")
+        return HStack(spacing: Theme.Space.sm) {
+            Image(systemName: w.failed ? Theme.Icon.errorFilled : "bell.fill")
                 .foregroundStyle(w.failed ? Theme.danger : Theme.accent)
             Text(w.text).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
         }
         .font(Theme.Font.label)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.sm)
         .background(Theme.Fill.well, in: .capsule)
         .frame(maxWidth: .infinity)
     }
@@ -551,22 +551,22 @@ struct WakeChip: View {
         let summary = notices.count == 1 ? NoticeRow.wakeSummary(notices[0]) : nil
         let failed = notices.contains { NoticeRow.wakeSummary($0).failed }
         Button(action: open) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if live {
                     ProgressView().controlSize(.mini)
                 } else {
-                    Image(systemName: failed ? "exclamationmark.circle.fill" : "bell.fill")
+                    Image(systemName: failed ? Theme.Icon.errorFilled : "bell.fill")
                         .foregroundStyle(failed ? Theme.danger : Theme.accent)
                 }
                 Text(live ? "后台任务完成 · 正在处理" : summary?.text ?? "\(notices.count) 个后台任务完成")
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold))
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
             }
             .font(Theme.Font.caption)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
             .background(Theme.Fill.well, in: .capsule)
             .contentShape(.capsule)
         }
@@ -588,7 +588,7 @@ struct WakeDrawer<Content: View>: View {
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
                     content()
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
             .navigationTitle(notices.count > 1 ? "\(notices.count) 个后台任务完成" : "后台任务完成")
@@ -611,16 +611,16 @@ struct RecapCard: View {
             Haptics.tap()
             open = true
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
                 Text("离开期间回顾").lineLimit(1)
                 if let ts = item.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
-                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold))
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
             }
             .font(Theme.Font.caption)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
             .background(Theme.Fill.well, in: .capsule)
             .contentShape(.capsule)
         }
@@ -645,17 +645,17 @@ struct RecapStrip: View {
             Haptics.tap()
             close()
         } label: {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 Capsule().fill(Theme.accent).frame(width: 3)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
-                        Text("离开期间回顾").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                        Text("离开期间回顾").font(Theme.Font.captionStrong).lineLimit(1)
                         if let ts = item.ts, ts.isMeaningful {
                             Text("· " + Fmt.relative(ts)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 4)
-                        Image(systemName: "xmark").font(Theme.Font.label.weight(.bold)).foregroundStyle(.tertiary)
+                        Image(systemName: Theme.Icon.close).font(Theme.Font.labelHeavy).foregroundStyle(.tertiary)
                     }
                     Text(Fmt.plain(item.text ?? ""))
                         .font(Theme.Font.secondary)
@@ -666,8 +666,8 @@ struct RecapStrip: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true) // as tall as the text: the bar would take all the room
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.m)
             .background(Theme.accent.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contentShape(.rect(cornerRadius: Theme.Radius.card))
         }
@@ -694,7 +694,7 @@ struct RecapDrawer: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
             .navigationTitle("离开期间回顾")

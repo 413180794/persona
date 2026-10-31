@@ -245,11 +245,29 @@ struct ChatView: View {
             scratch.frozenSettled = built.settled
             blocks = built.blocks
         }
-        let lines = unfoldWork(chatLines(Self.debugTrim(blocks), live: key.live))
+        let lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live)
         scratch.lines = lines
         scratch.linesKey = key
         return lines
     }
+
+    /// What builds the lines from the blocks, with what is open now.
+    private var lineBuilder: ChatLines {
+        ChatLines(openWork: openWork, openAll: Self.debugOpenAll, openRuns: openRuns, chipRuns: AppStyle.current.usesBeautifulUI,
+                  foldsIntoRun: foldsIntoRun)
+    }
+    private func unfoldWork(_ lines: [ChatLine]) -> [ChatLine] { lineBuilder.unfold(lines) }
+    private func isOpen(_ work: String) -> Bool { lineBuilder.isOpen(work) }
+    private func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
+    private func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
+        lineBuilder.runID(holding: call, group: group, items: items)
+    }
+    private func foldsIntoRun(_ call: ToolCall) -> Bool {
+        guard let id = call.use.toolUseID else { return true }
+        return !store.tasks.started.contains(id) && store.tasks.notes[id] == nil
+    }
+
+    static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] { ChatLines.foldAPIErrors(lines) }
 
     /// How many leading elements satisfy `pred` (true for a prefix, then false): a binary search.
     static func prefixCount(_ items: [Item], _ pred: (Item) -> Bool) -> Int {
@@ -259,97 +277,6 @@ struct ChatView: View {
             if pred(items[mid]) { lo = mid + 1 } else { hi = mid }
         }
         return lo
-    }
-
-    private func chatLines(_ blocks: [ChatBlock], live liveID: String?) -> [ChatLine] {
-        var out: [ChatLine] = []
-        for block in blocks {
-            switch block {
-            case .row(let r):
-                out.append(.row(r))
-            case .turn(var t):
-                // Work a background task woke the agent for opens with that notice, where a message would be.
-                var wokeAt: Date?
-                if let first = t.ordered.first, case .notice(let n) = first, n.wake == true {
-                    out.append(.row(first))
-                    t.ordered.removeFirst()
-                    wokeAt = n.ts
-                }
-                let segments = Self.segments(t.ordered)
-                let groupID = "wt-" + t.id
-                let messages = segments.compactMap(\.user)
-                // A finished turn that took several messages reads as one exchange: the messages in one bubble,
-                // one work line for everything, the final answer. Opening the work line splits it back up.
-                if t.id != liveID && messages.count > 1 {
-                    if !openWork.contains(groupID) {
-                        let photos = segments.flatMap { Self.photos($0.rows) }
-                        if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
-                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
-                        let answer = t.ordered.lastIndex { if case .assistant = $0 { true } else { false } }
-                        let rest = t.ordered.enumerated().filter { n, r in
-                            if case .user = r { return false }
-                            return n != answer
-                        }.map(\.element)
-                        out.append(.work(id: groupID, items: Self.workItems(rest), live: false, start: t.startedAt, end: t.endedAt))
-                        if let answer { out.append(.row(t.ordered[answer])) }
-                        if !t.wakes.isEmpty { out.append(.wakes(t, live: false)) }
-                        out += t.trailing.map { .row($0) }
-                        continue
-                    }
-                    out.append(.splitHeader(id: groupID, count: messages.count))
-                }
-                for (k, seg) in segments.enumerated() {
-                    // Once the answer is in and a background task woke the agent, the new work runs behind the chip.
-                    let live = t.id == liveID && k == segments.count - 1 && t.tail.isEmpty
-                    // Photos sent with the message (Claude inlines a pasted image path as an image block) sit above
-                    // its text, as they did while it was being sent — not in the agent's work.
-                    let photos = Self.photos(seg.rows)
-                    if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
-                    if let u = seg.user { out.append(.row(u)) }
-                    let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
-                    let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
-                    if !items.isEmpty || live {
-                        let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
-                        out.append(.work(id: id, items: items, live: live,
-                                         start: seg.user?.firstTS ?? (k == 0 ? wokeAt : nil) ?? seg.rows.first?.firstTS ?? t.startedAt,
-                                         end: seg.rows.last?.lastTS))
-                    }
-                    if let last { out.append(.row(seg.rows[last])) }
-                }
-                // After the answer: one small line for the background tasks; what they led to opens in a drawer.
-                if !t.wakes.isEmpty { out.append(.wakes(t, live: t.id == liveID && !t.tail.isEmpty)) }
-                out += t.trailing.map { .row($0) }
-            }
-        }
-        return Self.foldAPIErrors(out)
-    }
-
-    /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error
-    /// again right after, with nothing but a retry ("继续") between, folds into the first with a count.
-    static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] {
-        var out: [ChatLine] = []
-        out.reserveCapacity(lines.count)
-        for line in lines {
-            guard case .row(let r) = line.content, let item = r.errorCandidate, let info = APIErrorInfo.parse(item.text) else {
-                out.append(line)
-                continue
-            }
-            if let last = out.lastIndex(where: { if case .apiError = $0.content { true } else { false } }),
-               case .apiError(let first, let prev, let n) = out[last].content, prev.signature == info.signature,
-               out[(last + 1)...].allSatisfy(isRetry) {
-                out.removeSubrange((last + 1)...)
-                out[last] = .apiError(item: first, info: info, count: n + 1)
-                continue
-            }
-            out.append(.apiError(item: item, info: info, count: 1))
-        }
-        return out
-    }
-
-    private static func isRetry(_ line: ChatLine) -> Bool {
-        guard case .row(.user(let i)) = line.content else { return false }
-        let t = (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return ["继续", "重试", "再试一次", "continue", "retry", "go on"].contains(t)
     }
 
     #if DEBUG
@@ -445,76 +372,6 @@ struct ChatView: View {
     }
     #endif
 
-    /// Open work lines get their steps as lines of their own and a 收起 line after the last.
-    private func unfoldWork(_ lines: [ChatLine]) -> [ChatLine] {
-        var out: [ChatLine] = []
-        out.reserveCapacity(lines.count)
-        for line in lines {
-            out.append(line)
-            if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
-                // The BeautifulUI style folds runs of tool calls into a line of chips; the others list every step.
-                out += AppStyle.current.usesBeautifulUI ? runLines(group: id, items: items)
-                    : items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
-                out.append(.workEnd(group: id, count: items.reduce(0) { n, item in
-                    if case .step(.folded(let f)) = item { n + (f.fold.map { $0.tools + $0.thoughts } ?? 1) } else { n + 1 }
-                }))
-            }
-        }
-        return out
-    }
-
-    private func isOpen(_ work: String) -> Bool { openWork.contains(work) != Self.debugOpenAll }
-
-    /// An open work line's steps: two or more tool calls in a row fold into one line of chips (`ToolRunRow`); opened,
-    /// their rows follow it, one lazy line per call as before. Thoughts, notices and words stay lines of their own, and
-    /// so does a call that went to the background: its row says how the task went (后台 · 已完成).
-    private func runLines(group: String, items: [WorkItem]) -> [ChatLine] {
-        var out: [ChatLine] = []
-        var run: [ToolCall] = []
-        var runStart = 0
-        func flush() {
-            defer { run = [] }
-            guard run.count > 1 else {
-                if let c = run.first { out.append(.workStep(group: group, item: .step(.call(c)), first: runStart == 0)) }
-                return
-            }
-            let id = group + "/run-" + run[0].id
-            let open = isRunOpen(id)
-            out.append(.toolRun(id: id, calls: run, open: open, first: runStart == 0))
-            if open { out += run.map { .workStep(group: group, item: .step(.call($0)), first: false) } }
-        }
-        for (n, item) in items.enumerated() {
-            if case .step(.call(let c)) = item, foldsIntoRun(c) {
-                if run.isEmpty { runStart = n }
-                run.append(c)
-                continue
-            }
-            flush()
-            out.append(.workStep(group: group, item: item, first: n == 0))
-        }
-        flush()
-        return out
-    }
-
-    private func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
-
-    private func foldsIntoRun(_ call: ToolCall) -> Bool {
-        guard let id = call.use.toolUseID else { return true }
-        return !store.tasks.started.contains(id) && store.tasks.notes[id] == nil
-    }
-
-    /// The run line (`runLines`) a call is folded into, if it is.
-    private func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
-        var run: [String] = []
-        func found() -> String? { run.count > 1 && run.contains(call) ? group + "/run-" + run[0] : nil }
-        for item in items {
-            if case .step(.call(let c)) = item, foldsIntoRun(c) { run.append(c.id); continue }
-            if let id = found() { return id }
-            run = []
-        }
-        return found()
-    }
-
     /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
     /// still on its own: folding from 收起 under the last step leaves the reply below it where it was. From the header,
     /// the header stays under the finger instead (what is above it holds still; the reply comes up to meet it).
@@ -567,49 +424,6 @@ struct ChatView: View {
         }
     }
 
-    private static func photos(_ rows: [ChatRow]) -> [Item] {
-        rows.compactMap { r -> Item? in
-            if case .image(let i) = r, i.role == "user", i.toolUseID == nil, i.image != nil { return i }
-            return nil
-        }
-    }
-
-    /// What a work line folds from these rows: tools, thoughts, notices and the agent's words.
-    private static func workItems(_ rows: [ChatRow]) -> [WorkItem] {
-        var items: [WorkItem] = []
-        for r in rows {
-            switch r {
-            case .thinking(let i):
-                if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.step(.thought(i))) }
-            case .tools(let steps): items += steps.map { .step($0) }
-            case .notice(let i): items.append(.step(.thought(i)))
-            case .assistant(let i): items.append(.text(i))
-            default: break
-            }
-        }
-        return items
-    }
-
-    /// A turn cut at each message: (message, what came after it until the next one).
-    private static func segments(_ ordered: [ChatRow]) -> [(user: ChatRow?, rows: [ChatRow])] {
-        var out: [(user: ChatRow?, rows: [ChatRow])] = []
-        var user: ChatRow?
-        var rows: [ChatRow] = []
-        var started = false
-        for r in ordered {
-            if case .user = r {
-                if started { out.append((user, rows)) }
-                user = r
-                rows = []
-            } else {
-                rows.append(r)
-            }
-            started = true
-        }
-        if started { out.append((user, rows)) }
-        return out
-    }
-
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
@@ -628,10 +442,10 @@ struct ChatView: View {
             Button {
                 toggleWork(id, fromHeader: true)
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "rectangle.split.1x2").font(Theme.Font.label)
                     Text("已按 \(count) 条消息拆开 · 收起").lineLimit(1).fixedSize()
-                    Image(systemName: "chevron.up").font(Theme.Font.label.weight(.semibold))
+                    Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
@@ -655,14 +469,14 @@ struct ChatView: View {
         case .workEnd(let group, let count):
             // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.up").font(Theme.Font.label.weight(.semibold))
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
                     Text("收起 \(count) 步").lineLimit(1).fixedSize()
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, WorkCardSlice.inset)
-                .padding(.vertical, 10)
+                .padding(.vertical, Theme.Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background { WorkCardSlice(top: false, bottom: true) }
                 .overlay(alignment: .top) { WorkCardSlice.separator }
@@ -699,7 +513,7 @@ struct ChatView: View {
             chunk.append(r)
         }
         flush()
-        let items = Self.workItems(process)
+        let items = ChatLines.workItems(process)
         if !items.isEmpty || live {
             results.append(.work(id: "dw-" + t.id, items: items, live: live,
                                  start: process.first?.firstTS, end: process.last?.lastTS))
@@ -794,7 +608,7 @@ struct ChatView: View {
         #if DEBUG
         scratch.endJumps += 1
         #endif
-        if animated { withAnimation(.snappy) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
+        if animated { withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .top) } } else { position.scrollTo(edge: .top) }
     }
 
     /// On entry / returning to the chat tab: at the newest (already the natural start of the flipped list).
@@ -832,7 +646,7 @@ struct ChatView: View {
         case .chat: chatPane.transition(.move(edge: .leading))
         case .terminal:
             TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
-                .padding(.horizontal, Theme.Space.l).padding(.bottom, 8)
+                .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
                 .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
@@ -846,7 +660,7 @@ struct ChatView: View {
     /// keyboard going down opens it again.
     private func terminalKeyboard(_ up: Bool) {
         guard style == .dev else { return }
-        withAnimation(.smooth(duration: 0.3)) { chrome.collapse = up ? chrome.maxCollapse : 0 }
+        withAnimation(Theme.Motion.layout) { chrome.collapse = up ? chrome.maxCollapse : 0 }
     }
 
     /// The custom header's full height (Agents; the assistant's floating bar): the other panes sit below it, the chat
@@ -936,7 +750,7 @@ struct ChatView: View {
         Haptics.tap()
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120)) // the opened work line's steps are laid out first
-            withAnimation(.snappy) { position.scrollTo(id: target, anchor: .center) }
+            withAnimation(Theme.Motion.standard) { position.scrollTo(id: target, anchor: .center) }
         }
     }
 
@@ -948,22 +762,22 @@ struct ChatView: View {
     @ViewBuilder private var footer: some View {
         if let a = viewedAgent {
             SubagentFooter(agent: a) { view(nil) }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
         } else {
-            mainFooter.padding(.top, 8)
+            mainFooter.padding(.top, Theme.Space.s)
         }
     }
 
     @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
-                    Image(systemName: "arrow.down").font(Theme.Font.body.weight(.semibold)).frame(width: 40, height: 40)
+                    Image(systemName: "arrow.down").font(Theme.Font.bodyStrong).frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("回到最新")
                 .themedButton()
                 .clipShape(.circle)
-                .padding(16)
+                .padding(Theme.Space.l)
                 .transition(.scale.combined(with: .opacity))
             }
     }
@@ -987,16 +801,16 @@ struct ChatView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 if viewing == nil, session?.isCodex != true, session?.isTraex != true {
-                    SessionModeBar(key: key, session: session).padding(.leading, 4)
+                    SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-            .animation(.snappy, value: status)
-            .animation(.snappy, value: model.interactions(for: key).map(\.id))
-            .animation(.snappy, value: pendingRecap?.id)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.bottom, Theme.Space.s)
+            .animation(Theme.Motion.standard, value: status)
+            .animation(Theme.Motion.standard, value: model.interactions(for: key).map(\.id))
+            .animation(Theme.Motion.standard, value: pendingRecap?.id)
             .onChange(of: model.drafts[key] ?? "") { _, draft in
                 if !draft.isEmpty, let recap = pendingRecap { dismissRecap(recap) } // typing closes it
             }
@@ -1018,7 +832,7 @@ struct ChatView: View {
         var all = (try? JSONDecoder().decode([String: String].self, from: closedRecapsData)) ?? [:]
         all[key.machineID + "/" + key.sessionID] = recap.id
         if all.count > 300 { all = Dictionary(uniqueKeysWithValues: all.suffix(200).map { ($0.key, $0.value) }) }
-        withAnimation(.snappy) { closedRecapsData = (try? JSONEncoder().encode(all)) ?? Data() }
+        withAnimation(Theme.Motion.standard) { closedRecapsData = (try? JSONEncoder().encode(all)) ?? Data() }
     }
 
     /// Switches the chat to a subagent (nil: back to the main agent); its transcript streams like a session's.
@@ -1026,7 +840,7 @@ struct ChatView: View {
         guard agent?.id != viewing?.id else { return }
         Haptics.tap()
         if viewing != nil { model.unsubscribe(shownKey, by: owner) }
-        withAnimation(.snappy) { viewing = agent }
+        withAnimation(Theme.Motion.standard) { viewing = agent }
         if agent != nil { model.subscribe(shownKey, by: owner) }
         followsEnd = true
         frozen = nil
@@ -1050,7 +864,7 @@ struct ChatView: View {
                         if visible { followsEnd = true } // back at the newest: follow new messages again
                     }
                 if let err = store.error {
-                    Label(err, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
+                    Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
                 }
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
                 // history they wait with the rest.
@@ -1080,14 +894,14 @@ struct ChatView: View {
                 if !store.loadedOnce && rows.isEmpty {
                     ChatSkeleton().flippedBack()
                 } else if rows.isEmpty {
-                    EmptyStateView(symbol: "text.bubble", title: "还没有消息", message: "发一句话开始吧。").flippedBack()
+                    EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有消息", message: "发一句话开始吧。").flippedBack()
                 }
                 if store.hasMore {
                     // Reaching the far (oldest) end loads the page before it — only once the user has dragged the list.
                     ProgressView()
                         .controlSize(.small)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, Theme.Space.sm)
                         .task(id: "\(rows.first?.id ?? "")|\(userScrolled)") { if userScrolled { await model.loadOlder(shownKey) } }
                 }
             }
@@ -1239,7 +1053,7 @@ struct ChatView: View {
         if chrome.offset < 40 {
             hideChrome()
         } else if chrome.collapse > 0, chrome.collapse < full {
-            withAnimation(.smooth(duration: 0.3)) { chrome.collapse = chrome.collapse > full / 2 ? full : 0 }
+            withAnimation(Theme.Motion.layout) { chrome.collapse = chrome.collapse > full / 2 ? full : 0 }
         }
     }
 
@@ -1259,14 +1073,14 @@ struct ChatView: View {
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
-                Image(systemName: "chevron.left").font(Theme.Font.secondary.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
+                Image(systemName: Theme.Icon.back).font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
             .noBackWhen(hidesBack)
             Spacer(minLength: 0)
             Button { Haptics.tap(); showChrome() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     // Out of reach: the slim bar says so too (the open header's subtitle explains on a tap).
                     if model.connection.shown != .online {
                         ProgressView().controlSize(.mini)
@@ -1276,9 +1090,9 @@ struct ChatView: View {
                         Text(compactPlace).lineLimit(1).truncationMode(.middle)
                     }
                 }
-                .animation(.snappy, value: model.connection.shown)
-                .font(Theme.Font.caption.weight(.semibold))
-                .padding(.horizontal, 12)
+                .animation(Theme.Motion.standard, value: model.connection.shown)
+                .font(Theme.Font.captionStrong)
+                .padding(.horizontal, Theme.Space.m)
                 .frame(height: 28)
                 .background(Theme.Fill.chip, in: .capsule)
                 .contentShape(.capsule)
@@ -1299,7 +1113,7 @@ struct ChatView: View {
             }
             .frame(minWidth: 44)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Theme.Space.xs)
         .frame(height: ChatChrome.compactHeight)
     }
 
@@ -1307,10 +1121,10 @@ struct ChatView: View {
     /// 需要你 and the work spinner move).
     private var activityMark: some View {
         let bg = session?.background?.count ?? 0
-        return HStack(spacing: 2) {
-            Image(systemName: bg > 0 ? "gearshape.2.fill" : "arrow.triangle.2.circlepath")
-                .font(Theme.Font.label.weight(.bold))
-            if bg > 0 { Text("\(bg)").font(Theme.Font.label.weight(.bold).monospacedDigit()) }
+        return HStack(spacing: Theme.Space.xxs) {
+            Image(systemName: bg > 0 ? Theme.Icon.backgroundTaskFilled : Theme.Icon.inProgress)
+                .font(Theme.Font.labelHeavy)
+            if bg > 0 { Text("\(bg)").font(Theme.Font.labelHeavy.monospacedDigit()) }
         }
         .foregroundStyle(bg > 0 ? Theme.busy : Theme.loop)
         .frame(width: 44, height: 34)
@@ -1320,39 +1134,39 @@ struct ChatView: View {
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
     @ViewBuilder private var moreMenuItems: some View {
             if style == .dev {
-                Button { showTerminal = true } label: { Label("终端", systemImage: "terminal") }
+                Button { showTerminal = true } label: { Label("终端", systemImage: Theme.Icon.terminal) }
                 if pane != .chat {
-                    Button { withAnimation(.snappy) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
+                    Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
                 }
                 ForEach(panes.filter { $0 == .files || $0 == .git }) { p in
-                    Button { withAnimation(.snappy) { pane = p } } label: {
+                    Button { withAnimation(Theme.Motion.standard) { pane = p } } label: {
                         Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
                     }
                 }
             }
             if status.isActive {
-                Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
+                Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
             }
             if style == .dev, let s = session {
-                Button { renaming = s } label: { Label("重命名…", systemImage: "pencil") }
+                Button { renaming = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
             }
             if style == .dev {
                 Button { model.toggleMute(key) } label: {
-                    Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? "bell" : "bell.slash")
+                    Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
             }
             Divider()
             if let s = session {
                 Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
-                    Label("拷贝恢复命令", systemImage: "doc.on.doc")
+                    Label("拷贝恢复命令", systemImage: Theme.Icon.copy)
                 }
-                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
+                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
                 if let space = s.spaceKey, let openSpace {
-                    Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: "square.stack.3d.up") }
+                    Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: Theme.Icon.space) }
                 }
                 if s.status.isLive {
                     Button(role: .destructive) { closing = s } label: {
-                        Label("关闭 Agent…", systemImage: "xmark.circle")
+                        Label("关闭 Agent…", systemImage: Theme.Icon.end)
                     }
                 }
             }
@@ -1373,7 +1187,7 @@ struct ChatView: View {
                     if link != .online {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
                     } else {
-                        HStack(spacing: 3) {
+                        HStack(spacing: Theme.Space.xs) {
                             if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
                         }
                         .font(Theme.Font.label)
@@ -1381,7 +1195,7 @@ struct ChatView: View {
                         .transition(.opacity)
                     }
                 }
-                .animation(.snappy, value: link)
+                .animation(Theme.Motion.standard, value: link)
             }
             .frame(maxWidth: 260)
             .contentShape(.rect)
@@ -1398,7 +1212,7 @@ struct ChatView: View {
             let words = stateWords(s, now: ctx.date)
             let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.machine(s.machineID)?.name ?? s.machineID
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 StatusDot(state: s.state, size: 7)
                 ViewThatFits(in: .horizontal) {
                     subtitleLine(s, words, [machine, place])
@@ -1440,9 +1254,9 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // One container for the row's glass (back, the terminal, ⋯): drawn together instead of as separate glasses.
                 GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         Button { back() } label: {
-                            Image(systemName: "chevron.left").font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: Theme.Icon.back).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                                 .contentShape(.circle)
                         }
                         .buttonStyle(.plain)
@@ -1455,21 +1269,21 @@ struct ChatView: View {
                         // The terminal (it comes up from the bottom over the page, TerminalCover), files and Git are in
                         // the ··· menu; files and Git also a swipe to the left away — no tab row (docs/ios.md).
                         Menu { moreMenuItems } label: {
-                            Image(systemName: "ellipsis").font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: Theme.Icon.more).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                                 .contentShape(.circle)
                         }
                         .surface(interactive: true, in: .circle)
                         .accessibilityLabel("更多")
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 2)
-                .padding(.bottom, 6)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.top, Theme.Space.xxs)
+                .padding(.bottom, Theme.Space.sm)
                 // Row two, only when there is something for it: the space's other agents and a /loop or background
                 // work (small chips; a tap opens them). Files and Git are a swipe or the ··· menu away.
                 let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
                 if model.siblings(of: key).count > 1 || hasActivity {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         // The tabs take the width there is; without them the activity chips sit on the left.
                         SiblingTabs(current: key) { next in switchTo(next) }
                         if hasActivity {
@@ -1478,8 +1292,8 @@ struct ChatView: View {
                         }
                         if model.siblings(of: key).count < 2 { Spacer(minLength: 0) }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.bottom, Theme.Space.s)
                 }
                 // Only while subagents run (plus the one being read): finished ones stay reachable from their
                 // Agent call ("查看子 Agent") without taking a row here.
@@ -1512,20 +1326,20 @@ struct ChatView: View {
     @ToolbarContentBuilder private var sideBarItems: some ToolbarContent {
         if !hidesBack {
             ToolbarItem(placement: .cancellationAction) {
-                Button { back() } label: { Label("返回", systemImage: "chevron.left") }
+                Button { back() } label: { Label("返回", systemImage: Theme.Icon.back) }
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if pane != .chat {
-                Button { withAnimation(.snappy) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
+                Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
             }
             Button { Haptics.tap(); showTerminal = true } label: { Label("终端", systemImage: SessionPane.terminal.symbol) }
             ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
-                Button { Haptics.tap(); withAnimation(.snappy) { pane = p } } label: {
+                Button { Haptics.tap(); withAnimation(Theme.Motion.standard) { pane = p } } label: {
                     Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
                 }
             }
-            Menu { moreMenuItems } label: { Label("更多", systemImage: "ellipsis") }
+            Menu { moreMenuItems } label: { Label("更多", systemImage: Theme.Icon.more) }
         }
     }
 
@@ -1536,7 +1350,7 @@ struct ChatView: View {
             titleButton
             let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
             if model.siblings(of: key).count > 1 || hasActivity {
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Space.s) {
                     SiblingTabs(current: key) { next in switchTo(next) }
                     if hasActivity {
                         ActivityChips(loop: session?.loop, background: session?.background ?? [], compact: true) { showActivity = true }
@@ -1549,9 +1363,9 @@ struct ChatView: View {
                 AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.xs)
+        .padding(.bottom, Theme.Space.s)
         .frame(maxWidth: .infinity)
         .background(alignment: .top) {
             // The page's fog from the very top, so messages scrolling up do not show through the title.
@@ -1574,7 +1388,7 @@ struct ChatView: View {
     private var hidesBack: Bool { split?.isFirstPage == true && pane == .chat }
 
     private func back() {
-        if pane != .chat { withAnimation(.snappy) { pane = .chat } } else { dismissChat() }
+        if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
     }
 
     /// A swipe to the left goes from the chat to its files (then Git); to the right, back toward the chat.
@@ -1585,7 +1399,7 @@ struct ChatView: View {
         let j = forward ? i + 1 : i - 1
         guard order.indices.contains(j) else { return }
         Haptics.tap()
-        withAnimation(.snappy) { pane = order[j] }
+        withAnimation(Theme.Motion.standard) { pane = order[j] }
     }
 
     private var compactPlace: String {
@@ -1912,23 +1726,23 @@ struct SuggestionPill: View {
             Haptics.tap()
             fill()
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.ai)
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.ai).font(Theme.Font.labelStrong).foregroundStyle(Theme.ai)
                 Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
-                Text("采用").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
+                Text("采用").font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
             .surface(tint: Theme.ai.opacity(0.06), interactive: true, in: .capsule)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .contextMenu {
             Button { Haptics.success(); send() } label: { Label("直接发送", systemImage: "arrow.up.circle") }
-            Button(action: fill) { Label("填入输入框", systemImage: "text.cursor") }
+            Button(action: fill) { Label("填入输入框", systemImage: Theme.Icon.insert) }
         } preview: {
-            Text(text).font(Theme.Font.body).padding(16).frame(maxWidth: 320, alignment: .leading)
+            Text(text).font(Theme.Font.body).padding(Theme.Space.l).frame(maxWidth: 320, alignment: .leading)
         }
         .accessibilityLabel("Claude 建议：\(text)")
         .accessibilityHint("填入输入框；长按可直接发送")
@@ -2046,11 +1860,11 @@ struct Composer: View {
                             stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
                             send: { Task { await sendText(text) } }) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                    Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
+                    Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
                     }
-                    Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
+                    Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Section("快捷指令") {
                         ForEach(SlashCommand.all) { cmd in
                             Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
@@ -2073,7 +1887,7 @@ struct Composer: View {
             }
         }
         #endif
-        .animation(.snappy, value: suggestion)
+        .animation(Theme.Motion.standard, value: suggestion)
         #if DEBUG
         .task { // `-showClearConfirm YES`: the /clear confirmation, for screenshots
             guard UserDefaults.standard.bool(forKey: "showClearConfirm") else { return }
@@ -2195,10 +2009,10 @@ struct SlashCommand: Identifiable {
 
     static let all: [SlashCommand] = [
         SlashCommand(title: "继续", symbol: "forward", word: "/继续", detail: "让它接着做", text: "继续"),
-        SlashCommand(title: "压缩上下文 /compact", symbol: "rectangle.compress.vertical", word: "/compact", detail: "压缩上下文", text: "/compact"),
+        SlashCommand(title: "压缩上下文 /compact", symbol: Theme.Icon.collapseAll, word: "/compact", detail: "压缩上下文", text: "/compact"),
         SlashCommand(title: "查看上下文 /context", symbol: "chart.pie", word: "/context", detail: "查看上下文", text: "/context"),
         SlashCommand(title: "提交并推送", symbol: "arrow.up.doc", word: "/提交", detail: "按规范提交并推送", text: "把当前改动按规范提交并推送"),
-        SlashCommand(title: "汇报进展", symbol: "list.bullet.rectangle", word: "/汇报", detail: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么"),
+        SlashCommand(title: "汇报进展", symbol: Theme.Icon.list, word: "/汇报", detail: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么"),
     ]
 }
 
@@ -2228,8 +2042,8 @@ struct TerminalCover: View {
                 if distance > 140 || predicted > 420 { close() } else { withAnimation(.spring(duration: 0.3)) { offset = 0 } }
             },
             close: close))
-            .padding(.horizontal, 4)
-            .padding(.bottom, 2)
+            .padding(.horizontal, Theme.Space.xs)
+            .padding(.bottom, Theme.Space.xxs)
             .offset(y: offset)
             .background {
                 // The page shows through, dimmed less as the terminal goes down.
@@ -2250,38 +2064,38 @@ struct QueueStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 Image(systemName: "tray.and.arrow.down")
                 Text("排队中 \(queued.count) 条 · Claude 忙完会依次处理").lineLimit(1)
                 Spacer(minLength: 0)
                 if busy { ProgressView().controlSize(.mini) }
             }
-            .font(Theme.Font.label.weight(.semibold))
+            .font(Theme.Font.labelStrong)
             .foregroundStyle(.secondary)
             ForEach(Array(queued.enumerated()), id: \.offset) { i, q in
                 Menu {
-                    Button { act(i, delete: false) } label: { Label("撤回编辑", systemImage: "pencil") }
-                    Button { UIPasteboard.general.string = q } label: { Label("拷贝", systemImage: "doc.on.doc") }
-                    Button(role: .destructive) { act(i, delete: true) } label: { Label("删除", systemImage: "trash") }
+                    Button { act(i, delete: false) } label: { Label("撤回编辑", systemImage: Theme.Icon.edit) }
+                    Button { UIPasteboard.general.string = q } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+                    Button(role: .destructive) { act(i, delete: true) } label: { Label("删除", systemImage: Theme.Icon.delete) }
                 } label: {
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: Theme.Space.s) {
                         Text("\(i + 1)")
-                            .font(Theme.Font.label.weight(.bold).monospacedDigit())
+                            .font(Theme.Font.labelHeavy.monospacedDigit())
                             .foregroundStyle(Theme.accent)
                             .frame(width: 18, height: 18)
                             .background(Theme.accent.opacity(0.14), in: .circle)
                         Text(q).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
-                        Image(systemName: "ellipsis").font(Theme.Font.label).foregroundStyle(.secondary).padding(.top, 3)
+                        Image(systemName: Theme.Icon.more).font(Theme.Font.label).foregroundStyle(.secondary).padding(.top, Theme.Space.xs)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 }
                 .disabled(busy)
             }
         }
-        .padding(10)
+        .padding(Theme.Space.m)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -2343,35 +2157,35 @@ struct SessionInfoSheet: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
                 if let info {
                     Section("运行") {
-                        row("cpu", "模型", Fmt.model(info.model) ?? info.model)
+                        row(Theme.Icon.model, "模型", Fmt.model(info.model) ?? info.model)
                         if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", "启动器", l) }
                         row("shippingbox", agent, info.version)
                         row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode))
                         row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort))
                     }
                     Section("用量") {
-                        row("gauge.with.dots.needle.33percent", "上下文", Self.tokens(info.contextTokens) + " tokens")
+                        row(Theme.Icon.context, "上下文", Self.tokens(info.contextTokens) + " tokens")
                         if info.compactions > 0 { row("rectangle.compress.vertical", "压缩", "\(info.compactions) 次") }
-                        row("text.bubble", "对话", "\(info.turns) 轮")
+                        row(Theme.Icon.conversation, "对话", "\(info.turns) 轮")
                         row("text.word.spacing", "共生成", Self.tokens(info.outputTokens) + " tokens")
                         if let started = info.startedAt, started.isMeaningful {
-                            row("clock", "开始", started.formatted(date: .abbreviated, time: .shortened))
+                            row(Theme.Icon.time, "开始", started.formatted(date: .abbreviated, time: .shortened))
                         }
                     }
                     Section("位置") {
-                        row("folder", "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home), mono: true)
+                        row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineID)?.home), mono: true)
                         if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
                     }
                     Section {
-                        copyButton("拷贝 session id", symbol: "number", text: info.sessionID, toast: "已拷贝 session id")
-                        copyButton("拷贝恢复命令", symbol: "terminal", text: "cd \(info.cwd ?? "") && " + resume(info.sessionID), toast: "已拷贝恢复命令")
+                        copyButton("拷贝 session id", symbol: Theme.Icon.id, text: info.sessionID, toast: "已拷贝 session id")
+                        copyButton("拷贝恢复命令", symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(info.sessionID), toast: "已拷贝恢复命令")
                     } footer: {
                         Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
                     }
                 } else if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger) }
+                    Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                 } else {
-                    Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20) }.listRowBackground(Color.clear)
+                    Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
                 }
             }
             .listStyle(.insetGrouped)
@@ -2394,14 +2208,14 @@ struct SessionInfoSheet: View {
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
         return VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Text(s?.displayTitle ?? "会话").font(Theme.Font.title).lineLimit(2)
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if let st = s?.state {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         StatusDot(state: st, size: 7)
-                        Text(st.label).font(Theme.Font.label.weight(.semibold))
+                        Text(st.label).font(Theme.Font.labelStrong)
                             .foregroundStyle(ChatView.quiet(st) ? Color.secondary : st.tone.text)
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xs)
                     .background(Color.primary.opacity(0.06), in: .capsule)
                 }
                 Text(place).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -2568,12 +2382,12 @@ struct WorkStepView: View, Equatable {
                     ToolCallRow(call: c, autoExpand: false, grouped: true)
                     if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
                         Button { open(id) } label: {
-                            Label("查看子 Agent", systemImage: "arrow.up.right").font(Theme.Font.label.weight(.semibold)).lineLimit(1)
+                            Label("查看子 Agent", systemImage: Theme.Icon.open).font(Theme.Font.labelStrong).lineLimit(1)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
                         .padding(.leading, WorkCardSlice.textColumn)
-                        .padding(.bottom, 10)
+                        .padding(.bottom, Theme.Space.m)
                     }
                 }
             case .step(.thought(let t)) where t.task != nil && t.wake != true:
@@ -2581,15 +2395,15 @@ struct WorkStepView: View, Equatable {
             case .step(.thought(let t)):
                 Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: true) } }
                     .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, Theme.Space.m)
             case .step(.folded(let f)):
                 FoldedWorkRow(fold: f)
                     .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, Theme.Space.m)
             case .text(let i):
                 AssistantText(item: i)
                     .padding(.horizontal, WorkCardSlice.inset)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, Theme.Space.m)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2721,9 +2535,9 @@ struct WorkLine: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 Button(action: toggle) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         // Working: the state's amber spinner, the words stay secondary (the dot says the state).
                         if live { ProgressView().controlSize(.mini).tint(Theme.busy) }
                         // Whole words, never cut: the full summary, or a shorter one when the row is narrow.
@@ -2733,8 +2547,8 @@ struct WorkLine: View {
                             summary(now: end ?? .now)
                         }
                         if !isEmpty {
-                            Image(systemName: "chevron.right")
-                                .font(Theme.Font.label.weight(.semibold))
+                            Image(systemName: Theme.Icon.disclosure)
+                                .font(Theme.Font.labelStrong)
                                 .rotationEffect(.degrees(open ? 90 : 0))
                         }
                     }
@@ -2750,7 +2564,7 @@ struct WorkLine: View {
                 .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
                 if let openTerminal {
-                    Button(action: openTerminal) { Image(systemName: "terminal").font(Theme.Font.caption).foregroundStyle(.secondary) }
+                    Button(action: openTerminal) { Image(systemName: Theme.Icon.terminal).font(Theme.Font.caption).foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("打开终端")
                 }

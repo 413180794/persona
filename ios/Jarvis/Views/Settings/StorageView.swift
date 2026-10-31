@@ -174,7 +174,7 @@ struct StorageView: View {
                     }
                     bar
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, Theme.Space.sm)
             } footer: {
                 Text("Jarvis 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
             }
@@ -225,14 +225,14 @@ struct StorageView: View {
             .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
         }
         .frame(height: 12)
-        .animation(.snappy, value: usage)
+        .animation(Theme.Motion.standard, value: usage)
         .accessibilityHidden(true)
     }
 
     private func row(_ kind: StorageKind) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.m) {
             Image(systemName: kind.icon)
-                .font(Theme.Font.body.weight(.semibold))
+                .font(Theme.Font.bodyStrong)
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
                 .background(kind == .appData ? Color.gray : kind.color, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
@@ -259,7 +259,7 @@ struct StorageView: View {
         }
         .contextMenu {
             if kind.clearable, (usage?[kind] ?? 0) > 0 {
-                Button(role: .destructive) { confirmOne = kind } label: { Label("清除", systemImage: "trash") }
+                Button(role: .destructive) { confirmOne = kind } label: { Label("清除", systemImage: Theme.Icon.delete) }
             }
         }
         .accessibilityElement(children: .combine)
@@ -267,7 +267,7 @@ struct StorageView: View {
 
     private func measure() async {
         let result = await Task.detached(priority: .userInitiated) { StorageUsage.scan() }.value
-        withAnimation(.snappy) { usage = result }
+        withAnimation(Theme.Motion.standard) { usage = result }
     }
 
     private func clear(_ kinds: [StorageKind]) async {

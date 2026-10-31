@@ -54,7 +54,7 @@ struct SessionAvatar: View {
                 .fill(tint.opacity(state == .offline ? 0.06 : 0.12))
                 .frame(width: size, height: size)
                 .overlay {
-                    Image(systemName: symbol ?? machine?.symbol ?? "terminal")
+                    Image(systemName: symbol ?? machine?.symbol ?? Theme.Icon.terminal)
                         .font(.system(size: size * 0.42, weight: .medium))
                         .foregroundStyle(tint)
                 }
@@ -89,17 +89,17 @@ struct Chip: View {
     var body: some View {
         Group {
             if let symbol {
-                HStack(spacing: 3) {
-                    Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
+                HStack(spacing: Theme.Space.xs) {
+                    Image(systemName: symbol).font(Theme.Font.labelStrong)
                     Text(text).lineLimit(1)
                 }
             } else {
                 Text(text).lineLimit(1)
             }
         }
-        .font(Theme.Font.label.weight(.medium))
+        .font(Theme.Font.labelMedium)
         .foregroundStyle(words)
-        .padding(.horizontal, 7)
+        .padding(.horizontal, Theme.Space.s)
         .padding(.vertical, 2.5)
         .background {
             if case .outline = look {
@@ -140,11 +140,11 @@ struct CountBadge: View {
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(Theme.Font.label.weight(.bold).monospacedDigit())
+            .font(Theme.Font.labelHeavy.monospacedDigit())
             .contentTransition(.numericText(value: Double(count)))
             .foregroundStyle(words)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, Theme.Space.xxs)
             .background(fill, in: .capsule)
             .fixedSize()
     }
@@ -168,10 +168,10 @@ struct StatusLabel: View {
     var state: AgentState
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Theme.Space.sm) {
             StatusDot(state: state, size: 7)
             Text(state.label)
-                .font(Theme.Font.label.weight(.semibold))
+                .font(Theme.Font.labelStrong)
                 .foregroundStyle(state.tone.text)
         }
     }
@@ -197,10 +197,10 @@ struct EmptyStateView: View {
             if let action {
                 Button(action.title, action: action.run)
                     .themedButton(prominent: true)
-                    .padding(.top, 4)
+                    .padding(.top, Theme.Space.xs)
             }
         }
-        .padding(32)
+        .padding(Theme.Space.xxl)
         .frame(maxWidth: .infinity)
     }
 }
@@ -252,7 +252,7 @@ struct CloseAgentSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: "xmark")
+            Image(systemName: Theme.Icon.close)
                 .font(Theme.Font.title)
                 .foregroundStyle(Theme.danger)
                 .frame(width: 56, height: 56)
@@ -260,32 +260,32 @@ struct CloseAgentSheet: View {
                 .padding(.top, 28)
             Text("关闭这个 Agent？")
                 .font(Theme.Font.title)
-                .padding(.top, 14)
+                .padding(.top, Theme.Space.l)
             VStack(spacing: Theme.Space.xs) {
                 Text(name).font(Theme.Font.heading).lineLimit(2).multilineTextAlignment(.center)
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Text(session.agentLabel)
-                        .font(Theme.Font.label.weight(.semibold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
+                        .font(Theme.Font.labelStrong)
+                        .padding(.horizontal, Theme.Space.s)
+                        .padding(.vertical, Theme.Space.xxs)
                         .overlay(Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 1))
                     if !place.isEmpty { Text(place).lineLimit(1) }
                 }
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
             }
-            .padding(.top, 10)
-            .padding(.horizontal, 24)
+            .padding(.top, Theme.Space.m)
+            .padding(.horizontal, Theme.Space.xl)
 
             VStack(alignment: .leading, spacing: Theme.Space.m) {
                 fact("power", "退出 \(session.agentLabel)，关掉它在 herdr 里的标签页（分屏时只关这个窗格）")
                 fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
             }
-            .padding(16)
+            .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.top, Theme.Space.xl)
 
             VStack(spacing: Theme.Space.m) {
                 Button {
@@ -312,9 +312,9 @@ struct CloseAgentSheet: View {
                 .disabled(closing)
             }
             .controlSize(.large)
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.top, Theme.Space.xl)
+            .padding(.bottom, Theme.Space.m)
         }
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
@@ -334,4 +334,53 @@ struct CloseAgentSheet: View {
 
 extension View {
     func confirmClose(_ session: Binding<Session?>) -> some View { modifier(CloseAgentConfirmation(session: session)) }
+}
+
+/// Someone without a picture (a mail sender): the first letter on a disc.
+struct Monogram<Fill: ShapeStyle>: View {
+    var name: String
+    var size: CGFloat = 40
+    var fill: Fill
+    var ink: Color = .primary
+
+    var body: some View {
+        Circle().fill(fill).frame(width: size, height: size)
+            .overlay(Text(String((name.isEmpty ? "?" : name).prefix(1))).font(Theme.Font.heading).foregroundStyle(ink))
+    }
+}
+
+/// What a page that loads shows: a spinner, the thing, or why it failed.
+enum Loadable<Value> {
+    case loading
+    case loaded(Value)
+    case failed(String)
+
+    var value: Value? {
+        if case .loaded(let v) = self { v } else { nil }
+    }
+}
+
+extension Loadable: Equatable where Value: Equatable {}
+extension Loadable: Sendable where Value: Sendable {}
+
+/// A `Loadable` drawn the one way: a centered spinner, the content, or the error with 重试.
+struct LoadableContent<Value, Content: View>: View {
+    var state: Loadable<Value>
+    var retry: (() -> Void)?
+    @ViewBuilder var content: (Value) -> Content
+
+    var body: some View {
+        switch state {
+        case .loading:
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .loaded(let value):
+            content(value)
+        case .failed(let message):
+            ContentUnavailableView {
+                Label(message, systemImage: Theme.Icon.error)
+            } actions: {
+                if let retry { Button("重试", action: retry).themedButton() }
+            }
+        }
+    }
 }

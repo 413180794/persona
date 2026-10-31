@@ -1,0 +1,220 @@
+import Foundation
+
+/// The chat as a flat list of lines (`ChatLine`), from the store's blocks: every message of a turn opens its own
+/// exchange — the message, one work line for what the agent did after it, the agent's last words. Open work lines get
+/// their steps as lines. A plain function of the blocks and what is open, so `ChatView` memoizes it by
+/// `ChatStore.version` (`ChatScratch.LinesKey`) and `ChatLinesTests` checks it without a view.
+struct ChatLines {
+    /// Work lines the user opened; `openAll` flips them all (DEBUG `-openWork`).
+    var openWork: Set<String>
+    var openAll = false
+    /// Runs of tool calls the user opened (BeautifulUI).
+    var openRuns: Set<String> = []
+    /// BeautifulUI folds two or more tool calls in a row into a line of chips.
+    var chipRuns = false
+    /// Whether a call can join a run: a call that went to the background stays on its own line.
+    var foldsIntoRun: (ToolCall) -> Bool = { _ in true }
+
+    /// The lines of these blocks with the open work lines unfolded.
+    func build(_ blocks: [ChatBlock], live: String?) -> [ChatLine] { unfold(lines(blocks, live: live)) }
+
+    /// The lines of these blocks, before open work lines are unfolded.
+    func lines(_ blocks: [ChatBlock], live liveID: String?) -> [ChatLine] {
+        var out: [ChatLine] = []
+        for block in blocks {
+            switch block {
+            case .row(let r):
+                out.append(.row(r))
+            case .turn(var t):
+                // Work a background task woke the agent for opens with that notice, where a message would be.
+                var wokeAt: Date?
+                if let first = t.ordered.first, case .notice(let n) = first, n.wake == true {
+                    out.append(.row(first))
+                    t.ordered.removeFirst()
+                    wokeAt = n.ts
+                }
+                let segments = Self.segments(t.ordered)
+                let groupID = "wt-" + t.id
+                let messages = segments.compactMap(\.user)
+                // A finished turn that took several messages reads as one exchange: the messages in one bubble,
+                // one work line for everything, the final answer. Opening the work line splits it back up.
+                if t.id != liveID && messages.count > 1 {
+                    if !openWork.contains(groupID) {
+                        let photos = segments.flatMap { Self.photos($0.rows) }
+                        if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
+                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
+                        let answer = t.ordered.lastIndex { if case .assistant = $0 { true } else { false } }
+                        let rest = t.ordered.enumerated().filter { n, r in
+                            if case .user = r { return false }
+                            return n != answer
+                        }.map(\.element)
+                        out.append(.work(id: groupID, items: Self.workItems(rest), live: false, start: t.startedAt, end: t.endedAt))
+                        if let answer { out.append(.row(t.ordered[answer])) }
+                        if !t.wakes.isEmpty { out.append(.wakes(t, live: false)) }
+                        out += t.trailing.map { .row($0) }
+                        continue
+                    }
+                    out.append(.splitHeader(id: groupID, count: messages.count))
+                }
+                for (k, seg) in segments.enumerated() {
+                    // Once the answer is in and a background task woke the agent, the new work runs behind the chip.
+                    let live = t.id == liveID && k == segments.count - 1 && t.tail.isEmpty
+                    // Photos sent with the message (Claude inlines a pasted image path as an image block) sit above
+                    // its text, as they did while it was being sent — not in the agent's work.
+                    let photos = Self.photos(seg.rows)
+                    if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
+                    if let u = seg.user { out.append(.row(u)) }
+                    let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
+                    let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
+                    if !items.isEmpty || live {
+                        let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
+                        out.append(.work(id: id, items: items, live: live,
+                                         start: seg.user?.firstTS ?? (k == 0 ? wokeAt : nil) ?? seg.rows.first?.firstTS ?? t.startedAt,
+                                         end: seg.rows.last?.lastTS))
+                    }
+                    if let last { out.append(.row(seg.rows[last])) }
+                }
+                // After the answer: one small line for the background tasks; what they led to opens in a drawer.
+                if !t.wakes.isEmpty { out.append(.wakes(t, live: t.id == liveID && !t.tail.isEmpty)) }
+                out += t.trailing.map { .row($0) }
+            }
+        }
+        return Self.foldAPIErrors(out)
+    }
+
+    /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error
+    /// again right after, with nothing but a retry ("继续") between, folds into the first with a count.
+    static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count)
+        for line in lines {
+            guard case .row(let r) = line.content, let item = r.errorCandidate, let info = APIErrorInfo.parse(item.text) else {
+                out.append(line)
+                continue
+            }
+            if let last = out.lastIndex(where: { if case .apiError = $0.content { true } else { false } }),
+               case .apiError(let first, let prev, let n) = out[last].content, prev.signature == info.signature,
+               out[(last + 1)...].allSatisfy(isRetry) {
+                out.removeSubrange((last + 1)...)
+                out[last] = .apiError(item: first, info: info, count: n + 1)
+                continue
+            }
+            out.append(.apiError(item: item, info: info, count: 1))
+        }
+        return out
+    }
+
+    static func isRetry(_ line: ChatLine) -> Bool {
+        guard case .row(.user(let i)) = line.content else { return false }
+        let t = (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ["继续", "重试", "再试一次", "continue", "retry", "go on"].contains(t)
+    }
+
+    /// Open work lines get their steps as lines of their own and a 收起 line after the last.
+    func unfold(_ lines: [ChatLine]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count)
+        for line in lines {
+            out.append(line)
+            if case .work(let id, let items, _, _, _) = line.content, isOpen(id), !items.isEmpty {
+                // The BeautifulUI style folds runs of tool calls into a line of chips; the others list every step.
+                out += chipRuns ? runLines(group: id, items: items)
+                    : items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
+                out.append(.workEnd(group: id, count: items.reduce(0) { n, item in
+                    if case .step(.folded(let f)) = item { n + (f.fold.map { $0.tools + $0.thoughts } ?? 1) } else { n + 1 }
+                }))
+            }
+        }
+        return out
+    }
+
+    func isOpen(_ work: String) -> Bool { openWork.contains(work) != openAll }
+
+    /// An open work line's steps: two or more tool calls in a row fold into one line of chips (`ToolRunRow`); opened,
+    /// their rows follow it, one lazy line per call as before. Thoughts, notices and words stay lines of their own, and
+    /// so does a call that went to the background: its row says how the task went (后台 · 已完成).
+    func runLines(group: String, items: [WorkItem]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        var run: [ToolCall] = []
+        var runStart = 0
+        func flush() {
+            defer { run = [] }
+            guard run.count > 1 else {
+                if let c = run.first { out.append(.workStep(group: group, item: .step(.call(c)), first: runStart == 0)) }
+                return
+            }
+            let id = group + "/run-" + run[0].id
+            let open = isRunOpen(id)
+            out.append(.toolRun(id: id, calls: run, open: open, first: runStart == 0))
+            if open { out += run.map { .workStep(group: group, item: .step(.call($0)), first: false) } }
+        }
+        for (n, item) in items.enumerated() {
+            if case .step(.call(let c)) = item, foldsIntoRun(c) {
+                if run.isEmpty { runStart = n }
+                run.append(c)
+                continue
+            }
+            flush()
+            out.append(.workStep(group: group, item: item, first: n == 0))
+        }
+        flush()
+        return out
+    }
+
+    func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
+
+    /// The run line (`runLines`) a call is folded into, if it is.
+    func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
+        var run: [String] = []
+        func found() -> String? { run.count > 1 && run.contains(call) ? group + "/run-" + run[0] : nil }
+        for item in items {
+            if case .step(.call(let c)) = item, foldsIntoRun(c) { run.append(c.id); continue }
+            if let id = found() { return id }
+            run = []
+        }
+        return found()
+    }
+
+    static func photos(_ rows: [ChatRow]) -> [Item] {
+        rows.compactMap { r -> Item? in
+            if case .image(let i) = r, i.role == "user", i.toolUseID == nil, i.image != nil { return i }
+            return nil
+        }
+    }
+
+    /// What a work line folds from these rows: tools, thoughts, notices and the agent's words.
+    static func workItems(_ rows: [ChatRow]) -> [WorkItem] {
+        var items: [WorkItem] = []
+        for r in rows {
+            switch r {
+            case .thinking(let i):
+                if !(i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { items.append(.step(.thought(i))) }
+            case .tools(let steps): items += steps.map { .step($0) }
+            case .notice(let i): items.append(.step(.thought(i)))
+            case .assistant(let i): items.append(.text(i))
+            default: break
+            }
+        }
+        return items
+    }
+
+    /// A turn cut at each message: (message, what came after it until the next one).
+    static func segments(_ ordered: [ChatRow]) -> [(user: ChatRow?, rows: [ChatRow])] {
+        var out: [(user: ChatRow?, rows: [ChatRow])] = []
+        var user: ChatRow?
+        var rows: [ChatRow] = []
+        var started = false
+        for r in ordered {
+            if case .user = r {
+                if started { out.append((user, rows)) }
+                user = r
+                rows = []
+            } else {
+                rows.append(r)
+            }
+            started = true
+        }
+        if started { out.append((user, rows)) }
+        return out
+    }
+}

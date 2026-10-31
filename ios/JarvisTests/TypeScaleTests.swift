@@ -11,6 +11,7 @@ struct TypeScaleTests {
     private static let textStyle = try! NSRegularExpression(
         pattern: #"(\.font\(\.|\.system\(\.|(?<![\w.])Font\.)(largeTitle|title|title2|title3|headline|body|callout|subheadline|footnote|caption|caption2)\b"#)
     private static let fixedSize = try! NSRegularExpression(pattern: #"\.system\(size: *[0-9]"#)
+    private static let levelWeight = try! NSRegularExpression(pattern: #"Theme\.Font\.\w+\.(weight|bold)\("#)
     private static let stackSpacing = try! NSRegularExpression(pattern: #"VStack\([^)\n]*spacing: *[1-9][0-9.]*[,)]"#)
 
     private static func sources() throws -> [(name: String, lines: [String])] {
@@ -48,6 +49,12 @@ struct TypeScaleTests {
     @Test func noFixedTextSizes() throws {
         let found = try Self.hits(Self.fixedSize) { $0.contains("Image(systemName") || $0.contains("// type-scale: glyph") }
         #expect(found.isEmpty, "fixed sizes:\n\(found.joined(separator: "\n"))")
+    }
+
+    /// Emphasis is a token (`Theme.Font.labelStrong`), not a weight added to a level on the page.
+    @Test func levelsCarryTheirWeight() throws {
+        let found = try Self.hits(Self.levelWeight)
+        #expect(found.isEmpty, "a weight added to a level:\n\(found.joined(separator: "\n"))")
     }
 
     /// Vertical stacks space their lines with `Theme.Space` (4 pt grid); 0 is fine.

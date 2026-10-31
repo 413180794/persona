@@ -10,7 +10,7 @@ nonisolated enum SessionModes {
     }
 
     static let permissionModes: [Option] = [
-        Option(id: "default", title: "手动确认", detail: "改文件、跑命令前都先问你", symbol: "hand.raised"),
+        Option(id: "default", title: "手动确认", detail: "改文件、跑命令前都先问你", symbol: Theme.Icon.askFirst),
         Option(id: "acceptEdits", title: "自动改文件", detail: "改文件不问，跑命令还会问", symbol: "pencil.line"),
         Option(id: "plan", title: "只做计划", detail: "只读代码、写计划，批准后才动手", symbol: "list.bullet.clipboard"),
         Option(id: "auto", title: "自动", detail: "自己判断风险，安全的直接做", symbol: "wand.and.sparkles"),
@@ -19,8 +19,8 @@ nonisolated enum SessionModes {
 
     static let effortLevels: [Option] = [
         Option(id: "low", title: "低", detail: "最快，简单的事够用", symbol: "gauge.with.dots.needle.0percent"),
-        Option(id: "medium", title: "中", detail: "快一些", symbol: "gauge.with.dots.needle.33percent"),
-        Option(id: "high", title: "高", detail: "大多数任务的默认", symbol: "gauge.with.dots.needle.50percent"),
+        Option(id: "medium", title: "中", detail: "快一些", symbol: Theme.Icon.context),
+        Option(id: "high", title: "高", detail: "大多数任务的默认", symbol: Theme.Icon.effort),
         Option(id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵", symbol: "gauge.with.dots.needle.67percent"),
         Option(id: "max", title: "最高", detail: "最慢最仔细", symbol: "gauge.with.dots.needle.100percent"),
     ]
@@ -55,7 +55,7 @@ struct SessionModeBar: View {
     var body: some View {
         let mode = session?.permissionMode
         let effort = session?.effort
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Menu {
                 Picker("权限模式", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
                     ForEach(options(SessionModes.switchableModes, current: mode)) { o in
@@ -64,7 +64,7 @@ struct SessionModeBar: View {
                 }
                 .pickerStyle(.inline)
             } label: {
-                ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? "hand.raised",
+                ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
                          text: SessionModes.modeLabel(mode) ?? "权限模式", tint: SessionModes.modeTint(mode), known: mode != nil)
             }
             .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")")
@@ -76,7 +76,7 @@ struct SessionModeBar: View {
                 }
                 .pickerStyle(.inline)
             } label: {
-                ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? "gauge.with.dots.needle.50percent",
+                ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
                          text: effort.map { "思考 \(SessionModes.effortLabel($0) ?? $0)" } ?? "思考强度", tint: .secondary, known: effort != nil)
             }
             .accessibilityLabel("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")")
@@ -84,7 +84,7 @@ struct SessionModeBar: View {
             Spacer(minLength: 0)
         }
         .disabled(changing)
-        .animation(.snappy, value: changing)
+        .animation(Theme.Motion.standard, value: changing)
     }
 
     /// The switchable options plus the current one when it is not among them (bypassPermissions, an unknown mode).
@@ -111,15 +111,15 @@ struct ModeChip: View {
     var known = true
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: symbol).font(Theme.Font.labelStrong)
             Text(text).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(Theme.Font.label.weight(.bold)).imageScale(.small).opacity(0.6)
+            Image(systemName: "chevron.up.chevron.down").font(Theme.Font.labelHeavy).imageScale(.small).opacity(0.6)
         }
-        .font(Theme.Font.label.weight(.medium))
+        .font(Theme.Font.labelMedium)
         .foregroundStyle(known ? (tint == .secondary ? Color.primary : tint) : Color.secondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.sm)
         .background((known && tint != .secondary ? tint : Color.primary).opacity(known && tint != .secondary ? 0.12 : 0.06), in: .capsule)
         .contentShape(.capsule)
     }
@@ -132,7 +132,7 @@ struct NewSessionModePicker: View {
     var modes: [SessionModes.Option] = SessionModes.permissionModes
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Menu {
                 Picker("权限模式", selection: $mode) {
                     Text("跟随启动器").tag("")
@@ -140,7 +140,7 @@ struct NewSessionModePicker: View {
                 }
                 .pickerStyle(.inline)
             } label: {
-                ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? "hand.raised",
+                ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
                          text: SessionModes.mode(mode)?.title ?? "权限：默认", tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
             }
             Menu {
@@ -150,7 +150,7 @@ struct NewSessionModePicker: View {
                 }
                 .pickerStyle(.inline)
             } label: {
-                ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? "gauge.with.dots.needle.50percent",
+                ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
                          text: SessionModes.effort(effort).map { "思考 \($0.title)" } ?? "思考：默认", tint: .secondary, known: !effort.isEmpty)
             }
         }

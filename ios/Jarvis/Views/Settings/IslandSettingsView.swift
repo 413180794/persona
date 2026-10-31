@@ -14,7 +14,7 @@ struct IslandSettingsView: View {
                     preview("有 Agent 需要你时", Self.sample(needsYou: true), island)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, Theme.Space.sm)
             } footer: {
                 Text("有 Agent 需要你时，左侧总是换成红色的数量。")
             }
@@ -27,14 +27,14 @@ struct IslandSettingsView: View {
                             (island.left, island.right) = (.status, .tpm)
                         }
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: Theme.Space.m) {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(preset.title).foregroundStyle(.primary).lineLimit(1)
                                 Text(Self.summary(preset)).font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 8)
                             if island.preset == preset {
-                                Image(systemName: "checkmark").font(Theme.Font.heading).foregroundStyle(Theme.accent)
+                                Image(systemName: Theme.Icon.done).font(Theme.Font.heading).foregroundStyle(Theme.accent)
                             }
                         }
                         .contentShape(.rect)

@@ -72,22 +72,22 @@ struct FileChips: View {
     var body: some View {
         if !paths.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     ForEach(paths, id: \.self) { p in
                         Button { open(p) } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: Theme.Space.xs) {
                                 Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
                                 Text((p as NSString).lastPathComponent.isEmpty ? p : (p as NSString).lastPathComponent)
-                                    .font(Theme.Font.label.weight(.medium))
+                                    .font(Theme.Font.labelMedium)
                                     .lineLimit(1)
                             }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
+                            .padding(.horizontal, Theme.Space.s)
+                            .padding(.vertical, Theme.Space.sm)
                             .background(Theme.accent.opacity(0.1), in: .capsule)
                             .foregroundStyle(Theme.accent)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: "doc.on.doc") } }
+                        .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) } }
                     }
                 }
             }
@@ -116,7 +116,7 @@ struct FileViewer: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         if let back = history.last {
-                            Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: "chevron.left") }
+                            Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: Theme.Icon.back) }
                         } else {
                             Button("完成") { dismiss() }
                         }
@@ -135,7 +135,7 @@ struct FileViewer: View {
                         history.append(ref)
                         ref = FileRef(machineID: ref.machineID, path: (file.path as NSString).appendingPathComponent(e), cwd: ref.cwd)
                     } label: {
-                        Label(e, systemImage: e.hasSuffix("/") ? "folder" : FileViewer.symbol(for: e))
+                        Label(e, systemImage: e.hasSuffix("/") ? Theme.Icon.folder : FileViewer.symbol(for: e))
                             .foregroundStyle(Color.primary)
                     }
                 }
@@ -150,31 +150,31 @@ struct FileViewer: View {
                                 .markdownImageProvider(MachineImageProvider(load: loadImageFile))
                                 .textSelection(.enabled)
                         }
-                        .padding(16)
+                        .padding(Theme.Space.l)
                     }
                 } else {
                     // The code view scrolls both ways by itself (no outer vertical scroll stealing the gesture).
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
-                        meta(file).padding(.horizontal, 16)
-                        CodeText(text: text).padding(.horizontal, 12)
+                        meta(file).padding(.horizontal, Theme.Space.l)
+                        CodeText(text: text).padding(.horizontal, Theme.Space.m)
                     }
-                    .padding(.top, 12)
+                    .padding(.top, Theme.Space.m)
                 }
             } else if let data = file.data, let bytes = Data(base64Encoded: data) {
                 if (file.mime ?? "").hasPrefix("image/") {
                     ScrollView {
-                        meta(file).padding(.horizontal, 16)
-                        Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: data)).padding(16)
+                        meta(file).padding(.horizontal, Theme.Space.l)
+                        Base64Image(payload: ImagePayload(mime: file.mime ?? "image/png", data: data)).padding(Theme.Space.l)
                     }
                 } else if (file.mime ?? "") == "application/pdf", let doc = PDFDocument(data: bytes) {
                     PDFKitView(document: doc)
                 } else {
-                    EmptyStateView(symbol: "doc.questionmark", title: "无法预览",
+                    EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
                                    message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
                 }
             }
         } else if let error {
-            EmptyStateView(symbol: "exclamationmark.triangle", title: "打不开这个文件", message: error)
+            EmptyStateView(symbol: Theme.Icon.error, title: "打不开这个文件", message: error)
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -183,18 +183,18 @@ struct FileViewer: View {
     private var menu: some View {
         Menu {
             if let file, isMarkdown(file) {
-                Button { raw.toggle() } label: { Label(raw ? "渲染 Markdown" : "查看源文件", systemImage: raw ? "doc.richtext" : "chevron.left.forwardslash.chevron.right") }
+                Button { raw.toggle() } label: { Label(raw ? "渲染 Markdown" : "查看源文件", systemImage: raw ? "doc.richtext" : Theme.Icon.code) }
             }
-            Button { UIPasteboard.general.string = ref.path } label: { Label("拷贝路径", systemImage: "doc.on.doc") }
+            Button { UIPasteboard.general.string = ref.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
             if let text = file?.text {
-                Button { UIPasteboard.general.string = text } label: { Label("拷贝内容", systemImage: "doc.on.clipboard") }
-                ShareLink(item: text, subject: Text(file?.name ?? "")) { Label("分享", systemImage: "square.and.arrow.up") }
+                Button { UIPasteboard.general.string = text } label: { Label("拷贝内容", systemImage: Theme.Icon.copy) }
+                ShareLink(item: text, subject: Text(file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
             }
-        } label: { Image(systemName: "ellipsis.circle") }
+        } label: { Image(systemName: Theme.Icon.moreMenu) }
     }
 
     private func meta(_ f: FileContent) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Text(Fmt.path(f.path, home: model.machine(ref.machineID)?.home)).lineLimit(1).truncationMode(.head)
             Text("·")
             Text(ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file))
@@ -230,8 +230,8 @@ struct FileViewer: View {
         case "png", "jpg", "jpeg", "gif", "webp", "heic": "photo"
         case "pdf": "doc.richtext"
         case "json", "yml", "yaml", "toml", "plist": "curlybraces"
-        case "": path.hasSuffix("/") ? "folder" : "doc"
-        default: "chevron.left.forwardslash.chevron.right"
+        case "": path.hasSuffix("/") ? Theme.Icon.folder : Theme.Icon.file
+        default: Theme.Icon.code
         }
     }
 }
@@ -282,15 +282,15 @@ struct MachineMarkdownImage: View {
                 Base64Image(payload: payload)
             } else if failed {
                 // SVG and anything else that is not a bitmap: say what is there instead of a blank.
-                Label((path as NSString).lastPathComponent, systemImage: "photo")
+                Label((path as NSString).lastPathComponent, systemImage: Theme.Icon.photo)
                     .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.sm)
                     .background(Color.primary.opacity(0.05), in: .capsule)
             } else {
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.05))
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Color.primary.opacity(0.05))
                     .frame(height: 120)
                     .overlay { ProgressView() }
             }

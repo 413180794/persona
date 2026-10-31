@@ -114,7 +114,7 @@ struct FeishuDocReader: View {
                         ForEach(body.chunks) { chunk in
                             if let table = chunk.table {
                                 FeishuDocsMarkdownTableView(table: table)
-                                    .padding(.vertical, 4)
+                                    .padding(.vertical, Theme.Space.xs)
                                     .id(chunk.id)
                             } else {
                                 Markdown(Links.markdown(chunk.text))
@@ -134,7 +134,7 @@ struct FeishuDocReader: View {
                         FeishuDocsUnsupportedView(info: u, url: url)
                     case nil:
                         if let e = model.error {
-                            EmptyStateView(symbol: "doc.questionmark", title: "打不开这篇文档", message: e,
+                            EmptyStateView(symbol: Theme.Icon.missingFile, title: "打不开这篇文档", message: e,
                                            action: ("重试", { Task { await model.load(url: url, title: title) } }))
                                 .padding(.top, 60)
                             Button("在飞书中打开") { FeishuDocsLinks.openInFeishu(url) }
@@ -144,8 +144,8 @@ struct FeishuDocReader: View {
                         }
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.m)
             }
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > 90 } action: { _, v in
                 withAnimation(.easeInOut(duration: 0.15)) { showTitle = v }
@@ -153,7 +153,7 @@ struct FeishuDocReader: View {
             .onChange(of: jump) {
                 guard let id = jump else { return }
                 jump = nil
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .top) }
+                withAnimation(Theme.Motion.standard) { proxy.scrollTo(id, anchor: .top) }
             }
         }
         .themedPage()
@@ -207,19 +207,19 @@ struct FeishuDocReader: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             if let crumbs = breadcrumb { Text(crumbs).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                 if let icon = model.header?.icon, icon.type == "emoji" { Text(icon.value).font(Theme.Font.display) }
                 Text(docTitle).font(Theme.Font.display).fixedSize(horizontal: false, vertical: true)
                     .modifier(FeishuDocsSelectable(enabled: copyAllowed))
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 if let owner = model.info?.owner ?? treeOwner {
                     Button {
                         if let id = owner.id { open?(.profile(LarkPersonRef(id: id, name: owner.name, avatar: owner.avatarUrl))) }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Theme.Space.sm) {
                             LarkAvatarImage(name: owner.name, url: owner.avatarUrl, size: 22)
-                            Text(owner.name).font(Theme.Font.caption.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
+                            Text(owner.name).font(Theme.Font.captionMedium).foregroundStyle(.primary).lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
@@ -232,7 +232,7 @@ struct FeishuDocReader: View {
                 Text(stats).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, Theme.Space.xs)
     }
 
     private var breadcrumb: String? {
@@ -266,11 +266,11 @@ struct FeishuDocReader: View {
     @ViewBuilder private var summaryCard: some View {
         if let s = model.summary, s.state == "ready", !s.summary.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles").foregroundStyle(LarkColor.hue("purple"))
-                    Text("AI 摘要").font(Theme.Font.secondary.weight(.semibold))
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.ai).foregroundStyle(LarkColor.hue("purple"))
+                    Text("AI 摘要").font(Theme.Font.secondaryStrong)
                     Spacer()
-                    Button(summaryExpanded ? "收起" : "展开") { withAnimation(.snappy) { summaryExpanded.toggle() } }
+                    Button(summaryExpanded ? "收起" : "展开") { withAnimation(Theme.Motion.standard) { summaryExpanded.toggle() } }
                         .font(Theme.Font.caption).lineLimit(1)
                 }
                 Markdown(Links.markdown(s.summary))
@@ -283,34 +283,34 @@ struct FeishuDocReader: View {
                         }
                     }
                     .contentShape(.rect)
-                    .onTapGesture { withAnimation(.snappy) { summaryExpanded.toggle() } }
+                    .onTapGesture { withAnimation(Theme.Motion.standard) { summaryExpanded.toggle() } }
             }
-            .padding(12)
-            .background(LarkColor.hue("purple").opacity(0.07), in: .rect(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(LarkColor.hue("purple").opacity(0.18), lineWidth: 0.5))
+            .padding(Theme.Space.m)
+            .background(LarkColor.hue("purple").opacity(0.07), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.hue("purple").opacity(0.18), lineWidth: 0.5))
         }
     }
 
     private var footer: some View {
         VStack(spacing: Theme.Space.m) {
             Divider()
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 if (model.info?.comments ?? 0) > 0 {
                     Button { showComments = true } label: {
-                        Label("\(model.info?.comments ?? 0) 条评论", systemImage: "text.bubble").lineLimit(1)
+                        Label("\(model.info?.comments ?? 0) 条评论", systemImage: Theme.Icon.conversation).lineLimit(1)
                     }
                     .themedButton()
                 }
                 Button { FeishuDocsLinks.openInFeishu(url) } label: {
-                    Label("在飞书中打开", systemImage: "arrow.up.forward.app").lineLimit(1)
+                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1)
                 }
                 .themedButton()
             }
             .font(Theme.Font.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
+        .padding(.top, Theme.Space.xl)
+        .padding(.bottom, Theme.Space.m)
     }
 
     // MARK: Tree
@@ -323,7 +323,7 @@ struct FeishuDocReader: View {
                 .id(FeishuDocsTree.rowKey(node, index: i))
         }
         if view.partial == true {
-            Label("文档较长，只显示了前面的部分", systemImage: "ellipsis.circle").font(Theme.Font.caption).foregroundStyle(.secondary)
+            Label("文档较长，只显示了前面的部分", systemImage: Theme.Icon.moreMenu).font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -389,13 +389,13 @@ struct FeishuDocReader: View {
             }
             if model.content != nil, case .unsupported = model.content {} else if model.content != nil {
                 Button { showComments = true } label: {
-                    Image(systemName: "text.bubble")
+                    Image(systemName: Theme.Icon.conversation)
                         .overlay(alignment: .topTrailing) {
                             if let n = model.info?.comments, n > 0 {
                                 Text(n > 99 ? "99+" : "\(n)")
                                     .font(.system(size: 9, weight: .bold).monospacedDigit()) // type-scale: glyph (a count on an icon)
                                     .foregroundStyle(.white)
-                                    .padding(.horizontal, 3)
+                                    .padding(.horizontal, Theme.Space.xs)
                                     .frame(minWidth: 14, minHeight: 14)
                                     .background(LarkColor.hue("red"), in: .capsule)
                                     .offset(x: 9, y: -7)
@@ -407,8 +407,8 @@ struct FeishuDocReader: View {
             Menu {
                 FeishuDocsLinkMenu(url: url)
                 Divider()
-                Button { Task { await model.load(url: url, title: title) } } label: { Label("刷新", systemImage: "arrow.clockwise") }
-            } label: { Image(systemName: "ellipsis") }
+                Button { Task { await model.load(url: url, title: title) } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
+            } label: { Image(systemName: Theme.Icon.more) }
             .accessibilityLabel("更多")
         }
     }
@@ -436,10 +436,10 @@ struct FeishuDocsImageProvider: ImageProvider {
         return Button { open(src) } label: {
             LarkRemoteImage(url: src, maxPixel: 1600, contentMode: .fit)
                 .frame(maxWidth: .infinity, minHeight: 60)
-                .clipShape(.rect(cornerRadius: 8, style: .continuous))
+                .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.xs)
     }
 }
 
@@ -480,9 +480,9 @@ struct FeishuDocsSkeleton: View {
             } else {
                 bar(0.7, height: 26)
             }
-            HStack(spacing: 8) { Circle().fill(Color.primary.opacity(0.08)).frame(width: 22, height: 22); bar(0.35, height: 12) }
+            HStack(spacing: Theme.Space.s) { Circle().fill(Color.primary.opacity(0.08)).frame(width: 22, height: 22); bar(0.35, height: 12) }
             ForEach(0..<9, id: \.self) { i in bar([0.95, 0.88, 0.6, 0.92, 0.8, 0.45, 0.9, 0.85, 0.5][i], height: 14) }
-            ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+            ProgressView().frame(maxWidth: .infinity).padding(.top, Theme.Space.s)
         }
         .redacted(reason: [])
     }
@@ -508,8 +508,8 @@ struct FeishuDocsUnsupportedView: View {
                 Button { gallery = FeishuDocsGallery(urls: [image], index: 0) } label: {
                     LarkRemoteImage(url: image, maxPixel: 2000, contentMode: .fit)
                         .frame(maxWidth: .infinity, minHeight: 200)
-                        .clipShape(.rect(cornerRadius: 12, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
+                        .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
                 Text(info.title).font(Theme.Font.heading).multilineTextAlignment(.center)
@@ -525,16 +525,16 @@ struct FeishuDocsUnsupportedView: View {
                     Button {
                         request = ("/api/v1/lark/raw/documents/drive/files/\(f.token)/download", info.title)
                     } label: {
-                        Label("预览文件", systemImage: "eye").lineLimit(1).frame(minWidth: 180)
+                        Label("预览文件", systemImage: Theme.Icon.view).lineLimit(1).frame(minWidth: 180)
                     }
                     .themedButton(prominent: true)
                 }
                 Button { FeishuDocsLinks.openInFeishu(url) } label: {
-                    Label("在飞书中打开", systemImage: "arrow.up.forward.app").lineLimit(1).frame(minWidth: 180)
+                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(minWidth: 180)
                 }
                 .themedButton(prominent: info.file == nil)
             }
-            .padding(.top, 8)
+            .padding(.top, Theme.Space.s)
         }
         .frame(maxWidth: .infinity)
         .modifier(LarkFileOpener(request: $request))
@@ -590,25 +590,25 @@ struct FeishuDocsCommentsView: View {
                     Text("已解决 \(count(true))").tag(true)
                 }
                 .pickerStyle(.segmented)
-                .padding(.bottom, 4)
+                .padding(.bottom, Theme.Space.xs)
                 if threads == nil {
                     FeishuDocsListState(loading: error == nil, error: error, empty: ("text.bubble", "", ""), retry: load)
                 } else if shown.isEmpty {
-                    EmptyStateView(symbol: "text.bubble", title: resolved ? "没有已解决的评论" : "没有未解决的评论",
+                    EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? "没有已解决的评论" : "没有未解决的评论",
                                    message: resolved ? "解决后的评论会收在这里" : "在飞书里对文档发表的评论会出现在这里")
                         .padding(.top, 40)
                 } else {
                     ForEach(shown) { FeishuDocsThreadCard(thread: $0) }
                 }
             }
-            .padding(16)
+            .padding(Theme.Space.l)
         }
         .themedPage()
         .navigationTitle("评论")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { Label("关闭", systemImage: "xmark") }
+                Button { dismiss() } label: { Label("关闭", systemImage: Theme.Icon.close) }
             }
         }
         .refreshable { await load() }
@@ -637,7 +637,7 @@ struct FeishuDocsThreadCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if thread.whole {
                     Text("全文评论").font(Theme.Font.label).foregroundStyle(.secondary)
                 } else if !thread.quote.isEmpty {
@@ -645,7 +645,7 @@ struct FeishuDocsThreadCard: View {
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                        .padding(.leading, 8)
+                        .padding(.leading, Theme.Space.s)
                         .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: 3) }
                 }
                 Spacer(minLength: 0)
@@ -653,26 +653,26 @@ struct FeishuDocsThreadCard: View {
                 if thread.visibility != nil { FeishuDocsTag(text: "部分可见", hue: "grey") }
             }
             ForEach(thread.replies) { r in
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: Theme.Space.s) {
                     LarkAvatarImage(name: r.author.name, url: r.author.avatarUrl, size: 28)
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        HStack(spacing: 6) {
-                            Text(r.author.name).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                        HStack(spacing: Theme.Space.sm) {
+                            Text(r.author.name).font(Theme.Font.captionStrong).lineLimit(1)
                             Text(FeishuTime.short(r.created)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                             if r.edited == true { Text("已编辑").font(Theme.Font.label).foregroundStyle(.tertiary) }
                         }
                         Text(replyText(r)).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         if let n = r.imageCount, n > 0 {
-                            Label("\(n) 张图片", systemImage: "photo").font(Theme.Font.label).foregroundStyle(.secondary)
+                            Label("\(n) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                         if let rs = r.reactions, !rs.isEmpty {
-                            HStack(spacing: 6) {
+                            HStack(spacing: Theme.Space.sm) {
                                 ForEach(rs, id: \.key) { re in
-                                    HStack(spacing: 3) {
+                                    HStack(spacing: Theme.Space.xs) {
                                         LarkEmojiImage(key: re.key, size: 16)
                                         Text("\(re.count)").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
                                     }
-                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
                                     .background(Color.primary.opacity(0.05), in: .capsule)
                                 }
                             }
@@ -681,10 +681,10 @@ struct FeishuDocsThreadCard: View {
                 }
             }
         }
-        .padding(12)
+        .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LarkColor.cardBackground, in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
+        .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
     }
 
     private func replyText(_ r: FeishuDocsComments.Reply) -> AttributedString {
@@ -709,8 +709,8 @@ struct FeishuDocsLinkMenu: View {
     var url: String
 
     var body: some View {
-        Button { FeishuDocsLinks.openInFeishu(url) } label: { Label("在飞书中打开", systemImage: "arrow.up.forward.app") }
-        Button { UIPasteboard.general.string = url } label: { Label("拷贝链接", systemImage: "link") }
-        if let u = URL(string: url) { ShareLink(item: u) { Label("分享", systemImage: "square.and.arrow.up") } }
+        Button { FeishuDocsLinks.openInFeishu(url) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
+        Button { UIPasteboard.general.string = url } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
+        if let u = URL(string: url) { ShareLink(item: u) { Label("分享", systemImage: Theme.Icon.share) } }
     }
 }

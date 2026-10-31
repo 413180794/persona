@@ -25,6 +25,9 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
   configs:
+    Debug:
+      # The release machine's Swift gives up on expressions that dev machines still type-check (CLAUDE.md); warn early.
+      OTHER_SWIFT_FLAGS: "$(inherited) -Xfrontend -warn-long-expression-type-checking=150"
     Release:
       # Anti-tampering basics: no symbols or reflection names in the shipped binary.
       STRIP_INSTALLED_PRODUCT: YES
@@ -109,6 +112,7 @@ targets:
       - path: LiveActivity
       - path: Shared/FleetState.swift
       - path: Shared/StatusPalette.swift
+      - path: Shared/Design/Palette.swift
     info:
       path: JarvisWidgets/Info.plist
       properties:
@@ -160,6 +164,7 @@ targets:
     platform: iOS
     sources:
       - path: JarvisTests
+        excludes: ["*.json"] # TokenBaseline.json is read from the source tree, not the bundle
     dependencies:
       - target: Jarvis
     settings:

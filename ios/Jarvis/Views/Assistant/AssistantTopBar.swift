@@ -63,8 +63,8 @@ struct AssistantTopBar: View {
                 .disabled(key == nil)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.xxs)
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) {
             // From the top of the screen (under the status bar) to a little below the bar: solid down to the bar's
@@ -98,12 +98,12 @@ struct AssistantTopBar: View {
         ZStack(alignment: .bottom) {
             menu
             if let hint {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.positive)
+                HStack(spacing: Theme.Space.xs) {
+                    Image(systemName: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
                     Text(hint).lineLimit(1)
                 }
-                .font(Theme.Font.label.weight(.semibold))
-                .padding(.horizontal, 10)
+                .font(Theme.Font.labelStrong)
+                .padding(.horizontal, Theme.Space.m)
                 .frame(height: 24)
                 .fixedSize()
                 .background(.regularMaterial, in: .capsule)
@@ -112,7 +112,7 @@ struct AssistantTopBar: View {
                 .transition(.opacity)
             }
         }
-        .animation(.snappy, value: hint)
+        .animation(Theme.Motion.standard, value: hint)
         .task(id: hint) { await clearHint() }
     }
 
@@ -133,17 +133,17 @@ struct AssistantTopBar: View {
                     if link != .online {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
                     } else {
-                        Text(name).font(Theme.Font.label.weight(.semibold)).lineLimit(1).transition(.opacity)
+                        Text(name).font(Theme.Font.labelStrong).lineLimit(1).transition(.opacity)
                     }
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, Theme.Space.m)
                 .frame(height: 24)
                 .frame(maxWidth: 200)
                 .fixedSize() // as wide as the name, at most 200
                 // Not the glass `surface`: inside a Menu's label the glass spreads over the whole label (face included).
                 .background(.regularMaterial, in: .capsule)
                 .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
-                .animation(.snappy, value: link)
+                .animation(Theme.Motion.standard, value: link)
                 .opacity(hint == nil ? 1 : 0)
             }
             .contentShape(.rect)
@@ -178,22 +178,22 @@ struct AssistantTopBar: View {
     @ViewBuilder private func menuItems(_ link: ConnectionStatus.Phase) -> some View {
         Section(menuTitle) {
             if link != .online {
-                Button { showLink = true } label: { Label("连接详情", systemImage: "wifi.exclamationmark") }
+                Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.offline) }
             }
             Button(action: openKnowledge) { Label("知识库", systemImage: "books.vertical") }
-            Button(action: openProfile) { Label("详细信息", systemImage: "person.crop.circle") }
+            Button(action: openProfile) { Label("详细信息", systemImage: Theme.Icon.person) }
             if let main = model.assistantMain, key != main {
                 Button {
-                    withAnimation(.snappy) { model.assistantCurrent = main }
+                    withAnimation(Theme.Motion.standard) { model.assistantCurrent = main }
                     Haptics.tap()
                 } label: { Label("回到主对话", systemImage: "house") }
             }
         }
         Section {
-            Button { copy(cwd, "已拷贝工作目录") } label: { Label("拷贝目录", systemImage: "folder") }
-            Button { copy(infoText, "已拷贝对话信息") } label: { Label("拷贝信息", systemImage: "doc.on.doc") }
+            Button { copy(cwd, "已拷贝工作目录") } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
+            Button { copy(infoText, "已拷贝对话信息") } label: { Label("拷贝信息", systemImage: Theme.Icon.copy) }
             if let key {
-                Button { copy(key.sessionID, "已拷贝会话 ID") } label: { Label("拷贝会话 ID", systemImage: "number") }
+                Button { copy(key.sessionID, "已拷贝会话 ID") } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
             }
         }
         if let key {
@@ -207,16 +207,16 @@ struct AssistantTopBar: View {
                                 model.toast = Toast("已切换到 \(l.name)，下一条消息生效", style: .success)
                             } label: {
                                 let title = [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
-                                if l.name == launcher { Label(title, systemImage: "checkmark") } else { Text(title) }
+                                if l.name == launcher { Label(title, systemImage: Theme.Icon.done) } else { Text(title) }
                             }
                         }
                     }
-                } label: { Label("启动器：\(launcher)", systemImage: "cpu") }
+                } label: { Label("启动器：\(launcher)", systemImage: Theme.Icon.model) }
                 Button { showInfo = true } label: {
-                    Label("会话信息", systemImage: "info.circle")
+                    Label("会话信息", systemImage: Theme.Icon.info)
                 }
                 if session?.status.isActive == true {
-                    Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: "stop.circle") }
+                    Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
                 }
             }
         }

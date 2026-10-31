@@ -17,7 +17,7 @@ struct SettingsView: View {
         SplitNavigation(path: $path, destinations: SettingsDestinations()) {
             List {
                 Section {
-                    HStack(spacing: 14) {
+                    HStack(spacing: Theme.Space.l) {
                         AppGlyph(size: 54)
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text("Jarvis").font(Theme.Font.title)
@@ -25,14 +25,14 @@ struct SettingsView: View {
                                 Text("体验模式 · 数据都是编造的").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             } else {
                                 Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
-                                HStack(spacing: 5) {
+                                HStack(spacing: Theme.Space.sm) {
                                     Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
                                     Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Theme.Space.xs)
                 }
 
                 if model.isDemo {
@@ -61,21 +61,21 @@ struct SettingsView: View {
                         LabeledContent {
                             Text(model.assistantConfig?.launcher ?? "").font(Theme.Font.body.monospaced())
                         } label: {
-                            Label("助手", systemImage: "sparkles")
+                            Label("助手", systemImage: Theme.Icon.ai)
                         }
                     }
                     NavigationLink(value: SettingsPage.claude) {
-                        Label("Claude Code 设置", systemImage: "slider.horizontal.3")
+                        Label("Claude Code 设置", systemImage: Theme.Icon.options)
                     }
                     NavigationLink(value: MachineListRoute()) {
                         LabeledContent {
                             Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
                         } label: {
-                            Label("机器", systemImage: "macbook.and.iphone")
+                            Label("机器", systemImage: Theme.Icon.machines)
                         }
                     }
                     NavigationLink(value: SettingsPage.devices) {
-                        Label("设备", systemImage: "key")
+                        Label("设备", systemImage: Theme.Icon.credentials)
                     }
                 }
 
@@ -84,7 +84,7 @@ struct SettingsView: View {
                         Label("手机数据", systemImage: "iphone.gen3")
                     }
                     NavigationLink(value: SettingsPage.notifications) {
-                        Label("通知", systemImage: "bell.badge")
+                        Label("通知", systemImage: Theme.Icon.notifications)
                     }
                 } footer: {
                     Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。")
@@ -105,7 +105,7 @@ struct SettingsView: View {
                 if !model.isDemo {
                     Section("服务器") {
                         Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
-                        Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: "xmark.circle") }
+                        Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: Theme.Icon.end) }
                     }
                 }
 
@@ -131,7 +131,7 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPair) { PairView() }
         } empty: {
-            SplitPlaceholder(symbol: "gearshape", title: "设置", message: "左边选一项。")
+            SplitPlaceholder(symbol: Theme.Icon.settings, title: "设置", message: "左边选一项。")
         }
     }
 
@@ -166,7 +166,7 @@ struct SettingsView: View {
                     model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
                 }
             } label: {
-                Label("同步到 Apple Watch", systemImage: "applewatch").lineLimit(1)
+                Label("同步到 Apple Watch", systemImage: Theme.Icon.watch).lineLimit(1)
             }
         } footer: {
             Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
@@ -233,7 +233,7 @@ struct PhoneDataView: View {
         List {
             Section {
                 ForEach(PhoneDataSource.allCases) { s in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.m) {
                         Image(systemName: s.symbol)
                             .font(Theme.Font.heading)
                             .foregroundStyle(.white)
@@ -253,7 +253,7 @@ struct PhoneDataView: View {
                                     }
                                 } label: {
                                     Text(st == .granted || st == .limited ? st.title : st == .denied ? "已拒绝 · 去设置" : "点此授权")
-                                        .font(Theme.Font.label.weight(.semibold))
+                                        .font(Theme.Font.labelStrong)
                                         .foregroundStyle(st.isUsable ? Theme.positive : Theme.accent)
                                 }
                                 .buttonStyle(.plain)
@@ -268,7 +268,7 @@ struct PhoneDataView: View {
                         }))
                         .labelsHidden()
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, Theme.Space.xxs)
                 }
             } footer: {
                 Text("Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
@@ -289,7 +289,7 @@ struct AppGlyph: View {
             .fill(LinearGradient(colors: [Color(hex: 0x2A1810), Color(hex: 0x120B08)], startPoint: .top, endPoint: .bottom))
             .frame(width: size, height: size)
             .overlay {
-                Image(systemName: "sparkle")
+                Image(systemName: Theme.Icon.jarvis)
                     .font(.system(size: size * 0.48, weight: .semibold))
                     .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFB08A), Theme.brand], startPoint: .top, endPoint: .bottom))
             }
@@ -310,11 +310,11 @@ struct WelcomeView: View {
                 .opacity(appear ? 1 : 0)
             Text("Jarvis")
                 .font(Theme.Font.display)
-                .padding(.top, 24)
+                .padding(.top, Theme.Space.xl)
             Text("把每台电脑上的 Claude 装进口袋")
                 .font(Theme.Font.title)
                 .foregroundStyle(.secondary)
-                .padding(.top, 6)
+                .padding(.top, Theme.Space.sm)
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "你的每台电脑，herdr 里的同一个会话")
                 feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
@@ -322,44 +322,44 @@ struct WelcomeView: View {
                 feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")
             }
             .padding(.top, 40)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, Theme.Space.xxl)
             Spacer()
             Button { showPair = true } label: {
                 Label("连接 hub", systemImage: "qrcode.viewfinder").font(Theme.Font.heading).frame(maxWidth: .infinity, minHeight: 32)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, Theme.Space.xl)
             .accessibilityIdentifier("welcome.pair")
             Text("在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码")
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .padding(.top, 10)
+                .padding(.top, Theme.Space.m)
             // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
             Button { model.enterDemo() } label: {
                 Label("没有 hub？先体验一下", systemImage: "play.circle").font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 32)
             }
             .themedButton()
             .controlSize(.large)
-            .padding(.horizontal, 24)
-            .padding(.top, 14)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.top, Theme.Space.l)
             .accessibilityIdentifier("welcome.demo")
             Text("用编造的数据看看每个页面，不连接任何服务器")
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.top, Theme.Space.s)
+                .padding(.bottom, Theme.Space.m)
         }
         .sheet(isPresented: $showPair) { PairView() }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: Theme.Space.l) {
             Image(systemName: symbol)
                 .font(Theme.Font.title)
                 .foregroundStyle(Theme.accent)
@@ -521,12 +521,12 @@ struct ClaudeSettingsView: View {
                     .submitLabel(.done)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     private func title(_ s: APIClient.ClaudeSetting) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 Text(s.title)
                 if s.value == nil { Text("默认").font(Theme.Font.label).foregroundStyle(.tertiary) }
             }
@@ -573,7 +573,12 @@ struct ClaudeSettingsView: View {
 /// row: side by side they were 560 pt wide and the last two were off a 402 pt screen with nothing saying so.
 struct StylePicker: View {
     @Environment(AppModel.self) private var model
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 3)
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// Three previews a row; two at accessibility sizes, where three cut every name.
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: typeSize.isAccessibilitySize ? 2 : 3)
+    }
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -581,7 +586,7 @@ struct StylePicker: View {
                 Button {
                     guard s != model.style else { return }
                     Haptics.success()
-                    withAnimation(.snappy) { model.style = s }
+                    withAnimation(Theme.Motion.standard) { model.style = s }
                 } label: {
                     StyleCard(style: s, selected: s == model.style)
                 }
@@ -590,7 +595,7 @@ struct StylePicker: View {
                 .accessibilityAddTraits(s == model.style ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.Space.l)
     }
 }
 
@@ -607,23 +612,23 @@ private struct StyleCard: View {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
                         .frame(height: 16)
-                        .shadow(color: style == .island || style == .clay ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
+                        .shadow(color: [.puffy, .floating].contains(style.spec.surface) ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
                     HStack { Spacer(); Capsule().fill(bubble).frame(width: 40, height: 12) }
                     Capsule().fill(Color.secondary.opacity(0.25)).frame(width: 46, height: 8)
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         Circle().fill(accent).frame(width: 10, height: 10)
                         Capsule().fill(accent.opacity(0.35)).frame(height: 8)
                     }
                 }
-                .padding(10)
+                .padding(Theme.Space.m)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 120)
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
             VStack(spacing: Theme.Space.xxs) {
-                HStack(spacing: 3) {
-                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(accent) }
-                    Text(style.title).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                HStack(spacing: Theme.Space.xs) {
+                    if selected { Image(systemName: Theme.Icon.successFilled).foregroundStyle(accent) }
+                    Text(style.title).font(Theme.Font.captionStrong).lineLimit(1)
                 }
                 Text(style.subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }

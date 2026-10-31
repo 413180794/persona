@@ -18,73 +18,42 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
     case beautiful
 
     nonisolated(unsafe) static var current: AppStyle =
-        AppStyle(rawValue: UserDefaults.standard.string(forKey: "ui.style") ?? "") ?? .glass
+        AppStyle(rawValue: UserDefaults.standard.string(forKey: "ui.style") ?? "") ?? .glass {
+        didSet { StyleSpec.current = current.spec }
+    }
 
     var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .glass: "液态玻璃"
-        case .claude: "Claude"
-        case .clay: "黏土"
-        case .island: "Island"
-        case .lark: "飞书"
-        case .beautiful: "BeautifulUI"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .glass: "iOS 原生，简洁"
-        case .claude: "原来的珊瑚橙"
-        case .clay: "柔和、圆润"
-        case .island: "悬浮卡片"
-        case .lark: "和飞书一致"
-        case .beautiful: "新的思考轨迹、工具卡片和输入框"
-        }
-    }
-
+    var title: String { spec.title }
+    var subtitle: String { spec.subtitle }
     /// Liquid Glass surfaces and buttons; the other styles draw solid ones of their own.
-    var usesGlass: Bool { self == .glass || self == .claude || self == .beautiful }
+    var usesGlass: Bool { spec.surface == .glass }
     /// BeautifulUI's components (`.beautiful` only); every other style keeps Jarvis' own.
-    var usesBeautifulUI: Bool { self == .beautiful }
-    var fontDesign: Font.Design { self == .clay ? .rounded : .default }
-    /// Corner radius of cards / panels.
-    var corner: CGFloat {
-        switch self {
-        case .glass, .claude, .beautiful: 20
-        case .clay: 24
-        case .island: 26
-        case .lark: 10
-        }
-    }
+    var usesBeautifulUI: Bool { spec.components == .beautiful }
+    var fontDesign: Font.Design { spec.fontDesign }
+    /// Corner radius of the cards in the style picker's preview.
+    var corner: CGFloat { spec.previewCorner }
+}
+
+nonisolated extension StyleSpec {
+    /// The current style's spec, kept with `AppStyle.current` so the tokens read one value.
+    nonisolated(unsafe) static var current: StyleSpec = AppStyle.current.spec
 }
 
 nonisolated enum Theme {
-    private static var style: AppStyle { AppStyle.current }
+    private static var spec: StyleSpec { StyleSpec.current }
     #if os(watchOS)
-    private static let systemPage = Color.black
-    private static let systemCard = Color(white: 0.12)
+    static let systemPage = Color.black
+    static let systemCard = Color(white: 0.12)
     #else
-    private static let systemPage = Color(uiColor: .systemBackground)
-    private static let systemCard = Color(uiColor: .secondarySystemBackground)
+    static let systemPage = Color(uiColor: .systemBackground)
+    static let systemCard = Color(uiColor: .secondarySystemBackground)
     #endif
 
-    static var accent: Color { accent(style) }
-    static func accent(_ style: AppStyle) -> Color {
-        switch style {
-        case .glass, .beautiful: Color(light: 0x007AFF, dark: 0x0A84FF)
-        // Dark accents deep enough for white words on solid buttons and selected chips (≥ 3.5:1, like system blue's
-        // 3.65); Island's teal leans cyan and darker, away from the 完成未看 green and readable as a link on its mist.
-        case .claude: Color(light: 0xD4683F, dark: 0xCD6E45)
-        case .clay: Color(light: 0x7A5AF8, dark: 0x8979EB)
-        case .island: Color(light: 0x27747F, dark: 0x2A9798)
-        case .lark: Color(light: 0x3370FF, dark: 0x4C88FF)
-        }
-    }
+    static var accent: Color { spec.accent }
+    static func accent(_ style: AppStyle) -> Color { style.spec.accent }
     /// The app icon's coral. Only for Jarvis' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
     /// something to tap: that is `accent`, whatever the style.
-    static let brand = Color(light: 0xD4683F, dark: 0xE8835C)
+    static let brand = Palette.coral
     static let danger = Color(light: 0xD93A3A, dark: 0xFF5F57)
 
     // Meanings that are not agent states. Never use a state color (StatusPalette) for these: changing a state color
@@ -194,6 +163,19 @@ nonisolated enum Theme {
         static let label = SwiftUI.Font.caption
         /// Code, diffs, paths, terminal snippets (13).
         static let code = SwiftUI.Font.footnote.monospaced()
+
+        // Emphasis inside a level: views use these, never `.weight(` on a level (TypeScaleTests). Strong is semibold,
+        // the usual emphasis; medium and heavy (bold) are the weights in use today, kept so nothing moves.
+        static let bodyStrong = body.weight(.semibold)
+        static let bodyHeavy = body.weight(.bold)
+        static let secondaryStrong = secondary.weight(.semibold)
+        static let secondaryMedium = secondary.weight(.medium)
+        static let captionStrong = caption.weight(.semibold)
+        static let captionMedium = caption.weight(.medium)
+        static let captionHeavy = caption.weight(.bold)
+        static let labelStrong = label.weight(.semibold)
+        static let labelMedium = label.weight(.medium)
+        static let labelHeavy = label.weight(.bold)
     }
 
     /// The levels' sizes at the default text size and their line heights (a multiple of the size, as in CSS), for
@@ -254,6 +236,9 @@ nonisolated enum Theme {
     enum Motion {
         static let state = Animation.snappy(duration: 0.25)
         static let layout = Animation.smooth(duration: 0.3)
+        /// Opening and closing things (a work card, a menu, a section): a state change, 0.25 s (it was the system's
+        /// default snappy, 0.5 s, which trailed behind the finger).
+        static let standard = state
     }
 
     /// Categories with no meaning beyond telling them apart (memory types).
@@ -265,28 +250,13 @@ nonisolated enum Theme {
     }
 
     /// The user's own messages.
-    static var userBubble: Color { userBubble(style) }
-    static func userBubble(_ style: AppStyle) -> Color {
-        switch style {
-        case .glass, .beautiful: Color(light: 0xDCEAFF, dark: 0x1D3557) // a soft tint: a solid system blue was too heavy
-        // White words on the colored bubbles need ≥ 4.5:1 (body text): deeper than the accents.
-        case .claude: Color(light: 0xB24C25, dark: 0xAF4C28)
-        case .clay: Color(light: 0x6759D3, dark: 0x6756D9)
-        case .island: Color(light: 0x14201E, dark: 0xE8F3F1)
-        case .lark: Color(light: 0xD1E3FF, dark: 0x133063)
-        }
-    }
-    static var userBubbleText: Color {
-        switch style {
-        case .island: Color(light: 0xFFFFFF, dark: 0x0B1211)
-        case .glass, .lark, .beautiful: .primary
-        default: .white
-        }
-    }
+    static var userBubble: Color { spec.userBubble }
+    static func userBubble(_ style: AppStyle) -> Color { style.spec.userBubble }
+    static var userBubbleText: Color { spec.userBubbleText }
     /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient that only darkens toward the bottom
     /// (`Color.gradient` lightened the top, and the white words on it fell to 3:1).
     static var userBubbleFill: AnyShapeStyle {
-        style == .lark || style == .glass || style == .beautiful ? AnyShapeStyle(userBubble) : AnyShapeStyle(deepening(userBubble))
+        spec.deepensBubble ? AnyShapeStyle(deepening(userBubble)) : AnyShapeStyle(userBubble)
     }
 
     /// A color that darkens a little toward the bottom: depth without lightening what words sit on.
@@ -295,27 +265,12 @@ nonisolated enum Theme {
     }
 
     /// The page behind lists and chats.
-    static var pageBackground: Color { pageBackground(style) }
-    static func pageBackground(_ style: AppStyle) -> Color {
-        switch style {
-        case .glass, .claude, .beautiful: systemPage
-        // Clay's dark canvas sits under the system's grouped cells (#1C1C1E): at #1D1A23 they were one color (1.01:1).
-        case .clay: Color(light: 0xEFEAF7, dark: 0x0A0510)
-        case .island: Color(light: 0xE6F1EF, dark: 0x0A1110)
-        case .lark: Color(light: 0xF5F6F7, dark: 0x141414)
-        }
-    }
+    static var pageBackground: Color { spec.page }
+    static func pageBackground(_ style: AppStyle) -> Color { style.spec.page }
     /// Cards / panels in styles without glass.
-    static var card: Color { card(style) }
-    static func card(_ style: AppStyle) -> Color {
-        switch style {
-        case .glass, .claude, .beautiful: systemCard
-        case .clay: Color(light: 0xF8F5FD, dark: 0x2A2533)
-        case .island: Color(light: 0xFFFFFF, dark: 0x16201E)
-        case .lark: Color(light: 0xFFFFFF, dark: 0x1F1F1F)
-        }
-    }
-    static var cardStroke: Color { style == .lark ? Color(light: 0xDEE0E3, dark: 0x373A40) : Color.primary.opacity(0.08) }
+    static var card: Color { spec.card }
+    static func card(_ style: AppStyle) -> Color { style.spec.card }
+    static var cardStroke: Color { spec.cardStroke }
 
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)
     static let terminalBackground = Color(light: 0x16171B, dark: 0x0E0F12)

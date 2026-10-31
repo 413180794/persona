@@ -188,17 +188,17 @@ struct MetricChart: View {
 
     @ViewBuilder private func header(_ picked: MetricPoint?) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).font(Theme.Font.secondary.weight(.semibold))
+            Text(title).font(Theme.Font.secondaryStrong)
             Spacer(minLength: 8)
             if let picked {
                 Text(picked.date, format: .dateTime.hour().minute()).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
             }
         }
         // Values in text ink; a dot in the series color says which is which (the legend, for two series).
-        HStack(spacing: 14) {
+        HStack(spacing: Theme.Space.l) {
             ForEach(series.indices, id: \.self) { i in
                 let v = picked.map { series[i].value($0) } ?? (i < now.count ? now[i] : nil)
-                HStack(spacing: 5) {
+                HStack(spacing: Theme.Space.sm) {
                     if series.count > 1 {
                         Circle().fill(series[i].color).frame(width: 8, height: 8)
                         Text(series[i].name).font(Theme.Font.label).foregroundStyle(.secondary)

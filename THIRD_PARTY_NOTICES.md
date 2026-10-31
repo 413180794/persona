@@ -1,5 +1,21 @@
 # Third-party notices
 
+## Brand marks
+
+`ios/Jarvis/Resources/Assets.xcassets/Brands` and `ios/JarvisWatch/Assets.xcassets/Brands` hold other products' marks,
+shown next to the service Jarvis connects to. The marks are trademarks of their owners; using them here does not imply
+endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
+redrawn.
+
+| Asset | Mark | Source | Terms |
+| --- | --- | --- | --- |
+| `brand-claude` | Claude (Anthropic) | Simple Icons `claude.svg` (CC0 for the file) | Anthropic's brand guidelines |
+| `brand-openai` | OpenAI Blossom | github.com/openai/openai-cookbook, `chatgpt-blossom-black.svg` (viewBox cropped to the mark) | openai.com/brand |
+| `brand-lark` | 飞书 / Lark | github.com/larksuite/lark-samples, `public/svg/icon.svg` | Lark user agreement; no public logo guidelines found |
+| `brand-google` | Google G | developers.google.com/identity/branding-guidelines, `signin-assets.zip` (the G matted from the light and dark buttons) | Google Sign-In branding guidelines |
+| `brand-gmail` | Gmail | gstatic.com Google product icon `gmail_2020q4_512dp.png` | Google brand terms |
+| `os-*` | Ubuntu, Debian, Fedora, Red Hat, CentOS, Rocky Linux, AlmaLinux, Arch Linux, Alpine Linux, openSUSE, NixOS, Linux (Tux) | Simple Icons (CC0 for the files) | Debian CC-BY-SA-3.0, NixOS CC-BY-4.0, Rocky Linux CC-BY-SA-4.0; the others under each project's trademark policy |
+
 ## Ovis
 
 Parts of `server/internal/screen` (Claude Code input-box rules) are ported from Ovis, and

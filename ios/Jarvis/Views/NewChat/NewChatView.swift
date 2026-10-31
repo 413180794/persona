@@ -38,7 +38,7 @@ struct NewChatView: View {
             Form {
                 if let preset {
                     Section {
-                        Label(preset.spaceName, systemImage: "square.stack.3d.up.fill")
+                        Label(preset.spaceName, systemImage: Theme.Icon.spaceFilled)
                         Text(Fmt.path(preset.cwd, home: machine?.home)).font(Theme.Font.code).foregroundStyle(.secondary)
                     } header: { Text("加入空间") } footer: {
                         Text("会在 \(machine?.name ?? "") 的 herdr 这个 workspace 里新开一个标签。")
@@ -46,10 +46,10 @@ struct NewChatView: View {
                 } else {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
+                        HStack(spacing: Theme.Space.m) {
                             ForEach(model.machines) { m in machineCard(m) }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, Theme.Space.xs)
                     }
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 } header: { Text("机器") }
@@ -59,7 +59,7 @@ struct NewChatView: View {
                         DirectoryBrowser(machineID: machineID, start: cwd.isEmpty ? "" : cwd) { picked in cwd = picked }
                     } label: {
                         HStack {
-                            Image(systemName: "folder.fill").foregroundStyle(Theme.accent)
+                            Image(systemName: Theme.Icon.folderFilled).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(cwd.isEmpty ? "选择目录" : (cwd as NSString).lastPathComponent).font(Theme.Font.heading)
                                 if !cwd.isEmpty {
@@ -76,7 +76,7 @@ struct NewChatView: View {
                                 Haptics.tap()
                             } label: {
                                 HStack {
-                                    Image(systemName: cwd == r.path ? "checkmark.circle.fill" : "clock.arrow.circlepath")
+                                    Image(systemName: cwd == r.path ? Theme.Icon.successFilled : Theme.Icon.recent)
                                         .foregroundStyle(cwd == r.path ? Theme.accent : .secondary)
                                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                         Text(r.name).foregroundStyle(Color.primary)
@@ -97,7 +97,7 @@ struct NewChatView: View {
                         LauncherPicker(launchers: launchers, selection: $launcher)
                     } label: {
                         HStack {
-                            Image(systemName: "cpu").foregroundStyle(Theme.accent)
+                            Image(systemName: Theme.Icon.model).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(launcher.isEmpty ? "选择启动器" : launcher).font(Theme.Font.heading.monospaced())
                                 if let l = launchers.first(where: { $0.name == launcher }), let m = l.model, !m.isEmpty {
@@ -121,7 +121,7 @@ struct NewChatView: View {
                     Picker(selection: $effort) {
                         Text("跟随启动器").tag("")
                         ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
-                    } label: { Label { Text("思考强度") } icon: { Image(systemName: "gauge.with.dots.needle.50percent").foregroundStyle(Theme.accent) } }
+                    } label: { Label { Text("思考强度") } icon: { Image(systemName: Theme.Icon.effort).foregroundStyle(Theme.accent) } }
                 } header: { Text("权限与思考") } footer: {
                     Text(SessionModes.mode(mode)?.detail ?? "权限模式和思考强度在对话里也能随时改。")
                 }
@@ -146,17 +146,17 @@ struct NewChatView: View {
                 // Next to the button, not as the form's last section: below 第一条消息 and under this button it went
                 // unseen, the button just turned back to 开始对话 (and a retry started a second agent).
                 if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                    Label(error, systemImage: Theme.Icon.errorFilled)
                         .font(Theme.Font.caption).foregroundStyle(Theme.danger).lineLimit(4)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(.regularMaterial, in: .rect(cornerRadius: 12, style: .continuous))
+                        .padding(Theme.Space.m)
+                        .background(.regularMaterial, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .accessibilityIdentifier("newChat.error")
                 }
                 Button {
                     Task { await start() }
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         if starting { ProgressView().tint(.white) }
                         Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(Theme.Font.heading)
                             .lineLimit(1).minimumScaleFactor(0.8)
@@ -167,8 +167,8 @@ struct NewChatView: View {
                 .controlSize(.large)
                 .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.s)
             }
             .task(id: machineID) { await loadMachine() }
             .onAppear {
@@ -199,11 +199,11 @@ struct NewChatView: View {
                     Spacer()
                     Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).frame(width: 8, height: 8)
                 }
-                Text(m.name).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                Text(m.name).font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(m.online ? (m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(width: 120, alignment: .leading)
-            .padding(12)
+            .padding(Theme.Space.m)
             .background(selected ? Theme.accent.opacity(0.14) : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
             .opacity(m.online ? 1 : 0.55)
@@ -280,7 +280,7 @@ struct LauncherPicker: View {
                     HStack {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(l.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary)
-                            HStack(spacing: 6) {
+                            HStack(spacing: Theme.Space.sm) {
                                 if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {
                                     Text(host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
@@ -288,7 +288,7 @@ struct LauncherPicker: View {
                             }
                         }
                         Spacer()
-                        if l.name == selection { Image(systemName: "checkmark").foregroundStyle(Theme.accent).fontWeight(.semibold) }
+                        if l.name == selection { Image(systemName: Theme.Icon.done).foregroundStyle(Theme.accent).fontWeight(.semibold) }
                     }
                 }
             }
@@ -317,7 +317,7 @@ struct DirectoryBrowser: View {
                         onPick(list.path)
                         dismiss()
                     } label: {
-                        Label("使用「\((list.path as NSString).lastPathComponent)」", systemImage: "checkmark.circle.fill")
+                        Label("使用「\((list.path as NSString).lastPathComponent)」", systemImage: Theme.Icon.successFilled)
                             .font(Theme.Font.heading)
                     }
                 } footer: { Text(list.path).font(Theme.Font.code) }
@@ -329,7 +329,7 @@ struct DirectoryBrowser: View {
                     ForEach(list.entries) { e in
                         Button { Task { await load(e.path) } } label: {
                             HStack {
-                                Image(systemName: e.isGit ? "folder.badge.gearshape" : "folder").foregroundStyle(e.isGit ? Theme.accent : .secondary)
+                                Image(systemName: e.isGit ? "folder.badge.gearshape" : Theme.Icon.folder).foregroundStyle(e.isGit ? Theme.accent : .secondary)
                                 Text(e.name).foregroundStyle(.primary)
                                 Spacer()
                                 if e.isGit { Chip(text: "git") }
@@ -353,7 +353,7 @@ struct DirectoryBrowser: View {
         guard let api = model.api else { return }
         do {
             let l = try await api.dirs(machine: machineID, path: p)
-            withAnimation(.snappy) {
+            withAnimation(Theme.Motion.standard) {
                 list = l
                 path = l.path
             }

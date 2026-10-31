@@ -40,7 +40,7 @@ struct FeishuDocsTests {
         #expect(FeishuDocsKind(type: 22, url: "", kind: "folder") == .folder)
         #expect(FeishuDocsKind.from(url: "https://a.larkoffice.com/wiki/abc") == .wiki)
         #expect(FeishuDocsFileKind.symbol(ext: nil, title: "report.PDF").hue == "red")
-        #expect(FeishuDocsFileKind.symbol(ext: "md", title: "x").symbol == "chevron.left.forwardslash.chevron.right")
+        #expect(FeishuDocsFileKind.symbol(ext: "md", title: "x").symbol == Theme.Icon.code)
     }
 
     @Test func decodesReadTreeAndFlagsBase() throws {

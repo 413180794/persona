@@ -67,7 +67,7 @@ struct AssistantView: View {
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
     private func toggleSidebar() {
         if widthClass == .regular {
-            withAnimation(.snappy) { columns = columns == .detailOnly ? .all : .detailOnly }
+            withAnimation(Theme.Motion.standard) { columns = columns == .detailOnly ? .all : .detailOnly }
         } else {
             drawer.open()
         }
@@ -137,7 +137,7 @@ struct AssistantView: View {
     }
 
     private func newConversation() {
-        withAnimation(.snappy) {
+        withAnimation(Theme.Motion.standard) {
             model.assistantCurrent = nil
             pending = nil
         }
@@ -146,7 +146,7 @@ struct AssistantView: View {
     private func start(_ text: String, _ images: [ImagePayload]) async {
         guard let api = model.api else { return }
         startError = nil
-        withAnimation(.snappy) { pending = PendingStart(text: text, imageCount: images.count) }
+        withAnimation(Theme.Motion.standard) { pending = PendingStart(text: text, imageCount: images.count) }
         do {
             let s = try await api.startConversation(prompt: text, images: images, launcher: starterLauncher,
                                                     permissionMode: starterMode.isEmpty ? nil : starterMode,
@@ -154,12 +154,12 @@ struct AssistantView: View {
                                                     main: model.assistantMain == nil) // the first one becomes the main conversation
             if model.assistantMain == nil { await model.refreshAssistant() }
             Haptics.success()
-            withAnimation(.snappy) {
+            withAnimation(Theme.Motion.standard) {
                 model.assistantCurrent = s.key
                 pending = nil
             }
         } catch {
-            withAnimation(.snappy) {
+            withAnimation(Theme.Motion.standard) {
                 pending = nil
                 startError = error.shown
             }
@@ -201,22 +201,22 @@ struct AssistantHome: View {
                         Spacer(minLength: 48)
                         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
                             if pending.imageCount > 0 {
-                                Label("\(pending.imageCount) 张图片", systemImage: "photo").font(Theme.Font.label).foregroundStyle(.secondary)
+                                Label("\(pending.imageCount) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
                             }
                             // The same bubble as a sent message (white on the light-blue bubble was 1.2:1).
                             Text(pending.text)
                                 .foregroundStyle(Theme.userBubbleText)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
+                                .padding(.horizontal, Theme.Space.l)
+                                .padding(.vertical, Theme.Space.m)
                                 .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                         }
                     }
-                    .padding(.top, 12)
+                    .padding(.top, Theme.Space.m)
                     TypingIndicator(text: "Jarvis 正在准备…")
                 } else {
                     header
                     if let error {
-                        Label(error, systemImage: "exclamationmark.triangle")
+                        Label(error, systemImage: Theme.Icon.error)
                             .font(Theme.Font.caption)
                             .foregroundStyle(Theme.danger)
                     }
@@ -240,8 +240,8 @@ struct AssistantHome: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.bottom, Theme.Space.xl)
             // The conversation's measure on a wide display (iPhone Duo open).
             .frame(maxWidth: ChatView.readableWidth)
             .frame(maxWidth: .infinity)
@@ -251,12 +251,12 @@ struct AssistantHome: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: Theme.Space.s) {
                         // The BeautifulUI style picks the launcher in the prompt bar's model menu.
                         if !AppStyle.current.usesBeautifulUI { StarterModelChip(launcher: $launcher) }
                         NewSessionModePicker(mode: $mode, effort: $effort, modes: SessionModes.switchableModes)
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Theme.Space.xs)
                 }
                 if AppStyle.current.usesBeautifulUI {
                     BeautifulStarterComposer(disabled: pending != nil, launcher: $launcher, send: send)
@@ -264,10 +264,13 @@ struct AssistantHome: View {
                     StarterComposer(disabled: pending != nil, send: send)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.bottom, Theme.Space.s)
             .frame(maxWidth: ChatView.readableWidth)
             .frame(maxWidth: .infinity)
+            // At large text sizes the page reaches down here: back the chips and the field with the page, or the
+            // machine chips scrolled under them read through.
+            .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))
         }
         // The floating top bar (AssistantTopBar) is over the page: leave its room, let the page scroll under it.
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
@@ -277,7 +280,7 @@ struct AssistantHome: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
-            Text(greeting).font(Theme.Font.display).padding(.top, 20)
+            Text(greeting).font(Theme.Font.display).padding(.top, Theme.Space.xl)
             Text(model.assistantMain == nil
                  ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
                  : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
@@ -288,7 +291,7 @@ struct AssistantHome: View {
                 ForEach(model.machines.filter(\.online)) { m in
                     Chip(text: m.name, symbol: m.symbol)
                 }
-                Chip(text: "iPhone", symbol: model.live.state == .connected ? "iphone" : "iphone.slash")
+                Chip(text: "iPhone", symbol: model.live.state == .connected ? Theme.Icon.phone : "iphone.slash")
             }
         }
     }
@@ -309,8 +312,8 @@ struct TypingIndicator: View {
     @State private var phase = 0.0
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.xs) {
                 ForEach(0..<3) { i in
                     Circle()
                         .fill(Theme.accent)
@@ -356,8 +359,8 @@ struct StarterComposer: View {
                             images = []
                         }) {
                 // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                Button { showPhotos = true } label: { Label("照片", systemImage: "photo.on.rectangle") }
-                Button { showFiles = true } label: { Label("文件", systemImage: "doc") }
+                Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
+                Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
             }
         }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
@@ -486,26 +489,26 @@ struct AssistantToolsRow: View {
         let running = calls.last.map(\.isRunning) ?? false
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Button {
-                withAnimation(.snappy) { open.toggle() }
+                withAnimation(Theme.Motion.standard) { open.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     if running {
                         ProgressView().controlSize(.mini)
                         if let last = calls.last {
                             Text("\(ToolPresentation.verb(last.name)) \(ToolPresentation.subject(last))").lineLimit(1)
                         }
                     } else {
-                        Image(systemName: "wrench.and.screwdriver")
+                        Image(systemName: Theme.Icon.unknownTool)
                         Text("工具 \(count)")
                         Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).rotationEffect(.degrees(open ? 90 : 0))
+                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).rotationEffect(.degrees(open ? 90 : 0))
                 }
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
                 .background(Theme.Fill.well, in: .capsule)
             }
             .buttonStyle(.plain)
@@ -553,11 +556,11 @@ struct StarterModelChip: View {
                     launcher = l.name
                     Haptics.tap()
                 } label: {
-                    if l.name == current { Label(l.name, systemImage: "checkmark") } else { Text("\(l.name)  \(Fmt.model(l.model) ?? "")") }
+                    if l.name == current { Label(l.name, systemImage: Theme.Icon.done) } else { Text("\(l.name)  \(Fmt.model(l.model) ?? "")") }
                 }
             }
         } label: {
-            ModeChip(symbol: "cpu", text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
+            ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
         }
         .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
     }

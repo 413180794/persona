@@ -16,9 +16,7 @@ extension View {
 
     /// A scroll page that paints its own background (not a List): the system's grouped gray in the glass styles, the
     /// style's canvas otherwise (it used to stay system gray in 黏土 / Island / 飞书, and jumped against the next page).
-    @ViewBuilder func themedGroupedPage() -> some View {
-        if AppStyle.current.usesGlass { background(Color(.systemGroupedBackground)) } else { background(Theme.pageBackground) }
-    }
+    func themedGroupedPage() -> some View { background(Theme.groupedPage) }
 
     /// The page behind a list / scroll view: the style's canvas; the glass styles keep the system's.
     @ViewBuilder func themedPage() -> some View {
@@ -36,10 +34,10 @@ private struct Surface<S: Shape>: ViewModifier {
     var interactive: Bool
 
     func body(content: Content) -> some View {
-        switch AppStyle.current {
-        case .glass, .claude, .beautiful:
+        switch StyleSpec.current.surface {
+        case .glass:
             content.glassEffect(glass, in: shape)
-        case .clay:
+        case .puffy:
             // Clay: a puffy pastel slab — light from the top left, a soft colored shadow below.
             content.background {
                 ZStack {
@@ -50,7 +48,7 @@ private struct Surface<S: Shape>: ViewModifier {
                 .shadow(color: Color(light: 0x6B54D6, dark: 0x000000).opacity(0.22), radius: 12, x: 5, y: 8)
             }
             .overlay(shape.stroke(Color.white.opacity(0.45), lineWidth: 1))
-        case .island:
+        case .floating:
             content.background {
                 ZStack {
                     shape.fill(Theme.card)
@@ -58,7 +56,7 @@ private struct Surface<S: Shape>: ViewModifier {
                 }
                 .shadow(color: .black.opacity(0.13), radius: 20, y: 10)
             }
-        case .lark:
+        case .hairline:
             content.background {
                 ZStack {
                     shape.fill(Theme.card)
@@ -82,13 +80,13 @@ extension View {
     /// style directly: wrapping `Button(configuration)` in a PrimitiveButtonStyle that re-styles it recursed until the
     /// stack overflowed (crash on opening a chat in the glass styles).
     @ViewBuilder func themedButton(prominent: Bool = false) -> some View {
-        switch AppStyle.current {
-        case .glass, .claude, .beautiful:
+        switch StyleSpec.current.buttons {
+        case .glass:
             // .glassProminent keeps its full color when disabled (iOS 26.0): an empty composer's send looked tappable.
             if prominent { buttonStyle(.glassProminent).modifier(DimWhenDisabled()) } else { buttonStyle(.glass) }
-        case .lark:
+        case .bordered:
             if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
-        case .clay, .island:
+        case .soft:
             buttonStyle(SoftButtonStyle(prominent: prominent))
         }
     }
@@ -112,8 +110,8 @@ private struct SoftButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
             .frame(minHeight: 44)
             .foregroundStyle(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint))
             .background {
@@ -127,7 +125,7 @@ private struct SoftButtonStyle: ButtonStyle {
                     }
                 }
                 .compositingGroup()
-                .shadow(color: AppStyle.current == .clay ? Color(light: 0x6B54D6, dark: 0x000000).opacity(0.25) : .black.opacity(0.12),
+                .shadow(color: StyleSpec.current.softShadow,
                         radius: configuration.isPressed ? 2 : 6, y: configuration.isPressed ? 1 : 3)
             }
             .opacity(enabled ? 1 : 0.45)
@@ -141,3 +139,8 @@ extension View {
     func flippedBack() -> some View { scaleEffect(x: 1, y: -1) }
 }
 
+extension Theme {
+    /// The color `themedGroupedPage()` paints: what floats over such a page (a composer) is backed with it, so text
+    /// that scrolls under it at large sizes does not show through.
+    static var groupedPage: Color { AppStyle.current.usesGlass ? Color(.systemGroupedBackground) : pageBackground }
+}

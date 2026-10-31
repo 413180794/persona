@@ -23,9 +23,9 @@ node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存�
 | `cpu` | `/proc/cpuinfo` 第一个 `model name`（ARM 板子取 `Hardware` / `Model`） | `machdep.cpu.brand_string` |
 | `cores` / `memory` / `boot_time` | `runtime.NumCPU`、`MemTotal`、`/proc/stat` 的 `btime` | `runtime.NumCPU`、`hw.memsize`、`kern.boottime` |
 
-系统图标（`OSBadge`）：macOS 是 SF Symbols 的苹果标，Ubuntu 是画出来的「朋友圈」（三段弧加三个点），Arch / Alpine / NixOS 用相近的符号，
-Debian、Fedora、RHEL、CentOS、Rocky、Alma、openSUSE 是发行版颜色的字母；不认识的发行版先看 `ID_LIKE`（Pop!_OS → Ubuntu），再不行是通用 Linux。
-没有图片资源，任何尺寸、深浅色都清楚。
+系统图标（`OSBadge`）：macOS 是 SF Symbols 的苹果标，各 Linux 发行版是自己的官方标志（Simple Icons 的矢量图，`Theme.Brand.os`），
+染发行版的颜色；不认识的发行版先看 `ID_LIKE`（Pop!_OS → Ubuntu），再不行是通用 Linux 的企鹅。矢量资源，任何尺寸、深浅色都清楚。
+（2026-10-31 以前是画的「朋友圈」和字母，用户要求换成官方标志。）
 
 ## 采集口径
 

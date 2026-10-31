@@ -50,7 +50,7 @@ struct JarvisAvatar: View {
                 .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: max(0.5, size * 0.012)))
                 .overlay { eyes }
                 .offset(y: size * 0.02)
-            Image(systemName: "sparkle")
+            Image(systemName: Theme.Icon.jarvis)
                 .font(.system(size: size * 0.2, weight: .bold))
                 .foregroundStyle(.white.opacity(0.92))
                 .offset(x: size * 0.25, y: -size * 0.27)
@@ -83,7 +83,7 @@ struct JarvisAvatar: View {
         ZStack {
             Circle().fill(LinearGradient(colors: [accent.mix(with: .black, by: 0.72), accent.mix(with: .black, by: 0.88)],
                                          startPoint: .top, endPoint: .bottom))
-            Image(systemName: "sparkle")
+            Image(systemName: Theme.Icon.jarvis)
                 .font(.system(size: size * 0.5, weight: .semibold))
                 .foregroundStyle(LinearGradient(colors: [accent.mix(with: .white, by: 0.45), accent], startPoint: .top, endPoint: .bottom))
         }
@@ -134,15 +134,15 @@ struct JarvisAvatarGallery: View {
     private func panel(_ scheme: ColorScheme) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             ForEach(JarvisAvatar.Design.allCases) { d in
-                HStack(spacing: 18) {
-                    Text(d.title).font(Theme.Font.secondary.weight(.semibold)).frame(width: 40, alignment: .leading)
+                HStack(spacing: Theme.Space.l) {
+                    Text(d.title).font(Theme.Font.secondaryStrong).frame(width: 40, alignment: .leading)
                     JarvisAvatar(size: 28, design: d)
                     JarvisAvatar(size: 44, design: d)
                     JarvisAvatar(size: 84, design: d)
                     Spacer(minLength: 0)
                 }
             }
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 ForEach(AppStyle.allCases) { s in
                     VStack(spacing: Theme.Space.xs) {
                         JarvisAvatar(size: 40, tint: Theme.accent(s))
@@ -151,9 +151,9 @@ struct JarvisAvatarGallery: View {
                 }
             }
         }
-        .padding(16)
+        .padding(Theme.Space.l)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .systemBackground), in: .rect(cornerRadius: 20))
+        .background(Color(uiColor: .systemBackground), in: .rect(cornerRadius: Theme.Radius.bubble))
         .environment(\.colorScheme, scheme)
     }
 }

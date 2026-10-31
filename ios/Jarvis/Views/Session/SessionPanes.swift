@@ -34,13 +34,13 @@ struct SessionPaneBar: View {
     @Namespace private var ns
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.xs) {
             ForEach(panes) { p in
                 Button {
                     if p == .terminal, let openTerminal { Haptics.tap(); openTerminal(); return }
                     guard p != pane else { return }
                     Haptics.tap()
-                    withAnimation(.snappy(duration: 0.25)) { pane = p }
+                    withAnimation(Theme.Motion.state) { pane = p }
                 } label: {
                     PaneSegment(pane: p, on: p == pane, badge: badges[p], ns: ns)
                 }
@@ -49,10 +49,10 @@ struct SessionPaneBar: View {
                 .accessibilityAddTraits(p == pane ? .isSelected : [])
             }
         }
-        .padding(3)
+        .padding(Theme.Space.xs)
         .background(Theme.Fill.well, in: .capsule)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.sm)
     }
 }
 
@@ -63,12 +63,12 @@ private struct PaneSegment: View {
     var ns: Namespace.ID
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: pane.symbol).font(Theme.Font.label.weight(.semibold))
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: pane.symbol).font(Theme.Font.labelStrong)
             Text(pane.title).lineLimit(1).minimumScaleFactor(0.8)
             if let badge { badgeView(badge) }
         }
-        .font(Theme.Font.caption.weight(on ? .semibold : .medium))
+        .font(on ? Theme.Font.captionStrong : Theme.Font.captionMedium)
         .foregroundStyle(on ? Theme.accent : Color.secondary)
         .frame(maxWidth: .infinity)
         .frame(height: 30)
@@ -78,8 +78,8 @@ private struct PaneSegment: View {
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(Theme.Font.label.weight(.bold).monospacedDigit())
-            .padding(.horizontal, 5)
+            .font(Theme.Font.labelHeavy.monospacedDigit())
+            .padding(.horizontal, Theme.Space.sm)
             .padding(.vertical, 1)
             .background(on ? Theme.accent.opacity(0.18) : Theme.Fill.chip, in: .capsule)
     }
@@ -164,8 +164,8 @@ struct TerminalPanel: View {
         .background(Color(hex: side.background), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         // The controls on the terminal take its look: dark keys on the dark theme whatever the app's appearance.
         .environment(\.colorScheme, side.isDark ? .dark : .light)
-        .animation(.snappy, value: typing)
-        .animation(.snappy, value: keyboardUp)
+        .animation(Theme.Motion.standard, value: typing)
+        .animation(Theme.Motion.standard, value: keyboardUp)
         .onChange(of: keyboardUp) { _, up in onKeyboard?(up) }
         .sheet(isPresented: $showSettings) { TerminalSettingsView().environment(\.colorScheme, scheme) }
         .alert("电脑上另一个程序正在使用这个终端", isPresented: Binding(get: { feed.control == .busy }, set: { shown in
@@ -251,19 +251,19 @@ struct TerminalPanel: View {
                 field
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.top, Theme.Space.xs)
+        .padding(.bottom, Theme.Space.sm)
     }
 
     /// 输入框 mode: write, then send with return.
     private var field: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             TextField(Self.placeholder(mods), text: $input)
                 .focused($typing)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .padding(10)
+                .padding(Theme.Space.m)
                 .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .stroke(mods.active ? Theme.accent.opacity(0.6) : .clear, lineWidth: 1.5))
@@ -273,7 +273,7 @@ struct TerminalPanel: View {
                     suggestions = TerminalCompletion.suggestions(for: input, rows: feed.content.rows)
                 }
             Button(action: sendInput) {
-                Image(systemName: "return").frame(width: 24, height: 24)
+                Image(systemName: Theme.Icon.enter).frame(width: 24, height: 24)
             }
             .themedButton(prominent: true)
             .disabled(input.isEmpty)
@@ -285,7 +285,7 @@ struct TerminalPanel: View {
 
     @ViewBuilder private var screen: some View {
         if feed.offline && feed.screen.isEmpty {
-            ContentUnavailableView("没有终端", systemImage: "terminal",
+            ContentUnavailableView("没有终端", systemImage: Theme.Icon.terminal,
                                    description: Text("这个会话没有在 herdr 里运行，恢复会话后就能看到终端。"))
                 .foregroundStyle(Color(hex: side.foreground))
                 .frame(maxHeight: .infinity)
@@ -308,12 +308,12 @@ struct TerminalPanel: View {
             .overlay { pinchOverlay }
             .overlay(alignment: .top) {
                 if let error = feed.error {
-                    Text(error).font(Theme.Font.label).foregroundStyle(.white).padding(8)
-                        .background(Theme.danger.opacity(0.85), in: .capsule).padding(8)
+                    Text(error).font(Theme.Font.label).foregroundStyle(.white).padding(Theme.Space.s)
+                        .background(Theme.danger.opacity(0.85), in: .capsule).padding(Theme.Space.s)
                 }
             }
-            .animation(.snappy, value: feed.paused)
-            .animation(.snappy, value: pinchHUD == nil)
+            .animation(Theme.Motion.standard, value: feed.paused)
+            .animation(Theme.Motion.standard, value: pinchHUD == nil)
     }
 
     private var liveContent: some View {
@@ -350,16 +350,16 @@ struct TerminalPanel: View {
                 Haptics.tap()
                 feed.resume()
             } label: {
-                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(Theme.Font.caption.weight(.semibold))
+                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(Theme.Font.captionStrong)
             }
             .themedButton()
-            .padding(10)
+            .padding(Theme.Space.m)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if !tipsSeen {
             TerminalTips(direct: direct, openSettings: { tipsSeen = true; showSettings = true }) {
-                withAnimation(.snappy) { tipsSeen = true }
+                withAnimation(Theme.Motion.standard) { tipsSeen = true }
             }
-            .padding(10)
+            .padding(Theme.Space.m)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -367,9 +367,9 @@ struct TerminalPanel: View {
     @ViewBuilder private var pinchOverlay: some View {
         if let size = pinchHUD {
             Text("字号 \(size, specifier: "%.1f")")
-                .font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
+                .font(Theme.Font.secondaryStrong.monospacedDigit())
                 .lineLimit(1)
-                .padding(.horizontal, 14).padding(.vertical, 8)
+                .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.s)
                 .surface(in: .capsule)
                 .transition(.opacity)
                 .allowsHitTesting(false)
@@ -393,19 +393,19 @@ struct TerminalPanel: View {
                 .accessibilityLabel("关闭终端")
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("terminal-close")
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
                 if feed.loading { ProgressView().controlSize(.mini).tint(fg) }
                 Spacer(minLength: 0)
                 Button { Haptics.tap(); showSettings = true } label: {
-                    Image(systemName: "slider.horizontal.3").font(Theme.Font.caption.weight(.semibold)).frame(width: 32, height: 26)
+                    Image(systemName: Theme.Icon.options).font(Theme.Font.captionStrong).frame(width: 32, height: 26)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(fg.opacity(0.75))
                 .accessibilityLabel("终端设置")
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Theme.Space.m)
         .frame(height: 34)
         .contentShape(.rect)
         .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
@@ -414,31 +414,31 @@ struct TerminalPanel: View {
     }
 
     private var cardHeader: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             historyStatus
             Spacer(minLength: 8)
             if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
             Button { Haptics.tap(); showSettings = true } label: {
-                Label("设置", systemImage: "slider.horizontal.3")
-                    .font(Theme.Font.label.weight(.semibold))
+                Label("设置", systemImage: Theme.Icon.options)
+                    .font(Theme.Font.labelStrong)
                     .lineLimit(1)
                     .fixedSize()
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, Theme.Space.s)
+                    .padding(.vertical, Theme.Space.xs)
                     .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
             .accessibilityLabel("终端设置")
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.top, Theme.Space.s)
     }
 
     @ViewBuilder private var historyStatus: some View {
         Group {
             if feed.loading {
-                HStack(spacing: 6) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
+                HStack(spacing: Theme.Space.sm) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
             } else if feed.drives || feed.control == .starting {
                 EmptyView() // driving: scrolling up is the terminal's own history since the takeover, nothing to say
             } else if feed.atLimit {
@@ -449,7 +449,7 @@ struct TerminalPanel: View {
                 Text("上滑加载更早的输出").lineLimit(1).minimumScaleFactor(0.8)
             }
         }
-        .font(Theme.Font.label.weight(.medium))
+        .font(Theme.Font.labelMedium)
         .foregroundStyle(Color(hex: side.foreground).opacity(0.55))
     }
 
@@ -460,12 +460,12 @@ struct TerminalPanel: View {
         switch feed.control {
         case .active, .starting:
             let g = feed.phoneGrid
-            Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: "iphone")
-                .font(Theme.Font.label.weight(.semibold).monospacedDigit())
+            Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: Theme.Icon.phone)
+                .font(Theme.Font.labelStrong.monospacedDigit())
                 .lineLimit(1)
                 .fixedSize()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, Theme.Space.s)
+                .padding(.vertical, Theme.Space.xs)
                 .background(fg.opacity(0.1), in: .capsule)
                 .foregroundStyle(fg.opacity(0.75))
                 .accessibilityElement(children: .combine)
@@ -475,12 +475,12 @@ struct TerminalPanel: View {
                 Haptics.tap()
                 feed.takeOver(model)
             } label: {
-                Label("只看 · 接管", systemImage: "iphone.and.arrow.forward")
-                    .font(Theme.Font.label.weight(.semibold))
+                Label("只看 · 接管", systemImage: Theme.Icon.handoff)
+                    .font(Theme.Font.labelStrong)
                     .lineLimit(1)
                     .fixedSize()
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, Theme.Space.s)
+                    .padding(.vertical, Theme.Space.xs)
                     .background(fg.opacity(0.1), in: .capsule)
             }
             .buttonStyle(.plain)
@@ -509,11 +509,11 @@ struct TerminalPanel: View {
             wrap.toggle()
         } label: {
             Label(wrap ? "换行" : "不换行 · 左右滑", systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
-                .font(Theme.Font.label.weight(.semibold))
+                .font(Theme.Font.labelStrong)
                 .lineLimit(1)
                 .fixedSize()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, Theme.Space.s)
+                .padding(.vertical, Theme.Space.xs)
                 .background(Color(hex: side.foreground).opacity(0.1), in: .capsule)
         }
         .buttonStyle(.plain)
@@ -703,7 +703,7 @@ struct TerminalTips: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("终端小技巧").font(Theme.Font.secondary.weight(.semibold))
+            Text("终端小技巧").font(Theme.Font.secondaryStrong)
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 if direct { tip("keyboard", "键栏右边的键盘按钮弹出键盘直接打字；点终端是点在终端里") }
                 tip("arrow.up.left.and.arrow.down.right", "双指捏合调字号")
@@ -712,14 +712,14 @@ struct TerminalTips: View {
                 tip("arrow.left.arrow.right", "双指左右滑：切换同一空间的 Agent")
             }
             .font(Theme.Font.caption)
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 Button("配色、字体、键栏", action: openSettings).lineLimit(1).themedButton()
                 Spacer(minLength: 0)
                 Button("知道了", action: dismiss).lineLimit(1).themedButton(prominent: true)
             }
-            .font(Theme.Font.caption.weight(.semibold))
+            .font(Theme.Font.captionStrong)
         }
-        .padding(14)
+        .padding(Theme.Space.l)
         .frame(maxWidth: 380, alignment: .leading)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous)) // no shadow over the surface
     }
@@ -745,19 +745,19 @@ struct TerminalLinkStatus: View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let stale = lastOK.map { ctx.date.timeIntervalSince($0) > TerminalPanel.staleAfter } ?? false
             if failure != nil || stale {
-                HStack(spacing: 8) {
-                    Image(systemName: failure != nil ? "wifi.exclamationmark" : "clock.arrow.circlepath")
-                        .font(Theme.Font.label.weight(.semibold))
+                HStack(spacing: Theme.Space.s) {
+                    Image(systemName: failure != nil ? Theme.Icon.offline : Theme.Icon.recent)
+                        .font(Theme.Font.labelStrong)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(Theme.Font.label.weight(.semibold)).lineLimit(1)
+                        Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(Theme.Font.labelStrong).lineLimit(1)
                         Text(Self.detail(failure: failure, nextTry: nextTry, now: ctx.date))
                             .font(Theme.Font.label).opacity(0.8).lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     Button(action: retry) {
-                        Text("重试").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                        Text("重试").font(Theme.Font.captionStrong).lineLimit(1)
                             .foregroundStyle(.black)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, Theme.Space.l)
                             .frame(height: 30)
                             .background(.white, in: .capsule)
                     }
@@ -765,11 +765,11 @@ struct TerminalLinkStatus: View {
                     .accessibilityLabel("重试")
                 }
                 .foregroundStyle(.black)
-                .padding(.leading, 12)
-                .padding(.trailing, 8)
-                .padding(.vertical, 7)
+                .padding(.leading, Theme.Space.m)
+                .padding(.trailing, Theme.Space.s)
+                .padding(.vertical, Theme.Space.s)
                 .background(tint, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                .padding([.horizontal, .top], 6)
+                .padding([.horizontal, .top], Theme.Space.sm)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -804,19 +804,19 @@ struct BackgroundTasksStrip: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Button {
                 Haptics.tap()
-                withAnimation(.snappy) { expanded.toggle() }
+                withAnimation(Theme.Motion.standard) { expanded.toggle() }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "gearshape.2")
-                        .font(Theme.Font.caption.weight(.semibold))
+                HStack(spacing: Theme.Space.s) {
+                    Image(systemName: Theme.Icon.backgroundTask)
+                        .font(Theme.Font.captionStrong)
                         .foregroundStyle(Theme.busy)
-                    Text("\(tasks.count) 个后台任务").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                    Text("\(tasks.count) 个后台任务").font(Theme.Font.captionStrong).lineLimit(1)
                     if !expanded, let first = tasks.first {
                         Text(first.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: "chevron.up")
-                        .font(Theme.Font.label.weight(.bold))
+                    Image(systemName: Theme.Icon.collapse)
+                        .font(Theme.Font.labelHeavy)
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded ? 0 : 180))
                 }
@@ -828,20 +828,20 @@ struct BackgroundTasksStrip: View {
                 ForEach(tasks) { t in row(t) }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .surface(tint: Theme.busy.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 
     private func row(_ t: BackgroundTask) -> some View {
         Button { if t.outputFile != nil { openOutput(t) } } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: t.isAgent ? "person.2" : "terminal")
-                    .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+            HStack(alignment: .top, spacing: Theme.Space.m) {
+                Image(systemName: t.isAgent ? "person.2" : Theme.Icon.terminal)
+                    .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.secondary)
                     .frame(width: 18, height: 18)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text(t.title).font(Theme.Font.secondary.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
+                    Text(t.title).font(Theme.Font.secondaryMedium).foregroundStyle(Color.primary).lineLimit(1)
                     if let cmd = t.command, !cmd.isEmpty, cmd != t.title {
                         Text(cmd).font(Theme.Font.label.monospaced()).foregroundStyle(.secondary).lineLimit(2)
                     }
@@ -856,17 +856,17 @@ struct BackgroundTasksStrip: View {
                         }
                     }
                     if t.outputFile != nil {
-                        Text("看输出").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
+                        Text("看输出").font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1)
                     }
                 }
             }
-            .padding(10)
+            .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .contextMenu {
-            if let cmd = t.command { Button { UIPasteboard.general.string = cmd } label: { Label("拷贝命令", systemImage: "doc.on.doc") } }
+            if let cmd = t.command { Button { UIPasteboard.general.string = cmd } label: { Label("拷贝命令", systemImage: Theme.Icon.copy) } }
         }
     }
 
@@ -893,10 +893,10 @@ struct ActivityChips: View {
             Haptics.tap()
             open()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if let loop {
                     chip(Theme.loop, text: Theme.loop) {
-                        Image(systemName: "arrow.triangle.2.circlepath").font(Theme.Font.label.weight(.bold))
+                        Image(systemName: Theme.Icon.inProgress).font(Theme.Font.labelHeavy)
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(compact ? Self.shortLoopLabel(loop, now: ctx.date) : Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
                         }
@@ -904,7 +904,7 @@ struct ActivityChips: View {
                 }
                 if !background.isEmpty {
                     chip(Theme.busy, text: StatusPalette.working.text) {
-                        Image(systemName: "gearshape.2.fill").font(Theme.Font.label.weight(.bold))
+                        Image(systemName: Theme.Icon.backgroundTaskFilled).font(Theme.Font.labelHeavy)
                         Text("后台 \(background.count)").lineLimit(1)
                         if !compact, background.count == 1, let t = background.first {
                             Text(t.title).foregroundStyle(.secondary).lineLimit(1)
@@ -921,8 +921,8 @@ struct ActivityChips: View {
     }
 
     private func chip(_ tint: Color, text: Color, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 4) { content() }
-            .font(Theme.Font.label.weight(.semibold))
+        HStack(spacing: Theme.Space.xs) { content() }
+            .font(Theme.Font.labelStrong)
             .foregroundStyle(text)
             .padding(.horizontal, compact ? 10 : 8)
             .padding(.vertical, compact ? 10 : 3) // compact: as tall as the agents menu beside it
@@ -957,7 +957,7 @@ struct ActivitySheet: View {
                     if let loop { LoopStrip(loop: loop, stop: stopLoop, expanded: true) }
                     if !background.isEmpty { BackgroundTasksStrip(tasks: background, openOutput: openOutput, expanded: true) }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
             .navigationTitle(loop != nil && background.isEmpty ? "循环" : loop == nil ? "后台任务" : "循环与后台任务")
@@ -980,12 +980,12 @@ struct LoopStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(Theme.Font.caption.weight(.bold))
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.inProgress)
+                    .font(Theme.Font.captionHeavy)
                     .foregroundStyle(Theme.loop)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(Theme.Font.captionStrong).lineLimit(1)
                     if let next = loop.nextAt {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(next > ctx.date ? "下次唤醒 \(next.formatted(date: .omitted, time: .shortened))（\(Self.until(next, now: ctx.date))）"
@@ -996,22 +996,22 @@ struct LoopStrip: View {
                 }
                 Spacer(minLength: 4)
                 Button { confirming = true } label: {
-                    Text("停止循环").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                    Text("停止循环").font(Theme.Font.captionStrong).lineLimit(1)
                 }
                 .themedButton()
                 .tint(Theme.danger)
             }
             .contentShape(.rect)
-            .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
+            .onTapGesture { withAnimation(Theme.Motion.standard) { expanded.toggle() } }
             if expanded {
                 Text(loop.task).font(Theme.Font.secondary).foregroundStyle(.secondary).textSelection(.enabled)
                 if let r = loop.reason, !r.isEmpty {
-                    Label(r, systemImage: "text.bubble").font(Theme.Font.label).foregroundStyle(.tertiary)
+                    Label(r, systemImage: Theme.Icon.conversation).font(Theme.Font.label).foregroundStyle(.tertiary)
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .surface(tint: Theme.loop.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .confirmationDialog("停止这个循环？", isPresented: $confirming, titleVisibility: .visible) {
             Button("停止循环", role: .destructive, action: stop)
@@ -1034,16 +1034,16 @@ struct LoopTickRow: View {
     var item: Item
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(Theme.Font.label.weight(.bold))
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: Theme.Icon.inProgress).font(Theme.Font.labelHeavy)
             Text("循环唤醒").fontWeight(.semibold)
             if let ts = item.ts { Text(ts.formatted(date: .omitted, time: .shortened)) }
             Text(String((item.text ?? "").dropFirst(5)).trimmingCharacters(in: .whitespaces)).lineLimit(1).foregroundStyle(.tertiary)
         }
         .font(Theme.Font.label)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.sm)
         .background(Theme.Fill.well, in: .capsule)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -1067,41 +1067,41 @@ struct AgentStrip: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    chip(title: "主 Agent", symbol: "person.fill", running: false, done: false, on: viewing == nil) { select(nil) }
+                HStack(spacing: Theme.Space.sm) {
+                    chip(title: "主 Agent", symbol: Theme.Icon.user, running: false, done: false, on: viewing == nil) { select(nil) }
                         .id("main")
                     ForEach(agents) { a in
                         chip(title: a.title, symbol: nil, running: a.running, done: !a.running, on: viewing == a.id) { select(a) }
                             .id(a.id)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.bottom, Theme.Space.sm)
             }
             // The one being read stays in sight — only when it changes, and only along the row (an initial scrollTo
             // also scrolled the page around it and shifted the whole header).
             .onChange(of: viewing) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .trailing) }
+                withAnimation(Theme.Motion.standard) { proxy.scrollTo(id, anchor: .trailing) }
             }
         }
     }
 
     private func chip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.Space.sm) {
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if done {
-                    Image(systemName: "checkmark.circle.fill").font(Theme.Font.label).foregroundStyle(Theme.positive)
+                    Image(systemName: Theme.Icon.successFilled).font(Theme.Font.label).foregroundStyle(Theme.positive)
                 } else if let symbol {
-                    Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
+                    Image(systemName: symbol).font(Theme.Font.labelStrong)
                 }
                 Text(title).lineLimit(1).frame(maxWidth: 160)
             }
-            .font(Theme.Font.label.weight(on ? .semibold : .medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .font(on ? Theme.Font.labelStrong : Theme.Font.labelMedium)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.sm)
             .background(on ? Theme.accent.opacity(0.15) : Theme.Fill.well, in: .capsule)
             .overlay(Capsule().stroke(on ? Theme.accent.opacity(0.45) : .clear, lineWidth: 1))
             .foregroundStyle(on ? Theme.accent : Color.primary)
@@ -1118,22 +1118,22 @@ struct SubagentFooter: View {
     var back: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             Image(systemName: agent.running ? "person.2.wave.2" : "person.2")
-                .font(Theme.Font.secondary.weight(.semibold))
+                .font(Theme.Font.secondaryStrong)
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("子 Agent · " + (agent.type ?? "Agent")).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                Text("子 Agent · " + (agent.type ?? "Agent")).font(Theme.Font.captionStrong).lineLimit(1)
                 Text(agent.running ? "运行中，只读" : "已完成，只读").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
             Button(action: back) {
-                Label("回到主 Agent", systemImage: "arrow.uturn.backward").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                Label("回到主 Agent", systemImage: Theme.Icon.undo).font(Theme.Font.captionStrong).lineLimit(1)
             }
             .themedButton()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }

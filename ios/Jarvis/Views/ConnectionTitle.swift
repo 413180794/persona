@@ -21,7 +21,7 @@ struct ConnectionTitle: View {
                 Text(title).font(Theme.Font.heading).lineLimit(1).transition(.opacity)
             }
         }
-        .animation(.snappy, value: phase)
+        .animation(Theme.Motion.standard, value: phase)
         .connectionDetails($details)
         #if DEBUG
         // `-openConnectionDetails YES` (with `-showConnection …`): the details open (screenshots).
@@ -66,9 +66,9 @@ struct ConnectionDetails: View {
         let phase = status.shown == .online ? status.phase : status.shown
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Space.s) {
                     if phase == .online {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.positive)
+                        Image(systemName: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
                         Text("已连上 hub").font(Theme.Font.heading)
                     } else {
                         ConnectionLabel(phase: phase)
@@ -94,10 +94,10 @@ struct ConnectionDetails: View {
                         Text("立即重试").lineLimit(1).frame(maxWidth: .infinity)
                     }
                     .themedButton(prominent: true)
-                    .padding(.top, 2)
+                    .padding(.top, Theme.Space.xxs)
                 }
             }
-            .padding(16)
+            .padding(Theme.Space.l)
             .frame(width: 300, alignment: .leading)
         }
     }

@@ -150,8 +150,8 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
         super.init(frame: frame)
         delegate = self
         alwaysBounceVertical = true
-        showsHorizontalScrollIndicator = true
-        indicatorStyle = .white
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
         canvas.host = self
         canvas.isOpaque = false
         canvas.backgroundColor = .clear
@@ -634,14 +634,14 @@ final class TerminalScrollView: UIScrollView, UIScrollViewDelegate, UIEditMenuIn
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
         UIMenu(children: [
-            UIAction(title: "拷贝", image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+            UIAction(title: "拷贝", image: UIImage(systemName: Theme.Icon.copy)) { [weak self] _ in
                 guard let self else { return }
                 UIPasteboard.general.string = self.selectedText()
                 self.onCopy?()
                 self.selection = nil
                 self.canvas.setNeedsDisplay()
             },
-            UIAction(title: "全选", image: UIImage(systemName: "selection.pin.in.out")) { [weak self] _ in
+            UIAction(title: "全选", image: UIImage(systemName: Theme.Icon.select)) { [weak self] _ in
                 guard let self, !self.lines.isEmpty else { return }
                 self.selection = (CellPoint(line: 0, col: 0),
                                   CellPoint(line: self.lines.count - 1, col: max(0, self.lines[self.lines.count - 1].to - self.lines[self.lines.count - 1].from - 1)))

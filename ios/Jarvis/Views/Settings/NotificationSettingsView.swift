@@ -21,7 +21,7 @@ struct NotificationSettingsView: View {
                             Text("下面的设置要在系统设置里允许 Jarvis 发通知后才生效。").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "bell.slash.fill").foregroundStyle(Theme.caution)
+                        Image(systemName: Theme.Icon.muted).foregroundStyle(Theme.caution)
                     }
                     openSystemSettings
                 }
@@ -48,7 +48,7 @@ struct NotificationSettingsView: View {
                     Text("只推长任务").tag(NotifyPrefs.Done.long)
                     Text("每次都推").tag(NotifyPrefs.Done.always)
                 } label: {
-                    Label("Agent 做完时", systemImage: "checkmark.circle")
+                    Label("Agent 做完时", systemImage: Theme.Icon.success)
                 }
                 .pickerStyle(.inline)
                 .labelsHidden() // the section header says it
@@ -66,7 +66,7 @@ struct NotificationSettingsView: View {
                             Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "sparkle").foregroundStyle(Theme.brand)
+                        Image(systemName: Theme.Icon.jarvis).foregroundStyle(Theme.brand)
                     }
                 }
                 Toggle(isOn: binding(\.lockDetails)) {
@@ -76,7 +76,7 @@ struct NotificationSettingsView: View {
                             Text("关着时锁屏只显示数量和「有个授权等你」，不显示 Agent 名字和内容").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
-                        Image(systemName: "eye").foregroundStyle(.secondary)
+                        Image(systemName: Theme.Icon.view).foregroundStyle(.secondary)
                     }
                 }
                 .disabled(prefs?.liveActivity == false)
@@ -94,7 +94,7 @@ struct NotificationSettingsView: View {
                     Label {
                         Text("系统设置里关掉了 Jarvis 的实时活动").font(Theme.Font.caption)
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.caution)
+                        Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.caution)
                     }
                     Button {
                         UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)

@@ -72,7 +72,7 @@ struct ImageEditor: View {
 
     private var toolbar: some View {
         VStack(spacing: Theme.Space.m) {
-            HStack(spacing: 14) {
+            HStack(spacing: Theme.Space.l) {
                 ForEach(Self.colors, id: \.self) { c in
                     Button { color = c } label: {
                         Circle().fill(Color(uiColor: c)).frame(width: 26, height: 26)
@@ -82,24 +82,24 @@ struct ImageEditor: View {
                     .accessibilityLabel("颜色")
                 }
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.m) {
                 toolButton(.box, "框选", "rectangle")
                 toolButton(.pen, "画笔", "scribble")
                 Spacer(minLength: 0)
-                Button { _ = marks.popLast() } label: { Image(systemName: "arrow.uturn.backward").frame(width: 24) }
+                Button { _ = marks.popLast() } label: { Image(systemName: Theme.Icon.undo).frame(width: 24) }
                     .themedButton().disabled(marks.isEmpty).accessibilityLabel("撤销")
-                Button { marks = [] } label: { Image(systemName: "trash").frame(width: 24) }
+                Button { marks = [] } label: { Image(systemName: Theme.Icon.delete).frame(width: 24) }
                     .themedButton().disabled(marks.isEmpty).accessibilityLabel("清除")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .background(.black)
     }
 
     private func toolButton(_ t: Tool, _ title: String, _ symbol: String) -> some View {
         Button { tool = t } label: {
-            Label(title, systemImage: symbol).lineLimit(1).font(Theme.Font.secondary.weight(.semibold))
+            Label(title, systemImage: symbol).lineLimit(1).font(Theme.Font.secondaryStrong)
         }
         .themedButton(prominent: tool == t)
     }

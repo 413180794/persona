@@ -44,13 +44,13 @@ struct FilesPane: View {
     }
 
     private var breadcrumb: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             if !stack.isEmpty {
                 Button {
                     Haptics.tap()
                     stack.removeLast()
                 } label: {
-                    Image(systemName: "chevron.left").font(Theme.Font.caption.weight(.semibold)).frame(width: 30, height: 30)
+                    Image(systemName: Theme.Icon.back).font(Theme.Font.captionStrong).frame(width: 30, height: 30)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -58,28 +58,28 @@ struct FilesPane: View {
             }
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         crumb((cwd as NSString).lastPathComponent, level: 0)
                         ForEach(Array(stack.enumerated()), id: \.offset) { i, name in
                             Image(systemName: "chevron.compact.right").font(Theme.Font.label).foregroundStyle(.tertiary)
                             crumb(name, level: i + 1)
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, Theme.Space.xxs)
                 }
                 .onChange(of: stack.count) { _, n in withAnimation { proxy.scrollTo(n, anchor: .trailing) } }
             }
             Menu {
-                Toggle(isOn: $showHidden) { Label("显示隐藏文件", systemImage: "eye") }
-                Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: "doc.on.doc") }
+                Toggle(isOn: $showHidden) { Label("显示隐藏文件", systemImage: Theme.Icon.view) }
+                Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
             } label: {
-                Image(systemName: "ellipsis").font(Theme.Font.caption.weight(.semibold)).frame(width: 30, height: 30)
+                Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).frame(width: 30, height: 30)
             }
             .themedButton()
             .clipShape(.circle)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.sm)
     }
 
     private func crumb(_ name: String, level: Int) -> some View {
@@ -90,11 +90,11 @@ struct FilesPane: View {
             stack = Array(stack.prefix(level))
         } label: {
             Text(name.isEmpty ? "/" : name)
-                .font(Theme.Font.caption.weight(current ? .semibold : .regular))
+                .font(current ? Theme.Font.captionStrong : Theme.Font.caption)
                 .lineLimit(1)
                 .foregroundStyle(current ? Color.primary : Color.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, Theme.Space.s)
+                .padding(.vertical, Theme.Space.xs)
                 .background(current ? Theme.Fill.chip : .clear, in: .capsule)
         }
         .buttonStyle(.plain)
@@ -112,17 +112,17 @@ struct FilesPane: View {
                 file = FileRef(machineID: machineID, path: full, cwd: cwd)
             }
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: e.dir ? "folder.fill" : FileViewer.symbol(for: e.name))
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: e.dir ? Theme.Icon.folderFilled : FileViewer.symbol(for: e.name))
                     .font(Theme.Font.body)
                     .foregroundStyle(e.dir ? Theme.accent : Color.secondary)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         Text(e.name).font(Theme.Font.secondary).foregroundStyle(e.name.hasPrefix(".") ? Color.secondary : Color.primary).lineLimit(1)
                         if e.symlink == true { Image(systemName: "arrow.turn.up.right").font(Theme.Font.label).foregroundStyle(.tertiary) }
                     }
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         if !e.dir { Text(ByteCountFormatter.string(fromByteCount: e.size, countStyle: .file)) }
                         if let m = e.mtime { Text(Fmt.relative(m)) }
                     }
@@ -138,13 +138,13 @@ struct FilesPane: View {
                         GitBadge(letter: mark)
                     }
                 }
-                if e.dir { Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary) }
+                if e.dir { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary) }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button { UIPasteboard.general.string = full } label: { Label("拷贝路径", systemImage: "doc.on.doc") }
+            Button { UIPasteboard.general.string = full } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
         }
     }
 

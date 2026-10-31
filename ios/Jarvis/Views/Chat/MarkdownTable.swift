@@ -205,6 +205,6 @@ struct FittedTableCell: View {
             }
         }
         .padding(.horizontal, FittedTable.cellPadding / 2)
-        .padding(.vertical, 6)
+        .padding(.vertical, Theme.Space.sm)
     }
 }

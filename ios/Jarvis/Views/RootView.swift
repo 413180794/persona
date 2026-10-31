@@ -23,6 +23,9 @@ struct RootView: View {
         .fontDesign(model.style.fontDesign)
         .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))
         .buiTheme(.jarvis(model.style))
+        // No scroll bars anywhere (2026-10-31, the user: they look bad); the environment reaches every ScrollView,
+        // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
+        .scrollIndicators(.hidden)
         .overlay(alignment: .top) { ToastOverlay() }
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
@@ -61,7 +64,7 @@ struct RootView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("AssistantRootTab.body")
         #endif
-        Tab("Jarvis", systemImage: "sparkles", value: AppTab.assistant) {
+        Tab("Jarvis", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
             AssistantView()
             #if PERF_SIGNPOST
                 .modifier(PerfTabMount("assistant"))
@@ -78,7 +81,7 @@ struct RootView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("AgentsRootTab.body")
         #endif
-        Tab("Agents", systemImage: "chevron.left.forwardslash.chevron.right", value: AppTab.chats) {
+        Tab("Agents", systemImage: Theme.Icon.agents, value: AppTab.chats) {
             ChatsView()
             #if PERF_SIGNPOST
                 .modifier(PerfTabMount("agents"))
@@ -95,7 +98,7 @@ struct RootView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("InboxRootTab.body")
         #endif
-        Tab("收件箱", systemImage: "tray.full", value: AppTab.mail) {
+        Tab("收件箱", systemImage: Theme.Icon.inbox, value: AppTab.mail) {
             InboxView()
             #if PERF_SIGNPOST
                 .modifier(PerfTabMount("inbox"))
@@ -112,7 +115,7 @@ struct RootView: View {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("SettingsRootTab.body")
         #endif
-        Tab("设置", systemImage: "gearshape", value: AppTab.settings) {
+        Tab("设置", systemImage: Theme.Icon.settings, value: AppTab.settings) {
             SettingsView()
             #if PERF_SIGNPOST
                 .modifier(PerfTabMount("settings"))
@@ -128,25 +131,25 @@ struct ToastOverlay: View {
     var body: some View {
         ZStack {
             if let toast = model.toast {
-                HStack(spacing: 10) {
-                    Image(systemName: toast.style == .error ? "exclamationmark.triangle.fill" : toast.style == .success ? "checkmark.circle.fill" : "info.circle.fill")
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: toast.style == .error ? Theme.Icon.errorFilled : toast.style == .success ? Theme.Icon.successFilled : "info.circle.fill")
                         .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.positive : Theme.accent)
                     Text(toast.message)
-                        .font(Theme.Font.secondary.weight(.medium))
+                        .font(Theme.Font.secondaryMedium)
                         .lineLimit(3)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.vertical, Theme.Space.m)
                 .surface(in: .capsule)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Theme.Space.xl)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .onTapGesture { model.toast = nil }
                 .task(id: toast.id) {
                     try? await Task.sleep(for: .seconds(toast.style == .error ? 4 : 2.5))
-                    withAnimation(.snappy) { model.toast = nil }
+                    withAnimation(Theme.Motion.standard) { model.toast = nil }
                 }
             }
         }
-        .animation(.snappy, value: model.toast)
+        .animation(Theme.Motion.standard, value: model.toast)
     }
 }

@@ -285,6 +285,16 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 
 ## 设计语言
 
+- 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：
+  - `Shared/Design/`：token，手表也编译。`Theme`（字体级别和强调、间距、圆角、行高、动画、颜色角色）、`Icons`（`Theme.Icon` 和 `Theme.Brand`）、
+    `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec` 和 `Styles/` 下每种风格一个文件。
+  - `Jarvis/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
+    （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`TextSize`。
+  - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `StyleSpec`（主色、气泡、页面、卡片、描边、表面画法、按钮、字体设计、组件套件、飞书的颜色），
+    `AppStyle` 加一个 case，`spec` 里对上。别的代码只读 `StyleSpec.current`，不要 `switch AppStyle`。`StyleSpecTests` 会查新风格深浅色的对比度。
+  - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
+    竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
+    减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
 - 界面风格（设置 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
 
   | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |
@@ -318,6 +328,17 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   - 飞书消息和卡片保留飞书自己的字号（落在上面的级别上），通过 `LarkTextBase.scale`（`Theme.textScale`）一样跟随。
   - 固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（MarkdownUI 自己按动态字体缩放）。
   - 例外：终端网格（用户自己调字号）、灵动岛格子、导出的分享卡片（固定版式的图片）、小圆圈里的序号和角标。
+  - 等宽只给要逐字符对照或拷贝的东西：代码、命令、路径、分支、哈希和 ID、版本号、终端和工具输出。中文说明和值用系统字体
+    （会话信息页按行选：模型、分支、目录、版本等宽，其余系统字体 + 等宽数字；记忆编辑器、知识库的最近消息是系统字体）。
+  - 图标 `Theme.Icon`（`Shared/Design/Icons.swift`）：一个意思一个 SF Symbol，页面写 `Theme.Icon.copy`，不写 `"doc.on.doc"`。
+    两个文件都用到的符号必须登记；出错一律是三角（`error` / `errorFilled`），八角只给机器的严重告警（`critical`）；拷贝 `doc.on.doc`、
+    粘贴 `doc.on.clipboard`；中断 `stop.fill`；模型 / 启动器 `cube`，`cpu` 只是处理器；代码文件 `curlybraces`，`</>` 只是 Agents。
+    `IconVocabularyTests` 扫源码：登记过的符号写了名字、两个文件共用却没登记、退役的出错符号回来，都会失败。
+    别家的图标名（飞书卡片的 icon token）照飞书的画，那一行以 `// icon: <原因>` 结尾。
+  - 品牌标志 `Theme.Brand`（Assets 的 Brands 文件夹，来源和条款见 `THIRD_PARTY_NOTICES.md`）：Claude、OpenAI（Codex）、飞书、
+    Gmail、Google 的 G、各 Linux 发行版。按官方原样用，不改颜色、不重画；发行版是单色模板，染发行版的颜色。用在：分享卡的头像
+    （Claude / Codex，TRAEX 没有公开标志，仍是绿底终端）、收件箱的来源角标和手表收件箱（飞书）、邮箱账号（Gmail / 飞书邮箱）、
+    「使用 Google 账号登录」按钮（照 Google 的规范：浅色白底灰边、深色 #131314，不用主色）、机器的系统图标（`OSBadge`）。
   锁屏实时活动限到 `.large`（高度约 160pt，超出会被裁掉）。
 - 动效（`Theme.Motion`：状态切换 `.snappy` 0.25、布局 `.smooth` 0.3）：一直在动的只有「需要你」圆点的呼吸和工作中的系统转圈，
   打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。
@@ -348,6 +369,12 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 
 ## 数据流
 
+- 逻辑层的选型（2026-10-31）：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM：一个 `@Observable` 的 `XxxModel` 放在页面旁边，
+  hub、报错、toast、跳转从 `Deps` 传进来（`live` 接 `AppModel`），视图只留自己的状态（正在编辑哪个、弹出了什么）。第一个是
+  `AssistantRoutinesModel`。事件多、顺序出过问题的地方（对话页、飞书会话的分页）先把纯计算抽出来：`ChatLines`（消息 → 行）、
+  `AgentListOrder`（Agents 列表的排序和分组），再改成 reducer。
+- 单元测试不连 hub：`APIClient.transport` 换成 `FakeHub`（JarvisTests）按「方法 路径」回固定的 JSON，记下发了什么，view model 走真实的请求和解码。
+  体验模式仍用全局的 `APIClient.local`。
 - `AppModel`（`Jarvis/App`）：配对信息存 Keychain；`LiveConnection`（WebSocket，指数退避重连，重连后按 `since_seq` 重新订阅）；
   每个会话一个 `ChatStore`（按 id 去重、按 seq 排序、`buildRows` 生成展示行）。
 - 进入对话页 `subscribe`，离开 `unsubscribe`；hub 推 `items` / `screen` / `sessions` / `interaction`。

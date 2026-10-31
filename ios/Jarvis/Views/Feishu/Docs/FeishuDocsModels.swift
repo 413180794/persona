@@ -162,7 +162,7 @@ nonisolated enum FeishuDocsFileKind {
         case "ppt", "pptx", "odp", "key": return ("play.rectangle.fill", "orange")
         case "doc", "docx", "odt", "rtf", "pages": return ("doc.text.fill", "blue")
         case "md", "txt", "json", "yaml", "yml", "js", "ts", "py", "go", "sh", "swift", "html", "css":
-            return ("chevron.left.forwardslash.chevron.right", "indigo")
+            return (Theme.Icon.code, "indigo")
         default: return ("doc.fill", "grey")
         }
     }

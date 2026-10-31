@@ -33,9 +33,9 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
 
     var symbol: String {
         switch icon {
-        case "server": "server.rack"
-        case "desktop": "desktopcomputer"
-        default: "laptopcomputer"
+        case "server": Theme.Icon.server
+        case "desktop": Theme.Icon.machine
+        default: Theme.Icon.laptop
         }
     }
 }

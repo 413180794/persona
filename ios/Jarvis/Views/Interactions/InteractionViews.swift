@@ -16,7 +16,7 @@ extension InteractionKind {
         case .question: "questionmark.bubble.fill"
         case .plan: "list.bullet.clipboard.fill"
         case .permission: "hand.raised.fill"
-        case .screen: "terminal.fill"
+        case .screen: Theme.Icon.terminalFilled
         }
     }
 }
@@ -34,7 +34,7 @@ struct InteractionPreviewCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 // Every interaction is 需要你: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
                     .foregroundStyle(StatusPalette.needsYou.dot)
@@ -46,7 +46,7 @@ struct InteractionPreviewCard: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
             }
             Text(summary)
                 .font(Theme.Font.body).lineHeight(.body)
@@ -96,11 +96,11 @@ struct FlowButtons: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 ForEach(labels, id: \.self) { label in
                     let (text, recommended) = QuestionForm.display(label)
                     Button { action(label) } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: Theme.Space.sm) {
                             Text(text).lineLimit(1)
                             if recommended { RecommendedTag() }
                         }
@@ -144,19 +144,19 @@ struct InteractionPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 Image(systemName: interaction.kind.symbol)
-                    .font(Theme.Font.label.weight(.semibold))
+                    .font(Theme.Font.labelStrong)
                     .foregroundStyle(StatusPalette.needsYou.dot)
-                Text(panelTitle).font(Theme.Font.label.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+                Text(panelTitle).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
                 if collapsed {
                     Text(previewText).font(Theme.Font.secondary).foregroundStyle(.primary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 if interaction.kind == .plan && !collapsed {
                     Button { showFullPlan = true } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(Theme.Font.caption.weight(.semibold))
+                        Image(systemName: Theme.Icon.enlarge)
+                            .font(Theme.Font.captionStrong)
                             .foregroundStyle(.secondary)
                             .frame(width: 28, height: 28)
                             .contentShape(.rect)
@@ -166,23 +166,23 @@ struct InteractionPanel: View {
                 }
                 Menu {
                     Button { Task { await model.resolve(interaction, .dismissed) } } label: {
-                        Label("交给电脑上的终端处理", systemImage: "desktopcomputer")
+                        Label("交给电脑上的终端处理", systemImage: Theme.Icon.machine)
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(Theme.Font.caption.weight(.semibold))
+                    Image(systemName: Theme.Icon.more)
+                        .font(Theme.Font.captionStrong)
                         .foregroundStyle(.secondary)
                         .frame(width: 28, height: 28)
                         .contentShape(.rect)
                 }
-                Image(systemName: "chevron.down")
-                    .font(Theme.Font.caption.weight(.semibold))
+                Image(systemName: Theme.Icon.expand)
+                    .font(Theme.Font.captionStrong)
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(collapsed ? 180 : 0))
                     .frame(width: 28, height: 28)
             }
             .contentShape(.rect)
-            .onTapGesture { withAnimation(.snappy) { collapsed.toggle() } }
+            .onTapGesture { withAnimation(Theme.Motion.standard) { collapsed.toggle() } }
             if !collapsed {
                 ScrollView {
                     form.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
@@ -193,9 +193,9 @@ struct InteractionPanel: View {
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 16)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.m)
+        .padding(.bottom, Theme.Space.l)
         .surface(in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -251,7 +251,7 @@ struct QuestionForm: View {
                           questions.count > 1 ? "\(page + 1)/\(questions.count)" : nil,
                           q.multiSelect ? "可多选" : nil].compactMap { $0 }.joined(separator: " · "))
                         .monospacedDigit()
-                    .font(Theme.Font.label.weight(.semibold))
+                    .font(Theme.Font.labelStrong)
                     .foregroundStyle(.secondary)
                 }
                 Text(q.question)
@@ -284,18 +284,18 @@ struct QuestionForm: View {
         let selected = picks[q.question, default: []].contains(opt.label)
         let (label, recommended) = Self.display(opt.label)
         return Button { pick(q, opt) } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 ZStack {
                     Circle().fill(selected ? Theme.accent : Theme.Fill.chip)
                     if selected {
-                        Image(systemName: "checkmark").font(Theme.Font.label.weight(.bold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).foregroundStyle(.white)
+                        Image(systemName: Theme.Icon.done).font(Theme.Font.labelHeavy).dynamicTypeSize(...DynamicTypeSize.xxLarge).foregroundStyle(.white)
                     } else {
-                        Text("\(number)").font(Theme.Font.label.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                        Text("\(number)").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         Text(label).font(Theme.Font.heading).foregroundStyle(.primary)
                         if recommended { RecommendedTag() }
                     }
@@ -306,8 +306,8 @@ struct QuestionForm: View {
                 Spacer(minLength: 0)
             }
             .multilineTextAlignment(.leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
             .background(selected ? Theme.accent.opacity(0.08) : .clear)
             .contentShape(.rect)
         }
@@ -319,9 +319,9 @@ struct QuestionForm: View {
     /// "其他": a quiet row; tapping it turns it into a field with its own send arrow.
     @ViewBuilder private func otherRow(_ q: Question) -> some View {
         let text = Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 })
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "pencil")
-                .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        HStack(alignment: .center, spacing: Theme.Space.m) {
+            Image(systemName: Theme.Icon.edit)
+                .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .background(Theme.Fill.chip, in: .circle)
@@ -344,12 +344,12 @@ struct QuestionForm: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .contentShape(.rect)
         .onTapGesture {
             guard !writing else { return }
-            withAnimation(.snappy) { writing = true }
+            withAnimation(Theme.Motion.standard) { writing = true }
             otherFocused = true
         }
     }
@@ -359,18 +359,18 @@ struct QuestionForm: View {
     private var needsFooter: Bool { questions.count > 1 || questions.first?.multiSelect == true }
 
     private var footer: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             if page > 0 {
-                Button { withAnimation(.snappy) { page -= 1 } } label: { Text("上一题").lineLimit(1) }
+                Button { withAnimation(Theme.Motion.standard) { page -= 1 } } label: { Text("上一题").lineLimit(1) }
                     .themedButton()
             }
             Spacer(minLength: 0)
             Button { advance() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     if sending { ProgressView().controlSize(.small).tint(.white) }
                     Text(isLast ? "提交" : "下一题").lineLimit(1)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, Theme.Space.s)
             }
             .themedButton(prominent: true)
             .disabled(!canAdvance || sending)
@@ -398,14 +398,14 @@ struct QuestionForm: View {
         if questions.count == 1 {
             submit() // one question, one choice: the tap is the answer
         } else if page < questions.count - 1 {
-            Task { try? await Task.sleep(for: .milliseconds(250)); withAnimation(.snappy) { page += 1 } }
+            Task { try? await Task.sleep(for: .milliseconds(250)); withAnimation(Theme.Motion.standard) { page += 1 } }
         }
     }
 
     private var isLast: Bool { page >= questions.count - 1 || allAnswered }
 
     private func advance() {
-        if isLast { submit() } else { withAnimation(.snappy) { page += 1 } }
+        if isLast { submit() } else { withAnimation(Theme.Motion.standard) { page += 1 } }
     }
 
     private func answer(_ q: Question) -> String? {
@@ -421,7 +421,7 @@ struct QuestionForm: View {
 
     private func submit() {
         if !allAnswered {
-            if let next = questions.firstIndex(where: { answer($0) == nil }) { withAnimation(.snappy) { page = next } }
+            if let next = questions.firstIndex(where: { answer($0) == nil }) { withAnimation(Theme.Motion.standard) { page = next } }
             return
         }
         sending = true
@@ -454,7 +454,7 @@ struct PlanForm: View {
             if rejecting {
                 TextField("告诉 Claude 要怎么改…", text: $feedback, axis: .vertical)
                     .lineLimit(2...6)
-                    .padding(12)
+                    .padding(Theme.Space.m)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 HStack {
                     Button("取消") { withAnimation { rejecting = false } }.themedButton()
@@ -467,7 +467,7 @@ struct PlanForm: View {
                 Button {
                     Task { await model.resolve(interaction, Resolution(approve: true, mode: "bypassPermissions")) }
                 } label: {
-                    Label("批准并自动执行", systemImage: "play.fill").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Label("批准并自动执行", systemImage: Theme.Icon.run).lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton(prominent: true)
                 .controlSize(.large)
@@ -499,13 +499,13 @@ struct PermissionForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.toolName ?? "工具").font(Theme.Font.secondary.weight(.semibold))
+                Text(interaction.toolName ?? "工具").font(Theme.Font.secondaryStrong)
             }
             Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
                 .font(Theme.Font.code)
-                .padding(12)
+                .padding(Theme.Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .textSelection(.enabled)
@@ -557,7 +557,7 @@ struct ScreenForm: View {
             if !d.steps.isEmpty {
                 ScreenSteps(steps: d.steps)
             } else if let h = d.header, !h.isEmpty {
-                Text(h).font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
+                Text(h).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
             if !d.question.isEmpty {
                 Text(d.question).font(Theme.Font.heading).fixedSize(horizontal: false, vertical: true)
@@ -566,7 +566,7 @@ struct ScreenForm: View {
                 Text(detail)
                     .font(Theme.Font.code)
                     .foregroundStyle(.secondary)
-                    .padding(10)
+                    .padding(Theme.Space.m)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
@@ -578,18 +578,18 @@ struct ScreenForm: View {
                 }
             }
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-            HStack(spacing: 16) {
+            HStack(spacing: Theme.Space.l) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
                     Button { send(chat.key, answer(chat)) } label: {
                         Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
-                Button { withAnimation(.snappy) { showTerminal.toggle() } } label: {
-                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: "terminal").lineLimit(1)
+                Button { withAnimation(Theme.Motion.standard) { showTerminal.toggle() } } label: {
+                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
             }
-            .font(Theme.Font.caption.weight(.medium))
+            .font(Theme.Font.captionMedium)
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
             if showTerminal { terminal(screen) }
@@ -599,18 +599,18 @@ struct ScreenForm: View {
     private func choice(_ opt: ScreenParser.Dialog.Option) -> some View {
         let (label, recommended) = QuestionForm.display(opt.label)
         return Button { send(opt.key, answer(opt)) } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 ZStack {
                     Circle().fill(sending == opt.key ? Theme.accent : Theme.Fill.chip)
                     if sending == opt.key {
                         ProgressView().controlSize(.mini).tint(.white)
                     } else {
-                        Text(opt.key).font(Theme.Font.label.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                        Text(opt.key).font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         Text(label).font(Theme.Font.heading).foregroundStyle(.primary)
                         if recommended { RecommendedTag() }
                     }
@@ -621,8 +621,8 @@ struct ScreenForm: View {
                 Spacer(minLength: 0)
             }
             .multilineTextAlignment(.leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
             .background(sending == opt.key ? Theme.accent.opacity(0.08) : .clear)
             .contentShape(.rect)
         }
@@ -633,9 +633,9 @@ struct ScreenForm: View {
 
     /// "Type something.": a quiet row that turns into a field; sending picks the option, types, presses enter.
     private func typeRow(_ opt: ScreenParser.Dialog.Option) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "pencil")
-                .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        HStack(alignment: .center, spacing: Theme.Space.m) {
+            Image(systemName: Theme.Icon.edit)
+                .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .background(Theme.Fill.chip, in: .circle)
@@ -662,12 +662,12 @@ struct ScreenForm: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.m)
         .contentShape(.rect)
         .onTapGesture {
             guard !writing else { return }
-            withAnimation(.snappy) { writing = true }
+            withAnimation(Theme.Motion.standard) { writing = true }
             focused = true
         }
     }
@@ -686,13 +686,13 @@ struct ScreenForm: View {
                 }
             }
             .textFieldStyle(.plain)
-            .padding(10)
+            .padding(Theme.Space.m)
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             Button {
                 let t = text
                 text = ""
                 Task { await model.resolve(interaction, Resolution(keys: ["enter"], text: t)) }
-            } label: { Image(systemName: "return") }
+            } label: { Image(systemName: Theme.Icon.enter) }
                 .themedButton(prominent: true)
                 .disabled(text.isEmpty)
         }
@@ -721,11 +721,11 @@ struct ScreenSteps: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         Group {
-                            if s.done { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                            if s.done { Image(systemName: Theme.Icon.done).font(.system(size: 8, weight: .bold)) }
                             else { Text("\(i + 1)").font(.system(size: 9, weight: .bold).monospacedDigit()) } // type-scale: glyph (a step number in a 16 pt circle)
                         }
                         .foregroundStyle(s.done ? .white : .secondary)
@@ -733,9 +733,9 @@ struct ScreenSteps: View {
                         .background(s.done ? Theme.positive : Color.primary.opacity(0.1), in: .circle)
                         Text(s.label).lineLimit(1)
                     }
-                    .font(Theme.Font.label.weight(.medium))
+                    .font(Theme.Font.labelMedium)
                     .foregroundStyle(s.done ? .secondary : .primary)
-                    .padding(.leading, 4).padding(.trailing, 8).padding(.vertical, 4)
+                    .padding(.leading, Theme.Space.xs).padding(.trailing, Theme.Space.s).padding(.vertical, Theme.Space.xs)
                     .background(Color.primary.opacity(0.05), in: .capsule)
                 }
             }
@@ -758,7 +758,7 @@ struct TerminalText: View {
                 .font(Theme.Font.label.monospaced())
                 .foregroundStyle(Theme.terminalText)
                 .textSelection(.enabled)
-                .padding(10)
+                .padding(Theme.Space.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .defaultScrollAnchor(.bottomLeading)

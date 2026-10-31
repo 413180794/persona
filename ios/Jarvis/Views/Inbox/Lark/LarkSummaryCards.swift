@@ -17,8 +17,8 @@ struct LarkSummaryCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(LarkColor.cardBackground)
-        .clipShape(.rect(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke))
+        .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke))
     }
 
     private var title: String { meta["title"]?.string ?? fallbackTitle }
@@ -35,23 +35,23 @@ struct LarkMergeForwardCard: View {
         let count = meta["messageCount"]?.int ?? previews.count
         Button { showing = true } label: {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text(title.isEmpty ? "聊天记录" : title).font(Theme.Font.secondary.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                Text(title.isEmpty ? "聊天记录" : title).font(Theme.Font.secondaryStrong).lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(Array(previews.prefix(4).enumerated()), id: \.offset) { _, p in
                     Text("\(p["senderName"]?.string ?? "")：\(Fmt.plain(p["text"]?.string ?? ""))")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Divider().padding(.top, 2)
+                Divider().padding(.top, Theme.Space.xxs)
                 HStack {
-                    Label("聊天记录", systemImage: "text.bubble").labelStyle(.titleAndIcon)
+                    Label("聊天记录", systemImage: Theme.Icon.conversation).labelStyle(.titleAndIcon)
                     Spacer()
                     Text("\(count) 条")
                 }
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
             }
-            .padding(12)
+            .padding(Theme.Space.m)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -75,11 +75,11 @@ struct LarkForwardedView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
                     ForEach(messages) { m in
-                        HStack(alignment: .top, spacing: 10) {
+                        HStack(alignment: .top, spacing: Theme.Space.m) {
                             LarkAvatarImage(name: m.senderName ?? "?", url: m.senderAvatarUrl.map(Self.hubURL), size: 32)
                             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                                HStack(spacing: 6) {
-                                    Text(m.senderName ?? "").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
+                                HStack(spacing: Theme.Space.sm) {
+                                    Text(m.senderName ?? "").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                                     if let d = m.createdAt { Text(d.formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.label).foregroundStyle(.tertiary) }
                                 }
                                 if let parts = m.parts, !parts.isEmpty {
@@ -92,7 +92,7 @@ struct LarkForwardedView: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Theme.Space.l)
             }
             .navigationTitle(title.isEmpty ? "聊天记录" : title)
             .navigationBarTitleDisplayMode(.inline)
@@ -119,10 +119,10 @@ struct LarkShareCard: View {
             return "\(l) \(LarkFormat.fieldValue(v))"
         }
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 LarkAvatarImage(name: title, url: meta["imageUrl"]?.string, isGroup: isGroup, size: 44)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text(title).font(Theme.Font.secondary.weight(.semibold)).lineLimit(2)
+                    Text(title).font(Theme.Font.secondaryStrong).lineLimit(2)
                     if !fields.isEmpty { Text(fields.joined(separator: " · ")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
                 }
             }
@@ -135,7 +135,7 @@ struct LarkShareCard: View {
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
         }
-        .padding(12)
+        .padding(Theme.Space.m)
     }
 }
 
@@ -154,7 +154,7 @@ struct LarkGenericSummaryCard: View {
         HStack(spacing: 0) {
             Rectangle().fill(accent).frame(width: 4)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: Theme.Space.m) {
                     Group {
                         if let img = meta["imageUrl"]?.string {
                             LarkRemoteImage(url: img, size: larkThumbEdge(points: 36), maxPixel: 120)
@@ -164,15 +164,15 @@ struct LarkGenericSummaryCard: View {
                         }
                     }
                     .frame(width: 36, height: 36)
-                    .clipShape(.rect(cornerRadius: 8, style: .continuous))
+                    .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         if let eyebrow = meta["eyebrow"]?.string { Text(eyebrow).font(Theme.Font.label).foregroundStyle(.secondary) }
-                        Text(title).font(Theme.Font.secondary.weight(.semibold)).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                        Text(title).font(Theme.Font.secondaryStrong).lineLimit(3).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
                     if let status = meta["status"]?.string {
-                        Text(status).font(Theme.Font.label.weight(.medium)).lineLimit(1).foregroundStyle(.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(Color.primary.opacity(0.06), in: .capsule).fixedSize()
+                        Text(status).font(Theme.Font.labelMedium).lineLimit(1).foregroundStyle(.secondary)
+                            .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs).background(Color.primary.opacity(0.06), in: .capsule).fixedSize()
                     }
                 }
                 if let desc = meta["description"]?.string, !desc.isEmpty {
@@ -181,7 +181,7 @@ struct LarkGenericSummaryCard: View {
                 if let vote = meta["vote"], let options = vote["options"]?.array, !options.isEmpty {
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         ForEach(Array(options.enumerated()), id: \.offset) { _, o in
-                            Label(o["content"]?.string ?? "", systemImage: (vote["maxPick"]?.int ?? 1) > 1 ? "square" : "circle")
+                            Label(o["content"]?.string ?? "", systemImage: (vote["maxPick"]?.int ?? 1) > 1 ? Theme.Icon.uncheckedBox : Theme.Icon.unchecked)
                                 .font(Theme.Font.secondary)
                         }
                     }
@@ -204,12 +204,12 @@ struct LarkGenericSummaryCard: View {
                         UIPasteboard.general.string = value
                         Haptics.success()
                         AppModel.shared.toast = Toast("已拷贝会议号", style: .success)
-                    } label: { Label("拷贝会议号", systemImage: "doc.on.doc").lineLimit(1).font(Theme.Font.label.weight(.medium)) }
+                    } label: { Label("拷贝会议号", systemImage: Theme.Icon.copy).lineLimit(1).font(Theme.Font.labelMedium) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
             }
-            .padding(12)
+            .padding(Theme.Space.m)
         }
     }
 

@@ -20,7 +20,7 @@ struct GitPane: View {
                 changes(s)
                 history(s)
             } else if let error {
-                ContentUnavailableView("读不到 Git 状态", systemImage: "exclamationmark.triangle", description: Text(error))
+                ContentUnavailableView("读不到 Git 状态", systemImage: Theme.Icon.error, description: Text(error))
                     .listRowBackground(Color.clear)
             } else if status?.isRepo == false {
                 ContentUnavailableView("不是 Git 仓库", systemImage: "arrow.triangle.branch", description: Text(cwd))
@@ -39,14 +39,14 @@ struct GitPane: View {
 
     private func header(_ s: GitStatus) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.accent)
                 Text(s.branch ?? "分离的 HEAD").font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: 4)
                 if s.ahead > 0 { sync("arrow.up", s.ahead, .secondary) }
                 if s.behind > 0 { sync("arrow.down", s.behind, Theme.cautionText) }
             }
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 if let up = s.upstream {
                     Label(up, systemImage: "cloud").lineLimit(1)
                     if s.ahead == 0 && s.behind == 0 { Text("· 已同步") }
@@ -61,7 +61,7 @@ struct GitPane: View {
                 Text(Fmt.path(root, home: nil)).font(Theme.Font.label.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.xxs)
     }
 
     private func sync(_ symbol: String, _ n: Int, _ color: Color) -> some View {
@@ -71,13 +71,13 @@ struct GitPane: View {
     @ViewBuilder private func changes(_ s: GitStatus) -> some View {
         Section {
             if s.files.isEmpty {
-                Label("工作区是干净的", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                Label("工作区是干净的", systemImage: Theme.Icon.success).foregroundStyle(.secondary)
             }
             ForEach(s.files) { f in
                 Button { diff = GitDiffTarget(file: f, staged: f.isStaged && !f.hasUnstaged) } label: { GitFileRow(file: f) }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button { UIPasteboard.general.string = f.path } label: { Label("拷贝路径", systemImage: "doc.on.doc") }
+                        Button { UIPasteboard.general.string = f.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
                     }
             }
         } header: {
@@ -104,7 +104,7 @@ struct GitPane: View {
                 Button {
                     Task { await loadMore(after: s.commits.count + older.count) }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Space.sm) {
                         if loadingMore { ProgressView().controlSize(.mini) }
                         Text("加载更早的提交").lineLimit(1)
                     }
@@ -150,7 +150,7 @@ struct GitBadge: View {
 
     var body: some View {
         Text(letter)
-            .font(Theme.Font.label.weight(.bold).monospaced()).dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .font(Theme.Font.labelHeavy.monospaced()).dynamicTypeSize(...DynamicTypeSize.xLarge)
             .foregroundStyle(color)
             .frame(width: 20, height: 20)
             .background(color.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
@@ -173,11 +173,11 @@ struct GitFileRow: View {
     var showsStage = true
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             GitBadge(letter: file.letter)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(file.name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
-                HStack(spacing: 4) {
+                Text(file.name).font(Theme.Font.secondaryMedium).lineLimit(1)
+                HStack(spacing: Theme.Space.xs) {
                     if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(.primary) }
                     if let orig = file.origPath { Text("← " + (orig as NSString).lastPathComponent) }
                     if !file.folder.isEmpty { Text(file.folder).truncationMode(.head) }
@@ -190,7 +190,7 @@ struct GitFileRow: View {
             if file.binary == true {
                 Text("二进制").font(Theme.Font.label).foregroundStyle(.secondary)
             } else if file.added + file.deleted > 0 {
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.xs) {
                     Text("+\(file.added)").foregroundStyle(Theme.Diff.add)
                     Text("−\(file.deleted)").foregroundStyle(Theme.Diff.del)
                 }
@@ -207,8 +207,8 @@ struct GitCommitRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(commit.subject).font(Theme.Font.secondary.weight(.medium)).lineLimit(2)
-            HStack(spacing: 6) {
+            Text(commit.subject).font(Theme.Font.secondaryMedium).lineLimit(2)
+            HStack(spacing: Theme.Space.sm) {
                 Text(commit.short).font(Theme.Font.code).foregroundStyle(Theme.accent)
                 Text(commit.author).lineLimit(1)
                 if let d = commit.date { Text("· " + Fmt.relative(d)).lineLimit(1) }
@@ -218,7 +218,7 @@ struct GitCommitRow: View {
             let refs = commit.refNames
             if !refs.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         // A local branch outlined, a remote one (origin/…) plain: refs are facts, not buttons.
                         ForEach(refs, id: \.self) { r in Chip(text: r, look: r.contains("/") ? .neutral : .outline) }
                     }
@@ -248,13 +248,13 @@ struct GitDiffSheet: View {
                         Text("已暂存").tag(true)
                     }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.vertical, Theme.Space.s)
                 }
                 if let diff {
                     DiffText(diff: diff.diff, truncated: diff.truncated)
                 } else if let error {
-                    ContentUnavailableView("读不到改动", systemImage: "exclamationmark.triangle", description: Text(error))
+                    ContentUnavailableView("读不到改动", systemImage: Theme.Icon.error, description: Text(error))
                 } else {
                     ProgressView().frame(maxHeight: .infinity)
                 }
@@ -266,9 +266,9 @@ struct GitDiffSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button { UIPasteboard.general.string = diff?.diff } label: { Label("拷贝 diff", systemImage: "doc.on.doc") }
-                        Button { UIPasteboard.general.string = target.file.path } label: { Label("拷贝路径", systemImage: "link") }
-                    } label: { Image(systemName: "ellipsis") }
+                        Button { UIPasteboard.general.string = diff?.diff } label: { Label("拷贝 diff", systemImage: Theme.Icon.copy) }
+                        Button { UIPasteboard.general.string = target.file.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                    } label: { Image(systemName: Theme.Icon.more) }
                 }
             }
             .task(id: target) {
@@ -300,7 +300,7 @@ struct GitCommitSheet: View {
                         if let body = (show?.commit.body ?? commit.body), !body.isEmpty {
                             Text(body).font(Theme.Font.body).foregroundStyle(.secondary).textSelection(.enabled)
                         }
-                        HStack(spacing: 6) {
+                        HStack(spacing: Theme.Space.sm) {
                             Text(commit.author)
                             if let d = commit.date { Text("· " + d.formatted(date: .abbreviated, time: .shortened)) }
                         }
@@ -310,11 +310,11 @@ struct GitCommitSheet: View {
                             UIPasteboard.general.string = commit.hash
                             Haptics.success()
                         } label: {
-                            Label(commit.hash, systemImage: "number").font(Theme.Font.label.monospaced()).lineLimit(1).truncationMode(.middle)
+                            Label(commit.hash, systemImage: Theme.Icon.id).font(Theme.Font.label.monospaced()).lineLimit(1).truncationMode(.middle)
                         }
                         .buttonStyle(.borderless)
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, Theme.Space.xxs)
                 }
                 if let show {
                     let chunks = DiffText.split(show.diff)
@@ -385,12 +385,12 @@ struct DiffText: View {
     var body: some View {
         let content = GitDiffMemo.content(diff)
         if content.lines.isEmpty {
-            ContentUnavailableView("没有文本改动", systemImage: "doc.text", description: Text("可能是二进制文件、只改了权限，或者改动已被撤销。"))
+            ContentUnavailableView("没有文本改动", systemImage: Theme.Icon.document, description: Text("可能是二进制文件、只改了权限，或者改动已被撤销。"))
         } else {
             VStack(spacing: 0) {
                 MonoTextView(text: content.text, inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
                 if truncated {
-                    Text("改动太大，只显示了前 512 KB").font(Theme.Font.label).foregroundStyle(.secondary).padding(8)
+                    Text("改动太大，只显示了前 512 KB").font(Theme.Font.label).foregroundStyle(.secondary).padding(Theme.Space.s)
                 }
             }
             .background(Theme.codeBackground)

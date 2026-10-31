@@ -39,9 +39,9 @@ struct MachineMonitorView: View {
                 if let system { SystemFacts(system: system, machine: machine) }
                 Text("历史保留 24 小时。最近 1 小时每 10 秒一个点，更早的每分钟一个点；中间断开的时段不连线。")
                     .font(Theme.Font.label).foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Theme.Space.xs)
             }
-            .padding(16)
+            .padding(Theme.Space.l)
         }
         .themedPage()
         .navigationTitle(machine?.name ?? machineID)
@@ -84,13 +84,13 @@ struct MachineMonitorView: View {
     }
 
     private func header(_ m: Machine?, system: MachineSystem?, online: Bool) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Theme.Space.l) {
             OSBadge(system: system, fallback: m?.symbol ?? "desktopcomputer", size: 54, online: online)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(system?.name ?? m?.os ?? "未知系统").font(Theme.Font.heading).lineLimit(2)
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     Circle().fill(online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
-                    Text(online ? "在线" : "离线").font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(online ? Theme.positive : .secondary)
+                    Text(online ? "在线" : "离线").font(Theme.Font.secondaryStrong).foregroundStyle(online ? Theme.positive : .secondary)
                     if online, let boot = system?.bootDate {
                         Text("已运行 " + MetricFormat.uptime(since: boot)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                     } else if !online, let seen = m?.lastSeen, seen.timeIntervalSince1970 > 0 {
@@ -167,14 +167,14 @@ private struct NowGrid: View {
 
     private func tile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(spacing: 4) {
+            HStack(spacing: Theme.Space.xs) {
                 Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
                 if level > .normal {
-                    HStack(spacing: 2) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(MetricColor.level(level))
+                    HStack(spacing: Theme.Space.xxs) {
+                        Image(systemName: Theme.Icon.errorFilled).foregroundStyle(MetricColor.level(level))
                         Text(level == .critical ? "过高" : "偏高").foregroundStyle(.secondary)
                     }
-                    .font(Theme.Font.label.weight(.semibold)).lineLimit(1)
+                    .font(Theme.Font.labelStrong).lineLimit(1)
                 }
             }
             Text(value).font(Theme.Font.title.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
@@ -195,7 +195,7 @@ private struct CoreBars: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
-                Text("每个核心").font(Theme.Font.secondary.weight(.semibold))
+                Text("每个核心").font(Theme.Font.secondaryStrong)
                 Spacer()
                 Text("最忙 \(MetricFormat.percent(cores.max()))").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -229,7 +229,7 @@ private struct SystemFacts: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("系统").font(Theme.Font.secondary.weight(.semibold)).padding(.bottom, 8)
+            Text("系统").font(Theme.Font.secondaryStrong).padding(.bottom, Theme.Space.s)
             row("系统", system.name + (system.build.map { "（\($0)）" } ?? ""))
             if let k = system.kernel, !k.isEmpty { row("内核", k) }
             row("架构", system.arch ?? machine?.arch ?? "—")
@@ -247,13 +247,13 @@ private struct SystemFacts: View {
 
     private func row(_ k: String, _ v: String, last: Bool = false) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
                 Text(k).foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Text(v).multilineTextAlignment(.trailing).textSelection(.enabled)
             }
             .font(Theme.Font.secondary)
-            .padding(.vertical, 7)
+            .padding(.vertical, Theme.Space.s)
             if !last { Divider() }
         }
     }

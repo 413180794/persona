@@ -201,21 +201,21 @@ struct AssistantSidebar: View {
         let all = model.assistantConversations
         VStack(spacing: 0) {
             topBar
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 10)
+                .padding(.horizontal, Theme.Space.l)
+                .padding(.top, Theme.Space.s)
+                .padding(.bottom, Theme.Space.m)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if query.isEmpty {
-                        jarvisCard.padding(.bottom, 10)
+                        jarvisCard.padding(.bottom, Theme.Space.m)
                         shortcuts
                         conversations(all)
                     } else {
                         results(AssistantSidebarSearch.filter(all, query))
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 16)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.bottom, Theme.Space.l)
             }
             .scrollDismissesKeyboard(.interactively)
             if let openSettings { settingsRow(openSettings) }
@@ -226,24 +226,24 @@ struct AssistantSidebar: View {
     // MARK: Top: search and 新对话
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(Theme.Font.secondary.weight(.medium)).foregroundStyle(.secondary)
+        HStack(spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: "magnifyingglass").font(Theme.Font.secondaryMedium).foregroundStyle(.secondary)
                 TextField("搜索对话", text: $query)
                     .focused($searching)
                     .submitLabel(.search)
                     .autocorrectionDisabled()
                 if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                    Button { query = "" } label: { Image(systemName: Theme.Icon.clear).foregroundStyle(.tertiary) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("清除搜索")
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Theme.Space.m)
             .frame(height: 40)
-            .background(Theme.Fill.chip, in: .rect(cornerRadius: 12, style: .continuous))
+            .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             Button(action: newConversation) {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: Theme.Icon.compose)
                     .font(Theme.Font.heading)
                     .foregroundStyle(Theme.accent)
                     .frame(width: 40, height: 40)
@@ -265,11 +265,11 @@ struct AssistantSidebar: View {
         let machine = model.machine(machineID)
         let online = machine?.online ?? false
         return Button(action: openProfile) {
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 JarvisAvatar(size: 42)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text("Jarvis").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
-                    HStack(spacing: 5) {
+                    HStack(spacing: Theme.Space.sm) {
                         Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                         Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
                             .lineLimit(1)
@@ -278,7 +278,7 @@ struct AssistantSidebar: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
             }
             .card(padding: 12)
             .contentShape(.rect)
@@ -290,7 +290,7 @@ struct AssistantSidebar: View {
 
     /// 定时任务 and 知识库, side by side.
     private var shortcuts: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.m) {
             tile("定时任务", "alarm", action: openRoutines)
             tile("知识库", "books.vertical", action: openKnowledge)
         }
@@ -298,13 +298,13 @@ struct AssistantSidebar: View {
 
     private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.s) {
                 Image(systemName: symbol)
-                    .font(Theme.Font.secondary.weight(.semibold))
+                    .font(Theme.Font.secondaryStrong)
                     .foregroundStyle(Theme.accent)
                     .frame(width: 28, height: 28)
-                    .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: 8, style: .continuous))
-                Text(title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                    .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .card(padding: 10)
@@ -326,7 +326,7 @@ struct AssistantSidebar: View {
         if rest.isEmpty {
             Text(pinned.isEmpty ? "还没有对话：点右上角的新对话开始" : "还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
-                .padding(.horizontal, 12).padding(.top, 20)
+                .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
         }
         ForEach(AssistantSidebarGroups.group(rest), id: \.title) { group in
             heading(group.title)
@@ -335,14 +335,14 @@ struct AssistantSidebar: View {
             ForEach(shown) { row($0) }
             if older, group.sessions.count > Self.olderCount {
                 Button {
-                    withAnimation(.snappy) { showAllOlder.toggle() }
+                    withAnimation(Theme.Motion.standard) { showAllOlder.toggle() }
                 } label: {
                     Text(showAllOlder ? "收起" : "查看全部（\(group.sessions.count)）")
-                        .font(Theme.Font.secondary.weight(.medium))
+                        .font(Theme.Font.secondaryMedium)
                         .foregroundStyle(Theme.accent)
                         .lineLimit(1)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.vertical, Theme.Space.m)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
@@ -369,9 +369,9 @@ struct AssistantSidebar: View {
         Text(text)
             .font(Theme.Font.sectionHeader)
             .foregroundStyle(Color.secondary)
-            .padding(.horizontal, 12)
-            .padding(.top, 20)
-            .padding(.bottom, 6)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.top, Theme.Space.xl)
+            .padding(.bottom, Theme.Space.sm)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -382,16 +382,16 @@ struct AssistantSidebar: View {
         let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: Theme.Space.m) {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    HStack(spacing: 6) {
-                        Text(title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                    HStack(spacing: Theme.Space.sm) {
+                        Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
                         if isMain {
                             Text("主对话")
-                                .font(Theme.Font.label.weight(.semibold))
+                                .font(Theme.Font.labelStrong)
                                 .foregroundStyle(Theme.accent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, Theme.Space.sm)
+                                .padding(.vertical, Theme.Space.xxs)
                                 .background(Theme.accent.opacity(0.12), in: .capsule)
                                 .fixedSize()
                         }
@@ -406,11 +406,11 @@ struct AssistantSidebar: View {
                     mark(s)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.m)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accent.opacity(0.12))
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.accent.opacity(0.12))
                 }
             }
             .contentShape(.rect)
@@ -422,15 +422,15 @@ struct AssistantSidebar: View {
         .contextMenu {
             if !isMain {
                 Button { togglePin(s) } label: {
-                    isPinned(s) ? Label("取消置顶", systemImage: "pin.slash") : Label("置顶", systemImage: "pin")
+                    isPinned(s) ? Label("取消置顶", systemImage: Theme.Icon.unpin) : Label("置顶", systemImage: Theme.Icon.pin)
                 }
             }
             Button {
                 UIPasteboard.general.string = s.sessionID
                 model.toast = Toast("已拷贝会话 ID", style: .success)
-            } label: { Label("拷贝会话 ID", systemImage: "number") }
+            } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
             if s.status.isLive {
-                Button(role: .destructive) { ending = s } label: { Label("结束…", systemImage: "xmark.circle") }
+                Button(role: .destructive) { ending = s } label: { Label("结束…", systemImage: Theme.Icon.end) }
             }
         }
     }
@@ -462,14 +462,14 @@ struct AssistantSidebar: View {
     /// 设置 at the bottom of the drawer (the tab bar is hidden while it is out).
     private func settingsRow(_ action: @escaping () -> Void) -> some View {
         VStack(spacing: 0) {
-            Divider().padding(.horizontal, 16)
+            Divider().padding(.horizontal, Theme.Space.l)
             Button(action: action) {
-                HStack(spacing: 12) {
-                    Image(systemName: "gearshape").font(Theme.Font.heading).foregroundStyle(.secondary).frame(width: 28)
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: Theme.Icon.settings).font(Theme.Font.heading).foregroundStyle(.secondary).frame(width: 28)
                     Text("设置").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Theme.Space.xl)
                 .frame(height: 50)
                 .contentShape(.rect)
             }

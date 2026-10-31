@@ -62,9 +62,9 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
-        case .space: "square.stack.3d.up"
+        case .space: Theme.Icon.space
         case .state: "circle.grid.2x1"
-        case .machine: "desktopcomputer"
+        case .machine: Theme.Icon.machine
         }
     }
 }
@@ -153,7 +153,7 @@ struct ChatsView: View {
         Haptics.tap()
         var f = folded
         if f.contains(id) { f.remove(id) } else { f.insert(id) }
-        withAnimation(.snappy) { setFolded(f) }
+        withAnimation(Theme.Motion.standard) { setFolded(f) }
     }
 
     var body: some View {
@@ -205,7 +205,7 @@ struct ChatsView: View {
                     Section {
                         Button { confirmReadAll = true } label: {
                             HStack {
-                                Label("全部标为已读", systemImage: "checkmark.circle").lineLimit(1)
+                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
                                 Spacer()
                                 Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
@@ -255,7 +255,7 @@ struct ChatsView: View {
 
                 if base.isEmpty {
                     Section {
-                        EmptyStateView(symbol: "chevron.left.forwardslash.chevron.right",
+                        EmptyStateView(symbol: Theme.Icon.agents,
                                        title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
                                        message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
                                        action: ("新建会话", { showNew = true }))
@@ -263,7 +263,7 @@ struct ChatsView: View {
                     .listRowBackground(Color.clear)
                 } else if filtered.isEmpty, let st = quick.state {
                     Section {
-                        EmptyStateView(symbol: "checkmark.circle", title: "没有\(st.label)的会话",
+                        EmptyStateView(symbol: Theme.Icon.success, title: "没有\(st.label)的会话",
                                        message: machineFilter.isEmpty ? "各台电脑上的 Agent 有新动静会出现在这里。" : "这台机器上的 Agent 有新动静会出现在这里。",
                                        action: ("看全部", { choose(.all, base) }))
                     }
@@ -298,7 +298,7 @@ struct ChatsView: View {
                 ToolbarItem(placement: .principal) { ConnectionTitle() }
                 ToolbarItem(placement: .topBarLeading) { listMenu(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned)) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showNew = true } label: { Label("新建会话", systemImage: "square.and.pencil") }
+                    Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
                 }
             }
             .renameSpaceAlert($renamingSpace)
@@ -334,7 +334,7 @@ struct ChatsView: View {
                 if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
             }
         } empty: {
-            SplitPlaceholder(symbol: "chevron.left.forwardslash.chevron.right", title: "选一个 Agent",
+            SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
                              message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
         .environment(\.openSpace) { space in
@@ -398,17 +398,17 @@ struct ChatsView: View {
                         ForEach(idle) { s in slotRow(s) }
                         if query.isEmpty {
                             Button {
-                                withAnimation(.snappy) { _ = expandedIdle.remove(g.id) }
+                                withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(g.id) }
                             } label: {
-                                Label("收起空闲的 \(idle.count) 个", systemImage: "chevron.up")
-                                    .font(Theme.Font.secondary.weight(.medium))
+                                Label("收起空闲的 \(idle.count) 个", systemImage: Theme.Icon.collapse)
+                                    .font(Theme.Font.secondaryMedium)
                                     .lineLimit(1)
                             }
                         }
                     } else {
                         Button {
                             Haptics.tap()
-                            withAnimation(.snappy) { _ = expandedIdle.insert(g.id) }
+                            withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(g.id) }
                         } label: { IdleFoldRow(sessions: idle) }
                             .buttonStyle(.plain)
                     }
@@ -421,14 +421,14 @@ struct ChatsView: View {
 
     /// A visible ⋯ for open / mark read / pin / mute: long press on a list section header does not reach a context menu.
     private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.xs) {
             Button { toggleFold(g.id) } label: {
                 SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
             Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }) } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: Theme.Icon.moreMenu)
                     .font(Theme.Font.body)
                     .foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
@@ -440,38 +440,12 @@ struct ChatsView: View {
 
     // MARK: By state / by machine
 
-    /// Rows that stay out of the idle fold: busy, pinned, looping, or with background work.
-    private func stays(_ s: Session) -> Bool {
-        !s.isQuiet || model.isPinned(s.key) || s.loop != nil || !(s.background ?? []).isEmpty
-            || (s.subagents ?? []).contains(where: \.running)
+    private var order: AgentListOrder {
+        AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted, byRank: quick == .all)
     }
-
-    /// One order for every grouping (inside a space, a machine, and the sections of 按状态):
-    /// 需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看. Muted agents that are working, finished-unread or waiting
-    /// rank as 已屏蔽; one that needs you stays first.
-    private func rank(_ s: Session) -> Int {
-        if s.state == .needsYou { return 0 }
-        let live = s.state == .working || s.state == .unread || s.isWaiting
-        if live && model.isMuted(s) { return 4 }
-        switch s.state {
-        case .unread: return 1
-        case .working: return 2
-        default: return s.isWaiting ? 3 : 5
-        }
-    }
-
-    /// By rank, then the most recently updated (working: most recently started) first. Under a quick filter by time
-    /// only: an agent seen from there keeps its place.
-    private func ordered(_ list: [Session]) -> [Session] {
-        let byRank = quick == .all
-        return list.map { session -> (session: Session, rank: Int, sortDate: Date) in
-            (session: session, rank: byRank ? rank(session) : 0, sortDate: session.sortDate)
-        }.sorted { a, b in
-            if a.rank != b.rank { return a.rank < b.rank }
-            return a.sortDate != b.sortDate ? a.sortDate > b.sortDate : a.session.sessionID < b.session.sessionID
-        }
-        .map(\.session)
-    }
+    private func stays(_ s: Session) -> Bool { order.stays(s) }
+    private func rank(_ s: Session) -> Int { order.rank(s) }
+    private func ordered(_ list: [Session]) -> [Session] { order.ordered(list) }
 
     private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
         ("needs", "需要你", StatusPalette.needsYou), ("unread", "完成未看", StatusPalette.unread),
@@ -480,12 +454,7 @@ struct ChatsView: View {
     ]
 
     /// The fold ids of the sections 按状态 / 按机器 shows now (全部折叠).
-    private func sectionIDs(_ sessions: [Session]) -> [String] {
-        let live = sessions.filter { $0.state.isLive }
-        if grouping == .machine { return Set(live.map(\.machineID)).map { "machine/" + $0 } }
-        let ranks = Set(live.map(rank))
-        return Self.stateTitles.enumerated().filter { ranks.contains($0.offset) }.map { "state/" + $0.element.key }
-    }
+    private func sectionIDs(_ sessions: [Session]) -> [String] { order.sectionIDs(sessions, byMachine: grouping == .machine) }
 
     /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background
     /// work will bring some.
@@ -546,15 +515,15 @@ struct ChatsView: View {
                 ForEach(rows) { s in slotRow(s, context: true, inStateSection: inStateSection) }
                 if query.isEmpty {
                     Button {
-                        withAnimation(.snappy) { _ = expandedIdle.remove(key) }
+                        withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(key) }
                     } label: {
-                        Label("收起\(label)的 \(rows.count) 个", systemImage: "chevron.up").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                        Label("收起\(label)的 \(rows.count) 个", systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
                     }
                 }
             } else {
                 Button {
                     Haptics.tap()
-                    withAnimation(.snappy) { _ = expandedIdle.insert(key) }
+                    withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
                 } label: { IdleFoldRow(sessions: rows) }
                     .buttonStyle(.plain)
             }
@@ -578,41 +547,41 @@ struct ChatsView: View {
             .listRowInsets(compact ? EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 14) : nil)
             .swipeActions(edge: .trailing) {
                 if s.state.isLive {
-                    Button { closingSession = s } label: { Label("关闭", systemImage: "xmark") }.tint(Theme.danger)
+                    Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
                 }
             }
             .swipeActions(edge: .leading) {
                 Button { model.togglePin(s.key) } label: {
-                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : "pin.fill")
+                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : Theme.Icon.pinned)
                 }
                 .tint(Theme.accent)
                 if s.state == .working || s.state == .needsYou {
-                    Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: "stop.fill") }
+                    Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
                         .tint(Theme.busy)
                 }
                 if s.state == .unread {
-                    Button { model.markSeen(s.key) } label: { Label("标为已看", systemImage: "eye") }
+                    Button { model.markSeen(s.key) } label: { Label("标为已看", systemImage: Theme.Icon.view) }
                         .tint(.gray)
                 }
             }
             .contextMenu {
                 Button { model.togglePin(s.key) } label: {
-                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash" : "pin")
+                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? Theme.Icon.unpin : Theme.Icon.pin)
                 }
-                Button { renamingSession = s } label: { Label("重命名…", systemImage: "pencil") }
+                Button { renamingSession = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
                 Button { model.toggleMute(s.key) } label: {
-                    Label(model.isMuted(s.key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(s.key) ? "bell" : "bell.slash")
+                    Label(model.isMuted(s.key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(s.key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
                 if s.loop != nil {
-                    Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: "stop.circle") }
+                    Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: Theme.Icon.stopLoop) }
                 }
                 Button { Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) } } label: {
-                    Label("交给 Jarvis", systemImage: "sparkles")
+                    Label("交给 Jarvis", systemImage: Theme.Icon.ai)
                 }
-                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: "folder") }
-                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: "terminal") }
+                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
+                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal) }
                 if s.state.isLive {
-                    Button(role: .destructive) { closingSession = s } label: { Label("关闭 Agent…", systemImage: "xmark.circle") }
+                    Button(role: .destructive) { closingSession = s } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
                 }
             }
     }
@@ -630,11 +599,11 @@ struct ChatsView: View {
             }
             Section {
                 Button {
-                    withAnimation(.snappy) { setFolded(folded.union(sections)) }
+                    withAnimation(Theme.Motion.standard) { setFolded(folded.union(sections)) }
                     expandedQuiet = []
-                } label: { Label("全部折叠", systemImage: "rectangle.compress.vertical") }
+                } label: { Label("全部折叠", systemImage: Theme.Icon.collapseAll) }
                 Button {
-                    withAnimation(.snappy) { setFolded([]) }
+                    withAnimation(Theme.Motion.standard) { setFolded([]) }
                 } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
             }
             Picker("机器", selection: $machineFilter) {
@@ -645,17 +614,17 @@ struct ChatsView: View {
             }
             Section {
                 Button { openFromList(MachineDashboardRoute()) } label: {
-                    Label("机器监控", systemImage: "gauge.with.dots.needle.33percent")
+                    Label("机器监控", systemImage: Theme.Icon.context)
                 }
             }
         } label: {
             if let m = model.machine(machineFilter) {
-                HStack(spacing: 5) {
+                HStack(spacing: Theme.Space.sm) {
                     Image(systemName: m.symbol)
                     Text(m.name).lineLimit(1)
-                    Image(systemName: "chevron.down").font(Theme.Font.label.weight(.bold))
+                    Image(systemName: Theme.Icon.expand).font(Theme.Font.labelHeavy)
                 }
-                .font(Theme.Font.secondary.weight(.semibold))
+                .font(Theme.Font.secondaryStrong)
                 .fixedSize()
             } else {
                 Image(systemName: grouping == .space ? "line.3.horizontal.decrease" : grouping.symbol)
@@ -678,13 +647,13 @@ struct QuickFilterBar: View {
     /// tighten, then go to a second row.
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { chips(padding: 12) }
-            HStack(spacing: 6) { chips(padding: 8) }
+            HStack(spacing: Theme.Space.s) { chips(padding: 12) }
+            HStack(spacing: Theme.Space.sm) { chips(padding: 8) }
             LarkFlowLayout(spacing: 6, lineSpacing: 8) { chips(padding: 8) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.vertical, Theme.Space.sm)
     }
 
     /// 全部, and the states that have agents right now; the chosen one stays while it empties, so it can be left.
@@ -698,7 +667,7 @@ struct QuickFilterBar: View {
             let tone = f.state?.tone
             let tint = tone?.text ?? Theme.accent
             Button { if !on { choose(f) } } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: Theme.Space.sm) {
                     if let tone { Circle().fill(tone.dot).frame(width: 7, height: 7) }
                     Text(f.title)
                     if let n = counts[f] {
@@ -706,12 +675,12 @@ struct QuickFilterBar: View {
                             .contentTransition(.numericText(value: Double(n)))
                     }
                 }
-                .font(Theme.Font.secondary.weight(on ? .semibold : .medium))
+                .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondaryMedium)
                 .lineLimit(1)
                 .fixedSize()
                 .foregroundStyle(on ? tint : Color.primary)
                 .padding(.horizontal, padding)
-                .padding(.vertical, 7)
+                .padding(.vertical, Theme.Space.s)
                 .background(Capsule().fill(on ? tint.opacity(0.15) : Color.secondary.opacity(0.1)))
                 .overlay(Capsule().strokeBorder(on ? tint.opacity(0.35) : .clear, lineWidth: 1))
                 .contentShape(Capsule())
@@ -734,7 +703,7 @@ struct FoldButton<Content: View>: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
                 label
                 Spacer(minLength: 4)
                 FoldChevron(folded: folded)
@@ -751,11 +720,11 @@ struct FoldButton<Content: View>: View {
 struct FoldChevron: View {
     var folded: Bool
     var body: some View {
-        Image(systemName: "chevron.down")
-            .font(Theme.Font.label.weight(.bold))
+        Image(systemName: Theme.Icon.expand)
+            .font(Theme.Font.labelHeavy)
             .foregroundStyle(.tertiary)
             .rotationEffect(.degrees(folded ? -90 : 0))
-            .animation(.snappy, value: folded)
+            .animation(Theme.Motion.standard, value: folded)
     }
 }
 
@@ -768,7 +737,7 @@ struct SectionHeader: View {
     var tone: StatusTone
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             Text(title)
             if let count { CountBadge(count: count, look: .tone(tone)) }
         }
@@ -786,10 +755,10 @@ struct SpaceHeader: View {
     var folded = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Text(group.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
-            if pinned { Image(systemName: "pin.fill").font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-            if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+            if pinned { Image(systemName: Theme.Icon.pinned).font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+            if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
             if showMachine, let machine {
                 Text(machine.name).font(Theme.Font.label).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
@@ -817,13 +786,13 @@ struct StateCounts: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.sm) {
             ForEach([AgentState.needsYou, .working, .unread], id: \.self) { st in
                 let n = group.count(st)
                 if n > 0 {
-                    HStack(spacing: 3) {
+                    HStack(spacing: Theme.Space.xs) {
                         Circle().fill(st.color).frame(width: 6, height: 6)
-                        Text("\(n)").font(Theme.Font.label.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
+                        Text("\(n)").font(Theme.Font.labelHeavy.monospacedDigit()).foregroundStyle(.secondary)
                             .contentTransition(.numericText(value: Double(n)))
                     }
                     .accessibilityElement(children: .ignore)
@@ -833,9 +802,9 @@ struct StateCounts: View {
             // Idle as a gray dot and a number like the others: "4 空闲" wrapped to two lines in a busy header.
             let idle = group.count(.idle) + group.count(.unknown)
             if idle > 0 {
-                HStack(spacing: 3) {
+                HStack(spacing: Theme.Space.xs) {
                     Circle().fill(Color.secondary.opacity(0.45)).frame(width: 6, height: 6)
-                    Text("\(idle)").font(Theme.Font.label.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(idle)").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(.secondary)
                         .contentTransition(.numericText(value: Double(idle)))
                 }
                 .accessibilityLabel("\(idle) 个空闲")
@@ -864,12 +833,12 @@ nonisolated struct SlotRow: View, Equatable {
         #if PERF_SIGNPOST
         let _ = PerfTrace.event("SlotRow.body")
         #endif
-        HStack(alignment: .top, spacing: 10) {
-            StatusDot(state: session.state, size: 9).padding(.top, 6)
+        HStack(alignment: .top, spacing: Theme.Space.m) {
+            StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                     Text(session.displayTitle)
-                        .font(Theme.Font.body.weight(session.state == .unread ? .bold : .semibold))
+                        .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
@@ -881,10 +850,10 @@ nonisolated struct SlotRow: View, Equatable {
                 if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
                     Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.xs) {
                     meta.lineLimit(1)
                     if muted {
-                        Image(systemName: "bell.slash.fill").font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
+                        Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
                     }
                 }
                 .font(Theme.Font.caption)
@@ -892,7 +861,7 @@ nonisolated struct SlotRow: View, Equatable {
                 .padding(.top, 1)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, Theme.Space.xs)
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 
@@ -922,14 +891,14 @@ nonisolated struct CompactSlotRow: View, Equatable {
 
     @MainActor
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             StatusDot(state: session.state, size: 8)
             Text(session.displayTitle)
-                .font(Theme.Font.secondary.weight(session.state == .unread ? .semibold : .regular))
+                .font(session.state == .unread ? Theme.Font.secondaryStrong : Theme.Font.secondary)
                 .lineLimit(1)
                 .layoutPriority(1)
             Spacer(minLength: 4)
-            if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
+            if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
             if let place, !place.isEmpty {
                 Text(place).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
             }
@@ -953,23 +922,23 @@ struct IdleFoldRow: View {
     var sessions: [Session]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Image(systemName: "chevron.down.circle")
                 .foregroundStyle(.secondary)
             Text("还有 \(sessions.count) 个空闲")
-                .font(Theme.Font.secondary.weight(.medium))
+                .font(Theme.Font.secondaryMedium)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.xs) {
                     ForEach(sessions.prefix(6)) { s in Chip(text: s.slotLabel ?? s.displayTitle) }
                 }
             }
             .allowsHitTesting(false)
             .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .leading, endPoint: .trailing))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.xs)
         .contentShape(.rect)
         .accessibilityLabel("展开 \(sessions.count) 个空闲的 agent")
     }
@@ -982,8 +951,8 @@ struct QuietSpaceRow: View {
     var showMachine: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary)
+        HStack(spacing: Theme.Space.m) {
+            Image(systemName: Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
                 Text([showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
@@ -1005,7 +974,7 @@ struct SessionRow: View {
     var showMachine = true
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
             SessionAvatar(machine: machine, state: session.state)
             SlotRow(session: session).equatable()
         }
@@ -1027,16 +996,16 @@ struct SpaceMenuItems: View {
         }
         let unread = group.sessions.filter { $0.state == .unread }.map(\.key)
         if !unread.isEmpty {
-            Button { model.markSeen(unread) } label: { Label("全部标为已读（\(unread.count)）", systemImage: "checkmark.circle") }
+            Button { model.markSeen(unread) } label: { Label("全部标为已读（\(unread.count)）", systemImage: Theme.Icon.success) }
         }
         if let rename, group.spaceID != "-" {
-            Button(action: rename) { Label("重命名空间", systemImage: "pencil") }
+            Button(action: rename) { Label("重命名空间", systemImage: Theme.Icon.edit) }
         }
         Button { model.togglePin(group) } label: {
-            Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? "pin.slash" : "pin")
+            Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? Theme.Icon.unpin : Theme.Icon.pin)
         }
         Button { model.toggleMute(group) } label: {
-            Label(model.isMuted(group) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(group) ? "bell" : "bell.slash")
+            Label(model.isMuted(group) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(group) ? Theme.Icon.unmute : Theme.Icon.mute)
         }
     }
 }
@@ -1104,11 +1073,11 @@ struct MachineSectionHeader: View {
     var group: SpaceGroup
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Image(systemName: machine.symbol).foregroundStyle(machine.online ? Theme.accent : .secondary)
             Text(machine.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             if !machine.online {
-                Text("离线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
+                Text("离线").font(Theme.Font.labelStrong).foregroundStyle(.secondary).textCase(nil)
             }
             Spacer(minLength: 4)
             StateCounts(group: group)

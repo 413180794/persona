@@ -81,14 +81,14 @@ struct APIErrorCard: View {
     private var chips: [ToolChipGroup.Chip] {
         var out: [ToolChipGroup.Chip] = []
         if let s = info.status {
-            out.append(ToolChipGroup.Chip(symbol: "exclamationmark.circle", label: "\(s)", isError: true))
+            out.append(ToolChipGroup.Chip(symbol: Theme.Icon.error, label: "\(s)", isError: true))
         }
         switch info.transient {
-        case true?: out.append(ToolChipGroup.Chip(symbol: "clock.arrow.circlepath", label: "临时故障"))
-        case false?: out.append(ToolChipGroup.Chip(symbol: "hand.raised", label: "要处理"))
+        case true?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.retry, label: "临时故障"))
+        case false?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.askFirst, label: "要处理"))
         case nil: break
         }
-        if count > 1 { out.append(ToolChipGroup.Chip(symbol: "repeat", label: "连续 \(count) 次")) }
+        if count > 1 { out.append(ToolChipGroup.Chip(symbol: Theme.Icon.recurring, label: "连续 \(count) 次")) }
         return out
     }
 
@@ -96,11 +96,11 @@ struct APIErrorCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Button {
                 Haptics.tap()
-                withAnimation(.snappy(duration: 0.25)) { open.toggle() }
+                withAnimation(Theme.Motion.state) { open.toggle() }
             } label: {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill").font(Theme.Font.heading).foregroundStyle(Theme.danger)
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                        Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.heading).foregroundStyle(Theme.danger)
                         Text(info.reason).font(Theme.Font.heading).foregroundStyle(Color.primary).multilineTextAlignment(.leading)
                     }
                     ToolChipGroup(chips, isOpen: open)
@@ -123,13 +123,13 @@ struct APIErrorCard: View {
                         .lineHeight(.code)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(10)
+                        .padding(Theme.Space.m)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     Button {
                         copy(info.raw)
                     } label: {
-                        Label("复制原文", systemImage: "doc.on.doc").font(Theme.Font.label.weight(.medium)).lineLimit(1)
+                        Label("复制原文", systemImage: Theme.Icon.copy).font(Theme.Font.labelMedium).lineLimit(1)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
@@ -142,8 +142,8 @@ struct APIErrorCard: View {
                     Haptics.tap()
                     retry()
                 } label: {
-                    Label("重试", systemImage: "arrow.clockwise").font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
-                        .padding(.horizontal, 4)
+                    Label("重试", systemImage: Theme.Icon.retry).font(Theme.Font.secondaryStrong).lineLimit(1)
+                        .padding(.horizontal, Theme.Space.xs)
                 }
                 .themedButton()
             }
@@ -155,13 +155,13 @@ struct APIErrorCard: View {
     }
 
     private func field(_ name: String, _ value: String, copyable: Bool = true) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.s) {
             Text(name).font(Theme.Font.caption).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
             Text(value).font(Theme.Font.code).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             Spacer(minLength: 0)
             if copyable {
                 Button { copy(value) } label: {
-                    Image(systemName: "doc.on.doc").font(Theme.Font.caption)
+                    Image(systemName: Theme.Icon.copy).font(Theme.Font.caption)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)

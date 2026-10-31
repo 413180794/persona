@@ -15,7 +15,7 @@ struct MachineDashboardView: View {
 
     var body: some View {
         ScrollView {
-            if !list.isEmpty { summary.padding(.horizontal, 16).padding(.top, 12) }
+            if !list.isEmpty { summary.padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.m) }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 330), spacing: 14)], spacing: 14) {
                 ForEach(list) { m in
                     NavigationLink { MachineMonitorView(machineID: m.machineID) } label: {
@@ -24,10 +24,10 @@ struct MachineDashboardView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
             if loaded && list.isEmpty {
-                EmptyStateView(symbol: "gauge.with.dots.needle.33percent", title: failure == nil ? "还没有机器" : "看不到监控数据",
+                EmptyStateView(symbol: Theme.Icon.context, title: failure == nil ? "还没有机器" : "看不到监控数据",
                                message: failure ?? "hub 连上各台电脑后，这里会显示它们的 CPU、内存和网络。")
                     .padding(.top, 60)
             } else if !loaded {
@@ -51,21 +51,21 @@ struct MachineDashboardView: View {
         let online = list.filter(\.online).count
         let levels = list.compactMap { m in m.online ? m.latest.flatMap { MetricAlert.of($0, cores: m.system?.cores).first?.level } : nil }
         let alerting = levels.count
-        return HStack(spacing: 10) {
-            Label("\(online)/\(list.count) 台在线", systemImage: "circle.fill")
+        return HStack(spacing: Theme.Space.m) {
+            Label("\(online)/\(list.count) 台在线", systemImage: Theme.Icon.dot)
                 .labelStyle(DotLabel(color: online == list.count ? Theme.positive : .secondary))
             if alerting > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(MetricColor.level(levels.max() ?? .warning))
+                HStack(spacing: Theme.Space.xs) {
+                    Image(systemName: Theme.Icon.errorFilled).foregroundStyle(MetricColor.level(levels.max() ?? .warning))
                     Text("\(alerting) 台需要注意")
                 }
             }
             Spacer()
             Text("每 10 秒更新").foregroundStyle(.tertiary)
         }
-        .font(Theme.Font.caption.weight(.medium))
+        .font(Theme.Font.captionMedium)
         .lineLimit(1)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Theme.Space.xs)
     }
 
     private func load() async {
@@ -90,7 +90,7 @@ struct MachineDashboardView: View {
 private struct DotLabel: LabelStyle {
     var color: Color
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Theme.Space.sm) {
             Circle().fill(color).frame(width: 7, height: 7)
             configuration.title
         }
@@ -109,7 +109,7 @@ struct MachineMetricsCard: View {
         let end = Date.now
         let domain = end.addingTimeInterval(-3600)...end
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 12) {
+            HStack(spacing: Theme.Space.m) {
                 OSBadge(system: metrics.system ?? machine?.system, fallback: machine?.symbol ?? "desktopcomputer", size: 40, online: metrics.online)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(machine?.name ?? metrics.machineID).font(Theme.Font.heading).lineLimit(1)
@@ -119,11 +119,11 @@ struct MachineMetricsCard: View {
                 status
             }
             if metrics.online, !alerts.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.sm) {
                     ForEach(alerts, id: \.label) { a in AlertChip(alert: a) }
                 }
             }
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 cell("CPU", value: metrics.online ? MetricFormat.percent(s?.cpu) : "—",
                      detail: s?.load.map { "负载 " + MetricFormat.load($0) },
                      level: MetricLevel.of(metrics.online ? s?.cpu : nil, warn: 75, crit: 90)) {
@@ -168,14 +168,14 @@ struct MachineMetricsCard: View {
 
     @ViewBuilder private var status: some View {
         if metrics.online {
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.Space.sm) {
                 Circle().fill(Theme.positive).frame(width: 7, height: 7)
-                Text("在线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.positive)
+                Text("在线").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
             }
             .fixedSize()
         } else {
             VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
-                Text("离线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
+                Text("离线").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                 if let seen = machine?.lastSeen, seen.timeIntervalSince1970 > 0 {
                     Text(Fmt.relative(seen)).font(Theme.Font.label).foregroundStyle(.tertiary)
                 }
@@ -187,15 +187,15 @@ struct MachineMetricsCard: View {
     private func cell(_ title: String, value: String, detail: String?, level: MetricLevel,
                       @ViewBuilder chart: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(spacing: 3) {
+            HStack(spacing: Theme.Space.xs) {
                 Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
                 if level > .normal {
-                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 9)).foregroundStyle(MetricColor.level(level))
+                    Image(systemName: Theme.Icon.errorFilled).font(.system(size: 9)).foregroundStyle(MetricColor.level(level))
                 }
             }
-            Text(value).font(Theme.Font.body.weight(.semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(Theme.Font.bodyStrong.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
             Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
-            chart().frame(height: 30).padding(.top, 2)
+            chart().frame(height: 30).padding(.top, Theme.Space.xxs)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -208,15 +208,15 @@ struct AlertChip: View {
 
     var body: some View {
         let color = MetricColor.level(alert.level)
-        HStack(spacing: 4) {
-            Image(systemName: alert.level == .critical ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: alert.level == .critical ? Theme.Icon.critical : Theme.Icon.errorFilled)
                 .foregroundStyle(color)
             Text(alert.label).foregroundStyle(.primary)
         }
-        .font(Theme.Font.label.weight(.semibold))
+        .font(Theme.Font.labelStrong)
         .lineLimit(1)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.xs)
         .background(color.opacity(0.16), in: .capsule)
         .accessibilityLabel((alert.level == .critical ? "严重：" : "注意：") + alert.label)
     }
