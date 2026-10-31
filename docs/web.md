@@ -9,7 +9,7 @@
 
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.jarvis/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
-  不是文件的路径都回 `index.html`（前端路由：`/`、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/machines`）；
+  不是文件的路径都回 `index.html`（前端路由：`/`、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/machines`、`/settings`）；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/jarvis_config.py env)"`）。
@@ -43,6 +43,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - 同空间的其他 Agent 在右上角「同空间 N」菜单里，有别的需要你时带红点。「⋯」：拷贝会话 ID / 目录 / 恢复命令，关闭 Agent（先确认）。
   - 打开页面、页面回到前台时发 `seen`。
 - **Jarvis**：`/j` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
+- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：三个分类，和 App 的设置同一套接口。
+  「通用」是外观（跟随系统 / 浅色 / 深色）、Jarvis 助手的启动器（下拉，读 `/machines/<助手机器>/launchers`）、这个浏览器（hub 地址、断开）；
+  「模型」是全部启动器（搜索；Jarvis 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
+  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏（在按钮上方弹「确认删除」再执行）；「新增启动器」是表单；
+  「设备」列出各设备的 token（这个浏览器排第一），撤销同样就地确认。分类记在 `?tab=`。
 - **机器**：每台电脑一张卡片，CPU / 内存 / 磁盘当前值和最近一小时 CPU 曲线（`/api/v1/metrics`，10 秒刷新；空档断线），离线的能重连。
 
 ## 连接
