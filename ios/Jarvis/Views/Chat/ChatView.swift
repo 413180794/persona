@@ -63,6 +63,8 @@ struct ChatView: View {
     /// Bookkeeping written while scrolling (visible rows, finger down) and the cached lines: kept out of SwiftUI's
     /// state so writing it never re-renders the page.
     @State private var scratch = ChatScratch()
+    /// Keeps a tapped header in place while what it opens settles (`ChatPin`).
+    @State private var pin = ChatPin()
 
     private enum Entry: Equatable { case latestAnswer, line(String) }
     /// The line being landed on, measured while landing (only that one row watches its frame).
@@ -389,45 +391,36 @@ struct ChatView: View {
     /// A merged multi-message turn ("wt-…") opens into its messages under a "N 条消息 · 收起" line instead.
     private func headLine(_ id: String, open: Bool) -> String { id.hasPrefix("wt-") && open ? id + "-h" : id }
 
+    /// Folds or opens a work line. From its header, the header stays under the finger (`ChatPin`), through the steps
+    /// arriving from the hub after the tap; from 收起 under the last step, the flipped list keeps the reply below where
+    /// it was on its own. No animation: hundreds of rows animating out left blank frames behind.
     private func toggleWork(_ id: String, fromHeader: Bool, run: Bool = false) {
         Haptics.tap()
-        let frame = scratch.listFrame
         let wasOpen = run ? isRunOpen(id) : isOpen(id)
-        let y = scratch.workHeadY[headLine(id, open: wasOpen)]
-        let anchor: UnitPoint?
-        if fromHeader, let y, frame.height > 0 {
-            let v = (y - frame.minY) / frame.height
-            anchor = (0...1).contains(v) ? UnitPoint(x: 0.5, y: 1 - v) : nil
-        } else {
-            anchor = nil
-        }
+        if fromHeader { pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true) }
         var t = Transaction()
-        t.disablesAnimations = true // hundreds of rows animating out left blank frames behind
+        t.disablesAnimations = true
         withTransaction(t) {
             if run {
                 if openRuns.contains(id) { openRuns.remove(id) } else { openRuns.insert(id) }
             } else if openWork.contains(id) { openWork.remove(id) } else { openWork.insert(id) }
-            if let anchor { position.scrollTo(id: headLine(id, open: !wasOpen), anchor: anchor) }
         }
         #if PERF_SIGNPOST
-        PerfTrace.event("Work toggle", "open=\(!wasOpen) anchored=\(anchor != nil)")
+        PerfTrace.event("Work toggle", "open=\(!wasOpen) held=\(fromHeader)")
         #endif
-        guard anchor != nil, let y else { return }
-        let head = headLine(id, open: !wasOpen)
-        // The scroll view is flipped: its own top is the bottom on screen. Rows not drawn yet only have estimated
-        // heights, so this lands near; the header's measured position then corrects the rest.
-        Task { @MainActor in
-            for _ in 0..<4 {
-                try? await Task.sleep(for: .milliseconds(16))
-                guard let now = scratch.workHeadY[head] else { continue }
-                let off = y - now // > 0: the header sits too high; the flipped list scrolls toward older to lower it
-                if abs(off) < 0.5 { break }
-                #if PERF_SIGNPOST
-                PerfTrace.event("Work scroll correction", "offset=\(off)")
-                #endif
-                withTransaction(t) { scrollList(to: chrome.offset + off) }
-            }
-        }
+    }
+
+    /// A work line's header moved (its top on screen): kept for the fold probe, and told to the pin. The wake
+    /// drawer draws its own lines ("dw-…") with this too; the chat's list has none of those, so the pin never moves it.
+    private func workHeadMoved(_ id: String, _ spot: ChatPin.Spot) {
+        scratch.workHeadY[id] = spot.y
+        pin.moved(id, to: spot)
+    }
+
+    /// Where a work line's header is, by its top: the open header is taller than the folded one, and held by its
+    /// middle it pushed what is above it 10 pt up. The content is upside down: the top on screen is its far edge there.
+    nonisolated private static func headSpot(_ g: GeometryProxy) -> ChatPin.Spot {
+        ChatPin.Spot(y: g.frame(in: .global).minY, content: g.frame(in: .named(ChatPin.space)).maxY)
     }
 
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
@@ -459,19 +452,19 @@ struct ChatView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id + "-h"] = $0 }
+            .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id + "-h", $0) }
         case .work(let id, let items, let live, let start, let end):
             WorkLine(items: items, live: live, start: start, end: end, open: isOpen(id),
                      openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
                 toggleWork(id, fromHeader: true)
             }
-            .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
+            .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workStep(_, let item, let first):
             WorkStepView(item: item, first: first).equatable()
         case .toolRun(let id, let calls, let open, let first):
             ToolRunRow(calls: calls, open: open, first: first) { toggleWork(id, fromHeader: true, run: true) }
                 .equatable()
-                .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).midY }) { scratch.workHeadY[id] = $0 }
+                .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workEnd(let group, let count):
             // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
@@ -917,6 +910,8 @@ struct ChatView: View {
                 }
             }
             .scrollTargetLayout()
+            .coordinateSpace(.named(ChatPin.space))
+            .background { ChatPin.Finder(pin: pin) }
         }
         // Side margins as scroll content margins, not padding: jumping to a row aligns its leading edge with the
         // margin instead of the screen edge (padding shifted the page 16pt sideways after landing on a row).
@@ -962,6 +957,8 @@ struct ChatView: View {
             }
         }
         .environment(menu)
+        .environment(\.chatPin, pin)
+        .onAppear { pin.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) } }
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
         .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) {
@@ -970,6 +967,7 @@ struct ChatView: View {
             WakeDrawer(notices: t?.wakes ?? []) {
                 if let t { ForEach(unfoldWork(wakeLines(t, live: t.id == liveTurnID && !t.tail.isEmpty))) { lineView($0) } }
             }
+            .environment(\.chatPin, nil) // the drawer has a list of its own; the chat's must not scroll for it
             .environment(menu)
             .environment(\.openFold, openFold)
             .environment(\.taskIndex, store.tasks)
@@ -984,14 +982,15 @@ struct ChatView: View {
                 frozen = Frozen(seq: last.seq, part: last.part, live: liveTurnID)
             }
         }
-        .onChange(of: rows.last?.id) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: rows.last?.id) { _, _ in if followsEnd && !pin.holding { scrollToEnd() } }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: store.loadedOnce) { _, _ in landEntry(lines) }
-        .onChange(of: liveTurnID) { _, _ in if followsEnd { scrollToEnd() } }
+        .onChange(of: liveTurnID) { _, _ in if followsEnd && !pin.holding { scrollToEnd() } }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
-        .onChange(of: store.items.count) { _, _ in if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } } }
+        // Not while a tapped header is held in place (`ChatPin`): opening a work line loads its steps.
+        .onChange(of: store.items.count) { _, _ in if followsEnd && !pin.holding { scrollToEnd(); if userScrolled { hideChrome() } } }
         .modifier(ChatStreamFollow(store: store) {
-            if followsEnd { scrollToEnd(); if userScrolled { hideChrome() } }
+            if followsEnd && !pin.holding { scrollToEnd(); if userScrolled { hideChrome() } }
         })
         // Your own message brings you to the newest — only yours (one typed on the computer, or sent by another session,
         // used to pull you out of the history you were reading too), and only if you have not scrolled since sending it:

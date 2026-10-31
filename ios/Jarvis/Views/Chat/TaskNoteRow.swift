@@ -88,13 +88,19 @@ struct TaskNoteRow: View {
     var grouped = false
     @State private var open = false
 
-    var body: some View {
+    @Environment(\.chatPin) private var pin
+    private var pinKey: String { "task-" + item.id }
+
+    /// Its top is its header: opening or closing keeps it there in the chat (`ChatPin`).
+    var body: some View { content.chatPinned(pinKey) }
+
+    @ViewBuilder private var content: some View {
         if let n = item.task {
             let call = index.calls[item.id]
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     Haptics.tap()
-                    withAnimation(Theme.Motion.state) { open.toggle() }
+                    toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { open.toggle() }
                 } label: {
                     HStack(spacing: Theme.Space.m) {
                         ZStack {

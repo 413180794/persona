@@ -98,15 +98,17 @@ struct ToolGroupView: View {
     /// Every step listed, no "N 个步骤" fold (inside a line that was already tapped open).
     var flat = false
     @State private var expanded = false
+    @Environment(\.chatPin) private var pin
 
     private var calls: [ToolCall] { steps.compactMap { if case .call(let c) = $0 { c } else { nil } } }
+    private var pinKey: String { "group-" + (steps.first?.id ?? "") }
 
     var body: some View {
         let calls = calls
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if calls.count > 2 && !expanded && !flat {
                 Button {
-                    withAnimation(Theme.Motion.standard) { expanded = true }
+                    toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { expanded = true }
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: Theme.Icon.space).font(Theme.Font.label)
@@ -133,12 +135,13 @@ struct ToolGroupView: View {
                     }
                 }
                 if calls.count > 2 && !flat {
-                    Button("收起") { withAnimation(Theme.Motion.standard) { expanded = false } }
+                    Button("收起") { toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { expanded = false } }
                         .font(Theme.Font.labelMedium)
                         .padding(.leading, Theme.Space.m)
                 }
             }
         }
+        .chatPinned(pinKey) // its top: the "N 个步骤" line closed, the first step open
     }
 
     private func summary(_ calls: [ToolCall]) -> String {
@@ -285,10 +288,14 @@ struct ToolCallRow: View {
 
     private var isOpen: Bool { expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil)) }
 
+    @Environment(\.chatPin) private var pin
+    private var pinKey: String { "call-" + call.id }
+
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
         VStack(alignment: .leading, spacing: 0) {
-            if AppStyle.current.usesBeautifulUI { chipHeader } else { header(base) }
+            Group { if AppStyle.current.usesBeautifulUI { chipHeader } else { header(base) } }
+                .chatPinned(pinKey)
 
             if base == "TodoWrite" {
                 TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, pad).padding(.bottom, Theme.Space.s)
@@ -310,7 +317,7 @@ struct ToolCallRow: View {
     private func header(_ base: String) -> some View {
         Button {
             Haptics.tap()
-            withAnimation(Theme.Motion.state) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { expanded = !isOpen }
         } label: {
             HStack(spacing: Theme.Space.m) {
                 ZStack {
@@ -348,7 +355,7 @@ struct ToolCallRow: View {
     private var chipHeader: some View {
         ToolChipRow(chip, isOpen: isOpen, isRunning: call.isRunning) {
             Haptics.tap()
-            withAnimation(Theme.Motion.state) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { expanded = !isOpen }
         } accessory: {
             taskBadge
             if call.isError { Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.danger).font(Theme.Font.label) }

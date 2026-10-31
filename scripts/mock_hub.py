@@ -807,6 +807,19 @@ if os.environ.get("MOCK_API_ERRORS") == "1":
            "\"request_id\":\"req_011CUdExampleExample01\"} · Please run /login"),
     ]
 
+# MOCK_LONG_HISTORY=1: the weather chat with fifteen earlier exchanges in front, so its work line and thought sit in
+# the middle of a long chat and the list can scroll both ways around them (opening and closing them in place).
+if os.environ.get("MOCK_LONG_HISTORY") == "1":
+    _hist = []
+    for _k in range(15):
+        _hist.append(it("user", "text", 600 - _k * 30, text="第 %d 个问题：顺便看一下这一块的写法有没有问题？" % (_k + 1)))
+        _hist.append(it("assistant", "text", 599 - _k * 30, text="看过了，第 %d 块没有问题。命名可以再统一一点，"
+                                                            "测试也覆盖到了主要的分支，我顺手把两处重复的判断合并了。" % (_k + 1)))
+    _all = _hist + ITEMS[WIDGET]
+    for _i, _d in enumerate(_all):  # transcript order: the history first
+        _d["seq"] = _i + 1
+    ITEMS[WIDGET] = _all
+
 # MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
 # last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
 RICH = "a1f3c2d4-0000-4000-8000-00000000000a"

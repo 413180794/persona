@@ -402,6 +402,9 @@ struct ThinkingRow: View {
     var item: Item
     var compact = false
     @State private var open = false
+    @Environment(\.chatPin) private var pin
+
+    private var pinKey: String { "think-" + item.id }
 
     var body: some View {
         if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
@@ -410,7 +413,7 @@ struct ThinkingRow: View {
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {
-                withAnimation(Theme.Motion.standard) { open.toggle() }
+                toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { open.toggle() }
             } label: {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.memory).font(Theme.Font.label)
@@ -426,6 +429,7 @@ struct ThinkingRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            .chatPinned(pinKey)
             if open {
                 Text(item.text ?? "")
                     .font(Theme.Font.caption)
@@ -445,9 +449,10 @@ struct ThinkingRow: View {
             isWorking: false,
             doneTitle: open ? "思考过程" : ToolPresentation.firstLine(text),
             rows: [BeautifulUI.ThinkingRow(id: item.id, text)],
-            isExpanded: $open,
+            isExpanded: Binding(get: { open }, set: { v in toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { open = v } }),
             maxWidth: .infinity
         )
+        .chatPinned(pinKey) // the trace's header is its top
         .textSelection(.enabled)
         .padding(.horizontal, compact ? 10 : 0)
     }
@@ -456,6 +461,7 @@ struct ThinkingRow: View {
 struct NoticeRow: View {
     var item: Item
     @State private var expanded = false
+    @Environment(\.chatPin) private var pin
 
     var body: some View {
         if item.wake == true { wake } else if item.task != nil { TaskNoteRow(item: item) } else if Self.isShort(item.text ?? "") { plain } else { long }
@@ -467,7 +473,7 @@ struct NoticeRow: View {
 
     private var long: some View {
         Button {
-            withAnimation(Theme.Motion.state) { expanded.toggle() }
+            toggleInPlace(pin, "notice-" + item.id, animation: Theme.Motion.state) { expanded.toggle() }
         } label: {
             HStack(alignment: .top, spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.info).font(Theme.Font.label).foregroundStyle(.tertiary)
@@ -484,6 +490,7 @@ struct NoticeRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .chatPinned("notice-" + item.id)
         .contextMenu { CopyButton(text: item.text ?? "") }
     }
 
