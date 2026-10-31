@@ -1,0 +1,56 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+/// The menu bar item (docs/mac.md: 灵动岛 / 锁屏实时活动 → 菜单栏): what needs you, what's working, what finished.
+@MainActor
+struct MacMenuBarTests {
+    private func session(_ id: String, _ state: AgentState, assistant: Bool = false, ago: TimeInterval = 0) -> Session {
+        var s = try! JSON.decoder.decode(Session.self, from: Data("""
+        {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
+         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0}
+        """.utf8))
+        s.stateSince = Date(timeIntervalSince1970: 1_000_000 - ago)
+        return s
+    }
+
+    @Test func groupsByWhatTheyWantFromYou() {
+        let list = [session("w", .working), session("n", .needsYou), session("u", .unread), session("i", .idle),
+                    session("j", .needsYou, assistant: true)]
+        let s = MacMenuBar.sections(list, muted: { _ in false })
+        #expect(s.needsYou.map(\.sessionID) == ["n", "j"])
+        #expect(s.working.map(\.sessionID) == ["w"])
+        #expect(s.unread.map(\.sessionID) == ["u"])
+        #expect(s.isEmpty == false)
+        #expect(MacMenuBar.sections([session("i", .idle)], muted: { _ in false }).isEmpty)
+    }
+
+    @Test func longestWaitingFirstAndMutedLeftOut() {
+        let list = [session("a", .needsYou, ago: 10), session("b", .needsYou, ago: 300), session("c", .needsYou, ago: 60)]
+        #expect(MacMenuBar.sections(list, muted: { $0.sessionID == "c" }).needsYou.map(\.sessionID) == ["b", "a"])
+    }
+
+    @Test func finishedListIsShort() {
+        let list = (0..<12).map { session("u\($0)", .unread, ago: TimeInterval($0)) }
+        #expect(MacMenuBar.sections(list, muted: { _ in false }).unread.count == MacMenuBar.unreadLimit)
+    }
+
+    @Test func quickAnswersAreTheCardsOneTapOnes() throws {
+        func ix(_ json: String) throws -> Interaction { try JSON.decoder.decode(Interaction.self, from: Data(json.utf8)) }
+        let permission = try ix(#"{"id":"p","machine_id":"m","session_id":"a","kind":"permission","tool_name":"Bash"}"#)
+        #expect(MacMenuBar.quickAnswers(permission)?.map(\.title) == ["允许", "拒绝"])
+        #expect(MacMenuBar.quickAnswers(permission)?.first?.resolution.allow == true)
+        let plan = try ix(#"{"id":"p","machine_id":"m","session_id":"a","kind":"plan","plan":"改登录"}"#)
+        #expect(MacMenuBar.quickAnswers(plan)?.first?.resolution.mode == "acceptEdits")
+        let one = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"用哪个?","multi_select":false,"options":[{"label":"A"},{"label":"B"}]}]}"#)
+        #expect(MacMenuBar.quickAnswers(one)?.map(\.title) == ["A", "B"])
+        #expect(MacMenuBar.quickAnswers(one)?.last?.resolution.answers == ["用哪个?": "B"])
+        let multi = try ix(#"{"id":"q","machine_id":"m","session_id":"a","kind":"question","questions":[{"question":"哪些?","multi_select":true,"options":[{"label":"A"}]}]}"#)
+        #expect(MacMenuBar.quickAnswers(multi) == nil)
+    }
+
+    @Test func titleShowsTheCount() {
+        #expect(MacMenuBar.count(needsYou: 0) == nil)
+        #expect(MacMenuBar.count(needsYou: 3) == "3")
+    }
+}

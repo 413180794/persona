@@ -267,6 +267,22 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Jarvis"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  # The Mac shell's own logic (Mac/): menu bar, notifications, quick open… Hosted in the Mac app.
+  JarvisMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: JarvisMacTests
+    dependencies:
+      - target: JarvisMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).mactests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   # UI tests drive the real app in the simulator against the configured hub (scripts/ui-test.sh); not in the
   # default test run, which must work offline.
   JarvisUITests:
@@ -303,5 +319,8 @@ schemes:
     build:
       targets:
         JarvisMac: all
+        JarvisMacTests: [test]
     run:
       config: Debug
+    test:
+      targets: [JarvisMacTests]

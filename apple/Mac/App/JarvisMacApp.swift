@@ -42,6 +42,13 @@ struct JarvisMacApp: App {
             MacSettingsWindow()
                 .environment(model)
         }
+
+        MenuBarExtra {
+            MacMenuBarMenu().environment(model)
+        } label: {
+            MacMenuBarLabel().environment(model)
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -98,6 +105,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         MacLaunchArguments.apply()
         #endif
         AppModel.shared.start()
+        MacAttentionWatcher.shared.start(AppModel.shared)
         #if DEBUG
         MacSnapshot.scheduleIfAsked()
         #endif

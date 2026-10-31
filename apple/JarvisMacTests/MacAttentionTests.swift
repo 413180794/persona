@@ -1,0 +1,91 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+/// When the Mac posts a notification for an agent (it has no APNs; docs/mac.md 推送通知 → 系统通知), following the
+/// same 设置 › 通知 choices the hub uses for the phone (NotifyPrefs).
+@MainActor
+struct MacAttentionTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func session(_ id: String, _ state: AgentState, assistant: Bool = false, since: TimeInterval = 0) -> Session {
+        var s = try! JSON.decoder.decode(Session.self, from: Data("""
+        {"machine_id":"m","session_id":"\(id)","title":"t-\(id)","cwd":"/w/proj","status":"idle","state":"\(state.rawValue)",
+         "started_by_jarvis":false,"assistant":\(assistant),"pending_interactions":0,"last_text":"done it"}
+        """.utf8))
+        s.stateSince = now.addingTimeInterval(-since)
+        return s
+    }
+
+    private func ping(_ old: [Session], _ new: [Session], open: SessionKey? = nil, active: Bool = false,
+                      prefs: NotifyPrefs = NotifyPrefs(done: .always), muted: Set<String> = []) -> [String] {
+        MacAttention.transitions(old: old, new: new, open: open, appActive: active, prefs: prefs, now: now,
+                                 muted: { muted.contains($0.sessionID) }).map { "\($0.0.sessionID):\($0.1.rawValue)" }
+    }
+
+    @Test func needsYouAndFinishedNotify() {
+        let out = ping([session("a", .working), session("b", .working)], [session("a", .needsYou), session("b", .unread)])
+        #expect(out == ["a:needs_you", "b:unread"])
+    }
+
+    @Test func theChatOnScreenStaysQuietWhileTheAppIsInFront() {
+        let open = SessionKey(machineID: "m", sessionID: "a")
+        #expect(ping([session("a", .working)], [session("a", .unread)], open: open, active: true).isEmpty)
+        #expect(ping([session("a", .working)], [session("a", .unread)], open: open, active: false) == ["a:unread"])
+    }
+
+    @Test func noNoiseForNewOrUnchangedSessionsOrASecondStop() {
+        #expect(ping([session("a", .unread)], [session("a", .unread), session("n", .needsYou)]).isEmpty)
+        // Answered, then finished without working in between: the same stop, one ping.
+        #expect(ping([session("a", .needsYou)], [session("a", .unread)]).isEmpty)
+    }
+
+    @Test func mutedAgentsStayQuiet() {
+        #expect(ping([session("a", .working)], [session("a", .needsYou)], muted: ["a"]).isEmpty)
+    }
+
+    @Test func jarvisAsksButItsRepliesDoNotPing() {
+        let old = [session("j", .working, assistant: true), session("k", .working, assistant: true)]
+        let new = [session("j", .needsYou, assistant: true), session("k", .unread, assistant: true)]
+        #expect(ping(old, new) == ["j:needs_you"])
+    }
+
+    @Test func followsTheNotificationSettings() {
+        let old = [session("a", .working, since: 30), session("b", .working, since: 300), session("c", .working)]
+        let new = [session("a", .unread), session("b", .unread), session("c", .needsYou)]
+        #expect(ping(old, new, prefs: NotifyPrefs(input: false, done: .off)).isEmpty)
+        // 只推长任务: the turn that ran past the threshold (60 s unless the hub says otherwise).
+        #expect(ping(old, new, prefs: NotifyPrefs(done: .long)) == ["b:unread", "c:needs_you"])
+        var short = NotifyPrefs(done: .long)
+        short.longTurnSeconds = 20
+        #expect(ping(old, new, prefs: short) == ["a:unread", "b:unread", "c:needs_you"])
+    }
+
+    @Test func dockBadgeCountsWhatNeedsYou() {
+        let list = [session("a", .needsYou), session("b", .needsYou), session("c", .working), session("j", .needsYou, assistant: true)]
+        #expect(MacAttention.badge(list, muted: { $0.sessionID == "b" }) == "2")
+        #expect(MacAttention.badge([session("c", .working)], muted: { _ in false }) == nil)
+    }
+
+    @Test func text() {
+        let t = MacAttention.text(session("a", .needsYou), .needsYou)
+        #expect(t.title == "t-a 需要你")
+        #expect(t.body == "done it")
+        #expect(MacAttention.text(session("a", .unread), .unread).title == "t-a 做完了")
+    }
+
+    /// A needs-you about a permission or a plan carries the hub's category and the interaction, so the banner has the
+    /// same 允许 / 拒绝 / 批准 / 打回 buttons as the phone's push (MacAppDelegate resolves them).
+    @Test func needsYouCarriesTheInteractionsButtons() throws {
+        let ix = try JSON.decoder.decode(Interaction.self, from: Data(#"{"id":"ix1","machine_id":"m","session_id":"a","kind":"permission"}"#.utf8))
+        let c = MacAttention.content(session("a", .needsYou), .needsYou, interaction: ix)
+        #expect(c.categoryIdentifier == "INTERACTION_PERMISSION")
+        #expect(c.userInfo["interaction_id"] as? String == "ix1")
+        #expect(c.userInfo["session_id"] as? String == "a")
+        #expect(c.threadIdentifier == "m")
+        let done = MacAttention.content(session("a", .unread), .unread, interaction: nil)
+        #expect(done.categoryIdentifier.isEmpty)
+        #expect(done.userInfo["interaction_id"] == nil)
+        #expect(done.userInfo["machine_id"] as? String == "m")
+    }
+}
