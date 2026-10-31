@@ -304,7 +304,11 @@ struct PhoneDataView: View {
                     .padding(.vertical, Theme.Space.xxs)
                 }
             } footer: {
+                #if os(macOS)
+                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在这台 Mac 上问你。Jarvis 开着（窗口关了也算）时，hub 才能调到这里。健康数据 Mac 上没有。")
+                #else
                 Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
+                #endif
             }
         }
         .themedPage()
