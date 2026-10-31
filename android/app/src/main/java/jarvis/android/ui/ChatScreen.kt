@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,7 +87,11 @@ fun ChatScreen(
     actions: @Composable () -> Unit = {},
     /** Something (a tab bar) sits under the screen and takes the system navigation bar's inset itself. */
     embedded: Boolean = false,
+    /** Put the cursor in the composer once (the 「问 Jarvis」 shortcut), then [onFocusTaken]. */
+    focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
 ) {
+    val composerFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    FocusComposer(focusComposer, composerFocus, onFocusTaken)
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) { onDispose { hub.release(key) } }
     val state by store.state.collectAsState()
@@ -323,7 +328,7 @@ fun ChatScreen(
                             },
                         )
                     },
-                    modifier = Modifier.weight(1f).heightIn(max = 180.dp), shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(composerFocus), shape = RoundedCornerShape(20.dp),
                 )
                 IconButton(onClick = { send() }, enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty())) {
                     if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")

@@ -46,6 +46,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         (application as JarvisApp).hub.value?.kick()
+        // The process may have started in the background (widget, tile, a notification button), where Android 12+
+        // refuses the foreground service: start it now that the app is on screen (a no-op while it runs).
+        if ((application as JarvisApp).hub.value != null) jarvis.android.service.HubService.start(this)
     }
 
     private fun handle(intent: Intent?) {

@@ -57,6 +57,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // QR pairing (jarvis://pair?...) without Google Play services, which many Android phones in China do not have.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // The home-screen widget (widget/JarvisWidget.kt); the last version that builds against compileSdk 34.
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 
     testImplementation("junit:junit:4.13.2")
 }

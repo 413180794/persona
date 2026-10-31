@@ -14,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /** Holds the one hub connection for the process: the activity and the foreground service share it. */
 class JarvisApp : Application() {
@@ -34,6 +35,7 @@ class JarvisApp : Application() {
         pairings = PairingStore(this)
         notifier = Notifier(this)
         phoneTools = jarvis.android.phone.PhoneToolRunner(this)
+        jarvis.android.shortcuts.Shortcuts.publish(this)
         pairings.load()?.let { connect(it) }
     }
 
@@ -47,6 +49,8 @@ class JarvisApp : Application() {
         phoneTools.attach(hub) // before start: the first connect declares the tools
         hub.start()
         HubService.start(this)
+        // The ongoing notification, widget and tile follow the same summary (fleet/).
+        jarvis.android.fleet.FleetStore.follow(this, hub) { refreshFleetViews() }
     }
 
     fun unpair() {
@@ -54,6 +58,13 @@ class JarvisApp : Application() {
         _hub.value = null
         pairings.clear()
         HubService.stop(this)
+        jarvis.android.fleet.FleetStore.clear(this)
+        scope.launch { refreshFleetViews() }
+    }
+
+    private suspend fun refreshFleetViews() {
+        jarvis.android.widget.JarvisWidget.refresh(this)
+        jarvis.android.shortcuts.JarvisTileService.refresh(this)
     }
 
     companion object {

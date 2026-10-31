@@ -49,7 +49,15 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     var handoff by remember { mutableStateOf<String?>(null) } // inbox → Jarvis
     val open = openSession.value
     if (open != null) tab = Tab.Agents
-    openTab.value?.let { if (it == "jarvis") { tab = Tab.Jarvis; settings = false }; openTab.value = null }
+    var askFocus by remember { mutableStateOf(false) } // 「问 Jarvis」 shortcut: focus the Jarvis composer
+    openTab.value?.let {
+        when (it) {
+            "jarvis" -> { tab = Tab.Jarvis; settings = false }
+            "ask" -> { tab = Tab.Jarvis; settings = false; askFocus = true }
+            "agents" -> { tab = Tab.Agents; settings = false; space = null; openSession.value = null }
+        }
+        openTab.value = null
+    }
 
     val pending by hub.interactions.collectAsState()
     val byMachine by hub.sessions.collectAsState()
@@ -101,6 +109,7 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
         }
         tab == Tab.Jarvis -> AssistantScreen(
             hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
+            focusComposer = askFocus, onFocusTaken = { askFocus = false },
         )
         tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
         open != null -> {

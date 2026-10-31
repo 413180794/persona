@@ -38,7 +38,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 
 国内卖的安卓手机大多没有 Google 服务（FCM 收不到），各家厂商推送又要开发者账号和实名认证，所以第一版不接推送：
 
-- App 开一个前台服务（`HubService`，类型 `specialUse`）一直连着 hub 的 WebSocket，通知栏常驻一条「已连接 hub / N 件事需要你」（最低优先级，不响）。
+- App 开一个前台服务（`HubService`，类型 `specialUse`）一直连着 hub 的 WebSocket，通知栏常驻一条（下面「常驻通知」：有 Agent 需要你 / 在工作 / 做完未看时是汇总，没有时是「已连接 hub」，最低优先级，不响）。
   网络变了马上重连，断线指数退避到 30 秒；开机后自动启动（`BootReceiver`）。
 - 收到 `interaction` 就弹「需要你处理」通知（高优先级），能直接在通知上点：授权「允许 / 拒绝」、计划「批准 / 打回（可输入反馈）」、
   单选提问的前 3 个选项、终端对话框的前 3 个选项。`interaction_resolved` 时收回通知。
@@ -47,6 +47,35 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - 规则对照 hub 给 iPhone 的推送（`docs/server.md`「推送策略」），但时机在手机上算：需要你立即弹；做完了不等 `done_delay_seconds`。
 - 代价是耗电和被系统清理。小米 / 红米（MIUI、HyperOS）等要在系统设置里把这个 App 的省电策略设成「无限制」并打开「自启动」，
   设置页有两个入口按钮（电池优化白名单、MIUI 的自启动管理页，找不到时退回应用详情页）。以后要接厂商推送时，hub 侧加一个和 APNs 并列的发送器即可。
+
+## 常驻通知、小组件、快捷方式
+
+iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/intents.md`）在安卓上的对应，代码在 `fleet/`、`widget/`、`shortcuts/`。
+三处画的是同一份汇总 `FleetState`（`fleet/Fleet.kt`），规则照 hub 的 `buildFleet`：需要你（最早的请求在前）→ 工作中（跑得最久的在前）→
+做完未看（最新的在前），不算已看、离线、屏蔽的、`/loop` 等下次唤醒的，助手只在问你时算。手机自己从 WebSocket 的状态算（`FleetStore`，
+防抖 300 ms），最后一份存在手机上，小组件和磁贴在进程没跑时也有东西画。
+
+- 常驻通知：就是前台服务那一条（同一个 id），有东西时换到「实时状态」频道（低优先级、不响）：标题「2 个需要你」，副标题其余的数量，
+  展开是前三个 Agent（名字 · 在做什么（机器 · 空间 › 标签）），再多是「+N 个」；只剩工作中时计时从最久那一轮开始在手机上走。
+  第一个授权带「拒绝 / 允许」、第一个计划带「查看 / 批准」（批准用 `acceptEdits`，和「需要你处理」通知一样）；「允许 / 批准」要先解锁。
+  点通知：只有一个 Agent 时进它，否则进 Agents。只剩做完未看的 5 分钟后、全都处理完、hub 连不上时，退回原来那一行「已连接 hub / 正在连接 / 连不上」
+  （「后台连接」频道，最低优先级）。锁屏上只显示数量和「有个授权等你」（公开版本），系统「锁屏显示敏感内容」打开时才显示全部。
+  在系统设置里关掉「实时状态」频道，就只剩连接那一行；关掉通知权限，什么都不发。
+- Android 16：通知带 `android.requestPromotedOngoing` 和 `POST_PROMOTED_NOTIFICATIONS` 权限，申请成为 Live Update（状态栏上的胶囊）。
+  App 按 compileSdk 34 编，所以 extra 的名字是写死的字符串；更早的版本就是普通的常驻通知。
+- 按钮的 PendingIntent 一个（请求, 按钮）一个，用 data URI 区分、不可变，后来重画的通知改不了用户解锁时系统手里那一个；
+  打开 App 的 intent 也各带自己的 data URI（`jarvis-open://session/…`、`jarvis-open://tab/…`），只有 extras 不同的 intent 会被系统当成同一个。
+  `FleetActionReceiver` 用 `goAsync` 撑住广播等 hub 回复（最多 9 秒），只为这个广播拉起的进程否则 onReceive 一返回就被冻住、点击丢掉。
+- 主屏幕小组件（Glance，`widget/JarvisWidget.kt`）：「✦ Jarvis」、带状态色点的标题、其余数量，按高度画 0 / 2 / 3 个 Agent（名字、在做什么 · 机器），
+  再多是「+N 个」。点 Agent 进它，点别处进 Agents；只导航，不能在小组件上批准。数据在 `provideContent` 里面读（`collectAsState`）：
+  Glance 保留会话时 `updateAll()` 只重组，在外面读到的值会原样再画一遍。浅色 / 深色跟随系统。
+- 快速设置磁贴（`JarvisTileService`）：「Jarvis · 2 个需要你」，有需要你或工作中时亮；点了和点通知一样。没配对时不可用。
+- 长按图标的快捷方式（运行时发布，静态的 res/xml 要写死 application id）：「问 Jarvis」进 Jarvis tab 并把光标放进输入框、弹出键盘
+  （主对话或首页，等 tab 选好了对话再聚焦）；「批准第一个待处理」弹一个对话框，先从 hub 现拉待处理列表、取最早的一条，
+  授权「允许」/ 计划「批准并自动执行」（`bypassPermissions`，和 iOS 的 intent 一样），提问和终端对话框说明要打开 App。
+  这个对话框的 Activity 不导出，只有启动器代我们启动的快捷方式能进来。
+- 进程在后台被拉起（磁贴、小组件更新、通知按钮）时，Android 12+ 不许开前台服务：`HubService.start` 吞掉这个异常，
+  App 下次回到前台（`MainActivity.onStart`）或开机时再开。以前直接崩，连带磁贴 / 小组件 / 按钮一起没了。
 
 ## 构建和安装
 
@@ -86,6 +115,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 | `terminal/` | 实时终端：`TerminalGrid`（VT 子集，移植自 iOS 的 `TerminalGrid.swift`）、`TerminalFeed`（帧按序应用、接管时自己攒滚出屏幕的行）、`TerminalLink`（订阅 / 续传 / 接管 / 轮询降级）、`TerminalKeys`（键名 → 终端字节）、`BoxDrawing`、`TerminalScreen` |
 | `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`；`Theme` 是界面风格的 token |
 | `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
+| `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
 
 ## 验证记录
 
@@ -105,6 +135,14 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - 配对、列表、对话页正常；claude 的提问在手机上回答，电脑上的 claude 收到
 - 「需要你处理」的通知系统里有（channel `input`，重要级别最高），但默认不在通知栏显示：澎湃 OS 给新装的 App 关掉了悬浮 / 锁屏通知，
   要在「设置 › 通知与控制中心 › 通知管理 › Jarvis」里打开。锁屏后长时间的后台连接还没在真机上测
+
+常驻通知、小组件、磁贴、快捷方式（模拟器 Android 16 base 镜像，连 `scripts/mock_hub.py`）：
+
+- 通知展开是汇总和「查看 / 批准」，点「批准」hub 收到 `{approve:true, mode:"acceptEdits"}`，点「查看」进那个会话；深色 / 浅色截图检查
+- 小组件放到主屏幕、点 Agent 进会话；磁贴加进快速设置、显示「2 个需要你」、点了进 App
+- 「批准第一个待处理」弹框后批准，hub 收到 `bypassPermissions`；「问 Jarvis」在冷启动和 App 已经开着时都进 Jarvis 并弹出键盘
+- 没验证：通知上的「允许 / 拒绝」（假 hub 没有授权请求，代码和「批准」同一条路）；Live Update——这个镜像上通知没有被提升（flags 里没有 PROMOTED_ONGOING），
+  要在 Android 16 QPR1 以后的真机上看；真机上的锁屏表现
 
 ## 经验
 
@@ -131,3 +169,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
   加 U+FE0E 也没用，这几个按形状自己画。
 - hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
   （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
+- 假 hub（`scripts/mock_hub.py`）的 WebSocket 连上时不推待处理的交互，也没有 `POST /api/v1/auth/tokens`：配对页会报 NewToken 解不出来。
+  联调时用 `run-as <包名>` 把 `shared_prefs/pairing.xml`（`url`、`token`）写进去跳过配对，进 App 后下拉刷新一次才拿到交互。
+- `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
+  验证快捷方式要从启动器长按图标点，或者让 App 先停在别的页面。

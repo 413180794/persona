@@ -12,6 +12,10 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import jarvis.android.JarvisApp
 import jarvis.android.data.ConnState
+import jarvis.android.fleet.FleetNotification
+import jarvis.android.fleet.FleetState
+import jarvis.android.fleet.FleetStore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -33,16 +37,24 @@ class HubService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val app = application as JarvisApp
-        val n = app.notifier.ongoing(ConnState.Connecting, 0)
+        val n = FleetNotification.build(this, app.hub.value?.conn?.value ?: ConnState.Connecting, FleetStore.state.value ?: FleetState())
         ServiceCompat.startForeground(
             this, Notifier.ONGOING_ID, n,
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0,
         )
         if (job == null) {
             job = app.scope.launch {
+                // The notification is the fleet summary (fleet/FleetNotification.kt), the Live Activity's counterpart.
                 app.hub.flatMapLatest { hub ->
-                    hub?.let { combine(it.conn, it.interactions) { c, ix -> c to ix.size } } ?: flowOf(ConnState.Offline to 0)
-                }.collectLatest { (conn, pending) -> app.notifier.updateOngoing(conn, pending) }
+                    hub?.let { combine(it.conn, FleetStore.state) { c, st -> c to (st ?: FleetState()) } } ?: flowOf(ConnState.Offline to FleetState())
+                }.collectLatest { (conn, st) ->
+                    FleetNotification.show(this@HubService, conn, st)
+                    // Only finished agents left: back to the connection line after a while (the hub ends the activity then).
+                    if (st.phase == "done") {
+                        delay(DONE_LINGER_MS)
+                        FleetNotification.show(this@HubService, conn, st, quiet = true)
+                    }
+                }
             }
             val cm = getSystemService(ConnectivityManager::class.java)
             netCallback = object : ConnectivityManager.NetworkCallback() {
@@ -59,8 +71,17 @@ class HubService : Service() {
     }
 
     companion object {
+        private const val DONE_LINGER_MS = 5 * 60_000L
+
         fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, HubService::class.java))
+            // The process can start in the background (a Quick Settings tile binding, a widget update, a notification
+            // button): Android 12+ refuses a foreground service from there. The next time the app is on screen (or
+            // boots) starts it; crashing here would take the tile / widget / button down with it.
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, HubService::class.java))
+            } catch (e: IllegalStateException) { // ForegroundServiceStartNotAllowedException is one
+                android.util.Log.i("HubService", "not started from the background: ${e.message}")
+            }
         }
 
         fun stop(context: Context) {

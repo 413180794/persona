@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The home-screen widget and the Quick Settings tile (docs/android.md「常驻通知、小组件、快捷方式」). -->
+<resources>
+    <string name="widget_description">几个 Agent 需要你、在工作、做完了</string>
+    <string name="tile_label">Jarvis</string>
+</resources>

@@ -54,6 +54,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import jarvis.android.data.ApiClient
@@ -76,6 +77,8 @@ fun AssistantScreen(
     incoming: String? = null, onIncomingTaken: () -> Unit = {},
     /** Opens an Agent's chat (the Agents tab): the knowledge base's 开 Agent and a project's Agents. */
     onOpenSession: (SessionKey) -> Unit = {},
+    /** The 「问 Jarvis」 shortcut: put the cursor in the composer (conversation or home), then cleared. */
+    focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
 ) {
     val byMachine by hub.sessions.collectAsState()
     var state by remember { mutableStateOf<ApiClient.AssistantState?>(null) }
@@ -204,7 +207,7 @@ fun AssistantScreen(
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
                     ChatScreen(
                         hub, SessionKey(machine, shown), onBack = {}, assistant = true, navigation = historyButton, actions = newButton,
-                        embedded = !typing,
+                        embedded = !typing, focusComposer = focusComposer, onFocusTaken = onFocusTaken,
                     )
                 }
                 if (!typing) bottomBar()
@@ -217,6 +220,9 @@ fun AssistantScreen(
                 AssistantHome(
                     Modifier.padding(pad), pending = pending, error = startError ?: loadError,
                     ready = state != null, onSend = ::start,
+                    // Only once the home screen is where the tab stays (not while the main conversation is being picked).
+                    focusComposer = focusComposer && pending == null && state != null && (chose || state?.conversations.isNullOrEmpty()),
+                    onFocusTaken = onFocusTaken,
                 )
             }
         }
@@ -243,7 +249,12 @@ private val SUGGESTIONS = listOf(
 )
 
 @Composable
-private fun AssistantHome(modifier: Modifier, pending: String?, error: String?, ready: Boolean, onSend: (String) -> Unit) {
+private fun AssistantHome(
+    modifier: Modifier, pending: String?, error: String?, ready: Boolean, onSend: (String) -> Unit,
+    focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
+) {
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    FocusComposer(focusComposer, focus, onFocusTaken)
     var draft by rememberSaveable { mutableStateOf("") }
     Column(modifier.fillMaxSize().imePadding()) {
         LazyVerticalGrid(
@@ -284,7 +295,7 @@ private fun AssistantHome(modifier: Modifier, pending: String?, error: String?, 
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 draft, { draft = it }, placeholder = { Text("问 Jarvis…") }, enabled = pending == null,
-                modifier = Modifier.weight(1f).heightIn(max = 180.dp), shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(focus), shape = RoundedCornerShape(20.dp),
             )
             IconButton(onClick = { onSend(draft); draft = "" }, enabled = ready && pending == null && draft.isNotBlank()) {
                 Icon(Icons.AutoMirrored.Filled.Send, "发送")
@@ -298,4 +309,16 @@ private fun greeting(): String = when (java.time.LocalTime.now().hour) {
     in 11..13 -> "中午好"
     in 14..18 -> "下午好"
     else -> "晚上好"
+}
+
+/** Focuses [focus] (and opens the keyboard) once when [on] turns true, then tells the caller it is done. */
+@Composable
+internal fun FocusComposer(on: Boolean, focus: androidx.compose.ui.focus.FocusRequester, onTaken: () -> Unit) {
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(on) {
+        if (!on) return@LaunchedEffect
+        kotlinx.coroutines.delay(300) // after the tab's first layout: the text field has to be attached
+        runCatching { focus.requestFocus(); keyboard?.show() }
+        onTaken()
+    }
 }
