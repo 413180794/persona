@@ -17,8 +17,10 @@ import (
 // Codex support: herdr reports Codex panes as agent "codex"; their conversations are rollouts under
 // ~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session id>.jsonl (parsed by transcript/codex.go). TRAEX, a Codex
 // fork, keeps the same layout under ~/.trae/cli (traex.go). herdr's codex
-// integration reports the session id when Codex starts; a Codex started before that integration has none, and its
-// rollout is found by working directory (the newest one there not already claimed).
+// integration reports the session id when Codex starts; a Codex started before that integration has none. Codex puts
+// the thread's name in the terminal title ("<name> | <directory>"), which says which thread the pane shows now; the
+// newest unclaimed rollout in the pane's directory is only the last resort (2026-10-31: five Codex panes in one
+// repository, four of them showed another pane's thread, and the one at work looked idle).
 
 const codexWindow = 14 * 24 * time.Hour
 
@@ -33,6 +35,8 @@ type codexRollout struct {
 type rolloutCache struct {
 	at       time.Time
 	rollouts []codexRollout
+	older    []string // rollouts in day directories before the window, listed once a minute
+	olderAt  time.Time
 	cwds     map[string]string // path → cwd (never changes once written)
 	titles   map[string]string
 	titlesAt time.Time
@@ -60,34 +64,55 @@ func cacheFor(home string) *rolloutCache {
 	return c
 }
 
-// rollouts lists a home's rollouts of the last two weeks (<home>/sessions/YYYY/MM/DD), newest first; cached for 5s.
+// rollouts lists a home's rollouts written in the last two weeks, newest first; cached for 5s. A rollout lives in the
+// directory of the day its thread started (<home>/sessions/YYYY/MM/DD) and grows there for as long as the thread is
+// resumed: one started six weeks earlier and in use every day was not found at all (2026-10-31), so the older days
+// are listed too, once a minute, and kept when written lately.
 func rollouts(home string) []codexRollout {
 	rolloutCaches.Lock()
 	defer rolloutCaches.Unlock()
 	c := cacheFor(home)
-	if time.Since(c.at) < 5*time.Second {
+	now := time.Now()
+	if now.Sub(c.at) < 5*time.Second {
 		return c.rollouts
 	}
-	var out []codexRollout
+	var paths []string
+	recent := map[string]bool{}
 	for d := 0; d <= int(codexWindow/(24*time.Hour)); d++ {
-		day := time.Now().AddDate(0, 0, -d)
-		files, _ := filepath.Glob(filepath.Join(home, "sessions", day.Format("2006"), day.Format("01"), day.Format("02"), "rollout-*.jsonl"))
-		for _, p := range files {
-			m := rolloutIDRe.FindStringSubmatch(p)
-			st, err := os.Stat(p)
-			if m == nil || err != nil {
-				continue
+		day := now.AddDate(0, 0, -d)
+		dir := filepath.Join(home, "sessions", day.Format("2006"), day.Format("01"), day.Format("02"))
+		recent[dir] = true
+		files, _ := filepath.Glob(filepath.Join(dir, "rollout-*.jsonl"))
+		paths = append(paths, files...)
+	}
+	if now.Sub(c.olderAt) > time.Minute {
+		all, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*.jsonl"))
+		c.older = c.older[:0]
+		for _, p := range all {
+			if !recent[filepath.Dir(p)] {
+				c.older = append(c.older, p)
 			}
-			cwd, ok := c.cwds[p]
-			if !ok {
-				cwd = rolloutCwd(p)
-				c.cwds[p] = cwd
-			}
-			out = append(out, codexRollout{id: m[1], path: p, cwd: cwd, mtime: st.ModTime()})
 		}
+		c.olderAt = now
+	}
+	firstOlder := len(paths)
+	paths = append(paths, c.older...)
+	var out []codexRollout
+	for i, p := range paths {
+		m := rolloutIDRe.FindStringSubmatch(p)
+		st, err := os.Stat(p)
+		if m == nil || err != nil || (i >= firstOlder && now.Sub(st.ModTime()) > codexWindow) {
+			continue
+		}
+		cwd, ok := c.cwds[p]
+		if !ok {
+			cwd = rolloutCwd(p)
+			c.cwds[p] = cwd
+		}
+		out = append(out, codexRollout{id: m[1], path: p, cwd: cwd, mtime: st.ModTime()})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].mtime.After(out[j].mtime) })
-	c.rollouts, c.at = out, time.Now()
+	c.rollouts, c.at = out, now
 	return out
 }
 
@@ -143,15 +168,64 @@ func (n *Node) codexSession(a herdr.Agent, taken map[string]herdr.Agent) string 
 	return ""
 }
 
+// codexByTitle finds the thread a Codex pane shows by the name in its title ("<name> | <directory>"; either part may
+// be cut short with "..."). Of several threads with that name it keeps prefer (what herdr or a start said), else takes
+// the most recently written one not taken. "" when the title carries no name (a new thread) or no thread has it.
+func (n *Node) codexByTitle(a herdr.Agent, prefer string, taken map[string]herdr.Agent) string {
+	i := strings.LastIndex(a.Title, " | ")
+	if i <= 0 {
+		return ""
+	}
+	name := strings.TrimSpace(a.Title[:i])
+	cut := strings.TrimSuffix(strings.TrimSuffix(name, "..."), "…")
+	home := n.codexHome()
+	var best string
+	var bestAt time.Time
+	for _, id := range threadsNamed(home, func(t string) bool { return t == name || (cut != name && strings.HasPrefix(t, cut)) }) {
+		if _, used := taken[id]; used {
+			continue
+		}
+		if id == prefer {
+			return id
+		}
+		p := rolloutPath(home, id)
+		if p == "" {
+			continue
+		}
+		if st, err := os.Stat(p); err == nil && (best == "" || st.ModTime().After(bestAt)) {
+			best, bestAt = id, st.ModTime()
+		}
+	}
+	return best
+}
+
 // threadTitle is the name the agent gave the thread (<home>/session_index.jsonl, last entry wins); re-read on change.
 func threadTitle(home, id string) string {
+	rolloutCaches.Lock()
+	defer rolloutCaches.Unlock()
+	return threadTitles(home)[id]
+}
+
+// threadsNamed lists the threads whose name passes match.
+func threadsNamed(home string, match func(string) bool) []string {
+	rolloutCaches.Lock()
+	defer rolloutCaches.Unlock()
+	var out []string
+	for id, t := range threadTitles(home) {
+		if match(t) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// threadTitles reads a home's session_index.jsonl when it changed; the caller holds rolloutCaches.
+func threadTitles(home string) map[string]string {
 	path := filepath.Join(home, "session_index.jsonl")
 	st, err := os.Stat(path)
 	if err != nil {
-		return ""
+		return nil
 	}
-	rolloutCaches.Lock()
-	defer rolloutCaches.Unlock()
 	c := cacheFor(home)
 	if c.titles == nil || st.ModTime().After(c.titlesAt) {
 		titles := map[string]string{}
@@ -171,5 +245,5 @@ func threadTitle(home, id string) string {
 		}
 		c.titles, c.titlesAt = titles, st.ModTime()
 	}
-	return c.titles[id]
+	return c.titles
 }

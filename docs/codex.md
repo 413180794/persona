@@ -7,8 +7,13 @@ herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab�
 
 - herdr 把 Codex 窗格报成 `agent: "codex"`。装了 herdr 的 codex 集成（`~/.codex/herdr-agent-state.sh`，挂在
   `~/.codex/hooks.json` 的 SessionStart）时 `agent_session.value` 就是 Codex 的会话 id。
-- 集成装之前就启动的 Codex 没有会话 id：取同一工作目录下最新、还没被别的窗格认领的 rollout（`codexSession`）。
-  同目录开多个 Codex 时可能认错，重启一下 Codex 就会带上 id。
+- 没有会话 id 的窗格（集成装之前就启动的，或者 herdr 只在启动时记了 id、之后在 Codex 里 `/resume` 换了线程）：
+  Codex 把线程名写在终端标题里（「线程名 | 目录」，两段都可能被截成 `...`），按 `session_index.jsonl` 找同名线程（`codexByTitle`），
+  同名的有几个时优先 herdr / 启动时记的那个，否则取最近写过的。标题能说明的窗格先认，标题里没有线程名（新线程）的最后才按
+  「同一工作目录下最新、还没被认领的 rollout」猜（`codexSession`）。2026-10-31 以前只靠猜：一台机器同目录 5 个 Codex 认错 4 个，
+  正在跑的那个显示成别的会话、灰点、新一轮的消息一条都看不到（整个机器 26 个 Codex 窗格认错 9 个）。
+- rollout 放在线程**开始那天**的目录（`sessions/YYYY/MM/DD`），之后一直往里写：六周前开的线程今天还在用。列 rollout 时近两周的目录
+  每 5 秒扫一次，更早的目录每分钟扫一次，只留两周内写过的（`rollouts`）。
 - herdr 的终端标题是「dots | codex | Ready」，不能当标题：标题用 Codex 自己起的线程名（`~/.codex/session_index.jsonl`
   的 `thread_name`，同一个 id 以最后一条为准），没有就用第一条用户消息。
 - `proto.Session.agent` = `codex`；App 列表行、空间页卡片都带 Agent 标签（Claude 和 Codex 同一种描边小标签，`AgentTag`），对话页副标题带 Agent 名，输入框「给 Codex 发消息」，

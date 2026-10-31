@@ -359,6 +359,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 同一个 Claude 会话 id 可能在两个配置目录里各有一个文件（在另一个 profile 下 resume 过：旧的停住，新的接着写）。按目录顺序取第一个会读到旧的：
   在跑的会话在手机上停在两天前、子 Agent 报 not found、列表里同一个会话出现两次（2026-10-31，一台机器 45 个）。按 id 找文件一律取最近修改的那份（`newestFirst`）。
 - 往前翻页有解析预算，但前面还有内容时不能回空页：空页 + `has_more: true` 让 App 没有 seq 可以接着取，更早的历史就再也看不到（大 Codex rollout 两轮之间夹着几十 MB 不出条目的行）。
+- Codex 窗格认会话别靠「同目录最新的 rollout」（和 Claude 那条一样的坑）：终端标题是「线程名 | 目录」，按 `session_index.jsonl` 的线程名认；
+  rollout 在线程开始那天的目录里一直写，按日期目录只扫近两周会漏掉老线程（2026-10-31 一个正在跑的 Codex 显示成别的会话、灰点）。
+  按 id 对拍内容测不出这种错，要拿窗格的真值比（`scripts/live_panes_check.py`）。
 - hub 关掉 RPC peer 不等于连接结束：ssh 子进程还活着，连接循环要同时等 `peer.Done()`，否则「重连」之后机器一直显示在线、每个调用都回 `rpc: connection closed`（`TestReconnectGivesAWorkingConnection`）。
 - herdr `agent.prompt` 先粘贴、约 300 ms 后才回车：同一会话的两次发送要串行，否则第二次读屏会把第一条当成输入框里的草稿。发送去重放在 hub 的 Postgres（`sent_messages`）：
   node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/lanes/session-verify.md`。

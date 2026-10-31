@@ -33,6 +33,22 @@
 有意的转换（核对过，不是错）：工具结果里的图片单独成 `user/image`；Codex FileChange 每个文件一个 Edit、commentary 算思考、
 本地图片写成 `<attached_images>`；跨会话消息按发送者显示；后台任务通知去重。标题：列表里的 35 个有 custom-title / ai-title 的会话全部一致。
 
+## 一之二、正在进行中的会话（2026-10-31 补）
+
+上面的对拍按会话 id 取：「这个 id 的内容读得对不对」全对，但从来没问「这个窗格对应的是不是这个 id」「它现在是不是在工作」。
+线上 bug：一个正在跑的 Codex（回了一句、跑了 3 条命令、正在 compact），App 里那一轮什么都没有、灰点。原因不在读取：
+
+- herdr 没给这些 Codex 窗格报会话 id，node 按「同目录最新、没被认领的 rollout」猜，同目录 5 个 Codex 认错 4 个；
+- 正在跑的那个线程六周前开的，rollout 在六周前那天的目录里，node 只扫近两周的日期目录，根本没把它列进候选；
+- 于是这个窗格被认成同目录另一个已经结束的会话：内容是那个会话的，`codexTurnOver` 看它结尾是 task_complete 就报完成。
+
+按它真正的 id 去读，这一轮（用户消息、回复、51 个工具、compact 提示）一条不差。修法见 `docs/codex.md`「识别」。
+
+新加的对拍 `scripts/live_panes_check.py`（在 hub 机器上跑，`pane_probe.py` 到每台机器上取真值）：每个 herdr 窗格的真值——Codex 按标题里的线程名，
+Claude 按 herdr 报的 id 或 `sessions/<pid>.json`——和 hub 列表里这个窗格的会话 id 比；Codex 这一轮还开着（最后一个回合事件是 task_started）
+且两分钟内写过的，列表里必须是 working。修前：70 个窗格（6 台）里 **9 个认错**，全是同一台机器的 Codex（26 个里 9 个），Claude 全对；4 个没法验证
+（标题里没有线程名）。
+
 ## 二、发消息：链路
 
 ```

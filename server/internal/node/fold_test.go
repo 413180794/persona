@@ -111,7 +111,9 @@ func TestCodexTurnOverOverridesWorking(t *testing.T) {
 		{[]string{"task_started", "turn_aborted"}, 2 * time.Hour, true},
 		{[]string{"task_started", "task_complete"}, 5 * time.Second, false}, // herdr may be a moment ahead
 		{[]string{"task_complete", "task_started"}, 2 * time.Hour, false},   // a long turn, nothing written lately
-		{nil, 2 * time.Hour, false},                                         // the tail says nothing about turns
+		// a new turn after the last one completed, compacting its context: nothing written for a while either
+		{[]string{"task_started", "task_complete", "task_started", "context_compacted"}, 2 * time.Hour, false},
+		{nil, 2 * time.Hour, false}, // the tail says nothing about turns
 	} {
 		id := fmt.Sprintf("%08d-0000-0000-0000-000000000000", len(n.paths))
 		p := write(id+".jsonl", tc.events...)

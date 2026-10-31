@@ -700,19 +700,28 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 			m[id] = a
 		}
 	}
+	// Codex panes: the thread named in the title (what the pane shows now: a /resume in Codex changes it), else what
+	// herdr's codex integration or our own start said; only then, after every pane that could be told has its
+	// thread, the newest rollout in the directory nobody else has.
+	var unnamed []herdr.Agent
 	for _, a := range codex {
-		// herdr's codex integration reports the session id at start; a Jarvis-started one is bound to its pane;
-		// otherwise the newest rollout in its directory nobody else has.
 		id := a.SessionID()
 		if id == "" {
 			n.mu.Lock()
 			id = n.panes[a.PaneID]
 			n.mu.Unlock()
 		}
-		if _, taken := m[id]; id == "" || taken {
-			id = n.codexSession(a, m)
+		if named := n.codexByTitle(a, id, m); named != "" {
+			id = named
 		}
-		if id != "" {
+		if _, taken := m[id]; id == "" || taken {
+			unnamed = append(unnamed, a)
+			continue
+		}
+		m[id] = a
+	}
+	for _, a := range unnamed {
+		if id := n.codexSession(a, m); id != "" {
 			m[id] = a
 		}
 	}
