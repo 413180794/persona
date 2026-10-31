@@ -53,7 +53,14 @@ final class ShellTests: XCTestCase {
         see(button("assistant-sidebar-button"), "☰", timeout: 15).tapCenter()
         see(button("sidebar-inbox"), "收件箱 in the drawer").tap()
         see(app.navigationBars["收件箱"], "the inbox pushed on 聊天")
-        app.navigationBars["收件箱"].buttons["BackButton"].tap()
+        // Back once the push has settled (a tap during the push's animation can be lost).
+        let inbox = app.navigationBars["收件箱"]
+        for _ in 0..<2 where inbox.exists {
+            sleep(1)
+            inbox.buttons["BackButton"].tap()
+            _ = inbox.waitForNonExistence(timeout: 3)
+        }
+        XCTAssertFalse(inbox.exists, "still on 收件箱 after back")
         see(button("assistant-sidebar-button"), "☰ again").tapCenter()
         // The drawer's hosting view names every element in it "assistant-sidebar": find 设置 by its label.
         see(app.buttons.matching(NSPredicate(format: "label == '设置'")).firstMatch, "设置 at the drawer's foot").tap()

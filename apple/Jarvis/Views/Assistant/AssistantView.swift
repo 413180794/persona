@@ -13,6 +13,8 @@ struct AssistantView: View {
     @State private var pending: PendingStart?
     /// Pages pushed by value: the shell's 收件箱 and 机器 (and what they push themselves).
     @State private var path = NavigationPath()
+    /// The last shell request shown (`ShellState.request`'s serial).
+    @State private var handledRequest = 0
     @State private var startError: String?
     @State private var starterLauncher: String?
     @State private var showProfile = false
@@ -128,7 +130,13 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil))
-            .onChange(of: shell?.request?.serial, initial: true) { show(shell?.request?.page) }
+            // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
+            // appears again after every pop, and replaying the last request pushed the inbox right back.
+            .onChange(of: shell?.request?.serial, initial: true) { _, serial in
+                guard let serial, serial > handledRequest else { return }
+                handledRequest = serial
+                show(shell?.request?.page)
+            }
             .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
             // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Jarvis
             // from the knowledge base, even when its conversation is the one already open.

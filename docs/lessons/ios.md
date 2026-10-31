@@ -75,6 +75,9 @@
 
 ## 布局与组件
 
+- 「请求」类的状态（别处让一个页面推某页、打开某个浮层）要带序号并记下处理过的那个（2026-11-01 新外壳 `ShellState.request` / `AssistantView.handledRequest`）：
+  页面用 `onChange(…, initial: true)` 接它，从推出的页面返回时偶尔又执行了一次，把收件箱又推了回去（3 次里 1 次，UI 测试 `-test-iterations 3` 才抓到）。
+
 - 想让系统导航栏里的东西和自己画的浮动顶栏对齐，别放进 `.toolbar`（2026-11-01 新外壳的「聊天 | 工作」）：`.principal` 项会被两边宽度不同的按钮挤离中间，
   而且会被包进导航栏共享的玻璃里（自己的胶囊外面又套一层，选中的那块颜色也变了；`.sharedBackgroundVisibility(.hidden)` 能去掉玻璃，挤偏去不掉）。
   工作页的做法：导航栏只留给 `.searchable` 的搜索框（principal 放一个透明的点盖住标题），自己的顶栏（`WorkTopBar`）盖在上面，和聊天页用同一组组件。
