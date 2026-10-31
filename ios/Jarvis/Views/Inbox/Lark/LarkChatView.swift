@@ -392,6 +392,7 @@ struct LarkChatView: View {
                             edit: { discard(o.id); text = text.isEmpty ? o.text : text + "\n" + o.text },
                             discard: { discard(o.id) })
                 .padding(.top, Self.gap(grouped: Self.continues(m, after: prev)))
+                .id(o.id)
         }
     }
 
@@ -404,7 +405,12 @@ struct LarkChatView: View {
         withAnimation(Theme.Motion.standard) { outgoing.append(o) }
         Haptics.tap()
         deliver(o.id)
-        if pager.hasNewer { Task { await jumpToLatest() } } else { position.scrollTo(edge: .bottom) }
+        Task {
+            if pager.hasNewer { await jumpToLatest() }
+            // After the row is laid out: scrolling in the same update lands above it.
+            try? await Task.sleep(for: .milliseconds(60))
+            withAnimation(Theme.Motion.standard) { position.scrollTo(id: o.id, anchor: .bottom) }
+        }
     }
 
     private func resend(_ id: UUID) {

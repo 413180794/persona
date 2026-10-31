@@ -54,8 +54,10 @@ struct LarkPager: Equatable {
         }
     }
 
+    /// Two refreshes can be in flight at once (a push and a send's own): both return the same new message, it goes in once.
     mutating func add(_ fresh: [LarkMessage]) {
-        messages += fresh
+        let have = Set(messages.map(\.id))
+        messages += fresh.filter { !have.contains($0.id) }
         newerCursor = messages.last?.position
     }
 

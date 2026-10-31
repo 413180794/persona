@@ -50,6 +50,15 @@ import Testing
         #expect(p.newerRequest == "3")
     }
 
+    @Test func twoPollsAtOnceAddANewMessageOnce() {
+        var p = LarkPager()
+        p.replace(with: page([1, 2]))
+        let a = p.refresh(with: page([2, 3])), b = p.refresh(with: page([2, 3])) // both before either adds
+        p.add(a)
+        p.add(b)
+        #expect(p.messages.map(\.position) == ["1", "2", "3"])
+    }
+
     @Test func readIsReportedUpToTheNewestSeenWithOthersUnreadIDs() {
         var p = LarkPager()
         p.messages = [msg(1), msg(2, mine: true), msg(3), msg(4, read: true), msg(5)]

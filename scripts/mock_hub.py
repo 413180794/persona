@@ -1785,7 +1785,9 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "lark-connector: send timed out"}, 502)
             msgs = LARK_MESSAGES.setdefault(feed, [])
             pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
-            msgs.append(_lm(pos, "我", body.get("text", ""), mine=True, mins=0))
+            m = _lm(pos, "我", body.get("text", ""), mine=True, mins=0)
+            m["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")  # now, not the mock's start
+            msgs.append(m)
             return self.send_json({"ok": True})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")

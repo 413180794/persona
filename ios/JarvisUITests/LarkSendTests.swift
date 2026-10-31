@@ -44,7 +44,7 @@ final class LarkSendTests: XCTestCase {
 
     @MainActor func testMessageShowsAtOnceThenItsCopyTakesOver() {
         let app = openChat()
-        let text = "下午三点前我看一下 \(Int.random(in: 1000...9999))"
+        let text = "下午三点前我看一下 " + UUID().uuidString.prefix(8)
         send(app, text)
         let sending = app.staticTexts["发送中"]
         XCTAssertTrue(sending.waitForExistence(timeout: 1), "the message is not on screen while it goes")
@@ -54,8 +54,9 @@ final class LarkSendTests: XCTestCase {
         shot(app, "lark-sending")
         XCTAssertTrue(sending.waitForNonExistence(timeout: 15), "it never went out")
         sleep(3) // the copy replaces it: one message with the text, not two
-        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == %@", text)).count, 1)
         shot(app, "lark-sent")
+        let copies = app.staticTexts.matching(NSPredicate(format: "label == %@", text))
+        XCTAssertEqual(copies.count, 1, copies.debugDescription)
     }
 
     @MainActor func testFailedMessageOffersRetry() {
