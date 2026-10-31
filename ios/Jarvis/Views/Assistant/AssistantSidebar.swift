@@ -228,7 +228,7 @@ struct AssistantSidebar: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").font(Theme.Font.secondary.weight(.medium)).foregroundStyle(.secondary)
                 TextField("搜索对话", text: $query)
                     .focused($searching)
                     .submitLabel(.search)
@@ -244,7 +244,7 @@ struct AssistantSidebar: View {
             .background(Theme.Fill.chip, in: .rect(cornerRadius: 12, style: .continuous))
             Button(action: newConversation) {
                 Image(systemName: "square.and.pencil")
-                    .font(.body.weight(.semibold))
+                    .font(Theme.Font.heading)
                     .foregroundStyle(Theme.accent)
                     .frame(width: 40, height: 40)
                     .background(Theme.accent.opacity(0.12), in: .circle)
@@ -267,18 +267,18 @@ struct AssistantSidebar: View {
         return Button(action: openProfile) {
             HStack(spacing: 12) {
                 JarvisAvatar(size: 42)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Jarvis").font(.headline).foregroundStyle(Color.primary).lineLimit(1)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text("Jarvis").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
                     HStack(spacing: 5) {
                         Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                         Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
                             .lineLimit(1)
                     }
-                    .font(.footnote)
+                    .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.tertiary)
             }
             .card(padding: 12)
             .contentShape(.rect)
@@ -300,11 +300,11 @@ struct AssistantSidebar: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.Font.secondary.weight(.semibold))
                     .foregroundStyle(Theme.accent)
                     .frame(width: 28, height: 28)
                     .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: 8, style: .continuous))
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                Text(title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .card(padding: 10)
@@ -325,7 +325,7 @@ struct AssistantSidebar: View {
         let rest = all.filter { !isPinned($0) }
         if rest.isEmpty {
             Text(pinned.isEmpty ? "还没有对话：点右上角的新对话开始" : "还没有别的对话")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, 12).padding(.top, 20)
         }
         ForEach(AssistantSidebarGroups.group(rest), id: \.title) { group in
@@ -338,7 +338,7 @@ struct AssistantSidebar: View {
                     withAnimation(.snappy) { showAllOlder.toggle() }
                 } label: {
                     Text(showAllOlder ? "收起" : "查看全部（\(group.sessions.count)）")
-                        .font(.subheadline.weight(.medium))
+                        .font(Theme.Font.secondary.weight(.medium))
                         .foregroundStyle(Theme.accent)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
@@ -353,9 +353,9 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func results(_ hits: [Session]) -> some View {
         if hits.isEmpty {
-            VStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(.tertiary)
-                Text("没有找到「\(query)」").font(.subheadline).foregroundStyle(.secondary)
+            VStack(spacing: Theme.Space.sm) {
+                Image(systemName: "magnifyingglass").font(Theme.Font.title).foregroundStyle(.tertiary)
+                Text("没有找到「\(query)」").font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
@@ -367,7 +367,7 @@ struct AssistantSidebar: View {
 
     private func heading(_ text: String) -> some View {
         Text(text)
-            .font(.footnote.weight(.semibold))
+            .font(Theme.Font.sectionHeader)
             .foregroundStyle(Color.secondary)
             .padding(.horizontal, 12)
             .padding(.top, 20)
@@ -383,12 +383,12 @@ struct AssistantSidebar: View {
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
             HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: 6) {
-                        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
+                        Text(title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
                         if isMain {
                             Text("主对话")
-                                .font(.caption2.weight(.semibold))
+                                .font(Theme.Font.label.weight(.semibold))
                                 .foregroundStyle(Theme.accent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -397,12 +397,12 @@ struct AssistantSidebar: View {
                         }
                     }
                     if !preview.isEmpty {
-                        Text(preview).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        Text(preview).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(Fmt.relative(s.updatedAt)).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                VStack(alignment: .trailing, spacing: Theme.Space.sm) {
+                    Text(Fmt.relative(s.updatedAt)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     mark(s)
                 }
             }
@@ -465,8 +465,8 @@ struct AssistantSidebar: View {
             Divider().padding(.horizontal, 16)
             Button(action: action) {
                 HStack(spacing: 12) {
-                    Image(systemName: "gearshape").font(.body.weight(.medium)).foregroundStyle(.secondary).frame(width: 28)
-                    Text("设置").font(.body).foregroundStyle(Color.primary).lineLimit(1)
+                    Image(systemName: "gearshape").font(Theme.Font.heading).foregroundStyle(.secondary).frame(width: 28)
+                    Text("设置").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 24)

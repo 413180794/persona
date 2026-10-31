@@ -112,11 +112,11 @@ struct ModeChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: symbol).font(.caption2.weight(.semibold))
+            Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
             Text(text).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold)).imageScale(.small).opacity(0.6)
+            Image(systemName: "chevron.up.chevron.down").font(Theme.Font.label.weight(.bold)).imageScale(.small).opacity(0.6)
         }
-        .font(.caption.weight(.medium))
+        .font(Theme.Font.label.weight(.medium))
         .foregroundStyle(known ? (tint == .secondary ? Color.primary : tint) : Color.secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

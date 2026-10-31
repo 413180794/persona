@@ -195,13 +195,13 @@ struct AssistantHome: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 if let pending {
                     HStack {
                         Spacer(minLength: 48)
-                        VStack(alignment: .trailing, spacing: 6) {
+                        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
                             if pending.imageCount > 0 {
-                                Label("\(pending.imageCount) 张图片", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
+                                Label("\(pending.imageCount) 张图片", systemImage: "photo").font(Theme.Font.label).foregroundStyle(.secondary)
                             }
                             // The same bubble as a sent message (white on the light-blue bubble was 1.2:1).
                             Text(pending.text)
@@ -217,7 +217,7 @@ struct AssistantHome: View {
                     header
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle")
-                            .font(.footnote)
+                            .font(Theme.Font.caption)
                             .foregroundStyle(Theme.danger)
                     }
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -226,11 +226,11 @@ struct AssistantHome: View {
                                 Haptics.tap()
                                 send(s.prompt, [])
                             } label: {
-                                VStack(alignment: .leading, spacing: 10) {
+                                VStack(alignment: .leading, spacing: Theme.Space.m) {
                                     Image(systemName: s.symbol)
-                                        .font(.title3)
+                                        .font(Theme.Font.title)
                                         .foregroundStyle(Theme.accent)
-                                    Text(s.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
+                                    Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
                                 }
                                 .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
                                 .card(padding: 14)
@@ -249,7 +249,7 @@ struct AssistantHome: View {
         .scrollDismissesKeyboard(.interactively)
         .themedGroupedPage()
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         // The BeautifulUI style picks the launcher in the prompt bar's model menu.
@@ -276,12 +276,12 @@ struct AssistantHome: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(greeting).font(Theme.Font.greeting).padding(.top, 20)
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            Text(greeting).font(Theme.Font.display).padding(.top, 20)
             Text(model.assistantMain == nil
                  ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
                  : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
-                .font(.body)
+                .font(Theme.Font.secondary).lineHeight(.secondary)
                 .foregroundStyle(.secondary)
             // Wraps: in one HStack, a few more machines (or larger text) widened the whole page past the screen.
             LarkFlowLayout(spacing: 8, lineSpacing: 8) {
@@ -318,7 +318,7 @@ struct TypingIndicator: View {
                         .opacity(0.35 + 0.65 * max(0, sin(phase + Double(i) * 0.9)))
                 }
             }
-            Text(text).font(.subheadline).foregroundStyle(.secondary).contentTransition(.opacity)
+            Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary).contentTransition(.opacity)
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -345,7 +345,7 @@ struct StarterComposer: View {
     private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
             ComposerRow(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
@@ -415,7 +415,7 @@ struct BeautifulStarterComposer: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.s) {
             if !quotes.isEmpty { ContextChips(refs: $quotes) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
@@ -484,7 +484,7 @@ struct AssistantToolsRow: View {
         let calls = calls
         let count = steps.reduce(0) { $0 + $1.tools } // a fold counts the calls it stands for
         let running = calls.last.map(\.isRunning) ?? false
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Button {
                 withAnimation(.snappy) { open.toggle() }
             } label: {
@@ -500,9 +500,9 @@ struct AssistantToolsRow: View {
                         Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).rotationEffect(.degrees(open ? 90 : 0))
+                    Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).rotationEffect(.degrees(open ? 90 : 0))
                 }
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)

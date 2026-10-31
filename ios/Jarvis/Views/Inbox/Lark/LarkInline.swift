@@ -105,11 +105,23 @@ nonisolated enum LarkInline: Hashable {
     case image(url: String)
 }
 
-/// Base text appearance for a block of inline runs.
+/// Base text appearance for a block of inline runs. Sizes are Feishu's, set on Jarvis' levels (17 body, 15
+/// secondary, 13 caption, 12 label); `scale` (`Theme.textScale`, set by `LarkInlineText`) makes them follow the
+/// system's text size and 小 / 标准 / 大 like the rest of the app.
 nonisolated struct LarkTextBase: Hashable {
-    var size: CGFloat = 16
+    var size: CGFloat = 17
     var bold = false
     var color: Color?
+    var scale: CGFloat = 1
+
+    /// The size to draw at.
+    var points: CGFloat { size * scale }
+
+    func scaled(_ scale: CGFloat) -> LarkTextBase {
+        var b = self
+        b.scale = scale
+        return b
+    }
 }
 
 extension EnvironmentValues {
@@ -124,11 +136,13 @@ struct LarkInlineText: View {
     var lineLimit: Int? = nil
     var alignment: TextAlignment = .leading
     @Environment(\.larkTextBase) private var inherited
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let b = base ?? inherited
+        let b = (base ?? inherited).scaled(Theme.textScale(typeSize))
         let _ = LarkMedia.shared.emojiVersion
         Self.compose(runs, base: b)
+            .lineSpacing(b.points * (Theme.Level.body.lineHeight - 1.19)) // the body's line height, at Feishu's size
             .lineLimit(lineLimit)
             .multilineTextAlignment(alignment)
             .fixedSize(horizontal: false, vertical: true)
@@ -143,7 +157,7 @@ struct LarkInlineText: View {
             append(Text(pending))
             pending = AttributedString()
         }
-        let emojiPoints = (base.size * 1.25).rounded()
+        let emojiPoints = (base.points * 1.25).rounded()
         for run in runs {
             switch run {
             case .text(let s, let style):
@@ -157,7 +171,7 @@ struct LarkInlineText: View {
                 }
             case .symbol(let name, let color):
                 flush()
-                var t = Text(Image(systemName: name)).font(.system(size: base.size * 0.95))
+                var t = Text(Image(systemName: name)).font(.system(size: base.points * 0.95))
                 if let color { t = t.foregroundStyle(color) }
                 append(t)
             case .image(let url):
@@ -173,7 +187,7 @@ struct LarkInlineText: View {
 
     @MainActor static func attributed(_ s: String, style: LarkRunStyle, base: LarkTextBase) -> AttributedString {
         var a = AttributedString(style.code ? s.replacingOccurrences(of: " ", with: "\u{00A0}") : s)
-        let size = style.size ?? base.size
+        let size = (style.size ?? base.size) * base.scale
         var font: Font = style.code ? .system(size: size * 0.88, design: .monospaced) : .system(size: size)
         if style.bold || base.bold { font = font.weight(.semibold) }
         if style.italic { font = font.italic() }

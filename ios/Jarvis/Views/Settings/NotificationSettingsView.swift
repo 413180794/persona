@@ -16,9 +16,9 @@ struct NotificationSettingsView: View {
             if let system, system != .authorized && system != .provisional && system != .ephemeral {
                 Section {
                     Label {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("通知没有打开").font(.body.weight(.semibold))
-                            Text("下面的设置要在系统设置里允许 Jarvis 发通知后才生效。").font(.footnote).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            Text("通知没有打开").font(Theme.Font.heading)
+                            Text("下面的设置要在系统设置里允许 Jarvis 发通知后才生效。").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "bell.slash.fill").foregroundStyle(Theme.caution)
@@ -30,9 +30,9 @@ struct NotificationSettingsView: View {
             Section {
                 Toggle(isOn: binding(\.input)) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text("需要你处理时")
-                            Text("提问、计划审批、工具授权、终端等你输入").font(.footnote).foregroundStyle(.secondary)
+                            Text("提问、计划审批、工具授权、终端等你输入").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "exclamationmark.bubble").foregroundStyle(StatusPalette.needsYou.dot)
@@ -61,9 +61,9 @@ struct NotificationSettingsView: View {
             Section {
                 Toggle(isOn: binding(\.liveActivity)) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text("锁屏和灵动岛")
-                            Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(.footnote).foregroundStyle(.secondary)
+                            Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "sparkle").foregroundStyle(Theme.brand)
@@ -71,9 +71,9 @@ struct NotificationSettingsView: View {
                 }
                 Toggle(isOn: binding(\.lockDetails)) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text("锁屏显示详情")
-                            Text("关着时锁屏只显示数量和「有个授权等你」，不显示 Agent 名字和内容").font(.footnote).foregroundStyle(.secondary)
+                            Text("关着时锁屏只显示数量和「有个授权等你」，不显示 Agent 名字和内容").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "eye").foregroundStyle(.secondary)
@@ -92,7 +92,7 @@ struct NotificationSettingsView: View {
                 .disabled(prefs?.liveActivity == false)
                 if !activitiesAllowed {
                     Label {
-                        Text("系统设置里关掉了 Jarvis 的实时活动").font(.footnote)
+                        Text("系统设置里关掉了 Jarvis 的实时活动").font(Theme.Font.caption)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.caution)
                     }

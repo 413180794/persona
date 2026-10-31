@@ -122,6 +122,12 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   - 听写：`Dictation`（`SFSpeechRecognizer` 中文 + `AVAudioEngine`），听到的字实时接在草稿后面，再点一下停；发送时自动停。
   - 输入框上方的权限、思考强度标签（`SessionModeBar` / `NewSessionModePicker`）留在原处，不并进工具栏，理由见 PLAN「PromptBar v2」。
   - DEBUG：`-showPromptMenu mention|command|attach|model` 几秒后打开对应菜单（截图用）。
+- 模型 API 报错（`APIErrorCard`）：Claude Code 放弃重试后写的「API Error: 502 …」回复、hub 的「API 错误：…」通知，都画成一张报错卡，
+  不再把原文当正文铺开。第一行是一句人话的原因（`APIErrorInfo.explain`，比如「推理服务暂时没有可用的 GPU」「登录过期了，要在电脑上重新 /login」），
+  下面是 BeautifulUI 的 chip：状态码（错误样式）、「临时故障」或「要处理」、连续次数。点开看请求 ID、Session、时间和原文，都能复制。
+  同一个报错再来一次、中间只有「继续」这类重试时，合成一张卡加次数（`ChatView.foldAPIErrors`）。报错是最后一条、Agent 空闲、而且是临时性的才有「重试」（发「继续」）。
+  现在从文字里解析；Claude Code 在这条消息上还带了 `apiErrorStatus`、`error`、`requestId` 等字段，hub 读出来以后以字段为准。DEBUG：`-showErrorDetails YES` 卡片默认展开。
+  截图：mock 加 `MOCK_API_ERRORS=1`，看助手主对话和 review 会话。
 - Claude 的建议（`SuggestionPill`）：会话有 `suggestion`、Agent 没在工作、输入框为空时，输入框上方一条胶囊「✦ 建议 … 采用」（✦ 是 AI 的紫色，不是主色），占位文字也换成这条建议；
   点一下填进输入框（可以改了再发），长按菜单「直接发送」。一打字就消失。无头助手没有 TUI，没有建议。截图：mock 加 `MOCK_SUGGESTION=1`，打开 review 会话。
 - 发送：点发送立即清空输入框、消息以「发送中」气泡上屏（`ChatStore.pending`），请求在后台发；transcript 里出现同样的话
@@ -302,9 +308,16 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - Agents 列表的一行（`SlotRow`）：状态点 + 标题 + 时间；最新一句；元信息一行「需要你 · Claude · 空间 › tab · 机器」，普通字体、次要灰。只有需要你写成字（红），其余状态只看圆点（完成未看另把标题加粗）；以前 tab 名着色胶囊、状态字、描边的 Agent 种类挤在第一行，把状态说了三遍。空间标题的状态计数是彩色圆点 + 次要灰数字。
 - Token（`Theme.swift`，页面只引用）：圆角 `Theme.Radius` 五档（badge 6 / control 10 / card 14 / bubble 20 / panel 22，外加胶囊和圆）；
   背景灰阶 `Theme.Fill` 三档（well / chip / pressed，就是系统的 quaternary / tertiary / secondary fill，深色下也看得见，别再写 `Color.primary.opacity(…)`）；
-  字体 `Theme.Font` 按角色取动态字体（rowTitle、preview、meta、chip、code…）；间距 `Theme.Space`。字号一律用文本样式，跟随动态字体：
-  固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（和用户气泡的 body 一样，MarkdownUI 自己按动态字体缩放）。
-  例外：终端网格（用户自己调字号）、灵动岛格子、导出的分享卡片（固定版式的图片）、飞书消息卡片和文档（照搬 lark-connector 的样子）。
+  - 字体 `Theme.Font` 只有这几级（默认字号下）：display 28 粗、title 22、heading 17 粗、body 17、secondary 15、caption 13、sectionHeader 13 粗（配次要色）、
+    label 12、code 13 等宽。页面里不直接写 `.subheadline` 这类系统样式，也不写死 `.system(size:)`。
+  - 和 BeautifulUI 一样，层次主要靠字重和颜色：行标题是 body 大小加粗，分组头是 caption 大小加粗、次要色，比行标题小；
+    Markdown 的一级标题是 title，其余标题是 heading，靠上方的空白分开；代码块是 code。
+  - 间距 `Theme.Space` 是 4pt 网格（2 4 6 8 12 16 24 32），竖向的 `VStack(spacing:)` 都用它；横向间距在按钮文字旁边，没有统一改。
+  - 字号跟随动态字体；设置 › 界面风格 › 字号（小 / 标准 / 大，`TextSize`，`ui.textSize`）在系统档位上再挪一档：RootView 设 `.dynamicTypeSize`，
+    所以文本样式、`@ScaledMetric`、MarkdownUI 和 BeautifulUI 的字号一起变，比例不变。
+  - 飞书消息和卡片保留飞书自己的字号（落在上面的级别上），通过 `LarkTextBase.scale`（`Theme.textScale`）一样跟随。
+  - 固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（MarkdownUI 自己按动态字体缩放）。
+  - 例外：终端网格（用户自己调字号）、灵动岛格子、导出的分享卡片（固定版式的图片）、小圆圈里的序号和角标。
   锁屏实时活动限到 `.large`（高度约 160pt，超出会被裁掉）。
 - 动效（`Theme.Motion`：状态切换 `.snappy` 0.25、布局 `.smooth` 0.3）：一直在动的只有「需要你」圆点的呼吸和工作中的系统转圈，
   打开「减少动态效果」时圆点也停（`accessibilityReduceMotion`，加载占位和「正在准备」同样停）；工作中的圆点是一圈静止的外环。

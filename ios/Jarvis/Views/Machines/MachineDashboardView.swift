@@ -63,7 +63,7 @@ struct MachineDashboardView: View {
             Spacer()
             Text("每 10 秒更新").foregroundStyle(.tertiary)
         }
-        .font(.footnote.weight(.medium))
+        .font(Theme.Font.caption.weight(.medium))
         .lineLimit(1)
         .padding(.horizontal, 4)
     }
@@ -108,12 +108,12 @@ struct MachineMetricsCard: View {
         let worst = metrics.online ? alerts.first?.level ?? .normal : .normal
         let end = Date.now
         let domain = end.addingTimeInterval(-3600)...end
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: 12) {
                 OSBadge(system: metrics.system ?? machine?.system, fallback: machine?.symbol ?? "desktopcomputer", size: 40, online: metrics.online)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(machine?.name ?? metrics.machineID).font(.headline).lineLimit(1)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(machine?.name ?? metrics.machineID).font(Theme.Font.heading).lineLimit(1)
+                    Text(subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
                 status
@@ -170,14 +170,14 @@ struct MachineMetricsCard: View {
         if metrics.online {
             HStack(spacing: 5) {
                 Circle().fill(Theme.positive).frame(width: 7, height: 7)
-                Text("在线").font(.caption.weight(.semibold)).foregroundStyle(Theme.positive)
+                Text("在线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.positive)
             }
             .fixedSize()
         } else {
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("离线").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
+                Text("离线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
                 if let seen = machine?.lastSeen, seen.timeIntervalSince1970 > 0 {
-                    Text(Fmt.relative(seen)).font(.caption2).foregroundStyle(.tertiary)
+                    Text(Fmt.relative(seen)).font(Theme.Font.label).foregroundStyle(.tertiary)
                 }
             }
             .fixedSize()
@@ -186,15 +186,15 @@ struct MachineMetricsCard: View {
 
     private func cell(_ title: String, value: String, detail: String?, level: MetricLevel,
                       @ViewBuilder chart: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: 3) {
-                Text(title).font(.caption).foregroundStyle(.secondary)
+                Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
                 if level > .normal {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 9)).foregroundStyle(MetricColor.level(level))
                 }
             }
-            Text(value).font(.callout.weight(.semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
-            Text(detail ?? " ").font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(Theme.Font.body.weight(.semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
+            Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
             chart().frame(height: 30).padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,7 +213,7 @@ struct AlertChip: View {
                 .foregroundStyle(color)
             Text(alert.label).foregroundStyle(.primary)
         }
-        .font(.caption.weight(.semibold))
+        .font(Theme.Font.label.weight(.semibold))
         .lineLimit(1)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)

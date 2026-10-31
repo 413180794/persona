@@ -43,7 +43,7 @@ struct FeishuDocsTag: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10, weight: .medium))
+            .font(Theme.Font.label.weight(.medium))
             .foregroundStyle(LarkColor.hue(hue))
             .lineLimit(1)
             .padding(.horizontal, 4)

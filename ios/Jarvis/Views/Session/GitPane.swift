@@ -38,10 +38,10 @@ struct GitPane: View {
     }
 
     private func header(_ s: GitStatus) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.branch").foregroundStyle(Theme.accent)
-                Text(s.branch ?? "分离的 HEAD").font(.headline).lineLimit(1)
+                Text(s.branch ?? "分离的 HEAD").font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: 4)
                 if s.ahead > 0 { sync("arrow.up", s.ahead, .secondary) }
                 if s.behind > 0 { sync("arrow.down", s.behind, Theme.cautionText) }
@@ -55,10 +55,10 @@ struct GitPane: View {
                 }
                 if s.stashes > 0 { Text("· 暂存 \(s.stashes)") }
             }
-            .font(.caption)
+            .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             if let root = s.root {
-                Text(Fmt.path(root, home: nil)).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
+                Text(Fmt.path(root, home: nil)).font(Theme.Font.label.monospaced()).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
             }
         }
         .padding(.vertical, 2)
@@ -150,7 +150,7 @@ struct GitBadge: View {
 
     var body: some View {
         Text(letter)
-            .font(.caption2.weight(.bold).monospaced()).dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .font(Theme.Font.label.weight(.bold).monospaced()).dynamicTypeSize(...DynamicTypeSize.xLarge)
             .foregroundStyle(color)
             .frame(width: 20, height: 20)
             .background(color.opacity(0.14), in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
@@ -175,26 +175,26 @@ struct GitFileRow: View {
     var body: some View {
         HStack(spacing: 10) {
             GitBadge(letter: file.letter)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(file.name).font(.subheadline.weight(.medium)).lineLimit(1)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(file.name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
                 HStack(spacing: 4) {
                     if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(.primary) }
                     if let orig = file.origPath { Text("← " + (orig as NSString).lastPathComponent) }
                     if !file.folder.isEmpty { Text(file.folder).truncationMode(.head) }
                 }
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
             Spacer(minLength: 6)
             if file.binary == true {
-                Text("二进制").font(.caption2).foregroundStyle(.secondary)
+                Text("二进制").font(Theme.Font.label).foregroundStyle(.secondary)
             } else if file.added + file.deleted > 0 {
                 HStack(spacing: 4) {
                     Text("+\(file.added)").foregroundStyle(Theme.Diff.add)
                     Text("−\(file.deleted)").foregroundStyle(Theme.Diff.del)
                 }
-                .font(.caption.monospacedDigit())
+                .font(Theme.Font.label.monospacedDigit())
             }
         }
         .contentShape(.rect)
@@ -206,14 +206,14 @@ struct GitCommitRow: View {
     var isHead = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(commit.subject).font(.subheadline.weight(.medium)).lineLimit(2)
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(commit.subject).font(Theme.Font.secondary.weight(.medium)).lineLimit(2)
             HStack(spacing: 6) {
-                Text(commit.short).font(.caption.monospaced()).foregroundStyle(Theme.accent)
+                Text(commit.short).font(Theme.Font.code).foregroundStyle(Theme.accent)
                 Text(commit.author).lineLimit(1)
                 if let d = commit.date { Text("· " + Fmt.relative(d)).lineLimit(1) }
             }
-            .font(.caption)
+            .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             let refs = commit.refNames
             if !refs.isEmpty {
@@ -295,22 +295,22 @@ struct GitCommitSheet: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(commit.subject).font(.headline)
+                    VStack(alignment: .leading, spacing: Theme.Space.s) {
+                        Text(commit.subject).font(Theme.Font.heading)
                         if let body = (show?.commit.body ?? commit.body), !body.isEmpty {
-                            Text(body).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                            Text(body).font(Theme.Font.body).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                         HStack(spacing: 6) {
                             Text(commit.author)
                             if let d = commit.date { Text("· " + d.formatted(date: .abbreviated, time: .shortened)) }
                         }
-                        .font(.caption)
+                        .font(Theme.Font.label)
                         .foregroundStyle(.secondary)
                         Button {
                             UIPasteboard.general.string = commit.hash
                             Haptics.success()
                         } label: {
-                            Label(commit.hash, systemImage: "number").font(.caption2.monospaced()).lineLimit(1).truncationMode(.middle)
+                            Label(commit.hash, systemImage: "number").font(Theme.Font.label.monospaced()).lineLimit(1).truncationMode(.middle)
                         }
                         .buttonStyle(.borderless)
                     }
@@ -390,7 +390,7 @@ struct DiffText: View {
             VStack(spacing: 0) {
                 MonoTextView(text: content.text, inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
                 if truncated {
-                    Text("改动太大，只显示了前 512 KB").font(.caption).foregroundStyle(.secondary).padding(8)
+                    Text("改动太大，只显示了前 512 KB").font(Theme.Font.label).foregroundStyle(.secondary).padding(8)
                 }
             }
             .background(Theme.codeBackground)

@@ -39,7 +39,7 @@ struct NewChatView: View {
                 if let preset {
                     Section {
                         Label(preset.spaceName, systemImage: "square.stack.3d.up.fill")
-                        Text(Fmt.path(preset.cwd, home: machine?.home)).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        Text(Fmt.path(preset.cwd, home: machine?.home)).font(Theme.Font.code).foregroundStyle(.secondary)
                     } header: { Text("加入空间") } footer: {
                         Text("会在 \(machine?.name ?? "") 的 herdr 这个 workspace 里新开一个标签。")
                     }
@@ -60,10 +60,10 @@ struct NewChatView: View {
                     } label: {
                         HStack {
                             Image(systemName: "folder.fill").foregroundStyle(Theme.accent)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(cwd.isEmpty ? "选择目录" : (cwd as NSString).lastPathComponent).font(.body.weight(.medium))
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text(cwd.isEmpty ? "选择目录" : (cwd as NSString).lastPathComponent).font(Theme.Font.heading)
                                 if !cwd.isEmpty {
-                                    Text(Fmt.path(cwd, home: machine?.home)).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                                    Text(Fmt.path(cwd, home: machine?.home)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
                                 }
                             }
                         }
@@ -78,13 +78,13 @@ struct NewChatView: View {
                                 HStack {
                                     Image(systemName: cwd == r.path ? "checkmark.circle.fill" : "clock.arrow.circlepath")
                                         .foregroundStyle(cwd == r.path ? Theme.accent : .secondary)
-                                    VStack(alignment: .leading, spacing: 1) {
+                                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                         Text(r.name).foregroundStyle(Color.primary)
                                         Text(Fmt.path((r.path as NSString).deletingLastPathComponent, home: machine?.home))
-                                            .font(.caption2).foregroundStyle(Color.secondary).lineLimit(1).truncationMode(.head)
+                                            .font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1).truncationMode(.head)
                                     }
                                     Spacer()
-                                    Text(Fmt.relative(r.lastUsed)).font(.caption).foregroundStyle(Color.secondary)
+                                    Text(Fmt.relative(r.lastUsed)).font(Theme.Font.label).foregroundStyle(Color.secondary)
                                 }
                             }
                         }
@@ -98,10 +98,10 @@ struct NewChatView: View {
                     } label: {
                         HStack {
                             Image(systemName: "cpu").foregroundStyle(Theme.accent)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(launcher.isEmpty ? "选择启动器" : launcher).font(.body.weight(.medium).monospaced())
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text(launcher.isEmpty ? "选择启动器" : launcher).font(Theme.Font.heading.monospaced())
                                 if let l = launchers.first(where: { $0.name == launcher }), let m = l.model, !m.isEmpty {
-                                    Text(m).font(.caption).foregroundStyle(.secondary)
+                                    Text(m).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
@@ -142,12 +142,12 @@ struct NewChatView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
+                VStack(spacing: Theme.Space.s) {
                 // Next to the button, not as the form's last section: below 第一条消息 and under this button it went
                 // unseen, the button just turned back to 开始对话 (and a retry started a second agent).
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote).foregroundStyle(Theme.danger).lineLimit(4)
+                        .font(Theme.Font.caption).foregroundStyle(Theme.danger).lineLimit(4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
                         .background(.regularMaterial, in: .rect(cornerRadius: 12, style: .continuous))
@@ -158,7 +158,7 @@ struct NewChatView: View {
                 } label: {
                     HStack(spacing: 8) {
                         if starting { ProgressView().tint(.white) }
-                        Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(.headline)
+                        Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(Theme.Font.heading)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity, minHeight: 30)
@@ -193,14 +193,14 @@ struct NewChatView: View {
             Haptics.tap()
             machineID = m.id
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack {
-                    Image(systemName: m.symbol).font(.title3)
+                    Image(systemName: m.symbol).font(Theme.Font.title)
                     Spacer()
                     Circle().fill(m.online ? Theme.positive : Color.secondary.opacity(0.4)).frame(width: 8, height: 8)
                 }
-                Text(m.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(m.online ? (m.hostname ?? "在线") : "离线").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(m.name).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                Text(m.online ? (m.hostname ?? "在线") : "离线").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(width: 120, alignment: .leading)
             .padding(12)
@@ -278,12 +278,12 @@ struct LauncherPicker: View {
                     dismiss()
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(l.name).font(.body.weight(.medium).monospaced()).foregroundStyle(.primary)
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            Text(l.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary)
                             HStack(spacing: 6) {
                                 if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {
-                                    Text(host).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                                    Text(host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                                 }
                             }
                         }
@@ -318,9 +318,9 @@ struct DirectoryBrowser: View {
                         dismiss()
                     } label: {
                         Label("使用「\((list.path as NSString).lastPathComponent)」", systemImage: "checkmark.circle.fill")
-                            .font(.body.weight(.semibold))
+                            .font(Theme.Font.heading)
                     }
-                } footer: { Text(list.path).font(.caption.monospaced()) }
+                } footer: { Text(list.path).font(Theme.Font.code) }
 
                 Section {
                     if let parent = list.parent, !parent.isEmpty {

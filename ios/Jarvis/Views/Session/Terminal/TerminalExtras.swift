@@ -46,21 +46,21 @@ struct ShortcutsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text(hint).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Text(hint).font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 4)
-                Button("编辑", action: edit).font(.caption.weight(.semibold)).lineLimit(1)
+                Button("编辑", action: edit).font(Theme.Font.label.weight(.semibold)).lineLimit(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             if items.isEmpty {
-                Text("还没有快捷命令，点「编辑」添加").font(.footnote).foregroundStyle(.secondary)
+                Text("还没有快捷命令，点「编辑」添加").font(Theme.Font.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, 14).padding(.bottom, 12)
             }
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         Text(item)
-                            .font(.system(.subheadline, design: .monospaced))
+                            .font(Theme.Font.secondary.monospaced())
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14)
@@ -157,13 +157,13 @@ struct TerminalSettingsView: View {
                 }
                 Section {
                     ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { _, s in
-                        Text(s).font(.system(.body, design: .monospaced)).lineLimit(1)
+                        Text(s).font(Theme.Font.body.monospaced()).lineLimit(1)
                     }
                     .onDelete { shortcuts.wrappedValue.remove(atOffsets: $0) }
                     .onMove { shortcuts.wrappedValue.move(fromOffsets: $0, toOffset: $1) }
                     HStack {
                         TextField("新的快捷命令", text: $newShortcut)
-                            .font(.system(.body, design: .monospaced))
+                            .font(Theme.Font.body.monospaced())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .onSubmit(add)
@@ -196,7 +196,7 @@ struct TerminalSettingsView: View {
                     Label("长按：选择、拷贝", systemImage: "text.cursor")
                     Label("听写：键盘上的麦克风", systemImage: "mic")
                 }
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
             }
             .themedPage()
@@ -269,7 +269,7 @@ struct ThemeRow: View {
                         .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
                 }
             }
-            Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Theme.accent).opacity(on ? 1 : 0)
+            Image(systemName: "checkmark").font(Theme.Font.heading).foregroundStyle(Theme.accent).opacity(on ? 1 : 0)
         }
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
@@ -327,7 +327,7 @@ struct SuggestionStrip: View {
             HStack(spacing: 6) {
                 ForEach(items, id: \.self) { s in
                     Button { Haptics.tap(); pick(s) } label: {
-                        Text(s).font(.system(.footnote, design: .monospaced)).lineLimit(1)
+                        Text(s).font(Theme.Font.code).lineLimit(1)
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Theme.Fill.chip, in: .capsule)
                     }

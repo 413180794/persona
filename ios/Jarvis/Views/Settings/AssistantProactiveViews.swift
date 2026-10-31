@@ -217,22 +217,22 @@ struct AssistantRoutinesView: View {
     private func row(_ r: APIClient.Routine) -> some View {
         HStack(spacing: 12) {
             Image(systemName: AssistantScheduleText.symbol(r))
-                .font(.body.weight(.semibold))
+                .font(Theme.Font.heading)
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
                 .background((r.enabled ? Theme.accent : Color.secondary).gradient, in: .rect(cornerRadius: 9, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
-                    Text(r.title).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(r.title).font(Theme.Font.heading).lineLimit(1)
                     if r.createdBy == "assistant" {
-                        Text("Jarvis 建的").font(.caption2.weight(.medium)).foregroundStyle(Theme.accent)
+                        Text("Jarvis 建的").font(Theme.Font.label.weight(.medium)).foregroundStyle(Theme.accent)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                             .lineLimit(1)
                     }
                 }
                 Text(AssistantScheduleText.sentence(r))
-                    .font(.subheadline)
+                    .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Group {
@@ -242,13 +242,13 @@ struct AssistantRoutinesView: View {
                         Text("下次 \(AssistantScheduleText.moment(next)) · \(AssistantScheduleText.until(next))")
                     }
                 }
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 if let last = AssistantScheduleText.lastRun(r) {
                     Label(last.text, systemImage: last.failed ? "exclamationmark.triangle.fill" : "checkmark")
                         .labelStyle(AssistantCompactLabel())
-                        .font(.caption)
+                        .font(Theme.Font.label)
                         .foregroundStyle(last.failed ? Theme.danger : Color.secondary)
                         .lineLimit(1)
                 }
@@ -442,7 +442,7 @@ struct AssistantRoutineEditor: View {
                             Label("查看上次结果", systemImage: "text.bubble").lineLimit(1)
                             Spacer()
                             if let at = saved?.lastRun {
-                                Text(Fmt.relative(at)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                                Text(Fmt.relative(at)).font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
@@ -565,13 +565,13 @@ struct AssistantWeekdayPicker: View {
     private var selected: Set<Int> { days.isEmpty ? Set(1...7) : Set(days) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: 0) {
                 ForEach(1...7, id: \.self) { d in
                     let on = selected.contains(d)
                     Button { toggle(d) } label: {
                         Text(AssistantScheduleText.dayNames[d - 1])
-                            .font(.subheadline.weight(.semibold))
+                            .font(Theme.Font.secondary.weight(.semibold))
                             .foregroundStyle(on ? Color.white : Color.primary)
                             .frame(width: 38, height: 38)
                             .background(Circle().fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.14))))
@@ -598,7 +598,7 @@ struct AssistantWeekdayPicker: View {
             withAnimation(.snappy) { days = value }
         } label: {
             Text(title)
-                .font(.footnote.weight(.medium))
+                .font(Theme.Font.caption.weight(.medium))
                 .lineLimit(1)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -706,10 +706,10 @@ struct AssistantFollowupRow: View {
         let firstLine = f.prompt.split(whereSeparator: \.isNewline).first.map(String.init) ?? f.prompt
         let title = f.title.flatMap { $0.isEmpty ? nil : $0 } ?? firstLine
         let content = HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(2)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(title).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(2)
                 if title != f.prompt {
-                    Text(f.prompt).font(.subheadline).foregroundStyle(Color.secondary).lineLimit(2)
+                    Text(f.prompt).font(Theme.Font.secondary).foregroundStyle(Color.secondary).lineLimit(2)
                 }
                 HStack(spacing: 10) {
                     Label("\(AssistantScheduleText.moment(f.at)) · \(AssistantScheduleText.until(f.at))", systemImage: "clock")
@@ -718,13 +718,13 @@ struct AssistantFollowupRow: View {
                           systemImage: f.sessionID == nil ? "plus.bubble" : "arrowshape.turn.up.left")
                 }
                 .labelStyle(AssistantCompactLabel())
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(Color.secondary)
                 .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if f.sessionID != nil {
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
+                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
             }
         }
         .padding(.vertical, 3)
@@ -904,14 +904,14 @@ struct AssistantMemoryView: View {
     }
 
     private func row(_ e: AssistantMemoryEntry, title: String, detail: String?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(.body.weight(.semibold)).lineLimit(1)
+                Text(title).font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: 4)
                 if let t = e.typeTitle { AssistantMemoryTag(title: t, color: e.typeColor) }
             }
             if let detail {
-                Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
             }
         }
         .padding(.vertical, 2)
@@ -951,7 +951,7 @@ struct AssistantMemoryTag: View {
 
     var body: some View {
         Text(title)
-            .font(.caption2.weight(.semibold))
+            .font(Theme.Font.label.weight(.semibold))
             .lineLimit(1)
             .foregroundStyle(color)
             .padding(.horizontal, 7)
@@ -970,17 +970,17 @@ struct AssistantMemoryDetail: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 if onSaved != nil {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Theme.Space.sm) {
                         HStack(spacing: 8) {
                             if let t = entry.typeTitle { AssistantMemoryTag(title: t, color: entry.typeColor) }
                             if let at = entry.file.updatedAt {
-                                Text("更新于 \(Fmt.relative(at))").font(.caption).foregroundStyle(.secondary)
+                                Text("更新于 \(Fmt.relative(at))").font(Theme.Font.label).foregroundStyle(.secondary)
                             }
                         }
                         if let d = entry.description {
-                            Text(d).font(.subheadline).foregroundStyle(.secondary)
+                            Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary)
                         }
                     }
                     Divider()
@@ -989,7 +989,7 @@ struct AssistantMemoryDetail: View {
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in url.scheme == nil ? .discarded : .systemAction })
-                Text(entry.file.name).font(.caption.monospaced()).foregroundStyle(.tertiary).padding(.top, 8)
+                Text(entry.file.name).font(Theme.Font.code).foregroundStyle(.tertiary).padding(.top, 8)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1028,7 +1028,7 @@ struct AssistantMemoryEditor: View {
     var body: some View {
         NavigationStack {
             TextEditor(text: $text)
-                .font(.callout.monospaced())
+                .font(Theme.Font.body.monospaced())
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .scrollContentBackground(.hidden)
@@ -1078,7 +1078,7 @@ struct AssistantNotesView: View {
         Form {
             Section {
                 TextEditor(text: $text)
-                    .font(.callout)
+                    .font(Theme.Font.body)
                     .frame(minHeight: 380)
                     .focused($focused)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))

@@ -71,7 +71,7 @@ struct AssistantProfileView: View {
                     LauncherPicker(launchers: launchers, selection: $selection)
                 } label: {
                     LabeledContent("启动器（模型）") {
-                        Text(selection).font(.callout.monospaced()).lineLimit(1)
+                        Text(selection).font(Theme.Font.body.monospaced()).lineLimit(1)
                     }
                 }
                 LabeledContent("运行在", value: machineName)
@@ -125,12 +125,12 @@ struct AssistantProfileView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.Space.m) {
             JarvisAvatar(size: 88, working: working)
                 .shadow(color: Theme.accent.opacity(0.3), radius: 16, y: 6)
-            Text("Jarvis").font(.system(size: 28, weight: .bold, design: .rounded))
+            Text("Jarvis").font(Theme.Font.display).fontDesign(.rounded)
             Text("你的私人助手 · 运行在 \(machineName)")
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             HStack(spacing: 8) {
@@ -212,21 +212,21 @@ struct AssistantUpcomingRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(AssistantScheduleText.hm(item.at))
-                    .font(.title3.weight(.semibold).monospacedDigit())
-                Text(AssistantScheduleText.day(item.at)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(Theme.Font.heading.monospacedDigit())
+                Text(AssistantScheduleText.day(item.at)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(width: 58, alignment: .leading)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
                     Image(systemName: item.routine ? "repeat" : "arrow.turn.down.right")
-                        .font(.caption.weight(.bold))
+                        .font(Theme.Font.label.weight(.bold))
                         .foregroundStyle(Theme.accent)
-                    Text(item.title).font(.body.weight(.medium)).lineLimit(1)
+                    Text(item.title).font(Theme.Font.heading).lineLimit(1)
                 }
                 Text("\(item.detail) · \(AssistantScheduleText.until(item.at))")
-                    .font(.caption)
+                    .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -329,19 +329,19 @@ struct AssistantRunRow: View {
     var body: some View {
         let (symbol, tint) = AssistantRunText.symbol(run)
         let content = HStack(spacing: 12) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 2) {
+            Image(systemName: symbol).font(Theme.Font.title).foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(showTitle ? run.title : AssistantScheduleText.moment(run.at))
-                    .font(.body.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
+                    .font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
                 Text(showTitle ? "\(AssistantScheduleText.hm(run.at)) · \(AssistantRunText.detail(run))"
                      : AssistantRunText.detail(run))
-                    .font(.caption)
+                    .font(Theme.Font.label)
                     .foregroundStyle(run.status == "failed" ? Theme.danger : Color.secondary)
                     .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if run.key != nil {
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
+                Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(Color(uiColor: .tertiaryLabel))
             }
         }
         if let key = run.key {

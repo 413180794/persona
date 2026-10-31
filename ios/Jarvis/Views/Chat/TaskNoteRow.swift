@@ -100,23 +100,23 @@ struct TaskNoteRow: View {
                         ZStack {
                             Circle().fill(tint(n).opacity(0.14)).frame(width: 24, height: 24)
                             Image(systemName: TaskNoteText.symbol(n))
-                                .font(.caption2.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
+                                .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
                                 .foregroundStyle(tint(n))
                         }
-                        Text(TaskNoteText.label(n)).font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
+                        Text(TaskNoteText.label(n)).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1).fixedSize()
                         Text(TaskNoteText.subject(n, description: call.flatMap { index.descriptions[$0] }))
-                            .font(.subheadline)
+                            .font(Theme.Font.secondary)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer(minLength: 4)
                         if let o = TaskNoteText.outcome(n, startedAt: call.flatMap { index.startedAt[$0] }, at: item.ts) {
-                            Text(o).font(.caption.monospacedDigit())
+                            Text(o).font(Theme.Font.label.monospacedDigit())
                                 .foregroundStyle(n.failed ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.tertiary))
                                 .lineLimit(1).fixedSize()
                         }
                         Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.semibold))
+                            .font(Theme.Font.label.weight(.semibold))
                             .foregroundStyle(.tertiary)
                             .rotationEffect(.degrees(open ? 90 : 0))
                     }
@@ -138,16 +138,16 @@ struct TaskNoteRow: View {
     }
 
     @ViewBuilder private func detail(_ n: TaskNote, call: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             switch n.kind {
             case "shell": CodeBlock(text: "$ " + (n.detail ?? n.title), maxLines: 12)
             case "agent":
-                if let r = n.detail { Text(r).font(.footnote).foregroundStyle(.secondary).textSelection(.enabled) }
+                if let r = n.detail { Text(r).font(Theme.Font.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             default:
                 if let d = n.detail { CodeBlock(text: d, maxLines: 12) }
             }
             if n.kind == "monitor", n.status == "event" || n.detail == nil {
-                Text(n.title).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                Text(n.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             HStack(spacing: 16) {
                 if let f = n.outputFile, !f.isEmpty, let openFile {
@@ -157,7 +157,7 @@ struct TaskNoteRow: View {
                     Button { jumpToCall(call) } label: { Label("跳到发起的这一步", systemImage: "arrow.up.forward").lineLimit(1) }
                 }
             }
-            .font(.footnote.weight(.medium))
+            .font(Theme.Font.caption.weight(.medium))
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
         }

@@ -66,8 +66,8 @@ struct LarkCardView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 12)
                 } else if let fallback = meta["fallback"]?.array, !fallback.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(fallback.compactMap(\.string).enumerated()), id: \.offset) { _, t in Text(t).font(.subheadline) }
+                    VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                        ForEach(Array(fallback.compactMap(\.string).enumerated()), id: \.offset) { _, t in Text(t).font(Theme.Font.secondary) }
                     }
                     .padding(12)
                 }
@@ -96,11 +96,11 @@ struct LarkCardHeader: View {
         let tags = kids.filter { $0.tag == "text_tag" }
         let extras = kids.filter { $0.tag != "plain_text" && $0.tag != "text_tag" }
         let tinted = !(theme.isEmpty || theme == "default" || theme == "white")
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 ForEach(Array(extras.enumerated()), id: \.offset) { _, e in LarkCardNodeView(node: e) }
                 if let title = texts.first {
-                    LarkInlineText(runs: LarkCardRuns.runs(title, inMarkdown: false), base: LarkTextBase(size: 16, bold: true))
+                    LarkInlineText(runs: LarkCardRuns.runs(title, inMarkdown: false), base: LarkTextBase(size: 17, bold: true))
                 }
                 Spacer(minLength: 0)
             }
@@ -293,6 +293,7 @@ nonisolated enum LarkCardRuns {
 
 /// Renders one block-level card element (port of `CardNodeView`).
 struct LarkCardNodeView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var node: LarkCardNode
     @Environment(\.larkTextBase) private var base
 
@@ -306,7 +307,7 @@ struct LarkCardNodeView: View {
         case "card_header":
             return AnyView(LarkCardHeader(node: n, theme: ""))
         case "div":
-            return AnyView(VStack(alignment: .leading, spacing: 8) {
+            return AnyView(VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if !n.children.isEmpty { LarkCardFlow(nodes: n.children, alignment: Self.alignment(n)) }
                 let fields = n.raw["fields"]?.array ?? []
                 if !fields.isEmpty { LarkCardFields(fields: fields) }
@@ -394,17 +395,17 @@ struct LarkCardNodeView: View {
             return AnyView(LarkAvatarImage(name: n.text ?? "?", url: n.imageURL, size: 24))
         case "audio", "markdown_audio", "video":
             return AnyView(Label(n.text ?? (n.tag == "video" ? "视频" : "音频"), systemImage: "play.fill")
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 8)))
         case "fallback_text":
-            return AnyView(Text(n.plainText).font(.subheadline).foregroundStyle(.secondary))
+            return AnyView(Text(n.plainText).font(Theme.Font.secondary).foregroundStyle(.secondary))
         case "collapse_divider":
             return AnyView(EmptyView())
         default:
             if !n.children.isEmpty { return AnyView(LarkCardFlow(nodes: n.children)) }
-            if let t = n.text, !t.isEmpty { return AnyView(Text(t).font(.system(size: base.size))) }
+            if let t = n.text, !t.isEmpty { return AnyView(Text(t).font(.system(size: base.size * Theme.textScale(typeSize)))) }
             return AnyView(EmptyView())
         }
     }
@@ -746,7 +747,7 @@ struct LarkCardButton: View {
                 if pending { ProgressView().controlSize(.mini) } else if let icon { LarkCardIcon(node: icon, size: 14) }
                 if !label.isEmpty { Text(label).lineLimit(1).minimumScaleFactor(0.7) }
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(Theme.Font.secondary.weight(.medium))
             .padding(.horizontal, fill ? 6 : 14)
             .frame(minHeight: 32)
             .frame(maxWidth: fill ? .infinity : nil)
@@ -786,16 +787,17 @@ struct LarkCardButton: View {
 }
 
 struct LarkCardList: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var node: LarkCardNode
     @Environment(\.larkTextBase) private var base
 
     var body: some View {
         let items = node.raw["items"]?.array ?? []
         let markers = Self.markers(items)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array(items.enumerated()), id: \.offset) { i, item in
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(markers[i]).font(.system(size: base.size).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+                    Text(markers[i]).font(.system(size: base.size * Theme.textScale(typeSize)).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
                     LarkCardFlow(nodes: (item["children"]?.array ?? []).compactMap { LarkCardNode($0) }, inMarkdown: true)
                 }
                 .padding(.leading, CGFloat(min(4, item["level"]?.int ?? 0)) * 16)
@@ -843,7 +845,7 @@ struct LarkCardTag: View {
     var body: some View {
         let hue = LarkColor.hue(node.styleString("color"))
         Text(node.plainText)
-            .font(.system(size: 12, weight: .medium))
+            .font(Theme.Font.label.weight(.medium))
             .lineLimit(1)
             .foregroundStyle(node.styleString("color") == "neutral" || node.styleString("color") == "grey" ? .secondary : hue)
             .padding(.horizontal, 6)
@@ -914,9 +916,9 @@ struct LarkCardField: View {
             HStack(spacing: 6) {
                 Text(shown ?? (node.text ?? "请选择")).foregroundStyle(shown == nil ? Color(.placeholderText) : Color.primary).lineLimit(1)
                 Spacer(minLength: 4)
-                Image(systemName: symbol).font(.caption).foregroundStyle(Color.secondary)
+                Image(systemName: symbol).font(Theme.Font.label).foregroundStyle(Color.secondary)
             }
-            .font(.system(size: 14))
+            .font(Theme.Font.secondary)
             .padding(.horizontal, 10)
             .frame(minHeight: 34)
             .frame(maxWidth: .infinity)
@@ -961,7 +963,7 @@ struct LarkCardOverflow: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Theme.Font.secondary.weight(.semibold))
                 .frame(width: 32, height: 32)
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(LarkColor.cardStroke))
         }
@@ -994,7 +996,7 @@ struct LarkCardPanel: View {
             HStack(spacing: 6) {
                 if iconLeft { chevron }
                 Group {
-                    if let title { LarkCardFlow(nodes: [title]) } else { Text(node.text ?? "详情").font(.system(size: 15)) }
+                    if let title { LarkCardFlow(nodes: [title]) } else { Text(node.text ?? "详情").font(Theme.Font.secondary) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if !iconLeft { chevron }
@@ -1014,7 +1016,7 @@ struct LarkCardPanel: View {
 
     private var chevron: some View {
         Image(systemName: "chevron.down")
-            .font(.caption.weight(.semibold))
+            .font(Theme.Font.label.weight(.semibold))
             .foregroundStyle(.secondary)
             .rotationEffect(.degrees(open ? 180 : 0))
     }
@@ -1084,10 +1086,10 @@ struct LarkCardChart: View {
     var body: some View {
         let type = spec["type"]?.string ?? ""
         let pts = points
-        VStack(alignment: .leading, spacing: 6) {
-            if let title = spec["title"]?["text"]?.string { Text(title).font(.subheadline.weight(.semibold)) }
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            if let title = spec["title"]?["text"]?.string { Text(title).font(Theme.Font.secondary.weight(.semibold)) }
             if pts.isEmpty {
-                Label("图表", systemImage: "chart.bar.xaxis").font(.subheadline).foregroundStyle(.secondary)
+                Label("图表", systemImage: "chart.bar.xaxis").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 80).background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8))
             } else {
                 Chart(pts) { p in

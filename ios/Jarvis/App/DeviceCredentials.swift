@@ -90,13 +90,13 @@ struct DevicesView: View {
             Image(systemName: t.kind == "watch" ? "applewatch" : t.kind == "phone" ? "iphone" : "laptopcomputer")
                 .frame(width: 24)
                 .foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: 6) {
                     Text(t.name).lineLimit(1)
                     if t.id == current { Chip(text: "本机", look: .outline) }
                     if t.role == "answer" { Chip(text: "只能回答") }
                 }
-                Text(detail(t)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(detail(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
             if t.revokedAt == nil {

@@ -64,11 +64,11 @@ private struct PaneSegment: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: pane.symbol).font(.caption.weight(.semibold))
+            Image(systemName: pane.symbol).font(Theme.Font.label.weight(.semibold))
             Text(pane.title).lineLimit(1).minimumScaleFactor(0.8)
             if let badge { badgeView(badge) }
         }
-        .font(.footnote.weight(on ? .semibold : .medium))
+        .font(Theme.Font.caption.weight(on ? .semibold : .medium))
         .foregroundStyle(on ? Theme.accent : Color.secondary)
         .frame(maxWidth: .infinity)
         .frame(height: 30)
@@ -78,7 +78,7 @@ private struct PaneSegment: View {
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(.caption2.weight(.bold).monospacedDigit())
+            .font(Theme.Font.label.weight(.bold).monospacedDigit())
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
             .background(on ? Theme.accent.opacity(0.18) : Theme.Fill.chip, in: .capsule)
@@ -224,7 +224,7 @@ struct TerminalPanel: View {
 
     /// The key bar (over the keyboard while it is up), and in 输入框 mode the text field under it.
     private var controls: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.s) {
             if !autoHideKeys || typing || keyboardUp || mods.active {
                 TerminalKeyBar(mods: $mods, visible: Set(visibleKeys.split(separator: ",").map(String.init)),
                                shortcuts: { withAnimation(.spring(duration: 0.3, bounce: 0.25)) { showShortcuts.toggle() } },
@@ -308,7 +308,7 @@ struct TerminalPanel: View {
             .overlay { pinchOverlay }
             .overlay(alignment: .top) {
                 if let error = feed.error {
-                    Text(error).font(.caption).foregroundStyle(.white).padding(8)
+                    Text(error).font(Theme.Font.label).foregroundStyle(.white).padding(8)
                         .background(Theme.danger.opacity(0.85), in: .capsule).padding(8)
                 }
             }
@@ -350,7 +350,7 @@ struct TerminalPanel: View {
                 Haptics.tap()
                 feed.resume()
             } label: {
-                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(.footnote.weight(.semibold))
+                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(Theme.Font.caption.weight(.semibold))
             }
             .themedButton()
             .padding(10)
@@ -367,7 +367,7 @@ struct TerminalPanel: View {
     @ViewBuilder private var pinchOverlay: some View {
         if let size = pinchHUD {
             Text("字号 \(size, specifier: "%.1f")")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
                 .lineLimit(1)
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .surface(in: .capsule)
@@ -398,7 +398,7 @@ struct TerminalPanel: View {
                 if feed.loading { ProgressView().controlSize(.mini).tint(fg) }
                 Spacer(minLength: 0)
                 Button { Haptics.tap(); showSettings = true } label: {
-                    Image(systemName: "slider.horizontal.3").font(.footnote.weight(.semibold)).frame(width: 32, height: 26)
+                    Image(systemName: "slider.horizontal.3").font(Theme.Font.caption.weight(.semibold)).frame(width: 32, height: 26)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(fg.opacity(0.75))
@@ -420,7 +420,7 @@ struct TerminalPanel: View {
             if feed.wantsControl, feed.control != .off { sizeChip } else { wrapToggle }
             Button { Haptics.tap(); showSettings = true } label: {
                 Label("设置", systemImage: "slider.horizontal.3")
-                    .font(.caption2.weight(.semibold))
+                    .font(Theme.Font.label.weight(.semibold))
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 8)
@@ -449,7 +449,7 @@ struct TerminalPanel: View {
                 Text("上滑加载更早的输出").lineLimit(1).minimumScaleFactor(0.8)
             }
         }
-        .font(.caption.weight(.medium))
+        .font(Theme.Font.label.weight(.medium))
         .foregroundStyle(Color(hex: side.foreground).opacity(0.55))
     }
 
@@ -461,7 +461,7 @@ struct TerminalPanel: View {
         case .active, .starting:
             let g = feed.phoneGrid
             Label(feed.drives ? "手机尺寸 \(g?.cols ?? 0)×\(g?.rows ?? 0)" : "接管中…", systemImage: "iphone")
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .font(Theme.Font.label.weight(.semibold).monospacedDigit())
                 .lineLimit(1)
                 .fixedSize()
                 .padding(.horizontal, 8)
@@ -476,7 +476,7 @@ struct TerminalPanel: View {
                 feed.takeOver(model)
             } label: {
                 Label("只看 · 接管", systemImage: "iphone.and.arrow.forward")
-                    .font(.caption2.weight(.semibold))
+                    .font(Theme.Font.label.weight(.semibold))
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 8)
@@ -509,7 +509,7 @@ struct TerminalPanel: View {
             wrap.toggle()
         } label: {
             Label(wrap ? "换行" : "不换行 · 左右滑", systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
-                .font(.caption2.weight(.semibold))
+                .font(Theme.Font.label.weight(.semibold))
                 .lineLimit(1)
                 .fixedSize()
                 .padding(.horizontal, 8)
@@ -702,22 +702,22 @@ struct TerminalTips: View {
     var dismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("终端小技巧").font(.subheadline.weight(.semibold))
-            VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("终端小技巧").font(Theme.Font.secondary.weight(.semibold))
+            VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 if direct { tip("keyboard", "键栏右边的键盘按钮弹出键盘直接打字；点终端是点在终端里") }
                 tip("arrow.up.left.and.arrow.down.right", "双指捏合调字号")
                 tip("hand.tap", "双击终端粘贴剪贴板")
                 tip("bolt", "闪电：常用命令，单击输入、双击执行")
                 tip("arrow.left.arrow.right", "双指左右滑：切换同一空间的 Agent")
             }
-            .font(.footnote)
+            .font(Theme.Font.caption)
             HStack(spacing: 10) {
                 Button("配色、字体、键栏", action: openSettings).lineLimit(1).themedButton()
                 Spacer(minLength: 0)
                 Button("知道了", action: dismiss).lineLimit(1).themedButton(prominent: true)
             }
-            .font(.footnote.weight(.semibold))
+            .font(Theme.Font.caption.weight(.semibold))
         }
         .padding(14)
         .frame(maxWidth: 380, alignment: .leading)
@@ -747,15 +747,15 @@ struct TerminalLinkStatus: View {
             if failure != nil || stale {
                 HStack(spacing: 8) {
                     Image(systemName: failure != nil ? "wifi.exclamationmark" : "clock.arrow.circlepath")
-                        .font(.caption.weight(.semibold))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(.caption.weight(.semibold)).lineLimit(1)
+                        .font(Theme.Font.label.weight(.semibold))
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(Self.headline(lastOK: lastOK, now: ctx.date)).font(Theme.Font.label.weight(.semibold)).lineLimit(1)
                         Text(Self.detail(failure: failure, nextTry: nextTry, now: ctx.date))
-                            .font(.caption2).opacity(0.8).lineLimit(1)
+                            .font(Theme.Font.label).opacity(0.8).lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     Button(action: retry) {
-                        Text("重试").font(.footnote.weight(.semibold)).lineLimit(1)
+                        Text("重试").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                             .foregroundStyle(.black)
                             .padding(.horizontal, 14)
                             .frame(height: 30)
@@ -801,22 +801,22 @@ struct BackgroundTasksStrip: View {
     @State var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Button {
                 Haptics.tap()
                 withAnimation(.snappy) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gearshape.2")
-                        .font(.footnote.weight(.semibold))
+                        .font(Theme.Font.caption.weight(.semibold))
                         .foregroundStyle(Theme.busy)
-                    Text("\(tasks.count) 个后台任务").font(.footnote.weight(.semibold)).lineLimit(1)
+                    Text("\(tasks.count) 个后台任务").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                     if !expanded, let first = tasks.first {
-                        Text(first.title).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        Text(first.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.up")
-                        .font(.caption2.weight(.bold))
+                        .font(Theme.Font.label.weight(.bold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded ? 0 : 180))
                 }
@@ -837,26 +837,26 @@ struct BackgroundTasksStrip: View {
         Button { if t.outputFile != nil { openOutput(t) } } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: t.isAgent ? "person.2" : "terminal")
-                    .font(.caption.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                    .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.secondary)
                     .frame(width: 18, height: 18)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(t.title).font(.subheadline.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(t.title).font(Theme.Font.secondary.weight(.medium)).foregroundStyle(Color.primary).lineLimit(1)
                     if let cmd = t.command, !cmd.isEmpty, cmd != t.title {
-                        Text(cmd).font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(2)
+                        Text(cmd).font(Theme.Font.label.monospaced()).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
                 Spacer(minLength: 4)
-                VStack(alignment: .trailing, spacing: 3) {
+                VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                     if let start = t.startedAt {
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
                             Text(Self.elapsed(from: start, to: ctx.date))
-                                .font(.caption.monospacedDigit())
+                                .font(Theme.Font.label.monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
                     }
                     if t.outputFile != nil {
-                        Text("看输出").font(.caption2.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
+                        Text("看输出").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
                     }
                 }
             }
@@ -896,7 +896,7 @@ struct ActivityChips: View {
             HStack(spacing: 6) {
                 if let loop {
                     chip(Theme.loop, text: Theme.loop) {
-                        Image(systemName: "arrow.triangle.2.circlepath").font(.caption2.weight(.bold))
+                        Image(systemName: "arrow.triangle.2.circlepath").font(Theme.Font.label.weight(.bold))
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(compact ? Self.shortLoopLabel(loop, now: ctx.date) : Self.loopLabel(loop, now: ctx.date)).lineLimit(1)
                         }
@@ -904,7 +904,7 @@ struct ActivityChips: View {
                 }
                 if !background.isEmpty {
                     chip(Theme.busy, text: StatusPalette.working.text) {
-                        Image(systemName: "gearshape.2.fill").font(.caption2.weight(.bold))
+                        Image(systemName: "gearshape.2.fill").font(Theme.Font.label.weight(.bold))
                         Text("后台 \(background.count)").lineLimit(1)
                         if !compact, background.count == 1, let t = background.first {
                             Text(t.title).foregroundStyle(.secondary).lineLimit(1)
@@ -922,7 +922,7 @@ struct ActivityChips: View {
 
     private func chip(_ tint: Color, text: Color, @ViewBuilder _ content: () -> some View) -> some View {
         HStack(spacing: 4) { content() }
-            .font(.caption.weight(.semibold))
+            .font(Theme.Font.label.weight(.semibold))
             .foregroundStyle(text)
             .padding(.horizontal, compact ? 10 : 8)
             .padding(.vertical, compact ? 10 : 3) // compact: as tall as the agents menu beside it
@@ -953,7 +953,7 @@ struct ActivitySheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
                     if let loop { LoopStrip(loop: loop, stop: stopLoop, expanded: true) }
                     if !background.isEmpty { BackgroundTasksStrip(tasks: background, openOutput: openOutput, expanded: true) }
                 }
@@ -979,24 +979,24 @@ struct LoopStrip: View {
     @State private var confirming = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.footnote.weight(.bold))
+                    .font(Theme.Font.caption.weight(.bold))
                     .foregroundStyle(Theme.loop)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(.footnote.weight(.semibold)).lineLimit(1)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text("循环中" + (loop.cadence.map { " · " + $0 } ?? "")).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                     if let next = loop.nextAt {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(next > ctx.date ? "下次唤醒 \(next.formatted(date: .omitted, time: .shortened))（\(Self.until(next, now: ctx.date))）"
                                                  : "正在执行这一轮")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                 }
                 Spacer(minLength: 4)
                 Button { confirming = true } label: {
-                    Text("停止循环").font(.footnote.weight(.semibold)).lineLimit(1)
+                    Text("停止循环").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                 }
                 .themedButton()
                 .tint(Theme.danger)
@@ -1004,9 +1004,9 @@ struct LoopStrip: View {
             .contentShape(.rect)
             .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
             if expanded {
-                Text(loop.task).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
+                Text(loop.task).font(Theme.Font.secondary).foregroundStyle(.secondary).textSelection(.enabled)
                 if let r = loop.reason, !r.isEmpty {
-                    Label(r, systemImage: "text.bubble").font(.caption).foregroundStyle(.tertiary)
+                    Label(r, systemImage: "text.bubble").font(Theme.Font.label).foregroundStyle(.tertiary)
                 }
             }
         }
@@ -1035,12 +1035,12 @@ struct LoopTickRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrow.triangle.2.circlepath").font(.caption2.weight(.bold))
+            Image(systemName: "arrow.triangle.2.circlepath").font(Theme.Font.label.weight(.bold))
             Text("循环唤醒").fontWeight(.semibold)
             if let ts = item.ts { Text(ts.formatted(date: .omitted, time: .shortened)) }
             Text(String((item.text ?? "").dropFirst(5)).trimmingCharacters(in: .whitespaces)).lineLimit(1).foregroundStyle(.tertiary)
         }
-        .font(.caption)
+        .font(Theme.Font.label)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -1093,13 +1093,13 @@ struct AgentStrip: View {
                 if running {
                     ProgressView().controlSize(.mini)
                 } else if done {
-                    Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundStyle(Theme.positive)
+                    Image(systemName: "checkmark.circle.fill").font(Theme.Font.label).foregroundStyle(Theme.positive)
                 } else if let symbol {
-                    Image(systemName: symbol).font(.caption2.weight(.semibold))
+                    Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
                 }
                 Text(title).lineLimit(1).frame(maxWidth: 160)
             }
-            .font(.caption.weight(on ? .semibold : .medium))
+            .font(Theme.Font.label.weight(on ? .semibold : .medium))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(on ? Theme.accent.opacity(0.15) : Theme.Fill.well, in: .capsule)
@@ -1120,15 +1120,15 @@ struct SubagentFooter: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: agent.running ? "person.2.wave.2" : "person.2")
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.Font.secondary.weight(.semibold))
                 .foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("子 Agent · " + (agent.type ?? "Agent")).font(.footnote.weight(.semibold)).lineLimit(1)
-                Text(agent.running ? "运行中，只读" : "已完成，只读").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text("子 Agent · " + (agent.type ?? "Agent")).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                Text(agent.running ? "运行中，只读" : "已完成，只读").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
             Button(action: back) {
-                Label("回到主 Agent", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).lineLimit(1)
+                Label("回到主 Agent", systemImage: "arrow.uturn.backward").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
             }
             .themedButton()
         }

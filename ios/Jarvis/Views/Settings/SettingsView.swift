@@ -19,15 +19,15 @@ struct SettingsView: View {
                 Section {
                     HStack(spacing: 14) {
                         AppGlyph(size: 54)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Jarvis").font(.title3.weight(.bold))
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            Text("Jarvis").font(Theme.Font.title)
                             if model.isDemo {
-                                Text("体验模式 · 数据都是编造的").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text("体验模式 · 数据都是编造的").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             } else {
-                                Text(model.config?.url.absoluteString ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                                Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
                                 HStack(spacing: 5) {
                                     Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).frame(width: 7, height: 7)
-                                    Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(.caption).foregroundStyle(.secondary)
+                                    Text(model.live.state == .connected ? "已连接 hub" : model.connection.phase == .online ? "未连接" : model.connection.phase.title).font(Theme.Font.label).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -42,16 +42,24 @@ struct SettingsView: View {
                 Section {
                     StylePicker()
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+                    LabeledContent("字号") {
+                        Picker("字号", selection: Binding(get: { model.textSize }, set: { model.textSize = $0 })) {
+                            ForEach(TextSize.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                    }
+                    .accessibilityIdentifier("text-size")
                 } header: {
                     Text("界面风格")
                 } footer: {
-                    Text("整个 App 一起换，包括收件箱里的飞书页面。")
+                    Text("整个 App 一起换，包括收件箱里的飞书页面。字号在系统的「文字大小」之上再调小或调大一档。")
                 }
 
                 Section {
                     NavigationLink(value: SettingsPage.assistant) {
                         LabeledContent {
-                            Text(model.assistantConfig?.launcher ?? "").font(.callout.monospaced())
+                            Text(model.assistantConfig?.launcher ?? "").font(Theme.Font.body.monospaced())
                         } label: {
                             Label("助手", systemImage: "sparkles")
                         }
@@ -227,13 +235,13 @@ struct PhoneDataView: View {
                 ForEach(PhoneDataSource.allCases) { s in
                     HStack(spacing: 12) {
                         Image(systemName: s.symbol)
-                            .font(.body.weight(.medium))
+                            .font(Theme.Font.heading)
                             .foregroundStyle(.white)
                             .frame(width: 30, height: 30)
                             .background(Theme.accent.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text(s.title)
-                            Text(s.detail).font(.caption).foregroundStyle(.secondary)
+                            Text(s.detail).font(Theme.Font.label).foregroundStyle(.secondary)
                             if let st = statuses[s], st != .notNeeded {
                                 Button {
                                     Task {
@@ -245,7 +253,7 @@ struct PhoneDataView: View {
                                     }
                                 } label: {
                                     Text(st == .granted || st == .limited ? st.title : st == .denied ? "已拒绝 · 去设置" : "点此授权")
-                                        .font(.caption.weight(.semibold))
+                                        .font(Theme.Font.label.weight(.semibold))
                                         .foregroundStyle(st.isUsable ? Theme.positive : Theme.accent)
                                 }
                                 .buttonStyle(.plain)
@@ -301,13 +309,13 @@ struct WelcomeView: View {
                 .scaleEffect(appear ? 1 : 0.8)
                 .opacity(appear ? 1 : 0)
             Text("Jarvis")
-                .font(.largeTitle.bold())
+                .font(Theme.Font.display)
                 .padding(.top, 24)
             Text("把每台电脑上的 Claude 装进口袋")
-                .font(.title3)
+                .font(Theme.Font.title)
                 .foregroundStyle(.secondary)
                 .padding(.top, 6)
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 feature("bubble.left.and.text.bubble.right", "像聊天一样驱动 Claude", "你的每台电脑，herdr 里的同一个会话")
                 feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
                 feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
@@ -317,21 +325,21 @@ struct WelcomeView: View {
             .padding(.horizontal, 32)
             Spacer()
             Button { showPair = true } label: {
-                Label("连接 hub", systemImage: "qrcode.viewfinder").font(.headline).frame(maxWidth: .infinity, minHeight: 32)
+                Label("连接 hub", systemImage: "qrcode.viewfinder").font(Theme.Font.heading).frame(maxWidth: .infinity, minHeight: 32)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
             .padding(.horizontal, 24)
             .accessibilityIdentifier("welcome.pair")
             Text("在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码")
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .padding(.top, 10)
             // Without a hub there is nothing else to see: App Review and friends with the TestFlight link start here.
             Button { model.enterDemo() } label: {
-                Label("没有 hub？先体验一下", systemImage: "play.circle").font(.headline).lineLimit(1).frame(maxWidth: .infinity, minHeight: 32)
+                Label("没有 hub？先体验一下", systemImage: "play.circle").font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 32)
             }
             .themedButton()
             .controlSize(.large)
@@ -339,7 +347,7 @@ struct WelcomeView: View {
             .padding(.top, 14)
             .accessibilityIdentifier("welcome.demo")
             Text("用编造的数据看看每个页面，不连接任何服务器")
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -353,12 +361,12 @@ struct WelcomeView: View {
     private func feature(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .font(.title3)
+                .font(Theme.Font.title)
                 .foregroundStyle(Theme.accent)
                 .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.heading)
+                Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
         }
     }
@@ -397,7 +405,7 @@ struct PairView: View {
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("Token", text: $token)
                 }
-                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) } }
+                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
             }
             .themedPage()
             .navigationTitle("连接 hub")
@@ -479,7 +487,7 @@ struct ClaudeSettingsView: View {
                 Text("改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。")
             }
             if let error {
-                Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) }
+                Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
             Section {
                 ForEach(settings) { s in row(s) }
@@ -495,7 +503,7 @@ struct ClaudeSettingsView: View {
 
     @ViewBuilder private func row(_ s: APIClient.ClaudeSetting) -> some View {
         let value = s.value ?? s.default
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             switch s.type {
             case "bool":
                 Toggle(isOn: Binding(get: { value?.bool ?? false }, set: { v in Task { await set(s.key, .bool(v)) } })) {
@@ -517,12 +525,12 @@ struct ClaudeSettingsView: View {
     }
 
     private func title(_ s: APIClient.ClaudeSetting) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             HStack(spacing: 6) {
                 Text(s.title)
-                if s.value == nil { Text("默认").font(.caption2).foregroundStyle(.tertiary) }
+                if s.value == nil { Text("默认").font(Theme.Font.label).foregroundStyle(.tertiary) }
             }
-            Text(s.detail).font(.caption).foregroundStyle(.secondary)
+            Text(s.detail).font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }
 
@@ -593,10 +601,10 @@ private struct StyleCard: View {
     var body: some View {
         let page = Theme.pageBackground(style), card = Theme.card(style), accent = Theme.accent(style)
         let bubble = Theme.userBubble(style), corner = style.corner * 0.45
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.s) {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
                         .frame(height: 16)
                         .shadow(color: style == .island || style == .clay ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
@@ -612,12 +620,12 @@ private struct StyleCard: View {
             .frame(maxWidth: .infinity)
             .frame(height: 120)
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
-            VStack(spacing: 1) {
+            VStack(spacing: Theme.Space.xxs) {
                 HStack(spacing: 3) {
                     if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(accent) }
-                    Text(style.title).font(.footnote.weight(.semibold)).lineLimit(1)
+                    Text(style.title).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                 }
-                Text(style.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(style.subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity)

@@ -71,7 +71,7 @@ struct ImageViewer: View {
         VStack {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40)
+                    Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -79,7 +79,7 @@ struct ImageViewer: View {
                 Spacer()
                 if images.count > 1 {
                     Text("\(index + 1) / \(images.count)")
-                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
                         .surface(in: .capsule)
@@ -89,14 +89,14 @@ struct ImageViewer: View {
             HStack(spacing: 12) {
                 Button { Task { await save() } } label: {
                     Label(saving ? "保存中" : "保存", systemImage: "square.and.arrow.down").lineLimit(1).fixedSize()
-                        .font(.subheadline.weight(.semibold))
+                        .font(Theme.Font.secondary.weight(.semibold))
                         .padding(.horizontal, 6)
                 }
                 .themedButton(prominent: true)
                 .disabled(saving || decoded[index] == nil)
                 if attach != nil, let img = decoded[index] {
                     Button { editing = img } label: {
-                        Label("编辑", systemImage: "pencil.tip.crop.circle").lineLimit(1).fixedSize().font(.subheadline.weight(.semibold))
+                        Label("编辑", systemImage: "pencil.tip.crop.circle").lineLimit(1).fixedSize().font(Theme.Font.secondary.weight(.semibold))
                     }
                     .themedButton()
                 }

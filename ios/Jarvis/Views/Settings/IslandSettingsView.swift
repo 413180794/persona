@@ -9,7 +9,7 @@ struct IslandSettingsView: View {
     var body: some View {
         List {
             Section {
-                VStack(spacing: 14) {
+                VStack(spacing: Theme.Space.l) {
                     preview("平时", Self.sample(needsYou: false), island)
                     preview("有 Agent 需要你时", Self.sample(needsYou: true), island)
                 }
@@ -28,13 +28,13 @@ struct IslandSettingsView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(preset.title).foregroundStyle(.primary).lineLimit(1)
-                                Text(Self.summary(preset)).font(.footnote).foregroundStyle(.secondary)
+                                Text(Self.summary(preset)).font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 8)
                             if island.preset == preset {
-                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Theme.accent)
+                                Image(systemName: "checkmark").font(Theme.Font.heading).foregroundStyle(Theme.accent)
                             }
                         }
                         .contentShape(.rect)
@@ -81,9 +81,9 @@ struct IslandSettingsView: View {
     }
 
     private func preview(_ title: String, _ state: FleetState, _ island: IslandPrefs) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.sm) {
             IslandPreview(state: state.tailored(island: island, details: false))
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }
 

@@ -59,17 +59,17 @@ struct MachineSpacesView: View {
     private func summary(_ m: Machine, sessions: [Session], spaces: Int) -> some View {
         HStack(spacing: 12) {
             Image(systemName: m.symbol)
-                .font(.title2)
+                .font(Theme.Font.title)
                 .foregroundStyle(m.online ? Theme.accent : .secondary)
                 .frame(width: 44, height: 44)
                 .background((m.online ? Theme.accent : Color.secondary).opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
                     Circle().fill(m.online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
-                    Text(m.online ? "在线" : "离线").font(.subheadline.weight(.semibold))
-                    if let h = m.hostname, !h.isEmpty { Text(h).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1) }
+                    Text(m.online ? "在线" : "离线").font(Theme.Font.secondary.weight(.semibold))
+                    if let h = m.hostname, !h.isEmpty { Text(h).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1) }
                 }
-                Text("\(spaces) 个项目 · \(sessions.count) 个 Agent").font(.caption).foregroundStyle(.secondary)
+                Text("\(spaces) 个项目 · \(sessions.count) 个 Agent").font(Theme.Font.label).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             StateCounts(group: SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: sessions))
@@ -100,12 +100,12 @@ private struct BusySpaceRow: View {
 
     var body: some View {
         let lead = group.sessions.min { ($0.state.priority, -($0.updatedAt ?? .distantPast).timeIntervalSince1970) < ($1.state.priority, -($1.updatedAt ?? .distantPast).timeIntervalSince1970) }
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up.fill").foregroundStyle(muted ? Color.secondary : group.state.color)
-                Text(group.name).font(.body.weight(.semibold)).lineLimit(1)
-                if pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-                if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+                Text(group.name).font(Theme.Font.heading).lineLimit(1)
+                if pinned { Image(systemName: "pin.fill").font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+                if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
                 Spacer(minLength: 4)
                 StateCounts(group: group).opacity(muted ? 0.6 : 1)
             }
@@ -116,7 +116,7 @@ private struct BusySpaceRow: View {
                     Spacer(minLength: 4)
                     Text(Fmt.relative(group.updatedAt)).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
                 }
-                .font(.caption)
+                .font(Theme.Font.label)
                 .padding(.leading, 28)
             }
         }

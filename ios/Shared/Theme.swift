@@ -133,16 +133,25 @@ nonisolated enum Theme {
         static let panel: CGFloat = 22
     }
 
-    /// Spacing steps. Pages and the terminal card keep 16 from the screen's edges.
+    /// Spacing on a 4 pt grid, BeautifulUI's (`BUISpacing`): 2 4 6 8 12 16 24 32, nothing in between. Pages and the
+    /// terminal card keep 16 from the screen's edges.
     enum Space {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
+        static let sm: CGFloat = 6
         static let s: CGFloat = 8
         static let m: CGFloat = 12
         static let l: CGFloat = 16
-        static let xl: CGFloat = 20
-        static let xxl: CGFloat = 24
-        static let xxxl: CGFloat = 32
+        static let xl: CGFloat = 24
+        static let xxl: CGFloat = 32
+        /// Between the lines of one row: title, preview, meta.
+        static let lines: CGFloat = xs
+        /// From a title to the content under it.
+        static let titleToContent: CGFloat = s
+        /// Between blocks on a page or in a card.
+        static let block: CGFloat = l
+        /// Between sections.
+        static let section: CGFloat = xl
     }
 
     /// Three grays for backgrounds instead of `Color.primary.opacity(…)`: they are the system fills, so they read in
@@ -160,30 +169,63 @@ nonisolated enum Theme {
         #endif
     }
 
-    /// Type roles, all Dynamic Type text styles (the size at the default setting in the comment). The terminal grid
-    /// (its own size setting) and the Live Activity (system limits) are the exceptions.
+    /// The type scale: every text in the app is one of these levels, all Dynamic Type text styles, so they follow the
+    /// system's text size and the app's own 小 / 标准 / 大 (`TextSize`, which moves the Dynamic Type size a step).
+    /// As in BeautifulUI, levels differ more by weight and color than by size: a row's title is the body's size in
+    /// semibold, a section header the caption's size in semibold secondary. Sizes at the default setting in brackets.
+    /// The terminal grid (its own size setting), the Live Activity (system limits), the share card (a rendered
+    /// image) and glyphs drawn to a frame are the exceptions.
     enum Font {
-        /// Panels and sheets (20).
-        static let panelTitle = SwiftUI.Font.title3.weight(.semibold)
-        /// A row's title (17); bold for 完成未看.
-        static let rowTitle = SwiftUI.Font.headline
-        /// Messages, Markdown and the user's bubble (17).
+        /// The home page's greeting, the welcome page (28 bold).
+        static let display = SwiftUI.Font.title.bold()
+        /// A detail page's or a sheet's title: a mail's subject, a document, a profile, the settings header (22).
+        static let title = SwiftUI.Font.title2.weight(.semibold)
+        /// Titles of rows, cards, panels and Markdown headings below the first (17 semibold).
+        static let heading = SwiftUI.Font.headline
+        /// Messages, replies, mail and documents (17).
         static let body = SwiftUI.Font.body
-        /// Text in cards (16).
-        static let cardBody = SwiftUI.Font.callout
-        /// A row's preview, tool rows (15).
-        static let preview = SwiftUI.Font.subheadline
-        /// Times, machines, state words (13).
-        static let meta = SwiftUI.Font.footnote
-        /// Labels and counts (12).
-        static let chip = SwiftUI.Font.caption.weight(.medium)
-        /// The smallest, for badges only (11).
-        static let micro = SwiftUI.Font.caption2
-        /// Code, diffs, paths (13 / 12).
+        /// Previews, subtitles, descriptions in cards (15).
+        static let secondary = SwiftUI.Font.subheadline
+        /// Times, places, states, meta lines (13).
+        static let caption = SwiftUI.Font.footnote
+        /// A list's section header: the caption's size, semibold, in the secondary color (13).
+        static let sectionHeader = SwiftUI.Font.footnote.weight(.semibold)
+        /// Chips, badges, counts, small labels on controls (12).
+        static let label = SwiftUI.Font.caption
+        /// Code, diffs, paths, terminal snippets (13).
         static let code = SwiftUI.Font.footnote.monospaced()
-        static let codeSmall = SwiftUI.Font.caption.monospaced()
-        /// The assistant's greeting (34).
-        static let greeting = SwiftUI.Font.largeTitle.bold()
+    }
+
+    /// The levels' sizes at the default text size and their line heights (a multiple of the size, as in CSS), for
+    /// text that runs over several lines: `.lineHeight(_:)` turns them into line spacing at the current size.
+    enum Level {
+        case display, title, heading, body, secondary, caption, label, code
+
+        var size: CGFloat {
+            switch self {
+            case .display: 28
+            case .title: 22
+            case .heading, .body: 17
+            case .secondary: 15
+            case .caption, .code: 13
+            case .label: 12
+            }
+        }
+
+        var lineHeight: CGFloat {
+            switch self {
+            case .display: 1.2
+            case .title: 1.25
+            case .heading: 1.3
+            case .body: 1.45
+            case .secondary: 1.4
+            case .caption, .code: 1.35
+            case .label: 1.3
+            }
+        }
+
+        /// SF's own line height is about 1.19 × the size; line spacing adds the rest.
+        var extraLeading: CGFloat { max(0, lineHeight - 1.19) * size }
     }
 
     /// The watch's list rows: rounded cards with room around and inside them, like the system's lists (rows at least

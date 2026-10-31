@@ -3,6 +3,8 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    /// The system's text size, before 小 / 标准 / 大 moves it.
+    @Environment(\.dynamicTypeSize) private var systemTypeSize
 
     var body: some View {
         #if PERF_SIGNPOST
@@ -19,6 +21,7 @@ struct RootView: View {
         .id(model.style)
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
+        .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))
         .buiTheme(.jarvis(model.style))
         .overlay(alignment: .top) { ToastOverlay() }
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
@@ -129,7 +132,7 @@ struct ToastOverlay: View {
                     Image(systemName: toast.style == .error ? "exclamationmark.triangle.fill" : toast.style == .success ? "checkmark.circle.fill" : "info.circle.fill")
                         .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.positive : Theme.accent)
                     Text(toast.message)
-                        .font(.subheadline.weight(.medium))
+                        .font(Theme.Font.secondary.weight(.medium))
                         .lineLimit(3)
                 }
                 .padding(.horizontal, 16)

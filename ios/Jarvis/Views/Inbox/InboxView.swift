@@ -105,7 +105,7 @@ struct InboxView: View {
                 .listRowSeparator(.hidden)
                 .themedRow()
             if let error = store.error, store.items.isEmpty {
-                Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+                Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
                     .themedRow()
             }
             if openItems.isEmpty && waitingAgents.isEmpty && !store.loading {
@@ -152,8 +152,8 @@ struct InboxView: View {
                 withAnimation(.snappy) { if expanded.contains(key) { expanded.remove(key) } else { expanded.insert(key) } }
             } label: {
                 HStack(spacing: 6) {
-                    Text("\(title) · \(count)").font(.subheadline.weight(.semibold)).foregroundStyle(key == "action" ? Color.primary : .secondary)
-                    Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                    Text("\(title) · \(count)").font(Theme.Font.sectionHeader).foregroundStyle(key == "action" ? Color.primary : .secondary)
+                    Image(systemName: "chevron.right").font(Theme.Font.label.weight(.bold)).foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded.contains(key) ? 90 : 0))
                     Spacer(minLength: 0)
                 }
@@ -163,7 +163,7 @@ struct InboxView: View {
             .buttonStyle(.plain)
             if let clear {
                 Button(clear.0) { withAnimation(.snappy) { clear.1() } }
-                    .font(.subheadline)
+                    .font(Theme.Font.secondary)
                     .lineLimit(1)
                     .buttonStyle(.borderless)
             }
@@ -235,10 +235,10 @@ struct InboxView: View {
             Haptics.tap()
         } label: {
             HStack(spacing: 4) {
-                if let symbol { Image(systemName: symbol).font(.caption) }
+                if let symbol { Image(systemName: symbol).font(Theme.Font.label) }
                 Text(title)
             }
-            .font(.subheadline.weight(on ? .semibold : .regular))
+            .font(Theme.Font.secondary.weight(on ? .semibold : .regular))
             .lineLimit(1)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -277,24 +277,24 @@ struct InboxRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             avatar
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
-                    Text(item.title).font(item.isDone ? .body : .headline).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
+                    Text(item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
                         Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
                     }
                     Spacer(minLength: 4)
-                    Text(LarkTime.short(item.updatedAt)).font(.footnote).foregroundStyle(.secondary).fixedSize()
+                    Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
                 }
                 HStack(alignment: .top, spacing: 6) {
                     if let summary = item.summary, !summary.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + summary))
-                                .font(.subheadline).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
-                            Text(from).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                .font(Theme.Font.secondary).foregroundStyle(item.isDone ? Color.secondary : Color.primary.opacity(0.9)).lineLimit(2)
+                            Text(from).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } else {
-                        Text(from).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        Text(from).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
                     if item.count > 1 && !item.isDone {
@@ -303,7 +303,7 @@ struct InboxRow: View {
                     }
                 }
                 if showAccount && !item.isLark {
-                    Text(item.accountName).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    Text(item.accountName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !item.isDone {
                     if let draft = item.agentDraft, let send {
@@ -313,7 +313,7 @@ struct InboxRow: View {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini)
                             Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .padding(.top, 2)
                     }
@@ -337,13 +337,13 @@ struct InboxRow: View {
                 LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
             } else {
                 Circle().fill(Theme.monogramFill).frame(width: 40, height: 40)
-                    .overlay(Text(String((item.sender ?? "?").prefix(1))).font(.headline).foregroundStyle(.primary))
+                    .overlay(Text(String((item.sender ?? "?").prefix(1))).font(Theme.Font.heading).foregroundStyle(.primary))
             }
             }
             .opacity(item.isDone ? 0.6 : 1)
             // The source: Feishu's own blue (the same in both appearances), mail a neutral gray, not the accent.
             Image(systemName: item.isLark ? "bubble.left.fill" : "envelope.fill")
-                .font(.caption2.weight(.bold)).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
+                .font(Theme.Font.label.weight(.bold)).imageScale(.small).dynamicTypeSize(...DynamicTypeSize.large)
                 .foregroundStyle(.white)
                 .frame(width: 18, height: 18)
                 .background(item.isLark ? Color(hex: 0x3370FF) : Color(uiColor: .systemGray), in: .circle)
@@ -362,13 +362,13 @@ struct InboxDraftCard: View {
     var edit: (() -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             Label("AI 分身草拟的回复", systemImage: "sparkles")
-                .font(.caption.weight(.semibold))
+                .font(Theme.Font.label.weight(.semibold))
                 .foregroundStyle(Theme.ai)
                 .lineLimit(1)
             Text(draft)
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.primary)
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -376,7 +376,7 @@ struct InboxDraftCard: View {
                 Spacer(minLength: 0)
                 if let edit {
                     Button(action: edit) {
-                        Text("修改").font(.subheadline.weight(.medium)).lineLimit(1)
+                        Text("修改").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
                             .padding(.horizontal, 14).padding(.vertical, 6)
                             .foregroundStyle(Theme.accent)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
@@ -385,10 +385,10 @@ struct InboxDraftCard: View {
                 }
                 Button(action: send) {
                     HStack(spacing: 4) {
-                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: "paperplane.fill").font(.caption) }
+                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: "paperplane.fill").font(Theme.Font.label) }
                         Text("发送")
                     }
-                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                    .font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
                     .padding(.horizontal, 14).padding(.vertical, 6)
                     .foregroundStyle(.white)
                     .background(Theme.accent, in: .capsule)
@@ -417,21 +417,21 @@ struct InboxAgentRow: View {
         HStack(alignment: .top, spacing: 12) {
             // The rounded square of the Agents rows (SessionAvatar), with what kind of request it is.
             SessionAvatar(machine: machine, state: .needsYou, size: 40, symbol: ix.kind.symbol, dot: false)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
                     Text(ix.sessionTitle?.isEmpty == false ? ix.sessionTitle! : (ix.cwd.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Agent"))
-                        .font(.headline).lineLimit(1)
+                        .font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(LarkTime.short(ix.createdAt)).font(.footnote).foregroundStyle(.secondary).fixedSize()
+                    Text(LarkTime.short(ix.createdAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
                 }
                 if let asks, !asks.isEmpty {
-                    Text(asks).font(.subheadline).foregroundStyle(Color.primary.opacity(0.9)).lineLimit(2)
+                    Text(asks).font(Theme.Font.secondary).foregroundStyle(Color.primary.opacity(0.9)).lineLimit(2)
                     (Text(ix.title).fontWeight(.semibold).foregroundStyle(StatusPalette.needsYou.text)
                         + Text(" · " + machineName).foregroundStyle(.secondary))
-                        .font(.footnote).lineLimit(1)
+                        .font(Theme.Font.caption).lineLimit(1)
                 } else {
-                    Text(ix.title).font(.subheadline.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
-                    Text(machineName).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    Text(ix.title).font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+                    Text(machineName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }

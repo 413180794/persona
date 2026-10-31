@@ -40,7 +40,7 @@ struct KnowledgeView: View {
             } else if let list {
                 content(list)
             } else if let error {
-                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
+                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             } else {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24) }.listRowBackground(Color.clear)
             }
@@ -109,7 +109,7 @@ struct KnowledgeView: View {
                             Text("不是项目").foregroundStyle(.secondary)
                             Text("\(ignored.count)").foregroundStyle(.tertiary).monospacedDigit()
                             Spacer()
-                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            Image(systemName: "chevron.right").font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.tertiary)
                                 .rotationEffect(.degrees(showIgnored ? 90 : 0))
                         }
                         .contentShape(.rect)
@@ -222,11 +222,11 @@ struct KBKindBar: View {
                             withAnimation(.snappy) { kind = k }
                         } label: {
                             HStack(spacing: 5) {
-                                Image(systemName: k.symbol).font(.footnote.weight(.semibold))
+                                Image(systemName: k.symbol).font(Theme.Font.caption.weight(.semibold))
                                 Text(k.title).lineLimit(1)
                                 if let n = counts[k], on { Text("\(n)").monospacedDigit().opacity(0.75) }
                             }
-                            .font(.subheadline.weight(on ? .semibold : .medium))
+                            .font(Theme.Font.secondary.weight(on ? .semibold : .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
                             .foregroundStyle(on ? Color.white : Color.primary)
@@ -254,16 +254,16 @@ struct KBRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             KBAvatar(entry: entry)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(entry.name).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(entry.name).font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: 4)
                     if let d = entry.updated, d.realDate != nil {
-                        Text(Fmt.relative(d)).font(.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
+                        Text(Fmt.relative(d)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
                     }
                 }
                 if let line = entry.oneLine, !line.isEmpty {
-                    Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    Text(line).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
                 }
                 // As many tags as fit whole (a cut "#Manage…" says nothing).
                 ViewThatFits(in: .horizontal) {
@@ -284,7 +284,7 @@ struct KBRow: View {
             if let k = entry.projectKind { KBPill(text: k, tint: k == "长期" ? Theme.Hue.blue : nil) }
             if entry.relevance > 0 { KBPill(text: "相关 \(entry.relevance)", tint: RelevanceMeter.tint(entry.relevance)) }
             ForEach((entry.tags ?? []).prefix(tags), id: \.self) { t in
-                Text("#" + t).font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                Text("#" + t).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
         }
     }
@@ -341,7 +341,7 @@ struct KBPill: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(bold ? .bold : .medium).monospacedDigit())
+            .font(Theme.Font.label.weight(bold ? .bold : .medium).monospacedDigit())
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -393,17 +393,17 @@ struct KBHitRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             KBAvatar(entry: entry, size: 30)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
-                    Text(named ? entry.name : group.kind.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(named ? entry.name : group.kind.title).font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
                     if group.hits.count > 2 {
-                        Text("\(group.hits.count) 处").font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                        Text("\(group.hits.count) 处").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     }
                 }
                 ForEach(group.hits.prefix(2), id: \.self) { h in
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(h.source).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-                        Text(Self.marked(h.text, query)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(h.source).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(Self.marked(h.text, query)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
             }
@@ -477,21 +477,21 @@ struct KnowledgeDetailView: View {
                 if let recent = d.recent, !recent.isEmpty {
                     Section {
                         DisclosureGroup(isExpanded: $showRecent) {
-                            Text(recent).font(.footnote.monospaced()).textSelection(.enabled)
+                            Text(recent).font(Theme.Font.code).textSelection(.enabled)
                         } label: {
                             Label("最近 7 天的消息", systemImage: "text.bubble")
                         }
                     }
                 }
                 Section {
-                    Text(d.path).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text(d.path).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
                 } header: {
                     Text("目录")
                 } footer: {
                     Text("Jarvis、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
                 }
             } else if let error {
-                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
+                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             } else {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24) }.listRowBackground(Color.clear)
             }
@@ -523,11 +523,11 @@ struct KnowledgeDetailView: View {
 
     private var header: some View {
         let e = shown
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(alignment: .center, spacing: 12) {
                 KBAvatar(entry: e, size: 48)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(e.name).font(.title2.weight(.bold)).lineLimit(3)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(e.name).font(Theme.Font.title).lineLimit(3)
                     HStack(spacing: 6) {
                         ImportanceBadge(importance: e.importance)
                         if let k = e.projectKind { KBPill(text: k + "项目", tint: k == "长期" ? Theme.Hue.blue : nil) }
@@ -537,7 +537,7 @@ struct KnowledgeDetailView: View {
                 }
             }
             if let line = e.oneLine, !line.isEmpty {
-                Text(line).font(.body).foregroundStyle(.primary.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+                Text(line).font(Theme.Font.body).foregroundStyle(.primary.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
             }
             if let tags = e.tags, !tags.isEmpty {
                 LarkFlowLayout(spacing: 6, lineSpacing: 6) {
@@ -595,7 +595,7 @@ struct KnowledgeDetailView: View {
             }
             if lines.count > Self.logShown {
                 Button { withAnimation(.snappy) { allLog.toggle() } } label: {
-                    Text(allLog ? "收起" : "显示全部 \(lines.count) 条").font(.subheadline.weight(.medium)).lineLimit(1)
+                    Text(allLog ? "收起" : "显示全部 \(lines.count) 条").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
                 }
                 .listRowSeparator(.hidden)
             }
@@ -622,7 +622,7 @@ struct KnowledgeDetailView: View {
                                 if open { openKinds.remove(k.rawValue) } else { openKinds.insert(k.rawValue) }
                             }
                         } label: {
-                            Text(open ? "收起" : "全部 \(group.count) 个").font(.subheadline.weight(.medium)).lineLimit(1)
+                            Text(open ? "收起" : "全部 \(group.count) 个").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
                         }
                     }
                 } header: { sectionHeader("关联的" + k.title, group.count) }
@@ -632,7 +632,7 @@ struct KnowledgeDetailView: View {
             Section {
                 ForEach(dirs, id: \.self) { dir in
                     Label {
-                        Text(dir).font(.subheadline.monospaced()).lineLimit(1).truncationMode(.head)
+                        Text(dir).font(Theme.Font.secondary.monospaced()).lineLimit(1).truncationMode(.head)
                     } icon: {
                         Image(systemName: "folder").foregroundStyle(.secondary)
                     }
@@ -717,13 +717,13 @@ struct KBTimelineRow: View {
                     .padding(.top, 10)
             }
             .frame(width: 12)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 6) {
-                    if !line.when.isEmpty { Text(line.shortWhen()).font(.caption.weight(.semibold).monospacedDigit()) }
-                    if !line.source.isEmpty { Text(line.source).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                    if !line.when.isEmpty { Text(line.shortWhen()).font(Theme.Font.label.weight(.semibold).monospacedDigit()) }
+                    if !line.source.isEmpty { Text(line.source).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 .foregroundStyle(first ? Theme.accent : .secondary)
-                Text(line.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                Text(line.text).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 8)
             Spacer(minLength: 0)
@@ -739,9 +739,9 @@ struct KBLinkRow: View {
     var body: some View {
         HStack(spacing: 12) {
             KBAvatar(entry: entry, size: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                if let l = entry.oneLine, !l.isEmpty { Text(l).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(entry.name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                if let l = entry.oneLine, !l.isEmpty { Text(l).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
             }
         }
     }
@@ -790,7 +790,7 @@ struct KBTagEditor: View {
                     }
                 }
                 if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(.footnote) }
+                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.danger).font(Theme.Font.caption) }
                 }
             }
             .navigationTitle(entry.name)

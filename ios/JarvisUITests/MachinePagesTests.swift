@@ -87,6 +87,9 @@ final class MachinePagesTests: XCTestCase {
 
     private func openSettingsMachines() {
         launch(["-tab", "settings"])
+        // Below 界面风格 (styles and 字号): on a phone the row starts under the fold, and the list only makes rows on screen.
+        _ = app.navigationBars["设置"].waitForExistence(timeout: 15)
+        for _ in 0..<4 where !button("在线").exists { app.swipeUp() }
         let row = see(button("在线"), "设置 › 机器 row (n / m 在线)", timeout: 15)
         XCTAssertTrue(row.label.contains("3 / 4 在线") || row.label.contains("4 / 4 在线"), row.label)
         row.tap()

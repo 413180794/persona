@@ -34,15 +34,15 @@ struct LarkReactionPicker: View {
         let mine = Set((message.reactions ?? []).filter { $0.mine == true }.map { $0.key.lowercased() })
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
                     HStack(spacing: 0) {
                         ForEach(Array(media.quickReactions.prefix(7)), id: \.self) { key in
                             cell(key, size: 34, selected: mine.contains(key.lowercased()))
                         }
                     }
                     ForEach(media.emojiGroups, id: \.title) { g in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(g.title).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: Theme.Space.s) {
+                            Text(g.title).font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.secondary)
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 8) {
                                 ForEach(g.keys, id: \.self) { key in cell(key, size: 30, selected: mine.contains(key.lowercased())) }
                             }
@@ -95,26 +95,26 @@ struct LarkMomentsCard: View {
     var body: some View {
         let card = preview?.card
         Button { reading = true } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: 6) {
-                    Image(systemName: "circle.hexagongrid.fill").font(.caption).foregroundStyle(LarkColor.blue)
-                    Text(preview?.title ?? "removed动态").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Image(systemName: "circle.hexagongrid.fill").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
+                    Text(preview?.title ?? "removed动态").font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
                 }
                 if let author = card?.author {
                     HStack(spacing: 8) {
                         LarkAvatarImage(name: author, url: card?.avatarUrl, size: 28)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(author).font(.footnote.weight(.medium)).lineLimit(1)
-                            if let sub = card?.subtitle { Text(sub).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                            Text(author).font(Theme.Font.caption.weight(.medium)).lineLimit(1)
+                            if let sub = card?.subtitle { Text(sub).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1) }
                         }
                     }
                 }
                 if let body = card?.body, !body.isEmpty {
-                    Text(body).font(.system(size: 14)).foregroundStyle(.primary.opacity(0.85)).lineLimit(5).multilineTextAlignment(.leading)
+                    Text(body).font(Theme.Font.secondary).foregroundStyle(.primary.opacity(0.85)).lineLimit(5).multilineTextAlignment(.leading)
                 } else if preview == nil {
-                    Text(part.text ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(part.text ?? "").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                 }
-                if let footer = card?.footer { Text(footer).font(.caption).foregroundStyle(.secondary) }
+                if let footer = card?.footer { Text(footer).font(Theme.Font.label).foregroundStyle(.secondary) }
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,18 +147,18 @@ struct LarkMomentsPostView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                     if let p = post {
                         author(name: p.userName ?? "", avatar: p.userAvatarUrl, id: p.userId, time: p.createTime)
-                        LarkInlineText(runs: Self.runs(p.content), base: LarkTextBase(size: 16)).textSelection(.enabled)
+                        LarkInlineText(runs: Self.runs(p.content), base: LarkTextBase(size: 17)).textSelection(.enabled)
                         images(p.images ?? [])
                         if let groups = p.reactionGroups, !groups.isEmpty {
                             LarkFlowLayout(spacing: 6, lineSpacing: 6) {
                                 ForEach(groups, id: \.type) { g in
                                     HStack(spacing: 4) {
                                         LarkEmojiImage(key: g.type, size: 17)
-                                        Text("\(g.count)").font(.caption).foregroundStyle(g.selfInvolved == true ? LarkColor.blue : .secondary)
+                                        Text("\(g.count)").font(Theme.Font.label).foregroundStyle(g.selfInvolved == true ? LarkColor.blue : .secondary)
                                     }
                                     .padding(.horizontal, 8).padding(.vertical, 4)
                                     .background(Color.primary.opacity(0.05), in: .capsule)
@@ -166,9 +166,9 @@ struct LarkMomentsPostView: View {
                             }
                         }
                         Divider()
-                        Text("\(p.commentCount ?? comments.count) 条评论").font(.subheadline.weight(.semibold))
+                        Text("\(p.commentCount ?? comments.count) 条评论").font(Theme.Font.secondary.weight(.semibold))
                         ForEach(comments) { c in
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: Theme.Space.sm) {
                                 author(name: c.userName ?? "", avatar: c.userAvatarUrl, id: c.userId, time: c.createTime, small: true)
                                 LarkInlineText(runs: Self.runs(c.content), base: LarkTextBase(size: 15)).padding(.leading, 40)
                             }
@@ -210,9 +210,9 @@ struct LarkMomentsPostView: View {
         Button { if let id { person = LarkPersonRef(id: id, name: name, avatar: avatar) } } label: {
             HStack(spacing: 10) {
                 LarkAvatarImage(name: name, url: avatar, size: small ? 30 : 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(small ? .footnote.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
-                    if let time { Text(Date(timeIntervalSince1970: time / 1000).formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.secondary) }
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(name).font(small ? Theme.Font.caption.weight(.semibold) : Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                    if let time { Text(Date(timeIntervalSince1970: time / 1000).formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.label).foregroundStyle(.secondary) }
                 }
             }
         }

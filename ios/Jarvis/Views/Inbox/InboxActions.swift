@@ -10,10 +10,10 @@ struct InboxActionBar: View {
     var handOff: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let s = item.summary, !s.isEmpty {
                 (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.ai) + Text(" " + s))
-                    .font(.subheadline)
+                    .font(Theme.Font.secondary)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -31,7 +31,7 @@ struct InboxActionBar: View {
     private func action(_ title: String, symbol: String, prominent: Bool, perform: @escaping () -> Void) -> some View {
         Button(action: perform) {
             Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.Font.secondary.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
@@ -82,7 +82,7 @@ struct InboxDraftSheet: View {
                     }
                 }
                 if let error {
-                    Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+                    Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.bottom, 6)
                 }
                 Divider()
@@ -123,10 +123,10 @@ struct InboxDraftSheet: View {
 
     /// What the AI 分身 found, and a way into its conversation.
     private func agentNote(_ a: InboxItem.Agent) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if let note = a.note, !note.isEmpty {
                 (Text(Image(systemName: "sparkles")).foregroundStyle(Theme.accent) + Text(" " + note))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(4)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(4)
             }
             if let key = a.sessionKey {
                 Button {
@@ -134,7 +134,7 @@ struct InboxDraftSheet: View {
                     model.selectedTab = .assistant
                     dismiss()
                 } label: {
-                    Label("查看 AI 分身的处理过程", systemImage: "list.bullet.rectangle").font(.footnote.weight(.medium)).lineLimit(1)
+                    Label("查看 AI 分身的处理过程", systemImage: "list.bullet.rectangle").font(Theme.Font.caption.weight(.medium)).lineLimit(1)
                 }
                 .buttonStyle(.borderless)
             }
@@ -206,7 +206,7 @@ struct InboxHandOffSheet: View {
                         HStack(spacing: 8) {
                             ForEach(Self.presets, id: \.self) { p in
                                 Button { instruction = p } label: {
-                                    Text(p).font(.footnote).lineLimit(1)
+                                    Text(p).font(Theme.Font.caption).lineLimit(1)
                                         .padding(.horizontal, 10).padding(.vertical, 5)
                                         .background(Color.secondary.opacity(0.12), in: .capsule)
                                 }
@@ -219,9 +219,9 @@ struct InboxHandOffSheet: View {
                     Picker("交给谁", selection: $target) {
                         Label("Jarvis（新对话）", systemImage: "sparkles").tag(SessionKey?.none)
                         ForEach(agents) { s in
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.displayTitle).lineLimit(1)
-                                Text(model.machine(s.machineID)?.name ?? s.machineID).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(model.machine(s.machineID)?.name ?? s.machineID).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .tag(SessionKey?.some(s.key))
                         }
@@ -232,7 +232,7 @@ struct InboxHandOffSheet: View {
                 Section {
                     Toggle("同时标为已处理", isOn: $markDone)
                 }
-                if let error { Text(error).foregroundStyle(Theme.danger).font(.footnote) }
+                if let error { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
             .navigationTitle("交给 AI")
             .navigationBarTitleDisplayMode(.inline)

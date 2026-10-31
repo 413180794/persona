@@ -106,7 +106,7 @@ struct FeishuDocReader: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
                     switch model.content {
                     case .markdown(let body, _, _):
                         titleBlock
@@ -205,11 +205,11 @@ struct FeishuDocReader: View {
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let crumbs = breadcrumb { Text(crumbs).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            if let crumbs = breadcrumb { Text(crumbs).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head) }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let icon = model.header?.icon, icon.type == "emoji" { Text(icon.value).font(.title) }
-                Text(docTitle).font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                if let icon = model.header?.icon, icon.type == "emoji" { Text(icon.value).font(Theme.Font.display) }
+                Text(docTitle).font(Theme.Font.display).fixedSize(horizontal: false, vertical: true)
                     .modifier(FeishuDocsSelectable(enabled: copyAllowed))
             }
             HStack(spacing: 8) {
@@ -219,17 +219,17 @@ struct FeishuDocReader: View {
                     } label: {
                         HStack(spacing: 6) {
                             LarkAvatarImage(name: owner.name, url: owner.avatarUrl, size: 22)
-                            Text(owner.name).font(.footnote.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
+                            Text(owner.name).font(Theme.Font.caption.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
                     .disabled(owner.id == nil)
                 }
-                if let edited = editedLine { Text("· " + edited).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
+                if let edited = editedLine { Text("· " + edited).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 0)
             }
             if let stats = statsLine {
-                Text(stats).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                Text(stats).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
             }
         }
         .padding(.bottom, 4)
@@ -265,13 +265,13 @@ struct FeishuDocReader: View {
 
     @ViewBuilder private var summaryCard: some View {
         if let s = model.summary, s.state == "ready", !s.summary.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles").foregroundStyle(LarkColor.hue("purple"))
-                    Text("AI 摘要").font(.subheadline.weight(.semibold))
+                    Text("AI 摘要").font(Theme.Font.secondary.weight(.semibold))
                     Spacer()
                     Button(summaryExpanded ? "收起" : "展开") { withAnimation(.snappy) { summaryExpanded.toggle() } }
-                        .font(.footnote).lineLimit(1)
+                        .font(Theme.Font.caption).lineLimit(1)
                 }
                 Markdown(Links.markdown(s.summary))
                     .markdownTheme(.feishuDocsSmall)
@@ -292,7 +292,7 @@ struct FeishuDocReader: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.Space.m) {
             Divider()
             HStack(spacing: 10) {
                 if (model.info?.comments ?? 0) > 0 {
@@ -306,7 +306,7 @@ struct FeishuDocReader: View {
                 }
                 .themedButton()
             }
-            .font(.subheadline)
+            .font(Theme.Font.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 20)
@@ -323,7 +323,7 @@ struct FeishuDocReader: View {
                 .id(FeishuDocsTree.rowKey(node, index: i))
         }
         if view.partial == true {
-            Label("文档较长，只显示了前面的部分", systemImage: "ellipsis.circle").font(.footnote).foregroundStyle(.secondary)
+            Label("文档较长，只显示了前面的部分", systemImage: "ellipsis.circle").font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -393,7 +393,7 @@ struct FeishuDocReader: View {
                         .overlay(alignment: .topTrailing) {
                             if let n = model.info?.comments, n > 0 {
                                 Text(n > 99 ? "99+" : "\(n)")
-                                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                                    .font(.system(size: 9, weight: .bold).monospacedDigit()) // type-scale: glyph (a count on an icon)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 3)
                                     .frame(minWidth: 14, minHeight: 14)
@@ -474,9 +474,9 @@ struct FeishuDocsSkeleton: View {
     var title: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             if let title {
-                Text(title).font(.title.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(Theme.Font.display).fixedSize(horizontal: false, vertical: true)
             } else {
                 bar(0.7, height: 26)
             }
@@ -503,7 +503,7 @@ struct FeishuDocsUnsupportedView: View {
     @State private var gallery: FeishuDocsGallery?
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Theme.Space.l) {
             if let image = info.image {
                 Button { gallery = FeishuDocsGallery(urls: [image], index: 0) } label: {
                     LarkRemoteImage(url: image, maxPixel: 2000, contentMode: .fit)
@@ -512,15 +512,15 @@ struct FeishuDocsUnsupportedView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
-                Text(info.title).font(.headline).multilineTextAlignment(.center)
+                Text(info.title).font(Theme.Font.heading).multilineTextAlignment(.center)
             } else {
                 let file = info.kind == .file ? FeishuDocsFileKind.symbol(ext: info.file?.ext, title: info.title) : nil
                 FeishuAppIcon(symbol: file?.symbol ?? info.kind.symbol, hue: file?.hue ?? info.kind.hue, size: 72)
                     .padding(.top, 48)
-                Text(info.title).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
-                Text(info.message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(info.title).font(Theme.Font.title).multilineTextAlignment(.center)
+                Text(info.message).font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            VStack(spacing: 10) {
+            VStack(spacing: Theme.Space.m) {
                 if let f = info.file {
                     Button {
                         request = ("/api/v1/lark/raw/documents/drive/files/\(f.token)/download", info.title)
@@ -553,7 +553,7 @@ struct FeishuDocsOutlineSheet: View {
             List(items) { item in
                 Button { pick(item) } label: {
                     Text(item.title)
-                        .font(item.level == top ? .body.weight(.semibold) : .subheadline)
+                        .font(item.level == top ? Theme.Font.heading : Theme.Font.secondary)
                         .foregroundStyle(item.level == top ? .primary : .secondary)
                         .lineLimit(2)
                         .padding(.leading, CGFloat(min(item.level - top, 4)) * 16)
@@ -584,7 +584,7 @@ struct FeishuDocsCommentsView: View {
     var body: some View {
         let shown = (threads ?? []).filter { $0.resolved == resolved }
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
                 Picker("状态", selection: $resolved) {
                     Text("未解决 \(count(false))").tag(false)
                     Text("已解决 \(count(true))").tag(true)
@@ -636,13 +636,13 @@ struct FeishuDocsThreadCard: View {
     var thread: FeishuDocsComments.Thread
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: 6) {
                 if thread.whole {
-                    Text("全文评论").font(.caption).foregroundStyle(.secondary)
+                    Text("全文评论").font(Theme.Font.label).foregroundStyle(.secondary)
                 } else if !thread.quote.isEmpty {
                     Text(thread.quote)
-                        .font(.footnote)
+                        .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .padding(.leading, 8)
@@ -655,22 +655,22 @@ struct FeishuDocsThreadCard: View {
             ForEach(thread.replies) { r in
                 HStack(alignment: .top, spacing: 8) {
                     LarkAvatarImage(name: r.author.name, url: r.author.avatarUrl, size: 28)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         HStack(spacing: 6) {
-                            Text(r.author.name).font(.footnote.weight(.semibold)).lineLimit(1)
-                            Text(FeishuTime.short(r.created)).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-                            if r.edited == true { Text("已编辑").font(.caption2).foregroundStyle(.tertiary) }
+                            Text(r.author.name).font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
+                            Text(FeishuTime.short(r.created)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
+                            if r.edited == true { Text("已编辑").font(Theme.Font.label).foregroundStyle(.tertiary) }
                         }
-                        Text(replyText(r)).font(.subheadline).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        Text(replyText(r)).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         if let n = r.imageCount, n > 0 {
-                            Label("\(n) 张图片", systemImage: "photo").font(.caption).foregroundStyle(.secondary)
+                            Label("\(n) 张图片", systemImage: "photo").font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                         if let rs = r.reactions, !rs.isEmpty {
                             HStack(spacing: 6) {
                                 ForEach(rs, id: \.key) { re in
                                     HStack(spacing: 3) {
                                         LarkEmojiImage(key: re.key, size: 16)
-                                        Text("\(re.count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                                        Text("\(re.count)").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
                                     }
                                     .padding(.horizontal, 6).padding(.vertical, 2)
                                     .background(Color.primary.opacity(0.05), in: .capsule)

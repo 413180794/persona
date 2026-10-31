@@ -117,7 +117,7 @@ struct MetricChart: View {
 
     var body: some View {
         let picked = selection.flatMap { points.nearest($0, step: step) }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             header(picked)
             Chart {
                 ForEach(series.indices, id: \.self) { i in
@@ -139,7 +139,7 @@ struct MetricChart: View {
                         .foregroundStyle(Color.secondary.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         .annotation(position: .top, alignment: .leading, spacing: 2) {
-                            Text(reference.label).font(.caption2).foregroundStyle(.secondary)
+                            Text(reference.label).font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                 }
                 if let picked {
@@ -164,14 +164,14 @@ struct MetricChart: View {
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(MetricColor.grid)
                     // An explicit label color: date labels otherwise take the app's tint.
                     AxisValueLabel(format: .dateTime.hour().minute(), collisionResolution: .greedy)
-                        .font(.caption2).foregroundStyle(Color(.secondaryLabel))
+                        .font(Theme.Font.label).foregroundStyle(Color(.secondaryLabel))
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { v in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(MetricColor.grid)
                     AxisValueLabel { if let d = v.as(Double.self) { Text(format(d)) } }
-                        .font(.caption2).foregroundStyle(Color(.secondaryLabel))
+                        .font(Theme.Font.label).foregroundStyle(Color(.secondaryLabel))
                 }
             }
             .chartLegend(.hidden)
@@ -188,10 +188,10 @@ struct MetricChart: View {
 
     @ViewBuilder private func header(_ picked: MetricPoint?) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).font(.subheadline.weight(.semibold))
+            Text(title).font(Theme.Font.secondary.weight(.semibold))
             Spacer(minLength: 8)
             if let picked {
-                Text(picked.date, format: .dateTime.hour().minute()).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text(picked.date, format: .dateTime.hour().minute()).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
             }
         }
         // Values in text ink; a dot in the series color says which is which (the legend, for two series).
@@ -201,10 +201,10 @@ struct MetricChart: View {
                 HStack(spacing: 5) {
                     if series.count > 1 {
                         Circle().fill(series[i].color).frame(width: 8, height: 8)
-                        Text(series[i].name).font(.caption).foregroundStyle(.secondary)
+                        Text(series[i].name).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                     Text(v.map(format) ?? "—")
-                        .font(series.count > 1 ? .callout.weight(.semibold).monospacedDigit() : .title3.weight(.semibold).monospacedDigit())
+                        .font(series.count > 1 ? Theme.Font.heading.monospacedDigit() : Theme.Font.title.monospacedDigit())
                         .contentTransition(.numericText())
                 }
             }

@@ -167,7 +167,7 @@ struct LarkRemoteImage: View {
                 Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
             } else if failed {
                 Rectangle().fill(Color.primary.opacity(0.05))
-                    .overlay { Image(systemName: "photo.badge.exclamationmark").font(.title3).foregroundStyle(.tertiary) }
+                    .overlay { Image(systemName: "photo.badge.exclamationmark").font(Theme.Font.title).foregroundStyle(.tertiary) }
             } else {
                 Rectangle().fill(Color.primary.opacity(0.05)).overlay { ProgressView().controlSize(.small) }
             }
@@ -236,13 +236,13 @@ struct LarkImageGallery: View {
             if chrome {
                 VStack {
                     HStack {
-                        Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
+                        Button { dismiss() } label: { Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40) }
                             .themedButton()
                             .clipShape(.circle)
                             .accessibilityLabel("关闭")
                         Spacer()
                         if urls.count > 1 {
-                            Text("\(index + 1) / \(urls.count)").font(.subheadline.weight(.semibold).monospacedDigit())
+                            Text("\(index + 1) / \(urls.count)").font(Theme.Font.secondary.weight(.semibold).monospacedDigit())
                                 .padding(.horizontal, 12).padding(.vertical, 7).surface(in: .capsule)
                         }
                     }
@@ -250,7 +250,7 @@ struct LarkImageGallery: View {
                     if let img = loaded[index] {
                         HStack(spacing: 12) {
                             ShareLink(item: Image(uiImage: img), preview: SharePreview("图片", image: Image(uiImage: img))) {
-                                Label("分享", systemImage: "square.and.arrow.up").lineLimit(1).font(.subheadline.weight(.semibold))
+                                Label("分享", systemImage: "square.and.arrow.up").lineLimit(1).font(Theme.Font.secondary.weight(.semibold))
                             }
                             .themedButton(prominent: true)
                             Button {
@@ -287,7 +287,7 @@ struct LarkPlayerView: View {
             } else {
                 ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Button { dismiss() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 40, height: 40) }
+            Button { dismiss() } label: { Image(systemName: "xmark").font(Theme.Font.heading).frame(width: 40, height: 40) }
                 .themedButton()
                 .clipShape(.circle)
                 .padding(16)

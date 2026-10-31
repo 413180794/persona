@@ -103,17 +103,17 @@ struct ToolGroupView: View {
 
     var body: some View {
         let calls = calls
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if calls.count > 2 && !expanded && !flat {
                 Button {
                     withAnimation(.snappy) { expanded = true }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "square.stack.3d.up").font(.caption)
-                        Text("\(calls.count) 个步骤").font(.caption.weight(.medium))
-                        Text(summary(calls)).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                        Image(systemName: "square.stack.3d.up").font(Theme.Font.label)
+                        Text("\(calls.count) 个步骤").font(Theme.Font.label.weight(.medium))
+                        Text(summary(calls)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                        Image(systemName: "chevron.down").font(Theme.Font.label.weight(.semibold))
                     }
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
@@ -134,7 +134,7 @@ struct ToolGroupView: View {
                 }
                 if calls.count > 2 && !flat {
                     Button("收起") { withAnimation(.snappy) { expanded = false } }
-                        .font(.caption.weight(.medium))
+                        .font(Theme.Font.label.weight(.medium))
                         .padding(.leading, 12)
                 }
             }
@@ -319,21 +319,21 @@ struct ToolCallRow: View {
                         ProgressView().controlSize(.mini).tint(tint)
                     } else {
                         Image(systemName: ToolPresentation.symbol(call.name))
-                            .font(.caption2.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
+                            .font(Theme.Font.label.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xLarge)
                             .foregroundStyle(tint)
                     }
                 }
-                Text(ToolPresentation.verb(call.name)).font(.subheadline.weight(.semibold))
+                Text(ToolPresentation.verb(call.name)).font(Theme.Font.secondary.weight(.semibold))
                 Text(ToolPresentation.subject(call))
-                    .font(.subheadline)
+                    .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
                 taskBadge
-                if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(.caption) }
+                if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(Theme.Font.label) }
                 Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
+                    .font(Theme.Font.label.weight(.semibold))
                     .foregroundStyle(.tertiary)
                     .rotationEffect(.degrees(isOpen ? 90 : 0))
             }
@@ -351,7 +351,7 @@ struct ToolCallRow: View {
             withAnimation(.snappy(duration: 0.25)) { expanded = !isOpen }
         } accessory: {
             taskBadge
-            if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(.caption) }
+            if call.isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger).font(Theme.Font.label) }
         }
         .padding(.vertical, grouped ? 5 : 2)
         .padding(.horizontal, pad - 3)
@@ -361,7 +361,7 @@ struct ToolCallRow: View {
     @ViewBuilder private var taskBadge: some View {
         if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
             let b = TaskNoteText.badge(tasks.notes[id] ?? [])
-            Text(b.text).font(.caption).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
+            Text(b.text).font(Theme.Font.label).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
                 .lineLimit(1).fixedSize()
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Theme.Fill.well, in: .capsule)
@@ -388,7 +388,7 @@ struct ToolDetail: View {
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
         let i = call.input
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             switch base {
             case "Bash":
                 CodeBlock(text: "$ " + (i["command"]?.string ?? ""), maxLines: 12)
@@ -412,10 +412,10 @@ struct ToolDetail: View {
                 Markdown(MarkdownMemo.content(i["plan"]?.string ?? "")).markdownTheme(.jarvis)
             case "AskUserQuestion":
                 ForEach(Array((i["questions"]?.array ?? []).enumerated()), id: \.offset) { _, q in
-                    Text(q["question"]?.string ?? "").font(.footnote.weight(.medium))
+                    Text(q["question"]?.string ?? "").font(Theme.Font.caption.weight(.medium))
                 }
             case "Task", "Agent":
-                Text(i["prompt"]?.string ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(8)
+                Text(i["prompt"]?.string ?? "").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(8)
             default:
                 if i != .object([:]) { CodeBlock(text: ToolTextMemo.input(call.use), maxLines: 14) }
             }
@@ -424,7 +424,7 @@ struct ToolDetail: View {
             } else if call.isRunning {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
-                    Text("运行中…").font(.caption).foregroundStyle(.secondary)
+                    Text("运行中…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
             ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
@@ -436,16 +436,16 @@ struct ToolDetail: View {
         if let p, !p.isEmpty {
             let adds = diffs.reduce(0) { $0 + $1.adds }, dels = diffs.reduce(0) { $0 + $1.dels }
             let header = HStack(spacing: 6) {
-                Image(systemName: FileViewer.symbol(for: p)).font(.caption).foregroundStyle(.secondary)
-                Text((p as NSString).lastPathComponent).font(.footnote.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
-                Text((p as NSString).deletingLastPathComponent).font(.footnote).foregroundStyle(.secondary)
+                Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label).foregroundStyle(.secondary)
+                Text((p as NSString).lastPathComponent).font(Theme.Font.caption.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text((p as NSString).deletingLastPathComponent).font(Theme.Font.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.head)
                 Spacer(minLength: 4)
                 if adds > 0 { Text("+\(adds)").foregroundStyle(Theme.Diff.add) }
                 if dels > 0 { Text("−\(dels)").foregroundStyle(Theme.Diff.del) }
-                if openFile != nil { Image(systemName: "arrow.up.forward.square").font(.caption).foregroundStyle(Theme.accent) }
+                if openFile != nil { Image(systemName: "arrow.up.forward.square").font(Theme.Font.label).foregroundStyle(Theme.accent) }
             }
-            .font(.footnote.weight(.semibold).monospacedDigit())
+            .font(Theme.Font.caption.weight(.semibold).monospacedDigit())
             if let openFile {
                 Button { openFile(p) } label: { header.contentShape(.rect) }
                     .buttonStyle(.plain)
@@ -461,17 +461,17 @@ struct ToolDetail: View {
             if let openFile {
                 Button { openFile(p) } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: FileViewer.symbol(for: p)).font(.caption2)
+                        Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
                         Text(p).lineLimit(2).truncationMode(.head)
-                        Image(systemName: "arrow.up.forward.square").font(.caption2)
+                        Image(systemName: "arrow.up.forward.square").font(Theme.Font.label)
                     }
-                    .font(.caption.monospaced())
+                    .font(Theme.Font.code)
                     .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("查看文件 \((p as NSString).lastPathComponent)")
             } else {
-                Text(p).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2).truncationMode(.head).textSelection(.enabled)
+                Text(p).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(2).truncationMode(.head).textSelection(.enabled)
             }
         }
     }
@@ -507,17 +507,17 @@ struct CodeBlock: View {
     var body: some View {
         let lines = ToolTextMemo.codeLines(text)
         let clipped = !full && lines.count > maxLines
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(clipped ? lines.prefix(maxLines).joined(separator: "\n") : text)
-                    .font(.caption.monospaced())
+                    .font(Theme.Font.code)
                     .textSelection(.enabled)
                     .padding(10)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             if clipped {
-                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(.caption.weight(.medium))
+                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.label.weight(.medium))
             }
         }
     }
@@ -542,12 +542,12 @@ struct ResultBlock: View {
 
     var body: some View {
         if text.isEmpty && cut == nil {
-            Text(isError ? "失败" : "完成，无输出").font(.caption).foregroundStyle(isError ? Theme.danger : .secondary)
+            Text(isError ? "失败" : "完成，无输出").font(Theme.Font.label).foregroundStyle(isError ? Theme.danger : .secondary)
         } else {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 // Above the output: over it, the mark covered the end of the first line.
                 if isError {
-                    Label("出错了", systemImage: "xmark.octagon.fill").font(.caption.weight(.semibold)).foregroundStyle(Theme.danger)
+                    Label("出错了", systemImage: "xmark.octagon.fill").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.danger)
                         .lineLimit(1)
                 }
                 CodeBlock(text: text, maxLines: 10)
@@ -558,7 +558,7 @@ struct ResultBlock: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
-                    .font(.caption.weight(.medium))
+                    .font(Theme.Font.label.weight(.medium))
                     .sheet(isPresented: $showFull) { FullOutputSheet(itemID: cut.id, load: loadFullText) }
                     #if DEBUG
                     .task {
@@ -709,7 +709,7 @@ struct DiffView: View {
 
     var body: some View {
         let clipped = !full && lines.count > Self.maxLines
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(clipped ? Array(lines.prefix(Self.maxLines)) : lines) { line($0) }
@@ -730,7 +730,7 @@ struct DiffView: View {
             .background(Theme.codeBackground)
             .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             if clipped {
-                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(.caption.weight(.medium)).lineLimit(1)
+                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.label.weight(.medium)).lineLimit(1)
             }
         }
     }
@@ -746,7 +746,7 @@ struct DiffView: View {
             Text(sign).foregroundStyle(color).frame(width: 10)
             Text(l.text.isEmpty ? " " : l.text).foregroundStyle(quiet ? Color.secondary : .primary)
         }
-        .font(.caption.monospaced())
+        .font(Theme.Font.code)
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -758,14 +758,14 @@ struct TodoList: View {
     var todos: [JSONValue]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array(todos.enumerated()), id: \.offset) { _, t in
                 let status = t["status"]?.string ?? "pending"
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: status == "completed" ? "checkmark.circle.fill" : status == "in_progress" ? "circle.dotted.circle" : "circle")
                         .foregroundStyle(status == "completed" ? Theme.positive : status == "in_progress" ? Theme.busy : .secondary)
                     Text(status == "in_progress" ? (t["activeForm"]?.string ?? t["content"]?.string ?? "") : (t["content"]?.string ?? ""))
-                        .font(.footnote)
+                        .font(Theme.Font.caption)
                         .strikethrough(status == "completed", color: .secondary)
                         .foregroundStyle(status == "completed" ? .secondary : .primary)
                 }
@@ -857,7 +857,7 @@ struct FoldedWorkRow: View {
                 Spacer(minLength: 0)
             }
         }
-        .font(.footnote)
+        .font(Theme.Font.caption)
         .foregroundStyle(.secondary)
         .frame(minHeight: 28)
         .task(id: attempt) {

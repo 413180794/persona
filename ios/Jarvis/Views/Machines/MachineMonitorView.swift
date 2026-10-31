@@ -26,7 +26,7 @@ struct MachineMonitorView: View {
         let system = data?.system ?? machine?.system
         let online = data?.online ?? machine?.online ?? false
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 header(machine, system: system, online: online)
                 if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }
                 Picker("时间范围", selection: $range) {
@@ -38,7 +38,7 @@ struct MachineMonitorView: View {
                 if let cores = data?.latest?.cores, online, cores.count > 1 { CoreBars(cores: cores) }
                 if let system { SystemFacts(system: system, machine: machine) }
                 Text("历史保留 24 小时。最近 1 小时每 10 秒一个点，更早的每分钟一个点；中间断开的时段不连线。")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(Theme.Font.label).foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
             }
             .padding(16)
@@ -86,15 +86,15 @@ struct MachineMonitorView: View {
     private func header(_ m: Machine?, system: MachineSystem?, online: Bool) -> some View {
         HStack(spacing: 14) {
             OSBadge(system: system, fallback: m?.symbol ?? "desktopcomputer", size: 54, online: online)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(system?.name ?? m?.os ?? "未知系统").font(.headline).lineLimit(2)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(system?.name ?? m?.os ?? "未知系统").font(Theme.Font.heading).lineLimit(2)
                 HStack(spacing: 6) {
                     Circle().fill(online ? Theme.positive : Color.secondary).frame(width: 7, height: 7)
-                    Text(online ? "在线" : "离线").font(.subheadline.weight(.semibold)).foregroundStyle(online ? Theme.positive : .secondary)
+                    Text(online ? "在线" : "离线").font(Theme.Font.secondary.weight(.semibold)).foregroundStyle(online ? Theme.positive : .secondary)
                     if online, let boot = system?.bootDate {
-                        Text("已运行 " + MetricFormat.uptime(since: boot)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        Text("已运行 " + MetricFormat.uptime(since: boot)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                     } else if !online, let seen = m?.lastSeen, seen.timeIntervalSince1970 > 0 {
-                        Text("最后在线 " + Fmt.relative(seen)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                        Text("最后在线 " + Fmt.relative(seen)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }
@@ -131,7 +131,7 @@ struct MachineMonitorView: View {
             .animation(.default, value: shownRange)
             if data.points.allSatisfy(\.isGap) {
                 Text(data.online ? "刚开始记录：过一会儿这里就有曲线了。" : "这段时间这台机器没有连上。")
-                    .font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                    .font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
             }
         } else if let failure {
             EmptyStateView(symbol: "chart.xyaxis.line", title: "看不到监控数据", message: failure)
@@ -166,19 +166,19 @@ private struct NowGrid: View {
     }
 
     private func tile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: 4) {
-                Text(title).font(.caption).foregroundStyle(.secondary)
+                Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
                 if level > .normal {
                     HStack(spacing: 2) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(MetricColor.level(level))
                         Text(level == .critical ? "过高" : "偏高").foregroundStyle(.secondary)
                     }
-                    .font(.caption2.weight(.semibold)).lineLimit(1)
+                    .font(Theme.Font.label.weight(.semibold)).lineLimit(1)
                 }
             }
-            Text(value).font(.title3.weight(.semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
-            Text(detail ?? " ").font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(Theme.Font.title.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
+            Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
             if let fraction { MeterBar(fraction: fraction, color: level > .normal ? MetricColor.level(level) : color) }
             else { Color.clear.frame(height: 6) } // every tile the same height
         }
@@ -193,11 +193,11 @@ private struct CoreBars: View {
     var cores: [Double]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack {
-                Text("每个核心").font(.subheadline.weight(.semibold))
+                Text("每个核心").font(Theme.Font.secondary.weight(.semibold))
                 Spacer()
-                Text("最忙 \(MetricFormat.percent(cores.max()))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text("最忙 \(MetricFormat.percent(cores.max()))").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
             }
             GeometryReader { g in
                 let gap: CGFloat = cores.count > 32 ? 1 : 2
@@ -229,7 +229,7 @@ private struct SystemFacts: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("系统").font(.subheadline.weight(.semibold)).padding(.bottom, 8)
+            Text("系统").font(Theme.Font.secondary.weight(.semibold)).padding(.bottom, 8)
             row("系统", system.name + (system.build.map { "（\($0)）" } ?? ""))
             if let k = system.kernel, !k.isEmpty { row("内核", k) }
             row("架构", system.arch ?? machine?.arch ?? "—")
@@ -252,7 +252,7 @@ private struct SystemFacts: View {
                 Spacer(minLength: 8)
                 Text(v).multilineTextAlignment(.trailing).textSelection(.enabled)
             }
-            .font(.subheadline)
+            .font(Theme.Font.secondary)
             .padding(.vertical, 7)
             if !last { Divider() }
         }

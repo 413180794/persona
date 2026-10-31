@@ -721,6 +721,29 @@ if os.environ.get("MOCK_WAKES") == "1":
     ITEMS[WAKES] = _k
 
 
+# MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the
+# same 502 three times (the user said 继续 twice in between); an idle Agent's last answer is a login error. The texts
+# follow real ones with every id, host and region replaced.
+if os.environ.get("MOCK_API_ERRORS") == "1":
+    _gpu = ("API Error: 502 upstream stream error: rpc error: code = 13 desc = Req 202610302115A1B2C3D4E5F6 "
+            "Session 1ebd0000:7e470000 streamingcall loadbalance failed (target=default, roles=ROLE_DECODE,ROLE_PREFILL): "
+            "no available GPU pod [biz error]. This is a server-side issue, usually temporary — try again in a moment. "
+            "If it persists, check your inference gateway (gateway.example.com).")
+    ITEMS[ASK1] = ITEMS[ASK1] + [
+        it("user", "text", 2, text="帮我看看今天下午的会要准备什么"),
+        it("assistant", "text", 2, text=_gpu),
+        it("user", "text", 1, text="继续"),
+        it("assistant", "text", 1, text=_gpu),
+        it("user", "text", 1, text="继续"),
+        it("assistant", "text", 1, text=_gpu),
+    ]
+    ITEMS[REVIEW] = ITEMS.get(REVIEW, []) + [
+        it("user", "text", 1, text="接着把命名改完"),
+        it("assistant", "text", 1, text="API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\","
+           "\"message\":\"OAuth token has expired. Please obtain a new token or refresh your existing token.\"},"
+           "\"request_id\":\"req_011CUdExampleExample01\"} · Please run /login"),
+    ]
+
 # MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
 # last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
 RICH = "a1f3c2d4-0000-4000-8000-00000000000a"

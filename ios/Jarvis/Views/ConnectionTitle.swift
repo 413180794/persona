@@ -18,7 +18,7 @@ struct ConnectionTitle: View {
                     .accessibilityIdentifier("connection-title")
                     .transition(.opacity)
             } else if let title {
-                Text(title).font(.headline).lineLimit(1).transition(.opacity)
+                Text(title).font(Theme.Font.heading).lineLimit(1).transition(.opacity)
             }
         }
         .animation(.snappy, value: phase)
@@ -39,7 +39,7 @@ struct ConnectionLabel: View {
         HStack(spacing: compact ? 5 : 7) {
             ProgressView().controlSize(compact ? .mini : .small)
             Text(phase.title)
-                .font(compact ? .caption : .headline)
+                .font(compact ? Theme.Font.label : Theme.Font.heading)
                 .foregroundStyle(compact ? .secondary : .primary)
                 .lineLimit(1)
                 .contentTransition(.opacity)
@@ -65,24 +65,24 @@ struct ConnectionDetails: View {
         // What the title says; once it is back to normal, the live state (already connected again, or not yet shown).
         let phase = status.shown == .online ? status.phase : status.shown
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 HStack(spacing: 8) {
                     if phase == .online {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.positive)
-                        Text("已连上 hub").font(.headline)
+                        Text("已连上 hub").font(Theme.Font.heading)
                     } else {
                         ConnectionLabel(phase: phase)
                     }
                 }
-                Text(Self.explanation(phase, stalled: model.live.stalled)).font(.subheadline).foregroundStyle(.secondary)
+                Text(Self.explanation(phase, stalled: model.live.stalled)).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let lines = Self.facts(phase: phase, link: model.live.state, nextTry: model.live.nextTry, lastOnline: status.lastOnline,
                                        rtt: model.live.rtt, outbox: model.outboxCount, now: ctx.date)
                 if !lines.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         ForEach(lines, id: \.self) { Text($0) }
                     }
-                    .font(.footnote)
+                    .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
                 }
                 if phase != .online {

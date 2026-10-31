@@ -162,14 +162,14 @@ struct StorageView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(usage == nil ? "计算中…" : total.storageText)
-                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                            .font(Theme.Font.display).fontDesign(.rounded)
                             .contentTransition(.numericText())
                         Spacer()
                         if usage != nil {
-                            Text("其中缓存 \(clearableTotal.storageText)").font(.subheadline).foregroundStyle(.secondary)
+                            Text("其中缓存 \(clearableTotal.storageText)").font(Theme.Font.secondary).foregroundStyle(.secondary)
                         }
                     }
                     bar
@@ -232,20 +232,20 @@ struct StorageView: View {
     private func row(_ kind: StorageKind) -> some View {
         HStack(spacing: 12) {
             Image(systemName: kind.icon)
-                .font(.callout.weight(.semibold))
+                .font(Theme.Font.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
                 .background(kind == .appData ? Color.gray : kind.color, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(kind.title).lineLimit(1)
-                Text(kind.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(kind.detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 8)
             if clearing == kind {
                 ProgressView()
             } else {
                 Text(usage.map { ($0[kind] ?? 0).storageText } ?? "—")
-                    .font(.callout.monospacedDigit())
+                    .font(Theme.Font.body.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()

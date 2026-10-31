@@ -76,9 +76,9 @@ struct FileChips: View {
                     ForEach(paths, id: \.self) { p in
                         Button { open(p) } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: FileViewer.symbol(for: p)).font(.caption2)
+                                Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
                                 Text((p as NSString).lastPathComponent.isEmpty ? p : (p as NSString).lastPathComponent)
-                                    .font(.caption.weight(.medium))
+                                    .font(Theme.Font.label.weight(.medium))
                                     .lineLimit(1)
                             }
                             .padding(.horizontal, 9)
@@ -143,7 +143,7 @@ struct FileViewer: View {
             } else if let text = file.text {
                 if isMarkdown(file) && !raw {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: Theme.Space.m) {
                             meta(file)
                             Markdown(Links.markdown(MarkdownHTML.simplify(text)), imageBaseURL: URL(fileURLWithPath: (file.path as NSString).deletingLastPathComponent, isDirectory: true))
                                 .markdownTheme(.jarvis)
@@ -154,7 +154,7 @@ struct FileViewer: View {
                     }
                 } else {
                     // The code view scrolls both ways by itself (no outer vertical scroll stealing the gesture).
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Theme.Space.m) {
                         meta(file).padding(.horizontal, 16)
                         CodeText(text: text).padding(.horizontal, 12)
                     }
@@ -200,7 +200,7 @@ struct FileViewer: View {
             Text(ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file))
             if f.truncated { Text("· 只显示前 2 MB").foregroundStyle(Theme.cautionText) }
         }
-        .font(.caption.monospaced())
+        .font(Theme.Font.code)
         .foregroundStyle(.secondary)
     }
 
@@ -283,7 +283,7 @@ struct MachineMarkdownImage: View {
             } else if failed {
                 // SVG and anything else that is not a bitmap: say what is there instead of a blank.
                 Label((path as NSString).lastPathComponent, systemImage: "photo")
-                    .font(.caption)
+                    .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .padding(.horizontal, 10)

@@ -71,7 +71,7 @@ struct ImageEditor: View {
     }
 
     private var toolbar: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.Space.m) {
             HStack(spacing: 14) {
                 ForEach(Self.colors, id: \.self) { c in
                     Button { color = c } label: {
@@ -99,7 +99,7 @@ struct ImageEditor: View {
 
     private func toolButton(_ t: Tool, _ title: String, _ symbol: String) -> some View {
         Button { tool = t } label: {
-            Label(title, systemImage: symbol).lineLimit(1).font(.subheadline.weight(.semibold))
+            Label(title, systemImage: symbol).lineLimit(1).font(Theme.Font.secondary.weight(.semibold))
         }
         .themedButton(prominent: tool == t)
     }

@@ -81,7 +81,7 @@ struct AssistantTopBar: View {
     private func circle(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
+                .font(Theme.Font.heading)
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .frame(width: 44, height: 44)
                 .contentShape(.circle)
@@ -102,7 +102,7 @@ struct AssistantTopBar: View {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.positive)
                     Text(hint).lineLimit(1)
                 }
-                .font(.caption.weight(.semibold))
+                .font(Theme.Font.label.weight(.semibold))
                 .padding(.horizontal, 10)
                 .frame(height: 24)
                 .fixedSize()
@@ -133,7 +133,7 @@ struct AssistantTopBar: View {
                     if link != .online {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
                     } else {
-                        Text(name).font(.caption.weight(.semibold)).lineLimit(1).transition(.opacity)
+                        Text(name).font(Theme.Font.label.weight(.semibold)).lineLimit(1).transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 10)

@@ -73,7 +73,7 @@ nonisolated enum FeishuDocsInline {
         switch n.type {
         case "text":
             var s = AttributedString(n.text ?? "")
-            if monospaced { s.font = .system(.body, design: .monospaced) }
+            if monospaced { s.font = Theme.Font.body.monospaced() }
             apply(n.marks ?? [], to: &s)
             return s
         case "hardBreak":
@@ -104,7 +104,7 @@ nonisolated enum FeishuDocsInline {
             return s
         case "equation":
             var s = AttributedString(n.attr("latex") ?? "")
-            s.font = .system(.callout, design: .serif).italic()
+            s.font = .system(.body, design: .serif).italic() // type-scale: serif (a quoted passage, the body size)
             return s
         case "statusTag":
             var s = AttributedString(" \(n.attr("text") ?? "") ")
@@ -138,10 +138,10 @@ nonisolated enum FeishuDocsInline {
             }
         }
         if code {
-            s.font = .system(.callout, design: .monospaced)
+            s.font = Theme.Font.code
             if s.backgroundColor == nil { s.backgroundColor = Theme.codeBackground }
         } else if bold || italic {
-            var f = Font.body
+            var f = Theme.Font.body
             if bold { f = f.weight(.semibold) }
             if italic { f = f.italic() }
             s.font = f
@@ -191,7 +191,7 @@ struct FeishuDocsBlock: View {
         case "heading":
             heading
         case "bulletList", "orderedList", "taskList":
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 ForEach(Array(node.children.enumerated()), id: \.offset) { i, item in
                     FeishuDocsListItem(item: item, marker: node.type == "orderedList" ? "\((number ?? 1) + i)." : nil)
                 }
@@ -206,7 +206,7 @@ struct FeishuDocsBlock: View {
         case "callout":
             callout
         case "columns":
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 ForEach(Array(node.children.enumerated()), id: \.offset) { _, col in FeishuDocsBlocks(nodes: col.children) }
             }
         case "column", "synced", "agenda", "agendaContent", "doc", "mindnote", "slideNotes":
@@ -216,7 +216,7 @@ struct FeishuDocsBlock: View {
                 .padding(12)
                 .background(Color.primary.opacity(0.035), in: .rect(cornerRadius: 12, style: .continuous))
         case "agendaTitle":
-            inline(node.children).font(.headline)
+            inline(node.children).font(Theme.Font.heading)
         case "horizontalRule":
             Divider().padding(.vertical, 6)
         case "codeBlock":
@@ -236,8 +236,8 @@ struct FeishuDocsBlock: View {
         case "docTask":
             docTask
         case "mermaid", "plantuml":
-            VStack(alignment: .leading, spacing: 4) {
-                Text(node.type == "mermaid" ? "Mermaid 图" : "PlantUML 图").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(node.type == "mermaid" ? "Mermaid 图" : "PlantUML 图").font(Theme.Font.label).foregroundStyle(.secondary)
                 FeishuDocsCodeBlock(node: node)
             }
         case "mindnoteItem":
@@ -245,8 +245,8 @@ struct FeishuDocsBlock: View {
         case "mindnoteLabel":
             inline(node.children)
         case "slide":
-            VStack(alignment: .leading, spacing: 8) {
-                Text("第 \(Int(node.number("index") ?? 0)) 页").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text("第 \(Int(node.number("index") ?? 0)) 页").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
                 FeishuDocsBlocks(nodes: node.children)
             }
             .padding(14)
@@ -288,12 +288,8 @@ struct FeishuDocsBlock: View {
 
     private var heading: some View {
         let level = Int(node.number("level") ?? 1)
-        let font: Font = switch level {
-        case 1: .title2.weight(.bold)
-        case 2: .title3.weight(.bold)
-        case 3: .headline
-        default: .subheadline.weight(.semibold)
-        }
+        // Jarvis' levels: the first heading is a title, the rest headings, told apart by the space above them.
+        let font: Font = level == 1 ? Theme.Font.title : Theme.Font.heading
         return FeishuDocsText(text: FeishuDocsInline.attributed(node.children))
             .font(font)
             .frame(maxWidth: .infinity, alignment: alignment)
@@ -325,7 +321,7 @@ struct FeishuDocsBlock: View {
         let tint = FeishuDocsColor.background(node.attr("backgroundColor")) ?? LarkColor.hue("blue").opacity(0.08)
         let stroke = FeishuDocsColor.background(node.attr("borderColor")) ?? .clear
         return HStack(alignment: .top, spacing: 10) {
-            if let e = node.attr("emoji"), !e.isEmpty { Text(e).font(.title3) }
+            if let e = node.attr("emoji"), !e.isEmpty { Text(e).font(Theme.Font.title) }
             FeishuDocsBlocks(nodes: node.children, spacing: 6)
                 .foregroundStyle(FeishuDocsColor.text(node.attr("color")) ?? .primary)
         }
@@ -341,7 +337,7 @@ struct FeishuDocsBlock: View {
         return HStack(alignment: .top, spacing: 10) {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(done ? LarkColor.hue("green") : .secondary)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text(node.attr("summary").flatMap { $0.isEmpty ? nil : $0 } ?? node.plainText)
                     .strikethrough(done)
                     .foregroundStyle(done ? .secondary : .primary)
@@ -351,7 +347,7 @@ struct FeishuDocsBlock: View {
                             LarkAvatarImage(name: p.name, url: p.avatarUrl, size: 16)
                         }
                         if let d = node.attr("due").flatMap(JSON.parseDate) {
-                            Text("截止 " + d.formatted(.dateTime.month().day())).font(.caption).foregroundStyle(.secondary)
+                            Text("截止 " + d.formatted(.dateTime.month().day())).font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -438,12 +434,12 @@ struct FeishuDocsCodeBlock: View {
 
     var body: some View {
         let text = node.plainText
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if let lang = node.attr("language"), !lang.isEmpty, lang.lowercased() != "plaintext" {
-                Text(lang).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                Text(lang).font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(text).font(.system(.footnote, design: .monospaced)).fixedSize().textSelection(.enabled)
+                Text(text).font(Theme.Font.code).fixedSize().textSelection(.enabled)
             }
         }
         .padding(12)
@@ -463,7 +459,7 @@ struct FeishuDocsTable: View {
         FeishuDocsTableGrid(layout: layout, natural: layout.naturalWidths { r, slot in node(r, slot)?.plainText ?? "" }) { r, slot in
             if let n = node(r, slot) {
                 FeishuDocsBlocks(nodes: n.children, spacing: 4)
-                    .font(.subheadline.weight(slot.header ? .semibold : .regular))
+                    .font(Theme.Font.secondary.weight(slot.header ? .semibold : .regular))
             }
         } background: { r, slot in
             node(r, slot).flatMap { FeishuDocsColor.background($0.attr("backgroundColor")) }
@@ -482,7 +478,7 @@ struct FeishuDocsMarkdownTableView: View {
         let texts = grid.map { $0.map { Self.attributed(FeishuDocsMarkdownTable.cellMarkdown($0)) } }
         FeishuDocsTableGrid(layout: layout, natural: layout.naturalWidths { r, slot in String(texts[r][slot.column].characters) }) { r, slot in
             FeishuDocsText(text: texts[r][slot.column])
-                .font(.subheadline.weight(slot.header ? .semibold : .regular))
+                .font(Theme.Font.secondary.weight(slot.header ? .semibold : .regular))
         } background: { _, _ in nil }
     }
 
@@ -575,7 +571,7 @@ struct FeishuDocsImage: View {
         let w = node.number("width") ?? node.number("displayWidth") ?? 0
         let h = node.number("height") ?? 0
         let ratio = (w > 0 && h > 0) ? w / h : nil
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.sm) {
             Button { context.openImage(src) } label: {
                 LarkRemoteImage(url: src, maxPixel: 1600, contentMode: .fit)
                     .aspectRatio(ratio.map { CGFloat($0) }, contentMode: .fit)
@@ -585,7 +581,7 @@ struct FeishuDocsImage: View {
             .buttonStyle(.plain)
             .accessibilityLabel(node.attr("alt").flatMap { $0.isEmpty ? nil : $0 } ?? "图片")
             if let c = node.attr("caption"), !c.isEmpty {
-                Text(c).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(c).font(Theme.Font.label).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
@@ -609,9 +605,9 @@ struct FeishuDocsFileBlock: View {
         } label: {
             HStack(spacing: 12) {
                 FeishuAppIcon(symbol: icon.symbol, hue: icon.hue, size: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.subheadline.weight(.medium)).lineLimit(1)
-                    Text(size ?? "附件").font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(name).font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
+                    Text(size ?? "附件").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "arrow.down.circle").foregroundStyle(LarkColor.blue)
@@ -642,19 +638,19 @@ struct FeishuDocsLinkCard: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.Font.secondary.weight(.semibold))
                     .foregroundStyle(quiet ? Color.secondary : LarkColor.hue(hue))
                     .frame(width: 28, height: 28)
                     .background((quiet ? Color.secondary : LarkColor.hue(hue)).opacity(0.12), in: .rect(cornerRadius: 7, style: .continuous))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(quiet ? .footnote : .subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(title).font(quiet ? Theme.Font.caption : Theme.Font.secondary.weight(.medium))
                         .foregroundStyle(quiet ? .secondary : .primary).lineLimit(2).multilineTextAlignment(.leading)
                     if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.leading)
                     }
                 }
                 Spacer(minLength: 0)
-                if href != nil { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }
+                if href != nil { Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary) }
             }
             .padding(10)
             .background(quiet ? Color.primary.opacity(0.035) : LarkColor.cardBackground, in: .rect(cornerRadius: 12, style: .continuous))

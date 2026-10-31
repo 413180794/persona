@@ -26,7 +26,7 @@ struct FilesPane: View {
                     }
                     ForEach(entries) { e in entryRow(e) }
                     if listing.truncated {
-                        Text("文件太多，只列出了前 2000 个").font(.caption).foregroundStyle(.secondary)
+                        Text("文件太多，只列出了前 2000 个").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 } else if let error {
                     ContentUnavailableView("打不开这个文件夹", systemImage: "folder.badge.questionmark", description: Text(error))
@@ -50,7 +50,7 @@ struct FilesPane: View {
                     Haptics.tap()
                     stack.removeLast()
                 } label: {
-                    Image(systemName: "chevron.left").font(.footnote.weight(.semibold)).frame(width: 30, height: 30)
+                    Image(systemName: "chevron.left").font(Theme.Font.caption.weight(.semibold)).frame(width: 30, height: 30)
                 }
                 .themedButton()
                 .clipShape(.circle)
@@ -61,7 +61,7 @@ struct FilesPane: View {
                     HStack(spacing: 4) {
                         crumb((cwd as NSString).lastPathComponent, level: 0)
                         ForEach(Array(stack.enumerated()), id: \.offset) { i, name in
-                            Image(systemName: "chevron.compact.right").font(.caption2).foregroundStyle(.tertiary)
+                            Image(systemName: "chevron.compact.right").font(Theme.Font.label).foregroundStyle(.tertiary)
                             crumb(name, level: i + 1)
                         }
                     }
@@ -73,7 +73,7 @@ struct FilesPane: View {
                 Toggle(isOn: $showHidden) { Label("显示隐藏文件", systemImage: "eye") }
                 Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: "doc.on.doc") }
             } label: {
-                Image(systemName: "ellipsis").font(.footnote.weight(.semibold)).frame(width: 30, height: 30)
+                Image(systemName: "ellipsis").font(Theme.Font.caption.weight(.semibold)).frame(width: 30, height: 30)
             }
             .themedButton()
             .clipShape(.circle)
@@ -90,7 +90,7 @@ struct FilesPane: View {
             stack = Array(stack.prefix(level))
         } label: {
             Text(name.isEmpty ? "/" : name)
-                .font(.footnote.weight(current ? .semibold : .regular))
+                .font(Theme.Font.caption.weight(current ? .semibold : .regular))
                 .lineLimit(1)
                 .foregroundStyle(current ? Color.primary : Color.secondary)
                 .padding(.horizontal, 8)
@@ -114,19 +114,19 @@ struct FilesPane: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: e.dir ? "folder.fill" : FileViewer.symbol(for: e.name))
-                    .font(.callout)
+                    .font(Theme.Font.body)
                     .foregroundStyle(e.dir ? Theme.accent : Color.secondary)
                     .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     HStack(spacing: 4) {
-                        Text(e.name).font(.subheadline).foregroundStyle(e.name.hasPrefix(".") ? Color.secondary : Color.primary).lineLimit(1)
-                        if e.symlink == true { Image(systemName: "arrow.turn.up.right").font(.caption2).foregroundStyle(.tertiary) }
+                        Text(e.name).font(Theme.Font.secondary).foregroundStyle(e.name.hasPrefix(".") ? Color.secondary : Color.primary).lineLimit(1)
+                        if e.symlink == true { Image(systemName: "arrow.turn.up.right").font(Theme.Font.label).foregroundStyle(.tertiary) }
                     }
                     HStack(spacing: 6) {
                         if !e.dir { Text(ByteCountFormatter.string(fromByteCount: e.size, countStyle: .file)) }
                         if let m = e.mtime { Text(Fmt.relative(m)) }
                     }
-                    .font(.caption)
+                    .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 }
@@ -138,7 +138,7 @@ struct FilesPane: View {
                         GitBadge(letter: mark)
                     }
                 }
-                if e.dir { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }
+                if e.dir { Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.tertiary) }
             }
             .contentShape(.rect)
         }

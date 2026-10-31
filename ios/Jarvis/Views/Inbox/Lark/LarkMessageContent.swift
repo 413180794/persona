@@ -19,7 +19,7 @@ extension EnvironmentValues {
 extension MarkdownUI.Theme {
     /// Markdown messages inside a chat bubble: body size, tight paragraphs.
     @MainActor static let larkMessage = MarkdownUI.Theme.jarvis
-        .text { FontSize(16) }
+        .text { FontSize(17) } // the body level, as Lark messages are (LarkTextBase)
         .link { ForegroundColor(LarkColor.blue) }
         .paragraph { config in
             config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.15)).markdownMargin(top: 0, bottom: 6)
@@ -142,7 +142,7 @@ struct LarkNodesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
                 switch chunk {
                 case .inline(let runs): LarkInlineText(runs: runs, base: base)
@@ -156,6 +156,7 @@ struct LarkNodesView: View {
 struct LarkNodeView: View {
     var node: LarkRichNode
     var base: LarkTextBase
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         switch node {
@@ -168,10 +169,10 @@ struct LarkNodeView: View {
         switch b.type {
         case "ordered-list", "unordered-list":
             let items = children
-            return AnyView(VStack(alignment: .leading, spacing: 4) {
+            return AnyView(VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 ForEach(Array(items.enumerated()), id: \.offset) { i, item in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(Self.marker(b, index: i)).font(.system(size: base.size).monospacedDigit()).foregroundStyle(.secondary)
+                        Text(Self.marker(b, index: i)).font(.system(size: base.size * Theme.textScale(typeSize)).monospacedDigit()).foregroundStyle(.secondary)
                             .frame(minWidth: 14, alignment: .trailing)
                         LarkNodeView(node: item, base: base)
                     }
@@ -185,7 +186,7 @@ struct LarkNodeView: View {
                 .overlay(alignment: .leading) { Capsule().fill(Color.primary.opacity(0.18)).frame(width: 3) })
         case let t where t.hasPrefix("heading-"):
             let level = Int(t.dropFirst(8)) ?? 3
-            let size: CGFloat = [1: 22, 2: 20, 3: 18, 4: 17][level] ?? 16
+            let size: CGFloat = level == 1 ? 22 : 17 // Jarvis' title and heading levels, as in a chat's Markdown
             return AnyView(LarkNodesView(nodes: children, structured: true, base: LarkTextBase(size: size, bold: true)))
         case "code-block":
             return AnyView(LarkNodesView(nodes: children, structured: true, base: base))
@@ -385,7 +386,7 @@ struct LarkImagePart: View {
                 }
                 .accessibilityLabel("图片")
         } else {
-            Label("图片已失效", systemImage: "photo").font(.subheadline).foregroundStyle(.secondary)
+            Label("图片已失效", systemImage: "photo").font(Theme.Font.secondary).foregroundStyle(.secondary)
         }
     }
 
@@ -432,9 +433,9 @@ struct LarkFileCard: View {
             if let url = part.url { openFile?(url, name) }
         } label: {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(name).font(.subheadline.weight(.medium)).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
-                    Text(LarkFormat.fileSize(part.metaString("size"))).font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(name).font(Theme.Font.secondary.weight(.medium)).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(LarkFormat.fileSize(part.metaString("size"))).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
                 Self.badge(ext)
@@ -463,7 +464,7 @@ struct LarkFileCard: View {
         default: ("doc.fill", .gray)
         }
         return Image(systemName: symbol)
-            .font(.system(size: 20))
+            .font(.system(size: 20)) // type-scale: glyph (in a 42 pt tile)
             .foregroundStyle(.white)
             .frame(width: 42, height: 42)
             .background(color.gradient, in: .rect(cornerRadius: 9, style: .continuous))
@@ -484,7 +485,7 @@ struct LarkVideoPart: View {
                 Rectangle().fill(Color.black.opacity(0.85))
             }
             Image(systemName: "play.fill")
-                .font(.system(size: 20))
+                .font(.system(size: 20)) // type-scale: glyph (in a 48 pt play button)
                 .foregroundStyle(.white)
                 .frame(width: 48, height: 48)
                 .background(.black.opacity(0.45), in: .circle)
@@ -492,7 +493,7 @@ struct LarkVideoPart: View {
         .frame(width: size.width, height: size.height)
         .overlay(alignment: .bottomTrailing) {
             Text(LarkFormat.duration(ms: part.meta("duration")?.double))
-                .font(.caption2.weight(.semibold).monospacedDigit())
+                .font(Theme.Font.label.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(.black.opacity(0.5), in: .capsule)
@@ -515,13 +516,13 @@ struct LarkVoicePart: View {
         let ms = part.meta("duration")?.double ?? 0
         Button { playing = true } label: {
             HStack(spacing: 8) {
-                Image(systemName: "play.circle.fill").font(.title3).foregroundStyle(LarkColor.blue)
+                Image(systemName: "play.circle.fill").font(Theme.Font.title).foregroundStyle(LarkColor.blue)
                 HStack(spacing: 2) {
                     ForEach(0..<min(18, max(5, Int(ms / 1500))), id: \.self) { i in
                         Capsule().fill(Color.primary.opacity(0.35)).frame(width: 2.5, height: [8, 14, 10, 18, 12, 6][i % 6])
                     }
                 }
-                Text(LarkFormat.duration(ms: ms)).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                Text(LarkFormat.duration(ms: ms)).font(Theme.Font.secondary.monospacedDigit()).foregroundStyle(.secondary)
             }
         }
         .buttonStyle(.plain)
@@ -537,13 +538,13 @@ struct LarkCodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.isEmpty == false ? language! : "代码").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Text(language?.isEmpty == false ? language! : "代码").font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                     Haptics.success()
                     AppModel.shared.toast = Toast("已拷贝代码", style: .success)
-                } label: { Image(systemName: "doc.on.doc").font(.caption) }
+                } label: { Image(systemName: "doc.on.doc").font(Theme.Font.label) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("拷贝代码")
@@ -551,7 +552,7 @@ struct LarkCodeBlock: View {
             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 4)
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(LarkSyntax.highlight(code))
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(Theme.Font.code)
                     .fixedSize(horizontal: true, vertical: true)
                     .textSelection(.enabled)
                     .padding(.horizontal, 12).padding(.bottom, 10)

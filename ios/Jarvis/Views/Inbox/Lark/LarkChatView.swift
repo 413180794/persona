@@ -57,19 +57,19 @@ struct LarkChatView: View {
                 if hasOlder {
                     Button { Task { await loadOlder() } } label: {
                         Group { if loadingOlder { ProgressView().controlSize(.small) } else { Text("加载更早的消息").lineLimit(1) } }
-                            .font(.caption.weight(.medium))
+                            .font(Theme.Font.label.weight(.medium))
                             .frame(maxWidth: .infinity, minHeight: 32)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(LarkColor.blue)
                 }
-                if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger).padding(.bottom, 8) }
+                if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, 8) }
                 ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
                     let prev = i > 0 ? messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
                         if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
                         if Self.startsDay(m, after: prev) {
-                            Text(Self.dayLabel(m.createdAt)).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+                            Text(Self.dayLabel(m.createdAt)).font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 10)
                         }
                         LarkMessageRow(message: m, grouped: Self.continues(m, after: prev), isGroup: conversation.isGroup, feedID: conversation.id)
@@ -148,7 +148,7 @@ struct LarkChatView: View {
                 .padding(.vertical, 9)
                 .surface(interactive: true, in: .rect(cornerRadius: 20, style: .continuous))
             Button { Task { await send() } } label: {
-                Group { if sending { ProgressView().tint(.white) } else { Image(systemName: "arrow.up").font(.body.weight(.bold)) } }
+                Group { if sending { ProgressView().tint(.white) } else { Image(systemName: "arrow.up").font(Theme.Font.heading) } }
                     .frame(width: 36, height: 36)
             }
             .themedButton(prominent: true)
@@ -175,7 +175,7 @@ struct LarkChatView: View {
             Button { Task { await jumpToLatest() } } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold))
-                    if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(.system(size: 13, weight: .medium)).lineLimit(1) }
+                    if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(Theme.Font.caption.weight(.medium)).lineLimit(1) }
                 }
                 .foregroundStyle(LarkColor.blue)
                 .padding(.horizontal, n > 0 ? 12 : 0)
@@ -193,7 +193,7 @@ struct LarkChatView: View {
     @ViewBuilder private var mentionButton: some View {
         if let mention, !seen.contains(mention) {
             Button { Task { await jump(to: mention) } } label: {
-                Label("有人@你", systemImage: "at").font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Label("有人@你", systemImage: "at").font(Theme.Font.caption.weight(.medium)).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
                     .padding(.horizontal, 12).frame(minHeight: 34)
                     .surface(interactive: true, in: .capsule)
@@ -433,7 +433,7 @@ struct LarkNewMessagesDivider: View {
     var body: some View {
         HStack(spacing: 10) {
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
-            Text("以下为新消息").font(.caption.weight(.medium)).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
+            Text("以下为新消息").font(Theme.Font.label.weight(.medium)).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: 1)
         }
         .padding(.vertical, 10)
@@ -459,7 +459,7 @@ struct LarkMessageRow: View {
         let m = message
         if m.isSystem {
             Group {
-                if let p = m.parts?.first, p.metaBool("system") { LarkSystemText(part: p) } else { Text(m.text).font(.caption).foregroundStyle(.secondary) }
+                if let p = m.parts?.first, p.metaBool("system") { LarkSystemText(part: p) } else { Text(m.text).font(Theme.Font.label).foregroundStyle(.secondary) }
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -476,13 +476,13 @@ struct LarkMessageRow: View {
                     }
                 }
                 .frame(width: 34, height: grouped ? 1 : 34)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     if !grouped && isGroup {
                         HStack(spacing: 4) {
-                            Text(m.senderName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(m.senderName).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 .onTapGesture { showProfile() }
                             if m.senderType == "bot" {
-                                Text("机器人").font(.system(size: 9, weight: .semibold)).foregroundStyle(LarkColor.blue)
+                                Text("机器人").font(Theme.Font.label.weight(.semibold)).foregroundStyle(LarkColor.blue)
                                     .padding(.horizontal, 4).padding(.vertical, 1).background(LarkColor.blue.opacity(0.12), in: .rect(cornerRadius: 3))
                             }
                         }
@@ -507,11 +507,11 @@ struct LarkMessageRow: View {
         let m = message
         let parts = m.parts ?? []
         if m.recalled {
-            Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(.footnote).foregroundStyle(.tertiary).italic()
+            Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8, style: .continuous))
         } else if parts.isEmpty {
-            bubble { Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(.system(size: 16)) }
+            bubble { Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : m.text).font(Theme.Font.body) }
         } else if LarkPartsView.isBare(parts) {
             if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, 4) }
             LarkPartsView(parts: parts)
@@ -520,7 +520,7 @@ struct LarkMessageRow: View {
                 .contextMenu { menu }
         } else {
             bubble {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
@@ -592,7 +592,7 @@ struct LarkMessageRow: View {
                 if m.edited == true { Text("已编辑") }
                 if let d = m.createdAt { Text(d.formatted(date: .omitted, time: .shortened)) }
             }
-            .font(.caption2)
+            .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .sheet(isPresented: $showThread) { LarkThreadView(root: m, isGroup: isGroup, feedID: feedID) }
@@ -646,11 +646,11 @@ struct LarkThreadView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
                     HStack {
-                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                        Text(loading ? "加载回复…" : "\(replies.count) 条回复").font(Theme.Font.label.weight(.medium)).foregroundStyle(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
                     }
                     .padding(.vertical, 12)
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger) }
+                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger) }
                     ForEach(Array(replies.enumerated()), id: \.element.id) { i, m in
                         let prev = i > 0 ? replies[i - 1] : nil
                         LarkMessageRow(message: m, grouped: LarkChatView.continues(m, after: prev), isGroup: isGroup, feedID: feedID, inThread: true)
@@ -689,7 +689,7 @@ struct LarkReplyQuote: View {
         HStack(spacing: 6) {
             Capsule().fill(Color.primary.opacity(0.2)).frame(width: 2.5)
             Text(reply.recalled == true ? "\(reply.senderName)：消息已撤回" : "\(reply.senderName)：\(Fmt.plain(reply.text))")
-                .font(.system(size: 13))
+                .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
@@ -708,10 +708,10 @@ struct LarkReactionChip: View {
             if let url = media.emoji(reaction.key)?.url {
                 LarkRemoteImage(url: url, maxPixel: 64, contentMode: .fit).frame(width: 17, height: 17)
             } else {
-                Text(LarkMedia.labelFallback(reaction.key, text: nil)).font(.caption2)
+                Text(LarkMedia.labelFallback(reaction.key, text: nil)).font(Theme.Font.label)
             }
             Text(users.isEmpty || users.count > 3 ? "\(reaction.count)" : users.joined(separator: "、"))
-                .font(.caption)
+                .font(Theme.Font.label)
                 .foregroundStyle(reaction.mine == true ? LarkColor.blue : .secondary)
                 .lineLimit(1)
         }

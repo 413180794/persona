@@ -90,14 +90,14 @@ struct Chip: View {
         Group {
             if let symbol {
                 HStack(spacing: 3) {
-                    Image(systemName: symbol).font(.caption2.weight(.semibold))
+                    Image(systemName: symbol).font(Theme.Font.label.weight(.semibold))
                     Text(text).lineLimit(1)
                 }
             } else {
                 Text(text).lineLimit(1)
             }
         }
-        .font(.caption.weight(.medium))
+        .font(Theme.Font.label.weight(.medium))
         .foregroundStyle(words)
         .padding(.horizontal, 7)
         .padding(.vertical, 2.5)
@@ -140,7 +140,7 @@ struct CountBadge: View {
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(.caption2.weight(.bold).monospacedDigit())
+            .font(Theme.Font.label.weight(.bold).monospacedDigit())
             .contentTransition(.numericText(value: Double(count)))
             .foregroundStyle(words)
             .padding(.horizontal, 6)
@@ -171,7 +171,7 @@ struct StatusLabel: View {
         HStack(spacing: 5) {
             StatusDot(state: state, size: 7)
             Text(state.label)
-                .font(.caption.weight(.semibold))
+                .font(Theme.Font.label.weight(.semibold))
                 .foregroundStyle(state.tone.text)
         }
     }
@@ -184,14 +184,14 @@ struct EmptyStateView: View {
     var action: (title: String, run: () -> Void)?
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Theme.Space.l) {
             Image(systemName: symbol)
-                .font(.largeTitle.weight(.light)).imageScale(.large)
+                .font(Theme.Font.display).imageScale(.large)
                 .foregroundStyle(Theme.accent.gradient)
                 .symbolEffect(.bounce, value: title)
-            Text(title).font(.title3.weight(.semibold))
+            Text(title).font(Theme.Font.title)
             Text(message)
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let action {
@@ -253,31 +253,31 @@ struct CloseAgentSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "xmark")
-                .font(.title2.weight(.bold))
+                .font(Theme.Font.title)
                 .foregroundStyle(Theme.danger)
                 .frame(width: 56, height: 56)
                 .background(Theme.danger.opacity(0.12), in: .circle)
                 .padding(.top, 28)
             Text("关闭这个 Agent？")
-                .font(.title3.weight(.bold))
+                .font(Theme.Font.title)
                 .padding(.top, 14)
-            VStack(spacing: 4) {
-                Text(name).font(.headline).lineLimit(2).multilineTextAlignment(.center)
+            VStack(spacing: Theme.Space.xs) {
+                Text(name).font(Theme.Font.heading).lineLimit(2).multilineTextAlignment(.center)
                 HStack(spacing: 6) {
                     Text(session.agentLabel)
-                        .font(.caption.weight(.semibold))
+                        .font(Theme.Font.label.weight(.semibold))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .overlay(Capsule().stroke(Color.secondary.opacity(0.4), lineWidth: 1))
                     if !place.isEmpty { Text(place).lineLimit(1) }
                 }
-                .font(.subheadline)
+                .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
             }
             .padding(.top, 10)
             .padding(.horizontal, 24)
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 fact("power", "退出 \(session.agentLabel)，关掉它在 herdr 里的标签页（分屏时只关这个窗格）")
                 fact("clock.arrow.circlepath", "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊")
             }
@@ -287,7 +287,7 @@ struct CloseAgentSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 20)
 
-            VStack(spacing: 10) {
+            VStack(spacing: Theme.Space.m) {
                 Button {
                     closing = true
                     Haptics.tap()
@@ -299,14 +299,14 @@ struct CloseAgentSheet: View {
                     Group {
                         if closing { ProgressView().tint(.white) } else { Text("关闭 Agent").lineLimit(1) }
                     }
-                    .font(.body.weight(.semibold))
+                    .font(Theme.Font.heading)
                     .frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .themedButton(prominent: true)
                 .tint(Theme.danger)
                 .disabled(closing)
                 Button { dismiss() } label: {
-                    Text("取消").lineLimit(1).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
+                    Text("取消").lineLimit(1).font(Theme.Font.heading).frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .themedButton()
                 .disabled(closing)
@@ -325,9 +325,9 @@ struct CloseAgentSheet: View {
 
     private func fact(_ symbol: String, _ text: String) -> some View {
         Label {
-            Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
         } icon: {
-            Image(systemName: symbol).font(.subheadline).foregroundStyle(.secondary).frame(width: 22)
+            Image(systemName: symbol).font(Theme.Font.secondary).foregroundStyle(.secondary).frame(width: 22)
         }
     }
 }

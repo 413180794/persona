@@ -34,6 +34,14 @@ nonisolated enum ChatRow: Identifiable, Hashable, Sendable {
     case image(Item)
     case recap(Item)
 
+    /// An answer or a notice that may be a model API error (`APIErrorInfo` decides).
+    var errorCandidate: Item? {
+        switch self {
+        case .assistant(let i), .notice(let i): i
+        default: nil
+        }
+    }
+
     var id: String {
         switch self {
         case .user(let i), .assistant(let i), .thinking(let i), .notice(let i), .image(let i), .recap(let i): i.id

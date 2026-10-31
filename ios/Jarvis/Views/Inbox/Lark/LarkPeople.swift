@@ -49,11 +49,11 @@ struct LarkProfileView: View {
 
     private var card: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 header
-                if let error { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+                if let error { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                 if let sig = profile?.description, !sig.isEmpty {
-                    Text(sig).font(.subheadline).foregroundStyle(.secondary).lineLimit(6)
+                    Text(sig).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(6)
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 12, style: .continuous))
                 }
@@ -73,7 +73,7 @@ struct LarkProfileView: View {
     private var displayName: String { profile?.alias.flatMap { $0.isEmpty ? nil : $0 } ?? profile?.displayName ?? person.name }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             ZStack(alignment: .bottomLeading) {
                 Group {
                     if let cover = profile?.coverUrl, !cover.isEmpty {
@@ -91,15 +91,15 @@ struct LarkProfileView: View {
                     .offset(y: 40)
             }
             .padding(.bottom, 40)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: 8) {
-                    Text(displayName).font(.title2.weight(.bold)).lineLimit(2)
+                    Text(displayName).font(Theme.Font.title).lineLimit(2)
                     if profile?.userType == "bot" { LarkNameTag(text: "机器人") }
                     if profile?.relation?.external == true { LarkNameTag(text: "外部") }
                 }
                 let subtitle = [profile?.enName, profile?.alias?.isEmpty == false ? profile?.displayName : nil, profile?.groupNickname.map { "群昵称：\($0)" }]
                     .compactMap { $0 }.filter { !$0.isEmpty && $0 != displayName }
-                if !subtitle.isEmpty { Text(subtitle.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary) }
+                if !subtitle.isEmpty { Text(subtitle.joined(separator: " · ")).font(Theme.Font.secondary).foregroundStyle(.secondary) }
                 HStack(spacing: 6) {
                     if let s = profile?.workStatus?.status, s == 1 || s == 2 { chip(s == 1 ? "请假中" : "会议中", color: .orange) }
                     if let t = profile?.customStatus?.title, !t.isEmpty { chip(t, color: LarkColor.blue) }
@@ -108,13 +108,13 @@ struct LarkProfileView: View {
                         chip("当地时间 " + Date.now.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: zone)), color: .gray)
                     }
                 }
-                if profile?.relation?.external == true, let t = profile?.relation?.tenantName { Text(t).font(.footnote).foregroundStyle(.secondary) }
+                if profile?.relation?.external == true, let t = profile?.relation?.tenantName { Text(t).font(Theme.Font.caption).foregroundStyle(.secondary) }
             }
         }
     }
 
     private func chip(_ text: String, color: Color) -> some View {
-        Text(text).font(.caption.weight(.medium)).lineLimit(1).foregroundStyle(color)
+        Text(text).font(Theme.Font.label.weight(.medium)).lineLimit(1).foregroundStyle(color)
             .padding(.horizontal, 8).padding(.vertical, 3).background(color.opacity(0.12), in: .capsule)
     }
 
@@ -133,7 +133,7 @@ struct LarkProfileView: View {
             }
         } label: {
             Group { if opening { ProgressView() } else { Label("发消息", systemImage: "bubble.left.fill").lineLimit(1) } }
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.Font.secondary.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.borderedProminent)
@@ -161,7 +161,7 @@ struct LarkProfileView: View {
                 if all.count > 5 {
                     Divider()
                     Button { withAnimation(.snappy) { showAll.toggle() } } label: {
-                        Text(showAll ? "收起" : "查看更多信息").font(.subheadline).foregroundStyle(LarkColor.blue).lineLimit(1)
+                        Text(showAll ? "收起" : "查看更多信息").font(Theme.Font.secondary).foregroundStyle(LarkColor.blue).lineLimit(1)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.plain)
@@ -183,7 +183,7 @@ struct LarkProfileView: View {
         let leader = f.url.flatMap { u in u.hasPrefix("lark://client/profile") ? URLComponents(string: u)?.queryItems?.first { $0.name == "uid" }?.value : nil }
         let link = f.url.flatMap { $0.hasPrefix("http") ? URL(string: $0) : nil }
         return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label).font(.subheadline).foregroundStyle(.secondary).frame(width: 76, alignment: .leading).lineLimit(2)
+            Text(label).font(Theme.Font.secondary).foregroundStyle(.secondary).frame(width: 76, alignment: .leading).lineLimit(2)
             Group {
                 if let leader {
                     Button { push(.profile(LarkPersonRef(id: leader, name: value))) } label: { Text(value).foregroundStyle(LarkColor.blue) }.buttonStyle(.plain)
@@ -193,7 +193,7 @@ struct LarkProfileView: View {
                     Text(value).textSelection(.enabled)
                 }
             }
-            .font(.subheadline)
+            .font(Theme.Font.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 11)

@@ -100,33 +100,33 @@ struct MailDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(summary.subject?.isEmpty == false ? summary.subject! : "（无主题）").font(.title2.weight(.bold))
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
+                Text(summary.subject?.isEmpty == false ? summary.subject! : "（无主题）").font(Theme.Font.title)
                 HStack(alignment: .top, spacing: 12) {
                     Circle().fill(Theme.accent.opacity(0.15)).frame(width: 40, height: 40)
-                        .overlay(Text(String((summary.from?.display ?? "?").prefix(1))).font(.headline).foregroundStyle(Theme.accent))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(summary.from?.display ?? "").font(.subheadline.weight(.semibold))
-                        Text(summary.from?.email ?? "").font(.caption).foregroundStyle(.secondary)
+                        .overlay(Text(String((summary.from?.display ?? "?").prefix(1))).font(Theme.Font.heading).foregroundStyle(Theme.accent))
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        Text(summary.from?.display ?? "").font(Theme.Font.secondary.weight(.semibold))
+                        Text(summary.from?.email ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                         if let to = message?.to, !to.isEmpty {
-                            Text("收件人：" + to.map(\.display).joined(separator: "，")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            Text("收件人：" + to.map(\.display).joined(separator: "，")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
                     Spacer()
-                    Text(summary.date.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "").font(.caption).foregroundStyle(.secondary)
+                    Text(summary.date.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 Divider()
                 if let m = message {
                     if let text = m.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(text).font(.body).textSelection(.enabled)
+                        Text(text).font(Theme.Font.body).lineHeight(.body).textSelection(.enabled)
                     } else if let html = m.html, !html.isEmpty {
                         HTMLView(html: html, height: $webHeight).frame(height: webHeight)
                     }
                     if let atts = m.attachments, !atts.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Theme.Space.sm) {
                             ForEach(Array(atts.enumerated()), id: \.offset) { _, a in
                                 Label("\(a.filename ?? "附件")  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: "paperclip")
-                                    .font(.footnote)
+                                    .font(Theme.Font.caption)
                             }
                         }
                         .card(padding: 12)
@@ -274,7 +274,7 @@ struct ComposeView: View {
                 Section {
                     TextField("正文", text: $draft.body, axis: .vertical).lineLimit(10...40)
                 }
-                if let error { Text(error).foregroundStyle(Theme.danger).font(.footnote) }
+                if let error { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
             .themedPage()
             .navigationTitle("写邮件")
@@ -326,11 +326,11 @@ struct MailAccountsView: View {
                     ForEach(accounts) { a in
                         HStack {
                             Image(systemName: a.provider == "gmail" ? "g.circle.fill" : a.provider == "feishu" ? "paperplane.circle.fill" : "envelope.circle.fill")
-                                .font(.title2).foregroundStyle(Theme.accent)
+                                .font(Theme.Font.title).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading) {
-                                Text(a.email).font(.body.weight(.medium))
+                                Text(a.email).font(Theme.Font.heading)
                                 Text(a.status == "error" ? (a.error ?? "错误") : a.auth == "oauth2" ? "Gmail · Google 账号登录" : "\(a.provider == "feishu" ? "飞书邮箱" : (a.imapHost ?? ""))")
-                                    .font(.caption).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
+                                    .font(Theme.Font.label).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
                     }
@@ -446,7 +446,7 @@ struct AddMailAccountView: View {
                         TextField("SMTP 端口", text: $smtpPort).keyboardType(.numberPad)
                     }
                 }
-                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(.footnote) } }
+                if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
             }
             .themedPage()
             .navigationTitle("添加邮箱")

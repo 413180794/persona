@@ -5,7 +5,9 @@ import SwiftUI
 extension MarkdownUI.Theme {
     /// Reading-first markdown: system body text, roomy lists, quiet code blocks.
     /// The base size is body's (17); MarkdownUI scales it with Dynamic Type (a ScaledMetric relative to .body), so a
-    /// reply and the user's bubble are one size at every setting.
+    /// reply and the user's bubble are one size at every setting. Headings follow `Theme.Font`: the first is the title
+    /// level (22), the others the heading level (body size, semibold), told apart by the space above them; code
+    /// blocks are the code level (13). Paragraphs have the body's line height (1.45: 0.26 em over SF's own 1.19).
     @MainActor static let jarvis = MarkdownUI.Theme()
         .text { FontSize(17) }
         .code {
@@ -19,20 +21,20 @@ extension MarkdownUI.Theme {
             config.label.markdownMargin(top: 16, bottom: 8).markdownTextStyle { FontWeight(.bold); FontSize(.em(1.3)) }
         }
         .heading2 { config in
-            config.label.markdownMargin(top: 14, bottom: 6).markdownTextStyle { FontWeight(.bold); FontSize(.em(1.15)) }
+            config.label.markdownMargin(top: 14, bottom: 6).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
         }
         .heading3 { config in
-            config.label.markdownMargin(top: 12, bottom: 4).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1.05)) }
+            config.label.markdownMargin(top: 12, bottom: 4).markdownTextStyle { FontWeight(.semibold); FontSize(.em(1)) }
         }
         .paragraph { config in
-            config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.2)).markdownMargin(top: 0, bottom: 10)
+            config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.26)).markdownMargin(top: 0, bottom: 10)
         }
         .listItem { config in config.label.markdownMargin(top: .em(0.2)) }
         .codeBlock { config in
             ScrollView(.horizontal, showsIndicators: false) {
                 config.label
                     .relativeLineSpacing(.em(0.2))
-                    .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(0.8)) }
+                    .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(13.0 / 17)) }
                     .padding(12)
             }
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
@@ -89,7 +91,7 @@ struct UserBubble: View {
         let parsed = (refs: d.refs, rest: d.text)
         let shown = d.shown
         let images = d.images
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             if !parsed.refs.isEmpty { ContextCards(refs: parsed.refs) }
             if !images.isEmpty, let loadImage {
                 AttachedImages(paths: images, load: loadImage)
@@ -98,7 +100,7 @@ struct UserBubble: View {
                 HStack {
                     Spacer(minLength: 48)
                     Text(shown)
-                        .font(.body)
+                        .font(Theme.Font.body).lineHeight(.body)
                         .foregroundStyle(Theme.userBubbleText)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -159,13 +161,13 @@ struct PeerMessage: View {
     var from: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Label("来自 \(from)", systemImage: "arrow.left.arrow.right.circle")
-                .font(.caption.weight(.semibold))
+                .font(Theme.Font.label.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Text(item.text ?? "")
-                .font(.callout)
+                .font(Theme.Font.body).lineHeight(.body)
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -187,7 +189,7 @@ struct PendingBubble: View {
     var discard: () -> Void
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             if !msg.images.isEmpty {
                 HStack(spacing: 6) {
                     Spacer(minLength: 48)
@@ -202,14 +204,14 @@ struct PendingBubble: View {
             HStack(alignment: .bottom, spacing: 8) {
                 Spacer(minLength: 40)
                 switch msg.state {
-                case .sending: Image(systemName: "clock").font(.caption2).foregroundStyle(.tertiary)
+                case .sending: Image(systemName: "clock").font(Theme.Font.label).foregroundStyle(.tertiary)
                 case .sent: EmptyView()
                 case .waiting:
                     Menu {
                         Button(action: retry) { Label("现在重试", systemImage: "arrow.clockwise") }
                         Button(role: .destructive, action: discard) { Label("不发了", systemImage: "trash") }
                     } label: {
-                        Image(systemName: "clock").font(.footnote).foregroundStyle(.secondary)
+                        Image(systemName: "clock").font(Theme.Font.caption).foregroundStyle(.secondary)
                             .frame(width: 24, height: 24)
                             .contentShape(.rect)
                     }
@@ -219,12 +221,12 @@ struct PendingBubble: View {
                         Button(action: retry) { Label("重发", systemImage: "arrow.clockwise") }
                         Button(role: .destructive, action: discard) { Label("删除", systemImage: "trash") }
                     } label: {
-                        Image(systemName: "exclamationmark.circle.fill").font(.body).foregroundStyle(Theme.danger)
+                        Image(systemName: "exclamationmark.circle.fill").font(Theme.Font.body).foregroundStyle(Theme.danger)
                     }
                     .accessibilityLabel("发送失败，重发或删除")
                 }
                 Text(ContextRef.parse(msg.text).rest)
-                    .font(.body)
+                    .font(Theme.Font.body).lineHeight(.body)
                     .foregroundStyle(Theme.userBubbleText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -232,7 +234,7 @@ struct PendingBubble: View {
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {
-                Text("连上后自动发送").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text("连上后自动发送").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     .transition(.opacity)
             }
         }
@@ -249,13 +251,13 @@ struct MergedUserBubble: View {
         let texts = items.map { UserBubble.display(ContextRef.parse($0.text ?? "").rest) }.filter { !$0.isEmpty }
         HStack {
             Spacer(minLength: 48)
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
                     if n > 0 {
                         Capsule().fill(Theme.userBubbleText.opacity(0.22)).frame(width: 36, height: 1.5)
                             .frame(maxWidth: .infinity) // centered in the bubble
                     }
-                    Text(t).font(.body).foregroundStyle(Theme.userBubbleText)
+                    Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText)
                 }
             }
             .padding(.horizontal, 14)
@@ -364,7 +366,7 @@ struct AssistantText: View {
     @Environment(\.openFile) private var openFile
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             let d = RowMemo.assistant(item.id) { _ in AssistantRowText(item.text ?? "") } // once per message
             Markdown(d.markdown)
                 .task(id: item.id) { await Self.preloadLinks(item) }
@@ -406,17 +408,17 @@ struct ThinkingRow: View {
     }
 
     private var plain: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {
                 withAnimation(.snappy) { open.toggle() }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "brain").font(.caption)
+                    Image(systemName: "brain").font(Theme.Font.label)
                     Text(open ? "思考过程" : ToolPresentation.firstLine(item.text ?? ""))
-                        .font(.caption)
+                        .font(Theme.Font.label)
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption2).rotationEffect(.degrees(open ? 90 : 0))
+                    Image(systemName: "chevron.right").font(Theme.Font.label).rotationEffect(.degrees(open ? 90 : 0))
                 }
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, compact ? 10 : 0)
@@ -426,7 +428,7 @@ struct ThinkingRow: View {
             .buttonStyle(.plain)
             if open {
                 Text(item.text ?? "")
-                    .font(.footnote)
+                    .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .padding(.leading, 10)
@@ -468,9 +470,9 @@ struct NoticeRow: View {
             withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
         } label: {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle").font(.caption).foregroundStyle(.tertiary)
+                Image(systemName: "info.circle").font(Theme.Font.label).foregroundStyle(.tertiary)
                 Text(item.text ?? "")
-                    .font(.caption)
+                    .font(Theme.Font.label)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(expanded ? nil : 4)
@@ -487,7 +489,7 @@ struct NoticeRow: View {
 
     private var plain: some View {
         Text(item.text ?? "")
-            .font(.caption)
+            .font(Theme.Font.label)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 12)
@@ -504,7 +506,7 @@ struct NoticeRow: View {
                 .foregroundStyle(w.failed ? Theme.danger : Theme.accent)
             Text(w.text).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
         }
-        .font(.caption)
+        .font(Theme.Font.label)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Theme.Fill.well, in: .capsule)
@@ -559,9 +561,9 @@ struct WakeChip: View {
                 Text(live ? "后台任务完成 · 正在处理" : summary?.text ?? "\(notices.count) 个后台任务完成")
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold))
             }
-            .font(.footnote)
+            .font(Theme.Font.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -583,7 +585,7 @@ struct WakeDrawer<Content: View>: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
                     content()
                 }
                 .padding(16)
@@ -613,9 +615,9 @@ struct RecapCard: View {
                 Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
                 Text("离开期间回顾").lineLimit(1)
                 if let ts = item.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
-                Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                Image(systemName: "chevron.right").font(Theme.Font.label.weight(.semibold))
             }
-            .font(.footnote)
+            .font(Theme.Font.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -645,18 +647,18 @@ struct RecapStrip: View {
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Capsule().fill(Theme.accent).frame(width: 3)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
-                        Text("离开期间回顾").font(.footnote.weight(.semibold)).lineLimit(1)
+                        Text("离开期间回顾").font(Theme.Font.caption.weight(.semibold)).lineLimit(1)
                         if let ts = item.ts, ts.isMeaningful {
-                            Text("· " + Fmt.relative(ts)).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                            Text("· " + Fmt.relative(ts)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 4)
-                        Image(systemName: "xmark").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+                        Image(systemName: "xmark").font(Theme.Font.label.weight(.bold)).foregroundStyle(.tertiary)
                     }
                     Text(Fmt.plain(item.text ?? ""))
-                        .font(.subheadline)
+                        .font(Theme.Font.secondary)
                         .foregroundStyle(.primary)
                         .lineLimit(8)
                         .multilineTextAlignment(.leading)
@@ -683,9 +685,9 @@ struct RecapDrawer: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
                     if let ts = item.ts, ts.isMeaningful {
-                        Text("写于 " + Fmt.relative(ts)).font(.footnote).foregroundStyle(.secondary)
+                        Text("写于 " + Fmt.relative(ts)).font(Theme.Font.caption).foregroundStyle(.secondary)
                     }
                     Markdown(Links.markdown(item.text ?? ""))
                         .markdownTheme(.jarvis)

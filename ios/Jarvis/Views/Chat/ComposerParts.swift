@@ -21,7 +21,7 @@ struct ComposerRow<MenuItems: View>: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             Menu { menu() } label: {
-                Image(systemName: "plus").font(.body.weight(.semibold)).frame(width: Self.glyph, height: Self.glyph)
+                Image(systemName: "plus").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
             }
             .themedButton()
             .clipShape(.circle)
@@ -36,7 +36,7 @@ struct ComposerRow<MenuItems: View>: View {
 
             if let stop, !canSend {
                 Button(action: stop) {
-                    Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: Self.glyph, height: Self.glyph)
+                    Image(systemName: "stop.fill").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
                 .themedButton(prominent: true)
                 .tint(Theme.danger)
@@ -44,7 +44,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .accessibilityLabel("中断")
             } else {
                 Button(action: send) {
-                    Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: Self.glyph, height: Self.glyph)
+                    Image(systemName: "arrow.up").font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
                 .themedButton(prominent: true)
                 .clipShape(.circle)
@@ -69,7 +69,7 @@ struct ComposerImages: View {
                         .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         .overlay(alignment: .bottomLeading) {
                             if edit != nil {
-                                Image(systemName: "pencil.tip.crop.circle.fill").font(.caption).foregroundStyle(.white)
+                                Image(systemName: "pencil.tip.crop.circle.fill").font(Theme.Font.label).foregroundStyle(.white)
                                     .shadow(radius: 2).padding(3)
                             }
                         }

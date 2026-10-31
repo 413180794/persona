@@ -112,10 +112,10 @@ struct LinkSheet: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : target.url.host ?? "网页") : title)
-                    .font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(target.url.host ?? target.url.absoluteString).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(Theme.Font.secondary.weight(.semibold)).lineLimit(1)
+                Text(target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
             if isFeishuDoc {
@@ -131,7 +131,7 @@ struct LinkSheet: View {
             Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical) }
                 .accessibilityLabel("关闭")
         }
-        .font(.title3)
+        .font(Theme.Font.title)
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 8)
@@ -268,15 +268,15 @@ struct ContextCards: View {
     @Environment(\.openLink) private var openLink
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             ForEach(refs) { r in
                 Button { if let u = URL(string: r.url) { openLink?(u) } } label: {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         Label(r.kind == "edit" ? "要改的内容 · \(r.title)" : "上下文 · \(r.title)",
                               systemImage: r.kind == "edit" ? "sparkles" : "text.quote")
-                            .font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
-                        Text(r.text).font(.footnote).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
-                        Text(r.host).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                            .font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1)
+                        Text(r.text).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.leading)
+                        Text(r.host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                     }
                     .padding(10)
                     .frame(maxWidth: 300, alignment: .leading)
@@ -299,9 +299,9 @@ struct ContextChips: View {
             HStack(spacing: 6) {
                 ForEach(refs) { r in
                     HStack(spacing: 5) {
-                        Image(systemName: "text.quote").font(.caption2)
-                        Text(r.text == "（整篇）" ? r.title : String(r.text.prefix(24))).font(.caption).lineLimit(1)
-                        Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
+                        Image(systemName: "text.quote").font(Theme.Font.label)
+                        Text(r.text == "（整篇）" ? r.title : String(r.text.prefix(24))).font(Theme.Font.label).lineLimit(1)
+                        Button { refs.removeAll { $0.id == r.id } } label: { Image(systemName: "xmark").font(Theme.Font.label.weight(.bold)) }
                             .buttonStyle(.plain)
                             .accessibilityLabel("移除这个上下文")
                     }

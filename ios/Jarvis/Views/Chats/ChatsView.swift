@@ -207,7 +207,7 @@ struct ChatsView: View {
                             HStack {
                                 Label("全部标为已读", systemImage: "checkmark.circle").lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) 个完成未看").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                         .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
@@ -401,7 +401,7 @@ struct ChatsView: View {
                                 withAnimation(.snappy) { _ = expandedIdle.remove(g.id) }
                             } label: {
                                 Label("收起空闲的 \(idle.count) 个", systemImage: "chevron.up")
-                                    .font(.subheadline.weight(.medium))
+                                    .font(Theme.Font.secondary.weight(.medium))
                                     .lineLimit(1)
                             }
                         }
@@ -429,7 +429,7 @@ struct ChatsView: View {
             .buttonStyle(.plain)
             Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }) } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.body)
+                    .font(Theme.Font.body)
                     .foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
@@ -548,7 +548,7 @@ struct ChatsView: View {
                     Button {
                         withAnimation(.snappy) { _ = expandedIdle.remove(key) }
                     } label: {
-                        Label("收起\(label)的 \(rows.count) 个", systemImage: "chevron.up").font(.subheadline.weight(.medium)).lineLimit(1)
+                        Label("收起\(label)的 \(rows.count) 个", systemImage: "chevron.up").font(Theme.Font.secondary.weight(.medium)).lineLimit(1)
                     }
                 }
             } else {
@@ -653,9 +653,9 @@ struct ChatsView: View {
                 HStack(spacing: 5) {
                     Image(systemName: m.symbol)
                     Text(m.name).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                    Image(systemName: "chevron.down").font(Theme.Font.label.weight(.bold))
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.Font.secondary.weight(.semibold))
                 .fixedSize()
             } else {
                 Image(systemName: grouping == .space ? "line.3.horizontal.decrease" : grouping.symbol)
@@ -706,7 +706,7 @@ struct QuickFilterBar: View {
                             .contentTransition(.numericText(value: Double(n)))
                     }
                 }
-                .font(.subheadline.weight(on ? .semibold : .medium))
+                .font(Theme.Font.secondary.weight(on ? .semibold : .medium))
                 .lineLimit(1)
                 .fixedSize()
                 .foregroundStyle(on ? tint : Color.primary)
@@ -752,7 +752,7 @@ struct FoldChevron: View {
     var folded: Bool
     var body: some View {
         Image(systemName: "chevron.down")
-            .font(.caption2.weight(.bold))
+            .font(Theme.Font.label.weight(.bold))
             .foregroundStyle(.tertiary)
             .rotationEffect(.degrees(folded ? -90 : 0))
             .animation(.snappy, value: folded)
@@ -787,11 +787,11 @@ struct SpaceHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(group.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
-            if pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-            if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+            Text(group.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+            if pinned { Image(systemName: "pin.fill").font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
+            if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
             if showMachine, let machine {
-                Text(machine.name).font(.caption).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
+                Text(machine.name).font(Theme.Font.label).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
             Spacer(minLength: 4)
             StateCounts(group: group).opacity(muted ? 0.6 : 1)
@@ -823,7 +823,7 @@ struct StateCounts: View {
                 if n > 0 {
                     HStack(spacing: 3) {
                         Circle().fill(st.color).frame(width: 6, height: 6)
-                        Text("\(n)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
+                        Text("\(n)").font(Theme.Font.label.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
                             .contentTransition(.numericText(value: Double(n)))
                     }
                     .accessibilityElement(children: .ignore)
@@ -835,7 +835,7 @@ struct StateCounts: View {
             if idle > 0 {
                 HStack(spacing: 3) {
                     Circle().fill(Color.secondary.opacity(0.45)).frame(width: 6, height: 6)
-                    Text("\(idle)").font(.caption2.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(idle)").font(Theme.Font.label.weight(.semibold).monospacedDigit()).foregroundStyle(.secondary)
                         .contentTransition(.numericText(value: Double(idle)))
                 }
                 .accessibilityLabel("\(idle) 个空闲")
@@ -866,28 +866,28 @@ nonisolated struct SlotRow: View, Equatable {
         #endif
         HStack(alignment: .top, spacing: 10) {
             StatusDot(state: session.state, size: 9).padding(.top, 6)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(session.displayTitle)
-                        .font(.body.weight(session.state == .unread ? .bold : .semibold))
+                        .font(Theme.Font.body.weight(session.state == .unread ? .bold : .semibold))
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .fixedSize()
                 }
                 if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
-                    Text(last).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                    Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                 }
                 HStack(spacing: 4) {
                     meta.lineLimit(1)
                     if muted {
-                        Image(systemName: "bell.slash.fill").font(.caption2).accessibilityLabel("已屏蔽通知")
+                        Image(systemName: "bell.slash.fill").font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
                     }
                 }
-                .font(.footnote)
+                .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .padding(.top, 1)
             }
@@ -925,16 +925,16 @@ nonisolated struct CompactSlotRow: View, Equatable {
         HStack(spacing: 8) {
             StatusDot(state: session.state, size: 8)
             Text(session.displayTitle)
-                .font(.subheadline.weight(session.state == .unread ? .semibold : .regular))
+                .font(Theme.Font.secondary.weight(session.state == .unread ? .semibold : .regular))
                 .lineLimit(1)
                 .layoutPriority(1)
             Spacer(minLength: 4)
-            if muted { Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
+            if muted { Image(systemName: "bell.slash.fill").font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
             if let place, !place.isEmpty {
-                Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                Text(place).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
             }
             TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
             }
             .fixedSize()
         }
@@ -957,7 +957,7 @@ struct IdleFoldRow: View {
             Image(systemName: "chevron.down.circle")
                 .foregroundStyle(.secondary)
             Text("还有 \(sessions.count) 个空闲")
-                .font(.subheadline.weight(.medium))
+                .font(Theme.Font.secondary.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()
@@ -984,15 +984,15 @@ struct QuietSpaceRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(group.name).font(.body.weight(.medium)).lineLimit(1)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(group.name).font(Theme.Font.heading).lineLimit(1)
                 Text([showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Text(Fmt.relative(group.updatedAt)).font(.caption).foregroundStyle(.secondary)
+            Text(Fmt.relative(group.updatedAt)).font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }
 }
@@ -1106,9 +1106,9 @@ struct MachineSectionHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: machine.symbol).foregroundStyle(machine.online ? Theme.accent : .secondary)
-            Text(machine.name).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+            Text(machine.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             if !machine.online {
-                Text("离线").font(.caption2.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
+                Text("离线").font(Theme.Font.label.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
             }
             Spacer(minLength: 4)
             StateCounts(group: group)

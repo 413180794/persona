@@ -12,7 +12,7 @@ struct MachinesView: View {
 
     var body: some View {
         ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: Theme.Space.l) {
                     ForEach(model.machines) { m in
                         NavigationLink(value: MachineDetailRoute(id: m.id)) { MachineCard(machine: m) }
                             .buttonStyle(.plain)
@@ -44,14 +44,14 @@ struct MachineCard: View {
         let live = MachineDetailView.agents(model, machine.id)
         let working = live.filter { $0.state == .working }.count
         let waiting = live.filter { $0.state == .needsYou }.count
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             HStack(alignment: .top) {
                 OSBadge(system: machine.system, fallback: machine.symbol, size: 52, online: machine.online)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     // Color.primary / Color.secondary, not .primary / .secondary: as the details page's section header the
                     // list moves the hierarchical styles a step lighter (the name came out grey, the labels faint).
-                    Text(machine.name).font(.title3.weight(.semibold)).foregroundStyle(Color.primary)
-                    Text(machine.hostname ?? machine.sshHost ?? machine.id).font(.caption.monospaced()).foregroundStyle(Color.secondary)
+                    Text(machine.name).font(Theme.Font.title).foregroundStyle(Color.primary)
+                    Text(machine.hostname ?? machine.sshHost ?? machine.id).font(Theme.Font.code).foregroundStyle(Color.secondary)
                 }
                 Spacer()
                 Chip(text: machine.online ? "在线" : "离线", symbol: "circle.fill", look: machine.online ? .tint(Theme.positive) : .neutral)
@@ -72,20 +72,20 @@ struct MachineCard: View {
                 }
                 if machine.nodeMismatch == true {
                     Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
+                        .font(Theme.Font.label)
                         .foregroundStyle(Theme.cautionText)
                 }
             } else if let err = machine.error, !err.isEmpty {
-                Text(err).font(.caption).foregroundStyle(Color.secondary).lineLimit(3)
+                Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(3)
             }
         }
         .card(padding: 16)
     }
 
     private func stat(_ value: String, _ label: String, tint: Color? = nil) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title2.weight(.semibold).monospacedDigit()).foregroundStyle(tint ?? Color.primary)
-            Text(label).font(.caption).foregroundStyle(Color.secondary)
+        VStack(spacing: Theme.Space.xxs) {
+            Text(value).font(Theme.Font.title.monospacedDigit()).foregroundStyle(tint ?? Color.primary)
+            Text(label).font(Theme.Font.label).foregroundStyle(Color.secondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -117,7 +117,7 @@ struct MachineDetailView: View {
                     }
                 } header: {
                     // The card is the header, not a row: as a row it was tappable and pushed this page again.
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: Theme.Space.l) {
                         MachineCard(machine: machine)
                         Text("运行中的 Claude").padding(.leading, 16) // where the header text sits by default
                     }
@@ -133,13 +133,13 @@ struct MachineDetailView: View {
                     if !machine.online {
                         Text("机器离线，连上后显示").foregroundStyle(.secondary)
                     } else if let launcherError, launchers.isEmpty {
-                        Label(launcherError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger)
+                        Label(launcherError, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger)
                     }
                     ForEach(launchers) { l in
                         HStack {
-                            Text(l.name).font(.callout.monospaced())
+                            Text(l.name).font(Theme.Font.body.monospaced())
                             Spacer()
-                            Text(Fmt.model(l.model) ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(Fmt.model(l.model) ?? "").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                 } header: { Text(machine.online ? "启动器 \(launchers.count)" : "启动器") }

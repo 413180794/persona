@@ -27,14 +27,14 @@ struct MessageShareCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             HStack(spacing: 10) {
                 Image(systemName: message.isUser ? "person.fill" : Self.symbol(message.agent))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(message.isUser ? AnyShapeStyle(Color.gray) : AnyShapeStyle(Self.fill(message.agent)), in: .circle)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(message.isUser ? "我" : message.agent).font(.system(size: 15, weight: .semibold))
                     if !message.source.isEmpty {
                         Text(message.source).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
@@ -169,19 +169,19 @@ struct MessageShareSheet: View {
         HStack(spacing: 12) {
             Button { Task { await save() } } label: {
                 Label(saving ? "正在保存" : "保存图片", systemImage: "square.and.arrow.down")
-                    .font(.body.weight(.semibold)).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
+                    .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
             }
             .themedButton(prominent: false)
             .disabled(image == nil || saving)
             if let image {
                 ShareLink(item: Image(uiImage: image), preview: SharePreview("消息卡片", image: Image(uiImage: image))) {
                     Label("分享图片", systemImage: "square.and.arrow.up")
-                        .font(.body.weight(.semibold)).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
+                        .font(Theme.Font.heading).lineLimit(1).frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .themedButton(prominent: true)
             }
             ShareLink(item: message.text) {
-                Image(systemName: "text.alignleft").font(.body.weight(.semibold)).frame(width: 50, height: 50)
+                Image(systemName: "text.alignleft").font(Theme.Font.heading).frame(width: 50, height: 50)
             }
             .themedButton(prominent: false)
             .accessibilityLabel("分享文字")

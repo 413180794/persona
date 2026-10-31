@@ -866,6 +866,11 @@ final class AppModel {
         }
     }
 
+    /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it.
+    var textSize: TextSize = TextSize.current {
+        didSet { UserDefaults.standard.set(textSize.rawValue, forKey: "ui.textSize") }
+    }
+
     // MARK: Snapshot
 
     nonisolated private struct DevSnapshot: Codable, Sendable {

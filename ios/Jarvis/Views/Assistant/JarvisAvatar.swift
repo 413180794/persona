@@ -121,7 +121,7 @@ struct JarvisAvatar: View {
 struct JarvisAvatarGallery: View {
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: Theme.Space.l) {
                 panel(.light)
                 panel(.dark)
             }
@@ -132,10 +132,10 @@ struct JarvisAvatarGallery: View {
     }
 
     private func panel(_ scheme: ColorScheme) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             ForEach(JarvisAvatar.Design.allCases) { d in
                 HStack(spacing: 18) {
-                    Text(d.title).font(.subheadline.weight(.semibold)).frame(width: 40, alignment: .leading)
+                    Text(d.title).font(Theme.Font.secondary.weight(.semibold)).frame(width: 40, alignment: .leading)
                     JarvisAvatar(size: 28, design: d)
                     JarvisAvatar(size: 44, design: d)
                     JarvisAvatar(size: 84, design: d)
@@ -144,9 +144,9 @@ struct JarvisAvatarGallery: View {
             }
             HStack(spacing: 12) {
                 ForEach(AppStyle.allCases) { s in
-                    VStack(spacing: 4) {
+                    VStack(spacing: Theme.Space.xs) {
                         JarvisAvatar(size: 40, tint: Theme.accent(s))
-                        Text(s.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        Text(s.title).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }

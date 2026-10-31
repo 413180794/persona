@@ -321,7 +321,35 @@ struct ChatView: View {
                 out += t.trailing.map { .row($0) }
             }
         }
+        return Self.foldAPIErrors(out)
+    }
+
+    /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error
+    /// again right after, with nothing but a retry ("继续") between, folds into the first with a count.
+    static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count)
+        for line in lines {
+            guard case .row(let r) = line.content, let item = r.errorCandidate, let info = APIErrorInfo.parse(item.text) else {
+                out.append(line)
+                continue
+            }
+            if let last = out.lastIndex(where: { if case .apiError = $0.content { true } else { false } }),
+               case .apiError(let first, let prev, let n) = out[last].content, prev.signature == info.signature,
+               out[(last + 1)...].allSatisfy(isRetry) {
+                out.removeSubrange((last + 1)...)
+                out[last] = .apiError(item: first, info: info, count: n + 1)
+                continue
+            }
+            out.append(.apiError(item: item, info: info, count: 1))
+        }
         return out
+    }
+
+    private static func isRetry(_ line: ChatLine) -> Bool {
+        guard case .row(.user(let i)) = line.content else { return false }
+        let t = (i.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ["继续", "重试", "再试一次", "continue", "retry", "go on"].contains(t)
     }
 
     #if DEBUG
@@ -585,6 +613,12 @@ struct ChatView: View {
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
+        case .apiError(let item, let info, let count):
+            // 重试 only when the error is the last thing, the agent is not working (someone may have retried already) and
+            // trying again can help (not a login or a bad request).
+            APIErrorCard(info: info, count: count, at: item.ts,
+                         retry: info.transient != false && !status.isActive && currentLines().last?.id == line.id
+                             ? { model.sendNow(key, text: "继续") } : nil)
         case .userImages(_, let items):
             // Close to the bubble below it, like the photos on a message being sent (the list's spacing is 14).
             SentPhotos(images: items.compactMap(\.image)).padding(.bottom, -8)
@@ -595,11 +629,11 @@ struct ChatView: View {
                 toggleWork(id, fromHeader: true)
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "rectangle.split.1x2").font(.caption)
+                    Image(systemName: "rectangle.split.1x2").font(Theme.Font.label)
                     Text("已按 \(count) 条消息拆开 · 收起").lineLimit(1).fixedSize()
-                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                    Image(systemName: "chevron.up").font(Theme.Font.label.weight(.semibold))
                 }
-                .font(.footnote)
+                .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .contentShape(.rect)
@@ -622,10 +656,10 @@ struct ChatView: View {
             // The foot of the open work line's card.
             Button { toggleWork(group, fromHeader: false) } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.up").font(.caption2.weight(.semibold))
+                    Image(systemName: "chevron.up").font(Theme.Font.label.weight(.semibold))
                     Text("收起 \(count) 步").lineLimit(1).fixedSize()
                 }
-                .font(.footnote)
+                .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, WorkCardSlice.inset)
                 .padding(.vertical, 10)
@@ -924,7 +958,7 @@ struct ChatView: View {
     @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
                 Button(action: jumpToEnd) {
-                    Image(systemName: "arrow.down").font(.callout.weight(.semibold)).frame(width: 40, height: 40)
+                    Image(systemName: "arrow.down").font(Theme.Font.body.weight(.semibold)).frame(width: 40, height: 40)
                 }
                 .accessibilityLabel("回到最新")
                 .themedButton()
@@ -935,7 +969,7 @@ struct ChatView: View {
     }
 
     private var mainFooter: some View {
-            VStack(spacing: 10) {
+            VStack(spacing: Theme.Space.m) {
                 ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
                 #if DEBUG
                 if UserDefaults.standard.bool(forKey: "showSampleQuestion"), let ix = Interaction.sampleQuestion(key) {
@@ -1006,7 +1040,7 @@ struct ChatView: View {
         let queued = session?.queued ?? []
         let pending = store.pending.filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
                 // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
                 Color.clear
                     .frame(height: 1)
@@ -1016,7 +1050,7 @@ struct ChatView: View {
                         if visible { followsEnd = true } // back at the newest: follow new messages again
                     }
                 if let err = store.error {
-                    Label(err, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.danger).flippedBack()
+                    Label(err, systemImage: "exclamationmark.triangle").font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
                 }
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
                 // history they wait with the rest.
@@ -1225,7 +1259,7 @@ struct ChatView: View {
     private var compactChrome: some View {
         HStack(spacing: 0) {
             Button { back() } label: {
-                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
+                Image(systemName: "chevron.left").font(Theme.Font.secondary.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
@@ -1243,7 +1277,7 @@ struct ChatView: View {
                     }
                 }
                 .animation(.snappy, value: model.connection.shown)
-                .font(.footnote.weight(.semibold))
+                .font(Theme.Font.caption.weight(.semibold))
                 .padding(.horizontal, 12)
                 .frame(height: 28)
                 .background(Theme.Fill.chip, in: .capsule)
@@ -1275,8 +1309,8 @@ struct ChatView: View {
         let bg = session?.background?.count ?? 0
         return HStack(spacing: 2) {
             Image(systemName: bg > 0 ? "gearshape.2.fill" : "arrow.triangle.2.circlepath")
-                .font(.caption2.weight(.bold))
-            if bg > 0 { Text("\(bg)").font(.caption2.weight(.bold).monospacedDigit()) }
+                .font(Theme.Font.label.weight(.bold))
+            if bg > 0 { Text("\(bg)").font(Theme.Font.label.weight(.bold).monospacedDigit()) }
         }
         .foregroundStyle(bg > 0 ? Theme.busy : Theme.loop)
         .frame(width: 44, height: 34)
@@ -1333,8 +1367,8 @@ struct ChatView: View {
             Haptics.tap()
             if link != .online { showLink = true } else { showInfo = true }
         } label: {
-            VStack(spacing: 1) {
-                Text(title).font(.headline).lineLimit(1)
+            VStack(spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.heading).lineLimit(1)
                 ZStack {
                     if link != .online {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
@@ -1342,7 +1376,7 @@ struct ChatView: View {
                         HStack(spacing: 3) {
                             if style == .dev, let s = session { devSubtitle(s) } else { Text(subtitle).lineLimit(1) }
                         }
-                        .font(.caption)
+                        .font(Theme.Font.label)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
                     }
@@ -1408,7 +1442,7 @@ struct ChatView: View {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
                         Button { back() } label: {
-                            Image(systemName: "chevron.left").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: "chevron.left").font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                                 .contentShape(.circle)
                         }
                         .buttonStyle(.plain)
@@ -1421,7 +1455,7 @@ struct ChatView: View {
                         // The terminal (it comes up from the bottom over the page, TerminalCover), files and Git are in
                         // the ··· menu; files and Git also a swipe to the left away — no tab row (docs/ios.md).
                         Menu { moreMenuItems } label: {
-                            Image(systemName: "ellipsis").font(.body.weight(.semibold)).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
+                            Image(systemName: "ellipsis").font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).frame(width: 44, height: 44)
                                 .contentShape(.circle)
                         }
                         .surface(interactive: true, in: .circle)
@@ -1498,7 +1532,7 @@ struct ChatView: View {
     /// The header's other half while its buttons are in the side column: the title (a tap shows the session's info),
     /// and when there are any the space's other agents, a /loop or background work and running subagents. It stays put.
     private var sideHeader: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.sm) {
             titleButton
             let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
             if model.siblings(of: key).count > 1 || hasActivity {
@@ -1854,7 +1888,7 @@ struct ChatSkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var on = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             ForEach(0..<5, id: \.self) { i in
                 RoundedRectangle(cornerRadius: Theme.Radius.control)
                     .fill(on ? Theme.Fill.chip : Theme.Fill.well)
@@ -1879,10 +1913,10 @@ struct SuggestionPill: View {
             fill()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles").font(.caption.weight(.semibold)).foregroundStyle(Theme.ai)
-                Text(text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                Image(systemName: "sparkles").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.ai)
+                Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
-                Text("采用").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
+                Text("采用").font(Theme.Font.label.weight(.semibold)).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1894,7 +1928,7 @@ struct SuggestionPill: View {
             Button { Haptics.success(); send() } label: { Label("直接发送", systemImage: "arrow.up.circle") }
             Button(action: fill) { Label("填入输入框", systemImage: "text.cursor") }
         } preview: {
-            Text(text).font(.body).padding(16).frame(maxWidth: 320, alignment: .leading)
+            Text(text).font(Theme.Font.body).padding(16).frame(maxWidth: 320, alignment: .leading)
         }
         .accessibilityLabel("Claude 建议：\(text)")
         .accessibilityHint("填入输入框；长按可直接发送")
@@ -1959,7 +1993,7 @@ struct Composer: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.s) {
             if let suggestion {
                 SuggestionPill(text: suggestion) {
                     text = suggestion
@@ -2215,14 +2249,14 @@ struct QueueStrip: View {
     @State private var busy = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
             HStack(spacing: 6) {
                 Image(systemName: "tray.and.arrow.down")
                 Text("排队中 \(queued.count) 条 · Claude 忙完会依次处理").lineLimit(1)
                 Spacer(minLength: 0)
                 if busy { ProgressView().controlSize(.mini) }
             }
-            .font(.caption.weight(.semibold))
+            .font(Theme.Font.label.weight(.semibold))
             .foregroundStyle(.secondary)
             ForEach(Array(queued.enumerated()), id: \.offset) { i, q in
                 Menu {
@@ -2232,13 +2266,13 @@ struct QueueStrip: View {
                 } label: {
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(i + 1)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .font(Theme.Font.label.weight(.bold).monospacedDigit())
                             .foregroundStyle(Theme.accent)
                             .frame(width: 18, height: 18)
                             .background(Theme.accent.opacity(0.14), in: .circle)
-                        Text(q).font(.subheadline).foregroundStyle(Color.primary).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(q).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
-                        Image(systemName: "ellipsis").font(.caption).foregroundStyle(.secondary).padding(.top, 3)
+                        Image(systemName: "ellipsis").font(Theme.Font.label).foregroundStyle(.secondary).padding(.top, 3)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
@@ -2332,10 +2366,10 @@ struct SessionInfoSheet: View {
                         copyButton("拷贝 session id", symbol: "number", text: info.sessionID, toast: "已拷贝 session id")
                         copyButton("拷贝恢复命令", symbol: "terminal", text: "cd \(info.cwd ?? "") && " + resume(info.sessionID), toast: "已拷贝恢复命令")
                     } footer: {
-                        Text(info.sessionID).font(.caption2.monospaced()).textSelection(.enabled)
+                        Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
                     }
                 } else if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(Theme.danger) }
+                    Section { Label(error, systemImage: "exclamationmark.triangle").font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                 } else {
                     Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20) }.listRowBackground(Color.clear)
                 }
@@ -2358,19 +2392,19 @@ struct SessionInfoSheet: View {
         let s = session
         let place = [model.machine(key.machineID)?.name ?? key.machineID, s?.spaceName, s?.slotLabel]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(s?.displayTitle ?? "会话").font(.title3.weight(.bold)).lineLimit(2)
+        return VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            Text(s?.displayTitle ?? "会话").font(Theme.Font.title).lineLimit(2)
             HStack(spacing: 6) {
                 if let st = s?.state {
                     HStack(spacing: 4) {
                         StatusDot(state: st, size: 7)
-                        Text(st.label).font(.caption.weight(.semibold))
+                        Text(st.label).font(Theme.Font.label.weight(.semibold))
                             .foregroundStyle(ChatView.quiet(st) ? Color.secondary : st.tone.text)
                     }
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Color.primary.opacity(0.06), in: .capsule)
                 }
-                Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Text(place).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2440,6 +2474,8 @@ struct ChatLine: Identifiable {
         /// Two or more tool calls in a row of an open work line, as one line of chips.
         case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
         case workEnd(group: String, count: Int)
+        /// A model API error (`APIErrorInfo`), repeated `count` times in a row.
+        case apiError(item: Item, info: APIErrorInfo, count: Int)
 
         var id: String {
             switch self {
@@ -2452,6 +2488,7 @@ struct ChatLine: Identifiable {
             case .mergedUsers(let id, _): id
             case .splitHeader(let id, _): id + "-h"
             case .wakes(let t, _): "wk-" + t.id
+            case .apiError(let item, _, _): item.id
             }
         }
     }
@@ -2473,6 +2510,7 @@ struct ChatLine: Identifiable {
         Self(.workStep(group: group, item: item, first: first))
     }
     static func workEnd(group: String, count: Int) -> Self { Self(.workEnd(group: group, count: count)) }
+    static func apiError(item: Item, info: APIErrorInfo, count: Int) -> Self { Self(.apiError(item: item, info: info, count: count)) }
     static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
         Self(.toolRun(id: id, calls: calls, open: open, first: first))
     }
@@ -2530,7 +2568,7 @@ struct WorkStepView: View, Equatable {
                     ToolCallRow(call: c, autoExpand: false, grouped: true)
                     if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
                         Button { open(id) } label: {
-                            Label("查看子 Agent", systemImage: "arrow.up.right").font(.caption.weight(.semibold)).lineLimit(1)
+                            Label("查看子 Agent", systemImage: "arrow.up.right").font(Theme.Font.label.weight(.semibold)).lineLimit(1)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
@@ -2566,7 +2604,7 @@ struct WorkStepView: View, Equatable {
 struct WorkCardSlice: View {
     var top: Bool
     var bottom: Bool
-    /// Half the list's spacing (`LazyVStack(spacing: 14)`).
+    /// Half the list's spacing (`LazyVStack(spacing: Theme.Space.l)`).
     static let bridge: CGFloat = 7
     static let radius = Theme.Radius.card
     /// The rows' side padding inside the card.
@@ -2682,7 +2720,7 @@ struct WorkLine: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: 10) {
                 Button(action: toggle) {
                     HStack(spacing: 6) {
@@ -2696,11 +2734,11 @@ struct WorkLine: View {
                         }
                         if !isEmpty {
                             Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
+                                .font(Theme.Font.label.weight(.semibold))
                                 .rotationEffect(.degrees(open ? 90 : 0))
                         }
                     }
-                    .font(.footnote.monospacedDigit())
+                    .font(Theme.Font.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .contentShape(.rect)
@@ -2712,7 +2750,7 @@ struct WorkLine: View {
                 .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
                 if let openTerminal {
-                    Button(action: openTerminal) { Image(systemName: "terminal").font(.footnote).foregroundStyle(.secondary) }
+                    Button(action: openTerminal) { Image(systemName: "terminal").font(Theme.Font.caption).foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("打开终端")
                 }

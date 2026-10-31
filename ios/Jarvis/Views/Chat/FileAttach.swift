@@ -169,22 +169,22 @@ struct UploadsBar: View {
     var uploads: FileUploads
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.sm) {
             ForEach(uploads.items) { item in
                 HStack(spacing: 10) {
-                    Image(systemName: "doc").font(.body).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 4) {
+                    Image(systemName: "doc").font(Theme.Font.body).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
                         HStack {
-                            Text(item.name).font(.subheadline).lineLimit(1).truncationMode(.middle)
+                            Text(item.name).font(Theme.Font.secondary).lineLimit(1).truncationMode(.middle)
                             Spacer(minLength: 8)
                             Text(item.waiting ? "等待中" : "\(item.sent.storageText) / \(item.size.storageText)")
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                                .font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                         }
                         ProgressView(value: item.size > 0 ? Double(min(item.sent, item.size)) / Double(item.size) : 0)
                             .tint(Theme.accent)
                     }
                     Button { uploads.cancel(item.id) } label: {
-                        Image(systemName: "xmark.circle.fill").font(.title3).symbolRenderingMode(.hierarchical)
+                        Image(systemName: "xmark.circle.fill").font(Theme.Font.title).symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
