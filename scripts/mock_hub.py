@@ -1464,6 +1464,37 @@ def churn(rounds, ms, steps=1, final=False):
         CHURN["rounds"] += 1
 
 
+def say(text, user=None, stream=False):
+    """A reply (after `user`'s message, if given) in every conversation an app has open (/mock/say). `stream`: the
+    message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's."""
+    import time
+    for send, subscribed in list(LIVE):
+        for sid in list(subscribed):
+            items = ITEMS.get(sid)
+            if not items: continue
+            CHURN_ITEMS.setdefault(sid, list(items))  # /mock/reset takes the replies away again
+            mid = next((x["machine_id"] for x in all_sessions() if x["session_id"] == sid), "macbook")
+            if stream:
+                if user:
+                    before = ITEMS[sid][-1]["seq"]
+                    asked = [it("user", "text", 0, text=user)]
+                    ITEMS[sid] = ITEMS[sid] + asked
+                    send({"type": "items", "machine_id": mid, "session_id": sid, "items": asked, **span(asked, before)})
+                    user = None
+                for k in range(1, 11):
+                    time.sleep(0.3)
+                    send({"type": "delta", "machine_id": mid, "session_id": sid, "text": text[:len(text) * k // 10]})
+                items = ITEMS[sid]
+            before = items[-1]["seq"]
+            new = ([it("user", "text", 0, text=user)] if user else []) + [it("assistant", "text", 0, text=text)]
+            ITEMS[sid] = items + new
+            LOG.write("  SAY: %d items to %s after seq %d\n" % (len(new), sid, before)); LOG.flush()
+            try:
+                send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+            except Exception:
+                pass
+
+
 if os.environ.get("MOCK_CHURN") == "1":
     # Machines enough that the ⋯ menu scrolls, as it does with six on a phone.
     for _i, _n in enumerate(["构建机", "测试机", "Mac mini", "Mac mini 2", "训练机"]):
@@ -1517,6 +1548,10 @@ class H(BaseHTTPRequestHandler):
                                                  int(q.get("steps", ["1"])[0]), q.get("final", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
+            args = (q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1")
+            threading.Thread(target=say, args=args, daemon=True).start()
+            return self.send_json({"ok": True})
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
@@ -1542,7 +1577,7 @@ class H(BaseHTTPRequestHandler):
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
             del RECONNECTS[:], STARTED[:], SEEN[:]
-            for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests: the steps churn added go
+            for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
@@ -2005,7 +2040,14 @@ class H(BaseHTTPRequestHandler):
                                        [it("assistant", "text", 0, text="第 %d 步做完了，接着看下一处。" % n)])
                                 ITEMS[sid] = ITEMS[sid] + new
                                 LOG.write("  STREAM: push %d items after seq %d\n" % (len(new), before)); LOG.flush()
-                                send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+                                # To every socket that has it open now: the app reconnects soon after launch, and the
+                                # first socket going away used to end the stream after one push.
+                                for out, subs in list(LIVE):
+                                    if sid in subs:
+                                        try:
+                                            out({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+                                        except Exception:
+                                            pass
                         threading.Thread(target=stream, daemon=True).start()
                     if since:
                         newer = [x for x in items if x["seq"] > since]

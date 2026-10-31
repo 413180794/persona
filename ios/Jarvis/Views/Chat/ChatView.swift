@@ -612,6 +612,7 @@ struct ChatView: View {
         guard let id else { return }
         entry = nil
         followsEnd = false
+        scratch.landingInFlight = true
         if target == .latestAnswer, let i = lines.lastIndex(where: \.isInput) {
             landUnderInput(lines[i].id)
             return
@@ -622,7 +623,27 @@ struct ChatView: View {
             position.scrollTo(id: id, anchor: .bottomLeading)
             try? await Task.sleep(for: .milliseconds(300))
             position.scrollTo(id: id, anchor: .bottomLeading)
+            try? await Task.sleep(for: .milliseconds(100))
+            landed()
         }
+    }
+
+    /// A landing is over. A line in the last screenful lands at the newest end (the list cannot go further): follow from
+    /// there. The landing stopped following and the sentinel never left the screen, so nothing turned it back on: what
+    /// arrived after it was held back, with no ↓ either (TestFlight 50/51, 2026-10-31).
+    private func landed() {
+        scratch.landingInFlight = false
+        if atBottom { followsEnd = true }
+    }
+
+    /// New content arrived. At the newest end, untouched, but not following (anything that stopped following without
+    /// moving the list): follow again, or the new lines wait behind a sentinel that is on screen, with no ↓. Then
+    /// following goes to the newest, unless a tapped header is held in place (`ChatPin`).
+    private func contentArrived(foldChrome: Bool) {
+        if !followsEnd, atBottom, !scratch.userDragging, !scratch.landingInFlight { followsEnd = true }
+        guard followsEnd, !pin.holding else { return }
+        scrollToEnd()
+        if foldChrome, userScrolled { hideChrome() }
     }
 
     /// How much of your last message stays on screen above the answer: about its last line (and the bubble's edge).
@@ -648,6 +669,7 @@ struct ChatView: View {
                 scrollList(to: chrome.offset + off)
             }
             landing = nil
+            landed()
         }
     }
 
@@ -766,6 +788,9 @@ struct ChatView: View {
             ChatRegion(name: "ChatTranscript.body") {
                 chatScroll()
                     .overlay(alignment: .bottomTrailing) { jumpArrow }
+                    #if DEBUG
+                    .overlay(alignment: .topLeading) { if Self.scrollProbe { scrollState } }
+                    #endif
             }
             ChatRegion(name: "ChatFooter.body") { footer }
         }
@@ -832,6 +857,26 @@ struct ChatView: View {
             mainFooter.padding(.top, Theme.Space.s)
         }
     }
+
+    #if DEBUG
+    /// `-showScrollState YES`: where the list is, for UI tests (`ChatFollowTests`). XCUITest's frames of rows in the
+    /// flipped list are wrong; the list itself knows which lines are on screen.
+    static let scrollProbe = UserDefaults.standard.bool(forKey: "showScrollState") || scrollProbeVisible
+    /// `-showScrollState visible`: the same, readable in a screenshot.
+    static let scrollProbeVisible = UserDefaults.standard.string(forKey: "showScrollState") == "visible"
+
+    private var scrollState: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            let lines = currentLines()
+            let newest = lines.last?.id ?? ""
+            let shown = Set(scratch.visibleLines)
+            let lastShown = lines.lastIndex { shown.contains($0.id) }.map { lines.count - 1 - $0 } ?? -1
+            Text("bottom=\(atBottom ? 1 : 0) follows=\(followsEnd ? 1 : 0) frozen=\(frozen == nil ? 0 : 1) arrow=\(!atBottom && settled ? 1 : 0) newestShown=\(shown.contains(newest) ? 1 : 0) behind=\(lastShown) items=\(store.items.count) withheld=\(store.items.count - (frozen.map { f in Self.prefixCount(store.items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? store.items.count))")
+                .font(Theme.Font.label).opacity(Self.scrollProbeVisible ? 1 : 0.01).allowsHitTesting(false)
+                .accessibilityIdentifier("chat.scrollState")
+        }
+    }
+    #endif
 
     @ViewBuilder private var jumpArrow: some View {
             if !atBottom && settled {
@@ -1042,16 +1087,14 @@ struct ChatView: View {
                 frozen = Frozen(seq: last.seq, part: last.part, live: liveTurnID)
             }
         }
-        .onChange(of: rows.last?.id) { _, _ in if followsEnd && !pin.holding { scrollToEnd() } }
+        .onChange(of: rows.last?.id) { _, _ in contentArrived(foldChrome: false) }
         .onChange(of: lines.count, initial: true) { _, _ in landEntry(lines) }
         .onChange(of: store.loadedOnce) { _, _ in landEntry(lines) }
-        .onChange(of: liveTurnID) { _, _ in if followsEnd && !pin.holding { scrollToEnd() } }
+        .onChange(of: liveTurnID) { _, _ in contentArrived(foldChrome: false) }
         // Following the newest as it streams in folds the chrome too (once the user has taken the list).
         // Not while a tapped header is held in place (`ChatPin`): opening a work line loads its steps.
-        .onChange(of: store.items.count) { _, _ in if followsEnd && !pin.holding { scrollToEnd(); if userScrolled { hideChrome() } } }
-        .modifier(ChatStreamFollow(store: store) {
-            if followsEnd && !pin.holding { scrollToEnd(); if userScrolled { hideChrome() } }
-        })
+        .onChange(of: store.items.count) { _, _ in contentArrived(foldChrome: true) }
+        .modifier(ChatStreamFollow(store: store) { contentArrived(foldChrome: true) })
         // Your own message brings you to the newest — only yours (one typed on the computer, or sent by another session,
         // used to pull you out of the history you were reading too), and only if you have not scrolled since sending it:
         // Claude can take it in seconds later, while you went back up to read (2026-10-30).
@@ -2861,6 +2904,8 @@ final class ChatScratch {
     var visibleLines: [String] = []
     /// The finger is on the list (or it is gliding after a flick): only then does the chrome follow it.
     var userDragging = false
+    /// Between a landing's first jump and its end (`ChatView.landed`): the list is not where it is going yet.
+    var landingInFlight = false
     /// Last time the user scrolled or touched the header: the chrome folds itself after a few idle seconds.
     var lastActivity = Date.now
     var linesKey: LinesKey?
