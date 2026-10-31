@@ -30,7 +30,17 @@ func (h *Hub) routes() http.Handler {
 		m.reconnect()
 		writeJSON(w, map[string]any{"ok": true})
 	}))
-	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.proxy("launchers.list", nil))
+	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		ls, err := h.machineLaunchers(ctx, m)
+		if err != nil {
+			callErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"launchers": ls})
+	}))
+	h.launcherRoutes(api)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))

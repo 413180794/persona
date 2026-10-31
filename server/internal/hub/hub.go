@@ -66,8 +66,11 @@ type Hub struct {
 	kb    kbState  // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
-	devtok    devTokens // device token lookups (devicetokens.go)
-	sends     sendLog   // messages being / just sent, by client_msg_id (send.go)
+	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
+	launchers     launcherState
+	launchersSeen map[string][]proto.Launcher
+	devtok        devTokens // device token lookups (devicetokens.go)
+	sends         sendLog   // messages being / just sent, by client_msg_id (send.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.

@@ -24,12 +24,14 @@ import (
 type Node struct {
 	Version string
 
-	home   string
-	dir    string // ~/.jarvis
-	bin    string // absolute path of this executable
-	herdr  *herdr.Client
-	peer   *rpc.Peer
-	logger *log.Logger
+	home string
+	dir  string // ~/.jarvis
+	bin  string // absolute path of this executable
+	// managed: launchers kept by the hub (managed.go)
+	managed managedLaunchers
+	herdr   *herdr.Client
+	peer    *rpc.Peer
+	logger  *log.Logger
 
 	mu       sync.Mutex
 	state    *stateFile
@@ -273,6 +275,18 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
 		return map[string]any{"launchers": ls}, err
+	case "launchers.managed":
+		var c struct {
+			Launchers []proto.ManagedLauncher `json:"launchers"`
+		}
+		if err := json.Unmarshal(params, &c); err != nil {
+			return nil, err
+		}
+		n.setManaged(c.Launchers)
+		return map[string]any{"ok": true}, nil
+	case "launchers.show":
+		def, err := n.launcherDefinition(ctx, p.Name)
+		return map[string]any{"definition": def}, err
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":

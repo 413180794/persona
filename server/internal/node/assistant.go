@@ -276,7 +276,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 		shell = "bash"
 	}
 	// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
-	cmd := exec.Command(shell, append([]string{"-ic", launcher + ` "$@"`, "jarvis"}, args...)...)
+	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
 	cmd.Dir = cwd
 	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false")

@@ -22,6 +22,7 @@ import (
 var version = "dev"
 
 const usage = `usage:
+  jarvisd launch <name> …   run claude with a launcher kept in 设置 › 模型 (from the local node)
   jarvisd hub [run]        run the hub (config ~/.jarvis/hub.json)
   jarvisd hub pair         print the pairing URL, token and QR code
   jarvisd node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
@@ -78,6 +79,12 @@ func main() {
 		}
 	case "hook":
 		runHook(ctx)
+	case "launch": // a launcher kept in 设置 › 模型: its settings from the local node, then claude (docs/launchers.md)
+		if len(os.Args) < 3 {
+			err = fmt.Errorf("usage: jarvisd launch <launcher> [claude args…]")
+			break
+		}
+		err = node.Launch(ctx, os.Args[2], os.Args[3:])
 	case "mcp":
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
 	case "sysmon":

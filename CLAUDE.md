@@ -101,6 +101,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/android.md` | Android App：已有的页面、不用推送服务的后台通知、构建安装、还没做的部分 |
 | `docs/feishu.md` | 飞书在 Jarvis 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
 | `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面、连接与补洞、细节约定 |
+| `docs/launchers.md` | 启动器与「设置 › 模型」：~/.zshrc 的自动同步 / 隐藏，App 里加的（Key 加密存 hub、`jarvisd launch` 运行），接口 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |

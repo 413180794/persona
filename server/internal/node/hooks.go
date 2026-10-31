@@ -129,6 +129,8 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		} else {
 			resp = map[string]any{"output": out}
 		}
+	case "launcher.env": // jarvisd launch <name>
+		resp = n.launcherEnv(req.Name)
 	case "mcp.tools":
 		var res struct {
 			Tools []proto.Tool `json:"tools"`

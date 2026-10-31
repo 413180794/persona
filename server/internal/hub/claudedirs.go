@@ -29,6 +29,9 @@ func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 		}
 	}
 	_ = peer.Call(ctx, "node.configure", map[string]any{"claude_dirs": dirs}, nil)
+	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
+		return peer.Call(ctx, method, params, out)
+	})
 }
 
 // rememberClaudeDirs stores the directories the node found (claude.dirs event), added to what was known.

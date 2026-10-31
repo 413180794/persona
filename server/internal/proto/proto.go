@@ -145,6 +145,21 @@ type Launcher struct {
 	Name    string `json:"name"`
 	BaseURL string `json:"base_url"`
 	Model   string `json:"model"`
+	// Source: "zshrc" (a function in the machine's ~/.zshrc) or "jarvis" (managed in 设置 › 模型, launchers.go). Empty
+	// from an older node: zshrc.
+	Source string `json:"source,omitempty"`
+}
+
+// ManagedLauncher is a launcher kept by the hub (设置 › 模型): what `jarvisd launch <name>` sets before it runs claude.
+// The key only goes to nodes (in memory), never to the app.
+type ManagedLauncher struct {
+	Name       string `json:"name"`
+	BaseURL    string `json:"base_url"`
+	Model      string `json:"model"`
+	SmallModel string `json:"small_model,omitempty"`
+	// Args go before the caller's (e.g. --dangerously-skip-permissions).
+	Args   []string `json:"args,omitempty"`
+	APIKey string   `json:"api_key,omitempty"`
 }
 
 type DirEntry struct {

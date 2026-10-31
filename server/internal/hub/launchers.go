@@ -1,0 +1,464 @@
+package hub
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// 设置 › 模型 (docs/launchers.md): every launcher in one list. Those in each machine's ~/.zshrc are found by its node and
+// remembered here (the last list of every machine, so an offline one's still show); those added in the app are kept
+// by the hub — base URL, model, and the API key AES-GCM sealed with ~/.jarvis/secret.key — and sent to every node,
+// which runs them as `jarvisd launch <name>`. Deleting a ~/.zshrc launcher only hides it in Jarvis.
+
+const (
+	launchersManagedKey = "launchers.managed" // []storedLauncher
+	launchersHiddenKey  = "launchers.hidden"  // []string: ~/.zshrc launcher names hidden in Jarvis
+	launchersZshrcKey   = "launchers.zshrc"   // map machine id → []proto.Launcher, the last list seen
+)
+
+// storedLauncher is a managed launcher as kept in settings: the key sealed.
+type storedLauncher struct {
+	proto.ManagedLauncher
+	KeySealed string    `json:"key_sealed,omitempty"`
+	Created   time.Time `json:"created"`
+	Updated   time.Time `json:"updated"`
+}
+
+// LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
+type LauncherView struct {
+	Name       string   `json:"name"`
+	Source     string   `json:"source"` // zshrc | jarvis
+	BaseURL    string   `json:"base_url,omitempty"`
+	Model      string   `json:"model,omitempty"`
+	SmallModel string   `json:"small_model,omitempty"`
+	Args       []string `json:"args,omitempty"`
+	HasKey     bool     `json:"has_key,omitempty"`
+	Machines   []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
+	Hidden     bool     `json:"hidden,omitempty"`
+	// Definition per machine (zshrc launchers, detail only): the function body, secrets masked.
+	Definitions map[string]string `json:"definitions,omitempty"`
+}
+
+type launcherState struct {
+	mu  sync.Mutex
+	key []byte // AES key for API keys (secret.key)
+}
+
+var managedLauncherName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+func (h *Hub) launcherKey() ([]byte, error) {
+	h.launchers.mu.Lock()
+	defer h.launchers.mu.Unlock()
+	if h.launchers.key != nil {
+		return h.launchers.key, nil
+	}
+	path := filepath.Join(h.cfg.dir, "secret.key")
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		b = make([]byte, 32)
+		if _, err := io.ReadFull(rand.Reader, b); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(path, b, 0o600); err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	if len(b) != 32 {
+		return nil, fmt.Errorf("%s must hold 32 bytes", path)
+	}
+	h.launchers.key = b
+	return b, nil
+}
+
+func (h *Hub) sealKey(plain string) (string, error) {
+	key, err := h.launcherKey()
+	if err != nil {
+		return "", err
+	}
+	block, _ := aes.NewCipher(key)
+	gcm, _ := cipher.NewGCM(block)
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, []byte(plain), nil)), nil
+}
+
+func (h *Hub) openKey(sealed string) (string, error) {
+	if sealed == "" {
+		return "", nil
+	}
+	key, err := h.launcherKey()
+	if err != nil {
+		return "", err
+	}
+	raw, err := base64.StdEncoding.DecodeString(sealed)
+	if err != nil {
+		return "", err
+	}
+	block, _ := aes.NewCipher(key)
+	gcm, _ := cipher.NewGCM(block)
+	if len(raw) < gcm.NonceSize() {
+		return "", errors.New("sealed key too short")
+	}
+	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
+	return string(plain), err
+}
+
+func (h *Hub) storedLaunchers(ctx context.Context) []storedLauncher {
+	var list []storedLauncher
+	if h.store != nil {
+		_, _ = h.store.Setting(ctx, launchersManagedKey, &list)
+	}
+	return list
+}
+
+func (h *Hub) hiddenLaunchers(ctx context.Context) []string {
+	var list []string
+	if h.store != nil {
+		_, _ = h.store.Setting(ctx, launchersHiddenKey, &list)
+	}
+	return list
+}
+
+func (h *Hub) put(ctx context.Context, key string, v any) error {
+	if h.store == nil {
+		return errors.New("no database")
+	}
+	return h.store.PutSetting(ctx, key, v)
+}
+
+// managedForNodes: the managed launchers with their keys, for nodes.
+func (h *Hub) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
+	var out []proto.ManagedLauncher
+	for _, s := range h.storedLaunchers(ctx) {
+		l := s.ManagedLauncher
+		if k, err := h.openKey(s.KeySealed); err == nil {
+			l.APIKey = k
+		} else {
+			h.logf("launchers: open key of %s: %v", s.Name, err)
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// sendManaged gives one node the managed launchers (on connect).
+func (m *Machine) sendManaged(ctx context.Context, call func(context.Context, string, any, any) error) {
+	_ = call(ctx, "launchers.managed", map[string]any{"launchers": m.hub.managedForNodes(ctx)}, nil)
+}
+
+// pushManaged gives every online node the managed launchers (after a change).
+func (h *Hub) pushManaged(ctx context.Context) {
+	list := h.managedForNodes(ctx)
+	for _, m := range h.machines {
+		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_ = m.call(cctx, "launchers.managed", map[string]any{"launchers": list}, nil)
+		cancel()
+	}
+}
+
+// zshrcLaunchers reads every online machine's ~/.zshrc launchers (the node caches them a minute) and remembers them;
+// an offline machine's come from the last time.
+func (h *Hub) zshrcLaunchers(ctx context.Context) map[string][]proto.Launcher {
+	seen := map[string][]proto.Launcher{}
+	if h.store != nil {
+		_, _ = h.store.Setting(ctx, launchersZshrcKey, &seen)
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	changed := false
+	for _, m := range h.machines {
+		wg.Add(1)
+		go func(m *Machine) {
+			defer wg.Done()
+			cctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+			defer cancel()
+			var res struct {
+				Launchers []proto.Launcher `json:"launchers"`
+			}
+			if err := m.call(cctx, "launchers.list", map[string]any{}, &res); err != nil {
+				return
+			}
+			mu.Lock()
+			if !slices.Equal(seen[m.cfg.ID], res.Launchers) {
+				seen[m.cfg.ID], changed = res.Launchers, true
+			}
+			mu.Unlock()
+		}(m)
+	}
+	wg.Wait()
+	if changed && h.store != nil {
+		_ = h.store.PutSetting(ctx, launchersZshrcKey, seen)
+	}
+	return seen
+}
+
+// launcherViews is the whole list: managed first (newest last), then ~/.zshrc ones by name; hidden ones flagged.
+func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
+	var out []LauncherView
+	managed := map[string]bool{}
+	for _, s := range h.storedLaunchers(ctx) {
+		managed[s.Name] = true
+		out = append(out, LauncherView{Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
+			Args: s.Args, HasKey: s.KeySealed != ""})
+	}
+	hidden := h.hiddenLaunchers(ctx)
+	byName := map[string]*LauncherView{}
+	var names []string
+	for _, m := range h.machines {
+		for _, l := range h.zshrcLaunchersOf(ctx, m.cfg.ID) {
+			if managed[l.Name] || l.Name == "claude" {
+				continue
+			}
+			v := byName[l.Name]
+			if v == nil {
+				v = &LauncherView{Name: l.Name, Source: "zshrc", BaseURL: l.BaseURL, Model: l.Model, Hidden: slices.Contains(hidden, l.Name)}
+				byName[l.Name] = v
+				names = append(names, l.Name)
+			}
+			v.Machines = append(v.Machines, m.cfg.ID)
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		out = append(out, *byName[n])
+	}
+	return out
+}
+
+// zshrcLaunchersOf is one machine's last known ~/.zshrc launchers (filled by zshrcLaunchers).
+func (h *Hub) zshrcLaunchersOf(ctx context.Context, machine string) []proto.Launcher {
+	h.launchers.mu.Lock()
+	cached := h.launchersSeen
+	h.launchers.mu.Unlock()
+	if cached == nil {
+		cached = h.zshrcLaunchers(ctx)
+		h.launchers.mu.Lock()
+		h.launchersSeen = cached
+		h.launchers.mu.Unlock()
+	}
+	return cached[machine]
+}
+
+func (h *Hub) refreshZshrcLaunchers(ctx context.Context) {
+	seen := h.zshrcLaunchers(ctx)
+	h.launchers.mu.Lock()
+	h.launchersSeen = seen
+	h.launchers.mu.Unlock()
+}
+
+// machineLaunchers is what a machine can start (the pickers: new chat, the assistant's model): its ~/.zshrc
+// launchers but the hidden ones, then the managed ones.
+func (h *Hub) machineLaunchers(ctx context.Context, m *Machine) ([]proto.Launcher, error) {
+	var res struct {
+		Launchers []proto.Launcher `json:"launchers"`
+	}
+	if err := m.call(ctx, "launchers.list", map[string]any{}, &res); err != nil {
+		return nil, err
+	}
+	hidden := h.hiddenLaunchers(ctx)
+	managed := h.storedLaunchers(ctx)
+	out := make([]proto.Launcher, 0, len(res.Launchers)+len(managed))
+	for _, l := range res.Launchers {
+		if slices.Contains(hidden, l.Name) || slices.ContainsFunc(managed, func(s storedLauncher) bool { return s.Name == l.Name }) {
+			continue
+		}
+		l.Source = "zshrc"
+		out = append(out, l)
+	}
+	for _, s := range managed {
+		out = append(out, proto.Launcher{Name: s.Name, BaseURL: s.BaseURL, Model: s.Model, Source: "jarvis"})
+	}
+	return out, nil
+}
+
+// --- app API ---
+
+type launcherInput struct {
+	Name       string   `json:"name"`
+	BaseURL    string   `json:"base_url"`
+	Model      string   `json:"model"`
+	SmallModel string   `json:"small_model"`
+	Args       []string `json:"args"`
+	APIKey     *string  `json:"api_key"` // nil or "" on an update keeps the key
+}
+
+func (in launcherInput) check() error {
+	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" {
+		return errors.New("名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）")
+	}
+	u, err := url.Parse(strings.TrimSpace(in.BaseURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("Base URL 要是 http(s):// 开头的地址")
+	}
+	if strings.TrimSpace(in.Model) == "" {
+		return errors.New("要填模型")
+	}
+	for _, a := range in.Args {
+		if !strings.HasPrefix(a, "-") {
+			return fmt.Errorf("额外参数 %q 要以 - 开头", a)
+		}
+	}
+	return nil
+}
+
+func (h *Hub) launcherRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		h.refreshZshrcLaunchers(ctx) // a launcher just added to a ~/.zshrc shows up (the node caches a minute)
+		writeJSON(w, map[string]any{"launchers": h.launcherViews(ctx)})
+	})
+	api.HandleFunc("GET /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		name := r.PathValue("name")
+		for _, v := range h.launcherViews(ctx) {
+			if v.Name != name {
+				continue
+			}
+			if v.Source == "zshrc" {
+				v.Definitions = map[string]string{}
+				for _, id := range v.Machines {
+					if m := h.byID[id]; m != nil {
+						var res struct {
+							Definition string `json:"definition"`
+						}
+						if err := m.call(ctx, "launchers.show", map[string]any{"name": name}, &res); err == nil {
+							v.Definitions[id] = res.Definition
+						}
+					}
+				}
+			}
+			writeJSON(w, map[string]any{"launcher": v})
+			return
+		}
+		writeErr(w, http.StatusNotFound, errors.New("no such launcher"))
+	})
+	api.HandleFunc("POST /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
+		var in launcherInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := in.check(); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		ctx := r.Context()
+		for _, v := range h.launcherViews(ctx) {
+			if v.Name == in.Name {
+				writeErr(w, http.StatusConflict, fmt.Errorf("已经有叫 %s 的启动器了", in.Name))
+				return
+			}
+		}
+		h.saveLauncher(w, r, in, nil)
+	})
+	api.HandleFunc("PUT /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
+		var in launcherInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		in.Name = r.PathValue("name")
+		if err := in.check(); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		for _, s := range h.storedLaunchers(r.Context()) {
+			if s.Name == in.Name {
+				h.saveLauncher(w, r, in, &s)
+				return
+			}
+		}
+		writeErr(w, http.StatusNotFound, errors.New("只能改 Jarvis 里加的启动器；~/.zshrc 里的请在那台电脑上改"))
+	})
+	api.HandleFunc("DELETE /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
+		ctx, name := r.Context(), r.PathValue("name")
+		list := h.storedLaunchers(ctx)
+		if i := slices.IndexFunc(list, func(s storedLauncher) bool { return s.Name == name }); i >= 0 {
+			list = slices.Delete(list, i, i+1)
+			if err := h.put(ctx, launchersManagedKey, list); err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+			h.pushManaged(ctx)
+			writeJSON(w, map[string]any{"ok": true, "deleted": true})
+			return
+		}
+		hidden := h.hiddenLaunchers(ctx) // a ~/.zshrc launcher: hidden in Jarvis, the file is not touched
+		if !slices.Contains(hidden, name) {
+			hidden = append(hidden, name)
+		}
+		if err := h.put(ctx, launchersHiddenKey, hidden); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "hidden": true})
+	})
+	api.HandleFunc("POST /api/v1/launchers/{name}/restore", func(w http.ResponseWriter, r *http.Request) {
+		ctx, name := r.Context(), r.PathValue("name")
+		hidden := slices.DeleteFunc(h.hiddenLaunchers(ctx), func(s string) bool { return s == name })
+		if err := h.put(ctx, launchersHiddenKey, hidden); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	})
+}
+
+func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherInput, old *storedLauncher) {
+	ctx := r.Context()
+	now := time.Now().UTC()
+	s := storedLauncher{Created: now, Updated: now}
+	if old != nil {
+		s = *old
+		s.Updated = now
+	}
+	s.Name, s.BaseURL, s.Model, s.SmallModel = in.Name, strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"),
+		strings.TrimSpace(in.Model), strings.TrimSpace(in.SmallModel)
+	s.Args = in.Args
+	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
+		sealed, err := h.sealKey(strings.TrimSpace(*in.APIKey))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		s.KeySealed = sealed
+	}
+	list := h.storedLaunchers(ctx)
+	if i := slices.IndexFunc(list, func(x storedLauncher) bool { return x.Name == s.Name }); i >= 0 {
+		list[i] = s
+	} else {
+		list = append(list, s)
+	}
+	if err := h.put(ctx, launchersManagedKey, list); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	h.pushManaged(ctx)
+	writeJSON(w, map[string]any{"launcher": LauncherView{Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
+		SmallModel: s.SmallModel, Args: s.Args, HasKey: s.KeySealed != ""}})
+}

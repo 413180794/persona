@@ -87,7 +87,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	} else {
 		args = "--resume " + id
 	}
-	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", launcher, args, modeFlags(mode, effort),
+	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
 		shellQuote(filepath.Join(n.dir, "claude-settings.json")), shellQuote(filepath.Join(n.dir, "mcp.json")))
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC()}
 	if prev, ok := n.state.get(id); ok && resume != "" {
