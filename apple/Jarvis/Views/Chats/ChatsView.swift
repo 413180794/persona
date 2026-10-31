@@ -139,6 +139,9 @@ struct ChatsView: View {
         SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
             AgentsList(path: $path, spaceAt: $spaceAt, query: $query, searching: $searching,
                        searchedBeforePush: $searchedBeforePush, showNew: $showNew, menuActions: menuActions)
+                #if os(macOS)
+                .onAppear { MacShellState.shared.agentsList = menuActions } // 显示 › 全部折叠 / 全部展开
+                #endif
                 .onChange(of: path.isEmpty) { _, atList in
                     // Back at the list: the field shows what the results are for again (set it anew, the field is empty).
                     guard atList, let q = searchedBeforePush else { return }

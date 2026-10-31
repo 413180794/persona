@@ -14,6 +14,8 @@ import SwiftUI
     var seed = ""
     /// 显示会话信息 ⌥⌘I: the chat showing this session opens / closes its inspector (a new value each time).
     var inspector: InspectorToggle?
+    /// The Agents list's 全部折叠 / 全部展开 (its own ⋯ menu's), for 显示 › 全部折叠 / 全部展开.
+    var agentsList: AgentsListMenu.Actions?
 
     struct InspectorToggle: Equatable {
         let key: SessionKey

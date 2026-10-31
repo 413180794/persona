@@ -21,6 +21,9 @@ enum MacViewCommands {
 
 struct MacViewMenu: Commands {
     let model: AppModel
+    // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
+    @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
+    @AppStorage("dev.compact") private var compact = false
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
@@ -37,6 +40,15 @@ struct MacViewMenu: Commands {
             Divider()
         }
         CommandGroup(after: .sidebar) {
+            Toggle("紧凑列表", isOn: $compact)
+            Picker("分组方式", selection: $grouping) {
+                ForEach(DevGrouping.allCases) { Text($0.title).tag($0) }
+            }
+            Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
+                .disabled(MacShellState.shared.agentsList == nil)
+            Button("全部展开") { MacShellState.shared.agentsList?.expand() }
+                .disabled(MacShellState.shared.agentsList == nil)
+            Divider()
             Button("上一个 Agent") { go(-1) }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!model.isPaired)
