@@ -24,18 +24,18 @@ import (
 )
 
 type Hub struct {
-	translations translateCache // translate.go
-	cfg          *Config
-	version      string
-	logger       *log.Logger
-	machines     []*Machine
-	byID         map[string]*Machine
-	mail         Mail
-	push         *Pusher
-	store        Store // nil in unit tests: nothing is persisted
-	ai           *ai.Client
+	cfg      *Config
+	version  string
+	logger   *log.Logger
+	machines []*Machine
+	byID     map[string]*Machine
+	mail     Mail
+	push     *Pusher
+	store    Store // nil in unit tests: nothing is persisted
+	ai       *ai.Client
 	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
 	triageAI, judgeAI *ai.Client
+	translations      translateCache // translate.go
 	lark              *lark.Client
 
 	terms terminals // the terminal tab's live streams (terminal.go)
