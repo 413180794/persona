@@ -243,7 +243,7 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 
 ## 0. App shell / navigation
 - [ ] 4 tabs with badges: Jarvis (pending assistant questions), Agents (pending interactions, excluding muted), 收件箱 (inbox action count), 设置 (「体验」 badge in demo) — Jarvis/Views/RootView.swift
-- [ ] Toast overlay (success / info-blue / error), haptics (success/warning/error) — Views/RootView.swift (ToastOverlay), App/AppModel.swift
+- [x] Toast overlay (success / info-blue / error), haptics (success/warning/error) — Views/RootView.swift (ToastOverlay), App/AppModel.swift。Mac：浮层照常（拖入、链接拷贝等截图里看过），没有触感
 - [ ] Rebuild whole tree when style/persona changes, keep tab + open chat — Views/RootView.swift
 - [ ] Width-driven layout: compact = single NavigationStack, regular = NavigationSplitView (list | detail), shared path, `.splitDetailPage()`, sidebar width 340–480, SidebarTopFill — Views/SplitNavigation.swift
 - [ ] Readable width cap (chat 760pt, welcome 560pt) — Views/Chat/ChatView.swift, Shared/Design/Theme.swift
@@ -329,7 +329,7 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 
 ## 5. Composer
 - [ ] ComposerRow: + menu (照片 ≤4 / 拍照 / 文件 / 快捷指令), glass input, send / red interrupt — Views/Chat/ComposerParts.swift, ChatView.swift (Composer, CameraPicker)
-- [ ] Pending images strip (tap to edit), 1600px compression — ComposerParts.swift (ComposerImages)
+- [x] Pending images strip (tap to edit), 1600px compression — ComposerParts.swift (ComposerImages)。Mac：拖入 / ⌘V 的图片也进这一排（`-openDropDemo` 截图）
 - [ ] File upload to the session machine's temp dir, paths inserted at cursor — Views/Chat/FileAttach.swift (UploadsBar)
 - [ ] BeautifulUI PromptComposer: @ mentions (session files / other sessions as context), / slash commands (SlashCommand.all, /clear confirm), model (/model alias), dictation — Views/Chat/PromptComposer.swift
 - [ ] Dictation (SFSpeechRecognizer zh + AVAudioEngine) — PromptComposer.swift (Dictation)
