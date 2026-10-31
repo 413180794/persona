@@ -172,7 +172,7 @@ struct ChatView: View {
         }
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
-        .toolbar(style == .dev && split == nil ? .hidden : .automatic, for: .tabBar)
+        .hidesTabBarWhenShown(style == .dev && split == nil)
         .fullScreenCover(isPresented: $showTerminal) { TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear) }
         .renameSessionAlert($renaming)
         .confirmClose($closing)
