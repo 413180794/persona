@@ -40,8 +40,8 @@
 | 文件 | 新建 Agent 对话 ⌘N、新建 Jarvis 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Jarvis ⌘J |
 | 编辑 | 系统的拷贝 / 粘贴 / 全选 / 查找；拷贝会话 ID、拷贝恢复命令 |
 | 显示 | 显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（项目 / 状态 / 机器）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
-| Agent | 发送 ⏎（输入框里，⇧⏎ 换行）、中断 ⌘.、批准当前待处理 ⌘⏎、拒绝 ⌘⌫、回答选项 1–9、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
-| 前往 | Jarvis ⌘1 … 机器 ⌘5（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌘⇧N、快速打开 ⌘K、回到最新 ⌘↓ |
+| Agent | 发送 ⏎（输入框里，⇧⏎ 换行）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 1–9、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
+| 前往 | Jarvis ⌘1 … 机器 ⌘5（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
 
 ### 和 iOS 的对应
@@ -141,6 +141,16 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Jarvis 里）、机器（`MachineDashboardView` 机器监控，手机上在 Agents / 设置里），
 ⌘1…⌘6 依次是 Jarvis、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
 通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
+
+## Agent 菜单（Mac）
+
+`apple/Mac/App/MacAgentCommands.swift`（有测试）。对着屏幕上的对话（`AppModel.visibleSession`）：中断 ⌘.（工作中才能点）、
+批准当前待处理 ⇧⌘⏎（允许工具 / 批准计划，计划按「自动接受编辑」批，和通知上的「批准」一样）、拒绝 ⇧⌘⌫（只拒绝工具；打回计划要写理由，在卡片里）、
+下一个需要你的 ⌃⌘N（等得最久的在前，循环）、标为已读、置顶 / 取消置顶、屏蔽 / 开启通知、拷贝会话 ID、拷贝恢复命令。
+问题和终端对话框要选选项，留在对话里的卡片上。
+
+快捷键和清单最早写的不一样，因为撞了：⌘⏎ 是输入框的发送（`ComposerParts`），⌘⌫ 在输入框里是删到行首（菜单快捷键会抢走），
+⇧⌘N 是新建 Jarvis 对话，⌥⌘N 是收件箱的写邮件。
 
 ## 快速打开、新建（Mac）
 
