@@ -112,3 +112,85 @@ func TestCrawlMoments(t *testing.T) {
 		t.Fatalf("search = %+v", hits)
 	}
 }
+
+// A deep pass stops at a page whose posts are all past max_days: the pages below are never asked for, the tab is
+// done, and later rounds read only its head. Comments of an archived post past max_days are not read either.
+func TestCrawlMomentsStopsPastMaxDays(t *testing.T) {
+	now := time.Now()
+	post := func(id string, age time.Duration, comments int) map[string]any {
+		return map[string]any{"id": id, "userId": "u", "userName": "U", "commentCount": comments,
+			"createTime": now.Add(-age).UnixMilli(), "content": map[string]any{"text": id}}
+	}
+	day := 24 * time.Hour
+	pages := [][]map[string]any{
+		{post("new1", time.Hour, 0), post("new2", 2*time.Hour, 0)},
+		{post("mid", 300*day, 0), post("older", 400*day, 0)}, // one still wanted: go on
+		{post("o1", 380*day, 0), post("o2", 500*day, 0)},     // all past a year: stop here
+		{post("o3", 600*day, 0)},                             // never asked for
+	}
+	var asked [8]atomic.Int32
+	var comments atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := strings.TrimPrefix(r.URL.Path, "/agent/v1")
+		switch {
+		case p == "/accounts":
+			_ = json.NewEncoder(w).Encode(map[string]any{"accounts": []any{map[string]any{"userId": "me", "primary": true}}})
+		case p == "/moments/tabs":
+			_ = json.NewEncoder(w).Encode(map[string]any{"tabs": []any{map[string]any{"id": "1", "name": "推荐", "type": 1}}})
+		case p == "/moments/feed":
+			i := 0
+			if tok := r.URL.Query().Get("pageToken"); tok != "" {
+				i = int(tok[0] - '0')
+			}
+			asked[i].Add(1)
+			next := ""
+			if i+1 < len(pages) {
+				next = string(rune('0' + i + 1))
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"posts": pages[i], "nextPageToken": next})
+		case strings.HasSuffix(p, "/comments"):
+			comments.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{"comments": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	h := newTestHub(t)
+	h.lark = lark.New(lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "t"})
+	st, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Archived before the limit came in: a year and a half old, with comments not read yet.
+	_ = st.PutMomentPost(&kb.MomentPost{ID: "stale", At: now.Add(-550 * day), CommentCount: 4, CommentsOf: -1}, nil)
+
+	cfg := MomentsCrawl{Enabled: true, DelayMS: 1, HeadPages: 1, PagesPerTab: 10}
+	r := h.crawlMoments(context.Background(), st, cfg, 365)
+	if r.Error != "" || r.New != 3 || r.Old != 3 || r.TabsEnded != 1 {
+		t.Fatalf("round 1 = %+v", r)
+	}
+	if asked[3].Load() != 0 {
+		t.Fatal("read a page below the one past max_days")
+	}
+	if comments.Load() != 0 {
+		t.Fatal("read the comments of a post past max_days")
+	}
+	raw, _ := os.ReadFile(filepath.Join(st.Dir, "moments", "tabs.json"))
+	if !strings.Contains(string(raw), `"done": true`) {
+		t.Fatalf("tab not done: %s", raw)
+	}
+	// Next round: only the head page.
+	before := asked[1].Load() + asked[2].Load()
+	r = h.crawlMoments(context.Background(), st, cfg, 365)
+	if r.Pages != 1 || asked[1].Load()+asked[2].Load() != before {
+		t.Fatalf("round 2 = %+v", r)
+	}
+	// A shorter kb.text_days wins over max_days.
+	if got := (MomentsCrawl{MaxDays: 365}).maxAge(30); got != 30*day {
+		t.Fatalf("maxAge = %s", got)
+	}
+	if got := (MomentsCrawl{}).maxAge(0); got != 365*day {
+		t.Fatalf("default maxAge = %s", got)
+	}
+}

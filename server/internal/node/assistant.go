@@ -22,6 +22,7 @@ import (
 // The assistant (the app's 对话 tab) runs Claude Code headless — `<launcher> -p --input-format stream-json
 // --output-format stream-json --include-partial-messages` — instead of in a herdr tab: nothing appears in herdr,
 // tokens stream as they are generated, and switching the launcher (model) just restarts the process with --resume.
+// A launcher that runs Codex gets `codex app-server` instead (assistant_codex.go).
 
 const assistantIdleTimeout = 20 * time.Minute
 
@@ -40,6 +41,8 @@ const assistantSpareMaxAge = 10 * time.Minute
 
 type assistantProc struct {
 	id       string
+	agent    string // "claude" (stream-json) or "codex" (app-server, assistant_codex.go)
+	cx       *codexConn
 	launcher string
 	cwd      string
 	cmd      *exec.Cmd
@@ -106,23 +109,25 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		return "", err
 	}
 	resume := id != ""
-	if id == "" {
-		// The spare was started without --permission-mode, and bypassPermissions can't be switched to later.
-		if p := n.adoptSpareFor(cwd, launcher, mode); p != nil {
-			id, launcher, cwd = p.id, p.launcher, p.cwd
-		} else {
-			id = newUUID()
-		}
-	}
-	st, known := n.state.get(id)
-	if launcher == "" {
+	st, _ := n.state.get(id)
+	if launcher == "" && id != "" {
 		launcher = st.Launcher
 	}
 	if launcher == "" {
 		launcher = "claude"
 	}
-	if err := n.assistantLauncherOK(ctx, launcher); err != nil {
+	agent, err := n.assistantAgent(ctx, launcher)
+	if err != nil {
 		return "", err
+	}
+	var p *assistantProc
+	if id == "" {
+		// The spare was started without --permission-mode, and bypassPermissions can't be switched to later.
+		if p = n.adoptSpareFor(cwd, launcher, mode); p != nil {
+			id, launcher, cwd = p.id, p.launcher, p.cwd
+		} else if agent == "claude" {
+			id = newUUID()
+		}
 	}
 	if cwd == "" {
 		cwd = st.Cwd
@@ -130,8 +135,14 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if cwd == "" {
 		cwd = filepath.Join(n.home, ".jarvis", "assistant")
 	}
+	if id == "" { // a new Codex conversation: the thread's id is Codex's to pick
+		if p, err = n.spawnCodex("", cwd, launcher, false, false); err != nil {
+			return "", err
+		}
+		id = p.id
+	}
 	n.noteModes(id, mode, effort)
-	if !known || st.Launcher != launcher || st.Cwd != cwd {
+	if st, known := n.state.get(id); !known || st.Launcher != launcher || st.Cwd != cwd {
 		started := st.StartedAt
 		if started.IsZero() {
 			started = time.Now().UTC()
@@ -140,18 +151,32 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	}
 
 	n.mu.Lock()
-	p := n.procs[id]
+	p = n.procs[id]
 	n.mu.Unlock()
-	if p != nil && (!p.alive() || p.launcher != launcher || (mode == proto.ModeBypass && p.mode != mode)) {
+	// Claude takes bypassPermissions only at start; Codex gets the policy with every turn (codexPolicy).
+	if p != nil && (!p.alive() || p.launcher != launcher || (p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode)) {
 		n.stopAssistant(id) // model switch, dead process or bypassPermissions (start-only): resume in a fresh one
 		n.rememberTasks(id, nil)
 		p = nil
 	}
 	if p == nil {
-		var err error
 		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false); err != nil {
 			return "", err
 		}
+	}
+	if p.agent == "codex" {
+		p.mu.Lock()
+		p.busy = true
+		p.lastActive = time.Now()
+		p.mu.Unlock()
+		if err := p.cx.deliver(ctx, text, images); err != nil {
+			p.mu.Lock()
+			p.busy = p.cx.turn() != ""
+			p.mu.Unlock()
+			return "", fmt.Errorf("send to codex: %w", err)
+		}
+		n.notifySessions()
+		return id, nil
 	}
 
 	content := []map[string]any{}
@@ -177,8 +202,13 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 }
 
 func (n *Node) adoptSpareFor(cwd, launcher, mode string) *assistantProc {
-	if mode == proto.ModeBypass {
-		return nil
+	if mode == proto.ModeBypass { // a Codex spare is fine: its policy goes with each turn
+		n.mu.Lock()
+		sp := n.spare
+		n.mu.Unlock()
+		if sp == nil || sp.agent != "codex" {
+			return nil
+		}
 	}
 	return n.adoptSpare(cwd, launcher)
 }
@@ -213,7 +243,10 @@ func (n *Node) assistantWarm(cwd, launcher string) error {
 	if old != nil {
 		old.stop()
 	}
-	p, err := n.spawnAssistant(newUUID(), cwd, launcher, false, true)
+	if _, err := n.assistantAgent(context.Background(), launcher); err != nil {
+		return err
+	}
+	p, err := n.spawnAssistant("", cwd, launcher, false, true)
 	if err != nil {
 		return err
 	}
@@ -246,7 +279,19 @@ func (n *Node) assistantContext(id string) string {
 	return res.Text
 }
 
+// spawnAssistant starts the conversation's process for its launcher's agent: claude -p (spawnClaude) or codex
+// app-server (spawnCodex). A new Codex conversation (id "") gets its id from Codex.
 func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
+	if n.agentOf(launcher) == "codex" {
+		return n.spawnCodex(id, cwd, launcher, resume, spare)
+	}
+	if id == "" {
+		id = newUUID()
+	}
+	return n.spawnClaude(id, cwd, launcher, resume, spare)
+}
+
+func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		return nil, err
 	}
@@ -300,7 +345,7 @@ func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*as
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
-	p := &assistantProc{id: id, launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
+	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now(), mode: startMode}
 	if !spare {
 		n.mu.Lock()
@@ -451,8 +496,18 @@ func (n *Node) emitDelta(id, text string) {
 }
 
 // assistantInterrupt stops the current turn. claude -p has no interrupt over stdin, so the process is killed;
-// the next message resumes the conversation from its transcript.
+// the next message resumes the conversation from its transcript. Codex has turn/interrupt: the process stays.
 func (n *Node) assistantInterrupt(id string) error {
+	n.mu.Lock()
+	p := n.procs[id]
+	n.mu.Unlock()
+	if p != nil && p.agent == "codex" && p.alive() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := p.cx.interrupt(ctx); err == nil {
+			return nil
+		}
+	}
 	n.stopAssistant(id)
 	n.rememberTasks(id, nil) // stopped on purpose, background tasks included
 	return nil
@@ -603,6 +658,9 @@ func (n *Node) assistantSessions() []proto.Session {
 		updated := p.lastActive
 		p.mu.Unlock()
 		s := proto.Session{SessionID: p.id, Cwd: p.cwd, Status: status, Launcher: p.launcher, UpdatedAt: updated.UTC()}
+		if p.agent == "codex" {
+			s.Agent = "codex"
+		}
 		if path := n.transcriptPath(p.id); path != "" {
 			if st, err := os.Stat(path); err == nil {
 				m := n.meta(path, st)
@@ -633,15 +691,27 @@ func (n *Node) notifySessions() {
 	_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
 }
 
-// assistantLauncherOK refuses a launcher that does not run Claude Code: the assistant is headless claude (-p,
-// --input-format stream-json), and a codex launcher fails on its first flag with "unexpected argument
-// '--input-format'" (2026-11-01: 设置 › 助手 had been set to cx_gpt and every message failed that way).
-func (n *Node) assistantLauncherOK(ctx context.Context, launcher string) error {
+// assistantAgent is the agent a launcher runs, as far as the assistant goes: claude (headless -p, stream-json) or
+// codex (app-server). Anything else is refused with a reason the app shows (2026-11-01: a codex launcher used to fail
+// every message on "unexpected argument '--input-format'"; Codex has its own backend since).
+func (n *Node) assistantAgent(ctx context.Context, launcher string) (string, error) {
 	if launcher == "claude" {
-		return nil
+		return "claude", nil
 	}
-	if d := n.launcherProbeCached(ctx, launcher); d.Agent != "" && d.Agent != "claude" {
-		return fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code 的启动器：在 设置 › 助手 换一个", launcher, d.Agent)
+	d := n.launcherProbeCached(ctx, launcher)
+	switch d.Agent {
+	case "", "claude": // a probe that failed: try it as claude, as before
+		return "claude", nil
+	case "codex":
+		return "codex", nil
 	}
-	return nil
+	return "", fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code 或 Codex 的启动器：在 设置 › 助手 换一个", launcher, d.Agent)
+}
+
+// agentOf is assistantAgent from the probe cache, for places that only need to know (no error).
+func (n *Node) agentOf(launcher string) string {
+	if a, err := n.assistantAgent(context.Background(), launcher); err == nil {
+		return a
+	}
+	return "claude"
 }

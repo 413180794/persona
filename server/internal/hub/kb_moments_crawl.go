@@ -27,6 +27,19 @@ type MomentsCrawl struct {
 	PagesPerTab      int  `json:"pages_per_tab,omitempty"`      // pages further down a tab read per round, from where the last stopped (10)
 	CommentsPerRound int  `json:"comments_per_round,omitempty"` // posts whose comments are read per round (150)
 	DelayMS          int  `json:"delay_ms,omitempty"`           // between two requests (300)
+	// MaxDays: posts older than this are not wanted (2026-11-01: a year is enough, and reading further only loads
+	// lark-connector and Feishu). A deep pass stops at a page that is all older; their comments are not read. (365, and
+	// never more than kb.text_days.)
+	MaxDays int `json:"max_days,omitempty"`
+}
+
+// maxAge is how far back posts are kept and read.
+func (c MomentsCrawl) maxAge(textDays int) time.Duration {
+	days := or(c.MaxDays, 365)
+	if textDays > 0 && textDays < days {
+		days = textDays
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 func (c MomentsCrawl) interval() time.Duration {
@@ -56,10 +69,12 @@ type MomentsRound struct {
 	Tabs         int           `json:"tabs"`
 	Pages        int           `json:"pages"`
 	Requests     int           `json:"requests"`
-	Seen         int           `json:"seen"`     // distinct posts in the feeds this round
-	New          int           `json:"new"`      // first time archived
-	Changed      int           `json:"changed"`  // comment count moved
-	Comments     int           `json:"comments"` // posts whose comments were read
+	Seen         int           `json:"seen"`                 // distinct posts in the feeds this round
+	Old          int           `json:"old"`                  // posts past max_days in the pages read (skipped)
+	TabsEnded    int           `json:"tabs_ended,omitempty"` // tabs whose deep pass reached posts past max_days this round
+	New          int           `json:"new"`                  // first time archived
+	Changed      int           `json:"changed"`              // comment count moved
+	Comments     int           `json:"comments"`             // posts whose comments were read
 	CommentsLeft int           `json:"comments_left"`
 	Total        int           `json:"total"` // posts in the archive
 	Bytes        int64         `json:"bytes"` // size of moments/
@@ -70,13 +85,13 @@ func (h *Hub) momentsCrawlLoop(ctx context.Context, st *kb.Store, cfg MomentsCra
 	var lastPrune time.Time
 	for {
 		r := h.crawlMoments(ctx, st, cfg, textDays)
-		h.logf("kb: removed round: %d tab(s) %d page(s) %d request(s) in %s; %d seen, %d new, %d changed, comments of %d (%d left); %d archived, %.1f MB%s",
-			r.Tabs, r.Pages, r.Requests, r.Took.Round(time.Second), r.Seen, r.New, r.Changed, r.Comments, r.CommentsLeft, r.Total,
+		h.logf("kb: removed round: %d tab(s) %d page(s) %d request(s) in %s; %d seen, %d new, %d changed, %d past max_days (%d tab(s) ended there), comments of %d (%d left); %d archived, %.1f MB%s",
+			r.Tabs, r.Pages, r.Requests, r.Took.Round(time.Second), r.Seen, r.New, r.Changed, r.Old, r.TabsEnded, r.Comments, r.CommentsLeft, r.Total,
 			float64(r.Bytes)/1e6, map[bool]string{true: "; " + r.Error, false: ""}[r.Error != ""])
 		if time.Since(lastPrune) > 24*time.Hour {
 			lastPrune = time.Now()
-			if n := st.PruneMoments(time.Now().AddDate(0, 0, -textDays)); n > 0 {
-				h.logf("kb: removed: pruned %d post(s) older than %d days", n, textDays)
+			if n := st.PruneMoments(time.Now().Add(-cfg.maxAge(textDays))); n > 0 {
+				h.logf("kb: removed: pruned %d post(s) older than %s", n, cfg.maxAge(textDays))
 			}
 		}
 		select {
@@ -107,7 +122,7 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		}
 	}
 	me, _ := h.larkMe(ctx)
-	cutoff := time.Now().AddDate(0, 0, -textDays)
+	cutoff := time.Now().Add(-cfg.maxAge(textDays))
 	tabs, err := h.lark.MomentTabs(ctx)
 	if err != nil {
 		r.Error = "tabs: " + err.Error()
@@ -131,8 +146,9 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		}
 	}
 	seen := map[string]bool{}
-	// read pages a tab from token on; head stops at a page with nothing new. Returns the next token ("" at the end)
-	// and whether it may go on (false on errors, the end, or a rate limit).
+	// read pages a tab from token on; head stops at a page with nothing new. Returns the next token ("" at the end,
+	// or at a page whose posts are all past max_days: nothing further down is wanted) and whether it may go on
+	// (false on errors, the end, or a rate limit).
 	read := func(tab lark.MomentTab, token string, pages int, head bool) (string, bool) {
 		for page := 0; page < pages; page++ {
 			if !wait() {
@@ -144,9 +160,13 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 				return token, false
 			}
 			r.Pages++
-			fresh := 0
+			fresh, old := 0, 0
 			for _, p := range posts {
-				if p.ID == "" || p.At.Before(cutoff) {
+				if p.ID == "" {
+					continue
+				}
+				if p.At.Before(cutoff) {
+					old++
 					continue
 				}
 				if seen[p.ID] { // in another tab already this round: its first sighting stands
@@ -170,7 +190,13 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 					fresh++
 				}
 			}
+			r.Old += old
 			if next == "" || next == token || len(posts) == 0 {
+				return "", false
+			}
+			// The feed is by heat, not time, but a whole page past max_days is as far down as a tab is worth reading.
+			if old == len(posts) {
+				r.TabsEnded++
 				return "", false
 			}
 			token = next
@@ -217,6 +243,7 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 	var todo []*kb.MomentPost
 	for _, p := range st.MomentPosts() {
 		switch {
+		case p.At.Before(cutoff): // past max_days: pruned soon, its comments not worth a request
 		case p.CommentsOf == p.CommentCount:
 		case p.CommentCount == 0: // nothing to read: settled at once, no request, no budget
 			p.CommentsOf, p.CommentsAt = 0, time.Now().UTC()

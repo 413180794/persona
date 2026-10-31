@@ -58,7 +58,7 @@ struct AssistantTopBar: View {
                 }
             }
             .onChange(of: key) { showInfo = false }
-        .task(id: machineID) { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsClaude) }
+        .task(id: machineID) { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant) }
     }
 
     private var bar: some View {

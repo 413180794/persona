@@ -33,6 +33,10 @@ type codexPayload struct {
 	// turn_context
 	Model          string `json:"model"`
 	ApprovalPolicy string `json:"approval_policy"`
+	SandboxPolicy  struct {
+		Type string `json:"type"`
+	} `json:"sandbox_policy"`
+	Effort string `json:"effort"`
 	// event_msg
 	Item   *codexItem `json:"item"`
 	Reason string     `json:"reason"`
@@ -149,7 +153,10 @@ func parseCodexLine(seq int, line []byte, meta *Meta) []proto.Item {
 		if p.Model != "" {
 			meta.Model = p.Model
 		}
-		meta.PermissionMode = p.ApprovalPolicy
+		meta.PermissionMode, meta.CodexSandbox, meta.ModeAt = p.ApprovalPolicy, p.SandboxPolicy.Type, l.Timestamp
+		if p.Effort != "" {
+			meta.Effort, meta.EffortAt = p.Effort, l.Timestamp
+		}
 		return nil
 	case "event_msg":
 	default:

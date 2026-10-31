@@ -100,10 +100,10 @@ struct AssistantProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             selection = model.assistantConfig?.launcher ?? "claude"
-            launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsClaude)
+            launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant)
         }
         .sheet(isPresented: $showLaunchers, onDismiss: {
-            Task { launchers = ((try? await model.launchers(machineID, refresh: true)) ?? launchers).filter(\.runsClaude) }
+            Task { launchers = ((try? await model.launchers(machineID, refresh: true)) ?? launchers).filter(\.runsAssistant) }
         }) {
             NavigationStack {
                 ModelLaunchersView()

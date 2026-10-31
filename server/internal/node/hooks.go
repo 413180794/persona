@@ -111,6 +111,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 	if json.Unmarshal(line, &req) != nil {
 		return
 	}
+	req.SessionID = n.resolveAssistantKey(req.SessionID)
 	// The caller going away (hook killed because the user answered in the terminal) cancels the request.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -319,6 +320,9 @@ func permissionDecision(d map[string]any) any {
 // ask forwards an interaction to the hub and blocks until the phone answers, it expires, or the hook is cancelled.
 // It fails with errNodeGone when the hub connection ends first: a resumable hook then asks the next node.
 func (n *Node) ask(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool, error) {
+	if n.peer == nil { // no hub: nobody to ask
+		return proto.Resolution{}, false, nil
+	}
 	ctx, cancel := context.WithDeadline(ctx, ix.ExpiresAt)
 	defer cancel()
 	var res proto.Resolution

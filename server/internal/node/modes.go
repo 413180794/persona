@@ -73,6 +73,9 @@ func (n *Node) noteModes(id, mode, effort string) {
 // currentModes is the session's mode and effort: from its transcript, or what the app set since.
 func (n *Node) currentModes(id string, m quickMeta) (mode, effort string) {
 	mode, effort = m.mode, m.effort
+	if mode != "" && !slices.Contains(permissionModes, mode) && n.isAssistantSession(id) {
+		mode = modeFromCodex(mode, m.sandbox) // a Codex rollout records its approval policy and sandbox
+	}
 	n.mu.Lock()
 	set, ok := n.modes[id]
 	n.mu.Unlock()
@@ -85,6 +88,17 @@ func (n *Node) currentModes(id string, m quickMeta) (mode, effort string) {
 		}
 	}
 	return mode, effort
+}
+
+// modeFromCodex reads the app's mode back from what an assistant's Codex turn ran with (codexPolicy in reverse), so
+// it survives a node restart. acceptEdits runs like default and reads back as default.
+func modeFromCodex(approval, sandbox string) string {
+	for _, mode := range []string{"default", "auto", "plan", proto.ModeBypass} {
+		if a, s := codexPolicy(mode); a == approval && s == sandbox {
+			return mode
+		}
+	}
+	return ""
 }
 
 // modesOf is currentModes for a session id, reading its transcript meta when there is one.
@@ -307,6 +321,9 @@ func effortOutcome(screen, effort string) error {
 // syncAssistantModes sends a headless conversation's wanted mode and effort as control requests (they apply from
 // the next request on, mid-turn included), once per change.
 func (n *Node) syncAssistantModes(p *assistantProc) {
+	if p.agent == "codex" {
+		return // Codex gets them with each turn (codexPolicy), and the node answers approvals by the mode it reads then
+	}
 	mode, effort := n.modesOf(p.id)
 	p.mu.Lock()
 	var reqs []map[string]any

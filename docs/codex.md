@@ -46,6 +46,8 @@ UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 hub 机器的�
 
 `response_item` 是同样内容的模型线格式，跳过。Extension 里的 `web.search` 显示成 `WebSearch`（搜索，输入是查询词）/ `WebFetch`（`action.type=openPage`，输入是网址），结果每条「标题  网址」；SubAgentActivity、其他 Extension（生图）、CollabAgentToolCall 暂不显示。
 
+Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `codex app-server`，见 `docs/assistant.md`「Codex」。
+
 ## 还不支持
 
 - 从手机新建 Codex 会话（启动器只认 claude 系列），离线（已退出）的 Codex 会话也不进列表。

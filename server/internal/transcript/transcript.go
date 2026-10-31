@@ -101,9 +101,11 @@ type Meta struct {
 	Version        string
 	PermissionMode string
 	// ModeAt / Effort / EffortAt: when the permission mode was last seen, and the effort level of the latest reply.
-	ModeAt        time.Time
-	Effort        string
-	EffortAt      time.Time
+	ModeAt   time.Time
+	Effort   string
+	EffortAt time.Time
+	// CodexSandbox: Codex rollouts' sandbox of the latest turn (read-only, workspace-write…); PermissionMode is its approval policy.
+	CodexSandbox  string
 	ContextTokens int // input + cache read + cache creation of the latest reply: what the model last saw
 	OutputTokens  int // total generated, counted once per message
 	Compactions   int

@@ -1,0 +1,471 @@
+package node
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
+)
+
+// fakeAppServer plays `codex app-server` on the other end of a codexConn: it records what the node sends, answers
+// requests with canned results, and pushes notifications / requests of its own. The frames follow what codex-cli
+// 0.159.3 sent in a real run (docs/assistant.md「Codex」).
+type fakeAppServer struct {
+	t   *testing.T
+	out io.Writer
+
+	mu      sync.Mutex
+	got     []codexMessage // requests and notifications from the node
+	replies map[string]codexMessage
+	results map[string]any // method → result
+}
+
+func (f *fakeAppServer) serve(r io.Reader) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 16<<20)
+	for sc.Scan() {
+		var m codexMessage
+		if json.Unmarshal(sc.Bytes(), &m) != nil {
+			continue
+		}
+		f.mu.Lock()
+		if m.Method == "" { // the node answering one of our requests
+			f.replies[string(m.ID)] = m
+			f.mu.Unlock()
+			continue
+		}
+		f.got = append(f.got, m)
+		res, ok := f.results[m.Method]
+		f.mu.Unlock()
+		if len(m.ID) > 0 {
+			if !ok {
+				res = map[string]any{}
+			}
+			f.push(map[string]any{"id": m.ID, "result": res})
+		}
+	}
+}
+
+func (f *fakeAppServer) push(v any) {
+	b, _ := json.Marshal(v)
+	_, _ = f.out.Write(append(b, '\n'))
+}
+
+func (f *fakeAppServer) sent(method string) []codexMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []codexMessage
+	for _, m := range f.got {
+		if m.Method == method {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// request sends a request to the node and waits for its answer.
+func (f *fakeAppServer) request(id int, method string, params any) map[string]any {
+	f.t.Helper()
+	f.push(map[string]any{"id": id, "method": method, "params": params})
+	key, _ := json.Marshal(id)
+	var res map[string]any
+	waitFor(f.t, method+" answered", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		r, ok := f.replies[string(key)]
+		if ok {
+			_ = json.Unmarshal(r.Result, &res)
+		}
+		return ok
+	})
+	return res
+}
+
+func newFakeCodex(t *testing.T, n *Node, cwd string) (*assistantProc, *codexConn, *fakeAppServer) {
+	t.Helper()
+	inR, inW := io.Pipe()   // node → app-server
+	outR, outW := io.Pipe() // app-server → node
+	p := &assistantProc{agent: "codex", launcher: "cx_test", cwd: cwd, stdin: inW, exited: make(chan struct{}),
+		born: time.Now(), lastActive: time.Now()}
+	c := &codexConn{n: n, p: p, key: "proc-test", pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{},
+		files: map[string][]string{}}
+	p.cx = c
+	f := &fakeAppServer{t: t, out: outW, replies: map[string]codexMessage{}, results: map[string]any{}}
+	go f.serve(inR)
+	go c.read(outR)
+	t.Cleanup(func() { _ = inW.Close(); _ = outW.Close() })
+	return p, c, f
+}
+
+// fakeHub answers the node's calls the way the hub would: lark-connector config, the snapshot, and the phone's answers.
+type fakeHub struct {
+	mu     sync.Mutex
+	asked  []proto.Interaction
+	answer func(proto.Interaction) proto.Resolution
+	deltas []string
+}
+
+func (h *fakeHub) interactions() []proto.Interaction {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]proto.Interaction(nil), h.asked...)
+}
+
+func withFakeHub(t *testing.T, n *Node) *fakeHub {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer = rpc.New("n", n2hW)
+	hub := rpc.New("h", h2nW)
+	fh := &fakeHub{answer: func(proto.Interaction) proto.Resolution { yes := true; return proto.Resolution{Allow: &yes} }}
+	hub.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		switch method {
+		case "assistant.lark":
+			return proto.AssistantLark{Base: "http://lark.example:8443/agent/v1", Token: "t"}, nil
+		case "assistant.context":
+			return map[string]any{"text": "snapshot"}, nil
+		case "interaction.create":
+			var p struct {
+				Interaction proto.Interaction `json:"interaction"`
+			}
+			_ = json.Unmarshal(params, &p)
+			fh.mu.Lock()
+			fh.asked = append(fh.asked, p.Interaction)
+			answer := fh.answer
+			fh.mu.Unlock()
+			return answer(p.Interaction), nil
+		}
+		return map[string]any{}, nil
+	}
+	hub.OnEvent = func(event string, params json.RawMessage) {
+		if event != "session.delta" {
+			return
+		}
+		var p struct {
+			Text string `json:"text"`
+		}
+		_ = json.Unmarshal(params, &p)
+		fh.mu.Lock()
+		fh.deltas = append(fh.deltas, p.Text)
+		fh.mu.Unlock()
+	}
+	go func() { _ = hub.Serve(ctx, n2hR) }()
+	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+	return fh
+}
+
+func codexTestNode(t *testing.T) *Node {
+	n, _ := testNode(t)
+	n.akeys = map[string]*assistantProc{}
+	n.modes = map[string]sessionModes{}
+	n.metas = map[string]quickMeta{}
+	n.bgScans = map[string]*bgScan{}
+	n.logger = log.New(io.Discard, "", 0)
+	return n
+}
+
+const testThread = "01a19300-7e92-7073-9bb8-d2ad3126f328"
+
+func TestCodexStartAndTurns(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	cwd := t.TempDir()
+	rollout := filepath.Join(t.TempDir(), "rollout-2026-11-01T01-27-25-"+testThread+".jsonl")
+	_ = os.WriteFile(rollout, []byte(`{"timestamp":"2026-11-01T00:00:00Z","type":"session_meta","payload":{"id":"`+testThread+`","cwd":"`+cwd+`"}}`+"\n"), 0o600)
+	p, c, f := newFakeCodex(t, n, cwd)
+	f.results["thread/start"] = map[string]any{"thread": map[string]any{"id": testThread, "path": rollout}}
+	f.results["turn/start"] = map[string]any{"turn": map[string]any{"id": "turn-1", "status": "inProgress"}}
+
+	ctx := context.Background()
+	if err := c.start(ctx, "", cwd, false); err != nil {
+		t.Fatal(err)
+	}
+	if p.id != testThread || n.transcriptPath(testThread) != rollout {
+		t.Fatalf("thread not adopted: id %q path %q", p.id, n.transcriptPath(testThread))
+	}
+	var start struct {
+		Params struct {
+			Cwd, ApprovalPolicy, Sandbox, DeveloperInstructions string
+		}
+	}
+	b, _ := json.Marshal(f.sent("thread/start")[0])
+	_ = json.Unmarshal(b, &start)
+	if start.Params.ApprovalPolicy != "untrusted" || start.Params.Sandbox != "workspace-write" || start.Params.DeveloperInstructions != "snapshot" {
+		t.Fatalf("thread/start params %+v", start.Params)
+	}
+	if roots := f.sent("skills/extraRoots/set"); len(roots) != 1 || !strings.Contains(string(roots[0].Params), filepath.Join(cwd, ".claude", "skills")) {
+		t.Fatalf("skills root not set: %v", roots)
+	}
+
+	// Idle: a new turn, with the mode and effort the app chose.
+	n.noteModes(testThread, "auto", "high")
+	if err := c.deliver(ctx, "你好", nil); err != nil {
+		t.Fatal(err)
+	}
+	ts := f.sent("turn/start")
+	if len(ts) != 1 {
+		t.Fatalf("turn/start sent %d times", len(ts))
+	}
+	var turn map[string]any
+	_ = json.Unmarshal(ts[0].Params, &turn)
+	sb, _ := turn["sandboxPolicy"].(map[string]any)
+	if turn["approvalPolicy"] != "on-request" || turn["effort"] != "high" || sb["type"] != "workspaceWrite" || sb["networkAccess"] != false {
+		t.Fatalf("turn/start params %v", turn)
+	}
+
+	// Streaming text and the turn's state.
+	f.push(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": testThread, "turn": map[string]any{"id": "turn-1"}}})
+	f.push(map[string]any{"method": "item/started", "params": map[string]any{"threadId": testThread, "item": map[string]any{"type": "agentMessage", "id": "m1"}}})
+	for _, d := range []string{"Hi", ",", " nice"} {
+		f.push(map[string]any{"method": "item/agentMessage/delta", "params": map[string]any{"threadId": testThread, "itemId": "m1", "delta": d}})
+	}
+	waitFor(t, "live text", func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.partial.String() == "Hi, nice" && p.busy
+	})
+
+	// While the turn runs a message is steered into it.
+	if err := c.deliver(ctx, "再补一句", nil); err != nil {
+		t.Fatal(err)
+	}
+	st := f.sent("turn/steer")
+	if len(st) != 1 || !strings.Contains(string(st[0].Params), `"expectedTurnId":"turn-1"`) || len(f.sent("turn/start")) != 1 {
+		t.Fatalf("steer: %v, starts %d", st, len(f.sent("turn/start")))
+	}
+
+	// Stop interrupts the turn instead of killing the process.
+	if err := c.interrupt(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if it := f.sent("turn/interrupt"); len(it) != 1 || !strings.Contains(string(it[0].Params), `"turnId":"turn-1"`) {
+		t.Fatalf("interrupt: %v", it)
+	}
+	if cl := f.sent("thread/backgroundTerminals/clean"); len(cl) != 1 { // a running command outlives turn/interrupt
+		t.Fatalf("background terminals not cleaned: %v", cl)
+	}
+
+	f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": testThread, "turn": map[string]any{"id": "turn-1", "status": "interrupted"}}})
+	waitFor(t, "turn over", func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return !p.busy && c.turn() == ""
+	})
+	waitFor(t, "live text cleared", func() bool {
+		fh.mu.Lock()
+		defer fh.mu.Unlock()
+		return len(fh.deltas) > 0 && fh.deltas[len(fh.deltas)-1] == ""
+	})
+
+	// A photo goes in as a local file the rollout records (and the app shows as a thumbnail).
+	n.dir = t.TempDir()
+	if err := c.deliver(ctx, "", []proto.Image{{Mime: "image/png", Data: "iVBORw0KGgo="}}); err != nil {
+		t.Fatal(err)
+	}
+	last := f.sent("turn/start")
+	if !strings.Contains(string(last[len(last)-1].Params), `"type":"localImage"`) {
+		t.Fatalf("image not sent as localImage: %s", last[len(last)-1].Params)
+	}
+}
+
+func TestCodexApprovals(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	cwd := t.TempDir()
+	p, c, f := newFakeCodex(t, n, cwd)
+	p.id = testThread
+	c.threadID, c.turnID = testThread, "turn-1"
+	command := func(id int, cmd string) string {
+		res := f.request(id, "item/commandExecution/requestApproval", map[string]any{"kind": "command", "threadId": testThread,
+			"turnId": "turn-1", "itemId": "call_" + string(rune('a'+id)), "command": "/bin/zsh -lc '" + cmd + "'", "cwd": cwd})
+		d, _ := res["decision"].(string)
+		return d
+	}
+
+	// Bypass: everything runs, but Feishu writes still go to the phone.
+	n.noteModes(testThread, proto.ModeBypass, "")
+	if d := command(1, "rm -rf build"); d != "accept" || len(fh.interactions()) != 0 {
+		t.Fatalf("bypass command: %s, asked %d", d, len(fh.interactions()))
+	}
+	if d := command(2, "ol GET /me"); d != "accept" || len(fh.interactions()) != 0 {
+		t.Fatalf("Feishu read: %s, asked %d", d, len(fh.interactions()))
+	}
+	if d := command(3, `ol POST /conversations/7123/messages {"text":"hi"}`); d != "accept" {
+		t.Fatalf("Feishu write the phone allowed: %s", d)
+	}
+	if ix := fh.interactions(); len(ix) != 1 || ix[0].ToolName != "飞书" || ix[0].SessionID != testThread {
+		t.Fatalf("Feishu write not confirmed on the phone: %+v", ix)
+	}
+
+	// Default: other commands are asked about; a refusal with words goes back to the model.
+	n.noteModes(testThread, "default", "")
+	fh.mu.Lock()
+	fh.answer = func(proto.Interaction) proto.Resolution {
+		no := false
+		return proto.Resolution{Allow: &no, Message: "别删"}
+	}
+	fh.mu.Unlock()
+	if d := command(4, "rm -rf build"); d != "decline" {
+		t.Fatalf("refused command: %s", d)
+	}
+	ix := fh.interactions()
+	if len(ix) != 2 || ix[1].ToolName != "Bash" || ix[1].Summary != "rm -rf build" {
+		t.Fatalf("command card: %+v", ix[len(ix)-1])
+	}
+	waitFor(t, "refusal passed on", func() bool {
+		s := f.sent("turn/steer")
+		return len(s) == 1 && strings.Contains(string(s[0].Params), "别删")
+	})
+
+	// MCP tool calls: Jarvis's own run unasked, others are asked about.
+	elicit := func(id int, server string) string {
+		res := f.request(id, "mcpServer/elicitation/request", map[string]any{"threadId": testThread, "turnId": "turn-1",
+			"serverName": server, "mode": "form", "message": "Allow?", "requestedSchema": map[string]any{"type": "object"},
+			"_meta": map[string]any{"codex_approval_kind": "mcp_tool_call", "tool_params": map[string]any{"text": "x"}}})
+		a, _ := res["action"].(string)
+		return a
+	}
+	if a := elicit(5, "jarvis"); a != "accept" || len(fh.interactions()) != 2 {
+		t.Fatalf("jarvis tool: %s, asked %d", a, len(fh.interactions()))
+	}
+	if a := elicit(6, "other"); a != "decline" || len(fh.interactions()) != 3 {
+		t.Fatalf("other tool: %s, asked %d", a, len(fh.interactions()))
+	}
+
+	// File changes: acceptEdits accepts them.
+	n.noteModes(testThread, "acceptEdits", "")
+	res := f.request(7, "item/fileChange/requestApproval", map[string]any{"threadId": testThread, "turnId": "turn-1", "itemId": "fc1"})
+	if res["decision"] != "accept" || len(fh.interactions()) != 3 {
+		t.Fatalf("acceptEdits file change: %v", res)
+	}
+
+	// request_user_input: the phone's question card, answers by question id.
+	fh.mu.Lock()
+	fh.answer = func(ix proto.Interaction) proto.Resolution {
+		return proto.Resolution{Answers: map[string]string{ix.Questions[0].Question: "蓝色"}}
+	}
+	fh.mu.Unlock()
+	res = f.request(8, "item/tool/requestUserInput", map[string]any{"threadId": testThread, "turnId": "turn-1", "itemId": "q1",
+		"isBlocking": true, "questions": []any{map[string]any{"id": "color", "header": "颜色", "question": "选哪个？",
+			"options": []any{map[string]any{"label": "蓝色", "description": ""}, map[string]any{"label": "红色", "description": ""}}}}})
+	b, _ := json.Marshal(res)
+	if !strings.Contains(string(b), `"color":{"answers":["蓝色"]}`) {
+		t.Fatalf("answers: %s", b)
+	}
+	if ix := fh.interactions(); ix[len(ix)-1].Kind != proto.IxQuestion || len(ix[len(ix)-1].Questions[0].Options) != 2 {
+		t.Fatalf("question card: %+v", ix[len(ix)-1])
+	}
+
+	// Anything else is refused as a JSON-RPC error, not left hanging.
+	f.push(map[string]any{"id": 9, "method": "attestation/generate", "params": map[string]any{}})
+	waitFor(t, "unknown request answered", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		r, ok := f.replies["9"]
+		return ok && r.Error != nil
+	})
+}
+
+func TestCodexPolicyAlwaysAsks(t *testing.T) {
+	for _, mode := range append([]string{""}, proto.PermissionModes...) {
+		approval, sandbox := codexPolicy(mode)
+		if approval == "never" {
+			t.Errorf("%s: approvals off, the Feishu gate would see nothing", mode)
+		}
+		if sandbox == "" {
+			t.Errorf("%s: no sandbox", mode)
+		}
+	}
+	if _, sb := codexPolicy(proto.ModeBypass); sb != "danger-full-access" {
+		t.Errorf("bypass sandbox %s", sb)
+	}
+	if p := codexSandboxPolicy("default"); p["networkAccess"] != true {
+		t.Errorf("default: ol and ssh need the network: %v", p)
+	}
+}
+
+func TestUnwrapShell(t *testing.T) {
+	for in, want := range map[string]string{
+		`/bin/zsh -lc 'ol GET /me'`:            "ol GET /me",
+		`/usr/bin/zsh -c 'echo hello > x.txt'`: "echo hello > x.txt",
+		`bash -lc "ol POST /x '{\"a\":1}'"`:    `ol POST /x '{"a":1}'`,
+		`ls -la`:                               "ls -la",
+		`/bin/zsh -lc 'a' && /bin/zsh -lc 'b'`: `/bin/zsh -lc 'a' && /bin/zsh -lc 'b'`,
+		`python3 -c 'print(1)'`:                `python3 -c 'print(1)'`,
+	} {
+		if got := unwrapShell(in); got != want {
+			t.Errorf("unwrapShell(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCodexArgsAndShell(t *testing.T) {
+	args := strings.Join(codexArgs("/home/me/.jarvis/bin/jarvisd", "proc-ab"), " ")
+	for _, want := range []string{`mcp_servers.jarvis.command="/home/me/.jarvis/bin/jarvisd"`, `JARVIS_SESSION_ID="proc-ab"`,
+		"tool_timeout_sec=86400", "ignore_default_excludes=true"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args lack %s: %s", want, args)
+		}
+	}
+	if sh := codexShell("cx_gpt"); !strings.Contains(sh, `codex "$@" app-server "${__jarvis_args[@]}"`) || !strings.HasSuffix(sh, "cx_gpt") {
+		t.Errorf("shell: %s", sh)
+	}
+}
+
+func TestResolveAssistantKey(t *testing.T) {
+	n := codexTestNode(t)
+	p := &assistantProc{id: testThread}
+	n.akeys["proc-1"] = p
+	if got := n.resolveAssistantKey("proc-1"); got != testThread {
+		t.Errorf("key → %s", got)
+	}
+	if got := n.resolveAssistantKey("proc-unknown"); got != "proc-unknown" {
+		t.Errorf("unknown key → %s", got)
+	}
+	if got := n.resolveAssistantKey(testThread); got != testThread {
+		t.Errorf("session id → %s", got)
+	}
+}
+
+func TestModeFromCodex(t *testing.T) {
+	for _, mode := range []string{"default", "auto", "plan", proto.ModeBypass} {
+		a, s := codexPolicy(mode)
+		if got := modeFromCodex(a, s); got != mode {
+			t.Errorf("%s → (%s, %s) → %s", mode, a, s, got)
+		}
+	}
+	if got := modeFromCodex("never", "danger-full-access"); got != "" {
+		t.Errorf("a TUI's own policy read as %q", got)
+	}
+}
+
+// A Codex rollout of the assistant starts with tens of KB of instructions: the first prompt (the title until Codex
+// names the thread) is past the first 32 KB.
+func TestQuickMetaFindsAFirstPromptPastLongInstructions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout-2026-11-01T01-27-25-"+testThread+".jsonl")
+	big := strings.Repeat("x", 70*1024)
+	lines := []string{
+		`{"timestamp":"2026-11-01T00:00:00Z","type":"session_meta","payload":{"id":"` + testThread + `","cwd":"/home/me/.jarvis/assistant"}}`,
+		`{"timestamp":"2026-11-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"` + big + `"}]}}`,
+		`{"timestamp":"2026-11-01T00:00:01Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u1","content":[{"type":"text","text":"今天有什么会"}]}}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(path)
+	if m := readQuickMeta(path, st); m.first != "今天有什么会" {
+		t.Fatalf("first prompt %q", m.first)
+	}
+}

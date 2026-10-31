@@ -392,66 +392,78 @@ func (n *Node) larkGate(ctx context.Context, in hookInput, ix proto.Interaction)
 	if json.Unmarshal(in.ToolInput, &a) != nil || a.Command == "" {
 		return nil, nil
 	}
+	decision, reason, err := n.larkCheck(ctx, in.SessionID, in.Cwd, a.Command, ix)
+	if err != nil || decision == "" {
+		return nil, err
+	}
+	return preToolDecision(decision, reason), nil
+}
+
+// larkCheck is the gate itself, for any agent: "allow" / "deny" with the reason to give the model, or "" when the
+// command is not the gate's to decide (the usual permission flow). Writes are confirmed on the phone here, so a
+// "deny" may carry the user's own words. Claude reaches it through the Bash PreToolUse hook (larkGate), Codex through
+// the app-server's command approvals (assistant_codex.go).
+func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix proto.Interaction) (string, string, error) {
 	cfg := n.assistantLark(ctx)
-	v := classifyLark(a.Command, larkHost(cfg.Base), in.Cwd)
+	v := classifyLark(command, larkHost(cfg.Base), cwd)
 	if v.deny != "" {
-		return preToolDecision("deny", v.deny), nil
+		return "deny", v.deny, nil
 	}
 	if v.other {
 		// A command the gate cannot follow (loops, $(…), scripts) that still calls ol with a write: the phone confirms
 		// it here, whole, whatever the permission mode (bypassPermissions would otherwise run it unasked).
-		if m := olWriteRe.FindString(a.Command); m != "" {
+		if m := olWriteRe.FindString(command); m != "" {
 			ix.Kind, ix.ToolName = proto.IxPermission, "飞书"
-			ix.Summary = "以你的身份在飞书上写（命令较复杂，整条显示）\n" + prettyBody(a.Command)
-			return n.confirmLark(ctx, in, ix, nil)
+			ix.Summary = "以你的身份在飞书上写（命令较复杂，整条显示）\n" + prettyBody(command)
+			return n.confirmLark(ctx, session, ix, nil)
 		}
-		return nil, nil
+		return "", "", nil
 	}
 	rules := append(append([]proto.LarkRule(nil), cfg.Rules...), defaultLarkRules...)
 	var ask []larkCall
 	for _, c := range v.calls {
 		switch decideLark(rules, c) {
 		case "deny":
-			return preToolDecision("deny", "这个飞书操作按配置不允许（"+c.Method+" "+c.Path+"）。"), nil
+			return "deny", "这个飞书操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
-			if !n.larkAlways(in.SessionID, larkPattern(c)) {
+			if !n.larkAlways(session, larkPattern(c)) {
 				ask = append(ask, c)
 			}
 		}
 	}
 	if len(ask) == 0 {
 		if v.unsure {
-			return nil, nil // reads, but $(…) could run anything: the usual flow asks about the whole command
+			return "", "", nil // reads, but $(…) could run anything: the usual flow asks about the whole command
 		}
-		return preToolDecision("allow", "lark-connector 读操作"), nil
+		return "allow", "lark-connector 读操作", nil
 	}
 	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, "飞书", larkSummary(ask)
-	return n.confirmLark(ctx, in, ix, ask)
+	return n.confirmLark(ctx, session, ix, ask)
 }
 
 // olWriteRe: an ol call (or ol.sh) whose method is not a read, anywhere in a command.
 var olWriteRe = regexp.MustCompile("(?i)(^|[\\s;&|(`])(ol|\\S*/ol\\.sh)\\s+(POST|PUT|PATCH|DELETE|\"?\\$)")
 
 // confirmLark asks the phone; "本会话总是允许" remembers the calls' routes (not for whole commands).
-func (n *Node) confirmLark(ctx context.Context, in hookInput, ix proto.Interaction, ask []larkCall) (any, error) {
+func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interaction, ask []larkCall) (string, string, error) {
 	res, ok, err := n.ask(ctx, ix)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	if !ok || res.Allow == nil || !*res.Allow {
 		msg := res.Message
 		if msg == "" {
 			msg = "用户没有同意这个飞书写操作，没有执行。"
 		}
-		return preToolDecision("deny", msg), nil
+		return "deny", msg, nil
 	}
 	if res.Always {
 		for _, c := range ask {
-			n.rememberLarkAlways(in.SessionID, larkPattern(c))
+			n.rememberLarkAlways(session, larkPattern(c))
 		}
 	}
-	return preToolDecision("allow", "用户在手机上同意了"), nil
+	return "allow", "用户在手机上同意了", nil
 }
 
 func preToolDecision(decision, reason string) any {

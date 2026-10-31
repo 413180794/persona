@@ -555,6 +555,7 @@
     "model": "gpt-5-codex",
     "cwd": "/work/project/f1",
     "permission_mode": "never",
+    "effort": "xhigh",
     "turns": 2,
     "compactions": 1,
     "context_tokens": 83440,

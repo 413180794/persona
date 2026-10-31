@@ -56,8 +56,9 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
 }
 
 extension Launcher {
-    /// Runs Claude Code (not codex): what the Jarvis assistant can use (it is headless `claude -p`).
-    var runsClaude: Bool { baseURL != "(codex)" }
+    /// Runs Claude Code or Codex: what the Jarvis assistant can use (headless `claude -p` or `codex app-server`).
+    /// Other agents (TRAEX…) are left out; the node refuses them with a reason too.
+    var runsAssistant: Bool { baseURL != "(traex)" }
 }
 
 nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {

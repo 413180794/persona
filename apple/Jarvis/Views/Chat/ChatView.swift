@@ -914,7 +914,8 @@ struct ChatView: View {
                     RecapStrip(item: recap) { dismissRecap(recap) }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                if viewing == nil, session?.isCodex != true, session?.isTraex != true {
+                // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
+                if viewing == nil, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
@@ -983,7 +984,7 @@ struct ChatView: View {
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
                 // history they wait with the rest.
                 if style == .assistant && frozen == nil {
-                    ChatLiveText(store: store, status: status)
+                    ChatLiveText(store: store)
                 }
                 // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
                 ForEach(frozen == nil ? pending.reversed() : []) { msg in
@@ -2879,7 +2880,6 @@ private struct ChatRegion<Content: View>: View {
 
 private struct ChatLiveText: View {
     let store: ChatStore
-    let status: SessionStatus
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -2892,8 +2892,6 @@ private struct ChatLiveText: View {
         }()
         if !live.isEmpty && !(lastText.map { $0.hasPrefix(live) || live == $0 } ?? false) {
             StreamingText(text: live).id("live").flippedBack()
-        } else if status == .working && live.isEmpty {
-            TypingIndicator(text: "Jarvis 正在思考…").id("typing").flippedBack()
         }
     }
 }

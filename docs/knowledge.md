@@ -78,8 +78,11 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
    - 评论：评论数变了（或从没读过）才重读，新帖先，每轮最多读 `comments_per_round`（150）个帖子的评论（没有评论的不占名额），剩下的下一轮接着读；请求之间隔 `delay_ms`（300）。
      遇到限流（429 / rate）这一轮就停。
    - 搜索（`kb_search`）也读这些帖子，但排在所有别的内容之后，不会把会话、项目挤掉。按 `text_days` 删过期的帖子。
-   - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300}}`。
+   - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}`。
      它用你的账号读全公司的removed，所以默认不开。
+   - 只要一年内的（2026-11-01 用户要求，避免打爆上游）：`max_days`（默认 365，`kb.text_days` 更短就按它）之前的帖子不存、
+     不读评论；往下翻到一整页都超过一年就当这个 tab 读完了（`done`），之后每轮只读头几页看新帖。feed 按热度排，不严格按时间，
+     所以只在**整页**都旧时才停；混着新旧的页照常往下翻。每天清理一次超过 `max_days` 的存档。
 6. **清理**：每天一次，删 365 天前的 `messages/*.md`、30 天前的 `attachments/*`（天数在 `hub.json` 的 `kb` 里改）。
 
 ## 不是项目的项目

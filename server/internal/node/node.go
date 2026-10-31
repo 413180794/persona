@@ -45,6 +45,7 @@ type Node struct {
 	layout   layout                    // workspace / tab names from the last herdr snapshot
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
 	spare    *assistantProc            // warm process waiting for the next new conversation
+	akeys    map[string]*assistantProc // the key a Codex conversation's MCP server reports until its thread exists
 	lastList string                    // serialized last sessions.changed payload
 	lastRevs map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
 	metas    map[string]quickMeta      // transcript path -> cached meta
@@ -108,6 +109,7 @@ func New(version string) (*Node, error) {
 		agents:   map[string]herdr.Agent{},
 		panes:    map[string]string{},
 		procs:    map[string]*assistantProc{},
+		akeys:    map[string]*assistantProc{},
 		metas:    map[string]quickMeta{},
 		bgScans:  map[string]*bgScan{},
 		panePIDs: map[string]panePID{},
@@ -524,8 +526,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(a.ClaudeMD), 0o600); err != nil {
-			return nil, err
+		// The same instructions for both agents: Claude reads CLAUDE.md, Codex AGENTS.md.
+		for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(a.ClaudeMD), 0o600); err != nil {
+				return nil, err
+			}
 		}
 		return map[string]any{"cwd": dir}, nil
 	case "session.info":

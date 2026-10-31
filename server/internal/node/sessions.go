@@ -124,6 +124,7 @@ type quickMeta struct {
 	modeAt   time.Time
 	effort   string
 	effortAt time.Time
+	sandbox  string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
 	// turnClosed: a Codex rollout whose tail ends with its turn finished (transcript.Meta.TurnClosed)
 	turnClosed bool
 }
@@ -166,16 +167,25 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	}
 	defer f.Close()
 	var tm transcript.Meta
+	// The first prompt is usually in the first 32 KB. A Codex rollout puts its instructions first (the assistant's
+	// AGENTS.md and snapshot: 74 KB in), so up to 256 KB is read while it has not turned up.
 	head := make([]byte, 32*1024)
 	nr, _ := f.Read(head)
-	for _, line := range bytes.Split(head[:nr], []byte("\n")) {
-		if bytes.Contains(line, []byte(`"cwd"`)) || bytes.Contains(line, []byte(`"type":"user"`)) ||
-			bytes.Contains(line, []byte(`"type":"UserMessage"`)) { // Codex rollouts: session_meta, then the first prompt
-			transcript.ParseLine(0, line, &tm)
-			if tm.Cwd != "" && tm.FirstUser != "" {
-				break
+	for {
+		for _, line := range bytes.Split(head[:nr], []byte("\n")) {
+			if bytes.Contains(line, []byte(`"cwd"`)) || bytes.Contains(line, []byte(`"type":"user"`)) ||
+				bytes.Contains(line, []byte(`"type":"UserMessage"`)) { // Codex rollouts: session_meta, then the first prompt
+				transcript.ParseLine(0, line, &tm)
+				if tm.Cwd != "" && tm.FirstUser != "" {
+					break
+				}
 			}
 		}
+		if tm.FirstUser != "" || nr < len(head) || len(head) >= 256*1024 {
+			break
+		}
+		head = make([]byte, len(head)*2)
+		nr, _ = f.ReadAt(head, 0)
 	}
 	first := tm.FirstUser
 	const tail = 384 * 1024
@@ -203,7 +213,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	m.wake, m.turnClosed = tm.LastTurnWake, tm.TurnClosed
-	m.mode, m.modeAt, m.effort, m.effortAt = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt
+	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
 }
 
