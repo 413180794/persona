@@ -303,10 +303,8 @@ private struct AgentsList: View {
                             .listRowInsets(CompactList.rowInsets)
                             .accessibilityIdentifier("agents.interaction")
                         } else {
-                            InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            InteractionPreviewCard(interaction: ix, inCell: true) { openFromList(ix.sessionKey) }
+                                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
                         }
                     }
                 } header: {

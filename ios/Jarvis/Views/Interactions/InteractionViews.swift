@@ -26,10 +26,13 @@ extension Interaction {
     var title: String { toolName == "ask_user" ? "Jarvis 在问你" : kind.title }
 }
 
-/// Compact card on the chat list: enough context plus one-tap answers for simple questions.
+/// Compact card on the chat list: enough context plus one-tap answers for simple questions. A terminal dialog
+/// reads like the chat's panel: its question, the command it is about, its options as quick answers.
 struct InteractionPreviewCard: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
+    /// The list's cell is the card (same width and corners as the agents' rows): no chrome of its own.
+    var inCell = false
     var open: () -> Void
 
     var body: some View {
@@ -38,8 +41,9 @@ struct InteractionPreviewCard: View {
                 // Every interaction is 需要你: the same red as the agent's dot and the section's count.
                 Image(systemName: interaction.kind.symbol)
                     .foregroundStyle(StatusPalette.needsYou.dot)
+                    .scaledFrame(width: Theme.Size.icon) // one column: the titles line up card to card
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(interaction.title).font(Theme.Font.heading)
+                    Text(title).font(Theme.Font.heading).lineLimit(1)
                     Text([interaction.sessionTitle, model.machine(interaction.machineID)?.name].compactMap { $0 }.joined(separator: " · "))
                         .font(Theme.Font.label)
                         .foregroundStyle(.secondary)
@@ -48,15 +52,49 @@ struct InteractionPreviewCard: View {
                 Spacer()
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
             }
-            Text(summary)
-                .font(Theme.Font.body).lineHeight(.body)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if !summary.isEmpty {
+                Text(summary)
+                    .font(Theme.Font.body).lineHeight(.body)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let detail, !detail.isEmpty {
+                Text(detail)
+                    .font(Theme.Font.code)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .padding(Theme.Space.s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            }
             quickActions
         }
-        .card()
+        .modifier(PreviewChrome(on: !inCell))
         .contentShape(.rect)
         .onTapGesture(perform: open)
+    }
+
+    private struct PreviewChrome: ViewModifier {
+        var on: Bool
+        func body(content: Content) -> some View {
+            if on { content.card() } else { content.padding(.vertical, Theme.Space.xs) }
+        }
+    }
+
+    /// A terminal dialog that reads as a question is titled like one (as in the chat's panel).
+    private var title: String {
+        if interaction.kind == .screen, interaction.screenDialog != nil {
+            return "\(model.session(interaction.sessionKey)?.agentLabel ?? "Claude") 在问你"
+        }
+        return interaction.title
+    }
+
+    /// Under the summary, in code type: the command a terminal dialog is about, or (no dialog read) the last lines
+    /// the terminal shows.
+    private var detail: String? {
+        guard interaction.kind == .screen else { return nil }
+        if let d = interaction.screenDialog { return d.detail.map { ScreenParser.plainLines($0, max: 3) } }
+        return ScreenParser.waitingOn(interaction.screen ?? "")
     }
 
     private var summary: String {
@@ -64,7 +102,7 @@ struct InteractionPreviewCard: View {
         case .question: interaction.questions?.first?.question ?? ""
         case .plan: PlanText.title(interaction.plan ?? "")
         case .permission: [interaction.toolName, interaction.summary].compactMap { $0 }.joined(separator: "：")
-        case .screen: ScreenParser.activity(interaction.screen ?? "", max: 3).joined(separator: "\n")
+        case .screen: interaction.screenDialog?.question ?? ""
         }
     }
 
@@ -84,6 +122,19 @@ struct InteractionPreviewCard: View {
                     .themedButton()
             }
             .controlSize(.small)
+        case .screen:
+            // Only when the hub read the dialog too (it checks the screen before pressing the key).
+            if interaction.dialog != nil, let d = interaction.screenDialog {
+                // Short ones only ("Yes"): a long label ("Yes, and don't ask again for … in /path") is cut off in a
+                // card; it and the rest are one tap away in the chat.
+                let plain = d.options.filter { $0.kind == .plain && $0.label.count <= 24 }
+                if (1...4).contains(plain.count) {
+                    FlowButtons(labels: plain.map(\.label)) { label in
+                        guard let opt = plain.first(where: { $0.label == label }) else { return }
+                        Task { await model.resolve(interaction, Resolution(option: opt.key)) }
+                    }
+                }
+            }
         default:
             EmptyView()
         }

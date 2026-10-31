@@ -744,6 +744,30 @@ nonisolated enum ScreenParser {
         return Array(content.suffix(max))
     }
 
+    /// Terminal lines as text to read: the tree / box glyphs Claude Code draws in front of tool output (⎿ └ │ ├) and
+    /// the indent go, blank lines too; at most `max` lines.
+    static func plainLines(_ text: String, max: Int) -> String {
+        let glyphs = CharacterSet(charactersIn: "⎿└├│┃╰╭╮╯┌┐┘ \t\u{00a0}")
+        let lines = text.components(separatedBy: "\n")
+            .map { String($0.unicodeScalars.drop { glyphs.contains($0) }) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return lines.prefix(max).joined(separator: "\n")
+    }
+
+    /// What a terminal with no dialog to read waits on: the last tool call on the screen ("⏺ Bash(git rebase …)")
+    /// and the last line of its output, as plain text; nil when there is neither.
+    static func waitingOn(_ screen: String) -> String? {
+        let lines = activity(screen, max: 40)
+        guard let call = lines.lastIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("⏺") }) else {
+            let tail = plainLines(lines.suffix(2).joined(separator: "\n"), max: 2)
+            return tail.isEmpty ? nil : tail
+        }
+        let head = lines[call].trimmingCharacters(in: .whitespaces).dropFirst().trimmingCharacters(in: .whitespaces)
+        let last = plainLines(lines[(call + 1)...].suffix(1).joined(separator: "\n"), max: 1)
+        return last.isEmpty ? head : head + "\n" + last
+    }
+
     static func isRule(_ line: String) -> Bool {
         let t = line.trimmingCharacters(in: .whitespaces)
         return t.count > 20 && t.allSatisfy { $0 == "─" || $0 == "━" || $0 == "-" }

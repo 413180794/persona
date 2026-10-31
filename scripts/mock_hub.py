@@ -513,6 +513,16 @@ if os.environ.get("MOCK_SCREEN_DIALOG"):
                         {"key": "2", "label": "Yes, and don't ask again for git push commands in /Users/me/code/weather", "keys": ["2"]},
                         {"key": "3", "label": "No, and tell Claude what to do differently (esc)", "keys": ["3"]}]}})
 
+# MOCK_SCREEN_RAW=1: a terminal waiting with no dialog to read, only tool output above the input box (its tree
+# glyphs must not show on the Agents card).
+if os.environ.get("MOCK_SCREEN_RAW"):
+    INTERACTIONS.append(
+        {"id": "scr_macbook_raw", "machine_id": "macbook", "session_id": REVIEW, "session_title": "lark-connector 自动回复逻辑",
+         "cwd": "/Users/me/code/weather", "kind": "screen", "created_at": ago(minutes=1), "expires_at": later(hours=24),
+         "screen": "⏺ Bash(git stash && git rebase origin/master)\n  ⎿  Saved working directory and index state\n"
+                   "     … 40 more files changed\n  ⎿  (a git step in this command can move the working tree, so the hook stopped it)\n"
+                   "\n" + "─" * 60 + "\n> \n" + "─" * 60 + "\n  ? for shortcuts"})
+
 # MOCK_SCREEN_SECRET=1: the terminal asks for a password (a card with a password field).
 if os.environ.get("MOCK_SCREEN_SECRET"):
     INTERACTIONS.append(
