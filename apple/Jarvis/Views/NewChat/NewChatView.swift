@@ -210,7 +210,7 @@ struct NewChatView: View {
             .onChange(of: model.machines) { _, _ in if preset == nil { pickDefaultMachine() } }
             .interactiveDismissDisabled(starting)
             #if os(macOS)
-            // Opened from pushed pages too (知识库 › 开 Agent), where macLook's grouped form does not reach the sheet.
+            // Also opened from 知识库 › 开 Agent, whose sheets did not pick up macLook's grouped form (cause unknown).
             .macSheet()
             #endif
         }

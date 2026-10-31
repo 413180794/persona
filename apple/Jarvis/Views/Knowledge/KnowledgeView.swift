@@ -1241,7 +1241,7 @@ struct KBTagEditor: View {
         }
         .presentationDetents([.medium, .large])
         #if os(macOS)
-        // From a pushed page the sheet did not pick up macLook's grouped form: the two-column one cut rows off.
+        // This sheet did not pick up macLook's grouped form (cause unknown): the two-column one cut rows off.
         .macSheet()
         #endif
     }

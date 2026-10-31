@@ -245,7 +245,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   弹层（草稿、交给 AI、写信、邮箱、添加邮箱）是窗口内的 sheet，`.macSheet()` 给最小尺寸并把 `Form` 换成 `.grouped`（Mac 默认的两列表单会把 iOS 的分组行挤到标签列、截掉）。
   后来 `macLook` 在整棵树上设了 `.formStyle(.grouped)`，sheet 也继承，所以没套 `macSheet` 的表单（新建定时任务等）也是分组的了（截图对比过 `-openAssistantPage newRoutine`）；`macSheet` 只剩给最小尺寸。连接器里「这台 Mac」的图标在 Mac 上是笔记本（`Theme.Icon.thisDevice`）。
   grouped 表单把带标题的 `TextField` 画成「左边标签 + 右边输入」，多行的提示词 / 正文因此只占右半边：Mac 上这几处改成 `prompt:` + `.labelsHidden()`（新建定时任务、添加邮箱的整段粘贴截图看过；新建对话的第一条消息、写信正文同样改了，在截图范围外没看到）。
-  从推入的页面弹出的 sheet 不继承 `macLook` 的 grouped（知识库详情 › 打标就是两列的），这类 sheet 自己套 `macSheet()`：打标（`-showKnowledgeEntry projects/weather-app -showKBEditor YES` 截图看过，标签、滑块占满一行）、新建对话（知识库 › 开 Agent 那条路径没截到）。
+  知识库详情 › 打标弹出的 sheet 没继承 `macLook` 的 grouped，还是两列（设置里推入页面弹出的新建定时任务却继承了，原因没查清），这类 sheet 自己套 `macSheet()`：打标（`-showKnowledgeEntry projects/weather-app -showKBEditor YES` 截图看过，标签、滑块占满一行）、新建对话（知识库 › 开 Agent 那条路径没截到）。
 - 链接面板 `.macLinkPanel($link, key:)`：详情栏右侧并排（页面变窄、不被盖住；窗口太窄放不下两边时盖在上面），宽度拖、记在 `mac.linkPanel.width`；
   头部：后退 / 前进、标题和域名、重新载入、⋯（在浏览器打开、在单独窗口打开、拷贝链接、分享）、关闭（⌘W，面板开着时先关面板）。
   网页来自 `WebViewPool`（和 iOS 同一个池，预加载、复用），右键选中文字有「AI 修改」「作为上下文」；飞书文档 / removed在面板里用原生阅读器（右上「把这篇文档作为上下文」）。
