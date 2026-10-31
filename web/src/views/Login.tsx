@@ -1,21 +1,15 @@
 import { useState } from "react";
-import { api, errorText, setToken } from "../lib/api";
+import { errorText } from "../lib/api";
+import { pair } from "../lib/auth";
 import { Button, Spinner } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 
-function browserName() {
-  const ua = navigator.userAgent;
-  const b = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "浏览器";
-  const os = /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
-  return [b, os].filter(Boolean).join(" · ");
-}
-
-// Pair with the hub's token (`jarvisd hub pair` prints it) or a device token; the pairing token is traded for
-// this browser's own one right away (docs/protocol.md「鉴权」), so it can be revoked on its own.
-export function Login({ onDone }: { onDone: () => void }) {
+// Pair with the hub's token (`jarvisd hub pair` prints it) or a device token (lib/auth.ts). `error` is what went
+// wrong with a token that came in the link.
+export function Login({ onDone, error: linkError = "" }: { onDone: () => void; error?: string }) {
   const [token, setTok] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(linkError);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,18 +18,7 @@ export function Login({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError("");
     try {
-      await api("/machines", { token: t });
-      let use = t;
-      if (!t.startsWith("jd_")) {
-        try {
-          const r = await api<{ token: string; id: string }>("/auth/tokens", { method: "POST", json: { name: `网页（${browserName()}）`, kind: "web" }, token: t });
-          use = r.token;
-          localStorage.setItem("jarvis.tokenId", r.id);
-        } catch {
-          // an old hub without device tokens: keep the pairing token
-        }
-      }
-      setToken(use);
+      await pair(t);
       onDone();
     } catch (err) {
       setError(errorText(err) === "invalid token" ? "token 不对" : errorText(err));

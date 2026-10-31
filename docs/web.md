@@ -19,6 +19,10 @@
 
 第一次打开要贴 hub 的 token（`jarvisd hub pair` 打印的那个）。网页先用它换一个自己的设备 token（`POST /api/v1/auth/tokens`，`kind: web`，
 hub 存为 `other`，角色 full），之后只用自己的，配对 token 不留在浏览器里；手机「设置 › 设备」能单独撤销。也可以直接贴一个 `jd_` 设备 token。
+**链接直接登录**（2026-10-31）：打开 `<hub 地址>/?token=<hub token>`（任意页面路径都行，也认 `#token=`，后者不会发到服务器）就直接进，不用贴。
+页面一加载先把 token 从地址栏抹掉（`history.replaceState`，在 React 渲染之前），浏览历史、书签、复制出去的链接里都没有它；然后照常换成这个浏览器自己的
+设备 token。这个浏览器已经登录过（链接再打开一次）就沿用已有的，不再多建一个设备 token。token 不对时停在登录页并提示。
+hub 的访问日志只记路径，不记查询串。注意这个链接本身就是完整权限：别发到群里、别存在别人能看的地方，泄露了在 hub 机器上换 token。
 token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`（hub 本来就认，日志不记查询串）。
 左上角菜单「断开这个浏览器」会撤销这个 token。
 

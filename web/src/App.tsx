@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { getToken, handleUnauthorized, setToken } from "./lib/api";
+import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
+import { pair, takeToken } from "./lib/auth";
 import { useRoute } from "./lib/router";
 import { connect, disconnect, reset, useStore } from "./lib/store";
-import { cx, EASE, Toasts } from "./ui/atoms";
+import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
 import { ChatView } from "./views/chat/ChatView";
 import { Home } from "./views/Home";
 import { Jarvis } from "./views/Jarvis";
@@ -13,8 +14,35 @@ import { Palette } from "./views/Palette";
 import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
 
+// A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
+// before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
+const linked = typeof window === "undefined" ? null : takeToken(window.location.href);
+if (linked) window.history.replaceState(window.history.state, "", linked.rest);
+
 export function App() {
-  const [authed, setAuthed] = useState(() => Boolean(getToken()));
+  const [authed, setAuthed] = useState(() => !linked?.token && Boolean(getToken()));
+  const [joining, setJoining] = useState(() => Boolean(linked?.token));
+  const [linkError, setLinkError] = useState("");
+
+  useEffect(() => {
+    if (!linked?.token) return;
+    let live = true;
+    // Already signed in here (the link opened again): keep this browser's token instead of minting another one.
+    const signedIn = getToken() ? api("/machines").then(() => true, () => false) : Promise.resolve(false);
+    signedIn
+      .then((ok) => (ok ? undefined : pair(linked.token)))
+      .then(() => live && setAuthed(true))
+      .catch((err) => {
+        if (!live) return;
+        const t = errorText(err);
+        setLinkError(t === "invalid token" ? "链接里的 token 不对，贴一个新的" : t);
+        setAuthed(Boolean(getToken())); // still signed in from before: stay in
+      })
+      .finally(() => live && setJoining(false));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     handleUnauthorized(() => {
@@ -32,7 +60,7 @@ export function App() {
 
   return (
     <>
-      {authed ? <Shell /> : <Login onDone={() => setAuthed(true)} />}
+      {joining ? <Joining /> : authed ? <Shell /> : <Login error={linkError} onDone={() => setAuthed(true)} />}
       <Toasts />
     </>
   );
@@ -109,6 +137,18 @@ function Shell() {
       </main>
       <Palette open={palette} onClose={() => setPalette(false)} onNewAgent={() => setNewAgent(true)} />
       <NewAgent open={newAgent} onClose={() => setNewAgent(false)} />
+    </div>
+  );
+}
+
+// Signing in with the link's token: a moment, no form.
+function Joining() {
+  return (
+    <div className="flex min-h-full items-center justify-center bg-page" role="status" aria-live="polite">
+      <span className="flex items-center gap-2 text-[13px] text-ink-2">
+        <Spinner />
+        正在连接 Jarvis…
+      </span>
     </div>
   );
 }
