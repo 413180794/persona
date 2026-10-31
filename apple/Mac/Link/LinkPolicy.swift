@@ -13,6 +13,12 @@ nonisolated enum LinkPolicy {
         return openable.contains(scheme)
     }
 
+    /// What the app opens through `UIApplication.open` (the shim): the same, plus the System Settings panes its own
+    /// 「打开系统设置」 buttons name (constants, never text from a message).
+    static func opensFromApp(_ url: URL) -> Bool {
+        opensOnMac(url) || [UIApplication.openSettingsURLString, UIApplication.openNotificationSettingsURLString].contains(url.absoluteString)
+    }
+
     /// What an `OpenURLAction` returns for a link the app does not show itself.
     @MainActor static func system(_ url: URL) -> OpenURLAction.Result {
         if opensOnMac(url) { return .systemAction }
@@ -22,7 +28,7 @@ nonisolated enum LinkPolicy {
 
     /// `NSWorkspace.open`, behind the same rule.
     @MainActor @discardableResult static func open(_ url: URL) -> Bool {
-        if opensOnMac(url) { return NSWorkspace.shared.open(url) }
+        if opensFromApp(url) { return NSWorkspace.shared.open(url) }
         copy(url)
         return false
     }

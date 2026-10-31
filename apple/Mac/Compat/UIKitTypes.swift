@@ -267,8 +267,8 @@ nonisolated struct UIGraphicsImageRenderer {
 /// `UIApplication.shared`: opening URLs and the app's state.
 @MainActor final class UIApplication {
     static let shared = UIApplication()
-    static let openSettingsURLString = "x-apple.systempreferences:com.apple.preference.security"
-    static let openNotificationSettingsURLString = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    nonisolated static let openSettingsURLString = "x-apple.systempreferences:com.apple.preference.security"
+    nonisolated static let openNotificationSettingsURLString = "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
     static let didBecomeActiveNotification = NSApplication.didBecomeActiveNotification
     static let didEnterBackgroundNotification = NSApplication.didResignActiveNotification
     static let willEnterForegroundNotification = NSApplication.willBecomeActiveNotification
