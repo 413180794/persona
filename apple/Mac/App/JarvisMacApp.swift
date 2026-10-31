@@ -227,6 +227,11 @@ enum MacLaunchArguments {
         if d.bool(forKey: "openAgentsFresh") {
             for k in ["dev.machineFilter", "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
+        // A tab, a chat or a conversation named on the command line shows that, not the 知识库 / 机器 remembered
+        // from last time (MacShell's onChange is not there yet to clear it).
+        if ["tab", "openSession", "openAssistant", "newAssistant", "lark-connector"].contains(where: { d.object(forKey: $0) != nil }) {
+            MacShellState.shared.section = nil
+        }
         switch d.string(forKey: "tab") {
         case "dev": model.selectedTab = .chats
         case "mail": model.selectedTab = .mail

@@ -30,6 +30,15 @@ enum MacSection: String, CaseIterable, Identifiable {
         return (nil, s)
     }
 
+    /// The Mac-side pick across launches (the tabs are AppModel's to remember).
+    static let storageKey = "mac.section"
+    static func remember(_ s: MacSection?, in d: UserDefaults = .standard) {
+        if let s, s.tab == nil { d.set(s.rawValue, forKey: storageKey) } else { d.removeObject(forKey: storageKey) }
+    }
+    static func remembered(in d: UserDefaults = .standard) -> MacSection? {
+        d.string(forKey: storageKey).flatMap(MacSection.init(rawValue:)).flatMap { $0.tab == nil ? $0 : nil }
+    }
+
     init(_ tab: AppTab) {
         switch tab {
         case .assistant: self = .assistant

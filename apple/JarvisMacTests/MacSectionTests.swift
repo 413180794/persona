@@ -27,4 +27,16 @@ struct MacSectionTests {
         let k = MacQuickOpen.sections("knowledge", sessions: [], machines: [], inbox: []).flatMap(\.hits).map(\.title)
         #expect(k == ["知识库"])
     }
+
+    /// 知识库 / 机器 are not iPhone tabs, so AppModel does not remember them: the shell keeps the pick itself, and a
+    /// stored name that is not one of those two (an old build's, a tab's) restores nothing.
+    @Test func theMacSidePickIsRemembered() {
+        let d = UserDefaults(suiteName: "MacSectionTests-\(UUID())")!
+        MacSection.remember(.machines, in: d)
+        #expect(MacSection.remembered(in: d) == .machines)
+        MacSection.remember(nil, in: d)
+        #expect(MacSection.remembered(in: d) == nil)
+        d.set("agents", forKey: MacSection.storageKey)
+        #expect(MacSection.remembered(in: d) == nil)
+    }
 }

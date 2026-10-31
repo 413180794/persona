@@ -7,7 +7,9 @@ import SwiftUI
     var quickOpen = false
     var newAgent = false
     /// 知识库 or 机器 while picked (they are not iPhone tabs); nil shows the tab's section.
-    var section: MacSection?
+    var section: MacSection? = MacSection.remembered() {
+        didSet { MacSection.remember(section) }
+    }
     /// A conversation the menus asked to open in its own window (MacWindowOpener does it).
     var chatWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
