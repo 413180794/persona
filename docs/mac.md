@@ -247,7 +247,7 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 - [ ] Rebuild whole tree when style/persona changes, keep tab + open chat — Views/RootView.swift
 - [ ] Width-driven layout: compact = single NavigationStack, regular = NavigationSplitView (list | detail), shared path, `.splitDetailPage()`, sidebar width 340–480, SidebarTopFill — Views/SplitNavigation.swift
 - [ ] Readable width cap (chat 760pt, welcome 560pt) — Views/Chat/ChatView.swift, Shared/Design/Theme.swift
-- [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）
+- [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
 - [ ] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
 - [ ] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
 - [ ] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/JarvisApp.swift + views

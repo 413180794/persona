@@ -15,7 +15,10 @@ struct JarvisMacApp: App {
             MacRootView()
                 .environment(model)
                 .onOpenURL { url in model.openURL(url) }
+                // A jarvis:// link goes to the window that is open: without this every link opened another main window.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
+        .handlesExternalEvents(matching: ["*"])
         .defaultSize(width: Theme.Size.macWindowWidth, height: Theme.Size.macWindowHeight)
         .windowToolbarStyle(.unified)
         .commands {
@@ -66,6 +69,14 @@ extension AppModel {
     /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
     /// A `jarvis://` link from outside (MacOpenURL): open a chat, or pair.
     func openURL(_ url: URL) {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "macWindowLog") { // how many main windows a link leaves (docs/mac.md)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let mains = NSApp.windows.filter { $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible }
+                NSLog("macWindowLog: %d main window(s) after %@", mains.count, url.absoluteString)
+            }
+        }
+        #endif
         switch MacOpenURL.route(url) {
         case .session(let key): MacShellState.shared.open(key, self)
         case .pair: openPairing(url)
