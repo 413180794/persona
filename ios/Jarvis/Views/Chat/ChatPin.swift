@@ -110,12 +110,82 @@ private struct ChatPinReport: ViewModifier {
     }
 }
 
-/// Opens or closes something in a row (`change`). In the chat: no animation (a height animating in the flipped lazy
-/// list slid everything above it) and the row's top held in place (`ChatPin`). Elsewhere: the animation as before.
-@MainActor func toggleInPlace(_ pin: ChatPin?, _ key: String, animation: Animation, _ change: () -> Void) {
+/// Opens or closes something in a row (`change`). In the chat the height changes at once, with the row's top held in
+/// place (`ChatPin`): a height animating in the flipped lazy list slid everything above it. What opens animates
+/// instead (`unfold`, shown with `.unfolding`): it reveals itself after the change, and on `closing` folds away before
+/// it. Elsewhere: the animation as before.
+@MainActor func toggleInPlace(_ pin: ChatPin?, _ key: String, animation: Animation, unfold: Binding<Unfolding>? = nil,
+                              closing: Bool = false, _ change: @escaping () -> Void) {
     guard let pin else { withAnimation(animation, change); return }
-    pin.hold(key)
-    var t = Transaction()
-    t.disablesAnimations = true
-    withTransaction(t, change)
+    func now() {
+        pin.hold(key)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t, change)
+    }
+    guard let unfold else { return now() }
+    if closing {
+        unfold.wrappedValue.concealing = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Theme.Motion.concealTime))
+            unfold.wrappedValue.concealing = false
+            now()
+        }
+    } else {
+        unfold.wrappedValue.revealing = true
+        now()
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Theme.Motion.revealTime))
+            unfold.wrappedValue.revealing = false
+        }
+    }
+}
+
+/// What a row shows when opened, as it comes and goes in the chat (`toggleInPlace`).
+struct Unfolding: Equatable {
+    /// Just opened: it reveals itself.
+    var revealing = false
+    /// About to close: it folds away.
+    var concealing = false
+}
+
+extension View {
+    /// What a row shows when opened: it reveals itself from the top (a mask growing down, and a fade) when it appears
+    /// while `revealing`, and folds away while `concealing`. Its height never animates, so the list's layout changes
+    /// once and the pin holds the header in that same pass.
+    func unfolding(_ u: Unfolding) -> some View { modifier(Reveal(revealing: u.revealing, concealing: u.concealing)) }
+}
+
+private struct Reveal: ViewModifier {
+    var concealing: Bool
+    @State private var shown: CGFloat
+
+    init(revealing: Bool, concealing: Bool) {
+        self.concealing = concealing
+        _shown = State(initialValue: revealing ? 0 : 1)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .clipShape(RevealShape(shown: shown))
+            .opacity(shown)
+            .onAppear { if shown < 1 { withAnimation(Theme.Motion.reveal) { shown = 1 } } }
+            .onChange(of: concealing) { _, c in withAnimation(c ? Theme.Motion.conceal : Theme.Motion.reveal) { shown = c ? 0 : 1 } }
+    }
+}
+
+/// The part of the content shown, from its top; fully shown, it clips nothing (shadows and the like reach past it).
+private struct RevealShape: Shape {
+    /// How far past the content a fully shown clip reaches: further than anything draws.
+    static let reach: CGFloat = 10_000
+    var shown: CGFloat
+    var animatableData: CGFloat {
+        get { shown }
+        set { shown = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard shown < 1 else { return Path(rect.insetBy(dx: -Self.reach, dy: -Self.reach)) }
+        return Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * max(shown, 0)))
+    }
 }

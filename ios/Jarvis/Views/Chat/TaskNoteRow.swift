@@ -90,6 +90,7 @@ struct TaskNoteRow: View {
 
     @Environment(\.chatPin) private var pin
     private var pinKey: String { "task-" + item.id }
+    @State private var unfold = Unfolding()
 
     /// Its top is its header: opening or closing keeps it there in the chat (`ChatPin`).
     var body: some View { content.chatPinned(pinKey) }
@@ -100,7 +101,7 @@ struct TaskNoteRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     Haptics.tap()
-                    toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { open.toggle() }
+                    toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
                 } label: {
                     HStack(spacing: Theme.Space.m) {
                         ZStack {
@@ -136,6 +137,7 @@ struct TaskNoteRow: View {
                     detail(n, call: call)
                         .padding(.horizontal, pad)
                         .padding(.bottom, Theme.Space.m)
+                        .unfolding(unfold)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }

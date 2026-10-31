@@ -405,6 +405,7 @@ struct ThinkingRow: View {
     @Environment(\.chatPin) private var pin
 
     private var pinKey: String { "think-" + item.id }
+    @State private var unfold = Unfolding()
 
     var body: some View {
         if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
@@ -413,7 +414,7 @@ struct ThinkingRow: View {
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {
-                toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { open.toggle() }
+                toggleInPlace(pin, pinKey, animation: Theme.Motion.standard, unfold: $unfold, closing: open) { open.toggle() }
             } label: {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.memory).font(Theme.Font.label)
@@ -438,6 +439,7 @@ struct ThinkingRow: View {
                     .padding(.leading, Theme.Space.m)
                     .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: Theme.Size.rule) }
                     .padding(.horizontal, compact ? 10 : 0)
+                    .unfolding(unfold)
             }
         }
     }

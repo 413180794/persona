@@ -102,13 +102,14 @@ struct ToolGroupView: View {
 
     private var calls: [ToolCall] { steps.compactMap { if case .call(let c) = $0 { c } else { nil } } }
     private var pinKey: String { "group-" + (steps.first?.id ?? "") }
+    @State private var unfold = Unfolding()
 
     var body: some View {
         let calls = calls
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             if calls.count > 2 && !expanded && !flat {
                 Button {
-                    toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { expanded = true }
+                    toggleInPlace(pin, pinKey, animation: Theme.Motion.standard, unfold: $unfold) { expanded = true }
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: Theme.Icon.space).font(Theme.Font.label)
@@ -134,8 +135,9 @@ struct ToolGroupView: View {
                     case .folded(let f): FoldedWorkRow(fold: f)
                     }
                 }
+                .unfolding(unfold)
                 if calls.count > 2 && !flat {
-                    Button("收起") { toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { expanded = false } }
+                    Button("收起") { toggleInPlace(pin, pinKey, animation: Theme.Motion.standard, unfold: $unfold, closing: true) { expanded = false } }
                         .font(Theme.Font.labelMedium)
                         .padding(.leading, Theme.Space.m)
                 }
@@ -290,6 +292,7 @@ struct ToolCallRow: View {
 
     @Environment(\.chatPin) private var pin
     private var pinKey: String { "call-" + call.id }
+    @State private var unfold = Unfolding()
 
     var body: some View {
         let base = ToolPresentation.baseName(call.name)
@@ -303,6 +306,7 @@ struct ToolCallRow: View {
                 ToolDetail(call: call)
                     .padding(.horizontal, pad)
                     .padding(.bottom, Theme.Space.m)
+                    .unfolding(unfold)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -317,7 +321,7 @@ struct ToolCallRow: View {
     private func header(_ base: String) -> some View {
         Button {
             Haptics.tap()
-            toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { expanded = !isOpen }
         } label: {
             HStack(spacing: Theme.Space.m) {
                 ZStack {
@@ -355,7 +359,7 @@ struct ToolCallRow: View {
     private var chipHeader: some View {
         ToolChipRow(chip, isOpen: isOpen, isRunning: call.isRunning) {
             Haptics.tap()
-            toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { expanded = !isOpen }
         } accessory: {
             taskBadge
             if call.isError { Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.danger).font(Theme.Font.label) }

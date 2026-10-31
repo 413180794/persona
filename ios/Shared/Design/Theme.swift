@@ -312,6 +312,12 @@ nonisolated enum Theme {
         static let standard = state
         /// One way of a blink (the built-in persona's eyes): a blink is shut and open again, well under a quarter second.
         static let blink = Animation.easeInOut(duration: 0.07)
+        /// What opens in the chat shows itself (a mask growing down from its header, and a fade); its height does not
+        /// animate (`unfolding`). Closing folds it away first, quicker, then removes it.
+        static let revealTime = 0.28
+        static let concealTime = 0.2
+        static let reveal = Animation.easeOut(duration: revealTime)
+        static let conceal = Animation.easeIn(duration: concealTime)
     }
 
     /// Categories with no meaning beyond telling them apart (memory types).

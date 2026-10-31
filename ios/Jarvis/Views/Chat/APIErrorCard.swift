@@ -94,6 +94,7 @@ struct APIErrorCard: View {
 
     @Environment(\.chatPin) private var pin
     private var pinKey: String { "error-\(info.signature)-\(at?.timeIntervalSince1970 ?? 0)" }
+    @State private var unfold = Unfolding()
 
     /// Its top is its header: opening or closing keeps it there in the chat (`ChatPin`).
     var body: some View { content.chatPinned(pinKey) }
@@ -102,7 +103,7 @@ struct APIErrorCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Button {
                 Haptics.tap()
-                toggleInPlace(pin, pinKey, animation: Theme.Motion.state) { open.toggle() }
+                toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
             } label: {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
@@ -140,6 +141,7 @@ struct APIErrorCard: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
                 }
+                .unfolding(unfold)
                 .transition(.opacity)
             }
 

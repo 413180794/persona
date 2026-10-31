@@ -65,6 +65,10 @@ struct ChatView: View {
     @State private var scratch = ChatScratch()
     /// Keeps a tapped header in place while what it opens settles (`ChatPin`).
     @State private var pin = ChatPin()
+    /// Work lines just opened, until when their steps reveal themselves as they appear (they arrive from the hub after
+    /// the tap); and ones folding away before they close (`Unfolding`).
+    @State private var revealUntil: [String: Date] = [:]
+    @State private var concealing: Set<String> = []
 
     private enum Entry: Equatable { case latestAnswer, line(String) }
     /// The line being landed on, measured while landing (only that one row watches its frame).
@@ -397,6 +401,26 @@ struct ChatView: View {
     private func toggleWork(_ id: String, fromHeader: Bool, run: Bool = false) {
         Haptics.tap()
         let wasOpen = run ? isRunOpen(id) : isOpen(id)
+        guard run || !wasOpen else { return concealWork(id, fromHeader: fromHeader) }
+        if !run { revealUntil[id] = .now.addingTimeInterval(Self.stepsArrive) }
+        changeWork(id, fromHeader: fromHeader, run: run, wasOpen: wasOpen)
+    }
+
+    /// How long after opening a work line its steps may still arrive (and reveal themselves): the pin's hold.
+    private static let stepsArrive: TimeInterval = 1.5
+
+    /// Closing a work line: its steps fold away first, then go.
+    private func concealWork(_ id: String, fromHeader: Bool) {
+        concealing.insert(id)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Theme.Motion.concealTime))
+            concealing.remove(id)
+            revealUntil[id] = nil
+            changeWork(id, fromHeader: fromHeader, run: false, wasOpen: true)
+        }
+    }
+
+    private func changeWork(_ id: String, fromHeader: Bool, run: Bool, wasOpen: Bool) {
         if fromHeader { pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true) }
         var t = Transaction()
         t.disablesAnimations = true
@@ -408,6 +432,11 @@ struct ChatView: View {
         #if PERF_SIGNPOST
         PerfTrace.event("Work toggle", "open=\(!wasOpen) held=\(fromHeader)")
         #endif
+    }
+
+    /// A step of the work line `group`, as it opens and closes: steps appearing just after it opened reveal themselves.
+    private func stepUnfolding(_ group: String) -> Unfolding {
+        Unfolding(revealing: (revealUntil[group] ?? .distantPast) > .now, concealing: concealing.contains(group))
     }
 
     /// A work line's header moved (its top on screen): kept for the fold probe, and told to the pin. The wake
@@ -459,11 +488,13 @@ struct ChatView: View {
                 toggleWork(id, fromHeader: true)
             }
             .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
-        case .workStep(_, let item, let first):
+        case .workStep(let group, let item, let first):
             WorkStepView(item: item, first: first).equatable()
+                .unfolding(stepUnfolding(group))
         case .toolRun(let id, let calls, let open, let first):
             ToolRunRow(calls: calls, open: open, first: first) { toggleWork(id, fromHeader: true, run: true) }
                 .equatable()
+                .unfolding(stepUnfolding(id.components(separatedBy: "/run-")[0])) // a run's id is "<work line>/run-<first call>"
                 .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workEnd(let group, let count):
             // The foot of the open work line's card.
@@ -484,6 +515,7 @@ struct ChatView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("收起过程")
             .accessibilityIdentifier("work-fold-bottom")
+            .unfolding(stepUnfolding(group))
         case .wakes(let t, let live):
             WakeChip(notices: t.wakes, live: live) {
                 Haptics.tap()

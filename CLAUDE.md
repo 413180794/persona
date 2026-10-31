@@ -47,7 +47,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 间距 | `Theme.Space`：4pt 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32 |
 | 圆角 | `Theme.Radius`：badge 6 · control 10 · card 14 · bubble 20 · panel 22 |
 | 尺寸 | `Theme.Size` + `.scaledFrame(…)`：图标框、圆点、头像、点按区域随字号缩放（最多 1.6×）；4pt 及以下的线、条用普通 `frame` |
-| 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s）、`blink`（默认形象眨眼） |
+| 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s）、`blink`（默认形象眨眼）；对话里展开的内容 `reveal`（0.28 s）/ `conceal`（0.2 s），用 `.unfolding` |
 | 颜色 | `Theme` 的角色色（`accent`、`danger`、`positive`、`caution`、`ai`、形象的主色 `persona`…）、`Theme.Fill`、`Theme.Diff`、`Theme.Hue`；基础色 `Palette`；Agent 状态色 `AgentState.tone`（`StatusPalette`） |
 | 图标、标志 | `Theme.Icon`（一个意思一个 SF Symbol）、`Theme.Brand`（官方标志，原样用） |
 | 风格 | `StyleSpec.current`；`Shared/Design/Styles/` 每种风格一个文件；形象的配色叠在上面（`StyleSpec.tinted`，`docs/persona.md`） |
