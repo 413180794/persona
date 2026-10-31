@@ -30,7 +30,7 @@ struct InboxView: View {
 
     private func matches(_ it: InboxItem) -> Bool {
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && it.kind == "doc") { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == "@我")) { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }
@@ -81,6 +81,11 @@ struct InboxView: View {
                     if UserDefaults.standard.bool(forKey: "openInboxFirst") {
                         for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
                         if let first = openItems.first { path = NavigationPath([first]) }
+                    }
+                    // `-openInboxItem <id>`: open that item (a kind's detail, e.g. a removed one).
+                    if let id = UserDefaults.standard.string(forKey: "openInboxItem") {
+                        for _ in 0..<20 where !store.items.contains(where: { $0.id == id }) { try? await Task.sleep(for: .milliseconds(500)) }
+                        if let it = store.items.first(where: { $0.id == id }) { path = NavigationPath([it]) }
                     }
                     #endif
                 }
@@ -341,6 +346,7 @@ struct InboxRow: View {
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
         if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
+        if item.moment != nil { return (item.sender ?? "") + "：" + item.preview } // who commented, on the post in the title
         if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return sender + "：" + t }
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
         return sender + "：" + item.preview
@@ -351,6 +357,11 @@ struct InboxRow: View {
             Group {
             if let doc = item.doc {
                 InboxDocIcon(doc: doc)
+            } else if item.moment != nil {
+                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                    .fill((LarkColor.text("orange") ?? Theme.accent).opacity(0.15))
+                    .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
+                    .overlay(Image(systemName: Theme.Icon.moments).font(Theme.Font.bodyStrong).foregroundStyle(LarkColor.text("orange") ?? Theme.accent))
             } else if item.isLark {
                 LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
             } else {
@@ -517,6 +528,8 @@ struct InboxDetailView: View {
     @ViewBuilder private var content: some View {
         if current.doc != nil {
             InboxDocDetailView(item: current)
+        } else if let m = current.moment {
+            LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared removed card opens
         } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {

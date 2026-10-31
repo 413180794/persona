@@ -84,6 +84,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	}
 	if h.lark != nil {
 		e.Sources = append(e.Sources, &larkSource{c: h.lark})
+		e.Sources = append(e.Sources, &momentsSource{c: h.lark})
 	}
 	if idx, ok := h.store.(kbIndex); ok {
 		e.Index = func(kind, id, name string, t kb.Tagging, one string, updated time.Time) {

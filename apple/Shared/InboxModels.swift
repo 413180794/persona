@@ -28,10 +28,25 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     /// New foreign mail translated by the hub as it came in, by target language (subject and preview here; the body
     /// comes with the mail).
     var translations: [String: Translated]?
+    /// A removed post where someone commented on, replied to or @ed the user (docs/inbox.md「removed」).
+    var moment: Moment?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
     /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
     var agent: Agent?
+
+    nonisolated struct Moment: Codable, Hashable, Sendable {
+        var postID: String
+        var notice: String?  // comment | reply | atInPost | atInComment (the newest)
+        var replyTo: String? // the comment 发送 answers; nil: on the post
+        var myPost: Bool?
+        var postText: String?
+
+        enum CodingKeys: String, CodingKey {
+            case notice
+            case postID = "post_id", replyTo = "reply_to", myPost = "my_post", postText = "post_text"
+        }
+    }
 
     nonisolated struct Agent: Codable, Hashable, Sendable {
         var state: String // skipped | queued | running | drafted | failed
@@ -170,7 +185,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, context, agent, translations
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -199,6 +214,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         case "mention": lark?.atAll == true ? "@所有人" : "@我"
         case "bot": "机器人"
         case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? "评论" : "@我"
+        case "moment": moment?.notice?.hasPrefix("atIn") == true ? "@我" : "removed"
         default: nil
         }
     }

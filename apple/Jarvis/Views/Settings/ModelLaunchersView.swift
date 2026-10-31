@@ -110,6 +110,34 @@ struct ModelLaunchersView: View {
         NavigationLink(value: ModelLauncherRoute(name: l.name)) {
             LauncherRow(launcher: l, machines: machineNames(l))
         }
+        // Swipe left to hide a ~/.zshrc launcher or bring a hidden one back (2026-11-01 user request). No
+        // confirmation: it only changes what Jarvis lists and is undone the same way. A Jarvis one is deleted from
+        // its page, where that is confirmed.
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if !l.managed {
+                if l.hidden == true {
+                    Button { Task { await setHidden(l, false) } } label: { Label("恢复", systemImage: Theme.Icon.view) }
+                        .tint(Theme.accent)
+                } else {
+                    Button { Task { await setHidden(l, true) } } label: { Label("隐藏", systemImage: Theme.Icon.hide) }
+                        .tint(Theme.caution)
+                }
+            }
+        }
+    }
+
+    /// Moves the row at once, then asks the hub; a failure puts it back and says why.
+    private func setHidden(_ l: LauncherView, _ hide: Bool) async {
+        guard let api = model.api, let i = launchers?.firstIndex(where: { $0.name == l.name }) else { return }
+        withAnimation(Theme.Motion.standard) { launchers?[i].hidden = hide }
+        do {
+            if hide { try await api.deleteLauncher(l.name) } else { try await api.restoreLauncher(l.name) }
+            model.forgetLaunchers()
+            Haptics.success()
+        } catch {
+            withAnimation(Theme.Motion.standard) { launchers?[i].hidden = l.hidden }
+            model.show(error)
+        }
     }
 
     private func machineNames(_ l: LauncherView) -> String? {

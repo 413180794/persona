@@ -97,7 +97,7 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 		c.Pending = 0
 		return e.Store.PutChat(c)
 	}
-	kind := map[string]string{"dm": "私聊", "group": "群聊", "bot": "机器人 / AI", "mail": "邮件往来"}[c.Kind]
+	kind := map[string]string{"dm": "私聊", "group": "群聊", "bot": "机器人 / AI", "mail": "邮件往来", "moment": "removed帖子和评论（公司内公开）"}[c.Kind]
 	if c.Kind == "mail" && !HasPeople(c) {
 		kind += "，自动发出（通知 / 营销地址，不是真人写的）"
 	}

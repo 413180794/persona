@@ -75,6 +75,7 @@ type InboxItem struct {
 	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_docs.go)
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
 	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
+	Moment       *InboxMoment                 `json:"moment,omitempty"` // a removed post's comments / @me (inbox_moments.go)
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
 
@@ -127,6 +128,11 @@ func (it *InboxItem) listed() InboxItem {
 				c.Translations[k] = &InboxTranslation{Subject: t.Subject, Preview: t.Preview, Clipped: t.Clipped}
 			}
 		}
+	}
+	if it.Moment != nil {
+		m := *it.Moment
+		m.Notices = append([]string(nil), it.Moment.Notices...)
+		c.Moment = &m
 	}
 	return c
 }
@@ -243,6 +249,11 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 			h.logf("inbox: feishu docs: %v", err)
 		}
 		changed = append(changed, docs...)
+		moments, err := h.collectMoments(ctx)
+		if err != nil {
+			h.logf("inbox: removed: %v", err)
+		}
+		changed = append(changed, moments...)
 	}
 	if withMail && h.mail != nil {
 		changed = append(changed, h.collectMail(ctx)...)

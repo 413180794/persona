@@ -105,7 +105,7 @@ struct InboxDraftSheet: View {
                 .padding(.vertical, Theme.Space.m)
             }
             .themedPage()
-            .navigationTitle(item.doc != nil ? "评论 " + item.title : item.isLark ? "回复 " + item.title : "回复邮件")
+            .navigationTitle(item.moment != nil ? "评论removed" : item.doc != nil ? "评论 " + item.title : item.isLark ? "回复 " + item.title : "回复邮件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }

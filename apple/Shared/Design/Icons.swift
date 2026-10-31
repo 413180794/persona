@@ -137,6 +137,8 @@ extension Theme {
         static let sheet = "tablecells"
         /// A database table (Feishu 多维表格).
         static let base = "square.grid.3x2"
+        /// A removed (Feishu Moments) post in the inbox: the company's public feed.
+        static let moments = "rectangle.3.group.bubble"
         static let folder = "folder"
         static let folderFilled = "folder.fill"
         static let photo = "photo"

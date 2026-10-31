@@ -51,6 +51,9 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 
 详情页的「删除启动器 / 在 Jarvis 里隐藏」点一下，在按钮那里弹出「确认删除 / 确认隐藏」（popover，2026-10-31 用户要求），再点才执行。
 
+列表里 ~/.zshrc 的启动器左滑「隐藏」，「已隐藏」里的左滑「恢复」（2026-11-01 用户要求），不再确认：只改 Jarvis 里显不显示，随时能滑回来。
+Jarvis 管理的不能左滑删除，删除只在详情页、要确认。`LauncherSwipeTests` 对着 mock hub 覆盖。
+
 ## 接口
 
 | 接口 | 用途 |

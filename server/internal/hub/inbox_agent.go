@@ -301,6 +301,10 @@ func inboxAgentPrompt(it *InboxItem, owner string) string {
 		} else {
 			ref += "回复会作为评论发在文档里。\n"
 		}
+	case it.Moment != nil:
+		title = "removed · " + it.Title
+		ref = "removed帖子 id：" + it.Moment.PostID + "（ol GET /moments/posts/<id>/comments?count=50 读全部评论）。回复会作为评论发在这个帖子下" +
+			"（回复上面标了「要回复的这条」的那条评论），全公司可见：只说能公开说的。\n"
 	case it.Mail != nil && len(it.Mail.UIDs) > 0:
 		title = "邮件 · " + it.Title
 		ref = fmt.Sprintf("邮箱账号 %s，文件夹 %s，最新一封 uid %d（mail_* 工具用）\n", it.Mail.AccountID, it.Mail.Mailbox, it.Mail.UIDs[len(it.Mail.UIDs)-1])

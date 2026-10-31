@@ -139,6 +139,11 @@ func ruleTier(it *InboxItem) string {
 	switch it.Kind {
 	case KindDM, KindMention, KindDoc:
 		return TierAction
+	case KindMoment: // an @ asks for me; a comment or a reply is mostly chatter
+		if it.Moment != nil && strings.HasPrefix(it.Moment.Notice, "atIn") {
+			return TierAction
+		}
+		return TierFYI
 	case KindGroup:
 		return TierFYI
 	case KindMail:
@@ -162,6 +167,9 @@ func triageInput(it *InboxItem) string {
 		b.WriteString("类型：飞书机器人 / 应用发来的消息\n")
 	case KindDoc:
 		b.WriteString("类型：飞书云文档里 @ 了用户或评论了用户（表格、多维表格里可能要用户跟进某一行、改状态）\n")
+	case KindMoment:
+		b.WriteString("类型：removed（公司内的公开动态，类似朋友圈）里有人评论了用户的帖子、回复了用户的评论或 @ 了用户；" +
+			"多数是闲聊和捧场，有人在问用户问题、要用户回应时才需要用户\n")
 	case KindMail:
 		if it.Mail != nil && it.Mail.Direct {
 			b.WriteString("类型：邮件（直接发给用户）\n")
@@ -178,6 +186,7 @@ const draftPrompt = `你替用户（称呼：%s）起草一条回复，用户看
 - 用用户的口吻，第一人称，简洁自然，直接回应对方要的东西；不要解释你在做什么，只输出回复正文。
 - 飞书消息：口语、短，像同事之间聊天，不要「您好」「此致」这类客套；群里回复时不用 @ 对方（发送时会在原会话里）。
 - 邮件：按来信的语言和正式程度，可以有简短的称呼和落款；营销邮件一般不需要回，真要回也要短。
+- removed评论：全公司都看得到，像在公开场合说话：短、友好、不透露内部细节；只是捧场或闲聊的，一句就够。
 - 不知道的事实（时间、数字、结论）不要编，用【】标出来让用户补，比如「【周几】之前给你」。`
 
 // draftReply writes a reply to an inbox item in the user's voice (optionally following their instruction).
@@ -226,12 +235,20 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocCha
 			d := *it.Doc
 			c.Doc = &d
 		}
+		if it.Moment != nil {
+			m := *it.Moment
+			c.Moment = &m
+		}
 	}
 	h.inbox.mu.Unlock()
 	if !ok {
 		return InboxItem{}, errNoInboxItem
 	}
 	switch {
+	case c.Moment != nil && len(changes) == 0:
+		if err := h.replyMoment(ctx, *c.Moment, text); err != nil {
+			return InboxItem{}, err
+		}
 	case c.Doc != nil:
 		// The status moves first: a reply saying "done" with the row still 进行中 would be wrong.
 		for _, ch := range changes {

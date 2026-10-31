@@ -707,6 +707,11 @@ INBOX = [
      "reason": "@了你，下午就要用", "read": False,
      "agent": {"state": "running", "task": "打开新版图标的文档，整理改动和意见"},
      "lark": {"feed_id": "f2", "is_group": True, "start_position": "200", "mention_position": "202"}},
+    {"id": "moment:mp1:mn1", "source": "lark", "kind": "moment", "account": "feishu", "account_name": "飞书",
+     "title": "换新电脑以后大家都怎么迁移数据", "sender": "林小雨", "preview": "我用的迁移助手，一晚上就好了，你是不是开了 FileVault",
+     "count": 3, "started_at": ago(hours=2), "updated_at": ago(minutes=25), "tier": "fyi",
+     "summary": "林小雨在你的removed帖子下回复了迁移数据的办法", "reason": "评论你的帖子",
+     "moment": {"post_id": "mp1", "notice": "comment", "reply_to": "mc3", "my_post": True, "post_text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好"}},
     {"id": "mail:acc1:t1:501", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
      "title": "下周的分享能不能提前到周二？", "sender": "Lucy Wang", "preview": "Hi，周四我临时要出差，分享能不能挪到周二下午……",
      "count": 1, "started_at": ago(hours=3), "updated_at": ago(hours=3), "tier": "action",
@@ -831,6 +836,19 @@ LAUNCHER_QUOTAS = {
              "models": [{"model": "deepseek-v4.1-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
             {"name": "modelhub", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
 }
+
+# The removed post behind the inbox's moment item (LarkMomentsPostView reads these).
+def _ms(minutes): return int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp() * 1000)
+MOMENT_POST = {"id": "mp1", "userName": "我", "userId": "me", "commentCount": 3, "reactionCount": 12, "createTime": _ms(150),
+               "content": {"text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好", "segments": [{"kind": "text", "text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好"}]},
+               "categoryNames": ["技术交流"], "reactionGroups": [{"type": "THUMBSUP", "count": 12}]}
+MOMENT_COMMENTS = [
+    {"id": "mc1", "userName": "周一航", "userId": "u1", "createTime": _ms(110), "reactionCount": 2,
+     "content": {"text": "我是重新装的，配置文件放云盘，干净"}},
+    {"id": "mc2", "userName": "陈子墨", "userId": "u2", "createTime": _ms(70), "content": {"text": "插雷电线快很多"}},
+    {"id": "mc3", "userName": "林小雨", "userId": "u3", "createTime": _ms(25), "replyCommentId": "mc2", "replyUserName": "陈子墨",
+     "content": {"text": "我用的迁移助手，一晚上就好了，你是不是开了 FileVault"}},
+]
 
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
@@ -1697,6 +1715,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox": return self.send_json({"items": INBOX})
+        if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
+        if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
         if p.startswith("/api/v1/inbox/"):
             iid = p[len("/api/v1/inbox/"):]
             for x in INBOX:
@@ -1929,6 +1949,11 @@ class H(BaseHTTPRequestHandler):
             t = next((t for t in SCHEDULE if t["id"] == tid), {})
             if t.get("repeat") == "once": SCHEDULE[:] = [x for x in SCHEDULE if x["id"] != tid]
             return self.send_json({"session_id": t.get("session_id") or ASK2, "machine_id": "server"})
+        if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
+            l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
+            if l is None: return self.send_json({"error": "没有这个启动器"}, 404)
+            l["hidden"] = self.command == "DELETE"
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/assistant/tasks/"):
             tid = p.split("/")[5]
             i = next((i for i, t in enumerate(SCHEDULE) if t["id"] == tid), None)

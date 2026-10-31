@@ -138,6 +138,8 @@ struct LarkMomentsPostView: View {
     @Environment(\.openURL) private var openURL
     var postID: String
     var link: String?
+    /// Pushed as a page (the inbox's removed item) instead of presented as a sheet: no stack of its own, no 完成.
+    var pushed = false
     @State private var post: LarkMomentsPost?
     @State private var comments: [LarkMomentsComment] = []
     @State private var error: String?
@@ -145,7 +147,14 @@ struct LarkMomentsPostView: View {
     @State private var person: LarkPersonRef?
 
     var body: some View {
-        NavigationStack {
+        if pushed {
+            page
+        } else {
+            NavigationStack { page }
+        }
+    }
+
+    private var page: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
                     if let error { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger) }
@@ -183,7 +192,9 @@ struct LarkMomentsPostView: View {
             .navigationTitle("removed")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
+                if !pushed {
+                    ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
+                }
                 if let link, let u = URL(string: link) {
                     ToolbarItem(placement: .primaryAction) {
                         Button { openURL(u) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
@@ -201,7 +212,6 @@ struct LarkMomentsPostView: View {
                 LarkImageGallery(urls: (post?.images ?? []).compactMap(\.url), index: g.index)
             }
             .sheet(item: $person) { LarkProfileView(person: $0) }
-        }
     }
 
     private struct GalleryIndex: Identifiable { var index: Int; var id: Int { index } }
