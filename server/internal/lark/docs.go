@@ -313,6 +313,24 @@ func (c *Client) SetBaseOption(ctx context.Context, link, table, record, field, 
 	}}, nil)
 }
 
+// RecentDoc is one of the documents the user opened or edited lately (Feishu's 最近), newest activity first.
+type RecentDoc struct {
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	URL        string    `json:"url"`
+	Type       int       `json:"type"` // drive type: 22 docx, 3 sheet, 8 base, 2 doc…
+	ActivityAt time.Time `json:"activityAt"`
+}
+
+// RecentDocs is Feishu's 最近 list (documents/recent).
+func (c *Client) RecentDocs(ctx context.Context, limit int) ([]RecentDoc, error) {
+	var out struct {
+		Items []RecentDoc `json:"items"`
+	}
+	err := c.do(ctx, "GET", "/documents/recent", url.Values{"limit": {strconv.Itoa(limit)}}, nil, &out)
+	return out.Items, err
+}
+
 // ---- comments ----
 
 type CommentSegment struct {
@@ -336,6 +354,7 @@ type CommentReply struct {
 type CommentThread struct {
 	ID        string         `json:"id"`
 	Resolved  bool           `json:"resolved"`
+	Whole     bool           `json:"whole"` // on the whole document, not on a selection
 	Quote     string         `json:"quote"`
 	Replies   []CommentReply `json:"replies"`
 	CreatedAt time.Time      `json:"createdAt"`

@@ -60,3 +60,30 @@ func TestLarkAgentClaimsOnce(t *testing.T) {
 		t.Fatal("a message is claimed once (lark-connector re-emits it when edited or its thread grows)")
 	}
 }
+
+func TestLarkAgentCommentTask(t *testing.T) {
+	reply := func(mine bool, segs ...lark.CommentSegment) lark.CommentReply {
+		return lark.CommentReply{Mine: mine, Content: segs}
+	}
+	text := func(s string) lark.CommentSegment { return lark.CommentSegment{Kind: "text", Text: s} }
+	if task, ok := larkAgentCommentTask(reply(true, text("/agent 这段数据对吗")), "/agent"); !ok || task != "这段数据对吗" {
+		t.Fatalf("got %q %v", task, ok)
+	}
+	if task, ok := larkAgentCommentTask(reply(true, lark.CommentSegment{Kind: "mention", Name: "张三"}, text(" /agent 帮他看下")), "/agent"); !ok || task != "帮他看下" {
+		t.Fatalf("a leading mention: got %q %v", task, ok)
+	}
+	if _, ok := larkAgentCommentTask(reply(false, text("/agent 删掉这段")), "/agent"); ok {
+		t.Fatal("someone else's comment is not a request")
+	}
+	if _, ok := larkAgentCommentTask(reply(true, text("结论是 A\n🤖")), "/agent"); ok {
+		t.Fatal("the agent's own reply")
+	}
+}
+
+func TestPlainTextDropsMarkdown(t *testing.T) {
+	got := plainText("## 结论\n\n**不对**，见 [文档](https://example.com/d)：\n- 第一点\n- `code`\n> 引用")
+	want := "结论\n\n不对，见 文档（https://example.com/d）：\n· 第一点\n· code\n引用"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}

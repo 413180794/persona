@@ -76,6 +76,9 @@ type LarkAgentRun struct {
 	Error     string     `json:"error,omitempty"`
 	StartedAt time.Time  `json:"started_at"`
 	EndedAt   *time.Time `json:"ended_at,omitempty"`
+	// A request in a document's comment (MessageID is then the comment reply's id): the doc and the comment thread.
+	DocURL    string `json:"doc_url,omitempty"`
+	CommentID string `json:"comment_id,omitempty"`
 }
 
 const larkAgentRunsKey = "lark_agent.runs"
@@ -118,7 +121,12 @@ func larkAgentTask(m *lark.Message, prefix string) (string, bool) {
 	if !m.IsMine || m.Recalled || m.Type == "SYSTEM" || (m.SenderType != "" && m.SenderType != "user") {
 		return "", false
 	}
-	text := strings.TrimSpace(leadingMentions.ReplaceAllString(strings.TrimSpace(m.Text), ""))
+	return larkAgentRequest(m.Text, prefix)
+}
+
+// larkAgentRequest: the request in a text (a message, a doc comment), if it starts with the prefix after any @mentions.
+func larkAgentRequest(raw, prefix string) (string, bool) {
+	text := strings.TrimSpace(leadingMentions.ReplaceAllString(strings.TrimSpace(raw), ""))
 	if strings.HasSuffix(text, "🤖") { // one of the agent's replies (rendered, the quote marker may be gone)
 		return "", false
 	}
@@ -458,9 +466,15 @@ func (h *Hub) toolLarkAgentReply(ctx context.Context, sessionID string, args jso
 	return "Posted in the chat. You're done.", nil
 }
 
-// larkAgentPost replies to the request and ends the run.
+// larkAgentPost replies to the request and ends the run: a message in its chat, or a reply in its doc comment.
 func (h *Hub) larkAgentPost(ctx context.Context, run *LarkAgentRun, text string) error {
-	err := h.lark.Reply(ctx, run.MessageID, clipRunes(text, 8000)+larkAgentFooter, run.InThread, true)
+	var err error
+	if run.DocURL != "" {
+		// Comments are plain text: Markdown marks would show as they are.
+		err = h.lark.ReplyComment(ctx, run.DocURL, run.CommentID, clipRunes(plainText(text), 4000)+"\n🤖")
+	} else {
+		err = h.lark.Reply(ctx, run.MessageID, clipRunes(text, 8000)+larkAgentFooter, run.InThread, true)
+	}
 	h.larkAgent.mu.Lock()
 	now := time.Now().UTC()
 	if err != nil {
@@ -477,8 +491,10 @@ func (h *Hub) larkAgentPost(ctx context.Context, run *LarkAgentRun, text string)
 		h.logf("lark agent: reply to %s: %v", run.MessageID, err)
 		return fmt.Errorf("posting the reply failed: %w", err)
 	}
-	_ = h.lark.React(ctx, run.MessageID, "OnIt", true)
-	_ = h.lark.React(ctx, run.MessageID, "DONE", false)
+	if run.DocURL == "" {
+		_ = h.lark.React(ctx, run.MessageID, "OnIt", true)
+		_ = h.lark.React(ctx, run.MessageID, "DONE", false)
+	}
 	return nil
 }
 
@@ -489,7 +505,7 @@ func (h *Hub) larkAgentLoop(ctx context.Context) {
 	h.loadLarkAgentRuns(ctx)
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
-	for {
+	for n := 0; ; n++ {
 		select {
 		case <-ctx.Done():
 			return
@@ -499,6 +515,9 @@ func (h *Hub) larkAgentLoop(ctx context.Context) {
 			continue
 		}
 		h.sweepLarkAgents(ctx, time.Now())
+		if n%4 == 0 { // every 20 s: doc comments have no realtime event
+			h.scanLarkAgentComments(ctx)
+		}
 	}
 }
 
