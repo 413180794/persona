@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
 )
@@ -48,5 +49,32 @@ func TestAPaneShowsWhatItsClaudeRunsNotWhatItOnceRan(t *testing.T) {
 	}
 	if a, ok := n.agents[fresh]; !ok || a.PaneID != "w:p2" {
 		t.Errorf("a just started claude keeps its binding until its file is written: %v", n.agents)
+	}
+}
+
+// Right after node starts, a claude's config directory may not be known yet and its pid file is not found. That
+// answer was kept for a minute, the stale binding showing meanwhile (seen for a minute or two after a redeploy).
+func TestAPidFileNotFoundIsLookedForAgainSoon(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	const id = "0c000000-0000-4000-8000-000000000004"
+	h, _ := methodHerdr(t, func(method string, params map[string]any) any {
+		return map[string]any{"process_info": map[string]any{"foreground_processes": []any{
+			map[string]any{"pid": 4444, "name": "claude", "argv0": "claude"}}}}
+	})
+	n, home := testNode(t)
+	n.herdr, n.panePIDs = h, map[string]panePID{}
+	if got := n.sessionFromProcess("w:p1"); got != "" {
+		t.Fatalf("no pid file yet, got %q", got)
+	}
+	dir := filepath.Join(home, ".claude", "sessions")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "4444.json"), []byte(`{"sessionId":"`+id+`"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	n.panePIDs["w:p1"] = panePID{checked: time.Now().Add(-panePIDRetry - time.Second)}
+	if got := n.sessionFromProcess("w:p1"); got != id {
+		t.Fatalf("looked again after %v: %q, want %q", panePIDRetry, got, id)
 	}
 }

@@ -734,12 +734,14 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 }
 
 // sessionFromProcess reads the session a pane's claude runs from ~/.claude/sessions/<pid>.json, which Claude Code
-// keeps current (a /clear moves it to a new session id). The pane's pid is cached for a minute.
+// keeps current (a /clear moves it to a new session id). The pane's pid is cached for a minute; not finding it only
+// for a few seconds: right after node starts the claudes' config directories are not all known yet, and a minute of
+// "no pid file" let a stale pane binding show another session after every redeploy (2026-10-31).
 func (n *Node) sessionFromProcess(pane string) string {
 	n.mu.Lock()
 	c, ok := n.panePIDs[pane]
 	n.mu.Unlock()
-	if !ok || time.Since(c.checked) > time.Minute {
+	if !ok || time.Since(c.checked) > time.Minute || (c.pid == 0 && time.Since(c.checked) > panePIDRetry) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		pids, err := n.herdr.PaneProcesses(ctx, pane)
 		cancel()
@@ -784,6 +786,9 @@ func readClaudeSessionID(path string) string {
 	}
 	return f.SessionID
 }
+
+// panePIDRetry: how soon a pane whose claude had no sessions/<pid>.json is looked at again.
+const panePIDRetry = 5 * time.Second
 
 type panePID struct {
 	pid     int
