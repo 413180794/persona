@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 形象 (docs/persona.md), against scripts/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
+/// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Jarvis; choosing it downloads it, and the Jarvis tab's top bar takes
 /// its name and face; choosing Jarvis again brings the name back.
 final class PersonaPickerTests: XCTestCase {
@@ -55,10 +55,19 @@ final class PersonaPickerTests: XCTestCase {
         return face.label
     }
 
+    /// 设置 › 外观: the settings tab remembers its page, so the second time it is already open.
+    @MainActor private func openAppearance(_ app: XCUIApplication) {
+        app.tabBars.buttons["设置"].tap()
+        if app.buttons["persona-jarvis"].waitForExistence(timeout: 2) { return }
+        let row = app.buttons["settings-appearance"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "no 外观 row:\n\(app.debugDescription)")
+        row.tap()
+    }
+
     @MainActor func testChoosingAPersonaChangesJarvis() throws {
         let app = launch()
         XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "the bar should start on the built-in")
-        app.tabBars.buttons["设置"].tap()
+        openAppearance(app)
         let builtin = app.buttons["persona-jarvis"]
         let demo = app.buttons["persona-demo"]
         XCTAssertTrue(demo.waitForExistence(timeout: 20), "the hub's persona is not offered:\n\(app.debugDescription)")
@@ -68,11 +77,13 @@ final class PersonaPickerTests: XCTestCase {
 
         demo.tap()
         waitSelected(app.buttons["persona-demo"], "choosing the hub's persona did not take")
+        // The whole app was rebuilt with the new colors and is still on 外观.
+        XCTAssertTrue(app.navigationBars["外观"].exists, "the rebuild left 设置 › 外观:\n\(app.debugDescription)")
         shot(app, "settings-demo")
         XCTAssertTrue(topBarName(app).hasPrefix("小薄荷"), "the top bar does not use the persona's name")
         shot(app, "topbar-demo")
 
-        app.tabBars.buttons["设置"].tap()
+        openAppearance(app)
         let back = app.buttons["persona-jarvis"]
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()

@@ -916,6 +916,10 @@ final class AppModel {
         }
     }
 
+    /// Where 设置 is (its pages), here and not in SettingsView's state: picking a style or a persona in 设置 › 外观
+    /// rebuilds the whole tree (`look`), and the rebuilt settings stay on that page.
+    var settingsPath = NavigationPath()
+
     /// The persona on screen: the chosen one, the built-in in 体验模式 (its packages are the user's hub's).
     var persona: Persona { isDemo ? .builtin : personas.current }
 

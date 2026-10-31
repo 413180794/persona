@@ -116,7 +116,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
 - 输入框：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用 `ComposerRow`：+（照片 / 拍照 / 文件 / 快捷指令）、玻璃胶囊输入框、
   发送（没东西可发时淡掉），Agent 工作中且没打字时是红色的中断。
-- 「BeautifulUI」风格（设置 › 界面风格，`AppStyle.beautiful`，2026-10-30）下，输入框换成 `PromptComposer`（助手新对话是 `BeautifulStarterComposer`），
+- 「BeautifulUI」风格（设置 › 外观 › 界面风格，`AppStyle.beautiful`，2026-10-30）下，输入框换成 `PromptComposer`（助手新对话是 `BeautifulStarterComposer`），
   是 BeautifulUI 的 Prompt Bar（`layout: .stacked`）。其他风格完全是上面的样子（CLAUDE.md：新样子做成新主题）：
   上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成红色的中断。
   底色是当前风格的 `.surface`（库自己不画），按钮 34pt。待发的图片条是 `ComposerImages`。草稿、发送安全检查、上传都还在各自的 composer 里。
@@ -352,7 +352,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
     竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
     减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
-- 界面风格（设置 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
+- 界面风格（设置 › 外观 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
 
   | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |
   | --- | --- | --- | --- | --- |
@@ -383,7 +383,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 尺寸 `Theme.Size`（2026-10-31 用户要求）：图标框、圆点、头像、点按区域、缩略图、标签列宽这类挨着文字的尺寸都有名字，默认字号下和原来的点数一样，
     用 `.scaledFrame(width:height:)` / `.scaledFrame(minWidth:…)` 随字号缩放，到辅助功能大字号最多 1.6×（44pt 的按钮不至于占掉三分之一屏幕）。
     4pt 及以下的线、分隔条、进度条不缩，用普通 `frame`；按视图自己的几何算出来的尺寸照旧；手表不跟 App 的字号，保留自己的尺寸。
-  - 字号跟随动态字体；设置 › 界面风格 › 字号（小 / 标准 / 大，`TextSize`，`ui.textSize`）在系统档位上再挪一档：RootView 设 `.dynamicTypeSize`，
+  - 字号跟随动态字体；设置 › 外观 › 界面风格 › 字号（小 / 标准 / 大，`TextSize`，`ui.textSize`）在系统档位上再挪一档：RootView 设 `.dynamicTypeSize`，
     所以文本样式、`@ScaledMetric`、MarkdownUI 和 BeautifulUI 的字号一起变，比例不变。
   - 飞书消息和卡片保留飞书自己的字号（落在上面的级别上），通过 `LarkTextBase.scale`（`Theme.textScale`）一样跟随。
   - 固定尺寸框里的图标加 `dynamicTypeSize(...)` 上限，免得长出框；AI 回复的 Markdown 基准 17pt（MarkdownUI 自己按动态字体缩放）。

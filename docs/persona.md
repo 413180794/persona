@@ -1,6 +1,6 @@
 # 形象（persona）
 
-一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**、一套**配色**。设置 › 形象里选，选了以后这几样一起换：
+一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**、一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
 顶栏的脸和名字、侧边栏的卡片、资料页、输入框的「问 xxx…」，以及整个 App 的主色（按钮、链接、自己的气泡、选中态）。
 
 - **默认形象 Jarvis**：App 自己画的面罩（`JarvisAvatar`），颜色跟随界面风格，不带配色。仓库里只有它。
@@ -138,7 +138,7 @@
 - 黄色这种白字读不了的颜色，会变成蜂蜜色 / 琥珀色。
 - 想要别的颜色就用 `--accent-light` / `--accent-dark` 手动给。
 
-**换形象等于换一次风格**：RootView 按 `AppModel.look`（风格 + 形象配色）重建整棵视图树。打开的 Tab 和对话会记住，但推出来的页面会被关掉。所以选形象的界面放在设置列表里（`PersonaPicker`，和界面风格一样），而不是推出去的单独页面。
+**换形象等于换一次风格**：RootView 按 `AppModel.look`（风格 + 形象配色）重建整棵视图树。打开的 Tab 和对话会记住；设置的导航路径放在 `AppModel.settingsPath`，所以选形象的「设置 › 外观」页（`PersonaPicker` 和界面风格、字号在一起）重建后还开着。
 
 ## 手机上（`PersonaStore`）
 
@@ -176,7 +176,7 @@
    - 位置不对时，在 `<work>/framing.json` 里按姿势微调，例如 `{"think": {"scale": 1.05, "dx": 0.02, "dy": -0.01}}`（单位是边长的比例）。
    - 颜色不对就用 `--primary`、`--accent-light`、`--accent-dark`。
 5. **装到 hub**：`python3 scripts/persona/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/jarvis/config.json`。
-6. **手机上选**：设置 › 形象。
+6. **手机上选**：设置 › 外观 › 形象。
 
 一步做完生成和打包：`make_persona.py new --id doudou --name 豆豆 a.jpg b.jpg c.jpg`。不用 AI 也行：把自己画的 8 张透明 PNG 按上面的名字放进 `<work>/poses/`，直接 `build`。只有 `avatar` 是必须的，缺的姿势用它代替。
 

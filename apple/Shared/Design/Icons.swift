@@ -75,6 +75,8 @@ extension Theme {
         static let openExternal = "arrow.up.forward.app"
         /// Translate, and what was translated.
         static let translate = "translate"
+        /// 设置 › 外观: persona, style, text size.
+        static let appearance = "paintpalette"
         /// Open the thing the row points at (a sub-Agent, a card's link).
         static let open = "arrow.up.right"
         /// Open a file or a document in its viewer.

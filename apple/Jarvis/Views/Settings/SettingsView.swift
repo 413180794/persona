@@ -7,7 +7,6 @@ struct SettingsView: View {
     @State private var showPair = false
     @State private var debugOpened = false
     @State private var storage: Int64?
-    @State private var path = NavigationPath()
     @AppStorage(TranslationPrefs.enabledKey) private var translating = false
     @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
 
@@ -19,7 +18,7 @@ struct SettingsView: View {
         let _ = PerfTrace.body("SettingsView")
         #endif
         // By value, every page: in the split (iPhone Duo open) they open beside the list, not inside its column.
-        SplitNavigation(path: $path, destinations: SettingsDestinations()) {
+        SplitNavigation(path: Bindable(model).settingsPath, destinations: SettingsDestinations()) {
             List {
                 Section {
                     HStack(spacing: Theme.Space.l) {
@@ -45,30 +44,14 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    PersonaPicker()
-                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
-                } header: {
-                    Text("形象")
-                } footer: {
-                    Text(model.isDemo ? "体验模式只有默认形象。" :
-                        "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
-                }
-
-                Section {
-                    StylePicker()
-                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
-                    LabeledContent("字号") {
-                        Picker("字号", selection: Binding(get: { model.textSize }, set: { model.textSize = $0 })) {
-                            ForEach(TextSize.allCases) { Text($0.title).tag($0) }
+                    NavigationLink(value: SettingsPage.appearance) {
+                        LabeledContent {
+                            Text("\(model.persona.name) · \(model.style.title)").lineLimit(1)
+                        } label: {
+                            Label("外观", systemImage: Theme.Icon.appearance)
                         }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
                     }
-                    .accessibilityIdentifier("text-size")
-                } header: {
-                    Text("界面风格")
-                } footer: {
-                    Text("整个 App 一起换，包括收件箱里的飞书页面。字号在系统的「文字大小」之上再调小或调大一档。")
+                    .accessibilityIdentifier("settings-appearance")
                 }
 
                 Section {
@@ -153,7 +136,7 @@ struct SettingsView: View {
             // Measured each time the page shows and whenever a page closes (back from 存储空间 after clearing; in the
             // split the list never leaves the screen).
             .onAppear(perform: measureStorage)
-            .onChange(of: path) { measureStorage() }
+            .onChange(of: model.settingsPath) { measureStorage() }
             #if DEBUG
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
@@ -188,6 +171,7 @@ struct SettingsView: View {
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
+        else if d.bool(forKey: "openAppearance") { p.append(SettingsPage.appearance) }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
         else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
             p.append(ModelLaunchersRoute())
@@ -195,7 +179,7 @@ struct SettingsView: View {
         }
         guard !p.isEmpty else { return }
         debugOpened = true
-        path = p
+        model.settingsPath = p
     }
     #endif
 
@@ -219,7 +203,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case assistant, claude, devices, phoneData, notifications, storage, translation
+    case appearance, assistant, claude, devices, phoneData, notifications, storage, translation
 
 }
 
@@ -238,6 +222,7 @@ private struct SettingsDestinations: ViewModifier {
 
     @ViewBuilder private func page(for page: SettingsPage) -> some View {
         switch page {
+        case .appearance: AppearanceSettingsView()
         case .assistant: AssistantProfileView()
         case .claude: ClaudeSettingsView()
         case .devices: DevicesView()
