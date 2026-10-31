@@ -196,7 +196,8 @@ struct MessageShareSheet: View {
             return
         }
         do {
-            try await PHPhotoLibrary.shared().performChanges { PHAssetChangeRequest.creationRequestForAsset(from: image) }
+            // `@Sendable`: Photos runs the block on its own queue, where main-actor code is a crash (BackgroundCallbackTests).
+            try await PHPhotoLibrary.shared().performChanges { @Sendable in PHAssetChangeRequest.creationRequestForAsset(from: image) }
             Haptics.success()
             AppModel.shared.toast = Toast("已保存到相册", style: .success)
         } catch {

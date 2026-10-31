@@ -88,7 +88,8 @@ enum RemindersTool {
     private static func fetch(_ store: EKEventStore, in lists: [EKCalendar]?) async -> [ReminderRow] {
         let predicate = store.predicateForReminders(in: lists)
         return await withCheckedContinuation { (continuation: CheckedContinuation<[ReminderRow], Never>) in
-            store.fetchReminders(matching: predicate) { reminders in
+            // EventKit calls back on its own queue: `@Sendable` keeps the block off the main actor (BackgroundCallbackTests).
+            store.fetchReminders(matching: predicate) { @Sendable reminders in
                 let rows = (reminders ?? []).compactMap { reminder -> ReminderRow? in
                     guard let calendar = reminder.calendar else { return nil }
                     return ReminderRow(

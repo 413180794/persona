@@ -46,18 +46,19 @@ final class WatchSync: NSObject, WCSessionDelegate {
 
     #if os(watchOS)
     /// Watch side: ask the phone for its pairing right now (needs the phone nearby).
-    func requestConfig(done: @escaping (Bool) -> Void) {
+    func requestConfig(done: @escaping @MainActor (Bool) -> Void) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             done(false)
             return
         }
-        WCSession.default.sendMessage(["request": "config"], replyHandler: { reply in
+        // Both handlers run on WatchConnectivity's queue: `@Sendable` keeps them off the main actor (BackgroundCallbackTests).
+        WCSession.default.sendMessage(["request": "config"], replyHandler: { @Sendable reply in
             nonisolated(unsafe) let r = reply
             Task { @MainActor in
                 self.apply(r)
                 done(r["config"] != nil)
             }
-        }, errorHandler: { _ in Task { @MainActor in done(false) } })
+        }, errorHandler: { @Sendable _ in Task { @MainActor in done(false) } })
     }
     #endif
 

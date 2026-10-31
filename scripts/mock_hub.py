@@ -929,6 +929,24 @@ def find_items(sid):
 HISTORY = "mock-1"
 # MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
 # final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
+PHOTO = "a1f3c2d4-0000-4000-8000-00000000000c"
+if os.environ.get("MOCK_PHOTO") == "1":  # a screenshot in the chat, to save to the photo library (PhotoSaveTests)
+    import struct, zlib
+
+    def _png(w, h, rgb):
+        def chunk(t, d):
+            return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+        raw = b"".join(b"\0" + bytes(rgb) * w for _ in range(h))
+        return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+    SESSIONS.append(sess("macbook", PHOTO, "看看这张截图", "/Users/me/code/weather", "done", "read", "weather", 1, "shot", 6, 3,
+                         "截图里的布局没问题。"))
+    _shot = {"mime": "image/png", "data": base64.b64encode(_png(64, 48, (52, 120, 246))).decode(), "width": 64, "height": 48}
+    ITEMS[PHOTO] = [it("user", "text", 4, text="看看这张截图"), it("user", "image", 4, image=_shot),
+                    it("assistant", "text", 3, text="截图里的布局没问题。")]
+
+
 GAP = os.environ.get("MOCK_GAP") == "1"
 
 # ---------- personas (docs/persona.md) ----------

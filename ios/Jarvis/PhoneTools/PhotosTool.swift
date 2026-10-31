@@ -161,7 +161,8 @@ enum PhotosTool {
             options.isSynchronous = false
             options.version = .current
             let gate = SingleResume(continuation)
-            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, info in
+            // May come back off the main thread (an iCloud download): `@Sendable` keeps it off the main actor.
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { @Sendable data, _, _, info in
                 // The handler can be called more than once (degraded, then full).
                 if let cancelled = info?[PHImageCancelledKey] as? Bool, cancelled {
                     gate.fail(ToolFailure(.unavailable, "照片读取被取消 / The photo request was cancelled"))
