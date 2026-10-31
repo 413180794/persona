@@ -24,6 +24,7 @@ struct MacViewMenu: Commands {
     // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     @AppStorage("dev.compact") private var compact = false
+    @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
@@ -40,6 +41,13 @@ struct MacViewMenu: Commands {
             Divider()
         }
         CommandGroup(after: .sidebar) {
+            // The window's sections column (MacShell); the pages' own list columns have their buttons.
+            Button(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏") {
+                withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
+            .disabled(!model.isPaired)
+            Divider()
             Toggle("紧凑列表", isOn: $compact)
             Picker("分组方式", selection: $grouping) {
                 ForEach(DevGrouping.allCases) { Text($0.title).tag($0) }

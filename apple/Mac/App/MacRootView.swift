@@ -32,6 +32,8 @@ enum MacSection: String, CaseIterable, Identifiable {
 
     /// The Mac-side pick across launches (the tabs are AppModel's to remember).
     static let storageKey = "mac.section"
+    /// 显示 › 隐藏侧边栏 (⌃⌘S): the sections column folded away, across launches.
+    static let sidebarHiddenKey = "mac.sidebar.hidden"
     static func remember(_ s: MacSection?, in d: UserDefaults = .standard) {
         if let s, s.tab == nil { d.set(s.rawValue, forKey: storageKey) } else { d.removeObject(forKey: storageKey) }
     }
@@ -148,6 +150,20 @@ private struct MacShell: View {
         let _ = PerfTrace.body("MacShell")
         #endif
         HStack(spacing: 0) {
+            // 显示 › 隐藏侧边栏 folds it away; ⌘1…6 still move between the sections.
+            if !sidebarHidden { sections; Divider() }
+            page
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
+        .onChange(of: model.selectedTab) { shell.section = nil }
+        .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
+        .onChange(of: model.assistantCurrent) { shell.section = nil }
+    }
+
+    @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
+
+    private var sections: some View {
             List(selection: Binding(get: { MacSection.shown(override: shell.section, tab: model.selectedTab) },
                                     set: { if let s = $0 { shell.go(s, model) } })) {
                 ForEach(MacSection.allCases) { section in
@@ -164,14 +180,7 @@ private struct MacShell: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { MacConnectionFooter() }
             .frame(width: Theme.Size.macSidebarIdeal)
             .background(Theme.systemSidebar)
-            Divider()
-            page
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
-        .onChange(of: model.selectedTab) { shell.section = nil }
-        .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
-        .onChange(of: model.assistantCurrent) { shell.section = nil }
+            .transition(.move(edge: .leading))
     }
 
     /// The iOS tab bar's badges (`RootView`).
