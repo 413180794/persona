@@ -37,13 +37,24 @@ private struct MacWindowNumberReader: NSViewRepresentable {
 
     final class Probe: NSView {
         var changed: (Int?) -> Void = { _ in }
+        private var keyObserver: NSObjectProtocol?
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
+            keyObserver = nil
             // Read on the next turn: a window not yet on screen can still report -1 here.
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.changed(self.window.map(\.windowNumber).flatMap { $0 > 0 ? $0 : nil })
+            DispatchQueue.main.async { [weak self] in self?.report() }
+            // And again whenever it becomes key, in case that first read came too early.
+            if let window {
+                keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window,
+                                                                     queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.report() }
+                }
             }
         }
+
+        // The observer goes when the view leaves its window (above, with a nil window); it holds the probe weakly.
+        private func report() { changed(window.map(\.windowNumber).flatMap { $0 > 0 ? $0 : nil }) }
     }
 }

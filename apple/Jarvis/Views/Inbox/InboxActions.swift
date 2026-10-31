@@ -222,7 +222,13 @@ struct InboxHandOffSheet: View {
         NavigationStack {
             Form {
                 Section("要它做什么") {
+                    #if os(macOS)
+                    // A grouped Mac form shows a titled field as label + trailing value: the request took the right half.
+                    TextField(Self.presets[0], text: $instruction, prompt: Text(Self.presets[0]), axis: .vertical)
+                        .labelsHidden().lineLimit(2...6)
+                    #else
                     TextField(Self.presets[0], text: $instruction, axis: .vertical).lineLimit(2...6)
+                    #endif
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Theme.Space.s) {
                             ForEach(Self.presets, id: \.self) { p in

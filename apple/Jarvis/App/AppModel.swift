@@ -703,7 +703,9 @@ final class AppModel {
         Haptics.attention()
         #if os(macOS)
         // The alert hangs off the main window: bring it up (reopen it if it was closed) so the question is seen.
+        // From the background activating may not be granted: the Dock icon bounces until the user comes.
         MacShellState.shared.showMain()
+        NSApp.requestUserAttention(.criticalRequest)
         #endif
         return await withCheckedContinuation { cont in
             pendingConfirmation = PhoneConfirmation(summary: summary) { cont.resume(returning: $0) }

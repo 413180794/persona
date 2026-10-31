@@ -187,7 +187,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 和对话里「终端」浮层是同一个面板，⌘W 关；只有 herdr 里的 Agent 可点。截图：`-openTerminalWindow <m>/<s>`（存成 `<名字>.chat.png`）。
 菜单要开的窗口（对话、终端）由菜单栏图标上的 `MacWindowOpener` 打开：主窗口关了、只剩一个对话窗口时也能开（原来挂在主窗口上，主窗口一关就点了没反应，两个截图参数都验过）。
 「下一个需要你的」、⌘[ / ⌘] 打开的对话在主窗口里，先把主窗口叫出来（关了就重开，最小化了就还原）。终端窗口顶上的手柄点了关窗口。
-手机工具的写操作确认（「Claude 想在这台 Mac 上执行」）挂在主窗口上，弹之前先把主窗口叫出来；没连真 hub，没实际触发过。
+手机工具的写操作确认（「Claude 想在这台 Mac 上执行」）挂在主窗口上，弹之前先把主窗口叫出来，并让 Dock 图标跳（`requestUserAttention(.criticalRequest)`：App 在后台时系统可能不让它直接到前台）；没连真 hub，没实际触发过。
+只在菜单栏图标上挂一个 opener：主窗口上再挂一个时，两边都响应，同一个对话开出两个窗口（`-macWindowLog YES -openChatWindow … -openTerminalWindow …` 量过：2 个对话窗口；去掉后 1 个对话、1 个终端）。
+待查：用户在系统设置里把菜单栏项藏起来时，它的 label 还在不在驱动这个 opener，没试过。窗口号探针除了刚进窗口时读一次，变成 key 时也会再读。
 
 ## 显示 / 前往菜单（Mac）
 
@@ -271,7 +273,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 1. Jarvis tab (assistant)
 - [ ] Headless Claude assistant conversations (main conversation `assistant.main` + side branches); first launch opens main — Views/Assistant/AssistantView.swift, App/AppModel.swift (assistantMain, refreshAssistant)
-- [ ] Home: greeting + available devices + 6 suggestions; launcher/model chip list; StarterComposer (or BeautifulStarterComposer) with photos — Views/Assistant/AssistantView.swift (AssistantHome, StarterComposer, StarterModelChip, AssistantToolsRow)
+- [x] Home: greeting + available devices + 6 suggestions; launcher/model chip list; StarterComposer (or BeautifulStarterComposer) with photos — Views/Assistant/AssistantView.swift (AssistantHome, StarterComposer, StarterModelChip, AssistantToolsRow)
+  - Mac 截图看过（`-tab assistant -assistant.current ""`）：问候、在线机器 + 这台 Mac、6 个建议、启动器 / 权限 / 思考 chip、输入框；图片走拖放 / 粘贴（`MacComposerFiles`）。
 - [ ] First message shows bubble + 「正在准备」 immediately, session starts in background; warm assistant — AssistantView.swift, AppModel.warmAssistant
 - [ ] Thinking hidden; tool calls folded into 「工具 N · 电脑、iPhone…」 — Views/Chat/ChatLines.swift, ChatView.swift
 - [ ] Floating top bar with fog, center persona dot + name capsule; connection state replaces name — Views/Assistant/AssistantTopBar.swift (AssistantTopBar, TopFog)
@@ -282,6 +285,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
 - [ ] Jarvis avatar (mask face, eyes move when working) — Views/Assistant/JarvisAvatar.swift
 - [ ] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)
+  - Mac 截图看到：身份、所在机器、在线、接下来 3 项、定时任务 / 运行记录、关于我 / 记忆、启动器 + 管理启动器；能力列表在截图下方，没看到。
 - [ ] 「交给 Jarvis」 from other pages sends `<jarvis-context>` into main conversation — AppModel.askJarvis
 
 ## 2. Agents tab (dev list)
@@ -289,6 +293,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Grouping menu: 按项目 / 按状态 / 按机器 (`DevGrouping`, remembered); one rank order — ChatsView.swift, Views/Chats/AgentListOrder.swift, Views/Chats/AgentsMenus.swift (AgentsListMenu)
 - [ ] Card vs compact list (`dev.compact`); compact rows on one scale — ChatsView.swift (SessionRow), Views/Chats/CompactList.swift
 - [ ] 「需要你处理」 cards with quick-action buttons (card mode) / CompactInteractionRow — Views/Interactions/InteractionViews.swift (InteractionPreviewCard), CompactList.swift
+  - 卡片模式 Mac 截图看到（计划等你审批、Claude 在问你 + 选项按钮）；紧凑模式的 `CompactInteractionRow` 没截。
 - [ ] Pinned agents, pinned spaces, busy / just-done / muted-running / idle spaces (folded), 「还有 N 个空闲」 — ChatsView.swift (IdleFoldRow, QuietSpaceRow, SpaceHeader, StateCounts)
 - [ ] Fold/unfold spaces and section headers (`dev.folded`), 全部折叠/全部展开 — ChatsView.swift, AgentsMenus.swift
 - [ ] Mark all read (filter + per-space, with confirm) — ChatsView.swift, App/AppModel.swift (markSeen)
@@ -298,6 +303,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Rename agent (herdr tab + Claude session name) — ChatsView.swift (RenameSessionAlert), AppModel.renameSession
 - [ ] Pins / mutes synced with hub (/api/v1/pins, /mutes), optimistic, per-agent override of space mute — App/PinsStore.swift
 - [ ] Badges: 「⟳ 下次 12:20」 loop, 「⚙ 后台 N」, 「👥 子 Agent N」, muted 🔕 styling — ChatsView.swift (SessionRow)
+  - Mac 对话页顶上看到「⟳ 5:24」和「后台 1」；子 Agent 和屏蔽样式没截。
 - [ ] Machine filter menu, 「机器监控」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
 - [ ] Connection status in title slot — Views/ConnectionTitle.swift
 - [ ] Pull to refresh — ChatsView.swift

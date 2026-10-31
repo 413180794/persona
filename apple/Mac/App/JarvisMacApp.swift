@@ -285,6 +285,15 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // With `-macWindowLog YES`: how many chat / terminal windows the launch left (two openers, one window each).
+        if d.bool(forKey: "macWindowLog") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                func count(_ id: String) -> Int {
+                    NSApp.windows.filter { $0.isVisible && $0.identifier?.rawValue.hasPrefix(id) == true }.count
+                }
+                NSLog("macWindowLog: %d chat, %d terminal window(s) at launch", count(MacChatWindow.id), count(MacTerminalWindow.id))
+            }
+        }
         // `-openTerminalWindow <machine>/<session>`: that Agent's terminal in a window of its own.
         if let key = sessionKey(d.string(forKey: "openTerminalWindow")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.terminalWindow = key }
