@@ -53,11 +53,22 @@ struct AgentsListMenu: View {
     @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
     @AppStorage("dev.compact") private var compact = false
 
+    /// The shell (docs/ios.md「新外壳」) shows these inside its 工作 switch's menu: the items, without a button of their own.
+    var inline = false
+
     var body: some View {
         // Only the machines' names and icons: not their live state, which changes with every push.
         let machines = model.machineChoices
         let chosen = machines.first { $0.id == machineFilter }
-        Menu {
+        if inline {
+            items(machines)
+        } else {
+            Menu { items(machines) } label: { label(chosen) }
+                .accessibilityLabel((chosen.map { "当前机器：\($0.name)，" } ?? "") + "分组：" + grouping.title)
+        }
+    }
+
+    @ViewBuilder private func items(_ machines: [MachineChoice]) -> some View {
             #if DEBUG || PERF_SIGNPOST
             let _ = PerfTrace.body("ListMenu.content")
             #endif
@@ -87,7 +98,9 @@ struct AgentsListMenu: View {
                     Label("机器监控", systemImage: Theme.Icon.context)
                 }
             }
-        } label: {
+    }
+
+    @ViewBuilder private func label(_ chosen: MachineChoice?) -> some View {
             if let m = chosen {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: m.symbol)
@@ -99,8 +112,6 @@ struct AgentsListMenu: View {
             } else {
                 Image(systemName: grouping == .space ? "line.3.horizontal.decrease" : grouping.symbol)
             }
-        }
-        .accessibilityLabel((chosen.map { "当前机器：\($0.name)，" } ?? "") + "分组：" + grouping.title)
     }
 }
 

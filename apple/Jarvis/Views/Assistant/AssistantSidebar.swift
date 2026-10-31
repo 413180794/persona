@@ -579,7 +579,7 @@ struct AssistantSidebar: View {
             }
         } else {
             HStack {
-                Text(model.persona.name).font(Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
+                Text(model.persona.name).font(isShell ? Theme.Font.display : Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 Button {
                     withAnimation(Theme.Motion.state) { searchOpen = true }
@@ -611,7 +611,7 @@ struct AssistantSidebar: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, Theme.Space.m)
-                    .scaledFrame(minHeight: Theme.Size.avatarL)
+                    .scaledFrame(minHeight: Theme.Size.box50)
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -634,7 +634,7 @@ struct AssistantSidebar: View {
         Button(action: run) {
             HStack(spacing: Theme.Space.l) {
                 // One box for every symbol: a wide one (知识库's books) scales down into it instead of pushing its words.
-                Image(systemName: symbol).resizable().scaledToFit().fontWeight(.regular).foregroundStyle(Color.primary)
+                Image(systemName: symbol).resizable().scaledToFit().fontWeight(isShell ? .medium : .regular).foregroundStyle(Color.primary)
                     .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
                     .scaledFrame(width: Theme.Size.icon)
                 Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
@@ -642,7 +642,7 @@ struct AssistantSidebar: View {
                 if count > 0 { CountBadge(count: count, look: .solid(Theme.needsYou)) }
             }
             .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(minHeight: Theme.Size.avatarL)
+            .scaledFrame(minHeight: isShell ? Theme.Size.box50 : Theme.Size.avatarL)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -738,7 +738,10 @@ struct AssistantSidebar: View {
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
-                if isMain {
+                // The shell's list is ChatGPT's: titles only, all in one column (the marks made it busy).
+                if isShell {
+                    EmptyView()
+                } else if isMain {
                     PersonaAvatar(size: Theme.Size.wellM)
                 } else {
                     ConversationMark(id: s.sessionID)
@@ -748,10 +751,11 @@ struct AssistantSidebar: View {
                 mark(s)
             }
             .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(minHeight: Theme.Size.box50)
+            .scaledFrame(minHeight: isShell ? Theme.Size.avatarXL : Theme.Size.box50)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.Fill.well)
+                    // Rounder in the shell: a pill, like ChatGPT's selected chat.
+                    RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Theme.Fill.well)
                 }
             }
             .contentShape(.rect)

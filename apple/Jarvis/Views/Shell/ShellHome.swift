@@ -52,7 +52,7 @@ struct ShellHome: View {
                             .foregroundStyle(Theme.danger)
                             .padding(.horizontal, Theme.Space.l)
                     }
-                    ShellNeedsYou(openInbox: openInbox)
+                    ShellNeedsYou(openInbox: openInbox).shellScaled()
                 }
                 StarterComposer(disabled: pending != nil, shell: StarterComposer.ShellModes(launcher: $launcher, mode: $mode, effort: $effort),
                                 send: send)

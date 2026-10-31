@@ -83,6 +83,7 @@ struct AssistantTopBar: View {
                 .disabled(key == nil)
                 .opacity(key == nil ? 0.4 : 1)
         }
+        .shellScaled()
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
         .frame(height: Self.height, alignment: .top)

@@ -5,11 +5,13 @@ import SwiftUI
 
 /// The top switch: 助手 | Agents in a glass capsule, the selected one on a soft gray pill that glides across. Agents carries
 /// the count of agents waiting on the user. Tapping 助手 while it is selected opens `chatMenu` (the conversation's
-/// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT.
-struct ShellSwitch<ChatMenu: View>: View {
+/// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT; tapping Agents while it is selected opens
+/// the list's options (分组, 显示, 机器…).
+struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     @Binding var tab: AppTab
     var waiting: Int
     @ViewBuilder var chatMenu: () -> ChatMenu
+    @ViewBuilder var workMenu: () -> WorkMenu
     @Namespace private var pill
 
     var body: some View {
@@ -23,7 +25,15 @@ struct ShellSwitch<ChatMenu: View>: View {
             } else {
                 button("助手", .assistant, id: "shell-assistant")
             }
-            button("Agents", .chats, id: "shell-agents", badge: waiting)
+            if tab == .chats {
+                Menu { workMenu() } label: { segment("Agents", selected: true, badge: waiting) }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("shell-agents")
+                    .accessibilityHint("列表的选项")
+            } else {
+                button("Agents", .chats, id: "shell-agents", badge: waiting)
+            }
         }
         .padding(Theme.Space.xs)
         .surface(interactive: true, in: .capsule)
@@ -83,7 +93,8 @@ struct ShellCircleButton: View {
         } label: {
             Image(systemName: symbol)
                 .font(Theme.Font.heading)
-                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .fontWeight(.medium) // a touch heavier and rounder, like ChatGPT's line icons
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .foregroundStyle(Color.primary)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
@@ -102,5 +113,28 @@ struct ShellCircleButton: View {
         .accessibilityLabel(label)
         .accessibilityValue(dot ? "有事等你" : "")
         .accessibilityIdentifier(id)
+    }
+}
+
+extension View {
+    /// The shell's chrome a size up (docs/ios.md「新外壳」): one Dynamic Type step, about 12 %, so its text, icons, buttons
+    /// and the composer grow together and keep their proportions, ChatGPT's roomier scale. The conversation's messages
+    /// keep the reading size. 小 / 标准 / 大 and the system's size still apply under it.
+    func shellScaled() -> some View { modifier(ShellScaled()) }
+}
+
+private struct ShellScaled: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var size
+
+    func body(content: Content) -> some View {
+        let all = DynamicTypeSize.allCases
+        let i = all.firstIndex(of: size) ?? 0
+        content.dynamicTypeSize(all[min(i + 1, all.count - 1)])
+    }
+}
+
+extension ShellSwitch where WorkMenu == EmptyView {
+    init(tab: Binding<AppTab>, waiting: Int, @ViewBuilder chatMenu: @escaping () -> ChatMenu) {
+        self.init(tab: tab, waiting: waiting, chatMenu: chatMenu, workMenu: { EmptyView() })
     }
 }

@@ -47,6 +47,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     Menu { modes() } label: {
                         Image(systemName: Theme.Icon.effort)
                             .font(Theme.Font.heading)
+                            .fontWeight(.medium)
                             .foregroundStyle(modesWarn ? Theme.danger : Color.primary)
                             .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                             .contentShape(.circle)
@@ -81,6 +82,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         }
         .contentShape(.rect(cornerRadius: Theme.Shell.composerRadius))
         .onTapGesture { focused.wrappedValue = true }
+        .shellScaled()
         .animation(Theme.Motion.layout, value: expanded)
         .animation(Theme.Motion.state, value: canSend)
         .onDisappear { if dictation.isListening { dictation.stop() } }
@@ -90,7 +92,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         Menu { attach() } label: {
             Image(systemName: Theme.Icon.add)
                 .font(Theme.Font.title)
-                .fontWeight(.light)
+                .fontWeight(.regular)
                 .foregroundStyle(Color.primary)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
@@ -106,6 +108,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         Button(action: toggleDictation) {
             Image(systemName: dictation.isListening ? Theme.Icon.dictating : Theme.Icon.dictate)
                 .font(Theme.Font.heading)
+                .fontWeight(.medium)
                 .foregroundStyle(dictation.isListening ? Theme.danger : Color.primary)
                 .symbolEffect(.pulse, isActive: dictation.isListening)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)

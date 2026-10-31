@@ -1320,7 +1320,8 @@ private struct SearchCloseProbe: UIViewRepresentable {
 #endif
 
 /// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 助手's, in the same places,
-/// over the navigation bar (kept for its search field); on the right the list's options and 新建会话.
+/// over the navigation bar (kept for its search field), 新建会话 on the right; tapping the selected Agents opens the list's
+/// options (分组, 显示, 机器…).
 struct AgentsTopBar: View {
     @Environment(AppModel.self) private var model
     let shell: ShellState
@@ -1336,17 +1337,12 @@ struct AgentsTopBar: View {
             ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "agents-new", action: newSession)
         }
         .overlay(alignment: .top) {
-            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { EmptyView() }
-        }
-        .overlay(alignment: .topTrailing) {
-            // The list's options (分组, 显示, 机器…) just left of 新建会话.
-            AgentsListMenu(actions: menuActions)
-                .foregroundStyle(Color.primary)
-                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                .surface(interactive: true, in: .circle)
-                .offset(x: -(Theme.Size.tapTarget + Theme.Space.s))
+            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { EmptyView() } workMenu: {
+                AgentsListMenu(actions: menuActions, inline: true)
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
+        .shellScaled()
     }
 }
