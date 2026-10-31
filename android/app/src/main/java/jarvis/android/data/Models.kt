@@ -153,7 +153,10 @@ data class ImagePayload(
     val lazy: Boolean? = null,
     val width: Int? = null,
     val height: Int? = null,
-)
+) {
+    /** The inline base64 bytes, or null when they must be fetched (a lazy placeholder carries `"data":""`). */
+    val inlineData: String? get() = data.takeIf { it.isNotEmpty() && lazy != true }
+}
 
 @Serializable
 data class Item(
@@ -172,7 +175,23 @@ data class Item(
     val queued: Boolean? = null,
     val from: String? = null,
     val wake: Boolean? = null,
-)
+) {
+    val time: Instant? get() = parseTime(ts)
+
+    /** The text without the "…（已截断…" line the hub appends where it cut it. */
+    val cutText: String
+        get() {
+            val t = text ?: return ""
+            if (fullSize == null) return t
+            val i = t.lastIndexOf("\n…（已截断")
+            return if (i >= 0) t.substring(0, i) else t
+        }
+
+    /** A tool input field as a string ("command", "file_path"…), when it is one. */
+    fun inputString(key: String): String? =
+        ((toolInput as? kotlinx.serialization.json.JsonObject)?.get(key) as? kotlinx.serialization.json.JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+}
 
 @Serializable
 data class QuestionOption(val label: String = "", val description: String? = null)

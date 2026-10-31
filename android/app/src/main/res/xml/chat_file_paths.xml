@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What ui/media/ChatFileProvider may hand to other apps: pictures shared or copied from the image viewer. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -15,8 +15,12 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 空间操作 | 空间标题右边的 ⋯：打开空间、置顶空间、屏蔽这个空间（其中的 Agent 可以单独开启通知）、重命名空间（改 herdr workspace 名，hub 把置顶 / 屏蔽一起改到新名字上） |
 | 空间页 | 一个 herdr workspace 里在跑的 Agent，两列卡片按标签页顺序排；最后一张「在这个空间开新标签」，在同一个 workspace、同一个目录里起 claude（`POST /api/v1/sessions` 带 `workspace_id`）。右上角菜单多一个「全部标为已读」。从空间页打开的对话，返回时回到空间页 |
 | 搜索和筛选 | 右上角搜索（标题、目录、空间名、标签页名、最后一句，不分大小写）；快捷筛选「全部 / 需要你 / 未读 / 工作中」带数量，筛出来的 Agent 看过以后也留在原位，重新点筛选才刷新（和 iOS 一样）；「全部电脑 / 某一台」只看一台电脑，记住选择；完成未看的不止一个时有「全部标为已读」。搜索和筛选时所有折叠都展开 |
-| 对话 | 历史分页（`turns=2`，滚到顶自动往前翻）、实时 items（WebSocket `subscribe`，按「items 的连续性」补洞）、工具调用和结果合成一行（点开看命令 / diff / 输出，截断的点「看全文」）、图片按需取（`lazy_images`）、Markdown；发消息带 `client_msg_id`，被拒（`dialog_open` / `input_draft`）时弹窗说明，单行草稿可以「清空并发送」；中断（Esc）；Claude 给的下一条建议点一下填进输入框 |
+| 对话 | 历史分页（`turns=2`，滚到顶自动往前翻）、实时 items（WebSocket `subscribe`，按「items 的连续性」补洞）、图片按需取（`lazy_images`，内存 + 磁盘缓存）、Markdown；离开最新处时右下角「回到最新」；发消息带 `client_msg_id`，被拒（`dialog_open` / `input_draft`）时弹窗说明，单行草稿可以「清空并发送」；中断（Esc）；Claude 给的下一条建议点一下填进输入框 |
 | 交互卡片 | 提问（单选直接点、多选 / 自定义文本再提交）、计划（批准 / 批准并全部放行 / 打回带反馈）、授权（允许 / 总是允许 / 拒绝）、终端对话框（按 hub 解析出的 `option` 回答，`prompt_changed` 时提示）、密码框；都能「交给电脑处理」（`dismiss`） |
+| 对话里的工作过程 | 和 iOS 的 `chatLines` 一样（`docs/ios.md`「展示逻辑」，`ui/Rows.kt` 的 `buildRows` + `foldWork`，有单测）：每条你的消息下面，这一轮的工作收成一行「工具 N · 思考 N · 回复 N · 时长 ›」，只留最后一句回复在外面；正在跑的一轮是「正在工作 N 秒」并带终端按钮，跑着时回复后面还有工作就也算工作。点开就在原地一步一行地展开（每步是列表里单独的一行，几百步也不卡），最后一行「收起 N 步」。工具调用和结果合成一行（图标、动词、对象），点开看详情：Bash 是命令和输出，Edit / MultiEdit / Write 是 diff（只给 ± 号和行底色上色，长行左右滑，超过 40 行「展开全部」），Codex 的改动（Edit 带 `diff`）按 unified diff 画；输出超过 10 行折起、被 hub 截断的「看全文」全屏看；TodoWrite 直接画成待办清单；工具截的图在详情里。离开期间回顾（recap）是一行，点开看全文；后台任务的通知说清是什么完成 / 失败了。你的消息里的 `<jarvis-context>` 画成引用卡片，`<attached_images>` 画成缩略图（从那台电脑读），路径变成可点的文件标签，别的会话发来的消息在左边标明来自谁 |
+| 消息菜单 | 长按一条消息（你的或 Agent 的回复）在按住的地方弹出深色操作条：复制、选择（全屏可选中的纯文本）、引用（`> ` 放进输入框）、分享、交给 Jarvis（新开一段助手对话，消息作为 `<jarvis-context>`，和收件箱的「交给 Jarvis」同一条路）、作为上下文（输入框上方一个标签，随下一条消息作为 `<jarvis-context>` 发出，✕ 去掉）、编辑（只在你的消息上，内容放回输入框）。滑动列表就收起 |
+| 图片 | 点对话里的任何图片全屏看：左右滑看这段对话里的所有图片（「n / m」），双指 / 双击放大、拖动，单击显隐按钮，下拉关闭；保存到相册（`Pictures/Jarvis`，安卓 10 以下要存储权限）、分享、拷贝、编辑（框选 / 画笔、六种颜色、撤销、清除，完成后作为照片放进输入框，和「+ › 照片」一样随消息发出） |
+| 文件和 Git | 对话页右上角 ⋯ ›「文件」「Git（改动数）」「拷贝目录」，消息里的文件标签和工具里的路径也能点开（`fs.list`、`file.read`、`git.status / diff / show / log`，只读）。文件：面包屑、目录在前、Git 改动的标记、隐藏文件开关；文件查看器：Markdown 渲染（可切源文件）、代码带行号两个方向滑、图片（点开全屏看）、PDF、2 MB 截断提示。Git：分支、领先 / 落后、上游、暂存数；改动列表（点开看 diff，部分暂存的可切「未暂存 / 已暂存」）；提交历史（30 条之后「加载更早的提交」），点开提交看说明和改了哪些文件，再点文件看这一部分的 diff |
 | 终端 | 对话页右上角，实时终端（`docs/terminal.md`）：`terminal_subscribe` 收 herdr 的帧，VT 子集画进格子（颜色、宽字符、框线逐格画、OSC 8 链接），断线后带 epoch / seq 续上，丢帧就从整帧重来。默认「手机尺寸」接管终端（`control`），Claude 按手机宽度排版；键盘打的字和键栏（Esc、Tab、Ctrl、方向键、^C、⇧Tab、退格、回车）直接写进终端，上下拖是 herdr 的滚轮，点一下是在那一格单击；电脑上别的程序占着时问「接管 / 只看」，被抢走后顶栏有「接管」。可切「电脑尺寸」只看（按窗格原尺寸镜像，左右滑，键走 `/keys`）。旧 hub / node 不能推流时退回每秒读一次 `/screen?format=ansi`。离开页面或 App 进后台立刻放手，窗格回到电脑上的尺寸 |
 | Agent 操作 | 长按一行：置顶 / 取消置顶（置顶的只在顶部「置顶」里出现一次）、屏蔽 / 开启通知（规则和 hub 一样：Agent 自己 → `allowed` → 它的空间；屏蔽的灰点加 🔕、不弹通知）、重命名（herdr 标签页名和 Claude 会话名一起改）、关闭 Agent（先说明会退出哪台电脑上的什么、关掉哪个标签页）。置顶 / 屏蔽存在 hub（`/api/v1/pins`、`/api/v1/mutes`），点了立刻生效，hub 拒绝时退回原样 |
 | 新开会话 | 列表右下角 +：选电脑、目录（家目录里列「最近用过」，点一下选中、再点进入）、启动器、权限模式（和 iOS 同一组，「默认」交给启动器）、可选的第一条消息。hub 说没启动起来但新窗格里其实起来了（停在对话框上，或者 node 不认识这个版本的输入框底栏）时，照样打开新会话 |
@@ -139,12 +143,15 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
 | `data/ChatStore.kt` | 一个会话的 items：`covered`、`history`、补洞（`after_seq`）、往前翻页 |
 | `service/HubService.kt`、`Notifier.kt`、`ActionReceiver.kt` | 前台服务、通知、通知上的按钮 |
 | `terminal/` | 实时终端：`TerminalGrid`（VT 子集，移植自 iOS 的 `TerminalGrid.swift`）、`TerminalFeed`（帧按序应用、接管时自己攒滚出屏幕的行）、`TerminalLink`（订阅 / 续传 / 接管 / 轮询降级）、`TerminalKeys`（键名 → 终端字节）、`BoxDrawing`、`TerminalScreen` |
-| `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`；`Theme` 是界面风格的 token |
+| `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`；`Theme` 是界面风格的 token；`Rows.kt` 是对话的行模型（工具合并、按轮折叠、消息里的标签） |
 | `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
 | `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
 | `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
 | `ui/settings/`、`ui/machines/` | 设置的子页面和它们共用的分组、行（`SettingsKit.kt`，颜色取自 MaterialTheme）；机器列表、机器页、监控页和曲线（`MetricCharts.kt`） |
 | `ui/web/` | 链接卡片：`LinkSheet`（`Links`、`LinkHost`、卡片、上下文小条）、`WebViewPool`（预加载、选中菜单、`externalIntent`）、`LinkRules`（纯逻辑，`LinksTest` 覆盖） |
+| `ui/chat/` | 对话的行（`ChatViews`、`ToolViews`：工作行、工具详情、diff、待办）、消息菜单、`ChatEnv`（行要用的：打开文件 / 图片、当前目录、整段对话的图片） |
+| `ui/media/` | 图片：按需加载和缓存（`ChatImageLoader`）、全屏查看器、编辑器、保存 / 分享 / 拷贝（`MediaShare`，分享走自己的 `ChatFileProvider`） |
+| `ui/files/` | 文件和 Git：接口（`FilesApi`）、浏览器、文件查看器、Git 页面、diff 解析（`DiffText`，对话里的 diff 也用它） |
 
 ## 验证记录
 
@@ -175,6 +182,11 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
 
 ## 经验
 
+- 全屏看图别放进 Compose 的 `Dialog`：对话框窗口停在状态栏和导航栏之间（`decorFitsSystemWindows = false`、`FLAG_LAYOUT_NO_LIMITS` 都试过，上下照样露出底下的页面），
+  直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
+- `Markdown` 默认包在 `SelectionContainer` 里，长按会变成系统的选中文字，消息菜单弹不出来：对话里的回复传 `selectable = false`，要选文字用菜单的「选择」。
+- 倒置列表（`reverseLayout`）的 `verticalArrangement` 写成 `spacedBy(x)` 会顶着上边排，内容少时消息浮在顶上：要 `spacedBy(x, Alignment.Bottom)`。
+- 对话页验证用 `scripts/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
 - `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
 - herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
 - Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。

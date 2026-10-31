@@ -1224,6 +1224,141 @@ NET = {"delay": float(os.environ.get("MOCK_DELAY", "0")), "down_until": 0.0}
 SOCKETS = set()
 
 
+# --- Files & Git (read-only browser: /machines/{mid}/file, fs, git/*). Made-up tree under each machine's home. ---
+def mock_png(w=48, h=32):
+    """A small gradient PNG for the image viewer (built here: no binary in the repo)."""
+    import zlib
+    rows = b"".join(b"\x00" + bytes(c for x in range(w) for c in (x * 255 // w, y * 255 // h, 160)) for y in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return base64.b64encode(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
+                            chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")).decode()
+
+
+MOCK_PNG = mock_png()
+
+# MOCK_CHAT_IMAGES=1: the blog conversation gets a screenshot the agent took (an image item of its tool's result) and
+# one it showed before its answer, for the chat's thumbnails and the image viewer. Made-up page, inline bytes; seqs
+# renumbered so the list stays in order. Off by default so other screenshots keep their transcripts.
+_shot = "toolu_mock_screenshot"
+if os.environ.get("MOCK_CHAT_IMAGES"):
+    ITEMS[BLOG] = ITEMS[BLOG][:-1] + [
+        it("assistant", "tool_use", 13, tool_use_id=_shot, tool_name="mcp__browser__screenshot", tool_input={"url": "http://localhost:4321/"}),
+        it("user", "tool_result", 13, tool_use_id=_shot, text="截图已保存"),
+        it("user", "image", 13, tool_use_id=_shot, image={"mime": "image/png", "data": MOCK_PNG, "width": 48, "height": 32}),
+        it("assistant", "image", 12, image={"mime": "image/png", "data": MOCK_PNG, "width": 48, "height": 32}),
+    ] + ITEMS[BLOG][-1:]
+    for _i, _x in enumerate(ITEMS[BLOG]): _x["seq"] = ITEMS[BLOG][0]["seq"] + _i
+MOCK_TREE = {
+    "code/": None,
+    "code/weather/": None,
+    "code/weather/.gitignore": ".build/\n",
+    "code/weather/README.md": "# Weather\n\nA small sample app.\n\n<p align=\"center\"><img src=\"docs/icon.png\" alt=\"icon\"></p>\n\n- 今天的天气\n- `swift build`\n",
+    "code/weather/Package.swift": "// swift-tools-version:6.0\nimport PackageDescription\n\nlet package = Package(\n    name: \"Weather\",\n    targets: [.executableTarget(name: \"App\")]\n)\n",
+    "code/weather/Sources/": None,
+    "code/weather/Sources/App/": None,
+    "code/weather/Sources/App/main.swift": "import Foundation\n\nlet city = CommandLine.arguments.dropFirst().first ?? \"Paris\"\nprint(\"Weather for \\(city): sunny, 21°C\")\n",
+    "code/weather/docs/": None,
+    "code/weather/docs/icon.png": ("image/png", MOCK_PNG),
+    "notes.txt": "Remember to water the plants.\n",
+}
+MOCK_REPO = "code/weather"
+MOCK_COMMITS = [{"hash": "%040x" % (0xa1b2c3d0 + i), "short": "%07x" % (0xa1b2c3d0 + i),
+                 "subject": s, "author": "Sample Dev", "date": ago(hours=3 * i + 1),
+                 **({"refs": "HEAD -> main, origin/main"} if i == 0 else {})}
+                for i, s in enumerate(["Show the city name", "Add README", "Package skeleton"] +
+                                      ["Tweak #%d" % n for n in range(40)])]
+MOCK_DIFFS = {
+    "Sources/App/main.swift": "diff --git a/Sources/App/main.swift b/Sources/App/main.swift\n--- a/Sources/App/main.swift\n+++ b/Sources/App/main.swift\n"
+                              "@@ -1,3 +1,4 @@\n import Foundation\n \n-print(\"Weather: sunny\")\n+let city = CommandLine.arguments.dropFirst().first ?? \"Paris\"\n+print(\"Weather for \\(city): sunny, 21°C\")",
+    "README.md": "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,4 @@\n # Weather\n \n+A small sample app.\n+",
+    "docs/icon.png": "diff --git a/docs/icon.png b/docs/icon.png\nnew file mode 100644\nBinary files /dev/null and b/docs/icon.png differ",
+}
+
+
+def mock_home(mid):
+    return next((m.get("home") for m in MACHINES if m["id"] == mid), None) or "/home/me"
+
+
+def mock_abs(mid, path, cwd):
+    home = mock_home(mid)
+    path = (path or "").strip() or (cwd or "")
+    if path == "~" or path.startswith("~/"): path = home + path[1:]
+    elif not path.startswith("/") and cwd: path = cwd.rstrip("/") + "/" + path
+    return home, "/" + "/".join(x for x in path.split("/") if x and x != ".")
+
+
+def mock_rel(home, path):
+    """The tree key of an absolute path (dirs end with /), or None outside the tree."""
+    if path == home: return ""
+    if not path.startswith(home + "/"): return None
+    rel = path[len(home) + 1:]
+    return rel + "/" if rel + "/" in MOCK_TREE else rel if rel in MOCK_TREE else None
+
+
+def mock_children(rel):
+    out = []
+    for k in MOCK_TREE:
+        if k.startswith(rel) and k != rel:
+            rest = k[len(rel):]
+            if rest.count("/") == 0 or (rest.count("/") == 1 and rest.endswith("/")): out.append(k)
+    return sorted(out, key=lambda k: (not k.endswith("/"), k.lower()))
+
+
+def mock_size(v):
+    return 0 if v is None else len(base64.b64decode(v[1])) if isinstance(v, tuple) else len(v.encode())
+
+
+def mock_files(p, q):
+    """(json, status) for the files / Git endpoints, or None when p is not one of them."""
+    parts = p.split("/")
+    if not (p.startswith("/api/v1/machines/") and len(parts) >= 6): return None
+    mid, what = parts[4], "/".join(parts[5:])
+    if what not in ("file", "fs", "git/status", "git/diff", "git/show", "git/log"): return None
+    if not machine_online(mid): return {"error": "%s: machine is offline" % mid}, 503
+    arg = lambda k: (q.get(k) or [""])[0]
+    if what in ("file", "fs"):
+        home, path = mock_abs(mid, arg("path"), arg("cwd"))
+        rel = mock_rel(home, path)
+        if rel is None: return {"error": "open %s: no such file or directory" % path}, 502
+        is_dir = rel == "" or rel.endswith("/")
+        if what == "fs":
+            if not is_dir: return {"error": "readdir %s: not a directory" % path}, 502
+            ents = [{"name": k[len(rel):].rstrip("/"), "dir": k.endswith("/"), "size": mock_size(MOCK_TREE[k]),
+                     "mtime": ago(hours=i + 1)} for i, k in enumerate(mock_children(rel))]
+            return {"path": path, "entries": ents, "truncated": False}, 200
+        name = path.rsplit("/", 1)[-1]
+        if is_dir:
+            return {"path": path, "name": name, "size": 0, "mime": "", "is_dir": True, "truncated": False,
+                    "entries": [k[len(rel):] for k in mock_children(rel)]}, 200
+        v = MOCK_TREE[rel]
+        if isinstance(v, tuple):
+            return {"path": path, "name": name, "size": mock_size(v), "mime": v[0], "data": v[1], "is_dir": False, "truncated": False}, 200
+        mime = "text/markdown" if name.endswith(".md") else "text/plain"
+        return {"path": path, "name": name, "size": mock_size(v), "mime": mime, "text": v, "is_dir": False, "truncated": False}, 200
+    home, cwd = mock_abs(mid, arg("cwd"), "")
+    root = home + "/" + MOCK_REPO
+    if not (cwd == root or cwd.startswith(root + "/")):
+        return ({"is_repo": False, "files": [], "commits": []}, 200) if what == "git/status" else ({"error": "not a git repository"}, 502)
+    if what == "git/status":
+        return {"is_repo": True, "root": root, "branch": "main", "head": MOCK_COMMITS[0], "upstream": "origin/main",
+                "ahead": 1, "behind": 0, "stashes": 1, "commits": MOCK_COMMITS[:30], "files": [
+                    {"path": "Sources/App/main.swift", "index": "M", "worktree": "M", "added": 2, "deleted": 1, "binary": False},
+                    {"path": "README.md", "index": ".", "worktree": "M", "added": 2, "deleted": 0, "binary": False},
+                    {"path": "docs/icon.png", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": True}]}, 200
+    if what == "git/diff":
+        return {"path": arg("path"), "diff": MOCK_DIFFS.get(arg("path"), ""), "truncated": False}, 200
+    if what == "git/log":
+        skip, limit = int(arg("skip") or 0), int(arg("limit") or 50)
+        return {"commits": MOCK_COMMITS[skip:skip + limit]}, 200
+    c = next((c for c in MOCK_COMMITS if c["hash"] == arg("hash")), None)
+    if not c: return {"error": "unknown revision"}, 502
+    return {"commit": dict(c, body="Made-up commit for the mock hub."),
+            "files": [{"path": "Sources/App/main.swift", "index": "M", "worktree": ".", "added": 2, "deleted": 1, "binary": False},
+                      {"path": "README.md", "index": "M", "worktree": ".", "added": 2, "deleted": 0, "binary": False}],
+            "diff": MOCK_DIFFS["Sources/App/main.swift"] + "\n" + MOCK_DIFFS["README.md"], "truncated": False}, 200
+# --- end of Files & Git ---
+
+
 def net_control(path, q):
     """Handles /mock/delay and /mock/down; True if it was one of them."""
     if path == "/mock/delay":
@@ -1528,6 +1663,8 @@ class H(BaseHTTPRequestHandler):
             hits = [{"path": "%s/%s/summary.md" % (k, e["id"]), "line": "- " + e["name"] + "：" + (e.get("one_line") or "")}
                     for k, l in KB.items() for e in l if word and (word in e["name"].lower() or word in (e.get("one_line") or "").lower())]
             return self.send_json({"hits": hits})
+        files = mock_files(p, q)
+        if files: return self.send_json(*files)
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
 
@@ -1740,6 +1877,7 @@ class H(BaseHTTPRequestHandler):
         by = {}
         for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
         for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
+        for ix in INTERACTIONS: send({"type": "interaction", "interaction": ix})  # as the real hub does on connect
         r = self.rfile
         try:
             while True:

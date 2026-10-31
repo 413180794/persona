@@ -125,7 +125,11 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
             // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
             open != null -> {
                 BackHandler { openSession.value = null }
-                ChatScreen(hub, open, onBack = { openSession.value = null })
+                ChatScreen(
+                    hub, open, onBack = { openSession.value = null },
+                    // As the inbox's 交给 Jarvis: a new assistant conversation about the message.
+                    onHandToJarvis = { handoff = it; openSession.value = null; settings = false; tab = Tab.Jarvis },
+                )
             }
             settings -> {
                 BackHandler { settings = false }

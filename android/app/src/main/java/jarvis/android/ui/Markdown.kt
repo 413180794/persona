@@ -22,6 +22,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,37 +36,44 @@ import jarvis.android.ui.web.LocalLinkSource
  * **bold**, *italic*, `code` and [links](…). No dependency: a block parser over lines plus an inline pass.
  */
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun Markdown(
+    text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface,
+    /** False where a long press means something else (the chat's message menu has 选择 instead). */
+    selectable: Boolean = true,
+) {
+    if (selectable) SelectionContainer(modifier) { MarkdownBody(text, Modifier, color) } else MarkdownBody(text, modifier, color)
+}
+
+@Composable
+private fun MarkdownBody(text: String, modifier: Modifier, color: Color) {
     val blocks = remember(text) { parseBlocks(text) }
     // Links open in the app (CLAUDE.md「链接在 App 内打开」); the chat drawing the text is where page picks go back to.
     val from = LocalLinkSource.current
     val link = MaterialTheme.colorScheme.primary // the style's accent (Theme)
     val styled = { s: String -> inline(s, link) { url -> Links.open(url, from) } }
-    SelectionContainer(modifier) {
-        Column {
-            blocks.forEachIndexed { i, b ->
-                val top = if (i == 0) 0.dp else 6.dp
-                when (b) {
-                    is Block.Code -> Text(
-                        b.text,
-                        fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        softWrap = false,
-                        modifier = Modifier.padding(top = top).fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                            .horizontalScroll(rememberScrollState()).padding(10.dp),
-                    )
-                    is Block.Heading -> Text(
-                        styled(b.text), color = color, fontWeight = FontWeight.SemiBold,
-                        style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(top = top + 2.dp),
-                    )
-                    is Block.Para -> Text(styled(b.text), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
-                    is Block.Quote -> Text(
-                        styled(b.text), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(top = top).padding(start = 10.dp),
-                    )
-                }
+    Column(modifier) {
+        blocks.forEachIndexed { i, b ->
+            val top = if (i == 0) 0.dp else 6.dp
+            when (b) {
+                is Block.Code -> Text(
+                    b.text,
+                    fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    softWrap = false,
+                    modifier = Modifier.padding(top = top).fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .horizontalScroll(rememberScrollState()).padding(10.dp),
+                )
+                is Block.Heading -> Text(
+                    styled(b.text), color = color, fontWeight = FontWeight.SemiBold,
+                    style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = top + 2.dp),
+                )
+                is Block.Para -> Text(styled(b.text), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
+                is Block.Quote -> Text(
+                    styled(b.text), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = top).padding(start = 10.dp),
+                )
             }
         }
     }
@@ -125,11 +133,14 @@ private val inlineRe = Regex(
 private val defaultLinkColor = Color(0xFF3B82F6)
 
 /** A tappable [label] for [url] in [color] when there is an [onLink] handler; otherwise just coloured. */
-private fun AnnotatedString.Builder.linkSpan(label: String, url: String, color: Color, onLink: ((String) -> Unit)?) {
+private fun AnnotatedString.Builder.linkSpan(
+    label: String, url: String, color: Color, onLink: ((String) -> Unit)?, underline: Boolean = false,
+) {
+    val style = SpanStyle(color = color, textDecoration = if (underline) TextDecoration.Underline else null)
     // javascript:, file:, content:… never open (LinkSafety): the label reads as plain text, not as a dead link.
     if (LinkSafety.kind(url) == LinkSafety.Kind.REFUSED) append(label)
-    else if (onLink == null) withStyle(SpanStyle(color = color)) { append(label) }
-    else withLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(color = color))) { onLink(url) }) { append(label) }
+    else if (onLink == null) withStyle(style) { append(label) }
+    else withLink(LinkAnnotation.Url(url, TextLinkStyles(style)) { onLink(url) }) { append(label) }
 }
 
 /**
@@ -159,12 +170,12 @@ fun inline(s: String, link: Color = defaultLinkColor, onLink: ((String) -> Unit)
 }
 
 /** Plain text (what the user typed, an inbox message) with its bare http(s) URLs tappable. */
-fun linkified(s: String, link: Color = defaultLinkColor, onLink: (String) -> Unit): AnnotatedString = buildAnnotatedString {
+fun linkified(s: String, link: Color = defaultLinkColor, underline: Boolean = false, onLink: (String) -> Unit): AnnotatedString = buildAnnotatedString {
     var last = 0
     for (m in LinkText.bareLink.findAll(s)) {
         append(s.substring(last, m.range.first))
         val url = LinkText.trim(m.value)
-        linkSpan(url, url, link, onLink)
+        linkSpan(url, url, link, onLink, underline)
         append(m.value.substring(url.length))
         last = m.range.last + 1
     }

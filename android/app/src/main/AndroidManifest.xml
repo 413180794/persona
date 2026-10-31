@@ -18,6 +18,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Android 16: the ongoing fleet notification may become a Live Update (fleet/FleetNotification.kt). -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- Saving a chat picture to the gallery on Android 8-9 (10+ use MediaStore without a permission). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -61,6 +65,17 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the connection to the user's own server open to show agent questions as notifications without a push service." />
         </service>
+
+        <!-- Pictures shared / copied from the chat's image viewer (ui/media/MediaShare.kt): cache/shared only. -->
+        <provider
+            android:name=".ui.media.ChatFileProvider"
+            android:authorities="${applicationId}.chatfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/chat_file_paths" />
+        </provider>
 
         <receiver android:name=".service.ActionReceiver" android:exported="false" />
         <receiver android:name=".phone.AskReceiver" android:exported="false" />

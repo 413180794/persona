@@ -9,7 +9,8 @@ import jarvis.android.data.Resolution
 import jarvis.android.data.Session
 import jarvis.android.data.parseTime
 import jarvis.android.ui.Block
-import jarvis.android.ui.Row
+import jarvis.android.ui.ChatRow
+import jarvis.android.ui.ToolStep
 import jarvis.android.ui.buildRows
 import jarvis.android.ui.cleanText
 import jarvis.android.ui.parseBlocks
@@ -70,8 +71,8 @@ class RowsTest {
             item("d#0", 4, "text", text = "done"),
         ))
         assertEquals(3, rows.size)
-        val tool = rows[1] as Row.Tool
-        assertEquals("ok", tool.result?.text)
+        val tool = (rows[1] as ChatRow.Tools).steps.single() as ToolStep.Call
+        assertEquals("ok", tool.call.result?.text)
     }
 
     @Test fun toolSubjectPicksTheUsefulField() {

@@ -1,14 +1,16 @@
 package jarvis.android.ui
 
 import android.graphics.BitmapFactory
-import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,36 +25,41 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,6 +67,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
@@ -69,19 +78,64 @@ import androidx.compose.ui.unit.sp
 import jarvis.android.data.AgentState
 import jarvis.android.data.Hub
 import jarvis.android.data.HubException
-import jarvis.android.data.Item
 import jarvis.android.data.SessionKey
-import jarvis.android.ui.web.ContextChips
-import jarvis.android.ui.web.ContextRef
+import jarvis.android.ui.chat.ChatEnv
 import jarvis.android.ui.web.LinkText
 import jarvis.android.ui.web.Links
 import jarvis.android.ui.web.LocalLinkSource
 import jarvis.android.ui.web.WebViewPool
+import jarvis.android.ui.chat.ImageRow
+import jarvis.android.ui.chat.LocalChatEnv
+import jarvis.android.ui.chat.MessageMenuHost
+import jarvis.android.ui.chat.MessageMenuState
+import jarvis.android.ui.chat.NoticeRow
+import jarvis.android.ui.chat.RecapCard
+import jarvis.android.ui.chat.SelectTextDialog
+import jarvis.android.ui.chat.SentPhotos
+import jarvis.android.ui.chat.ThinkingRow
+import jarvis.android.ui.chat.ToastStyle
+import jarvis.android.ui.chat.Toasts
+import jarvis.android.ui.chat.ToolGroup
+import jarvis.android.ui.chat.UserBubble
+import jarvis.android.ui.chat.WorkBridge
+import jarvis.android.ui.chat.WorkEndRow
+import jarvis.android.ui.chat.WorkLineRow
+import jarvis.android.ui.chat.WorkStepRow
+import jarvis.android.ui.chat.WorkingIndicator
+import jarvis.android.ui.chat.AssistantText
+import jarvis.android.ui.chat.composeMessage
+import jarvis.android.ui.chat.quoted
+import jarvis.android.ui.files.FilesScreen
+import jarvis.android.ui.files.FilesTarget
+import jarvis.android.ui.files.gitStatus
+import jarvis.android.ui.media.ImageViewerArgs
+import jarvis.android.ui.media.ImageViewerScreen
+import jarvis.android.ui.media.chatImages
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
 
-/** One agent's conversation: live items, its pending cards, and the input box. */
+/** One line of the (reversed) chat list, newest first. */
+private sealed interface ChatLine {
+    val key: String
+
+    data class Card(val ix: jarvis.android.data.Interaction) : ChatLine { override val key get() = "ix/" + ix.id }
+    data class Live(val text: String) : ChatLine { override val key get() = "live" }
+    data class Working(val label: String) : ChatLine { override val key get() = "working" }
+    data class Queued(val text: String) : ChatLine { override val key get() = "queued" }
+    data class Line(val row: FoldedRow) : ChatLine { override val key get() = row.key }
+    data object Older : ChatLine { override val key get() = "older" }
+}
+
+/**
+ * One agent's conversation: live items, its pending cards, and the input box. Each turn's work folds behind one line
+ * under the user's message (iOS `chatLines`, docs/ios.md「展示逻辑」); a long press on a message opens its menu;
+ * files, Git and pictures open over the page.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
@@ -93,19 +147,21 @@ fun ChatScreen(
     actions: @Composable () -> Unit = {},
     /** Something (a tab bar) sits under the screen and takes the system navigation bar's inset itself. */
     embedded: Boolean = false,
+    /** 「交给 Jarvis」 on a message: the prompt for a new assistant conversation (null: not offered). */
+    onHandToJarvis: ((String) -> Unit)? = null,
     /** Put the cursor in the composer once (the 「问 Jarvis」 shortcut), then [onFocusTaken]. */
     focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
 ) {
-    val composerFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-    FocusComposer(focusComposer, composerFocus, onFocusTaken)
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) { onDispose { hub.release(key) } }
     val state by store.state.collectAsState()
     val byMachine by hub.sessions.collectAsState()
     val session = byMachine[key.machineId]?.firstOrNull { it.sessionId == key.sessionId }
     val machines by hub.machines.collectAsState()
+    val machine = machines.firstOrNull { it.id == key.machineId }
     val pending by hub.interactions.collectAsState()
     val cards = pending.filter { it.machineId == key.machineId && it.sessionId == key.sessionId }
+    val working = session?.agentState == AgentState.Working
     val scope = rememberCoroutineScope()
 
     // Looking at it counts as having seen the result (the hub then stops treating it as done-unseen). Only while the
@@ -116,13 +172,57 @@ fun ChatScreen(
         if (visible && session?.agentState == AgentState.Unread) runCatching { hub.api.seen(key) }
     }
 
-    val rows = remember(state.items) { buildRows(state.items).asReversed() }
+    // What the rows reach for: files and pictures open over this page.
+    var filesTarget by remember(key) { mutableStateOf<FilesTarget?>(null) }
+    var viewer by remember(key) { mutableStateOf<ImageViewerArgs?>(null) }
+    val env = remember(key) { ChatEnv(hub, key) }
+    env.cwd = session?.cwd?.ifEmpty { null }
+    env.canOpenFiles = machine != null && !session?.cwd.isNullOrEmpty()
+    env.onOpenFiles = { filesTarget = it }
+    env.onOpenImage = { viewer = it }
+    val menu = remember(key) { MessageMenuState() }
+    env.menu = menu
+
+    // Rows are rebuilt off the main thread on each new item list; only the first frame builds them here.
+    var rows by remember(key) { mutableStateOf(buildRows(state.items)) }
+    val items = state.items
+    LaunchedEffect(items) { rows = withContext(Dispatchers.Default) { buildRows(items) } }
+    // Work lines the user opened (by the id of their first step).
+    var expandedWork by remember(key) { mutableStateOf(setOf<String>()) }
+    val toggleWork: (String) -> Unit = { id -> expandedWork = if (id in expandedWork) expandedWork - id else expandedWork + id }
+    val folded = remember(rows, working, expandedWork) { foldWork(rows, working, expandedWork) }
+    // The viewer pages through every image; user tags warm up off the main thread (iOS `RowMemo.prewarm`).
+    LaunchedEffect(items) {
+        withContext(Dispatchers.Default) {
+            env.gallery = chatImages(key, items)
+            for (it in items.asReversed().take(400)) if (it.kind == "text" && it.role == "user") userText(it)
+        }
+    }
+
+    // The reply being written (the assistant streams it; herdr agents don't), unless the transcript already holds it;
+    // otherwise a working line when no running work line says so already.
+    val lastText = ((rows.lastOrNull() as? ChatRow.Assistant)?.item?.cutText)
+    val live = state.live.takeIf { assistant && it.isNotBlank() && !(lastText != null && lastText.startsWith(it)) }
+    val runningWork = folded.any { it is FoldedRow.Work && it.running }
+    val lines = remember(folded, cards, live, working, runningWork, session?.queued, state.loadingOlder) {
+        buildList {
+            cards.forEach { add(ChatLine.Card(it)) }
+            when {
+                live != null -> add(ChatLine.Live(live))
+                working && !runningWork -> add(ChatLine.Working(if (assistant) "Jarvis 正在思考…" else "${session?.agentLabel ?: "Claude"} 正在工作…"))
+            }
+            session?.queued?.takeIf { it.isNotEmpty() }?.let { add(ChatLine.Queued("排队中：" + it.joinToString(" / "))) }
+            for (i in folded.indices.reversed()) add(ChatLine.Line(folded[i]))
+            if (state.loadingOlder) add(ChatLine.Older)
+        }
+    }
+
     val list = rememberLazyListState()
     // The list is reversed (newest at index 0): new content shows without scrolling, older pages load at the end.
     LaunchedEffect(list) {
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->
-            if (last >= rows.size - 3) store.loadOlder()
-        }
+        snapshotFlow { list.layoutInfo.let { (it.visibleItemsInfo.lastOrNull()?.index ?: 0) to it.totalItemsCount } }
+            .distinctUntilChanged()
+            .collect { (last, total) -> if (total > 0 && last >= total - 3) store.loadOlder() }
     }
     // Follow the newest end while the user is there. A reversed list keeps its first visible item in place when
     // rows are added before it, so a long reply that grew while you read it would leave the next one off screen.
@@ -136,9 +236,12 @@ fun ChatScreen(
             if (scrolling && list.firstVisibleItemIndex > 0) follow = false // the user scrolled back to read
         }
     }
-    LaunchedEffect(rows.firstOrNull()?.id, state.live.length / 80, cards.size) {
-        if (follow && rows.isNotEmpty()) list.scrollToItem(0)
+    // A drag closes the message menu (as on iOS: scrolling dismisses it).
+    LaunchedEffect(list) { list.interactionSource.interactions.collect { if (it is DragInteraction.Start) menu.close() } }
+    LaunchedEffect(lines.firstOrNull { it !is ChatLine.Card }?.key, state.live.length / 80, cards.size) {
+        if (follow && lines.isNotEmpty()) list.scrollToItem(0)
     }
+    val farFromEnd by remember { derivedStateOf { list.firstVisibleItemIndex > 2 } }
 
     // Links in a fresh answer start loading now, so tapping one shows a finished page (docs/android.md「链接」).
     val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -153,6 +256,12 @@ fun ChatScreen(
     var pendingMsgId by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var terminal by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    FocusComposer(focusComposer, focus, onFocusTaken)
+    // Excerpts picked 「作为上下文」 (a message's menu or a page in the link sheet): chips above the input box, sent as
+    // <jarvis-context> tags with the next message. Kept in [Links.contexts] so the link sheet can add to them.
+    val contexts = Links.contexts[key.path].orEmpty()
 
     // Attachments (docs/protocol.md「发送文件」): photos go with the message; files are uploaded to the session's
     // computer first and their paths dropped into the text, which the user then sends (or not).
@@ -196,18 +305,15 @@ fun ChatScreen(
     }
 
     fun send(clearDraft: String? = null) {
-        // 「作为上下文」 picks from the link sheet go in front of the message, as <jarvis-context> tags.
-        val contexts = Links.contexts[key.path].orEmpty()
-        val typed = draft.trim().ifEmpty { if (images.isNotEmpty()) "请看图片" else if (contexts.isNotEmpty()) "看看上面这段。" else "" }
-        if (typed.isEmpty()) return
-        val text = ContextRef.message(contexts, typed)
+        val sentContexts = contexts
+        val text = composeMessage(draft, images.isNotEmpty(), sentContexts) ?: return
         val id = pendingMsgId ?: UUID.randomUUID().toString().also { pendingMsgId = it }
         sending = true; notice = null
         scope.launch {
             try {
                 hub.api.send(key, text, id, clearDraft, images)
                 draft = ""; pendingMsgId = null; images = emptyList()
-                contexts.forEach { Links.removeContext(key, it) }
+                sentContexts.forEach { Links.removeContext(key, it) }
                 follow = true; list.scrollToItem(0) // what you sent and its answer show, wherever you had scrolled
             } catch (e: HubException) {
                 when (e.code) {
@@ -221,141 +327,194 @@ fun ChatScreen(
         }
     }
 
+    // The message menu's actions (iOS `MessageMenu`): 引用 / 编辑 fill the input box, 交给 Jarvis starts an assistant
+    // conversation about it (the inbox's path), 作为上下文 rides along with this chat's next message.
+    val title = if (assistant) session?.title?.takeIf { it.isNotBlank() && it != "Claude Code" } ?: "Jarvis"
+    else session?.displayTitle ?: key.sessionId.take(8)
+    menu.quote = { text -> draft = quoted(text, draft); pendingMsgId = null; runCatching { focus.requestFocus() } }
+    menu.edit = { text -> draft = text; pendingMsgId = null; runCatching { focus.requestFocus() } }
+    menu.askJarvis = onHandToJarvis?.let { hand ->
+        { text: String -> hand(ContextRef("context", "$title · 消息", "", text).xml + "\n\n看看这条消息，告诉我该怎么处理。") }
+    }
+    menu.asContext = { text ->
+        Links.addContext(key, ContextRef("context", "$title · 消息", "", text))
+        Toasts.show("已作为上下文，随下一条消息发送", ToastStyle.SUCCESS)
+    }
+
+    // Files and Git: whether the session's folder is a repository (and how many changes, for the menu).
+    var gitCount by remember(key) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(env.cwd, machine != null) {
+        val cwd = env.cwd ?: return@LaunchedEffect
+        if (machine == null || assistant) return@LaunchedEffect
+        gitCount = runCatching { hub.api.gitStatus(key.machineId, cwd) }.getOrNull()?.takeIf { it.isRepo }?.files?.size
+    }
+    val openTerminal: (() -> Unit)? = if (session?.isLive == true && !assistant) ({ terminal = true }) else null
+
     if (terminal) {
         jarvis.android.terminal.TerminalScreen(hub, key, session?.displayTitle ?: key.sessionId.take(8), onClose = { terminal = false })
         return
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = navigation ?: { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-                title = {
-                    Column {
-                        Text(
-                            if (assistant) session?.title?.takeIf { it.isNotBlank() && it != "Claude Code" } ?: "Jarvis"
-                            else session?.displayTitle ?: key.sessionId.take(8),
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        val where = if (assistant) listOfNotNull(
-                            "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
-                        ).joinToString(" · ") else listOfNotNull(
-                            machines.firstOrNull { it.id == key.machineId }?.displayName,
-                            session?.spaceName?.takeIf { it.isNotBlank() },
-                            session?.agentState?.label(),
-                        ).joinToString(" · ")
-                        Text(where, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                    }
-                },
-                actions = {
-                    if (session?.isLive == true && !assistant) IconButton(onClick = { terminal = true }) { Icon(Icons.Default.Terminal, "终端") }
-                    if (session?.agentState == AgentState.Working) {
-                        IconButton(onClick = { scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) {
-                            Icon(Icons.Default.Stop, "中断")
+    filesTarget?.let { t ->
+        // Over the chat, as a pushed page would be; the image viewer (below) can still open on top of it.
+        FilesScreen(hub, t, onBack = { filesTarget = null }, onOpenImage = { viewer = it })
+        viewer?.let { ImageViewerOverlay(hub, it, onClose = { viewer = null }, onEdited = null) }
+        return
+    }
+
+    CompositionLocalProvider(LocalChatEnv provides env, LocalLinkSource provides key) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    navigationIcon = navigation ?: { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                    title = {
+                        Column {
+                            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val where = if (assistant) listOfNotNull(
+                                "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
+                            ).joinToString(" · ") else listOfNotNull(
+                                machine?.displayName,
+                                session?.spaceName?.takeIf { it.isNotBlank() },
+                                session?.agentState?.label(),
+                            ).joinToString(" · ")
+                            Text(where, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
-                    }
-                    actions()
-                },
-            )
-        },
-    ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize().imePadding()) {
-            Box(Modifier.weight(1f)) {
-                if (state.loading && rows.isEmpty()) {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
-                } else {
-                    // Links in this chat open in the sheet and hand page text back here.
-                    androidx.compose.runtime.CompositionLocalProvider(LocalLinkSource provides key) {
+                    },
+                    actions = {
+                        if (openTerminal != null) IconButton(onClick = openTerminal) { Icon(Icons.Default.Terminal, "终端") }
+                        if (working) {
+                            IconButton(onClick = { scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) {
+                                Icon(Icons.Default.Stop, "中断")
+                            }
+                        }
+                        actions()
+                        val cwd = env.cwd
+                        if (!assistant && cwd != null && machine != null) Box {
+                            IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "更多") }
+                            DropdownMenu(moreMenu, onDismissRequest = { moreMenu = false }) {
+                                DropdownMenuItem({ Text("文件", maxLines = 1) }, {
+                                    moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.DIR)
+                                })
+                                gitCount?.let { n ->
+                                    DropdownMenuItem({ Text(if (n > 0) "Git（$n）" else "Git", maxLines = 1) }, {
+                                        moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
+                                    })
+                                }
+                                DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
+                                    moreMenu = false
+                                    jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
+                                    Toasts.show("已拷贝", ToastStyle.SUCCESS)
+                                })
+                            }
+                        }
+                    },
+                )
+            },
+        ) { pad ->
+            Column(Modifier.padding(pad).fillMaxSize().imePadding()) {
+                Box(Modifier.weight(1f)) {
+                    if (state.loading && rows.isEmpty()) {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    } else {
                         LazyColumn(
                             state = list, reverseLayout = true, modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(WorkBridge * 2, Alignment.Bottom),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         ) {
-                            items(cards, key = { "ix/" + it.id }) { ix -> InteractionCard(hub, ix) }
-                            // The reply being written (the assistant streams it; herdr agents don't), unless the transcript
-                            // already holds it; otherwise a working line.
-                            val lastText = (rows.firstOrNull() as? Row.Assistant)?.text
-                            if (assistant && state.live.isNotBlank() && !(lastText != null && (lastText.startsWith(state.live) || lastText == state.live))) {
-                                item(key = "live") { Markdown(state.live, Modifier.fillMaxWidth().padding(vertical = 2.dp)) }
-                            } else if (session?.agentState == AgentState.Working) item(key = "working") {
-                                Text(
-                                    if (assistant) "Jarvis 正在思考…" else "${session.agentLabel} 正在工作…",
-                                    style = MaterialTheme.typography.labelMedium, color = AgentState.Working.color(),
-                                )
-                            }
-                            session?.queued?.takeIf { it.isNotEmpty() }?.let { q ->
-                                item(key = "queued") {
-                                    Text("排队中：" + q.joinToString(" / "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            items(lines, key = { it.key }, contentType = { contentType(it) }) { line ->
+                                when (line) {
+                                    is ChatLine.Card -> InteractionCard(hub, line.ix)
+                                    is ChatLine.Live -> Markdown(line.text, Modifier.fillMaxWidth().padding(vertical = 2.dp))
+                                    is ChatLine.Working -> WorkingIndicator(line.label)
+                                    is ChatLine.Queued -> Text(line.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    is ChatLine.Line -> FoldedRowView(line.row, key, working, toggleWork, openTerminal)
+                                    ChatLine.Older -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(Modifier.size(20.dp))
+                                    }
                                 }
                             }
-                            items(rows, key = { it.id }) { r -> RowView(hub, key, r) }
-                            if (state.loadingOlder) item(key = "older") {
-                                Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp)) }
+                        }
+                    }
+                    if (farFromEnd) {
+                        Box(
+                            Modifier.align(Alignment.BottomCenter).padding(12.dp).size(40.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .clickable { follow = true; scope.launch { list.scrollToItem(0) } },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "回到最新", tint = MaterialTheme.colorScheme.onSurface) }
+                    }
+                }
+                // Live updates come over the WebSocket: say when it's down, or a reply that never shows looks like silence.
+                val conn by hub.conn.collectAsState()
+                if (conn != jarvis.android.data.ConnState.Online) Text(
+                    if (conn == jarvis.android.data.ConnState.Connecting) "正在连接 hub…，新消息稍后显示" else "和 hub 的连接断了，正在重连；发出去的消息不受影响",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
+                notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
+                session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
+                    AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
+                }
+                if (contexts.isNotEmpty()) Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    contexts.forEach { ref -> ContextChip(ref) { Links.removeContext(key, ref) } }
+                }
+                if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    images.forEachIndexed { i, img ->
+                        Box {
+                            val bmp = remember(img.data) {
+                                runCatching { android.util.Base64.decode(img.data, android.util.Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+                            }
+                            bmp?.let { Image(it.asImageBitmap(), "第 ${i + 1} 张", Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                            IconButton({ images = images.filterIndexed { j, _ -> j != i } }, Modifier.size(24.dp).align(Alignment.TopEnd)) {
+                                Icon(Icons.Default.Cancel, "移除这张", tint = androidx.compose.ui.graphics.Color.White)
                             }
                         }
                     }
                 }
-            }
-            // Live updates come over the WebSocket: say when it's down, or a reply that never shows looks like silence.
-            val conn by hub.conn.collectAsState()
-            if (conn != jarvis.android.data.ConnState.Online) Text(
-                if (conn == jarvis.android.data.ConnState.Connecting) "正在连接 hub…，新消息稍后显示" else "和 hub 的连接断了，正在重连；发出去的消息不受影响",
-                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
-            notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
-            session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
-                AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
-            }
-            if (images.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                images.forEachIndexed { i, img ->
+                uploading?.let { name ->
+                    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Text("  正在传「$name」到电脑上…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
                     Box {
-                        val bmp = remember(img.data) {
-                            runCatching { android.util.Base64.decode(img.data, android.util.Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
-                        }
-                        bmp?.let { Image(it.asImageBitmap(), "第 ${i + 1} 张", Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
-                        IconButton({ images = images.filterIndexed { j, _ -> j != i } }, Modifier.size(24.dp).align(Alignment.TopEnd)) {
-                            Icon(Icons.Default.Cancel, "移除这张", tint = androidx.compose.ui.graphics.Color.White)
+                        IconButton({ attachMenu = true }, enabled = !sending && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
+                        DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
+                            DropdownMenuItem({ Text("照片") }, {
+                                attachMenu = false
+                                pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
+                            DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
                         }
                     }
-                }
-            }
-            ContextChips(key)
-            uploading?.let { name ->
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    Text("  正在传「$name」到电脑上…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
-                Box {
-                    IconButton({ attachMenu = true }, enabled = !sending && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
-                    androidx.compose.material3.DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
-                        androidx.compose.material3.DropdownMenuItem({ Text("照片") }, {
-                            attachMenu = false
-                            pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
-                        androidx.compose.material3.DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
+                    OutlinedTextField(
+                        draft, { draft = it; pendingMsgId = null },
+                        placeholder = {
+                            Text(
+                                when {
+                                    assistant -> "问 Jarvis…"
+                                    session?.isLive == false -> "发消息会在电脑上恢复这个会话"
+                                    else -> "发给 ${session?.agentLabel ?: "Claude"}"
+                                },
+                            )
+                        },
+                        modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(focus), shape = RoundedCornerShape(20.dp),
+                    )
+                    IconButton(
+                        onClick = { send() },
+                        enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
+                    ) {
+                        if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")
                     }
-                }
-                OutlinedTextField(
-                    draft, { draft = it; pendingMsgId = null },
-                    placeholder = {
-                        Text(
-                            when {
-                                assistant -> "问 Jarvis…"
-                                session?.isLive == false -> "发消息会在电脑上恢复这个会话"
-                                else -> "发给 ${session?.agentLabel ?: "Claude"}"
-                            },
-                        )
-                    },
-                    modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(composerFocus), shape = RoundedCornerShape(20.dp),
-                )
-                IconButton(onClick = { send() }, enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || !Links.contexts[key.path].isNullOrEmpty())) {
-                    if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")
                 }
             }
         }
+        MessageMenuHost(menu)
+        menu.selecting?.let { text -> SelectTextDialog(text) { menu.selecting = null } }
     }
 
     refusal?.let { e ->
@@ -378,82 +537,78 @@ fun ChatScreen(
         )
     }
 
-}
 
-@Composable
-private fun RowView(hub: Hub, key: SessionKey, r: Row) {
-    when (r) {
-        is Row.User -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.widthIn(max = 320.dp),
-            ) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    r.from?.let { Text("来自 $it", style = MaterialTheme.typography.labelSmall) }
-                    SelectionContainer { Text(linkified(r.text) { Links.open(it, key) }, style = MaterialTheme.typography.bodyLarge) }
-                    if (r.queued) Text("工作中输入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-                }
-            }
-        }
-        is Row.Assistant -> Markdown(r.text, Modifier.fillMaxWidth().padding(vertical = 2.dp))
-        is Row.Thinking -> Text(
-            r.text.lineSequence().firstOrNull { it.isNotBlank() }?.let { "思考：$it" } ?: "思考",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-        is Row.Tool -> ToolRow(hub, key, r)
-        is Row.Image -> LazyImage(hub, key, r.item)
-        is Row.Notice -> Text(r.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    viewer?.let { args ->
+        ImageViewerOverlay(hub, args, onClose = { viewer = null }, onEdited = { payload ->
+            if (images.size >= jarvis.android.data.MAX_IMAGES) notice = "一次最多 ${jarvis.android.data.MAX_IMAGES} 张"
+            else { images = images + payload; pendingMsgId = null }
+        })
     }
 }
 
+/**
+ * The viewer over the chat page, edge to edge (drawn on top of it, not in a Dialog: a dialog window stops at the
+ * system bars). [onEdited] null: no 编辑.
+ */
 @Composable
-private fun ToolRow(hub: Hub, key: SessionKey, r: Row.Tool) {
-    var open by remember { mutableStateOf(false) }
-    var full by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val err = r.result?.isError == true
-    Column(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-            .clickable { open = !open }.padding(horizontal = 10.dp, vertical = 7.dp).animateContentSize(),
+private fun ImageViewerOverlay(hub: Hub, args: ImageViewerArgs, onClose: () -> Unit, onEdited: ((jarvis.android.data.ImagePayload) -> Unit)?) {
+    // Light status / navigation bar icons on the black page (light mode would draw them dark), restored on close.
+    val view = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? android.app.Activity)?.window
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+        val status = bars?.isAppearanceLightStatusBars
+        val nav = bars?.isAppearanceLightNavigationBars
+        bars?.isAppearanceLightStatusBars = false
+        bars?.isAppearanceLightNavigationBars = false
+        onDispose {
+            status?.let { bars.isAppearanceLightStatusBars = it }
+            nav?.let { bars.isAppearanceLightNavigationBars = it }
+        }
+    }
+    ImageViewerScreen(hub, args.copy(canEdit = args.canEdit && onEdited != null), onBack = onClose, onEdited = { onEdited?.invoke(it) })
+}
+
+/** An excerpt waiting for the next message: its title, a ✕ to drop it. */
+@Composable
+private fun ContextChip(ref: ContextRef, onRemove: () -> Unit) {
+    Row(
+        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)).padding(start = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(toolVerb(r.use.toolName), style = MaterialTheme.typography.labelLarge, color = if (err) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.size(8.dp))
-            Text(toolSubject(r.use), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (r.result == null) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
-        }
-        if (open) {
-            val detail = toolDetail(r.use)
-            if (detail.isNotBlank()) Mono(detail)
-            r.result?.let { res ->
-                Mono(full ?: res.text.orEmpty())
-                if (res.fullSize != null && full == null) {
-                    TextButton(onClick = { scope.launch { full = runCatching { hub.api.fullItem(key, res.id).text }.getOrNull() } }) { Text("看全文", maxLines = 1) }
-                }
-            }
+        Icon(Icons.Default.FormatQuote, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.size(4.dp))
+        Text(ref.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.Close, "不带这段上下文", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
 
-@Composable
-private fun Mono(text: String) {
-    SelectionContainer {
-        Text(
-            text.take(20_000), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp, softWrap = false,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp).heightIn(max = 400.dp).horizontalScroll(rememberScrollState()),
-        )
+private fun contentType(l: ChatLine): Any = when (l) {
+    is ChatLine.Line -> when (val r = l.row) {
+        is FoldedRow.Plain -> r.row::class
+        is FoldedRow.Step -> "step:" + r.item::class.simpleName
+        else -> r::class
     }
+    else -> l::class
 }
 
 @Composable
-private fun LazyImage(hub: Hub, key: SessionKey, item: Item) {
-    val bmp by produceState<android.graphics.Bitmap?>(null, item.id) {
-        val inline = item.image?.data?.takeIf { it.isNotEmpty() }
-        val bytes = inline?.let { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }
-            ?: runCatching { hub.api.image(key, item.id) }.getOrNull()
-        value = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+private fun FoldedRowView(f: FoldedRow, key: SessionKey, working: Boolean, toggleWork: (String) -> Unit, onTerminal: (() -> Unit)?) {
+    when (f) {
+        is FoldedRow.Plain -> when (val r = f.row) {
+            is ChatRow.User -> UserBubble(r.item)
+            is ChatRow.Assistant -> AssistantText(r.item)
+            is ChatRow.Thinking -> ThinkingRow(r.item)
+            is ChatRow.Tools -> ToolGroup(r.steps, working)
+            is ChatRow.Notice -> NoticeRow(r.item)
+            is ChatRow.Recap -> RecapCard(r.item)
+            is ChatRow.Image -> if (r.item.role == "user") SentPhotos(listOf(r.item), key) else ImageRow(r.item, key)
+        }
+        is FoldedRow.Work -> WorkLineRow(f, onToggle = { toggleWork(f.id) }, onTerminal = if (f.running) onTerminal else null)
+        is FoldedRow.Step -> WorkStepRow(f, working)
+        is FoldedRow.StepsEnd -> WorkEndRow(f.count, onCollapse = { toggleWork(f.workId) })
     }
-    bmp?.let { Image(it.asImageBitmap(), null, Modifier.widthIn(max = 280.dp).heightIn(max = 360.dp)) }
-        ?: Box(Modifier.size(120.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)))
 }
