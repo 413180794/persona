@@ -13,6 +13,8 @@ struct ModelLaunchersView: View {
     @State private var error: String?
     @State private var adding = false
     @State private var query = ""
+    /// 已隐藏 starts folded (2026-11-01): they are hidden for a reason. A search shows them anyway.
+    @State private var showHidden = false
 
     /// Name, model, gateway host, or a machine's name.
     private func matches(_ l: LauncherView) -> Bool {
@@ -49,10 +51,28 @@ struct ModelLaunchersView: View {
                     }
                 }
                 if !hidden.isEmpty {
+                    let open = showHidden || !query.isEmpty
                     Section {
-                        ForEach(hidden) { row($0) }
-                    } header: { header("已隐藏", hidden.count) } footer: {
-                        Text("只是在 Jarvis 里不显示，~/.zshrc 没有改。点进去可以恢复。")
+                        if open { ForEach(hidden) { row($0) } }
+                    } header: {
+                        Button {
+                            withAnimation(Theme.Motion.standard) { showHidden.toggle() }
+                        } label: {
+                            HStack(spacing: Theme.Space.xs) {
+                                header("已隐藏", hidden.count)
+                                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
+                                    .rotationEffect(.degrees(open ? 90 : 0))
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(Color.secondary)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!query.isEmpty)
+                        .accessibilityLabel("已隐藏 \(hidden.count) 个，" + (open ? "已展开" : "已折叠"))
+                        .accessibilityAddTraits(.isButton)
+                    } footer: {
+                        if open { Text("只是在 Jarvis 里不显示，~/.zshrc 没有改。点进去可以恢复。") }
                     }
                 }
             } else if let error {

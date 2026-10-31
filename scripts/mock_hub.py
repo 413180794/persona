@@ -803,6 +803,8 @@ LAUNCHERS = [
     {"name": "cc_kiro", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "kiro/claude-opus-5-5", "machines": ["macbook"]},
     {"name": "example-cli", "source": "zshrc", "base_url": "http://fakemodel.example.com", "model": "gpt-6.1-sol", "machines": ["macbook"]},
     {"name": "cc_glm", "source": "zshrc", "base_url": "https://open.bigmodel.example.com/api/anthropic", "model": "glm-5.3", "machines": ["macbook"]},
+    {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
+    {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
 ]
 def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
     w = {"label": label, "unit": unit}
