@@ -931,6 +931,17 @@ if os.environ.get("MOCK_RICH") == "1":
 参考：https://en.wikipedia.org/wiki/Weather_(disambiguation)。"""
     ITEMS[RICH] = [it("user", "text", 5, text="还有哪些要我拍板？"), it("assistant", "text", 2, text=_rich)]
 
+# MOCK_LINKS=1: links in the Jarvis tab's main conversation and in an inbox item, to open in the link sheet
+# (docs/android.md「链接」): a plain web page, a jarvis:// link that only navigates, and a javascript: link that is dropped.
+if os.environ.get("MOCK_LINKS") == "1":
+    ITEMS[ASK1] = ITEMS[ASK1] + [it("assistant", "text", 1, text=(
+        "资料在 [示例页面](https://example.com/) 里；要看那个 Agent 就点 [这里](jarvis://session/macbook/" + RICH +
+        ")。这个不会打开：[脚本](javascript:alert(1))。"))]
+    INBOX.insert(0, {"id": "mail:links:1", "source": "mail", "kind": "mail", "account": "work", "account_name": "工作邮箱",
+                     "title": "评审材料", "sender": "Lucy Wang", "preview": "材料在 https://example.org/ ，评审前看一下",
+                     "count": 1, "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action",
+                     "summary": "评审材料的链接：https://example.org/", "read": False})
+
 
 def fold_work(items):
     """transcript.FoldWork: each run of tool calls (with their results) and thoughts becomes one fold item."""

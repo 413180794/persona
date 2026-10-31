@@ -202,7 +202,8 @@ fun AssistantScreen(
         } else if (shown != null && pending == null && machine.isNotEmpty()) {
             // The tab bar sits under the conversation; while typing it goes away, so the composer sits right on the
             // keyboard (ChatScreen handles the keyboard inset itself: a Scaffold around it would add it twice).
-            val typing = WindowInsets.isImeVisible
+            // Same while a link is open: at 60 % the sheet sits right under the composer (CLAUDE.md「链接在 App 内打开」).
+            val typing = WindowInsets.isImeVisible || jarvis.android.ui.web.Links.current.value != null
             Column(Modifier.fillMaxSize()) {
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
                     ChatScreen(

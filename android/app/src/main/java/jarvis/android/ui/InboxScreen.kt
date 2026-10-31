@@ -172,12 +172,17 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandToJarvis: (St
             }
         }
     }
-    opened?.let { item ->
-        InboxDetail(
-            hub, item, onDismiss = { opened = null },
-            onDone = { done(item, true); opened = null },
-            onHandToJarvis = { prompt -> done(item, true); opened = null; onHandToJarvis(prompt) },
-        )
+    // A link tapped in the detail opens the link sheet, which can't float over this modal sheet: the detail steps
+    // aside while the page is open and comes back, with what was typed, when it closes.
+    val details = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    opened?.takeIf { jarvis.android.ui.web.Links.current.value == null }?.let { item ->
+        details.SaveableStateProvider(item.id) {
+            InboxDetail(
+                hub, item, onDismiss = { opened = null },
+                onDone = { done(item, true); opened = null },
+                onHandToJarvis = { prompt -> done(item, true); opened = null; onHandToJarvis(prompt) },
+            )
+        }
     }
 }
 
@@ -245,8 +250,8 @@ private fun InboxRow(item: InboxItem, onClick: () -> Unit, trailing: (@Composabl
 @Composable
 private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone: () -> Unit, onHandToJarvis: (String) -> Unit) {
     var full by remember { mutableStateOf<InboxItem?>(null) }
-    var draft by remember { mutableStateOf(item.agent?.draft.orEmpty()) }
-    var instruction by remember { mutableStateOf("") }
+    var draft by rememberSaveable { mutableStateOf(item.agent?.draft.orEmpty()) }
+    var instruction by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmSend by remember { mutableStateOf(false) }
@@ -258,10 +263,10 @@ private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone
             Text(item.title, style = MaterialTheme.typography.titleLarge)
             Text(listOf(item.sourceLabel, item.kindLabel, ago(item.updated)).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             item.summary?.takeIf { it.isNotBlank() }?.let {
-                Text("✦ $it", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(10.dp)).padding(12.dp))
+                Text(linkified("✦ $it") { url -> jarvis.android.ui.web.Links.open(url, null) }, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(10.dp)).padding(12.dp))
             }
             val text = full?.context?.takeIf { it.isNotBlank() } ?: item.preview
-            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()))
+            Text(linkified(text) { url -> jarvis.android.ui.web.Links.open(url, null) }, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()))
             if (full == null) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
 
             HorizontalDivider()

@@ -34,6 +34,25 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 设备 | `GET /api/v1/auth/tokens`：每台设备的凭据（本机、手表「只能回答」），最近使用 / 撤销时间，已撤销的单独一组；撤销先确认，撤销的是这台手机自己就回到配对页 |
 | 通知 | 「需要你处理时」开关，「Agent 做完时」不推送 / 只推长任务 / 每次都推，系统里每类通知的设置入口。和 iOS 一样存在 hub 的 `devices/{id}/prefs`（只发 `input` / `done`，iPhone 的实时活动、灵动岛字段不动；id 是这台手机第一次用时生成的 `android-…`），每次连上 hub 时读回来，所以在别处改了也生效；改的时候 hub 连不上，下次连上先把这边的发上去。`Notifier` 按它决定弹不弹（见下面「通知」） |
 | 存储空间 | 这台手机上 Jarvis 占的空间按类分（对话、图片、网页、网络缓存……，没有的类不显示）、一条比例条，点一类单独清、或清除全部缓存；设置和配对信息不清 |
+| 链接 | 对话（Agents 和 Jarvis）、收件箱详情里的链接都在 App 内的卡片里打开，见下面「链接」 |
+
+## 链接
+
+CLAUDE.md「链接在 App 内打开」的安卓版（`ui/web/`，对应 iOS `Views/Link/LinkSheet.swift`）：
+
+- 打开即铺满屏幕；拖顶部的把手 / 标题栏下拉到 0.6 时，后面的页面挤到上面 40%（`LinkHost` 按卡片高度给内容让出底部），对话照常滚动、能点输入框打字；
+  再往下拉或点 ✕、返回键关闭。Jarvis tab 开着卡片时不显示底部 tab 栏（和打字时一样），输入框直接贴着卡片。
+- 网页来自 `WebViewPool`：最多 6 个、按最近使用淘汰；对话里 15 分钟内的回复，前三个链接一出现就在后台开始加载（`LinkText.toPreload`），
+  翻历史不预加载。不在屏幕上的页面 `onPause()`（预加载完、卡片关掉、App 进后台都会停掉声音和计时器），系统要内存时（`onTrimMemory`）销毁不在屏幕上的。
+  第一次打开用 `LOAD_CACHE_ELSE_NETWORK`，看过的页面从磁盘缓存直接出来。深色模式下页面跟着变暗（自带深色的页面用自己的，其余算法变暗）。
+- 页面里选中文字，菜单最前面是「AI 修改」「作为上下文」：「AI 修改」弹框写怎么改，选中内容和要求作为一条消息立刻发给这个对话的 Agent（或 Jarvis）；
+  「作为上下文」放进这个对话输入框上方的小条（可以点掉），随下一条消息发出。两种都是 iOS 的 `<jarvis-context kind="edit|context" title="…" url="…">` 标签（`ContextRef`）。
+  收件箱里没有对应的 Agent，菜单只有「交给 Jarvis」，新开一段助手对话。从收件箱详情打开链接时详情先让开（ModalBottomSheet 是单独的窗口，链接卡片盖不上去），关掉卡片后带着没发的草稿回来。
+- 安全（`LinkSafety`、`externalIntent`）：http(s) 进卡片；`jarvis://` 只做跳转（`session/<机器>/<会话>`、`tab/…`、`assistant`、`inbox`），
+  `jarvis://pair` 这种会改配对的不认；`mailto:` / `tel:` / `intent:` 交给系统，`intent:` 去掉 component、selector、clip data 和所有 URI 授权标志，
+  指向本 App、`jarvis:`、`content:` / `file:` 的一律丢掉；`javascript:` / `file:` / `content:` / `data:` 等不显示成链接、点了也不动。网页里的非 http 跳转只在用户真的点了、页面在屏幕上时才放行。
+  页面拿不到 hub 的 token（`loadUrl` 不带任何头，token 只在 OkHttp 的请求里）；不允许文件 / content 访问、不允许混合内容、不允许脚本开新窗口；
+  证书只认系统 CA（`network_security.xml` 的 `trust-anchors`，用户装的 CA 不认）。
 
 还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、
 终端的选择复制（现在只能拷贝整屏）、字号和主题、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
@@ -125,6 +144,7 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
 | `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
 | `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
 | `ui/settings/`、`ui/machines/` | 设置的子页面和它们共用的分组、行（`SettingsKit.kt`，颜色取自 MaterialTheme）；机器列表、机器页、监控页和曲线（`MetricCharts.kt`） |
+| `ui/web/` | 链接卡片：`LinkSheet`（`Links`、`LinkHost`、卡片、上下文小条）、`WebViewPool`（预加载、选中菜单、`externalIntent`）、`LinkRules`（纯逻辑，`LinksTest` 覆盖） |
 
 ## 验证记录
 
@@ -181,7 +201,11 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
   加 U+FE0E 也没用，这几个按形状自己画。
 - hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
   （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。
-- 假 hub（`scripts/mock_hub.py`）的 WebSocket 连上时不推待处理的交互，也没有 `POST /api/v1/auth/tokens`：配对页会报 NewToken 解不出来。
-  联调时用 `run-as <包名>` 把 `shared_prefs/pairing.xml`（`url`、`token`）写进去跳过配对，进 App 后下拉刷新一次才拿到交互。
+- 假 hub（`scripts/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
 - `adb shell am start` 启动一个和当前任务根 intent 一样的 intent 时只是把任务拉到前台（「Activity not started」），onNewIntent 不来；
   验证快捷方式要从启动器长按图标点，或者让 App 先停在别的页面。
+- WebView 用 application context 建出来时页面永远是浅色：application context 没有 App 的主题（`isLightTheme` 读成 true），WebView 只在外面的主题是深色时才给页面
+  `prefers-color-scheme: dark` / 算法变暗。池里的 WebView 包一层 `ContextThemeWrapper(app, Theme.Jarvis)`，`values-night` 里的 `Theme.Jarvis` 是深色并写明 `isLightTheme=false`。
+- 往 WebView 的选中菜单加项：Chromium 在 `onPrepareActionMode` 里（每次选区变化）填菜单，它的项都要求显示成按钮，浮动工具栏先排这种；
+  自己的项也要 `SHOW_AS_ACTION_ALWAYS`、order 比它小，才排在 Copy 前面。点了以后先 `evaluateJavascript` 读到选区再 `mode.finish()`，先 finish 的话选区已经清掉，读到空字符串。
+- `scripts/mock_hub.py` 带 `MOCK_RICH=1 MOCK_LINKS=1` 时给对话、Jarvis 主对话、收件箱各放了几个链接。

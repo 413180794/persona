@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -22,6 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import jarvis.android.ui.web.LinkSafety
+import jarvis.android.ui.web.LinkText
+import jarvis.android.ui.web.Links
+import jarvis.android.ui.web.LocalLinkSource
 
 /**
  * The Markdown Claude writes, enough of it to read comfortably: headings, lists, quotes, fenced code, and inline
@@ -30,7 +37,10 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun Markdown(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     val blocks = remember(text) { parseBlocks(text) }
-    val link = MaterialTheme.colorScheme.primary
+    // Links open in the app (CLAUDE.md「链接在 App 内打开」); the chat drawing the text is where page picks go back to.
+    val from = LocalLinkSource.current
+    val link = MaterialTheme.colorScheme.primary // the style's accent (Theme)
+    val styled = { s: String -> inline(s, link) { url -> Links.open(url, from) } }
     SelectionContainer(modifier) {
         Column {
             blocks.forEachIndexed { i, b ->
@@ -46,13 +56,13 @@ fun Markdown(text: String, modifier: Modifier = Modifier, color: Color = Materia
                             .horizontalScroll(rememberScrollState()).padding(10.dp),
                     )
                     is Block.Heading -> Text(
-                        inline(b.text, link), color = color, fontWeight = FontWeight.SemiBold,
+                        styled(b.text), color = color, fontWeight = FontWeight.SemiBold,
                         style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = top + 2.dp),
                     )
-                    is Block.Para -> Text(inline(b.text, link), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
+                    is Block.Para -> Text(styled(b.text), color = color, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = top))
                     is Block.Quote -> Text(
-                        inline(b.text, link), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
+                        styled(b.text), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(top = top).padding(start = 10.dp),
                     )
                 }
@@ -108,9 +118,25 @@ fun parseBlocks(src: String): List<Block> {
     return out
 }
 
-private val inlineRe = Regex("""\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])""")
+private val inlineRe = Regex(
+    """\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])|""" + LinkText.bareLink.pattern,
+)
 
-fun inline(s: String, link: Color = Color(0xFF3B82F6)): AnnotatedString = buildAnnotatedString {
+private val defaultLinkColor = Color(0xFF3B82F6)
+
+/** A tappable [label] for [url] in [color] when there is an [onLink] handler; otherwise just coloured. */
+private fun AnnotatedString.Builder.linkSpan(label: String, url: String, color: Color, onLink: ((String) -> Unit)?) {
+    // javascript:, file:, content:… never open (LinkSafety): the label reads as plain text, not as a dead link.
+    if (LinkSafety.kind(url) == LinkSafety.Kind.REFUSED) append(label)
+    else if (onLink == null) withStyle(SpanStyle(color = color)) { append(label) }
+    else withLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(color = color))) { onLink(url) }) { append(label) }
+}
+
+/**
+ * Inline Markdown; links are drawn in [link] (the style's accent). With [onLink], `[text](url)` and bare http(s)
+ * URLs are tappable and go there.
+ */
+fun inline(s: String, link: Color = defaultLinkColor, onLink: ((String) -> Unit)? = null): AnnotatedString = buildAnnotatedString {
     var last = 0
     for (m in inlineRe.findAll(s)) {
         append(s.substring(last, m.range.first))
@@ -118,9 +144,28 @@ fun inline(s: String, link: Color = Color(0xFF3B82F6)): AnnotatedString = buildA
         when {
             g[1] != null -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(g[1]!!.value) }
             g[2] != null -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color(0x22888888))) { append(g[2]!!.value) }
-            g[3] != null -> withStyle(SpanStyle(color = link)) { append(g[3]!!.value) }
+            g[3] != null -> linkSpan(g[3]!!.value, g[4]!!.value, link, onLink)
             g[5] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[5]!!.value) }
+            else -> {
+                // A bare URL; prose punctuation after it is not part of it.
+                val url = LinkText.trim(m.value)
+                linkSpan(url, url, link, onLink)
+                append(m.value.substring(url.length))
+            }
         }
+        last = m.range.last + 1
+    }
+    append(s.substring(last))
+}
+
+/** Plain text (what the user typed, an inbox message) with its bare http(s) URLs tappable. */
+fun linkified(s: String, link: Color = defaultLinkColor, onLink: (String) -> Unit): AnnotatedString = buildAnnotatedString {
+    var last = 0
+    for (m in LinkText.bareLink.findAll(s)) {
+        append(s.substring(last, m.range.first))
+        val url = LinkText.trim(m.value)
+        linkSpan(url, url, link, onLink)
+        append(m.value.substring(url.length))
         last = m.range.last + 1
     }
     append(s.substring(last))

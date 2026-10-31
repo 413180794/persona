@@ -24,6 +24,9 @@ import jarvis.android.data.AgentState
 import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
+import jarvis.android.ui.web.AppLink
+import jarvis.android.ui.web.LinkHost
+import jarvis.android.ui.web.Links
 
 enum class Tab(val title: String) { Jarvis("Jarvis"), Agents("Agents"), Inbox("收件箱") }
 
@@ -103,28 +106,44 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
         )
     }
 
-    when {
-        // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
-        open != null -> {
-            BackHandler { openSession.value = null }
-            ChatScreen(hub, open, onBack = { openSession.value = null })
+    // In-app links (CLAUDE.md「链接在 App 内打开」): jarvis:// links in a chat only navigate; the inbox's 交给 Jarvis
+    // from a page starts an assistant conversation, like the inbox's own button.
+    Links.navigate = { link ->
+        when (link) {
+            is AppLink.Session -> { settings = false; openSession.value = link.key }
+            is AppLink.Tab -> {
+                settings = false
+                tab = when (link.name) { "jarvis" -> Tab.Jarvis; "inbox" -> Tab.Inbox; else -> Tab.Agents }
+                if (tab == Tab.Agents) openSession.value = null
+            }
         }
-        settings -> {
-            BackHandler { settings = false }
-            SettingsScreen(hub, onBack = { settings = false }, stack = settingsStack, onOpenSession = { openSession.value = it })
+    }
+    Links.handToJarvis = { prompt -> handoff = prompt; settings = false; tab = Tab.Jarvis }
+
+    LinkHost {
+        when {
+            // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
+            open != null -> {
+                BackHandler { openSession.value = null }
+                ChatScreen(hub, open, onBack = { openSession.value = null })
+            }
+            settings -> {
+                BackHandler { settings = false }
+                SettingsScreen(hub, onBack = { settings = false }, stack = settingsStack, onOpenSession = { openSession.value = it })
+            }
+            tab == Tab.Jarvis -> AssistantScreen(
+                hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
+                focusComposer = askFocus, onFocusTaken = { askFocus = false },
+            )
+            tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
+            space != null -> {
+                BackHandler { space = null }
+                SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
+            }
+            else -> AgentsScreen(
+                hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settingsStack.value = emptyList(); settings = true },
+                bottomBar = bar,
+            )
         }
-        tab == Tab.Jarvis -> AssistantScreen(
-            hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
-            focusComposer = askFocus, onFocusTaken = { askFocus = false },
-        )
-        tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
-        space != null -> {
-            BackHandler { space = null }
-            SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
-        }
-        else -> AgentsScreen(
-            hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settingsStack.value = emptyList(); settings = true },
-            bottomBar = bar,
-        )
     }
 }

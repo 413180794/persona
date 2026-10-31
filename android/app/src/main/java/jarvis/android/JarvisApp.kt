@@ -40,6 +40,12 @@ class JarvisApp : Application() {
         pairings.load()?.let { connect(it) }
     }
 
+    /** Pooled link pages are live renderers: give them back when the system asks for memory (docs/android.md「链接」). */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_UI_HIDDEN) android.os.Handler(mainLooper).post { jarvis.android.ui.web.WebViewPool.trimMemory() }
+    }
+
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
 
     fun connect(p: Pairing) {

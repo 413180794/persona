@@ -55,6 +55,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Algorithmic darkening for pages in the link sheet (dark mode without a white page).
+    implementation("androidx.webkit:webkit:1.12.1")
     // QR pairing (jarvis://pair?...) without Google Play services, which many Android phones in China do not have.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     // The home-screen widget (widget/JarvisWidget.kt); the last version that builds against compileSdk 34.

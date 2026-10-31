@@ -71,6 +71,12 @@ import jarvis.android.data.Hub
 import jarvis.android.data.HubException
 import jarvis.android.data.Item
 import jarvis.android.data.SessionKey
+import jarvis.android.ui.web.ContextChips
+import jarvis.android.ui.web.ContextRef
+import jarvis.android.ui.web.LinkText
+import jarvis.android.ui.web.Links
+import jarvis.android.ui.web.LocalLinkSource
+import jarvis.android.ui.web.WebViewPool
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
@@ -134,6 +140,13 @@ fun ChatScreen(
         if (follow && rows.isNotEmpty()) list.scrollToItem(0)
     }
 
+    // Links in a fresh answer start loading now, so tapping one shows a finished page (docs/android.md「链接」).
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    LaunchedEffect(state.items.lastOrNull()?.id) {
+        val urls = LinkText.toPreload(state.items, java.time.Instant.now())
+        if (urls.isNotEmpty()) WebViewPool.preload(appContext, urls)
+    }
+
     var draft by rememberSaveable(key.path) { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var refusal by remember { mutableStateOf<HubException?>(null) }
@@ -183,14 +196,18 @@ fun ChatScreen(
     }
 
     fun send(clearDraft: String? = null) {
-        val text = draft.trim().ifEmpty { if (images.isNotEmpty()) "请看图片" else "" }
-        if (text.isEmpty()) return
+        // 「作为上下文」 picks from the link sheet go in front of the message, as <jarvis-context> tags.
+        val contexts = Links.contexts[key.path].orEmpty()
+        val typed = draft.trim().ifEmpty { if (images.isNotEmpty()) "请看图片" else if (contexts.isNotEmpty()) "看看上面这段。" else "" }
+        if (typed.isEmpty()) return
+        val text = ContextRef.message(contexts, typed)
         val id = pendingMsgId ?: UUID.randomUUID().toString().also { pendingMsgId = it }
         sending = true; notice = null
         scope.launch {
             try {
                 hub.api.send(key, text, id, clearDraft, images)
                 draft = ""; pendingMsgId = null; images = emptyList()
+                contexts.forEach { Links.removeContext(key, it) }
                 follow = true; list.scrollToItem(0) // what you sent and its answer show, wherever you had scrolled
             } catch (e: HubException) {
                 when (e.code) {
@@ -247,31 +264,34 @@ fun ChatScreen(
                 if (state.loading && rows.isEmpty()) {
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 } else {
-                    LazyColumn(
-                        state = list, reverseLayout = true, modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
-                        items(cards, key = { "ix/" + it.id }) { ix -> InteractionCard(hub, ix) }
-                        // The reply being written (the assistant streams it; herdr agents don't), unless the transcript
-                        // already holds it; otherwise a working line.
-                        val lastText = (rows.firstOrNull() as? Row.Assistant)?.text
-                        if (assistant && state.live.isNotBlank() && !(lastText != null && (lastText.startsWith(state.live) || lastText == state.live))) {
-                            item(key = "live") { Markdown(state.live, Modifier.fillMaxWidth().padding(vertical = 2.dp)) }
-                        } else if (session?.agentState == AgentState.Working) item(key = "working") {
-                            Text(
-                                if (assistant) "Jarvis 正在思考…" else "${session.agentLabel} 正在工作…",
-                                style = MaterialTheme.typography.labelMedium, color = AgentState.Working.color(),
-                            )
-                        }
-                        session?.queued?.takeIf { it.isNotEmpty() }?.let { q ->
-                            item(key = "queued") {
-                                Text("排队中：" + q.joinToString(" / "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Links in this chat open in the sheet and hand page text back here.
+                    androidx.compose.runtime.CompositionLocalProvider(LocalLinkSource provides key) {
+                        LazyColumn(
+                            state = list, reverseLayout = true, modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            items(cards, key = { "ix/" + it.id }) { ix -> InteractionCard(hub, ix) }
+                            // The reply being written (the assistant streams it; herdr agents don't), unless the transcript
+                            // already holds it; otherwise a working line.
+                            val lastText = (rows.firstOrNull() as? Row.Assistant)?.text
+                            if (assistant && state.live.isNotBlank() && !(lastText != null && (lastText.startsWith(state.live) || lastText == state.live))) {
+                                item(key = "live") { Markdown(state.live, Modifier.fillMaxWidth().padding(vertical = 2.dp)) }
+                            } else if (session?.agentState == AgentState.Working) item(key = "working") {
+                                Text(
+                                    if (assistant) "Jarvis 正在思考…" else "${session.agentLabel} 正在工作…",
+                                    style = MaterialTheme.typography.labelMedium, color = AgentState.Working.color(),
+                                )
                             }
-                        }
-                        items(rows, key = { it.id }) { r -> RowView(hub, key, r) }
-                        if (state.loadingOlder) item(key = "older") {
-                            Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp)) }
+                            session?.queued?.takeIf { it.isNotEmpty() }?.let { q ->
+                                item(key = "queued") {
+                                    Text("排队中：" + q.joinToString(" / "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            items(rows, key = { it.id }) { r -> RowView(hub, key, r) }
+                            if (state.loadingOlder) item(key = "older") {
+                                Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp)) }
+                            }
                         }
                     }
                 }
@@ -300,6 +320,7 @@ fun ChatScreen(
                     }
                 }
             }
+            ContextChips(key)
             uploading?.let { name ->
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
@@ -330,7 +351,7 @@ fun ChatScreen(
                     },
                     modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(composerFocus), shape = RoundedCornerShape(20.dp),
                 )
-                IconButton(onClick = { send() }, enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty())) {
+                IconButton(onClick = { send() }, enabled = !sending && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || !Links.contexts[key.path].isNullOrEmpty())) {
                     if (sending) CircularProgressIndicator(Modifier.size(20.dp)) else Icon(Icons.AutoMirrored.Filled.Send, "发送")
                 }
             }
@@ -369,7 +390,7 @@ private fun RowView(hub: Hub, key: SessionKey, r: Row) {
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     r.from?.let { Text("来自 $it", style = MaterialTheme.typography.labelSmall) }
-                    SelectionContainer { Text(r.text, style = MaterialTheme.typography.bodyLarge) }
+                    SelectionContainer { Text(linkified(r.text) { Links.open(it, key) }, style = MaterialTheme.typography.bodyLarge) }
                     if (r.queued) Text("工作中输入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                 }
             }

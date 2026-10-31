@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The hub speaks plain HTTP on a private network or VPN (docs/server.md); the address is the user's own. -->
+<!-- The hub speaks plain HTTP on a private network or VPN (docs/server.md); the address is the user's own.
+     HTTPS (the hub over TLS, pages in the link sheet) trusts the system CAs only, never user-installed ones. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
