@@ -578,3 +578,30 @@ func (h *Hub) sweepLarkAgents(ctx context.Context, now time.Time) {
 		_ = h.larkAgentPost(ctx, r, answer)
 	}
 }
+
+// agentConversationTitles names the assistant conversations the hub started for something (2026-10-31: listed under
+// the first line of their prompt, 「这是收件箱里的一件事，你作为…」): "/agent · 会话 · 要求" for a Feishu request,
+// "AI 分身 · 标题" for an inbox item.
+func (h *Hub) agentConversationTitles() map[string]string {
+	out := map[string]string{}
+	h.larkAgent.mu.Lock()
+	for _, r := range h.larkAgent.runs {
+		if r.SessionID == "" {
+			continue
+		}
+		t := "/agent · " + r.Chat
+		if r.Task != "" {
+			t += " · " + r.Task
+		}
+		out[r.SessionID] = clip(oneLine(t), 80)
+	}
+	h.larkAgent.mu.Unlock()
+	h.inbox.mu.Lock()
+	for _, it := range h.inbox.items {
+		if it.Agent != nil && it.Agent.SessionID != "" {
+			out[it.Agent.SessionID] = clip(oneLine("AI 分身 · "+it.Title), 80)
+		}
+	}
+	h.inbox.mu.Unlock()
+	return out
+}

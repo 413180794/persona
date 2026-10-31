@@ -245,9 +245,13 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.mu.Unlock()
+	titles := h.agentConversationTitles()
 	for i := range list {
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i].Cwd, dir)
+		if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
+			list[i].Title = t // not the first line of the prompt the hub wrote for it
+		}
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
 	}

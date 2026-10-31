@@ -19,6 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import jarvis.android.JarvisApp
 import jarvis.android.MainActivity
 import jarvis.android.data.AgentState
 import jarvis.android.data.ConnState
@@ -139,7 +141,23 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
                 hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
                 focusComposer = askFocus, onFocusTaken = { askFocus = false },
             )
-            tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
+            tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandOff = { h ->
+                val to = h.to
+                if (to == null) { handoff = h.prompt; tab = Tab.Jarvis }
+                else {
+                    // To a running agent: its chat opens and the message goes out as if typed there.
+                    val app = JarvisApp.instance
+                    app.scope.launch {
+                        runCatching { hub.api.send(to, h.prompt, java.util.UUID.randomUUID().toString()) }.onFailure { e ->
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(app, "没交过去：${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                    tab = Tab.Agents
+                    openSession.value = to
+                }
+            })
             space != null -> {
                 BackHandler { space = null }
                 SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })

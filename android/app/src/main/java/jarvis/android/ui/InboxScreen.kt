@@ -73,11 +73,11 @@ import kotlinx.coroutines.launch
 /**
  * The inbox tab (iOS InboxView, docs/inbox.md): Feishu and mail as one list the hub's AI has triaged, in 需要你 /
  * 知悉即可 / 已折叠 / 已处理. A row swipes away as done; tapping it opens what it says, an AI draft to send, and
- * 交给 Jarvis. The app never opens Feishu's own pages (「不做第二个飞书」): the item's text is what it shows.
+ * 交给 AI. The app never opens Feishu's own pages (「不做第二个飞书」): the item's text is what it shows.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandToJarvis: (String) -> Unit) {
+fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff) -> Unit) {
     val items by hub.inbox.collectAsState()
     var filter by remember { mutableStateOf<InboxFilter>(InboxFilter.All) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -180,7 +180,7 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandToJarvis: (St
             InboxDetail(
                 hub, item, onDismiss = { opened = null },
                 onDone = { done(item, true); opened = null },
-                onHandToJarvis = { prompt -> done(item, true); opened = null; onHandToJarvis(prompt) },
+                onHandOff = { h -> if (h.markDone) done(item, true); opened = null; onHandOff(h) },
             )
         }
     }
@@ -244,17 +244,18 @@ private fun InboxRow(item: InboxItem, onClick: () -> Unit, trailing: (@Composabl
 
 /**
  * One item: what it says (the hub's text, no Feishu page), the AI summary, an AI-drafted reply to edit and send
- * (POST /reply sends it as the user, so it's an explicit button), and 交给 Jarvis.
+ * (POST /reply sends it as the user, so it's an explicit button), and 交给 AI.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone: () -> Unit, onHandToJarvis: (String) -> Unit) {
+private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone: () -> Unit, onHandOff: (HandOff) -> Unit) {
     var full by remember { mutableStateOf<InboxItem?>(null) }
     var draft by rememberSaveable { mutableStateOf(item.agent?.draft.orEmpty()) }
     var instruction by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmSend by remember { mutableStateOf(false) }
+    var handingOff by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(item.id) { runCatching { full = hub.api.inboxItem(item.id) } }
 
@@ -288,7 +289,7 @@ private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-                OutlinedButton({ onHandToJarvis(handoffPrompt(full ?: item)) }, enabled = !busy) { Text("交给 Jarvis", maxLines = 1) }
+                OutlinedButton({ handingOff = true }, enabled = !busy) { Text("交给 AI", maxLines = 1) }
                 if (!item.isDone) OutlinedButton(onDone, enabled = !busy) { Text("已处理", maxLines = 1) }
                 Spacer(Modifier.weight(1f))
                 Button({ confirmSend = true }, enabled = !busy && draft.isNotBlank()) {
@@ -297,6 +298,7 @@ private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone
             }
         }
     }
+    if (handingOff) HandOffSheet(hub, full ?: item, onDismiss = { handingOff = false }, onSend = { handingOff = false; onHandOff(it) })
     if (confirmSend) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { confirmSend = false },
@@ -315,13 +317,71 @@ private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone
     }
 }
 
-/** 交给 Jarvis: the item as context the assistant can act on (docs/protocol.md「消息里的标签」), plus what to do. */
-fun handoffPrompt(item: InboxItem): String {
+/** 交给 AI: the item as context (docs/protocol.md「消息里的标签」), plus what to do — iOS InboxHandOffSheet.message. */
+fun handoffPrompt(item: InboxItem, ask: String = HANDOFF_PRESETS[0]): String {
     val title = (if (item.source == "lark") "飞书 · " else "邮件 · ") + item.title
-    val ids = listOfNotNull(
-        item.lark?.feedId?.takeIf { it.isNotBlank() }?.let { "feed_id=$it" },
-        item.mail?.let { m -> "account=${m.accountId} mailbox=${m.mailbox} uid=${m.uids.lastOrNull() ?: ""}" },
-    ).joinToString(" ")
-    val body = (item.context?.takeIf { it.isNotBlank() } ?: item.preview).replace("</jarvis-context>", "")
-    return "<jarvis-context kind=\"context\" title=\"${title.replace("\"", "'")}\">${if (ids.isNotEmpty()) "($ids)\n" else ""}$body</jarvis-context>\n总结一下，告诉我要做什么，给出建议的回复。"
+    var text = item.context?.takeIf { it.isNotBlank() } ?: listOfNotNull(item.sender, item.preview).filter { it.isNotBlank() }.joinToString("：")
+    item.lark?.feedId?.takeIf { it.isNotBlank() }?.let { text += "\n\n（飞书会话 feedId $it，可用飞书工具读更多上下文或回复）" }
+    item.mail?.let { m -> m.uids.lastOrNull()?.let { uid -> text += "\n\n（邮件 account_id ${m.accountId}，mailbox ${m.mailbox}，uid $uid，可用 mail_read 读全文、mail_send 回复）" } }
+    return ContextRef("context", title, "", text).xml + "\n\n" + ask
+}
+
+/** What to ask for, as the iOS app offers it. */
+val HANDOFF_PRESETS = listOf("总结一下，告诉我要做什么，给出建议的回复", "查清楚背景再告诉我", "直接帮我处理，回复前先问我")
+
+/** An inbox item handed to AI: the message to send, and to whom (null: Jarvis, a new conversation). */
+data class HandOff(val prompt: String, val to: jarvis.android.data.SessionKey?, val markDone: Boolean)
+
+/** The agents an item can go to: the most recently active live ones, not Jarvis itself (iOS: eight). */
+fun handOffTargets(sessions: Collection<jarvis.android.data.Session>): List<jarvis.android.data.Session> =
+    sessions.filter { !it.assistant && it.isLive }.sortedByDescending { it.updated ?: java.time.Instant.EPOCH }.take(8)
+
+/**
+ * 交给 AI (iOS InboxHandOffSheet): what to do with the item, and who does it — Jarvis in a new conversation, or one
+ * of the agents running in herdr, as a message in its session.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HandOffSheet(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onSend: (HandOff) -> Unit) {
+    var instruction by remember { mutableStateOf("") }
+    var target by remember { mutableStateOf<jarvis.android.data.SessionKey?>(null) }
+    var markDone by remember { mutableStateOf(true) }
+    val byMachine by hub.sessions.collectAsState()
+    val machines by hub.machines.collectAsState()
+    val agents = remember(byMachine) { handOffTargets(byMachine.values.flatten()) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("交给 AI", style = MaterialTheme.typography.titleLarge)
+            Text("要它做什么", style = MaterialTheme.typography.titleSmall)
+            OutlinedTextField(instruction, { instruction = it }, placeholder = { Text(HANDOFF_PRESETS[0]) }, minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                HANDOFF_PRESETS.forEach { p -> FilterChip(selected = instruction == p, onClick = { instruction = p }, label = { Text(p, maxLines = 1) }) }
+            }
+            Text("交给谁", style = MaterialTheme.typography.titleSmall)
+            TargetRow("Jarvis（新对话）", null, target == null) { target = null }
+            agents.forEach { s ->
+                TargetRow(s.displayTitle, machines.firstOrNull { it.id == s.machineId }?.displayName ?: s.machineId, target == s.key) { target = s.key }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("同时标为已处理", Modifier.weight(1f))
+                androidx.compose.material3.Switch(markDone, { markDone = it })
+            }
+            Row(Modifier.padding(bottom = 16.dp)) {
+                Spacer(Modifier.weight(1f))
+                TextButton(onDismiss) { Text("取消", maxLines = 1) }
+                Button({ onSend(HandOff(handoffPrompt(item, instruction.trim().ifEmpty { HANDOFF_PRESETS[0] }), target, markDone)) }) { Text("发送", maxLines = 1) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetRow(title: String, subtitle: String?, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.RadioButton(selected, onClick)
+        Column(Modifier.weight(1f)) {
+            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+        }
+    }
 }

@@ -236,7 +236,9 @@ private fun List<Session>.newest() = maxByOrNull { it.updated ?: Instant.EPOCH }
 fun Session.conversationTitle(): String {
     val t = title.takeIf { it.isNotBlank() && it != "Claude Code" } ?: lastText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(30) ?: return "对话"
     // Started from 交给 Jarvis: the first message is a <jarvis-context title="…"> tag (claude names it after it).
-    Regex("""<jarvis-context[^>]*title="([^"]*)"""").find(t)?.let { return "交给 Jarvis：" + it.groupValues[1] }
+    Regex("""<jarvis-context[^>]*title="([^"]*)"""").find(t)?.let { m ->
+        return "交给 Jarvis：" + m.groupValues[1].replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    }
     return if (t.startsWith("<jarvis-context")) "交给 Jarvis" else t
 }
 
