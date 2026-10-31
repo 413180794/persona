@@ -145,12 +145,13 @@ func (e *Engine) TagItems(ctx context.Context) error {
 
 // Hit is one search result.
 type Hit struct {
-	Path string `json:"path"` // relative to the data dir
+	Path string `json:"path"` // relative to the data dir; absolute for a file in one of the ExtraDirs
 	Line string `json:"line"`
 }
 
-// Search finds lines containing every word of the query (case-insensitive) in summaries, metadata, timelines and
-// (when messages is set) the message archive; newest message days first. At most limit hits.
+// Search finds lines containing every word of the query (case-insensitive) in summaries, metadata, timelines, the
+// Markdown of the ExtraDirs and (when messages is set) the message archive; newest message days first. At most limit
+// hits.
 func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 	words := strings.Fields(strings.ToLower(query))
 	if len(words) == 0 {
@@ -171,7 +172,10 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 		if err != nil {
 			return
 		}
-		rel, _ := filepath.Rel(e.Store.Dir, p)
+		rel, err := filepath.Rel(e.Store.Dir, p)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			rel = p
+		}
 		for _, l := range strings.Split(string(raw), "\n") {
 			if len(hits) >= limit {
 				return
@@ -197,6 +201,20 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 		}
 		return nil
 	})
+	for _, dir := range e.ExtraDirs {
+		_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() && p != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir // .git and the like
+			}
+			if !d.IsDir() && strings.HasSuffix(p, ".md") {
+				files = append(files, p)
+			}
+			return nil
+		})
+	}
 	for _, p := range files {
 		scan(p)
 	}

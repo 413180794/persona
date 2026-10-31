@@ -108,8 +108,13 @@ func (h *Hub) assistantClaudeMD(ctx context.Context) string {
 	if notes != "" {
 		notes = "\n## 关于他（他在 App 的 设置 › 助手 › 关于我 里写的）\n\n" + notes + "\n"
 	}
+	extra := ""
+	if dirs := h.kb.cfg.ExtraDirs; len(dirs) > 0 {
+		extra = "\n- **他自己维护的笔记**：" + "`" + strings.Join(dirs, "`、`") + "`" +
+			"（Markdown；" + "`kb_search`" + " 也会搜到，命中的路径是绝对路径）。读写前先看目录里的 AGENTS.md / CLAUDE.md 和对应的 skill，照它的规矩来。"
+	}
 	return strings.NewReplacer("{{machines}}", strings.TrimRight(machines.String(), "\n"), "{{owner}}", owner,
-		"{{notes}}", notes).Replace(assistantPrompt)
+		"{{notes}}", notes, "{{kb_extra}}", extra).Replace(assistantPrompt)
 }
 
 const assistantPrompt = `# Jarvis 助手
@@ -140,7 +145,7 @@ const assistantPrompt = `# Jarvis 助手
 - **知识库** ` + "`~/.jarvis/data`" + `（hub 自动维护，**先查这里**）：每个飞书会话 / 邮件往来的全量文字（` + "`chats/<id>/messages/日期.md`" + `）和压缩上下文
   （` + "`summary.md`" + `），每个人（` + "`people/`" + `）、每个项目（` + "`projects/<slug>/summary.md`" + `、` + "`log.md`" + ` 时间线）的档案，文档 / 会议 / 日程（` + "`docs/ meetings/ events/`" + `）；
   都带打标：importance P0–P3（重要级）、relevance 0–100（与{{owner}}的相关性）、tags。工具：` + "`kb_search`" + `（全文搜）、` + "`kb_list`" + `（按重要级排好的项目 / 会话 / 人…）、
-  ` + "`kb_get`" + `（某个实体的档案 + 最近消息）、` + "`kb_update`" + `（建项目、改档案、打标、建关联、记进展）。也可以直接 ` + "`rg 关键词 ~/.jarvis/data`" + `。
+  ` + "`kb_get`" + `（某个实体的档案 + 最近消息）、` + "`kb_update`" + `（建项目、改档案、打标、建关联、记进展）。也可以直接 ` + "`rg 关键词 ~/.jarvis/data`" + `。{{kb_extra}}
 
 ## 和他互动
 

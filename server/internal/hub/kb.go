@@ -28,6 +28,9 @@ type KBConfig struct {
 	TextDays       int        `json:"text_days,omitempty"`       // full text kept (365)
 	AttachmentDays int        `json:"attachment_days,omitempty"` // images / files kept (30)
 	AI             *ai.Config `json:"ai,omitempty"`              // compression model (default inbox.triage_ai, then ai)
+	// ExtraDirs are directories on the hub's machine that kb_search also reads (Markdown, read only), e.g. a
+	// repository of notes the user keeps; "~/" is the home there (docs/knowledge.md).
+	ExtraDirs []string `json:"extra_dirs,omitempty"`
 }
 
 const (
@@ -74,6 +77,11 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		model = ai.New(cfg.AI.Over(h.cfg.AI))
 	}
 	e := &kb.Engine{Store: st, Model: model, Owner: h.ownerName(), Logf: h.logf, AttachmentDays: cfg.AttachmentDays}
+	for _, d := range cfg.ExtraDirs {
+		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
+			e.ExtraDirs = append(e.ExtraDirs, d)
+		}
+	}
 	if h.lark != nil {
 		e.Sources = append(e.Sources, &larkSource{c: h.lark})
 	}
@@ -458,7 +466,8 @@ func (h *Hub) kbMail(ctx context.Context) {
 
 var kbTools = []proto.Tool{
 	{Name: "kb_search", Description: "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, " +
-		"meetings, events, project timelines and, with messages=true, the full message archive (newest days first). All words must match.",
+		"meetings, events, project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, " +
+		"the full message archive (newest days first). All words must match.",
 		InputSchema: schema(`{"type":"object","required":["query"],"properties":{"query":{"type":"string"},"messages":{"type":"boolean","description":"also search the message archive (default true)"},"limit":{"type":"integer","description":"default 40"}}}`)},
 	{Name: "kb_list", Description: "List knowledge-base entities of one kind ranked by importance (P0 first), relevance to the user, recency: " +
 		"projects (short = a feature / launch, long = a team mission), chats, people, docs, meetings, events. Optional tag filter.",

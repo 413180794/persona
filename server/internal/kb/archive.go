@@ -50,6 +50,9 @@ type Engine struct {
 	Model   Model
 	Owner   string // how the owner is called (the AI writes "我" for them)
 	Logf    func(string, ...any)
+	// ExtraDirs are directories outside the data dir that Search also reads (Markdown files, read only): notes the
+	// user keeps elsewhere, e.g. a git repository of facts. Absolute paths.
+	ExtraDirs []string
 	// Index mirrors an entity into the hub's Postgres index (optional).
 	Index func(kind, id, name string, t Tagging, oneLine string, updated time.Time)
 
