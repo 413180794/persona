@@ -23,7 +23,7 @@ func TestCrawlMoments(t *testing.T) {
 	ms := func(d time.Duration) int64 { return now.Add(-d).UnixMilli() }
 	post := func(id, user, text string, comments int, age time.Duration) map[string]any {
 		return map[string]any{"id": id, "userId": user, "userName": "U" + user, "commentCount": comments, "reactionCount": 1,
-			"createTime": ms(age), "categoryNames": []string{"字节研发"}, "content": map[string]any{"text": text}}
+			"createTime": ms(age), "categoryIds": []string{"c1"}, "content": map[string]any{"text": text}}
 	}
 	feeds := map[string][][]map[string]any{
 		"1":  {{post("p1", "u1", "第一帖", 2, time.Hour), post("p2", "me", "我发的", 0, 2*time.Hour)}, {post("p3", "u3", "第三帖", 1, 3*time.Hour)}},

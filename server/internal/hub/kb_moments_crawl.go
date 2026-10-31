@@ -124,6 +124,12 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		raw, _ := json.MarshalIndent(deep, "", "  ")
 		_ = os.WriteFile(deepPath, append(raw, '\n'), 0o600)
 	}()
+	categories := map[string]string{} // category id → name: a category is a tab
+	for _, t := range tabs {
+		if t.Type == 2 {
+			categories[t.ID] = t.Name
+		}
+	}
 	seen := map[string]bool{}
 	// read pages a tab from token on; head stops at a page with nothing new. Returns the next token ("" at the end)
 	// and whether it may go on (false on errors, the end, or a rate limit).
@@ -148,6 +154,13 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 				}
 				seen[p.ID] = true
 				r.Seen++
+				if len(p.Categories) == 0 {
+					for _, id := range p.CategoryIDs {
+						if n := categories[id]; n != "" {
+							p.Categories = append(p.Categories, n)
+						}
+					}
+				}
 				switch h.archiveMomentMeta(st, p, me.UserID) {
 				case "new":
 					r.New++
@@ -203,7 +216,12 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 	// Comments of the posts whose count moved (newest first), within the round's budget.
 	var todo []*kb.MomentPost
 	for _, p := range st.MomentPosts() {
-		if p.CommentsOf != p.CommentCount {
+		switch {
+		case p.CommentsOf == p.CommentCount:
+		case p.CommentCount == 0: // nothing to read: settled at once, no request, no budget
+			p.CommentsOf, p.CommentsAt = 0, time.Now().UTC()
+			_ = st.PutMomentPost(p, []kb.MomentComment{})
+		default:
 			todo = append(todo, p)
 		}
 	}
@@ -213,11 +231,6 @@ func (h *Hub) crawlMoments(ctx context.Context, st *kb.Store, cfg MomentsCrawl, 
 		if fetched >= or(cfg.CommentsPerRound, 150) || ctx.Err() != nil {
 			r.CommentsLeft = len(todo) - i
 			break
-		}
-		if p.CommentCount == 0 { // nothing to read: no request, no budget
-			p.CommentsOf, p.CommentsAt = 0, time.Now().UTC()
-			_ = st.PutMomentPost(p, []kb.MomentComment{})
-			continue
 		}
 		if !wait() {
 			r.CommentsLeft = len(todo) - i

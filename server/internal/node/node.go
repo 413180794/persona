@@ -620,9 +620,10 @@ func claudeVersion(ctx context.Context) string {
 }
 
 // parseClaudeVersion takes the version out of `claude --version` run in an interactive shell, whose ~/.zshrc may
-// print first (oh-my-zsh warnings, a machine's welcome banner): the last line that is one.
+// print first (oh-my-zsh warnings, a machine's welcome banner, a terminal's shell-integration escapes on the same
+// line): the last line that is one once escape sequences are removed.
 func parseClaudeVersion(out string) string {
-	lines := strings.Split(strings.TrimSpace(out), "\n")
+	lines := strings.Split(strings.TrimSpace(terminalEscapes.ReplaceAllString(out, "")), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		if m := claudeVersionLine.FindStringSubmatch(lines[i]); m != nil {
 			return m[1]
@@ -630,6 +631,9 @@ func parseClaudeVersion(out string) string {
 	}
 	return ""
 }
+
+// terminalEscapes are OSC (ESC ] … BEL or ESC \\, e.g. iTerm2's shell integration) and CSI (colors) sequences.
+var terminalEscapes = regexp.MustCompile(`\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;?]*[A-Za-z]`)
 
 var claudeVersionLine = regexp.MustCompile(`^\s*v?(\d+\.\d+\.\d+\S*)\s*(\(Claude Code\))?\s*$`)
 

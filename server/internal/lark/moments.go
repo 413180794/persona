@@ -163,10 +163,11 @@ func (c *Client) MomentTabs(ctx context.Context) ([]MomentTab, error) {
 // MomentFeedPost is a post as a feed page lists it.
 type MomentFeedPost struct {
 	MomentPost
-	Anonymous  bool
-	Categories []string
-	Images     int
-	Reactions  int
+	Anonymous   bool
+	Categories  []string // names when the feed gives them
+	CategoryIDs []string // a category's id is its tab's id (MomentTabs)
+	Images      int
+	Reactions   int
 }
 
 // MomentFeed is one page of a tab (count ≤ 50; 推荐 ignores it), with the token for the next page ("" at the end).
@@ -181,6 +182,7 @@ func (c *Client) MomentFeed(ctx context.Context, tabID, pageToken string, count 
 			ReactionCount int      `json:"reactionCount"`
 			CreateTime    int64    `json:"createTime"`
 			CategoryNames []string `json:"categoryNames"`
+			CategoryIDs   []string `json:"categoryIds"`
 			Images        []any    `json:"images"`
 			Content       struct {
 				Text string `json:"text"`
@@ -200,7 +202,7 @@ func (c *Client) MomentFeed(ctx context.Context, tabID, pageToken string, count 
 		ps = append(ps, MomentFeedPost{
 			MomentPost: MomentPost{ID: p.ID, UserID: p.UserID, UserName: p.UserName, Text: p.Content.Text, CommentCount: p.CommentCount,
 				At: time.UnixMilli(p.CreateTime)},
-			Anonymous: p.IsAnonymous, Categories: p.CategoryNames, Images: len(p.Images), Reactions: p.ReactionCount,
+			Anonymous: p.IsAnonymous, Categories: p.CategoryNames, CategoryIDs: p.CategoryIDs, Images: len(p.Images), Reactions: p.ReactionCount,
 		})
 	}
 	return ps, out.NextPageToken, nil
