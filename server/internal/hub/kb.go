@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -202,6 +203,9 @@ func (s *larkSource) Chats(ctx context.Context, limit int) ([]kb.SourceChat, err
 var larkMediaRe = regexp.MustCompile(`"(/api/v1/lark/(?:media|messages)/[^"]+)"`)
 
 func (s *larkSource) Messages(ctx context.Context, c kb.SourceChat, after string, limit int) ([]kb.SourceMessage, string, bool, error) {
+	if !larkPosition(after) {
+		after = "" // a cursor lark-connector rejects (one came back as "-3"): read the newest page; older lines are skipped by time
+	}
 	w := lark.Window{After: after}
 	if c.Topic {
 		w = lark.Window{}
@@ -228,10 +232,20 @@ func (s *larkSource) Messages(ctx context.Context, c kb.SourceChat, after string
 		out = append(out, sm)
 	}
 	newer := p.NewerCursor
-	if c.Topic {
+	if c.Topic || !larkPosition(newer) {
 		newer = ""
 	}
 	return out, newer, p.HasNewer, nil
+}
+
+// larkPosition: a message position lark-connector takes back as a cursor, a non-negative integer (or none). Once it handed
+// out "-3" for a chat; kept as the archive cursor, every later read of that chat failed with INVALID_CURSOR.
+func larkPosition(p string) bool {
+	if p == "" {
+		return true
+	}
+	n, err := strconv.ParseInt(p, 10, 64)
+	return err == nil && n >= 0 && n <= 1<<53-1
 }
 
 func clipRunes(s string, n int) string {

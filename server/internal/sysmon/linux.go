@@ -85,9 +85,19 @@ func (c *linuxCollector) Sample(now time.Time) proto.MetricSample {
 		s.NetRx, s.NetTx = netRates(c.net, cur)
 		c.net = cur
 	}
-	var st syscall.Statfs_t
-	if syscall.Statfs("/", &st) == nil {
-		s.DiskUsed, s.DiskTotal = diskUsage(st.Blocks, st.Bfree, st.Bavail, uint64(st.Bsize))
+	mounts := []string{"/"}
+	if b, err := os.ReadFile("/proc/self/mounts"); err == nil {
+		if m := diskMounts(b); len(m) > 0 {
+			mounts = m
+		}
+	}
+	for _, m := range mounts {
+		var st syscall.Statfs_t
+		if syscall.Statfs(m, &st) == nil {
+			used, total := diskUsage(st.Blocks, st.Bfree, st.Bavail, uint64(st.Bsize))
+			s.DiskUsed += used
+			s.DiskTotal += total
+		}
 	}
 	return s
 }

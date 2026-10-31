@@ -367,3 +367,43 @@ func diskUsage(blocks, bfree, bavail, bsize uint64) (used, total int64) {
 	used = int64((blocks - min(bfree, blocks)) * bsize)
 	return used, used + int64(bavail*bsize)
 }
+
+// diskMounts picks, from /proc/self/mounts, one mount point per local block device: a box with its data disk on
+// /data00 has most of its space there, so counting only / would show a 118 GB disk on a 5 TB machine. Loop devices
+// (snaps, images) and read-only image filesystems are not storage anyone fills; bind mounts repeat a device.
+func diskMounts(b []byte) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 || !strings.HasPrefix(f[0], "/dev/") || strings.HasPrefix(f[0], "/dev/loop") || seen[f[0]] {
+			continue
+		}
+		switch f[2] {
+		case "squashfs", "iso9660", "erofs", "udf":
+			continue
+		}
+		seen[f[0]] = true
+		out = append(out, unescapeMount(f[1]))
+	}
+	return out
+}
+
+// unescapeMount undoes the kernel's octal escapes in mount points (\040 for a space).
+func unescapeMount(s string) string {
+	if !strings.Contains(s, "\\") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+3 < len(s) {
+			if n, err := strconv.ParseUint(s[i+1:i+4], 8, 8); err == nil {
+				b.WriteByte(byte(n))
+				i += 3
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}

@@ -183,6 +183,21 @@ func TestDiskUsage(t *testing.T) {
 	}
 }
 
+func TestDiskMounts(t *testing.T) {
+	mounts := "/dev/vda1 / ext4 rw,relatime 0 0\n" +
+		"proc /proc proc rw 0 0\n" +
+		"/dev/vdb /data00 ext4 rw,relatime 0 0\n" +
+		"/dev/vdb /home ext4 rw,relatime 0 0\n" + // bind mount of the same disk
+		"/dev/loop3 /snap/core/1 squashfs ro 0 0\n" +
+		"/dev/sr0 /media/cd iso9660 ro 0 0\n" +
+		"/dev/sdc1 /mnt/my\\040disk xfs rw 0 0\n" +
+		"tmpfs /run tmpfs rw 0 0\n"
+	got := strings.Join(diskMounts([]byte(mounts)), "|")
+	if got != "/|/data00|/mnt/my disk" {
+		t.Fatalf("mounts %q", got)
+	}
+}
+
 func TestSampleHere(t *testing.T) {
 	c := NewCollector(context.Background())
 	defer c.Close()

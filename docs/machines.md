@@ -39,7 +39,7 @@ node 每 10 秒（`proto.MetricEvery`，对齐到整 10 秒，所有机器的点
 | 内存 | 已用 = MemTotal − MemAvailable（页缓存算空闲，同 `free` 的 available）；没有 MemAvailable 的老内核用 free + buffers + cached | 常驻的 `vm_stat 10`：已用 = 匿名页 − 可清除页 + wired + 压缩器占用，等于「活动监视器」的「已使用内存」（App 内存 + 联动内存 + 被压缩）；文件缓存算空闲 |
 | 交换 | SwapTotal − SwapFree | `sysctl vm.swapusage` |
 | 网络 | `/proc/net/dev` 物理网卡的收发字节之差 / 时间 | 路由 socket `NET_RT_IFLIST2`（`if_msghdr2` 的 64 位计数）的物理网卡之差 / 时间 |
-| 磁盘 | `statfs("/")`，已用 = 总块 − 空闲块，总量 = 已用 + 普通用户可用（同 df） | `statfs("/System/Volumes/Data")`（`/` 是只读的系统快照，只有几 GB） |
+| 磁盘 | `/proc/self/mounts` 里每个本地块设备（`/dev/…`，去掉 loop、squashfs / iso9660 这类只读镜像，同一设备的 bind mount 只算一次）各 `statfs` 一次加起来：数据盘常挂在 `/data00` 之类，只看 `/` 一台 5 TB 的机器只显示 118 GB；每个的已用 = 总块 − 空闲块，总量 = 已用 + 普通用户可用（同 df） | `statfs("/System/Volumes/Data")`（`/` 是只读的系统快照，只有几 GB） |
 
 macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `host_statistics` 这类 Mach 调用；`vm.page_*` 的 sysctl 缺匿名页和压缩器数字。
 两个进程每 10 秒各打印一行，比每次采集都起 `vm_stat` / `top` 便宜得多；退出了就一分钟后重起，node 退出时一起结束（`exec.CommandContext`）。
