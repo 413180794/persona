@@ -69,6 +69,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -466,6 +468,7 @@ fun ChatScreen(
                     ) { cards.forEach { ix -> androidx.compose.runtime.key(ix.id) { InteractionCard(hub, ix) } } }
                 }
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
+                session?.takeIf { it.starting == true || it.startError != null }?.let { StartingNote(it.startError, it.agentLabel) }
                 session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                     AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
                 }
@@ -624,5 +627,27 @@ private fun FoldedRowView(f: FoldedRow, key: SessionKey, working: Boolean, toggl
         is FoldedRow.Work -> WorkLineRow(f, onToggle = { toggleWork(f.id) }, onTerminal = if (f.running) onTerminal else null)
         is FoldedRow.Step -> WorkStepRow(f, working)
         is FoldedRow.StepsEnd -> WorkEndRow(f.count, onCollapse = { toggleWork(f.workId) })
+    }
+}
+
+/** A session Jarvis is still starting (node/starting.go): what is sent now goes in once it is ready. Or why it did not start. */
+@Composable
+internal fun StartingNote(error: String?, agent: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)
+            .background(
+                if (error == null) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .then(Modifier.clearAndSetSemantics { contentDescription = if (error == null) "正在启动 $agent" else "没有启动起来：$error" }),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (error == null) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+        Text(
+            if (error == null) "正在启动 $agent，消息会在它就绪后发出" else "没有启动起来：$error",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3,
+        )
     }
 }

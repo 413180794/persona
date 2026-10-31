@@ -197,13 +197,16 @@ class ApiClient(val baseUrl: String, val token: String) {
         @SerialName("workspace_id") val workspaceId: String? = null,
         /** Answer at once and start in the background (docs/protocol.md「新建会话」): the chat opens right away. */
         val async: Boolean? = null,
+        /** What the tab name is made from when the first message goes as a message of its own, not `prompt`. */
+        @SerialName("name_hint") val nameHint: String? = null,
     )
     @Serializable private data class SessionResp(val session: Session)
     /** Starts claude in a new herdr tab, in the background: the session comes back at once, the first message goes in
      *  once claude is ready. */
     /** `mode` null = whatever the launcher / that computer's Claude settings use (as iOS sends it). */
-    suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?, mode: String? = null, workspaceId: String? = null): Session =
-        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode, workspaceId, async = true))).session
+    /** As iOS: no `prompt`, the first message is sent as an ordinary message once the chat is open (on screen at once). */
+    suspend fun start(machine: String, cwd: String, launcher: String, nameHint: String?, mode: String? = null, workspaceId: String? = null): Session =
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint))).session
 
     @Serializable data class DirEntry(val name: String = "", val path: String = "", @SerialName("is_git") val isGit: Boolean = false)
     @Serializable data class RecentDir(val path: String = "", val name: String = "")

@@ -102,3 +102,15 @@ class MarkdownTest {
         assertFalse(parseBlocks("#tag")[0] is Block.Heading)
     }
 }
+
+class AsyncStartTest {
+    @Test fun startingAndStartErrorDecode() {
+        val s = jarvis.android.data.JsonCodec.decodeFromString<jarvis.android.data.Session>(
+            """{"machine_id":"mac","session_id":"s1","status":"idle","starting":true}""")
+        org.junit.Assert.assertEquals(true, s.starting)
+        val f = jarvis.android.data.JsonCodec.decodeFromString<jarvis.android.data.Session>(
+            """{"machine_id":"mac","session_id":"s1","status":"offline","start_error":"claude did not become ready"}""")
+        org.junit.Assert.assertEquals("claude did not become ready", f.startError)
+        org.junit.Assert.assertEquals(null, f.starting)
+    }
+}

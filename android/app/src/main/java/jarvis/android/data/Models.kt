@@ -135,6 +135,10 @@ data class Session(
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
     val rev: Long? = null,
     val suggestion: String? = null,
+    /** Jarvis is still opening its tab and starting claude (docs/protocol.md「新建会话」): what is sent now goes in once it is ready. */
+    val starting: Boolean? = null,
+    /** Starting it failed (shown in the chat; sends get the same error). */
+    @SerialName("start_error") val startError: String? = null,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)

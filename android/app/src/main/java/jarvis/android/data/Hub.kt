@@ -329,6 +329,14 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     fun session(k: SessionKey): Session? = _sessions.value[k.machineId]?.firstOrNull { it.sessionId == k.sessionId }
 
+    /** A session the hub just started (async): listed now, so its chat has it before the next `sessions` push. */
+    fun adopt(s: Session) {
+        _sessions.update { map ->
+            val list = map[s.machineId].orEmpty()
+            if (list.any { it.sessionId == s.sessionId }) map else map + (s.machineId to list + s)
+        }
+    }
+
     /** The item store of a session; created (and subscribed) on first use by a chat screen. */
     fun chat(k: SessionKey): ChatStore = chat(k, create = true)!!
 

@@ -255,8 +255,16 @@ fun NewSessionSheet(
                         starting = true; error = null
                         val panesBefore = hub.livePanes(m.id)
                         scope.launch {
-                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: "claude", prompt.trim().ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
-                                .onSuccess { onStarted(it.key.copy(machineId = m.id)) }
+                            val first = prompt.trim()
+                            runCatching { hub.api.start(m.id, cwd!!, launcher ?: "claude", first.ifEmpty { null }, mode.ifEmpty { null }, preset?.workspaceId) }
+                                .onSuccess { s0 ->
+                                    // The hub answers at once and starts claude in the background: open the chat now, and
+                                    // send the first message as an ordinary one (it waits on the node until claude is ready).
+                                    val s = s0.copy(machineId = m.id)
+                                    hub.adopt(s)
+                                    if (first.isNotEmpty()) jarvis.android.chat.Outbox.send(hub, s.key, first)
+                                    onStarted(s.key)
+                                }
                                 .onFailure { e ->
                                     // Often claude did start and the node only gave up on it:
                                     //  - it stopped on a dialog (trust this folder, the bypass warning…), which the hub turns
