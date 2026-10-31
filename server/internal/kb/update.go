@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -92,10 +93,58 @@ func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
 		Projects []string `json:"projects"`
 		Chats    []string `json:"chats"`
 		People   []string `json:"people"`
+		Items    []string `json:"items"` // projects: "docs/<id>", "meetings/<id>", "events/<id>"
+		Where    string   `json:"where"` // docs / meetings / events: the chat they came from
 	}
 	_ = json.Unmarshal(raw, &refs)
-	d.Links = e.entries(refs.Projects, refs.Chats, refs.People)
+	if refs.Where != "" {
+		refs.Chats = append(refs.Chats, refs.Where) // entries() drops it when it is not a chat ("calendar")
+	}
+	d.Links = append(e.entries(refs.Projects, refs.Chats, refs.People), e.itemEntries(refs.Items)...)
 	return d, nil
+}
+
+// itemEntries names "kind/id" references to docs, meetings and events, newest first, at most 30 of each kind.
+func (e *Engine) itemEntries(refs []string) []Entry {
+	by := map[string][]Entry{}
+	for _, r := range refs {
+		kind, id, ok := strings.Cut(r, "/")
+		if !ok {
+			continue
+		}
+		if it, ok := e.Store.Item(kind, id); ok && it.Title != "" {
+			by[kind] = append(by[kind], Entry{Kind: kind, ID: it.ID, Name: it.Title, OneLine: it.Note, Importance: it.Importance,
+				Relevance: it.Relevance, Tags: it.Tags, Updated: it.At, Extra: it.URL})
+		}
+	}
+	var out []Entry
+	for _, k := range []string{KindDoc, KindMeeting, KindEvent} {
+		list := by[k]
+		sort.SliceStable(list, func(i, j int) bool { return list[i].Updated.After(list[j].Updated) })
+		out = append(out, list[:min(len(list), 30)]...)
+	}
+	return out
+}
+
+// KindTags is the most used tags among entries (one kind's list), most used first.
+func KindTags(list []Entry, n int) []string {
+	count := map[string]int{}
+	for _, en := range list {
+		for _, t := range en.Tags {
+			count[t]++
+		}
+	}
+	tags := make([]string, 0, len(count))
+	for t := range count {
+		tags = append(tags, t)
+	}
+	sort.Slice(tags, func(i, j int) bool {
+		if count[tags[i]] != count[tags[j]] {
+			return count[tags[i]] > count[tags[j]]
+		}
+		return tags[i] < tags[j]
+	})
+	return tags[:min(len(tags), n)]
 }
 
 // Update is a change by hand (the app) or by the assistant. Set fields only; tagging set here is locked.

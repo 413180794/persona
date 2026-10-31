@@ -69,4 +69,17 @@ func TestFindRanksEntriesAndMatchesLocateMessages(t *testing.T) {
 	if _, _, _, err := e.Day("lark-high", "../meta"); err != ErrNotFound {
 		t.Fatalf("bad day: %v", err)
 	}
+
+	// A doc names the chat it came from; a project's docs come with its links.
+	_ = st.PutItem(&Item{Kind: KindDoc, ID: "d1", Title: "周报模板", Where: "lark-high", At: day("2026-10-20", 9)})
+	_ = st.PutProject(&Project{Slug: "p1", Name: "P1", Kind: "short", Status: "active", Items: []string{"docs/d1", "docs/gone"}})
+	if d, err := e.Get(KindDoc, "d1", 0); err != nil || len(d.Links) != 1 || d.Links[0].ID != "lark-high" {
+		t.Fatalf("doc links: %+v %v", d, err)
+	}
+	if d, err := e.Get(KindProject, "p1", 0); err != nil || len(d.Links) != 1 || d.Links[0].Kind != KindDoc {
+		t.Fatalf("project links: %+v %v", d, err)
+	}
+	if tags := KindTags([]Entry{{Tags: []string{"a", "b"}}, {Tags: []string{"b"}}}, 5); len(tags) != 2 || tags[0] != "b" {
+		t.Fatalf("tags: %v", tags)
+	}
 }

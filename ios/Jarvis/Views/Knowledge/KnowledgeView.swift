@@ -58,16 +58,18 @@ struct KnowledgeView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
         .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
+        .onChange(of: kind) { showIgnored = false }
         .refreshable { await load() }
         // Entries open with view-based links, not `navigationDestination(for:)`: this page is itself pushed with
         // `navigationDestination(isPresented:)`, and a value-pushed page on top of that lands *under* it (CLAUDE.md):
         // a hit seemed not to open, and back showed the entry's ⚠️ placeholder (2026-10-31).
         #if DEBUG
         // `-showKnowledgeEntry <kind>/<id>` (with `-openAssistantPage knowledge`): that entry's page, for screenshots;
-        // `-showKnowledgeSearch <text>`: searching for it.
+        // `-showKnowledgeSearch <text>`: searching for it; `-showKnowledgeKind <kind>`: that kind's list.
         .navigationDestination(item: $debugEntry) { e in KnowledgeDetailView(entry: e) }
         .onAppear {
             if let q = UserDefaults.standard.string(forKey: "showKnowledgeSearch") { query = q }
+            if let k = UserDefaults.standard.string(forKey: "showKnowledgeKind").flatMap(KBKind.init(rawValue:)) { kind = k }
             if let ref = UserDefaults.standard.string(forKey: "showKnowledgeEntry"), let slash = ref.firstIndex(of: "/") {
                 let id = String(ref[ref.index(after: slash)...])
                 debugEntry = KBEntry(kind: String(ref[..<slash]), id: id, name: id, relevance: 0)
@@ -113,7 +115,33 @@ struct KnowledgeView: View {
                 }
             }
         } else {
-            Section { rows(list.items) } header: { header(tag.map { "#" + $0 } ?? "按重要级和相关性", list.items.count) }
+            // Most people are only someone in a group (no importance yet): folded under the ranked ones, as 不是项目.
+            let ranked = tag != nil ? list.items : list.items.filter { !($0.importance ?? "").isEmpty }
+            let rest = tag != nil ? [] : list.items.filter { ($0.importance ?? "").isEmpty }
+            if !ranked.isEmpty {
+                Section { rows(ranked) } header: { header(tag.map { "#" + $0 } ?? "按重要级和相关性", ranked.count) }
+            }
+            if !rest.isEmpty {
+                Section {
+                    Button { withAnimation(Theme.Motion.standard) { showIgnored.toggle() } } label: {
+                        HStack {
+                            Text(ranked.isEmpty ? "全部" : "还没整理的").foregroundStyle(.secondary).lineLimit(1)
+                            Text("\(rest.count)").foregroundStyle(.tertiary).monospacedDigit()
+                            Spacer()
+                            Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
+                                .rotationEffect(.degrees(showIgnored || ranked.isEmpty ? 90 : 0))
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("kb.rest")
+                    if showIgnored || ranked.isEmpty { rows(rest) }
+                } footer: {
+                    if !ranked.isEmpty {
+                        Text("只在群里出现过、还没有打标的\(kind.title)。和你说过话、或在重要会话里的会被 AI 整理出来。")
+                    }
+                }
+            }
         }
     }
 
@@ -208,47 +236,52 @@ struct KnowledgeView: View {
         }
     }
 }
-/// The six kinds as chips with their icon (and how many, once loaded): fits a phone without squeezing six segments.
+/// The six kinds as chips with their icon (and how many, once loaded), all in sight: no sideways scroll view (the
+/// navigation stack can take one at the top of a page for the page's own and inset it, CLAUDE.md「布局与组件」, and
+/// 日程 was off the edge). Chips that do not fit drop their icons, then go to a second row.
 struct KBKindBar: View {
     @Binding var kind: KBKind
     var counts: [KBKind: Int]
 
-    /// The bar's own scroll position (not ScrollViewReader: its scrollTo drags the list above along, CLAUDE.md).
-    @State private var shown: KBKind?
-
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Space.s) {
-                    ForEach(KBKind.allCases) { k in
-                        let on = k == kind
-                        Button {
-                            Haptics.tap()
-                            withAnimation(Theme.Motion.standard) { kind = k }
-                        } label: {
-                            HStack(spacing: Theme.Space.sm) {
-                                Image(systemName: k.symbol).font(Theme.Font.captionStrong)
-                                Text(k.title).lineLimit(1)
-                                if let n = counts[k], on { Text("\(n)").monospacedDigit().opacity(0.75) }
-                            }
-                            .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondaryMedium)
-                            .padding(.horizontal, Theme.Space.m)
-                            .padding(.vertical, Theme.Space.s)
-                            .foregroundStyle(on ? Color.white : Color.primary)
-                            .background(on ? Theme.accent : Color.primary.opacity(0.06), in: .capsule)
-                            .contentShape(.capsule)
-                        }
-                        .buttonStyle(.plain)
-                        .id(k)
-                        .accessibilityAddTraits(on ? .isSelected : [])
-                    }
-                }
-                .scrollTargetLayout()
-                .padding(.horizontal, Theme.Space.xxs)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Theme.Space.s) { chips(icons: true, padding: Theme.Space.m) }
+            HStack(spacing: Theme.Space.sm) { chips(icons: false, padding: Theme.Space.m) }
+            HStack(spacing: Theme.Space.xs) { chips(icons: false, padding: Theme.Space.s) }
+            LarkFlowLayout(spacing: Theme.Space.sm, lineSpacing: Theme.Space.s) { chips(icons: true, padding: Theme.Space.m) }
         }
-        .scrollPosition(id: $shown, anchor: .center)
-        .onAppear { shown = kind }
-        .onChange(of: kind) { _, k in withAnimation(Theme.Motion.standard) { shown = k } }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    @ViewBuilder private func chips(icons: Bool, padding: CGFloat) -> some View {
+        ForEach(KBKind.allCases) { k in
+            let on = k == kind
+            Button {
+                Haptics.tap()
+                withAnimation(Theme.Motion.standard) { kind = k }
+            } label: {
+                HStack(spacing: Theme.Space.xs) {
+                    if icons { Image(systemName: k.symbol).font(Theme.Font.captionStrong) }
+                    Text(k.title)
+                    if let n = counts[k], on { Text(Self.count(n)).monospacedDigit().opacity(0.75) }
+                }
+                .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondaryMedium)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, padding)
+                .padding(.vertical, Theme.Space.s)
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .background(on ? Theme.accent : Color.primary.opacity(0.06), in: .capsule)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("kb.kind." + k.rawValue)
+            .accessibilityAddTraits(on ? .isSelected : [])
+        }
+    }
+
+    /// 1985 → "1985" (no grouping comma: the chip is narrow), past 9999 → "1万+".
+    static func count(_ n: Int) -> String { n > 9999 ? "1万+" : String(n) }
 }
 
 /// One ranked entry: a kind tile carrying the importance, the name, its one-line state, then tags and when it changed.
@@ -260,7 +293,8 @@ struct KBRow: View {
             KBAvatar(entry: entry)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
-                    Text(entry.name).font(Theme.Font.heading).lineLimit(1)
+                    // Two lines: documents and meetings are told apart by the end of their titles.
+                    Text(entry.name).font(Theme.Font.heading).lineLimit(2)
                     Spacer(minLength: 4)
                     if let d = entry.updated, d.realDate != nil {
                         Text(Fmt.relative(d)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
@@ -411,12 +445,14 @@ struct KBHitRow: View {
 
 struct KnowledgeDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     var entry: KBEntry
     /// Opened from a search: the places it was found come first.
     var query: String? = nil
     @State private var detail: KBDetailResponse?
     @State private var error: String?
     @State private var allMatches = false
+    @State private var link: LinkTarget?
     @State private var editing = false
     @State private var newAgent = false
     @State private var showRecent = false
@@ -446,6 +482,7 @@ struct KnowledgeDetailView: View {
             }
             if let d = detail?.detail {
                 if let query, let matches = detail?.matches { found(matches, query: query, chat: d.kind == KBKind.chats.rawValue ? d.id : nil) }
+                if let facts = ItemFacts(kind: d.kind, meta: d.meta), !facts.isEmpty { factsSection(facts) }
                 if !Self.debugLower, let agents = detail?.agents, !agents.isEmpty {
                     Section {
                         ForEach(agents) { s in
@@ -496,6 +533,9 @@ struct KnowledgeDetailView: View {
                 Button { editing = true } label: { Label("打标", systemImage: "tag") }
                     .accessibilityLabel("打标")
             }
+        }
+        .sheet(item: $link) { t in
+            if let key = model.assistantMain ?? model.assistantCurrent { LinkSheet(target: t, key: key) }
         }
         .sheet(isPresented: $editing) {
             KBTagEditor(entry: shown) { await load() }
@@ -569,6 +609,27 @@ struct KnowledgeDetailView: View {
         HStack(spacing: Theme.Space.sm) {
             Text(title)
             Text("\(count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
+        }
+    }
+
+    // MARK: Facts
+
+    /// A doc's, meeting's or event's when and link: the document opens in the app (CLAUDE.md「链接在 App 内打开」).
+    private func factsSection(_ f: ItemFacts) -> some View {
+        Section {
+            if let at = f.at {
+                LabeledContent(f.whenLabel) {
+                    Text(ItemFacts.format(at)).monospacedDigit().lineLimit(1)
+                }
+            }
+            if let url = f.url {
+                Button {
+                    if model.assistantMain ?? model.assistantCurrent != nil { link = LinkTarget(url: url) } else { openURL(url) }
+                } label: {
+                    Label(f.openLabel, systemImage: Theme.Icon.openDocument).lineLimit(1)
+                }
+                .accessibilityIdentifier("kb.openLink")
+            }
         }
     }
 
@@ -721,6 +782,40 @@ struct KnowledgeDetailView: View {
             // Cancelled (the page went away mid-load) is not an error to show.
             if let shown = error.shown { self.error = shown }
         }
+    }
+}
+
+/// What a doc, meeting or event says about itself besides its tagging: when, and its link.
+struct ItemFacts {
+    var at: Date?
+    var url: URL?
+    var whenLabel: String
+    var openLabel: String
+    var isEmpty: Bool { at == nil && url == nil }
+
+    init?(kind: String, meta: JSONValue?) {
+        guard let k = KBKind(rawValue: kind), [.docs, .meetings, .events].contains(k), let meta else { return nil }
+        at = meta["at"]?.string.flatMap(Self.parse)
+        url = meta["url"]?.string.flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        whenLabel = k == .docs ? "提到的时间" : k == .meetings ? "开会时间" : "时间"
+        openLabel = k == .docs ? "打开文档" : k == .meetings ? "打开会议纪要" : "打开日程"
+    }
+
+    /// "10月30日 周五 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, CLAUDE.md), the year when not this one.
+    static func format(_ d: Date, now: Date = .now) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: now)
+        f.dateFormat = sameYear ? "M月d日 EEE HH:mm" : "yyyy年M月d日 HH:mm"
+        return f.string(from: d)
+    }
+
+    /// RFC 3339 with or without fractions (Go writes nanoseconds).
+    /// The fraction is dropped (ISO8601DateFormatter does not take nine digits); Go's zero time counts as none.
+    static func parse(_ s: String) -> Date? {
+        let whole = s.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
+        let d = ISO8601DateFormatter().date(from: whole)
+        return d.flatMap { $0.timeIntervalSince1970 > 0 ? $0 : nil }
     }
 }
 

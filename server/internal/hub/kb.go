@@ -630,11 +630,17 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusNotFound, errors.New("unknown kind"))
 			return
 		}
-		list := e.List(kind, r.URL.Query().Get("tag"))
+		// The tags offered are this kind's (all of them, not only the filtered list's): a tag from another kind
+		// filtered to nothing.
+		all := e.List(kind, "")
+		list := all
+		if tag := r.URL.Query().Get("tag"); tag != "" {
+			list = e.List(kind, tag)
+		}
 		if list == nil {
 			list = []kb.Entry{}
 		}
-		writeJSON(w, map[string]any{"items": list, "tags": e.TopTags(30)})
+		writeJSON(w, map[string]any{"items": list, "tags": kb.KindTags(all, 30)})
 	})
 	api.HandleFunc("GET /api/v1/kb/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)

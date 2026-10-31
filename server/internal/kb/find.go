@@ -3,8 +3,10 @@ package kb
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,10 +35,21 @@ type Result struct {
 const (
 	hitsPerResult = 3
 	foundCap      = 99
-	// resultLines bounds the lines scanned out of the message archive for one search: past it the oldest days
-	// are left unread (the entries already found are ranked as they are).
-	resultLines = 4000
 )
+
+// words is the query lowercased and split; a file without all of them is skipped whole.
+func words(query string) []string { return strings.Fields(strings.ToLower(query)) }
+
+// hasAll is the whole-file check: most files have none of the words, and one pass over the file is much cheaper than
+// a match per line (the archive is ~400k lines; everything is read, the oldest days too).
+func hasAll(lowered string, ws []string) bool {
+	for _, w := range ws {
+		if !strings.Contains(lowered, w) {
+			return false
+		}
+	}
+	return true
+}
 
 // matcher returns whether a line has every word of the query (case-insensitive); nil for an empty query.
 func matcher(query string) func(string) bool {
@@ -87,8 +100,8 @@ func (e *Engine) Find(query string, limit int) []Result {
 			known[k+"/"+en.ID] = en
 		}
 	}
+	ws := words(query)
 	by := map[string]*Result{}
-	scanned := 0
 	add := func(key string, f Found) {
 		r := by[key]
 		if r == nil {
@@ -102,36 +115,55 @@ func (e *Engine) Find(query string, limit int) []Result {
 			r.Hits = append(r.Hits, f)
 		}
 	}
-	scan := func(p string) {
-		rel, _ := filepath.Rel(e.Store.Dir, p)
-		kind, id, ok := entryOf(rel)
-		if !ok {
-			return
-		}
-		key := kind + "/" + id
-		if _, ok := known[key]; !ok {
-			return // an entry the lists do not show (a doc without a title yet): nothing to open
-		}
-		raw, err := os.ReadFile(p)
-		if err != nil {
-			return
-		}
-		for i, l := range strings.Split(string(raw), "\n") {
-			scanned++
-			if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "# ") && match(t) {
-				add(key, Found{Path: filepath.ToSlash(rel), Line: clip(t, 300), N: i + 1})
-			}
-		}
-	}
+	// Files are read in parallel (the archive is ~25 MB); what each found is added in file order, so the lines kept
+	// for an entry are its profile's first, then the newest days'.
 	files, days := e.files()
-	for _, p := range files {
-		scan(p)
+	all := append(files, days...)
+	type fileHits struct {
+		key   string
+		found []Found
 	}
-	for _, p := range days {
-		if scanned > resultLines*25 { // ~100k lines: a few hundred ms at most
-			break
+	per := make([]fileHits, len(all))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for range max(1, min(8, runtime.NumCPU())) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				p := all[i]
+				rel, _ := filepath.Rel(e.Store.Dir, p)
+				kind, id, ok := entryOf(rel)
+				if !ok {
+					continue
+				}
+				key := kind + "/" + id
+				if _, ok := known[key]; !ok {
+					continue // an entry the lists do not show (a doc without a title yet): nothing to open
+				}
+				raw, err := os.ReadFile(p)
+				if err != nil || !hasAll(strings.ToLower(string(raw)), ws) {
+					continue
+				}
+				fh := fileHits{key: key}
+				for n, l := range strings.Split(string(raw), "\n") {
+					if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "# ") && match(t) {
+						fh.found = append(fh.found, Found{Path: filepath.ToSlash(rel), Line: clip(t, 300), N: n + 1})
+					}
+				}
+				per[i] = fh
+			}
+		}()
+	}
+	for i := range all {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	for _, fh := range per {
+		for _, f := range fh.found {
+			add(fh.key, f)
 		}
-		scan(p)
 	}
 	// Names: an entry whose name matches is found even when no file line does.
 	for key, en := range known {
@@ -249,9 +281,10 @@ func (e *Engine) Matches(kind, id, query string, limit int) []Match {
 		return nil
 	}
 	var out []Match
+	ws := words(query)
 	look := func(p string, msgs bool) {
 		raw, err := os.ReadFile(p)
-		if err != nil {
+		if err != nil || !hasAll(strings.ToLower(string(raw)), ws) {
 			return
 		}
 		rel, _ := filepath.Rel(e.Store.Dir, p)

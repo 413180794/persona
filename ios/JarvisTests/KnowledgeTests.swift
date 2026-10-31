@@ -30,6 +30,10 @@ struct KnowledgeTests {
         let m = KBMessageLine("- 10:01 张三: MCP 挂了: 重启了\n第二行")
         #expect(m.time == "10:01" && m.sender == "张三" && m.text == "MCP 挂了: 重启了\n第二行")
         #expect(KBMessageLine("没有格式的一行").text == "没有格式的一行")
+        // Go's times, nanoseconds and all; its zero time is none.
+        #expect(ItemFacts.parse("2026-10-29T18:27:00.519822572Z") == ISO8601DateFormatter().date(from: "2026-10-29T18:27:00Z"))
+        #expect(ItemFacts.parse("0001-01-01T00:00:00Z") == nil)
+        #expect(KBKindBar.count(1985) == "1985" && KBKindBar.count(12000) == "1万+")
         // Every word searched for is marked.
         let marked = KBHitRow.marked("MCP 挂了，重启 mcp", "mcp 重启")
         #expect(marked.runs.filter { $0.inlinePresentationIntent == .stronglyEmphasized }.count == 3)
