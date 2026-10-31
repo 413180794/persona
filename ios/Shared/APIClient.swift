@@ -247,15 +247,19 @@ nonisolated struct APIClient: Sendable {
         var effort: String? = nil
         /// The herdr tab's name; nil: the hub makes one from the first message (else agent-<n>).
         var tabName: String? = nil
+        /// Answer at once with the session it is going to be and start it in the background (docs/protocol.md「新建会话」).
+        var async: Bool? = nil
+        /// What the tab name is made from when the first message is sent as a message of its own (not `prompt`).
+        var nameHint: String? = nil
         enum CodingKeys: String, CodingKey {
-            case cwd, launcher, prompt, effort
+            case cwd, launcher, prompt, effort, async
             case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id",
-                 permissionMode = "permission_mode", tabName = "tab_name"
+                 permissionMode = "permission_mode", tabName = "tab_name", nameHint = "name_hint"
         }
     }
 
     func start(_ req: StartRequest) async throws -> Session {
-        try await post("/api/v1/sessions", body: req, timeout: 110, as: SessionResponse.self).session
+        try await post("/api/v1/sessions", body: req, timeout: req.async == true ? 20 : 110, as: SessionResponse.self).session
     }
 
     private func sp(_ k: SessionKey) -> String { "/api/v1/sessions/\(k.machineID)/\(k.sessionID)" }

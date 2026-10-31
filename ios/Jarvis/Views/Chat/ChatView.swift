@@ -1003,7 +1003,7 @@ struct ChatView: View {
                 }
                 if !store.loadedOnce && rows.isEmpty {
                     ChatSkeleton().flippedBack()
-                } else if rows.isEmpty {
+                } else if rows.isEmpty && store.pending.isEmpty { // a first message on its way is not 还没有消息
                     EmptyStateView(symbol: Theme.Icon.conversation, title: "还没有消息", message: "发一句话开始吧。").flippedBack()
                 }
                 if store.hasMore {
@@ -1845,6 +1845,31 @@ struct ChatSkeleton: View {
 
 /// Message input: text, photos, quick slash commands; turns into a stop button while Claude works.
 /// Claude's suggested next message over the composer: a tap puts it in the box to edit, 直接发送 (long press) sends it.
+/// A session Jarvis is still starting (node/starting.go): what is sent now waits and goes in once it is ready. Or why
+/// it did not start.
+struct StartingNote: View {
+    var error: String?
+    var agent: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            if let error {
+                Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
+                Text("没有启动起来：\(error)").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
+            } else {
+                ProgressView().controlSize(.mini)
+                Text("正在启动 \(agent)，消息会在它就绪后发出").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .surface(tint: error == nil ? nil : Theme.danger.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chat.starting")
+    }
+}
+
 struct SuggestionPill: View {
     var text: String
     var fill: () -> Void
@@ -1937,6 +1962,10 @@ struct Composer: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
+            if let s = model.session(key), s.starting == true || s.startError != nil {
+                StartingNote(error: s.startError, agent: s.agentLabel)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if let suggestion {
                 SuggestionPill(text: suggestion) {
                     text = suggestion

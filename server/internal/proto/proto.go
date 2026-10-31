@@ -296,6 +296,10 @@ type Session struct {
 	// Suggestion is the next message Claude Code proposes after a turn (grey in its empty input box), read off the
 	// screen; gone once the agent works again or a message is sent.
 	Suggestion string `json:"suggestion,omitempty"`
+	// Starting: Jarvis is opening its tab and waiting for claude (node/starting.go); messages sent now go in once it is
+	// ready. StartError: the start failed (shown in the chat for a while).
+	Starting   bool   `json:"starting,omitempty"`
+	StartError string `json:"start_error,omitempty"`
 }
 
 // Item kinds.

@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -69,14 +70,12 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -93,7 +92,13 @@ import jarvis.android.data.SessionKey
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-private const val FONT_SP = 13f
+/** The terminal's font size (sp), kept on the phone; the range and step are the iOS app's (设置 › 终端). */
+internal const val FONT_DEFAULT = 13f
+internal const val FONT_MIN = 7f
+internal const val FONT_MAX = 20f
+internal fun nextFontSize(now: Float, up: Boolean): Float = (now + if (up) 0.5f else -0.5f).coerceIn(FONT_MIN, FONT_MAX)
+private fun fontSize(c: Context) = c.getSharedPreferences("terminal", Context.MODE_PRIVATE).getFloat("font_size", FONT_DEFAULT)
+private fun setFontSize(c: Context, v: Float) = c.getSharedPreferences("terminal", Context.MODE_PRIVATE).edit().putFloat("font_size", v).apply()
 private val BG = Color(TerminalPalette.BACKGROUND)
 private val FG = Color(TerminalPalette.FOREGROUND)
 
@@ -125,10 +130,13 @@ fun TerminalScreen(hub: Hub, key: SessionKey, title: String, onClose: () -> Unit
             onDispose { lifecycle.removeObserver(obs); link.stop() }
         }
         BackHandler(onBack = onClose)
+        // A new size is a new grid: when the phone drives the terminal, the programs in it lay themselves out again.
+        var font by remember { mutableStateOf(fontSize(context)) }
+        val onFont = { up: Boolean -> font = nextFontSize(font, up); setFontSize(context, font) }
         Surface(color = BG, contentColor = FG, modifier = Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
-                TopStrip(link, title, onClose)
-                TerminalBody(link, Modifier.weight(1f))
+                TopStrip(link, title, font, onFont, onClose)
+                TerminalBody(link, font, Modifier.weight(1f))
                 KeyBar(link)
             }
         }
@@ -137,15 +145,16 @@ fun TerminalScreen(hub: Hub, key: SessionKey, title: String, onClose: () -> Unit
 }
 
 @Composable
-private fun TopStrip(link: TerminalLink, title: String, onClose: () -> Unit) {
+private fun TopStrip(link: TerminalLink, title: String, font: Float, onFont: (Boolean) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val control by link.feed.control.collectAsState()
     val note by link.feed.note.collectAsState()
     val content by link.feed.content.collectAsState()
     val failure by link.failure.collectAsState()
     val mode by link.mode.collectAsState()
     var menu by remember { mutableStateOf(false) }
+    var selecting by remember { mutableStateOf<String?>(null) }
+    selecting?.let { text -> SelectScreenText(text, onDismiss = { selecting = null }) }
     Row(Modifier.fillMaxWidth().height(48.dp).padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, Modifier.testTag("terminal-close")) { Icon(Icons.Default.Close, "关闭终端", tint = FG) }
         Column(Modifier.weight(1f)) {
@@ -162,15 +171,50 @@ private fun TopStrip(link: TerminalLink, title: String, onClose: () -> Unit) {
         if (control == TerminalFeed.Control.Declined && link.wantsControl && link.canControl) {
             TextButton(onClick = { link.takeOver() }) { Text("接管", maxLines = 1) }
         }
-        IconButton(onClick = { clipboard.setText(AnnotatedString(content.rows.joinToString("\n") { TerminalGrid.plain(it) }.trimEnd())) }) {
-            Icon(Icons.Default.ContentCopy, "拷贝屏幕", tint = FG)
-        }
+        // As the chat's 选择: the screen (and what scrolled off it) as plain text, any part of it to select and copy.
+        IconButton(onClick = { selecting = screenText(content) }) { Icon(Icons.Default.ContentCopy, "选择文本", tint = FG) }
         Box {
             TextButton(onClick = { menu = true }) { Text(if (link.wantsControl) "手机尺寸" else "电脑尺寸", maxLines = 1, fontSize = 12.sp) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("手机尺寸（接管终端）") }, onClick = { menu = false; setPhoneSize(context, true); link.setWantsControl(true) })
                 DropdownMenuItem(text = { Text("电脑尺寸（只看）") }, onClick = { menu = false; setPhoneSize(context, false); link.setWantsControl(false) })
+                androidx.compose.material3.HorizontalDivider()
+                // The menu stays open so a few taps get there.
+                Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("字号 ${"%.1f".format(font)}", Modifier.weight(1f, fill = false).padding(end = 8.dp))
+                    TextButton(onClick = { onFont(false) }, enabled = font > FONT_MIN) { Text("A−", maxLines = 1) }
+                    TextButton(onClick = { onFont(true) }, enabled = font < FONT_MAX) { Text("A＋", maxLines = 1) }
+                }
             }
+        }
+    }
+}
+
+/** What the terminal shows as plain text, a line per row, without the blank rows at the end. */
+internal fun screenText(content: TerminalContent): String = content.rows.joinToString("\n") { TerminalGrid.plain(it) }.trimEnd()
+
+/**
+ * 选择文本 for the terminal: the chat's full-screen page (iOS selects on the grid itself), but rows stay rows —
+ * monospace, not wrapped, scrolled sideways — so columns and box drawing line up as they did on screen.
+ */
+@Composable
+private fun SelectScreenText(text: String, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    jarvis.android.ui.chat.FullScreenPage(
+        title = "选择文本",
+        onBack = onDismiss,
+        actions = {
+            TextButton(onClick = {
+                jarvis.android.ui.media.MediaShare.copyText(ctx, text, "终端")
+                jarvis.android.ui.chat.Toasts.show("已拷贝", jarvis.android.ui.chat.ToastStyle.SUCCESS)
+                onDismiss()
+            }) { Text("全部拷贝", maxLines = 1) }
+        },
+    ) { pad ->
+        androidx.compose.foundation.text.selection.SelectionContainer(
+            Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()),
+        ) {
+            Text(text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 17.sp, softWrap = false, modifier = Modifier.padding(16.dp))
         }
     }
 }
@@ -187,12 +231,12 @@ private class Cells(px: Float) {
 }
 
 @Composable
-private fun TerminalBody(link: TerminalLink, modifier: Modifier) {
+private fun TerminalBody(link: TerminalLink, font: Float, modifier: Modifier) {
     val content by link.feed.content.collectAsState()
     val control by link.feed.control.collectAsState()
     val loaded by link.loaded.collectAsState()
     val density = LocalDensity.current
-    val cells = remember(density) { Cells(with(density) { FONT_SP.sp.toPx() }) }
+    val cells = remember(density, font) { Cells(with(density) { font.sp.toPx() }) }
     val list = rememberLazyListState()
     val driving = control == TerminalFeed.Control.Active
 

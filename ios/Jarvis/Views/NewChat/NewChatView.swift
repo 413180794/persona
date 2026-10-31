@@ -133,6 +133,7 @@ struct NewChatView: View {
                     TextField("想让 Claude 做什么？（可以留空）", text: $prompt, axis: .vertical)
                         .lineLimit(3...10)
                         .focused($promptFocused)
+                        .accessibilityIdentifier("newChat.prompt")
                 } header: { Text("第一条消息") }
 
                 Section {
@@ -258,15 +259,19 @@ struct NewChatView: View {
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             let name = tabName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: p.isEmpty ? nil : p,
+            // The hub answers at once and starts claude in the background; the first message goes out as an ordinary
+            // message (on screen right away, typed in once claude is ready).
+            let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: nil,
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
-                                              effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name))
+                                              effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name,
+                                              async: true, nameHint: p.isEmpty ? nil : p))
             UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
             UserDefaults.standard.set(mode, forKey: "mode.\(machineID)")
             UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()
             model.adopt(s)
+            if !p.isEmpty { model.sendNow(s.key, text: p) }
             onStarted(s)
         } catch {
             self.error = error.shown

@@ -156,6 +156,19 @@ class TerminalTest {
         assertEquals(0, f.content.value.screenStart)
     }
 
+    @Test fun selectTextIsTheRowsAsPlainText() {
+        val f = TerminalFeed()
+        f.apply("e", 1, true, 20, 5, d("\u001B[2J\u001B[1;1H\u001B[31m$ ls\u001B[0m\u001B[2;1H中文 ok\u001B[4;1H"))
+        assertEquals("$ ls\n中文 ok", jarvis.android.terminal.screenText(f.content.value))
+    }
+
+    @Test fun fontSizeStepsInTheIosRange() {
+        assertEquals(13.5f, jarvis.android.terminal.nextFontSize(13f, true))
+        assertEquals(12.5f, jarvis.android.terminal.nextFontSize(13f, false))
+        assertEquals(20f, jarvis.android.terminal.nextFontSize(20f, true))
+        assertEquals(7f, jarvis.android.terminal.nextFontSize(7f, false))
+    }
+
     @Test fun keyBytesMatchIos() {
         assertEquals("\r", TerminalKeys.encode("enter"))
         assertEquals("\u001B\r", TerminalKeys.encode("shift+enter"))

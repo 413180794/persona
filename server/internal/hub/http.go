@@ -451,6 +451,11 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Effort          string `json:"effort,omitempty"`
 		// TabName names the herdr tab; empty: one made from the first message (tabname.go), else agent-<n>.
 		TabName string `json:"tab_name,omitempty"`
+		// Async: answer at once with the session it is going to be and start it in the background (node/starting.go);
+		// messages sent to it meanwhile go in once it is ready. NameHint: what the tab name is made from when the
+		// app sends the first message itself (so it shows as a message right away) instead of as prompt.
+		Async    bool   `json:"async,omitempty"`
+		NameHint string `json:"name_hint,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -461,10 +466,19 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
 		return
 	}
+	p.TabName = strings.TrimSpace(p.TabName)
+	nameFrom := p.Prompt
+	if strings.TrimSpace(p.NameHint) != "" {
+		nameFrom = p.NameHint
+	}
+	async := p.Async && p.ResumeSessionID == ""
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
-	if p.TabName = strings.TrimSpace(p.TabName); p.TabName == "" && p.ResumeSessionID == "" {
-		p.TabName = h.autoTabName(ctx, p.Prompt)
+	if async {
+		ctx, cancel = context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+	} else if p.TabName == "" && p.ResumeSessionID == "" {
+		p.TabName = h.autoTabName(ctx, nameFrom)
 	}
 	var res struct {
 		Session proto.Session `json:"session"`
@@ -476,6 +490,18 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	res.Session.MachineID = m.cfg.ID
 	res.Session.State = agentState(res.Session, time.Time{})
 	writeJSON(w, res)
+	if async && p.TabName == "" {
+		// The name takes a model call (seconds): the tab opens as agent-<n> and is renamed when it comes.
+		go func(id string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if name := h.autoTabName(ctx, nameFrom); name != "" {
+				if err := m.call(ctx, "session.rename", map[string]any{"session_id": id, "tab_name": name}, nil); err != nil {
+					h.logf("tab name %s: %v", id, err)
+				}
+			}
+		}(res.Session.SessionID)
+	}
 }
 
 // ---- WebSocket ----

@@ -79,7 +79,12 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p["session_id"] = sid
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and
 	// its outcome is what the retry gets. Resuming an offline session can take a while (shell + claude startup).
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 90*time.Second)
+	// One sent while the session still starts waits for claude to be ready (node/starting.go).
+	wait := 90 * time.Second
+	if s, ok := m.session(sid); ok && s.Starting {
+		wait = 3 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), wait)
 	defer cancel()
 	id, _ := p["client_msg_id"].(string)
 	if id == "" {

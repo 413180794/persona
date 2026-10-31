@@ -26,31 +26,14 @@ func newUUID() string {
 }
 
 // start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
-// start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
 // workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
 // after the directory is reused or created.
 // tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName string) (*proto.Session, error) {
-	if launcher == "" {
-		launcher = "claude"
-	}
-	if !nameRe.MatchString(launcher) {
-		return nil, fmt.Errorf("invalid launcher %q", launcher)
-	}
-	if resume != "" && !validID(resume) {
-		return nil, fmt.Errorf("invalid session id %q", resume)
-	}
-	if err := validModes(mode, effort); err != nil {
+// newID is the id a new session gets (startAsync picked it already); empty: a fresh one.
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID string) (*proto.Session, error) {
+	cwd, launcher, err := n.checkStart(cwd, launcher, resume, mode, effort)
+	if err != nil {
 		return nil, err
-	}
-	if strings.HasPrefix(cwd, "~/") {
-		cwd = filepath.Join(n.home, cwd[2:])
-	}
-	if cwd == "" {
-		cwd = n.home
-	}
-	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("directory %s does not exist", cwd)
 	}
 	if resume != "" {
 		if a, ok := n.agent(resume); ok {
@@ -60,13 +43,18 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 
 	ws := workspaceID
 	if ws == "" {
-		var err error
 		if ws, err = n.workspaceFor(ctx, cwd); err != nil {
 			return nil, err
 		}
 	}
+	id := resume
+	if id == "" {
+		id = newID
+	}
+	if id == "" {
+		id = newUUID()
+	}
 	var created *herdr.Created
-	var err error
 	if ws == "" {
 		if created, err = n.herdr.WorkspaceCreate(ctx, cwd, filepath.Base(cwd)); err == nil && created.Tab.ID != "" {
 			_ = n.herdr.TabRename(ctx, created.Tab.ID, tabLabel(tabName, nil)) // its first tab
@@ -78,13 +66,12 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		return nil, fmt.Errorf("create herdr tab: %w", err)
 	}
 	pane := created.RootPane.ID
+	if name := n.starts.tabCreated(id, created.Tab.ID); name != "" { // named while the tab was being made
+		_ = n.herdr.TabRename(ctx, created.Tab.ID, name)
+	}
 
-	id := resume
-	args := ""
-	if id == "" {
-		id = newUUID()
-		args = "--session-id " + id
-	} else {
+	args := "--session-id " + id
+	if resume != "" {
 		args = "--resume " + id
 	}
 	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
@@ -114,6 +101,32 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 	return n.sessionFor(id, *a), nil
+}
+
+// checkStart validates a start's arguments and returns the directory (~ expanded, home when empty) and launcher.
+func (n *Node) checkStart(cwd, launcher, resume, mode, effort string) (string, string, error) {
+	if launcher == "" {
+		launcher = "claude"
+	}
+	if !nameRe.MatchString(launcher) {
+		return "", "", fmt.Errorf("invalid launcher %q", launcher)
+	}
+	if resume != "" && !validID(resume) {
+		return "", "", fmt.Errorf("invalid session id %q", resume)
+	}
+	if err := validModes(mode, effort); err != nil {
+		return "", "", err
+	}
+	if strings.HasPrefix(cwd, "~/") {
+		cwd = filepath.Join(n.home, cwd[2:])
+	}
+	if cwd == "" {
+		cwd = n.home
+	}
+	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
+		return "", "", fmt.Errorf("directory %s does not exist", cwd)
+	}
+	return cwd, launcher, nil
 }
 
 // tabLabels are the names of the workspace's tabs.
@@ -286,6 +299,10 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
 	// would see the first still in the box and be refused as a draft: one at a time.
 	defer n.typing.lock(id)()
+	// Written while the session still starts (the app opens the chat at once): it goes in once claude is ready.
+	if err := n.starts.wait(ctx, id); err != nil {
+		return err
+	}
 	n.dropSuggestion(id)
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
@@ -315,7 +332,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			}
 		}
 		mode, effort := n.modesOf(id) // resume with what it ran with
-		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "")
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "", "")
 		if err != nil {
 			return err
 		}
@@ -651,6 +668,18 @@ func (n *Node) renameSpace(ctx context.Context, workspaceID, name string) error 
 // `/rename <title>` (it records a custom-title, shown in its prompt, /resume and our lists); for one that is not
 // running we append the same custom-title line Claude Code writes.
 func (n *Node) renameSession(ctx context.Context, id string, tab, title *string) error {
+	if tab != nil {
+		if name := strings.TrimSpace(*tab); name != "" {
+			if done, tabID := n.starts.nameTab(id, name); done {
+				tab = nil
+			} else if tabID != "" {
+				if err := n.herdr.TabRename(ctx, tabID, name); err != nil {
+					return err
+				}
+				tab = nil
+			}
+		}
+	}
 	a, live := n.agent(id)
 	if tab != nil {
 		name := strings.TrimSpace(*tab)

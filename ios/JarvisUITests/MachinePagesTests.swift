@@ -271,6 +271,12 @@ final class MachinePagesTests: XCTestCase {
         shot("new-chat-tab-name")
         app.keyboards.buttons.matching(NSPredicate(format: "label IN %@", ["完成", "done", "Done"])).firstMatch.tap()
 
+        // 第一条消息 goes out as an ordinary message of the new chat (on screen at once, typed in once claude is up).
+        let prompt = app.textViews["newChat.prompt"].exists ? app.textViews["newChat.prompt"] : app.textFields["newChat.prompt"]
+        for _ in 0..<4 where !prompt.isHittable { app.swipeDown() }
+        see(prompt, "the first message field").tap()
+        prompt.typeText("迁移到 Astro")
+
         let start = see(button("开始对话"), "开始对话")
         XCTAssertTrue(start.isEnabled)
         start.tap()
@@ -280,7 +286,16 @@ final class MachinePagesTests: XCTestCase {
         XCTAssertEqual(body["cwd"] as? String, "/Users/me/code/blog")
         XCTAssertEqual(body["launcher"] as? String, "codex")
         XCTAssertEqual(body["tab_name"] as? String, "blog-astro")
+        XCTAssertEqual(body["async"] as? Bool, true, "the hub answers at once and starts claude in the background")
+        XCTAssertNil(body["prompt"], "the first message is not part of the start")
+        XCTAssertEqual(body["name_hint"] as? String, "迁移到 Astro")
         XCTAssertFalse(app.navigationBars["新对话"].waitForExistence(timeout: 3), "the sheet closes on start")
+        see(app.descendants(matching: .any)["chat.starting"], "正在启动 under the new chat")
+        see(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "迁移到 Astro")).firstMatch, "the first message on screen")
+        wait("the first message sent") {
+            ((mock("sent")["sent"] as? [[String: Any]]) ?? []).contains { ($0["text"] as? String) == "迁移到 Astro" }
+        }
+        shot("new-chat-starting")
         // The new chat knows its session at once (not 「对话 · 对话」 until the hub's next list).
         see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blog")).firstMatch, "the new chat's place in its header")
         shot("new-chat-started")

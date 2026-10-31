@@ -104,7 +104,7 @@
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
-| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?,"workspace_id"?,"tab_name"?}` → `{"session":Session}`。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名 |
+| POST | `/api/v1/sessions` | `{"machine_id","cwd","launcher","prompt"?,"resume_session_id"?,"workspace_id"?,"tab_name"?}` → `{"session":Session}`。`tab_name` 是 herdr 标签页的名字；不给时 hub 用小任务模型按 `prompt` 起一个短英文名（`hub/tabname.go`，约 2 秒，失败就不起），node 再兜底成 `agent-<n>`，同一空间里重名加 `-2`、`-3`（`node.tabLabel`）。新建空间时它的第一个标签页也用这个名字。助手的 `agent_start` 同样自动起名。`"async": true`（App 都带）：立刻回会话（新会话 id、目录、启动器，`starting: true`），开标签页、等 Claude 就绪在后台做，见下面「新建会话」；这时 hub 不等起名，标签页先叫 `agent-<n>`，名字出来后再 `session.rename`。`name_hint`：App 把第一条消息当普通消息发（马上上屏）时，用它起名、不进 `prompt` |
 | POST | `/api/v1/tabs/autoname` | `{"dry_run"?,"all"?}` → `{"tabs":[{machine_id,session_id,space,title,from,to,error?}]}`：把在跑的 Agent 里「没人起过名」的标签页（`jarvis`、`jarvis-N`、herdr 的数字、`agent-N`）按会话标题改成短英文名，规则同新建；`dry_run` 只列出会改成什么，`all` 连用户起过名的也改。模型偶尔回空，会再问一次，仍没有就留原名（`error`）。2026-10-31 在两台机器上跑过一次：61 个标签页里改了 39 个，用户自己起的 21 个没动 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items?before_seq=&turns=2` | 历史分页 `{"items":[Item],"has_more":bool}`（按 seq 升序）。`turns`：往前取够 N 轮完整的「用户输入 + 回答」，页首一定是一条用户输入（最多 2000 条；一轮特别长、往前要解析几十 MB 时这一页会短一些，`has_more: true`，再往前翻接着取；但只要前面还有内容，一页至少带一条，空页加 `has_more: true` 会让 App 没有 seq 可以接着往前取）；旧客户端的 `limit` 仍按条数。带 `lazy_images=1` 时图片不含数据（`image: {mime, lazy:true, size, width, height}`），显示时再取。带 `after_seq=N` 时返回 seq > N 的新内容（后台同步用，约 500 条一页，从不切开同一行的多个 item；`more_after: true` 表示后面还有，接着用最后一条的 seq 再取，或改取最新一页）。带 `fold_work=1` 时从末尾往前的页把工作折叠起来；带 `from_seq=&through_seq=` 时返回这几行的 items（展开折叠用，约 1000 条一页，`more: true` 表示还没到 `through_seq`）。见「折叠的工作」 |
 | GET | `/api/v1/sessions/{mid}/{sid}/items/{item id}/image` | 一条 item 的图片原始字节（Content-Type 为图片类型，可永久缓存）；item id 含 `#`，要百分号编码 |
@@ -218,6 +218,19 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   `secret: true`，App 用密码框（不进草稿）。不管是不是密码，终端卡回答里的 `text` 在数据库里一律存成 `<redacted>`；
   终端面板的按键接口（`/keys`）本来就不落库，hub 的请求日志也只记路径和状态码。
 
+
+### 新建会话
+
+开 herdr 标签页、跑启动器、等 Claude 的输入框出来要几秒到一分钟（`~/.zshrc` 慢、信任目录对话框），以前 App 的「开始对话」按钮一直转到 Claude 就绪，
+hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/sessions` 带 `async`：
+
+- node 只做便宜的检查（启动器名、目录存在、权限模式），记下会话（`sessionState`，对话页取历史回空列表、订阅等 transcript 出现），马上回会话；
+  开标签页、跑启动器、等就绪、发 `prompt` 在后台做（最多 2 分钟）。
+- 启动期间会话列表里有它：`status: idle`、`starting: true`（不算一轮，不计时、不推送「完成」）。启动失败就变成 `offline` 加 `start_error`，留 10 分钟。
+- 启动期间发来的消息（`session.send`）在 node 上等它就绪再按顺序打进去；hub 给这种发送 3 分钟（平时 90 秒）。启动失败时这些发送拿到同一个错误，App 的气泡变成「重发」。
+- App 的第一条消息不放在 `prompt` 里，而是进对话后当普通消息发（马上上屏、带发送状态），起名用 `name_hint`。对话页输入框上方显示「正在启动 Claude…」或失败原因（`StartingNote`）。
+- node 重启会丢掉还在启动的记录：这时会话既不在列表里也没有 transcript，App 那边的发送会失败、可以重发。
+
 ### 发消息
 
 往别人的终端里打字是这个 App 风险最大的操作。node 在往正在跑的 Agent 窗格里打字之前先读一次屏幕（`server/internal/node/sendsafe.go`、
@@ -318,7 +331,7 @@ hub → node 请求：
 | `launchers.list` | → `{launchers}` |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
-| `session.start` | `{cwd, launcher, prompt?, resume_session_id?}` → `{session}` |
+| `session.start` | `{cwd, launcher, prompt?, resume_session_id?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`） |
 | `session.send` | `{session_id, text, images?}` |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |

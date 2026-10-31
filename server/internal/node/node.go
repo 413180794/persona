@@ -57,6 +57,7 @@ type Node struct {
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
 	typing   typingLocks               // one send at a time per session (sendsafe.go)
+	starts   startLog                  // sessions starting in the background (starting.go)
 	ups      uploads                   // files arriving from the phone (upload.go)
 	sysOnce  sync.Once                 // system: read once (metrics.go)
 	sys      proto.System
@@ -250,6 +251,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		ThroughSeq      int             `json:"through_seq"`
 		Name            string          `json:"name"`
 		TabName         *string         `json:"tab_name"`
+		Async           bool            `json:"async"`
 		Title           *string         `json:"title"`
 		PermissionMode  string          `json:"permission_mode"`
 		Effort          string          `json:"effort"`
@@ -300,7 +302,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if p.TabName != nil {
 			tab = *p.TabName
 		}
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab)
+		if p.Async && p.ResumeSessionID == "" {
+			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab)
+			return map[string]any{"session": s}, err
+		}
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "")
 		return map[string]any{"session": s}, err
 	case "assistant.send":
 		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort)

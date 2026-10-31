@@ -193,12 +193,15 @@ class ApiClient(val baseUrl: String, val token: String) {
         @SerialName("permission_mode") val permissionMode: String? = null,
         /** Open the new tab in this herdr workspace (the space page's "在这个空间开新标签"). */
         @SerialName("workspace_id") val workspaceId: String? = null,
+        /** Answer at once and start in the background (docs/protocol.md「新建会话」): the chat opens right away. */
+        val async: Boolean? = null,
     )
     @Serializable private data class SessionResp(val session: Session)
-    /** Starts claude in a new herdr tab; resuming or a slow shell can take ~90 s (the read timeout covers it). */
+    /** Starts claude in a new herdr tab, in the background: the session comes back at once, the first message goes in
+     *  once claude is ready. */
     /** `mode` null = whatever the launcher / that computer's Claude settings use (as iOS sends it). */
     suspend fun start(machine: String, cwd: String, launcher: String, prompt: String?, mode: String? = null, workspaceId: String? = null): Session =
-        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode, workspaceId))).session
+        JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, prompt, mode, workspaceId, async = true))).session
 
     @Serializable data class DirEntry(val name: String = "", val path: String = "", @SerialName("is_git") val isGit: Boolean = false)
     @Serializable data class RecentDir(val path: String = "", val name: String = "")

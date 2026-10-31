@@ -82,6 +82,6 @@ struct AskClaudeIntent: AppIntent {
               let cwd = defaults.string(forKey: IntentText.cwdKey(machine.id)), !cwd.isEmpty
         else { throw IntentFailure.noLauncher(machine.name) }
         // The prompt rides along with the start request; sending it again would duplicate it.
-        return try await api.start(.init(machineID: machine.id, cwd: cwd, launcher: launcher, prompt: text))
+        return try await api.start(.init(machineID: machine.id, cwd: cwd, launcher: launcher, prompt: text, async: true))
     }
 }

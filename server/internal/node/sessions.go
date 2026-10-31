@@ -480,6 +480,11 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		seen[id] = true
 	}
 
+	for _, s := range n.starts.listed(seen) { // starting.go
+		n.decorate(&s)
+		out = append(out, s)
+		seen[s.SessionID] = true
+	}
 	for _, s := range n.assistantSessions() {
 		if !seen[s.SessionID] {
 			out = append(out, s)

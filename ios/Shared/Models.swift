@@ -131,6 +131,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var rev: Int64?
     /// The next message Claude Code proposes after a turn (grey in its input box on the computer), until it works again.
     var suggestion: String?
+    /// Jarvis is still opening its tab and starting claude: messages sent now go in once it is ready.
+    var starting: Bool? = nil
+    /// Starting it failed (shown in the chat; sends get the same error).
+    var startError: String? = nil
 
     var id: String { machineID + "/" + sessionID }
     /// What lists sort by, newest first: a working agent's updated_at moves on every step, so working ones keep
@@ -153,7 +157,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents,
-             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion
+             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion,
+             starting, startError = "start_error"
     }
 
     init(from decoder: Decoder) throws {
@@ -193,6 +198,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
         rev = try c.decodeIfPresent(Int64.self, forKey: .rev)
         suggestion = try c.decodeIfPresent(String.self, forKey: .suggestion)
+        starting = try c.decodeIfPresent(Bool.self, forKey: .starting)
+        startError = try c.decodeIfPresent(String.self, forKey: .startError)
     }
 }
 
