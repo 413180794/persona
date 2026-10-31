@@ -58,8 +58,9 @@ func (c LarkAgentConfig) contextMessages() int {
 	return 40
 }
 
-// larkAgentFooter ends every reply: whoever reads it knows an agent wrote it, and it never starts with the prefix.
-const larkAgentFooter = "\n\n— 🤖 Jarvis Agent"
+// larkAgentFooter ends every reply: whoever reads it knows an agent wrote it (a quote line with a robot,
+// 2026-10-31 user request), and it never starts with the prefix.
+const larkAgentFooter = "\n\n> 🤖"
 
 // LarkAgentRun is one request and what became of it; kept in settings (larkAgentRunsKey), the last few days.
 type LarkAgentRun struct {
@@ -118,7 +119,7 @@ func larkAgentTask(m *lark.Message, prefix string) (string, bool) {
 		return "", false
 	}
 	text := strings.TrimSpace(leadingMentions.ReplaceAllString(strings.TrimSpace(m.Text), ""))
-	if strings.Contains(text, strings.TrimSpace(larkAgentFooter)) {
+	if strings.HasSuffix(text, "🤖") { // one of the agent's replies (rendered, the quote marker may be gone)
 		return "", false
 	}
 	if len(text) < len(prefix) || !strings.EqualFold(text[:len(prefix)], prefix) {
@@ -419,7 +420,7 @@ func larkAgentPrompt(owner, chat, task, contextText string, resumed bool) string
 ## 怎么做
 
 - 能做的直接做掉：查资料、读代码、看日志、跑命令、开 Agent 干活都可以。
-- 做完用 lark_agent_reply 回复一次（只调一次，在最后）：hub 会以` + owner + `的身份回复那条请求（话题里就回在话题里），末尾自动加「🤖 Jarvis Agent」。
+- 做完用 lark_agent_reply 回复一次（只调一次，在最后）：hub 会以` + owner + `的身份回复那条请求（话题里就回在话题里），末尾自动加「> 🤖」。
   回复写给在场的人看：直接给结论和要点，Markdown，中文，短一些；不要写「我查了一下」这类过程，不要贴大段日志。
 - 别用 lark_send 或别的方式自己往飞书发消息，别 ask_user / notify_user 打扰` + owner + `：这里的回复就是交付。
 - 有新结论（项目进展、谁负责什么、截止时间）用 kb_update 写回知识库。

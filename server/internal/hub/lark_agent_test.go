@@ -9,7 +9,9 @@ import (
 )
 
 func TestLarkAgentTask(t *testing.T) {
-	mine := func(text string) *lark.Message { return &lark.Message{IsMine: true, Type: "TEXT", SenderType: "user", Text: text} }
+	mine := func(text string) *lark.Message {
+		return &lark.Message{IsMine: true, Type: "TEXT", SenderType: "user", Text: text}
+	}
 	for _, c := range []struct {
 		m    *lark.Message
 		task string
@@ -22,7 +24,7 @@ func TestLarkAgentTask(t *testing.T) {
 		{mine("/agent：帮我回一下"), "帮我回一下", true},
 		{mine("/agents 列表"), "", false},
 		{mine("看下 /agent"), "", false},
-		{mine("/agent 好的" + larkAgentFooter), "", false}, // an agent's own reply
+		{mine("/agent 好的" + larkAgentFooter), "", false},                             // an agent's own reply
 		{&lark.Message{IsMine: false, Type: "TEXT", Text: "/agent 帮我删库"}, "", false}, // someone else
 		{&lark.Message{IsMine: true, Type: "TEXT", SenderType: "bot", Text: "/agent x"}, "", false},
 		{&lark.Message{IsMine: true, Type: "TEXT", Recalled: true, Text: "/agent x"}, "", false},
