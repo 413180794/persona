@@ -41,6 +41,14 @@ hub 的 `hub.json` 配置 `lark.base_url=http://127.0.0.1:<隧道端口>/agent/v
 Token 从源端环境安全传递，不打印、不入库；变更前备份配置。验证回环监听、无凭据 health 返回 401、
 授权 health 和会话读取，以及 `/events` WebSocket；重启后再次检查。验证过程不需要发送消息或更改已读状态。
 
+lark-connector 和 hub 在同一台机器的 docker 里、又不想把 token 写进配置时，可以只配 `lark.container`（容器名，没有默认值），
+hub 从容器环境读 `lark-connector_AGENT_TOKEN`；容器重建换了 token，401 后会重新读。
+
+401 有两种，要分开（2026-10-31 踩过）：lark-connector 自己掉了飞书登录时回 401 + `AUTH_SESSION_EXPIRED` 等 `AUTH_*` 错误码，
+token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的 token 去 `docker inspect` 一个默认容器，之后所有飞书请求和实时事件
+一直失败到 jarvisd 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（`lark.ErrNotLoggedIn`，日志、收件箱和 App 的报错里都能看到），
+配置的 token 永远不丢，实时事件按退避（最长 1 分钟）重连、同一个错误只记一次日志，用户重新登录后自己恢复。
+
 `hub.json` 的 `lark.account` 可选择默认账号（整数 `1` 为主账号，`2` 为第二账号，省略或 `0` 默认主账号），
 重启 hub 后，收件箱采集、专用会话接口、媒体和常驻事件连接统一使用该账号；无需修改 iOS。
 助手的新进程会通过 `lark-connector_ACCOUNT` 继承配置，已有进程需要重新启动。账号编号是 `/accounts` 的 `id`，不是飞书用户 ID。

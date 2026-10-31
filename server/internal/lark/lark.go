@@ -1,6 +1,7 @@
 // Package lark reads and sends Feishu / Lark messages through the user's lark-connector instance
 // (github.com/Eric-2369/lark-connector) on the hub machine, via its local agent API (/agent/v1, loopback only).
-// The agent token is read from the lark-connector container's environment at runtime; Jarvis never stores a copy.
+// The agent token comes from hub.json (lark.token), or is read from the configured lark-connector container's
+// environment at runtime (lark.container); in that case Jarvis never stores a copy.
 package lark
 
 import (
@@ -23,8 +24,8 @@ import (
 type Config struct {
 	Account   int    `json:"account,omitempty"` // lark-connector account ID; zero selects primary account 1
 	BaseURL   string `json:"base_url"`          // default http://127.0.0.1:8095/agent/v1
-	Container string `json:"container"`         // docker container to read lark-connector_AGENT_TOKEN from (default lark-connector-yunpeng)
-	Token     string `json:"token,omitempty"`
+	Container string `json:"container"`         // docker container to read lark-connector_AGENT_TOKEN from when Token is empty (no default)
+	Token     string `json:"token,omitempty"`   // agent token; kept for the client's lifetime (never dropped on a 401)
 }
 
 func (cfg Config) Validate() error {
@@ -54,9 +55,6 @@ func New(cfg Config) *Client {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "http://127.0.0.1:8095/agent/v1"
 	}
-	if cfg.Container == "" {
-		cfg.Container = "lark-connector-yunpeng"
-	}
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}, media: &http.Client{}, token: cfg.Token}
 }
 
@@ -83,7 +81,10 @@ func (c *Client) agentToken(ctx context.Context) (string, error) {
 	if c.token != "" {
 		return c.token, nil
 	}
-	out, err := exec.CommandContext(ctx, "docker", "inspect", c.cfg.Container, "--format", "{{range .Config.Env}}{{println .}}{{end}}").Output()
+	if c.cfg.Container == "" {
+		return "", errors.New("lark: lark-connector is not configured (set lark.token or lark.container in hub.json)")
+	}
+	out, err := containerEnv(ctx, c.cfg.Container)
 	if err != nil {
 		return "", fmt.Errorf("lark: read lark-connector token from container %s: %w", c.cfg.Container, err)
 	}
@@ -94,6 +95,47 @@ func (c *Client) agentToken(ctx context.Context) (string, error) {
 		}
 	}
 	return "", errors.New("lark: lark-connector agent API is not enabled (lark-connector_AGENT_TOKEN unset)")
+}
+
+// containerEnv prints a docker container's environment, one VAR=value per line (a variable so tests can stub docker).
+var containerEnv = func(ctx context.Context, container string) ([]byte, error) {
+	return exec.CommandContext(ctx, "docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}").Output()
+}
+
+// ErrNotLoggedIn is lark-connector answering that it has no live Feishu session (AUTH_SESSION_EXPIRED and the other
+// AUTH_* codes, sent with HTTP 401). The agent token is fine; the user has to log in to Feishu in lark-connector again.
+var ErrNotLoggedIn = errors.New("lark-connector 未登录飞书")
+
+// upstreamError reads an lark-connector error body ({"error":{"code","message"}}).
+func upstreamError(raw []byte) (code, message string) {
+	var e struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(raw, &e)
+	return e.Error.Code, e.Error.Message
+}
+
+// unauthorized handles a 401 from lark-connector. An AUTH_* code means lark-connector itself is logged out of Feishu: the
+// token stays and the error says so. Anything else is a rejected agent token: forget a token read from the
+// container (it may have been recreated with a new one), but never the one from config.
+func (c *Client) unauthorized(raw []byte) error {
+	code, msg := upstreamError(raw)
+	if strings.HasPrefix(code, "AUTH_") {
+		if msg != "" {
+			return fmt.Errorf("lark: %w: %s (%s)", ErrNotLoggedIn, msg, code)
+		}
+		return fmt.Errorf("lark: %w (%s)", ErrNotLoggedIn, code)
+	}
+	c.mu.Lock()
+	c.token = c.cfg.Token
+	c.mu.Unlock()
+	if msg != "" {
+		return fmt.Errorf("lark: agent token rejected: %s (%s)", msg, code)
+	}
+	return errors.New("lark: agent token rejected (HTTP 401)")
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
@@ -125,19 +167,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if resp.StatusCode/100 != 2 {
-		var e struct {
-			Error struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
+		if resp.StatusCode == 401 {
+			return c.unauthorized(raw)
 		}
-		if json.Unmarshal(raw, &e) == nil && e.Error.Message != "" {
-			if resp.StatusCode == 401 {
-				c.mu.Lock()
-				c.token = "" // the container may have been recreated with a new token
-				c.mu.Unlock()
-			}
-			return fmt.Errorf("lark: %s (%s)", e.Error.Message, e.Error.Code)
+		if code, msg := upstreamError(raw); msg != "" {
+			return fmt.Errorf("lark: %s (%s)", msg, code)
 		}
 		return fmt.Errorf("lark: HTTP %d", resp.StatusCode)
 	}
@@ -492,9 +526,8 @@ func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, 
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		if resp.StatusCode == 401 {
-			c.mu.Lock()
-			c.token = ""
-			c.mu.Unlock()
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+			return c.unauthorized(raw)
 		}
 		return fmt.Errorf("lark: media HTTP %d", resp.StatusCode)
 	}
@@ -637,9 +670,7 @@ func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path st
 			return err
 		}
 		if resp.StatusCode == 401 {
-			c.mu.Lock()
-			c.token = ""
-			c.mu.Unlock()
+			_ = c.unauthorized(raw) // the caller gets lark-connector's own answer below
 		}
 		w.Header().Set("Content-Type", ct)
 		w.WriteHeader(resp.StatusCode)

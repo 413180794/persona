@@ -54,7 +54,7 @@ func TestAccountSelectionAcrossTransports(t *testing.T) {
 				t.Fatal(err)
 			}
 			gotEvent := false
-			_ = c.followEvents(ctx, func(ev Event) { gotEvent = ev.Type == "conversation.upserted" })
+			_ = c.followEvents(ctx, func(ev Event) { gotEvent = ev.Type == "conversation.upserted" }, func() {})
 			if !gotEvent {
 				t.Fatal("selected account event was not received")
 			}

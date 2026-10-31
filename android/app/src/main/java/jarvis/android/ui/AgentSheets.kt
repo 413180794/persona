@@ -156,14 +156,20 @@ fun NewSessionSheet(
     hub: Hub, machines: List<Machine>, onDismiss: () -> Unit, onStarted: (SessionKey) -> Unit,
     /** From a space page: start a new tab in this workspace, in its folder (machine and folder can't change). */
     preset: SpacePreset? = null,
+    /** Prefilled first message (the knowledge base's 开 Agent puts the project's profile here). */
+    initialPrompt: String = "",
+    /** (machine id, folder) to start in, picked but changeable (a project's code directory). */
+    initialDir: Pair<String, String>? = null,
 ) {
     val scope = rememberCoroutineScope()
-    var machine by remember { mutableStateOf(machines.firstOrNull { it.id == preset?.machineId } ?: machines.firstOrNull()) }
+    var machine by remember {
+        mutableStateOf(machines.firstOrNull { it.id == (preset?.machineId ?: initialDir?.first) } ?: machines.firstOrNull())
+    }
     var dir by remember { mutableStateOf<ApiClient.DirList?>(null) }
     var picked by remember { mutableStateOf<String?>(null) }
     var launchers by remember { mutableStateOf<List<Launcher>>(emptyList()) }
     var launcher by remember { mutableStateOf<String?>(null) }
-    var prompt by remember { mutableStateOf("") }
+    var prompt by remember { mutableStateOf(initialPrompt) }
     var mode by remember { mutableStateOf("") } // "" = whatever the launcher uses
     var loading by remember { mutableStateOf(false) }
     var starting by remember { mutableStateOf(false) }
@@ -180,7 +186,7 @@ fun NewSessionSheet(
 
     LaunchedEffect(machine?.id) {
         val m = machine ?: return@LaunchedEffect
-        dir = null; picked = preset?.cwd; launcher = null
+        dir = null; picked = preset?.cwd ?: initialDir?.second?.takeIf { initialDir.first == m.id }; launcher = null
         if (preset == null) browse("")
         runCatching { hub.api.launchers(m.id) }.onSuccess { l -> launchers = l; launcher = l.firstOrNull()?.name }
     }

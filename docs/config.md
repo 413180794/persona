@@ -139,6 +139,10 @@
 - `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
   这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。
+- `lark.token` / `lark.container`：lark-connector Agent API 的 token。优先写 `lark.token`；不写时才用 `lark.container`
+  （lark-connector 所在的 docker 容器名，从它的环境变量 `lark-connector_AGENT_TOKEN` 读），两个都不写就不接飞书，没有默认容器名。
+  配置的 token 整个进程期间都保留：lark-connector 未登录飞书时回 401 + `AUTH_*`（如 `AUTH_SESSION_EXPIRED`），这不是 token 错，
+  hub 照样用这个 token 重试，用户在 lark-connector 里重新登录后收件箱和实时事件自己恢复，不用重启。
 - `lark.account`（可选整数）：lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号。
   例如 `"lark": {"base_url": "http://127.0.0.1:<隧道端口>/agent/v1", "token": "<Agent Token>", "account": 2}`。
   账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。允许范围为 1–999999999，账号不存在时上游报错，不会回退到主账号。

@@ -339,6 +339,46 @@ MEMORY = [
 ]
 SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/schedule)
 
+# ---------- the knowledge base (Jarvis › 知识库, docs/knowledge.md) ----------
+KB = {
+    "projects": [
+        {"kind": "projects", "id": "weather-app", "name": "天气 App", "one_line": "小组件时间线已按小时刷新，等中号布局的降雨条",
+         "importance": "P0", "relevance": 92, "tags": ["iOS", "小组件"], "updated": ago(minutes=20), "extra": "short · active"},
+        {"kind": "projects", "id": "blog", "name": "个人博客迁移到 Astro", "one_line": "32 篇文章迁完，旧链接都加了 301",
+         "importance": "P2", "relevance": 55, "tags": ["前端"], "updated": ago(days=1), "extra": "short · done"},
+        {"kind": "projects", "id": "reading", "name": "读书笔记", "one_line": "每季度整理一次", "importance": "P3",
+         "relevance": 30, "tags": ["个人"], "updated": ago(days=3), "extra": "long · active"},
+        {"kind": "projects", "id": "promo", "name": "促销邮件", "importance": "P3", "relevance": 5, "updated": ago(days=6),
+         "extra": "short · ignored"},
+    ],
+    "people": [{"kind": "people", "id": "p_han", "name": "韩梅梅", "one_line": "产品经理，周五约了午饭", "importance": "P1",
+                "relevance": 70, "tags": ["同事"], "updated": ago(hours=28)}],
+    "chats": [{"kind": "chats", "id": "oc_team", "name": "天气 App 项目群", "one_line": "今天在讨论降雨条的样式", "importance": "P1",
+               "relevance": 64, "updated": ago(hours=2), "extra": "group"}],
+    "docs": [{"kind": "docs", "id": "doc_widget", "name": "小组件设计稿 v3", "one_line": "小号、中号两种布局", "importance": "P2",
+              "relevance": 60, "tags": ["iOS"], "updated": ago(days=2)}],
+    "meetings": [{"kind": "meetings", "id": "m_review", "name": "小组件评审", "one_line": "降雨条改成逐小时柱状", "importance": "P1",
+                  "relevance": 75, "updated": ago(days=5)}],
+    "events": [],
+}
+KB_TAGS = {"projects": ["iOS", "前端", "个人"]}
+KB_UPDATES = []  # what 打标 saved (read back at /mock/kb_updates)
+KB_DETAIL = {
+    ("projects", "weather-app"): {"summary": "# 天气 App\n\n给自己用的天气 App 和桌面小组件。\n\n- **现在**：小组件按小时刷新\n- **下一步**：中号布局的降雨条",
+                                  "log": ["- 2026-10-24 09:10 · 飞书 · 天气 App 项目群 · 定了小组件先做小号和中号",
+                                          "- 2026-10-26 15:30 · 会议 · 小组件评审 · 降雨条改成逐小时柱状",
+                                          "- 2026-10-28 11:02 · Agent · 数据层 · MacBook · 数据层复用逐小时预报",
+                                          "- 2026-10-29 18:40 · 邮件 · 设计稿 v3 发来了",
+                                          "- 2026-10-30 10:15 · 飞书 · 韩梅梅 · 周五前要一版能装的",
+                                          "- 2026-10-30 21:05 · Agent · 小组件 · MacBook · 时间线按小时刷新",
+                                          "- 2026-10-31 09:30 · Agent · 小组件 · MacBook · 降雨概率格式化的测试过了"],
+                                  "links": [{"kind": "people", "id": "p_han", "name": "韩梅梅", "one_line": "产品经理，周五约了午饭", "importance": "P1"},
+                                            {"kind": "chats", "id": "oc_team", "name": "天气 App 项目群", "one_line": "今天在讨论降雨条的样式", "importance": "P1"},
+                                            {"kind": "docs", "id": "doc_widget", "name": "小组件设计稿 v3", "one_line": "小号、中号两种布局", "importance": "P2"}],
+                                  "meta": {"name": "天气 App", "importance": "P0", "relevance": 92, "tags": ["iOS", "小组件"], "kind": "short",
+                                           "status": "active", "dirs": ["macbook:/Users/me/code/weather"]}},
+}
+
 # ---------- items ----------
 _seq = [0]
 
@@ -1340,6 +1380,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
+        if p == "/mock/kb_updates": return self.send_json({"updates": KB_UPDATES})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p in ("/api/v1/pins",): return self.send_json({"spaces": ["macbook/weather"], "sessions": []})
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": [], "allowed": []})
@@ -1441,6 +1482,27 @@ class H(BaseHTTPRequestHandler):
                 if t > float(after) and not (back and t > float(after) + float(back)):
                     return self.send_json({"error": "node macbook: not connected"}, 503)
             return self.send_json({"text": TERMINAL, "status": "idle"})
+        if p.startswith("/api/v1/kb/"):  # the knowledge base (Jarvis › 知识库)
+            parts = p.split("/")[4:]
+            kind = parts[0]
+            if len(parts) == 1:
+                tag = (q.get("tag") or [""])[0]
+                items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
+                return self.send_json({"items": items, "tags": KB_TAGS.get(kind, [])})
+            e = next((e for e in KB.get(kind, []) if e["id"] == parts[1]), None)
+            if e is None: return self.send_json({"error": "not found"}, 404)
+            d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.jarvis/data/%s/%s" % (kind, e["id"]), "summary": e.get("one_line")},
+                     **KB_DETAIL.get((kind, e["id"]), {}))
+            out = {"detail": d}
+            if kind == "projects":
+                dirs = [x.split(":", 1)[1] for x in (d.get("meta") or {}).get("dirs", [])]
+                out["agents"] = [x for x in SESSIONS if x.get("cwd") in dirs]
+            return self.send_json(out)
+        if p == "/api/v1/kb-search":
+            word = (q.get("q") or [""])[0].lower()
+            hits = [{"path": "%s/%s/summary.md" % (k, e["id"]), "line": "- " + e["name"] + "：" + (e.get("one_line") or "")}
+                    for k, l in KB.items() for e in l if word and (word in e["name"].lower() or word in (e.get("one_line") or "").lower())]
+            return self.send_json({"hits": hits})
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
 
@@ -1474,6 +1536,22 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if self.bad_network(): return
+        if self.command == "PUT" and p.startswith("/api/v1/kb/"):  # 打标: kept over the automatic tagging
+            kind, eid = p.split("/")[4:6]
+            body = json.loads(self.last_body or b"{}")
+            e = next((e for e in KB.get(kind, []) if e["id"] == eid), None)
+            if e is None: return self.send_json({"error": "not found"}, 404)
+            for k in ("importance", "relevance", "tags"):
+                if k in body: e[k] = body[k]
+            if kind == "projects" and ("status" in body or "project_kind" in body):
+                pk, st = (e.get("extra") or "short · active").split(" · ")
+                e["extra"] = "%s · %s" % (body.get("project_kind") or pk, body.get("status") or st)
+            meta = KB_DETAIL.get((kind, eid), {}).get("meta")
+            if meta is not None:
+                meta.update({k: e[k] for k in ("importance", "relevance", "tags") if k in e})
+                if kind == "projects": meta["kind"], meta["status"] = e["extra"].split(" · ")
+            KB_UPDATES.append({"kind": kind, "id": eid, **body})
+            return self.send_json({"ok": True})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
@@ -1549,6 +1627,8 @@ class H(BaseHTTPRequestHandler):
                      "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "")
             SESSIONS.append(s)
             return self.send_json({"session": s})
+        if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades for this device's own token
+            return self.send_json({"id": "dev_new", "token": "mock-device", "role": "phone"})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":
             for t in TOKENS:
                 if t["id"] == p.split("/")[-1]:

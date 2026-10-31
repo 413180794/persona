@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
@@ -73,6 +74,8 @@ fun AssistantScreen(
     hub: Hub, bottomBar: @Composable () -> Unit,
     /** Something another tab handed to Jarvis (the inbox's 交给 Jarvis): started as a new conversation, then cleared. */
     incoming: String? = null, onIncomingTaken: () -> Unit = {},
+    /** Opens an Agent's chat (the Agents tab): the knowledge base's 开 Agent and a project's Agents. */
+    onOpenSession: (SessionKey) -> Unit = {},
 ) {
     val byMachine by hub.sessions.collectAsState()
     var state by remember { mutableStateOf<ApiClient.AssistantState?>(null) }
@@ -84,6 +87,7 @@ fun AssistantScreen(
     var startError by remember { mutableStateOf<String?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     var profile by rememberSaveable { mutableStateOf(false) }
+    var knowledge by rememberSaveable { mutableStateOf(false) }
     val machines by hub.machines.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -117,8 +121,23 @@ fun AssistantScreen(
         }
     }
 
+    // 问 Jarvis from the knowledge base (iOS AppModel.askJarvis): into the main conversation, else a new main one.
+    fun ask(text: String) {
+        knowledge = false; profile = false
+        val main = state?.main?.takeIf { it.isNotEmpty() }
+        if (main == null || machine.isEmpty()) { start(text); return }
+        current = main; chose = true; startError = null
+        scope.launch {
+            runCatching { hub.api.send(SessionKey(machine, main), text, java.util.UUID.randomUUID().toString()) }
+                .onFailure { e ->
+                    // The conversation page is showing (not the home screen with its error line): say it there.
+                    android.widget.Toast.makeText(jarvis.android.JarvisApp.instance, "没发给 Jarvis：${e.message?.lineSequence()?.firstOrNull()}", android.widget.Toast.LENGTH_LONG).show()
+                }
+        }
+    }
+
     LaunchedEffect(incoming, state != null) {
-        if (incoming != null && state != null) { profile = false; start(incoming); onIncomingTaken() }
+        if (incoming != null && state != null) { profile = false; knowledge = false; start(incoming); onIncomingTaken() }
     }
 
     ModalNavigationDrawer(
@@ -134,6 +153,11 @@ fun AssistantScreen(
                 NavigationDrawerItem(
                     label = { Text("定时任务、记忆、关于我") }, icon = { Icon(Icons.Default.Person, null) }, selected = false,
                     onClick = { profile = true; scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                NavigationDrawerItem(
+                    label = { Text("知识库") }, icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, selected = false,
+                    onClick = { knowledge = true; profile = false; scope.launch { drawer.close() } },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -164,7 +188,9 @@ fun AssistantScreen(
         val historyButton: @Composable () -> Unit = { IconButton({ scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "历史对话") } }
         val newButton: @Composable () -> Unit = { IconButton({ current = null; chose = true }) { Icon(Icons.Default.Edit, "新对话") } }
         val shown = current
-        if (profile) {
+        if (knowledge) {
+            jarvis.android.ui.knowledge.KnowledgeScreen(hub, onBack = { knowledge = false }, onAsk = ::ask, onOpenSession = onOpenSession)
+        } else if (profile) {
             AssistantProfile(
                 hub, machineName = machines.firstOrNull { it.id == machine }?.displayName ?: machine,
                 onBack = { profile = false },

@@ -99,7 +99,9 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
             BackHandler { settings = false }
             SettingsScreen(hub, onBack = { settings = false })
         }
-        tab == Tab.Jarvis -> AssistantScreen(hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null })
+        tab == Tab.Jarvis -> AssistantScreen(
+            hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
+        )
         tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
         open != null -> {
             BackHandler { openSession.value = null }
