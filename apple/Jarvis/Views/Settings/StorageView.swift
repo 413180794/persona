@@ -72,7 +72,7 @@ nonisolated enum StorageUsage {
     static func scan() -> [StorageKind: Int64] {
         var out: [StorageKind: Int64] = [:]
         func add(_ k: StorageKind, _ url: URL) { out[k, default: 0] += size(of: url) }
-        for url in children(caches) {
+        for url in ownCaches() {
             let name = url.lastPathComponent
             if name == bundleID { // URLCache, and WebKit's cache when it lives below
                 for sub in children(url) { add(sub.lastPathComponent == "WebKit" ? .web : .network, sub) }
@@ -80,14 +80,42 @@ nonisolated enum StorageUsage {
                 add(kind(cachesEntry: name), url)
             }
         }
-        for url in children(URL.temporaryDirectory) {
+        for url in ownTemp() {
             add(url.lastPathComponent.hasPrefix("lark-") ? .feishuMedia : .other, url)
         }
+        // Outside a sandbox Library and Documents are the user's (walking ~/Library never finished): not counted.
+        guard sandboxed else { return out }
         for url in children(library) where url.lastPathComponent != "Caches" {
             add(url.lastPathComponent == "WebKit" ? .web : .appData, url)
         }
         add(.appData, URL.documentsDirectory)
         return out
+    }
+
+    /// Whether an entry of the caches folder is Jarvis's to count and clear. In a sandbox (iOS, a signed Mac build)
+    /// the folder is the app's own; a Mac build without one (an ad-hoc debug build) shares ~/Library/Caches with
+    /// every other app, so only the folders Jarvis writes count there.
+    static func owned(cachesEntry name: String, sandboxed: Bool, bundleID: String) -> Bool {
+        sandboxed || name == bundleID || ["chats-v2", "chats", "chat-images", "lark-media", "state"].contains(name)
+    }
+
+    /// Whether the app runs in a sandbox (its own caches, temp and Library). Always on iOS.
+    private static var sandboxed: Bool {
+        #if os(macOS)
+        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        #else
+        true
+        #endif
+    }
+
+    /// The caches folder's entries that are Jarvis's (all of them in a sandbox).
+    private static func ownCaches() -> [URL] {
+        children(caches).filter { owned(cachesEntry: $0.lastPathComponent, sandboxed: sandboxed, bundleID: bundleID) }
+    }
+
+    /// The temp folder's entries that are Jarvis's: outside a sandbox $TMPDIR is shared, only lark- files are ours.
+    private static func ownTemp() -> [URL] {
+        children(URL.temporaryDirectory).filter { sandboxed || $0.lastPathComponent.hasPrefix("lark-") }
     }
 
     private static func kind(cachesEntry name: String) -> StorageKind {
@@ -102,7 +130,7 @@ nonisolated enum StorageUsage {
 
     /// Removes the files of one kind. Folders stay (the loaders write into them without creating them again).
     static func clear(_ kind: StorageKind) {
-        for url in children(caches) {
+        for url in ownCaches() {
             let name = url.lastPathComponent
             if name == bundleID {
                 if kind == .network { URLCache.shared.removeAllCachedResponses() }
@@ -113,7 +141,7 @@ nonisolated enum StorageUsage {
             }
         }
         if kind == .feishuMedia || kind == .other {
-            for url in children(URL.temporaryDirectory) where url.lastPathComponent.hasPrefix("lark-") == (kind == .feishuMedia) {
+            for url in ownTemp() where url.lastPathComponent.hasPrefix("lark-") == (kind == .feishuMedia) {
                 remove(url)
             }
         }

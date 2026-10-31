@@ -566,6 +566,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] 翻译 (auto translate, mail, chat picker) + Translator (NLLanguageRecognizer, batching) — Views/Settings/TranslationSettingsView.swift, App/Translator.swift
   - Mac 上设置页截图看到「自动翻译」开关和说明；翻译本身（NLLanguageRecognizer）没在 Mac 上跑过。
 - [ ] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
+  - Mac（2026-11-01）：本机 ad-hoc 签名的调试版没有沙盒，`URL.cachesDirectory` 是所有 App 共用的 `~/Library/Caches`、`libraryDirectory` 是整个 `~/Library`：页面一直「计算中…」（在遍历整个 ~/Library），而「清除全部缓存」会把别的 App 的缓存当「其他缓存」删掉。改成没沙盒时只认 Jarvis 自己写的文件夹（`StorageUsage.owned`，有测试）、临时目录只认 `lark-`、不数 Library 和 Documents；有沙盒（iOS、签了名的 Mac 版）时和原来一样。修后截图算出 127 KB；清除没在 Mac 上点过。
 - [ ] 通知 / 灵动岛 — see §18, §19
 
 
