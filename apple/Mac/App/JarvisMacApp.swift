@@ -105,6 +105,10 @@ struct MacCommands: Commands {
             .disabled(!model.isPaired)
         }
         // 前往: 快速打开 ⌘K.
+        CommandGroup(after: .textEditing) {
+            Button("查找…") { MacFind.find() }
+                .keyboardShortcut("f", modifiers: .command)
+        }
         CommandMenu("前往") {
             Button("快速打开…") { MacShellState.shared.quickOpen.toggle() }
                 .keyboardShortcut("k", modifiers: .command)
@@ -277,6 +281,18 @@ enum MacLaunchArguments {
         // `-macOpenURL <jarvis://…>`: what handing the app that link does, 2 s in.
         if let u = d.string(forKey: "macOpenURL").flatMap(URL.init(string:)) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.openURL(u) }
+        }
+        // `-macFind YES`: 编辑 › 查找… 3 s in, and who has the keyboard after it (in the log).
+        if d.bool(forKey: "macFind") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                // A locked screen's snapshot run has no key window: use the main one, as ⌘F would.
+                guard let w = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else { return }
+                let found = MacFind.focusSearch(in: w)
+                let r = w.firstResponder
+                NSLog("macFind: found %@", found ? "yes" : "no")
+                NSLog("macFind: first responder %@ (delegate %@)", String(describing: r.map { type(of: $0) }),
+                      String(describing: (r as? NSText)?.delegate.map { type(of: $0) }))
+            }
         }
         // `-macSection knowledge|machines|…`: that sidebar section.
         if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
