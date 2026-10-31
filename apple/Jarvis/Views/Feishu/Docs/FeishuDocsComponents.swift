@@ -27,7 +27,11 @@ extension Error {
             switch e.code {
             case .notConnectedToInternet, .networkConnectionLost: return "网络不可用"
             case .timedOut: return "请求超时，请稍后重试"
+            #if os(macOS)
+            case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（确认这台 Mac 能访问 hub）"
+            #else
             case .cannotConnectToHost, .cannotFindHost: return "连不上 hub（确认手机能访问 hub）"
+            #endif
             default: break
             }
         }
