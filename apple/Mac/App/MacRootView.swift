@@ -77,6 +77,9 @@ struct MacRootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("MacRootView")
+        #endif
         Group {
             if model.isPaired {
                 MacShell()
@@ -139,6 +142,9 @@ private struct MacShell: View {
     private var shell: MacShellState { .shared }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("MacShell")
+        #endif
         HStack(spacing: 0) {
             List(selection: Binding(get: { MacSection.shown(override: shell.section, tab: model.selectedTab) },
                                     set: { if let s = $0 { shell.go(s, model) } })) {

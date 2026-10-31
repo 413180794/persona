@@ -42,6 +42,9 @@ struct MacMenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("MacMenuBarLabel")
+        #endif
         let n = MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }).needsYou.count
         HStack(spacing: Theme.Space.xxs) {
             Image(systemName: Theme.Icon.ai)

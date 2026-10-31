@@ -76,7 +76,8 @@
   锁屏时能量的是 hub 推送的主线程开销（和 iOS `LiveUpdateTests` 同一套 `PerfCount`）：本机起 mock hub，App 配对过去、开着 Agents 列表和一个工作中的对话，
   `/mock/churn?n=20&ms=400` 推 20 轮（每轮 5 条），`-perfCounts YES -macPerfLog YES` 每 2 秒打一行（`-macSnapshot … -macSnapshotDelay 60` 让它不读钥匙串）。
   2026-11-01：每轮主线程约 52 ms（约 10 ms 一次），和 iOS 修过之后的「对话，过程卡展开」50 ms 一档；每轮多算的 body：对话页 2、Agents 列表 2、
-  空间标题 5、没变的用户气泡 2、回复正文 2.3。没变的行每轮还在重算，是下一步要减的。
+  空间标题 5、没变的用户气泡 2、回复正文 2.3。Mac 自己的壳（`MacShell` / `MacRootView`）每轮 0 次，菜单栏图标 2 次（只数一遍会话）：
+  多出来的都在和 iOS 共用的对话页 / 列表里（没变的行每轮还在重算），要减得在 iOS 一起改、跑 `LiveUpdateTests`，不在 Mac 这边单独动。
   ⌥ 点列表行在新窗口打开也没做：锁屏时发不了真的点击，验不了它会不会同时触发 NavigationLink。
 
 ## 构建、运行、截图
