@@ -114,7 +114,9 @@ func (h *Hub) autonameTabs(ctx context.Context, dryRun, all bool) []TabRename {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			names[i] = h.autoTabName(ctx, t.s.Title)
+			if names[i] = h.autoTabName(ctx, t.s.Title); names[i] == "" { // the small model comes back empty now and then
+				names[i] = h.autoTabName(ctx, t.s.Title)
+			}
 		}()
 	}
 	wg.Wait()
