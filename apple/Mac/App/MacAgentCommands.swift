@@ -65,6 +65,9 @@ struct MacAgentMenu: Commands {
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
+            // Only an Agent in a herdr pane has a terminal (the Jarvis conversation runs headless).
+            Button("在新窗口打开终端") { if let key { MacShellState.shared.terminalWindow = key } }
+                .disabled(key.flatMap { model.session($0) }.map { $0.assistant || $0.paneID == nil } ?? true)
             // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
             Button("交给 Jarvis") {
                 if let key, let s = model.session(key) {

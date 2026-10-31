@@ -35,6 +35,12 @@ struct JarvisMacApp: App {
             }
         }
 
+        // An Agent's terminal on its own (Agent › 在新窗口打开终端, MacTerminalWindow).
+        WindowGroup("终端", id: MacTerminalWindow.id, for: SessionKey.self) { $key in
+            MacTerminalWindow(key: key).environment(model)
+        }
+        .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowMinHeight)
+
         // A conversation on its own (「在新窗口打开」, MacChatWindow).
         WindowGroup("对话", id: MacChatWindow.id, for: SessionKey.self) { $key in
             MacChatWindow(key: key).environment(model)
@@ -279,6 +285,10 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // `-openTerminalWindow <machine>/<session>`: that Agent's terminal in a window of its own.
+        if let key = sessionKey(d.string(forKey: "openTerminalWindow")) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.terminalWindow = key }
+        }
         // `-openChatWindow <machine>/<session>`: that conversation in a window of its own.
         if let key = sessionKey(d.string(forKey: "openChatWindow")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.chatWindow = key }

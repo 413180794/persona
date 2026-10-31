@@ -12,6 +12,8 @@ import SwiftUI
     }
     /// A conversation the menus asked to open in its own window (MacWindowOpener does it).
     var chatWindow: SessionKey?
+    /// An Agent's terminal the menus asked to open in its own window.
+    var terminalWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
     /// What the Agent menu asks of the chat showing `key` (a new value each time): toggle the inspector

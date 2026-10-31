@@ -49,5 +49,33 @@ struct MacWindowOpener: ViewModifier {
             MacShellState.shared.chatWindow = nil
             openWindow(id: MacChatWindow.id, value: key)
         }
+        .onChange(of: MacShellState.shared.terminalWindow) { _, key in
+            guard let key else { return }
+            MacShellState.shared.terminalWindow = nil
+            openWindow(id: MacTerminalWindow.id, value: key)
+        }
+    }
+}
+
+/// An Agent's terminal in a window of its own (docs/mac.md「窗口」: 终端也可以单独开窗口), beside its chat or on another
+/// screen. The same panel the chat's 终端 sheet shows; dragging it down does nothing here (the window closes with ⌘W).
+struct MacTerminalWindow: View {
+    static let id = "terminal"
+    @Environment(AppModel.self) private var model
+    var key: SessionKey?
+
+    var body: some View {
+        Group {
+            if let key {
+                TerminalPanel(key: key, switchTo: nil, grab: TerminalGrab(dragged: { _ in }, released: { _, _ in }, close: {}))
+                    .padding(Theme.Space.xs)
+                    .navigationTitle("终端 · " + (model.session(key)?.displayTitle ?? key.sessionID))
+            } else {
+                EmptyStateView(symbol: Theme.Icon.terminal, title: "没有终端", message: "这个窗口打开的 Agent 已经不在了。")
+            }
+        }
+        .frame(minWidth: Theme.Size.macWindowMinHeight, minHeight: Theme.Size.macWindowMinHeight)
+        .macLook(model)
+        .overlay(alignment: .top) { ToastOverlay() }
     }
 }

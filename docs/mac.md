@@ -173,6 +173,8 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 菜单（Commands）没有自己的 `openWindow`，经 `MacShellState.chatWindow` 交给主窗口的 `MacWindowOpener` 打开。
 DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗口另存成 `<名字>.chat.png`。
 窗口里的对话是这个窗口的第一页（`SplitDetail(isFirstPage: true)`），对话页自己画的返回箭头不显示。
+Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（`MacTerminalWindow`，`WindowGroup(id: "terminal", for: SessionKey.self)`，标题「终端 · Agent 名」），
+和对话里「终端」浮层是同一个面板，⌘W 关；只有 herdr 里的 Agent 可点。截图：`-openTerminalWindow <m>/<s>`（存成 `<名字>.chat.png`）。
 
 ## 显示 / 前往菜单（Mac）
 
