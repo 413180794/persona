@@ -891,6 +891,9 @@ final class AppModel {
         do { try await api?.close(key); toast = Toast("已关闭会话", style: .success) } catch { show(error) }
     }
 
+    /// After a change in 设置 › 模型: the pickers read the machines' lists again.
+    func forgetLaunchers() { launcherCache = [:] }
+
     func launchers(_ machine: String, refresh: Bool = false) async throws -> [Launcher] {
         if !refresh, let cached = launcherCache[machine] { return cached }
         guard let api else { return [] }

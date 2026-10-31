@@ -6,6 +6,7 @@ import SwiftUI
 struct AssistantProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var launchers: [Launcher] = []
+    @State private var showLaunchers = false
     @State private var selection = ""
     @State private var tasks: [APIClient.ScheduledTask]?
     @State private var runs: [APIClient.ScheduleRun]?
@@ -70,6 +71,10 @@ struct AssistantProfileView: View {
                         Text(selection).font(Theme.Font.body.monospaced()).lineLimit(1)
                     }
                 }
+                // A sheet: this page is pushed by view in the Jarvis tab and by value in 设置 (value links mix badly).
+                Button { showLaunchers = true } label: {
+                    Label("管理启动器", systemImage: "cpu").lineLimit(1)
+                }
                 LabeledContent("运行在", value: machineName)
                 LabeledContent("工作目录", value: "~/.jarvis/assistant")
             } header: {
@@ -96,6 +101,14 @@ struct AssistantProfileView: View {
         .task {
             selection = model.assistantConfig?.launcher ?? "claude"
             launchers = (try? await model.launchers(machineID)) ?? []
+        }
+        .sheet(isPresented: $showLaunchers, onDismiss: {
+            Task { launchers = (try? await model.launchers(machineID, refresh: true)) ?? launchers }
+        }) {
+            NavigationStack {
+                ModelLaunchersView()
+                    .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name) }
+            }
         }
         .task { await load() }
         .refreshable { await load() }

@@ -79,6 +79,9 @@ struct SettingsView: View {
                             Label("助手", systemImage: Theme.Icon.ai)
                         }
                     }
+                    NavigationLink(value: ModelLaunchersRoute()) {
+                        Label("模型", systemImage: "cpu")
+                    }
                     NavigationLink(value: SettingsPage.claude) {
                         Label("Claude Code 设置", systemImage: Theme.Icon.options)
                     }
@@ -176,6 +179,10 @@ struct SettingsView: View {
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }
         else if d.bool(forKey: "openDevices") { p.append(SettingsPage.devices) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
+        else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
+            p.append(ModelLaunchersRoute())
+            if let n = d.string(forKey: "openModelLauncher") { p.append(ModelLauncherRoute(name: n)) }
+        }
         guard !p.isEmpty else { return }
         debugOpened = true
         path = p
@@ -213,6 +220,8 @@ private struct SettingsDestinations: ViewModifier {
         content
             .navigationDestination(for: SettingsPage.self) { page(for: $0).splitDetailPage() }
             .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
+            .navigationDestination(for: ModelLaunchersRoute.self) { _ in ModelLaunchersView().splitDetailPage() }
+            .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name).splitDetailPage() }
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
     }
