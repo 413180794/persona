@@ -2077,6 +2077,20 @@ struct Composer: View {
         .fileUploadPicker(isPresented: $showFiles) { urls in
             uploads.start(urls, machine: key.machineID, model: model) { insertPath($0) }
         }
+        #if os(macOS)
+        // Finder drags: pictures are attached like 照片, other files uploaded to the machine like 文件 (docs/mac.md).
+        .dropDestination(for: URL.self) { urls, _ in take(urls) }
+        // ⌘V of a screenshot or of files copied in Finder does the same; text is pasted as usual.
+        .modifier(MacComposerPaste(focused: focused, image: { add($0) }, files: { take($0) }))
+        #if DEBUG
+        .task { // `-openDropDemo a.png,b.md`: those files dropped on the composer 2 s after opening, for screenshots
+            if let list = UserDefaults.standard.string(forKey: "openDropDemo") {
+                try? await Task.sleep(for: .seconds(2))
+                take(list.split(separator: ",").map { URL(fileURLWithPath: String($0)) })
+            }
+        }
+        #endif
+        #endif
         #if DEBUG
         .task { // `-openUploadDemo <name>`: a made-up 24 MB file uploading, for screenshots of the progress bar
             if let name = UserDefaults.standard.string(forKey: "openUploadDemo") {
@@ -2125,6 +2139,23 @@ struct Composer: View {
         images = []
         model.composerContexts[key] = nil
     }
+
+    #if os(macOS)
+    /// Files dropped or pasted: pictures attached, other files uploaded to the machine, folders refused.
+    @discardableResult private func take(_ urls: [URL]) -> Bool {
+        let split = MacDrop.split(urls, already: images.count)
+        if split.folders > 0 { model.toast = Toast("文件夹发不了，拖里面的文件进来", style: .error) }
+        guard !split.images.isEmpty || !split.files.isEmpty else { return split.folders > 0 }
+        for url in split.images {
+            if let img = UIImage(contentsOf: url) { add(img) }
+        }
+        if !split.files.isEmpty {
+            uploads.start(split.files, machine: key.machineID, model: model) { insertPath($0) }
+        }
+        focused = true
+        return true
+    }
+    #endif
 
     /// A file's path on the machine, at the cursor; not sent.
     private func insertPath(_ path: String) {
