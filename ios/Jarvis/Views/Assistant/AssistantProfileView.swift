@@ -73,7 +73,7 @@ struct AssistantProfileView: View {
                 }
                 // A sheet: this page is pushed by view in the Jarvis tab and by value in 设置 (value links mix badly).
                 Button { showLaunchers = true } label: {
-                    Label("管理启动器", systemImage: "cpu").lineLimit(1)
+                    Label("管理启动器", systemImage: Theme.Icon.cpu).lineLimit(1)
                 }
                 LabeledContent("运行在", value: machineName)
                 LabeledContent("工作目录", value: "~/.jarvis/assistant")
