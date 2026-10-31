@@ -166,6 +166,16 @@ type LauncherDetail struct {
 	Error         string          `json:"error,omitempty"`
 }
 
+// LauncherCheck is one 测试可用性 run: a real one-word request through the launcher.
+type LauncherCheck struct {
+	OK     bool   `json:"ok"`
+	Agent  string `json:"agent,omitempty"`
+	Model  string `json:"model,omitempty"` // which model answered
+	Answer string `json:"answer,omitempty"`
+	Millis int    `json:"millis"`
+	Error  string `json:"error,omitempty"`
+}
+
 type LauncherModel struct {
 	Role  string `json:"role"` // 主模型, Opus, 小模型, 子 Agent…
 	Env   string `json:"env"`

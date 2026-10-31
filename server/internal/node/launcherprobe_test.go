@@ -167,3 +167,18 @@ unset CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ANTHROPIC_AUTH_TOKEN`)
 	}
 }
 
+func TestClaudeResultOfACheck(t *testing.T) {
+	ok := "banner from zshrc\n" + `{"type":"result","subtype":"success","is_error":false,"duration_ms":2310,"result":"ok",` +
+		`"modelUsage":{"vendor/model-a":{"inputTokens":12},"m":{"inputTokens":3}}}`
+	r, found := claudeResult(ok)
+	if !found || r.isError || r.result != "ok" || r.millis != 2310 || r.model != "vendor/model-a" {
+		t.Fatalf("%+v %v", r, found)
+	}
+	bad := `{"type":"result","subtype":"success","is_error":true,"result":"API Error: 401 invalid API key","duration_ms":800}`
+	if r, found := claudeResult(bad); !found || !r.isError || !strings.Contains(r.result, "401") {
+		t.Fatalf("%+v %v", r, found)
+	}
+	if _, found := claudeResult("zsh: command not found: cc_nope"); found {
+		t.Fatal("not a result")
+	}
+}

@@ -287,6 +287,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.show":
 		def, err := n.launcherDefinition(ctx, p.Name)
 		return map[string]any{"definition": def}, err
+	case "launchers.check":
+		return n.launcherCheck(ctx, p.Name), nil
 	case "launchers.probe":
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
 	case "dirs.list":

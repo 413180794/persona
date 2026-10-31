@@ -444,6 +444,25 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "hidden": true})
 	})
+	// 测试可用性: one real request through the launcher on a machine (default: the assistant's, else the first online).
+	api.HandleFunc("POST /api/v1/launchers/{name}/check", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
+		defer cancel()
+		m := h.byID[r.URL.Query().Get("machine")]
+		if m == nil {
+			m = h.byID[h.assistantConfig(ctx).MachineID]
+		}
+		if m == nil {
+			writeErr(w, http.StatusBadRequest, errors.New("no machine to test on"))
+			return
+		}
+		var res proto.LauncherCheck
+		if err := m.call(ctx, "launchers.check", map[string]any{"name": r.PathValue("name")}, &res); err != nil {
+			callErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"machine": m.cfg.ID, "check": res})
+	})
 	api.HandleFunc("POST /api/v1/launchers/{name}/restore", func(w http.ResponseWriter, r *http.Request) {
 		ctx, name := r.Context(), r.PathValue("name")
 		hidden := slices.DeleteFunc(h.hiddenLaunchers(ctx), func(s string) bool { return s == name })

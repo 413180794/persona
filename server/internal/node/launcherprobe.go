@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -133,7 +135,9 @@ func (n *Node) launcherProbe(ctx context.Context, name string) (Probe, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, _ := loginShell(ctx, probeScript(name)).Output()
+	cmd := loginShell(ctx, probeScript(name))
+	killGroupOnCancel(cmd)
+	out, _ := cmd.Output()
 	p, ok := parseProbe(string(out))
 	if !ok {
 		return Probe{}, fmt.Errorf("%s did not start an agent when tried", name)
@@ -229,4 +233,17 @@ func indexOf(list []string, want ...string) int {
 		}
 	}
 	return -1
+}
+
+// killGroupOnCancel: on timeout kill everything the shell started (a token script, a hung network call) and stop
+// waiting for its output soon after; killing only the shell left Output() waiting on the children's open pipe.
+func killGroupOnCancel(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = 2 * time.Second
 }
