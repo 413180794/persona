@@ -308,6 +308,10 @@ nonisolated enum Theme {
         static let sidebarMax: CGFloat = 480
     }
 
+    /// The system's sidebar column on iPad (iOS 26, the glass styles), measured from its pixels: the split fills the
+    /// status bar above the column with it (`SidebarTopFill`), which the column itself cannot draw into.
+    static let systemSidebar = Color(light: 0xE6E9EE, dark: 0x191C20)
+
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot, the work spinner and
     /// the persona's dot in the Jarvis tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
     /// is the system's).

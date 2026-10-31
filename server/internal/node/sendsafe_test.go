@@ -255,3 +255,51 @@ func screenDialogRev(t *testing.T, s string) string {
 	}
 	return d.Rev
 }
+
+// A prompt left in the input box (seen once with an image: `[Image #1]` and the text, the agent done) gets one Enter;
+// a box that empties, or shows someone else's text, gets none.
+func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
+	defer func(g, p time.Duration) { submitGrace, submitPoll = g, p }(submitGrace, submitPoll)
+	submitGrace, submitPoll = 200*time.Millisecond, 20*time.Millisecond
+	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi") // the box shows "fix the flaky test"
+	empty := screenFixture(t, "claude-2.1.312-empty-162.ansi")
+	ctx := context.Background()
+
+	stuck := &fakePane{screens: []string{typed, empty}}
+	n := &Node{herdr: stuck.serve(t)}
+	n.ensureSubmitted(ctx, "w1:p1", "fix the flaky test\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>")
+	if len(stuck.keys) != 1 || stuck.keys[0][0] != "enter" {
+		t.Fatalf("stuck prompt: keys %v", stuck.keys)
+	}
+
+	taken := &fakePane{screens: []string{typed, empty}, clearAfter: 2} // Claude takes it a moment later
+	m := &Node{herdr: taken.serve(t)}
+	m.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	if len(taken.keys) != 0 {
+		t.Fatalf("pressed enter on a prompt Claude took: %v", taken.keys)
+	}
+
+	other := &fakePane{screens: []string{typed}}
+	o := &Node{herdr: other.serve(t)}
+	o.ensureSubmitted(ctx, "w1:p1", "something else entirely")
+	if len(other.keys) != 0 {
+		t.Fatalf("pressed enter on someone else's draft: %v", other.keys)
+	}
+}
+
+func TestStillPromptedIgnoresChips(t *testing.T) {
+	for _, c := range []struct {
+		box, prompted string
+		want          bool
+	}{
+		{"[Image #1]What two colors <attached_images> </attached_images>", "What two colors are in this picture?\n\n<attached_images>\n/x.jpg\n</attached_images>", true},
+		{"[Pasted text #1 +40 lines]", "a long paste", false},
+		{"fix the flaky test", "fix the flaky test", true},
+		{"fix", "fix the flaky test", false},
+		{"", "anything", false},
+	} {
+		if got := stillPrompted(c.box, c.prompted); got != c.want {
+			t.Errorf("stillPrompted(%q, %q) = %v", c.box, c.prompted, got)
+		}
+	}
+}

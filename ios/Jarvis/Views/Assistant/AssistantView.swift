@@ -41,6 +41,7 @@ struct AssistantView: View {
             } detail: {
                 stack
             }
+            .modifier(SidebarTopFill(shown: columns != .detailOnly))
             .navigationSplitViewStyle(.balanced)
         } else {
             AssistantDrawerLayout(drawer: drawer, enabled: atRoot, sidebar: { sidebar(column: false) }, page: stack)

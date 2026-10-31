@@ -291,8 +291,8 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
 		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
 	}
+	kind := "claude"
 	if err == nil {
-		kind := "claude"
 		if a, ok := n.agent(id); ok && a.Agent != "" {
 			kind = a.Agent
 		}
@@ -336,6 +336,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	err = n.prompt(ctx, pane, text)
 	if err == nil {
 		n.typing.typed(pane, text)
+		if kind == "claude" {
+			n.ensureSubmitted(ctx, pane, text)
+		}
 	}
 	return uncertain(err)
 }

@@ -11,6 +11,8 @@ import SwiftUI
 /// should do the same (`path = NavigationPath([value])`, which in the single stack is the same as appending).
 struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: View {
     @Environment(\.horizontalSizeClass) private var widthClass
+    /// Whether the list column shows (its button in the toolbar closes it).
+    @State private var columns = NavigationSplitViewVisibility.all
     @Binding var path: NavigationPath
     /// The pages the list opens (`navigationDestination`s), registered in both layouts.
     var destinations: Destinations
@@ -20,7 +22,7 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
 
     var body: some View {
         if widthClass == .regular {
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $columns) {
                 // No stack of its own: a value link in the sidebar column replaces the detail column's stack. A sidebar
                 // stack that refused its pushes (a path binding that always read empty) first slid the list away, then
                 // back: the sidebar folded and unfolded on every tap.
@@ -32,6 +34,7 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
                 }
             }
             .navigationSplitViewStyle(.balanced)
+            .modifier(SidebarTopFill(shown: columns != .detailOnly))
             // On the whole split, not the detail stack: its pages are built from the destinations the sidebar
             // registered, in the sidebar's environment.
             .environment(\.splitDetail, SplitDetail(isFirstPage: path.count <= 1))
@@ -50,6 +53,37 @@ struct SidebarWidth: ViewModifier {
     func body(content: Content) -> some View {
         if UIDevice.current.userInterfaceIdiom == .pad {
             content.navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin, ideal: Theme.Size.sidebar, max: Theme.Size.sidebarMax)
+                .background(GeometryReader { g in Color.clear.preference(key: SidebarEdge.self, value: g.frame(in: .global).maxX) })
+        } else {
+            content
+        }
+    }
+}
+
+/// Where the list column ends, for `SidebarTopFill`.
+private struct SidebarEdge: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/// iPad: the list column starts below the status bar (its background cannot reach above it), so the strip over it was
+/// the window's white and the list looked cut off at the top (2026-10-31). The split fills that strip with the
+/// column's color, as wide as the column is.
+struct SidebarTopFill: ViewModifier {
+    /// The column is open (closed, its last frame stays reported: the fill must go by this).
+    var shown: Bool
+    @State private var edge: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            content
+                .onPreferenceChange(SidebarEdge.self) { edge = $0 }
+                .background(alignment: .topLeading) {
+                    (AppStyle.current.usesGlass ? Theme.systemSidebar : Theme.pageBackground)
+                        .frame(width: shown ? max(edge, 0) : 0)
+                        .animation(Theme.Motion.layout, value: shown)
+                        .ignoresSafeArea()
+                }
         } else {
             content
         }

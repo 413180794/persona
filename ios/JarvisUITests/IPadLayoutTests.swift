@@ -53,4 +53,40 @@ final class IPadLayoutTests: XCTestCase {
             app.terminate()
         }
     }
+
+    /// The list column reaches the top of the screen (the strip under the status bar has its color), and when the
+    /// column is closed the strip is the detail's again (2026-10-31: the list looked cut off at the top).
+    @MainActor func testSidebarReachesTheTop() throws {
+        XCUIDevice.shared.orientation = .portrait
+        for style in ["glass", "claude"] {
+            app.launchArguments += ["-ui.style", style]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["选一个 Agent"].waitForExistence(timeout: 20))
+            sleep(1)
+            var image = app.screenshot().image
+            shot("top-\(style)")
+            let scale = image.scale
+            func color(_ x: CGFloat, _ y: CGFloat) -> [Int] {
+                guard let cg = image.cgImage?.cropping(to: CGRect(x: x * scale, y: y * scale, width: 1, height: 1)),
+                      let data = cg.dataProvider?.data, let p = CFDataGetBytePtr(data) else { return [] }
+                return [Int(p[0]), Int(p[1]), Int(p[2])]
+            }
+            // The same to the eye: the system's glass edge over the list's top tints it a few levels.
+            func near(_ a: [Int], _ b: [Int]) -> Bool { a.count == 3 && b.count == 3 && zip(a, b).allSatisfy { abs($0 - $1) <= 8 } }
+            // Above the list column (in the status bar), the same color as the column under it; the detail column's
+            // strip stays the detail's.
+            XCTAssertTrue(near(color(8, 2), color(8, 34)), "\(style): the strip above the list (\(color(8, 2))) is not the list's color (\(color(8, 34)))")
+            let right = app.windows.firstMatch.frame.width - 40
+            XCTAssertTrue(near(color(right, 2), color(right, 400)), "\(style): the strip above the detail changed")
+            // Close the column: what is at the top there is the detail's color again, as below it.
+            let toggle = app.buttons.matching(NSPredicate(format: "label IN %@", ["隐藏边栏", "Hide Sidebar", "边栏", "Sidebar"])).firstMatch
+            XCTAssertTrue(toggle.exists, "no sidebar button:\n\(app.debugDescription)")
+            toggle.tap()
+            sleep(1)
+            image = app.screenshot().image
+            XCTAssertTrue(near(color(8, 2), color(8, 400)), "\(style): the list's color stayed at the top after closing it (\(color(8, 2)))")
+            app.terminate()
+            app.launchArguments.removeLast(2)
+        }
+    }
 }

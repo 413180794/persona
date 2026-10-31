@@ -186,6 +186,57 @@ func (t *typingLocks) ours(pane, box string) bool {
 
 var pastePlaceholder = regexp.MustCompile(`^\s*\[Pasted text #\d+`)
 
+// How long a prompt may sit in Claude's input box before ensureSubmitted presses Enter for it, and how often it looks.
+var (
+	submitGrace = 1500 * time.Millisecond
+	submitPoll  = 150 * time.Millisecond
+)
+
+// ensureSubmitted presses Enter once when what was just prompted is still in Claude's input box after submitGrace.
+// Seen once with an image (2026-10-31, Claude Code 2.1.206): the text and its `[Image #1]` chip sat in the box, the
+// agent `done`, until Enter was pressed on the computer; 42 tries in an isolated herdr never repeated it, so the
+// cause is unknown. A box that empties (Claude took it, or queued it while working) or shows anything else is left alone.
+func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) {
+	deadline := time.Now().Add(submitGrace)
+	for {
+		s, err := n.herdr.PaneReadANSI(ctx, pane, "visible", 60)
+		if err != nil {
+			return
+		}
+		in := screen.ClaudeInput(s)
+		if !in.Box || !in.Draft || !stillPrompted(in.Text, text) {
+			return
+		}
+		if time.Now().After(deadline) {
+			if n.logger != nil {
+				n.logger.Printf("prompt still in the input box after %s, pressing enter", submitGrace)
+			}
+			_ = n.herdr.PaneSendKeys(ctx, pane, "enter")
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(submitPoll):
+		}
+	}
+}
+
+var boxChips = regexp.MustCompile(`\[(Image|Pasted text) #\d+[^\]]*\]`)
+
+// stillPrompted: the input box shows the start of what was prompted. Claude turns an image path into an `[Image #n]`
+// chip and a long paste into `[Pasted text #n …]`, so chips are dropped and only the first words are compared.
+func stillPrompted(box, prompted string) bool {
+	squash := func(s string) []rune {
+		return []rune(strings.Join(strings.Fields(boxChips.ReplaceAllString(s, "")), ""))
+	}
+	b, p := squash(box), squash(strings.SplitN(prompted, "\n", 2)[0])
+	if len(p) > 12 {
+		p = p[:12]
+	}
+	return len(p) > 0 && len(b) >= len(p) && string(b[:len(p)]) == string(p)
+}
+
 // sentLog remembers the client_msg_id of recent sends (10 minutes) so a retry is not typed twice.
 type sentLog struct {
 	mu   sync.Mutex
