@@ -67,8 +67,8 @@ struct MachineCard: View {
                 // Wraps: OS, herdr and claude side by side are wider than a phone, and Chip does not shrink, so one row
                 // pushed the whole card (and the page) past both edges of the screen.
                 FlowLayoutRow {
-                    if let sys = machine.system { Chip(text: sys.name, symbol: Theme.Icon.cpu) }
-                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: Theme.Icon.cpu) }
+                    if let sys = machine.system { Chip(text: sys.name, symbol: Theme.Icon.cpu, shrinks: true) }
+                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: Theme.Icon.cpu, shrinks: true) }
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
                     if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
                 }

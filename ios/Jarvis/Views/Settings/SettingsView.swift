@@ -150,8 +150,8 @@ struct SettingsView: View {
             .onChange(of: path) { measureStorage() }
             #if DEBUG
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
-            // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器),
-            // `-openDevices YES` (设备).
+            // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
+            // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -173,7 +173,10 @@ struct SettingsView: View {
         let d = UserDefaults.standard
         // Appended with their own types: a path of AnyHashable finds no destination.
         var p = NavigationPath()
-        if d.bool(forKey: "openMachines") { p.append(MachineListRoute()) }
+        if d.bool(forKey: "openMachines") {
+            p.append(MachineListRoute())
+            if let id = d.string(forKey: "openMachineDetail") { p.append(MachineDetailRoute(id: id)) }
+        }
         else if d.bool(forKey: "openStorage") { p.append(SettingsPage.storage) }
         else if d.bool(forKey: "openNotificationSettings") { p.append(SettingsPage.notifications) }
         else if d.string(forKey: "openAssistantPage") != nil { p.append(SettingsPage.assistant) }

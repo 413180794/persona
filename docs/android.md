@@ -179,6 +179,9 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏�
 - 配对、列表、对话页正常；claude 的提问在手机上回答，电脑上的 claude 收到
 - 「需要你处理」的通知系统里有（channel `input`，重要级别最高），但默认不在通知栏显示：澎湃 OS 给新装的 App 关掉了悬浮 / 锁屏通知，
   要在「设置 › 通知与控制中心 › 通知管理 › Jarvis」里打开。锁屏后长时间的后台连接还没在真机上测
+- 2026-10-31 复测（最新版）：「需要你处理」的通知弹出来了（通知栏里一条「android-demo · 请选择 A 或 B？」，常驻那条变成「1 个需要你」），
+  点开进对话、在交互卡片上选 A，电脑上的 Claude 收到，通知随之收回
+- 实时终端：接管成 54×50；搜狗输入法打拼音时拼音留在输入法自己的候选栏，选「你好」后电脑上的窗格里出现「你好」，退格一次删一个字；关掉后窗格放回电脑
 
 收件箱「交给 AI」（模拟器连真实 hub，hub 库里临时放一件假邮件，测完删掉）：交给 Mac 上的 Agent，对话页打开、Claude 收到并回复，消息显示成上下文卡片；交给 Jarvis 新开对话并回复；件标为已处理。
 
@@ -198,6 +201,8 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏�
 - 倒置列表（`reverseLayout`）的 `verticalArrangement` 写成 `spacedBy(x)` 会顶着上边排，内容少时消息浮在顶上：要 `spacedBy(x, Alignment.Bottom)`。
 - 对话页验证用 `scripts/mock_hub.py`：`MOCK_CHAT_IMAGES=1` 给「博客迁移」那段对话加两张截图（查看器、编辑器），文件和 Git 是编出来的 `~/code/weather`。
 - `adb shell input swipe` 从屏幕最上方往下滑会拉出系统的快捷设置，测试翻历史时从屏幕中间开始滑。
+- 小米 / 澎湃 OS 上 `adb shell input` 要开「开发者选项 › USB 调试（安全设置）」，开完要重连一次 adb（`adb reconnect`）才生效；
+  之后偶尔连着几次 `SecurityException: Injecting input events requires … INJECT_EVENTS`，隔几秒再发就好，测试脚本里每次点击被拒就等 3 秒重试。
 - herdr server 继承启动它的 shell 的环境：在带代理变量的 shell 里起 herdr，里面的 claude 也会走那个代理。联调时用干净的登录 shell 起 herdr。
 - Claude Code 设置里放开了的工具（allow 规则、bypass 模式）不会触发 PermissionRequest，测授权卡片要在没放开的会话里。
 - hub 只存一份 phone_* 工具列表（`setPhoneTools`），每台手机 `register_phone` 时整个替换，调用发给最后注册的那台（`phoneClient`）。

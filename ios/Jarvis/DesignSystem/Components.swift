@@ -85,6 +85,8 @@ struct Chip: View {
     var text: String
     var symbol: String?
     var look: Look = .neutral
+    /// Truncates instead of keeping its full width when offered less (in a FlowLayoutRow, a chip longer than the line).
+    var shrinks = false
 
     var body: some View {
         Group {
@@ -108,7 +110,7 @@ struct Chip: View {
                 Capsule().fill(fill)
             }
         }
-        .fixedSize()
+        .fixedSize(horizontal: !shrinks, vertical: true)
     }
 
     private var words: Color {
@@ -393,7 +395,7 @@ struct FlowLayoutRow: Layout {
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? .greatestFiniteMagnitude
         var x: CGFloat = 0, y: CGFloat = 0, line: CGFloat = 0, widest: CGFloat = 0
         for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
+            let size = Self.size(s, within: width)
             if x > 0 && x + size.width > width { y += line + spacing; x = 0; line = 0 }
             x += size.width + spacing
             line = max(line, size.height)
@@ -405,11 +407,17 @@ struct FlowLayoutRow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, line: CGFloat = 0
         for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
+            let size = Self.size(s, within: bounds.width)
             if x > bounds.minX && x + size.width > bounds.maxX { y += line + spacing; x = bounds.minX; line = 0 }
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             line = max(line, size.height)
         }
+    }
+
+    /// Its ideal size, or the line's width if that is narrower (a subview that can shrink, like `Chip(shrinks:)`).
+    private static func size(_ s: LayoutSubview, within width: CGFloat) -> CGSize {
+        let ideal = s.sizeThatFits(.unspecified)
+        return ideal.width <= width ? ideal : s.sizeThatFits(ProposedViewSize(width: width, height: nil))
     }
 }
