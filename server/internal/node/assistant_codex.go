@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -44,6 +45,7 @@ type codexConn struct {
 	n      *Node
 	p      *assistantProc
 	key    string // what the jarvis MCP server reports as its session until the thread exists (resolveAssistantKey)
+	memDir string // the assistant's memory, shared with Claude (codexMemoryPrompt)
 	nextID int64
 
 	mu       sync.Mutex
@@ -150,6 +152,9 @@ func codexArgs(bin, key string) []string {
 		// would strip lark-connector_AGENT_TOKEN, and ol would fail.
 		"-c", "shell_environment_policy.inherit=" + q("all"),
 		"-c", "shell_environment_policy.ignore_default_excludes=true",
+		// The assistant's memory is the one the app's 记忆 page shows, shared with Claude (codexMemoryPrompt); Codex's
+		// own (~/.codex/memories) is one store for every Codex on the machine, so it stays off here.
+		"-c", "features.memories=false",
 	}
 }
 
@@ -193,7 +198,11 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool) (*assist
 	}
 	p := &assistantProc{id: id, agent: "codex", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}),
 		born: time.Now(), lastActive: time.Now()}
-	c := &codexConn{n: n, p: p, key: key, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{}}
+	memDir := n.memoryDir(cwd)
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		n.logger.Printf("assistant codex: memory dir: %v", err)
+	}
+	c := &codexConn{n: n, p: p, key: key, memDir: memDir, pending: map[int64]chan codexReply{}, asks: map[string]context.CancelFunc{}, files: map[string][]string{}}
 	p.cx = c
 	n.mu.Lock()
 	n.akeys[key] = p
@@ -271,9 +280,11 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 	mode, _ := n.modesOf(id)
 	approval, sandbox := codexPolicy(mode)
 	params := map[string]any{"cwd": cwd, "approvalPolicy": approval, "sandbox": sandbox}
+	instructions := codexMemoryPrompt(c.memDir)
 	if snap := n.assistantContext(id); snap != "" {
-		params["developerInstructions"] = snap
+		instructions = snap + "\n\n" + instructions
 	}
+	params["developerInstructions"] = instructions
 	var res struct {
 		Thread struct {
 			ID   string `json:"id"`
@@ -323,15 +334,19 @@ func codexPolicy(mode string) (approval, sandbox string) {
 
 // codexSandboxPolicy is the turn's sandbox. The network is open in workspace-write where every command is asked
 // about anyway (lark-connector's ol, ssh to the user's computers); in auto it stays closed, so going out (ol included)
-// is an escalation that comes to the node.
-func codexSandboxPolicy(mode string) map[string]any {
+// is an escalation that comes to the node. The memory directory (outside the assistant's own) is writable.
+func codexSandboxPolicy(mode, memDir string) map[string]any {
+	roots := []string{}
+	if memDir != "" {
+		roots = append(roots, memDir)
+	}
 	switch _, sandbox := codexPolicy(mode); sandbox {
 	case "read-only":
 		return map[string]any{"type": "readOnly", "networkAccess": false}
 	case "danger-full-access":
 		return map[string]any{"type": "dangerFullAccess"}
 	}
-	return map[string]any{"type": "workspaceWrite", "writableRoots": []string{}, "networkAccess": mode != "auto",
+	return map[string]any{"type": "workspaceWrite", "writableRoots": roots, "networkAccess": mode != "auto",
 		"excludeTmpdirEnvVar": false, "excludeSlashTmp": false}
 }
 
@@ -362,7 +377,7 @@ func (c *codexConn) deliver(ctx context.Context, text string, images []proto.Ima
 	}
 	mode, effort := n.modesOf(c.p.id)
 	approval, _ := codexPolicy(mode)
-	params := map[string]any{"threadId": thread, "input": input, "approvalPolicy": approval, "sandboxPolicy": codexSandboxPolicy(mode)}
+	params := map[string]any{"threadId": thread, "input": input, "approvalPolicy": approval, "sandboxPolicy": codexSandboxPolicy(mode, c.memDir)}
 	if effort != "" {
 		params["effort"] = effort
 	}
@@ -683,19 +698,20 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 			c.tellModel(reason)
 			return map[string]any{"decision": "decline"}, nil
 		}
-		if mode == proto.ModeBypass {
-			return map[string]any{"decision": "accept"}, nil
+		if mode == proto.ModeBypass || readsOnlyMemory(command, cwd, c.memDir) {
+			return map[string]any{"decision": "accept"}, nil // Claude reads its auto-memory unasked too
 		}
 		ix.Kind, ix.Summary = proto.IxPermission, withReason(command, r.Reason)
 		return c.askPhone(ctx, ix, "accept", "acceptForSession", "decline"), nil
 
 	case "item/fileChange/requestApproval":
-		if mode == proto.ModeBypass || mode == "acceptEdits" {
-			return map[string]any{"decision": "accept"}, nil
-		}
 		c.mu.Lock()
 		paths := c.files[r.ItemID]
 		c.mu.Unlock()
+		// Writing its memory is unasked, like Claude's auto-memory (not in plan mode, which writes nothing).
+		if mode == proto.ModeBypass || mode == "acceptEdits" || (mode != "plan" && r.GrantRoot == "" && allUnder(paths, cwd, c.memDir)) {
+			return map[string]any{"decision": "accept"}, nil
+		}
 		ix.ToolName = "Edit"
 		file := firstNonEmpty(append(paths, r.GrantRoot)...)
 		ix.ToolInput, _ = json.Marshal(map[string]any{"file_path": file})
@@ -814,6 +830,107 @@ func (c *codexConn) tellModel(reason string) {
 			c.n.logger.Printf("assistant codex %s: pass the refusal on: %v", short(thread), err)
 		}
 	}()
+}
+
+// memoryReaders are the commands readsOnlyMemory lets through, with the flags that would make one write or run
+// something (sed -i / w, rg --pre…): refused.
+var memoryReaders = map[string][]string{"cat": nil, "head": nil, "tail": {"-f", "--follow", "-F"}, "ls": nil, "wc": nil, "nl": nil,
+	"grep": nil, "rg": {"--pre", "--pre-glob"}, "sed": {"-i", "--in-place"}}
+
+// readsOnlyMemory: a command that only reads, and only the memory directory (cat / head / rg … on paths in it, a
+// timeout in front, output to /dev/null at most). What it reads is what the 记忆 page shows anyway.
+func readsOnlyMemory(command, cwd, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	segs, ok := shellSegments(command)
+	if !ok || len(segs) == 0 {
+		return false
+	}
+	touched := false
+	for _, sg := range segs {
+		w := sg.words
+		if len(w) > 2 && w[0] == "timeout" && regexp.MustCompile(`^[0-9.]+[smh]?$`).MatchString(w[1]) {
+			w = w[2:]
+		}
+		if len(w) == 0 || sg.subst || !safeRedirect(sg.redirect) || strings.Contains(sg.redirect, "/tmp/") {
+			return false
+		}
+		bad, known := memoryReaders[w[0]]
+		if !known {
+			return false
+		}
+		for _, a := range w[1:] {
+			for _, b := range bad {
+				if a == b || strings.HasPrefix(a, b+"=") || (b == "-i" && strings.HasPrefix(a, "-i")) {
+					return false
+				}
+			}
+			if w[0] == "sed" && !strings.HasPrefix(a, "-") && strings.ContainsAny(a, "wWeE") && !strings.Contains(a, "/") {
+				return false // a sed script that writes (w file) or runs (e) something
+			}
+			if strings.Contains(a, "/") && !strings.HasPrefix(a, "-") {
+				if p := a; !allUnder([]string{p}, cwd, dir) && filepath.Clean(p) != filepath.Clean(dir) {
+					return false
+				}
+				touched = true
+			}
+		}
+	}
+	return touched
+}
+
+// allUnder: there are paths, and each (relative ones from cwd) is inside dir.
+func allUnder(paths []string, cwd, dir string) bool {
+	if dir == "" || len(paths) == 0 {
+		return false
+	}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, p)
+		}
+		rel, err := filepath.Rel(dir, filepath.Clean(p))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, "../") || rel == "." {
+			return false
+		}
+	}
+	return true
+}
+
+// codexMemoryPrompt tells Codex about the assistant's memory: the same directory and format as Claude Code's
+// auto-memory for the assistant's directory (memory.go), so both agents read and write one memory and the app's
+// 记忆 page shows it whichever runs. The index (MEMORY.md) goes in as it is now; the files are read when needed.
+func codexMemoryPrompt(dir string) string {
+	index, _ := os.ReadFile(filepath.Join(dir, "MEMORY.md"))
+	if len(index) > 24*1024 {
+		index = append(index[:24*1024], []byte("\n…（索引太长，后面的没放进来，需要时读文件）")...)
+	}
+	shown := strings.TrimSpace(string(index))
+	if shown == "" {
+		shown = "（还没有记忆）"
+	}
+	return `# 记忆
+
+你有一份跨对话保留的记忆，在 ` + "`" + dir + "`" + `（用户在 App 的「记忆」页里看、改、删；换成 Claude 跑时用的也是这一份）。
+每条记忆一个 Markdown 文件，` + "`MEMORY.md`" + ` 是索引，每条一行：` + "`- [标题](文件名.md) — 一句话说明`" + `。
+
+- 开始一件事前看下面的索引；和眼前的事相关的条目，读它的文件再动手。记忆可能过时：里面提到的文件、命令、配置，用之前先确认还在。
+- 用户告诉你关于他自己、他的偏好、对你做事方式的要求（纠正或认可都算），或者你发现了以后对话还会用到、又没法从别处查到的事实时，记下来：
+  新建一个文件（文件名用英文小写和连字符），开头写
+
+      ---
+      name: <短的英文标识>
+      description: <一句话，用来判断以后用不用得上>
+      metadata:
+        type: user | feedback | project | reference
+      ---
+
+  正文写事实本身；feedback / project 类再写「为什么」和「怎么用」。然后在 ` + "`MEMORY.md`" + ` 加一行指向它。用 apply_patch 改这个目录，不用问用户。
+- 已有的条目覆盖了就改那个文件，不要重复建；发现错了就改掉或删掉（同时删索引里那一行）。只在这个对话里有用的、能从代码或别处查到的，不要记。
+
+当前的索引（` + "`MEMORY.md`" + `）：
+
+` + shown
 }
 
 func withReason(s, reason string) string {

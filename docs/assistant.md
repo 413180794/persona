@@ -28,7 +28,7 @@
 | 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 实时快照 | node 启动 claude 进程前调 hub 的 `assistant.context`，拼进 `--append-system-prompt`：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。每个来源 3 秒超时，结果缓存 45 秒 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，jarvis 工具不再延迟加载 |
-| 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`） |
+| 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex 上时读写的也是这一份（下面「Codex」一节），换启动器记忆不丢 |
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
 | 手机不在前台 | `phone_*` 调用时没有手机连着 → hub 发静默推送（`content-available`，`jarvis_wake`）→ App 在后台连上 WS 执行，25 秒后断开；等最多 20 秒。App 进后台时主动断开 WS，否则挂起的 socket 让 hub 以为手机在线、调用干等 2 分钟 |
 
@@ -142,6 +142,7 @@ thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才
 | 图片 | base64 image 块 | 存成文件（`~/.jarvis/uploads/日期/`），`localImage`；rollout 记路径，App 当缩略图显示 |
 | 指令 | `CLAUDE.md` | `AGENTS.md`（`assistant.prepare` 同时写两份，内容一样）；Codex 还会读用户自己的 `~/.codex/AGENTS.md` |
 | lark-connector skill | `.claude/skills/lark-connector` | 同一个目录作为 extra skill root（格式相同，`skills/list` 里能看到）；`ol` 在 PATH 上，token 在进程环境里（`shell_environment_policy.ignore_default_excludes=true`，否则 Codex 默认把 `*TOKEN*` 变量从命令环境里去掉） |
+| 记忆 | Claude Code 的 auto memory（助手目录专属） | **同一份**（2026-11-01 用户选的）：`developerInstructions` 里带上目录、格式（一条一个文件 + `MEMORY.md` 索引，和 Claude 一样）和当前的索引（`codexMemoryPrompt`）；目录加进沙箱的 `writableRoots`，在里面改文件（apply_patch）和只读它的命令（cat / head / rg …，`readsOnlyMemory`）不问，计划模式下写也要问。Codex 自己的记忆（`~/.codex/memories`，整台机器所有 Codex 共用一份，由它自己从 rollout 提炼）对助手关掉（`features.memories=false`） |
 | 后台任务 / Monitor | `background_tasks_changed`，任务跑完 claude 自己开新一轮 | 每轮结束读 `thread/backgroundTerminals/list` 记成任务（有就不回收进程，重启后告诉对话丢了什么）；**跑完不会自己唤醒对话**，Codex 没有 Monitor |
 | 备用进程（预热） | 有 | 有（预先 `thread/start`，新对话直接用它的 thread，实测 50 ms 返回） |
 
@@ -155,7 +156,8 @@ thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才
 实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库，真实的 cx_gpt 启动器和 lark-connector）：新对话（快照、`agents_list` 不用批准）、续聊、
 ask_user 卡片答完拿到答案、`ol GET /me` 直接放行、`ol POST …/messages` 弹「飞书」卡片并在卡片上拒绝（模型停下没重试，消息没发出）、
 全部放行下命令不问、插话进同一轮、中断（即时，`sleep` 一起停掉）、hub + node 重启后续聊记得上文、思考强度和模式重启后读回、流式输出约 120 ms 一段、
-发图片认出颜色、预热的备用进程。单测：`assistant_codex_test.go`（假的 app-server 按真实帧回放：握手、turn/start / steer / interrupt、
+发图片认出颜色、预热的备用进程；记忆（同一天补测）：预置的「喜欢的茶」默认模式下直接读到（不弹卡片），
+让它记「花生过敏」后建了文件、更新了索引，「记忆」接口列得出来，新开的对话不读文件凭索引答对，`~/.codex/memories` 没被写。单测：`assistant_codex_test.go`（假的 app-server 按真实帧回放：握手、turn/start / steer / interrupt、
 各种审批和闸门、request_user_input）。
 
 ## 资料页和头像（2026-10-30）

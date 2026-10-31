@@ -11,7 +11,8 @@ import (
 )
 
 // The assistant's memory is Claude Code's auto-memory for its directory: one Markdown file per fact under
-// ~/.claude/projects/<encoded cwd>/memory, indexed by MEMORY.md. The app lists, edits and deletes the files.
+// ~/.claude/projects/<encoded cwd>/memory, indexed by MEMORY.md. The app lists, edits and deletes the files. On a
+// Codex launcher the assistant reads and writes the same directory (codexMemoryPrompt), so it is one memory either way.
 
 type memoryOp struct {
 	Op      string `json:"op"` // list | write | delete

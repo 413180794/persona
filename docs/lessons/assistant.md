@@ -21,4 +21,7 @@
   （`_meta.codex_approval_kind: mcp_tool_call`），不是命令审批；MCP 工具默认 60 秒超时（ask_user 要调大 `tool_timeout_sec`）；命令的环境默认去掉
   `*KEY*` / `*TOKEN*` 变量（ol 拿不到 token）；`turn/interrupt` 不停正在跑的命令，要再 `thread/backgroundTerminals/clean`（实验接口，导出协议要
   `generate-ts --experimental` 才看得到）；thread id 由 Codex 定，MCP 进程起来时还不知道会话 id。飞书闸门靠「审批总会来」：别用 `approvalPolicy: never`。
+- Codex 助手的记忆和 Claude 共用助手目录的 auto memory（`docs/assistant.md`「Codex」）。Codex 的 `untrusted` 连 `head` 都要批准，
+  不单独放行的话每次读记忆都在手机上弹卡片（2026-11-01 实测）；记忆目录在助手目录外，不加进 `writableRoots` 写不进去。
+  Codex 自己的 `~/.codex/memories` 是整台机器共用的，别给助手打开。
 - 在 hub 机器上用假 HOME 起测试 hub 时，`~/.local/bin/codex` 包装脚本按 `$HOME/.npm-global` 找安装目录，假 HOME 里要软链过去，否则 app-server 一启动就退出。
