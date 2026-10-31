@@ -65,10 +65,12 @@ func TestMissingFieldPanics(t *testing.T) {
 
 func TestSmallPrompts(t *testing.T) {
 	for got, want := range map[string]string{
-		RenderRefused("他说不行"):              "（没有执行）他说不行",
-		RenderLauncherCheck():              "Reply with exactly one word: ok",
-		RenderJSONOnly("system"):           "system\n\nReply with a single JSON object only, no prose, no code fences.",
-		RenderTranslateMailInput("S", "T"): "主题：S\n\nT",
+		RenderRefused("他说不行"):                  "（没有执行）他说不行",
+		RenderLauncherCheck():                  "Reply with exactly one word: ok",
+		RenderJSONOnly("system"):               "system\n\nReply with a single JSON object only, no prose, no code fences.",
+		RenderTranslateMailInput("S", "T"):     "主题：S\n\nT",
+		RenderCodexInstructions("snap", "mem"): "snap\n\nmem",
+		RenderCodexInstructions("", "mem"):     "mem",
 	} {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)

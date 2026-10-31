@@ -119,3 +119,18 @@ func RenderLostTasks(tasks []string) string {
 
 // RenderRefused is passed into a running Codex turn when a tool call was refused (assistant/refused).
 func RenderRefused(reason string) string { return render("assistant/refused", reason) }
+
+// CodexMemory tells the Codex assistant about the memory it shares with Claude (assistant/codex_memory).
+type CodexMemory struct {
+	Dir       string
+	Index     string // MEMORY.md, trimmed
+	Truncated bool   // Index is the start of a longer one
+}
+
+func RenderCodexMemory(m CodexMemory) string { return render("assistant/codex_memory", m) }
+
+// RenderCodexInstructions is the Codex assistant's developer instructions: the live context, then the memory
+// (assistant/codex_instructions).
+func RenderCodexInstructions(snapshot, memory string) string {
+	return render("assistant/codex_instructions", struct{ Snapshot, Memory string }{snapshot, memory})
+}

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -281,11 +282,7 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 	mode, _ := n.modesOf(id)
 	approval, sandbox := codexPolicy(mode)
 	params := map[string]any{"cwd": cwd, "approvalPolicy": approval, "sandbox": sandbox}
-	instructions := codexMemoryPrompt(c.memDir)
-	if snap := n.assistantContext(id); snap != "" {
-		instructions = snap + "\n\n" + instructions
-	}
-	params["developerInstructions"] = instructions
+	params["developerInstructions"] = prompts.RenderCodexInstructions(n.assistantContext(id), codexMemoryPrompt(c.memDir))
 	var res struct {
 		Thread struct {
 			ID   string `json:"id"`
@@ -902,36 +899,14 @@ func allUnder(paths []string, cwd, dir string) bool {
 // auto-memory for the assistant's directory (memory.go), so both agents read and write one memory and the app's
 // 记忆 page shows it whichever runs. The index (MEMORY.md) goes in as it is now; the files are read when needed.
 func codexMemoryPrompt(dir string) string {
+	m := prompts.CodexMemory{Dir: dir}
 	index, _ := os.ReadFile(filepath.Join(dir, "MEMORY.md"))
 	if len(index) > 24*1024 {
-		index = append(index[:24*1024], []byte("\n…（索引太长，后面的没放进来，需要时读文件）")...)
+		m.Index, m.Truncated = strings.TrimLeftFunc(string(index[:24*1024]), unicode.IsSpace), true
+	} else {
+		m.Index = strings.TrimSpace(string(index))
 	}
-	shown := strings.TrimSpace(string(index))
-	if shown == "" {
-		shown = "（还没有记忆）"
-	}
-	return `# 记忆
-
-你有一份跨对话保留的记忆，在 ` + "`" + dir + "`" + `（用户在 App 的「记忆」页里看、改、删；换成 Claude 跑时用的也是这一份）。
-每条记忆一个 Markdown 文件，` + "`MEMORY.md`" + ` 是索引，每条一行：` + "`- [标题](文件名.md) — 一句话说明`" + `。
-
-- 开始一件事前看下面的索引；和眼前的事相关的条目，读它的文件再动手。记忆可能过时：里面提到的文件、命令、配置，用之前先确认还在。
-- 用户告诉你关于他自己、他的偏好、对你做事方式的要求（纠正或认可都算），或者你发现了以后对话还会用到、又没法从别处查到的事实时，记下来：
-  新建一个文件（文件名用英文小写和连字符），开头写
-
-      ---
-      name: <短的英文标识>
-      description: <一句话，用来判断以后用不用得上>
-      metadata:
-        type: user | feedback | project | reference
-      ---
-
-  正文写事实本身；feedback / project 类再写「为什么」和「怎么用」。然后在 ` + "`MEMORY.md`" + ` 加一行指向它。用 apply_patch 改这个目录，不用问用户。
-- 已有的条目覆盖了就改那个文件，不要重复建；发现错了就改掉或删掉（同时删索引里那一行）。只在这个对话里有用的、能从代码或别处查到的，不要记。
-
-当前的索引（` + "`MEMORY.md`" + `）：
-
-` + shown
+	return prompts.RenderCodexMemory(m)
 }
 
 func withReason(s, reason string) string {

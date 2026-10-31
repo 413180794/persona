@@ -18,6 +18,7 @@ MCP 工具的描述（`proto.Tool` 的 `Description`）和工具返回给模型�
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | jarvisd 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
+| `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：实时快照 + 和 Claude 共用的记忆（目录、格式、当前索引） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
