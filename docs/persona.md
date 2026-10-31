@@ -197,7 +197,10 @@
   - 要能连上 chatgpt.com。
   - 对话请求认 `socks5h://` 代理，但 `image_gen` 和刷新模型列表用的 HTTP 客户端不认，报「connection failed: error sending request」。
   - 要给 HTTP CONNECT 代理：`--proxy http://host:port`。
-- **耗时**：一张约 2–3 分钟，8 张二十分钟左右。
+- **耗时**：一张约 2–3 分钟，8 张二十分钟左右；几个形象可以同时跑（2026-10-31 四个并行，32 张 6 分钟画完）。
+  - 慢得多（一张十分钟以上、几个并行就全部停住）时，先量隧道的吞吐：`curl -x <代理> -o /dev/null -w '%{speed_download}' <大文件>`。
+    每张图约 1.6 MB，每次请求还要带上参考图和上下文；出口只有十几 KB/s 时（2026-10-31 hub 机器的外网一度只有 11 KB/s）就会这样。
+    换一台外网快、连得上 chatgpt.com 的机器开 `ssh -D`，CONNECT 代理不用改。
 
 ## 测试
 
