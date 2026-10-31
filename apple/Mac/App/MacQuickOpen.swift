@@ -104,6 +104,8 @@ enum MacQuickOpen {
             .assistant: ["jarvis", "assistant", "助手", "主对话"],
             .agents: ["agents", "claude", "codex", "会话"],
             .inbox: ["inbox", "mail", "lark", "邮件", "飞书"],
+            .knowledge: ["knowledge", "kb", "项目", "人", "文档", "会议"],
+            .machines: ["machines", "monitor", "电脑", "监控", "cpu", "内存"],
             .settings: ["settings", "preferences", "偏好"],
         ]
         return MacSection.allCases.compactMap { s in

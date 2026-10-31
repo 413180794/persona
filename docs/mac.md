@@ -136,6 +136,12 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   「做完了，还没看」（最近 5 个）。需要你的一项是子菜单：说了什么 + 卡片上一点就能答的那几个（单个问题的选项、允许 / 拒绝、批准计划、
   hub 读出来的终端短选项）+ 打开对话；别的点一下打开对话。最后是「打开 Jarvis」「退出 Jarvis」。
 
+## 侧边栏的「知识库」「机器」（Mac）
+
+壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Jarvis 里）、机器（`MachineDashboardView` 机器监控，手机上在 Agents / 设置里），
+⌘1…⌘6 依次是 Jarvis、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
+通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
+
 ## 快速打开、新建（Mac）
 
 `apple/Mac/App/MacQuickOpen.swift`（搜索、排序，有测试）、`MacQuickOpenPanel.swift`（浮层）。
@@ -336,7 +342,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 ## 11. Machines / monitoring
 - [ ] 设置 › 机器 list: online, sessions, version, launcher, reconnect; version-mismatch 重新部署 — Views/Machines/MachinesView.swift (MachinesView, MachineCard, DeployRow)
 - [ ] Machine detail (系统与监控, running Claude list) — MachinesView.swift (MachineDetailView)
-- [ ] Dashboard: N/M online, per-machine card with CPU/mem/net now + 1h sparklines, alert rings, 10s polling — Views/Machines/MachineDashboardView.swift
+- [x] Dashboard: N/M online, per-machine card with CPU/mem/net now + 1h sparklines, alert rings, 10s polling — Views/Machines/MachineDashboardView.swift（Mac：侧边栏「机器」⌘5）
 - [ ] Monitor page: 1/6/24h, CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps — Views/Machines/MachineMonitorView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
 - [ ] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
 

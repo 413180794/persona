@@ -1,19 +1,33 @@
 import BeautifulUI
 import SwiftUI
 
-/// The iPhone's four tabs, as the window's sidebar sections.
+/// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
+/// Jarvis, and 机器监控 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
+/// (docs/mac.md「主窗口」). ⌘1…⌘6 in this order.
 enum MacSection: String, CaseIterable, Identifiable {
-    case assistant, agents, inbox, settings
+    case assistant, agents, inbox, knowledge, machines, settings
 
     var id: String { rawValue }
 
-    var tab: AppTab {
+    /// The iPhone tab it is; nil for the Mac's own sections.
+    var tab: AppTab? {
         switch self {
         case .assistant: .assistant
         case .agents: .chats
         case .inbox: .mail
         case .settings: .settings
+        case .knowledge, .machines: nil
         }
+    }
+
+    /// The section on screen: one of the Mac's own while picked, else the tab's (a notification, ⌘K or a link that
+    /// moves the tab moves the section with it, MacShell clears the pick).
+    static func shown(override: MacSection?, tab: AppTab) -> MacSection { override ?? MacSection(tab) }
+
+    /// What picking a section changes: the tab, or the Mac-side pick.
+    static func pick(_ s: MacSection) -> (tab: AppTab?, override: MacSection?) {
+        if let tab = s.tab { return (tab, nil) }
+        return (nil, s)
     }
 
     init(_ tab: AppTab) {
@@ -30,6 +44,8 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .assistant: "Jarvis"
         case .agents: "Agents"
         case .inbox: "收件箱"
+        case .knowledge: "知识库"
+        case .machines: "机器"
         case .settings: "设置"
         }
     }
@@ -39,6 +55,8 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .assistant: Theme.Icon.ai
         case .agents: Theme.Icon.agents
         case .inbox: Theme.Icon.inbox
+        case .knowledge: Theme.Icon.knowledge
+        case .machines: Theme.Icon.machines
         case .settings: Theme.Icon.settings
         }
     }
@@ -108,10 +126,12 @@ extension View {
 /// its composer cut off). The page's split is the window's; this column sits at its leading edge.
 private struct MacShell: View {
     @Environment(AppModel.self) private var model
+    private var shell: MacShellState { .shared }
 
     var body: some View {
         HStack(spacing: 0) {
-            List(selection: Binding(get: { MacSection(model.selectedTab) }, set: { if let s = $0 { model.selectedTab = s.tab } })) {
+            List(selection: Binding(get: { MacSection.shown(override: shell.section, tab: model.selectedTab) },
+                                    set: { if let s = $0 { shell.go(s, model) } })) {
                 ForEach(MacSection.allCases) { section in
                     Label(section.title, systemImage: section.icon)
                         .lineLimit(1)
@@ -127,12 +147,17 @@ private struct MacShell: View {
             page
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
+        .onChange(of: model.selectedTab) { shell.section = nil }
+        .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
+        .onChange(of: model.assistantCurrent) { shell.section = nil }
     }
 
     /// The iOS tab bar's badges (`RootView`).
     private func badge(_ section: MacSection) -> Text? {
         let n: Int
         switch section {
+        case .knowledge, .machines: return nil
         case .assistant: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count
         case .agents: n = model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey) }.count
         case .inbox: n = InboxStore.shared.actionCount
@@ -142,10 +167,17 @@ private struct MacShell: View {
     }
 
     @ViewBuilder private var page: some View {
-        switch MacSection(model.selectedTab) {
+        switch MacSection.shown(override: shell.section, tab: model.selectedTab) {
         case .assistant: AssistantView()
         case .agents: ChatsView()
         case .inbox: MacInboxPage()
+        case .knowledge: NavigationStack { KnowledgeView() }
+        case .machines:
+            NavigationStack {
+                MachineDashboardView()
+                    .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
+                    .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+            }
         case .settings: SettingsView()
         }
     }

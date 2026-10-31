@@ -6,6 +6,8 @@ import SwiftUI
     static let shared = MacShellState()
     var quickOpen = false
     var newAgent = false
+    /// 知识库 or 机器 while picked (they are not iPhone tabs); nil shows the tab's section.
+    var section: MacSection?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
 }
@@ -93,7 +95,7 @@ struct MacQuickOpenPanel: View {
         case .inbox(let id):
             model.selectedTab = .mail
             MacInboxState.shared.selection = [.item(id)]
-        case .section(let s): model.selectedTab = s.tab
+        case .section(let s): MacShellState.shared.go(s, model)
         case .newAgent: MacShellState.shared.newAgent = true
         case .newConversation:
             model.selectedTab = .assistant
@@ -152,5 +154,14 @@ struct MacQuickOpenLayer: View {
                     .padding(.top, Theme.Size.macQuickOpenTop)
             }
         }
+    }
+}
+
+extension MacShellState {
+    /// Shows a section: an iPhone tab moves the tab, 知识库 / 机器 are picked on the Mac side.
+    func go(_ s: MacSection, _ model: AppModel) {
+        let p = MacSection.pick(s)
+        section = p.override
+        if let tab = p.tab { model.selectedTab = tab }
     }
 }

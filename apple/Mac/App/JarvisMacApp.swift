@@ -88,7 +88,7 @@ struct MacCommands: Commands {
         }
         CommandGroup(after: .sidebar) {
             ForEach(Array(MacSection.allCases.enumerated()), id: \.element) { i, section in
-                Button(section.title) { model.selectedTab = section.tab }
+                Button(section.title) { MacShellState.shared.go(section, model) }
                     .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
             }
             Divider()
@@ -232,6 +232,8 @@ enum MacLaunchArguments {
             MacShellState.shared.quickOpen = true
         }
         if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
+        // `-macSection knowledge|machines|…`: that sidebar section.
+        if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
         if let key = sessionKey(d.string(forKey: "simulateTap")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { model.open(key) }
         }
