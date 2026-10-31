@@ -142,7 +142,7 @@ func TestInboxAgentPrompt(t *testing.T) {
 	it := actionItem("x", time.Now())
 	it.Title = `群 "A" <b>`
 	it.Agent = &InboxAgent{Task: "查 1013 是否合入"}
-	p := inboxAgentPrompt(it, "小明")
+	p := inboxAgentPrompt(it, "小明", nil)
 	for _, want := range []string{`title="飞书 · 群 &quot;A&quot; &lt;b&gt;"`, "飞书会话 id（lark_messages 用）：f1", "查 1013 是否合入",
 		"inbox_draft", "张三：1013 合了吗？", "小明"} {
 		if !strings.Contains(p, want) {

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -582,9 +583,7 @@ func (n *Node) recoverAssistantTasks(send func(id, text string) error) {
 			continue
 		}
 		n.rememberTasks(id, nil)
-		text := "⚠️ 运行你的 jarvisd 刚重启过（通常是部署），这段对话里还在跑的后台任务 / 监控随进程一起停了：\n- " +
-			strings.Join(tasks, "\n- ") + "\n还需要的就重新启动（命令可能只跑了一半，重跑前先看看输出）；不需要了就简短说一句，不用推送。"
-		if err := send(id, text); err != nil {
+		if err := send(id, prompts.RenderLostTasks(tasks)); err != nil {
 			n.logger.Printf("assistant %s: tell it about lost background tasks: %v", id[:8], err)
 		} else {
 			n.logger.Printf("assistant %s: %d background tasks lost in the restart, told the conversation", id[:8], len(tasks))

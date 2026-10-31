@@ -2,12 +2,13 @@ package kb
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // ItemSource lists documents, meetings and calendar events (Feishu through lark-connector).
@@ -67,11 +68,6 @@ type itemTags struct {
 	} `json:"items"`
 }
 
-const itemPrompt = `你在给 {{owner}} 的文档、会议、日程打标。「我」就是 {{owner}}。每行一条：id | 类型 | 标题 | 时间 | 来源。
-JSON：{"items":[{"id","importance","relevance","tags","project","note"}]}，每条都要有：
-importance P0–P3（对我的重要级，P3 是例行 / 无关），relevance 0–100（与我相关性），tags 1–4 个短标签（优先复用已有标签），
-project 是「已知项目」里对应的项目原名（没有就空），note 一句话（20 字内，可空）。不知道的不要编。`
-
 // TagItems tags documents, meetings and events that are new or changed, 40 per call.
 func (e *Engine) TagItems(ctx context.Context) error {
 	if e.Model == nil {
@@ -89,24 +85,23 @@ func (e *Engine) TagItems(ctx context.Context) error {
 		batch := todo[:min(40, len(todo))]
 		todo = todo[len(batch):]
 		byID := map[string]*Item{}
-		var in strings.Builder
-		fmt.Fprintf(&in, "已知项目：%s\n已有标签：%s\n\n", e.projectNames(), strings.Join(e.TopTags(40), "、"))
+		in := prompts.KBItemsInput{Projects: e.knownProjects(), Tags: e.TopTags(40)}
 		for _, it := range batch {
 			key := it.Kind + "/" + it.ID
 			byID[key] = it
-			at := ""
+			var at time.Time
 			if !it.At.IsZero() {
-				at = it.At.Local().Format("2006-01-02 15:04")
+				at = it.At.Local()
 			}
 			where := it.Where
 			if c, ok := e.Store.Chat(it.Where); ok {
 				where = c.Name
 			}
-			fmt.Fprintf(&in, "%s | %s | %s | %s | %s\n", key, map[string]string{KindDoc: "文档", KindMeeting: "会议", KindEvent: "日程"}[it.Kind], it.Title, at, where)
+			in.Items = append(in.Items, prompts.KBItem{Key: key, Kind: it.Kind, Title: it.Title, At: at, Where: where})
 		}
 		var out itemTags
 		cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-		err := e.Model.JSONMax(cctx, strings.ReplaceAll(itemPrompt, "{{owner}}", e.Owner), in.String(), 6000, &out)
+		err := e.Model.JSONMax(cctx, prompts.RenderKBItems(prompts.KBOwner{Owner: e.Owner}), prompts.RenderKBItemsInput(in), 6000, &out)
 		cancel()
 		if err != nil {
 			return err
@@ -331,37 +326,22 @@ func (e *Engine) List(kind, tag string) []Entry {
 
 // Prompt is a short Markdown digest of the most important projects and chats, for the assistant's live snapshot.
 func (e *Engine) Prompt(projects, chats int) string {
-	var b strings.Builder
-	ps := e.List(KindProject, "")
-	n := 0
-	for _, p := range ps {
-		if n >= projects || strings.HasSuffix(p.Extra, "done") || strings.HasSuffix(p.Extra, "ignored") {
+	var d prompts.KBDigest
+	for _, p := range e.List(KindProject, "") {
+		if len(d.Projects) >= projects || strings.HasSuffix(p.Extra, "done") || strings.HasSuffix(p.Extra, "ignored") {
 			continue
 		}
-		if n == 0 {
-			b.WriteString("重点项目（知识库 projects/）：\n")
-		}
-		fmt.Fprintf(&b, "- %s [%s 相关%d] %s（projects/%s）\n", p.Name, orDash(p.Importance), p.Relevance, p.OneLine, p.ID)
-		n++
+		d.Projects = append(d.Projects, digestEntry(p))
 	}
-	cs := e.List(KindChat, "")
-	n = 0
-	for _, c := range cs {
-		if n >= chats || c.Importance == "P3" {
+	for _, c := range e.List(KindChat, "") {
+		if len(d.Chats) >= chats || c.Importance == "P3" {
 			continue
 		}
-		if n == 0 {
-			b.WriteString("重点会话（知识库 chats/）：\n")
-		}
-		fmt.Fprintf(&b, "- %s [%s 相关%d] %s（chats/%s）\n", c.Name, orDash(c.Importance), c.Relevance, c.OneLine, c.ID)
-		n++
+		d.Chats = append(d.Chats, digestEntry(c))
 	}
-	return b.String()
+	return prompts.RenderKBDigest(d)
 }
 
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
+func digestEntry(x Entry) prompts.KBDigestEntry {
+	return prompts.KBDigestEntry{ID: x.ID, Name: x.Name, Importance: x.Importance, OneLine: x.OneLine, Relevance: x.Relevance}
 }

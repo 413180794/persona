@@ -444,16 +444,16 @@ func TestGoldenInboxAgentPrompt(t *testing.T) {
 	for _, name := range []string{"dm", "doc_rows", "doc_plain", "moment", "mail_direct"} {
 		h := agentHub(t)
 		h.cfg.Assistant.Owner = "示例用户"
-		golden(t, "inbox_agent."+name, inboxAgentPrompt(items[name], h.ownerName())+h.kbContextFor(items[name]))
+		golden(t, "inbox_agent."+name, inboxAgentPrompt(items[name], h.ownerName(), h.kbContextFor(items[name])))
 	}
 	// With the knowledge base: the chat's summary and projects follow.
 	h := agentHub(t)
 	h.kb.eng = goldenKB(t)
 	it := *items["mention"]
-	golden(t, "inbox_agent.mention_kb", inboxAgentPrompt(&it, h.ownerName())+h.kbContextFor(&it))
+	golden(t, "inbox_agent.mention_kb", inboxAgentPrompt(&it, h.ownerName(), h.kbContextFor(&it)))
 	it = *items["mail_direct"]
 	it.Mail = &InboxMail{AccountID: "acc1", Mailbox: "INBOX", UIDs: []uint32{3}, From: mail.Address{Email: "Sender@Example.com"}}
-	golden(t, "inbox_agent.mail_kb", inboxAgentPrompt(&it, "")+h.kbContextFor(&it))
+	golden(t, "inbox_agent.mail_kb", inboxAgentPrompt(&it, "", h.kbContextFor(&it)))
 }
 
 func TestGoldenTabName(t *testing.T) {

@@ -61,11 +61,12 @@ func TestKBTools(t *testing.T) {
 	}
 
 	// The inbox agent gets the chat's and its project's context.
-	ctx := h.kbContextFor(&InboxItem{Lark: &InboxLark{FeedID: "f1"}})
+	it := &InboxItem{Lark: &InboxLark{FeedID: "f1"}, Agent: &InboxAgent{}}
+	ctx := inboxAgentPrompt(it, "我", h.kbContextFor(it))
 	if !strings.Contains(ctx, "会话档案 · 发布群") || !strings.Contains(ctx, "项目 · Jarvis 发布") || !strings.Contains(ctx, "kb_update") {
 		t.Fatalf("inbox context: %s", ctx)
 	}
-	if h.kbContextFor(&InboxItem{Lark: &InboxLark{FeedID: "nope"}}) != "" {
+	if h.kbContextFor(&InboxItem{Lark: &InboxLark{FeedID: "nope"}}) != nil {
 		t.Fatal("context for an unknown chat")
 	}
 }

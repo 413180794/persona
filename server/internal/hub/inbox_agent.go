@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -117,31 +118,12 @@ func (b *inbox) toJudge(since time.Time) []*InboxItem {
 	return out
 }
 
-const judgePrompt = `你是用户（称呼：%s）的 AI 分身的调度员。收件箱里的这件事已经判定为「需要用户处理」。判断要不要先交给 AI 分身：
-一个能用工具的 Agent，能读飞书会话、文档、日程，搜索飞书，查邮件，看用户各台电脑上的 Agent 和代码，上网。它查清楚以后起草一条回复，
-用户看过点一下就发出去。
-
-- 交给它（handle=true）：对方在等用户回复或给个结果，而且 Agent 能出力：问的是查得到的事实（进度、结论、文档 / 代码 / 数据里的东西）、
-  要材料或链接、要一个确认或回执、要基于资料写一段说明；需要用户拍板的事也可以交，Agent 会把要用户定的地方标出来。
-- 不交（handle=false）：不需要回复（通知、公告、讨论已经结束、对方只是告知）；内容太少看不出对方要什么；需要用户本人线下去做的事。
-
-task：交给它时写给 Agent 的具体指令，一两句：要查什么、回复要回答什么。比如「查 1013 分支是否已合入 codex 的改动，回复对方结论和合入的 MR」。
-reason：不超过 12 个字，为什么这么定。
-
-回复 JSON：{"handle":true,"task":"…","reason":"…"}`
-
 // judgeOne asks model 2 about one item. A model failure leaves it unjudged, so the next pass tries again.
 func (h *Hub) judgeOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
-	last, input := it.Last, triageInput(it)
-	if it.Summary != "" {
-		input = "摘要：" + it.Summary + "\n" + input
-	}
+	last, input := it.Last, prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: promptItem(it)})
 	h.inbox.mu.Unlock()
-	system := fmt.Sprintf(judgePrompt, h.ownerName())
-	if r := strings.TrimSpace(h.cfg.Inbox.Agent.Rules); r != "" {
-		system += "\n\n用户自己定的规则（优先于上面的默认判断）：\n" + r
-	}
+	system := prompts.RenderInboxJudge(prompts.InboxJudge{Owner: h.ownerName(), Rules: strings.TrimSpace(h.cfg.Inbox.Agent.Rules)})
 	var out struct {
 		Handle bool   `json:"handle"`
 		Task   string `json:"task"`
@@ -200,7 +182,7 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	now := time.Now().UTC()
 	for _, it := range queued {
 		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
-		jobs = append(jobs, job{it, inboxAgentPrompt(it, h.ownerName()) + h.kbContextFor(it)})
+		jobs = append(jobs, job{it, inboxAgentPrompt(it, h.ownerName(), h.kbContextFor(it))})
 	}
 	h.inbox.mu.Unlock()
 	for _, j := range jobs {
@@ -286,47 +268,20 @@ func (h *Hub) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now ti
 	h.saveInbox(ctx, changed)
 }
 
-func inboxAgentPrompt(it *InboxItem, owner string) string {
-	title, ref := it.Title, ""
+// inboxAgentPrompt is the AI 分身's first message for an item (prompts/inbox/agent.md).
+func inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) string {
+	a := prompts.InboxAgent{Owner: owner, Title: it.Title, Item: promptItem(it), Task: it.Agent.Task, KB: kbc}
 	switch {
 	case it.Lark != nil:
-		title = "飞书 · " + it.Title
-		ref = "飞书会话 id（lark_messages 用）：" + it.Lark.FeedID + "\n"
+		a.Lark = &prompts.InboxAgentLark{FeedID: it.Lark.FeedID}
 	case it.Doc != nil:
-		title = "飞书文档 · " + it.Title
-		ref = "文档链接（ol GET /documents/read?url=… 读全文，表格加 sheet=，多维表格用 /documents/base/table）：" + it.Doc.URL + "\n"
-		if len(it.Doc.Rows) > 0 {
-			ref += "如果某一行的状态该变（比如事情已经做完、开始跟进），在 inbox_draft 的 changes 里给出 [{ref, field, value}]（上面列出的 ref、field 和可选值之一），" +
-				"用户点发送时一起改；不该改就不给。回复会作为评论发在文档里。\n"
-		} else {
-			ref += "回复会作为评论发在文档里。\n"
-		}
+		a.Doc = &prompts.InboxAgentDoc{URL: it.Doc.URL, Rows: len(it.Doc.Rows) > 0}
 	case it.Moment != nil:
-		title = "removed · " + it.Title
-		ref = "removed帖子 id：" + it.Moment.PostID + "（ol GET /moments/posts/<id>/comments?count=50 读全部评论）。回复会作为评论发在这个帖子下" +
-			"（回复上面标了「要回复的这条」的那条评论），全公司可见：只说能公开说的。\n"
+		a.Moment = &prompts.InboxAgentMoment{PostID: it.Moment.PostID}
 	case it.Mail != nil && len(it.Mail.UIDs) > 0:
-		title = "邮件 · " + it.Title
-		ref = fmt.Sprintf("邮箱账号 %s，文件夹 %s，最新一封 uid %d（mail_* 工具用）\n", it.Mail.AccountID, it.Mail.Mailbox, it.Mail.UIDs[len(it.Mail.UIDs)-1])
+		a.Mail = &prompts.InboxAgentMail{Account: it.Mail.AccountID, Mailbox: it.Mail.Mailbox, UID: it.Mail.UIDs[len(it.Mail.UIDs)-1]}
 	}
-	return fmt.Sprintf(`这是收件箱里的一件事，你作为%[1]s的 AI 分身先处理它，最后起草一条回复，%[1]s在手机上看过、点一下就会发出去。
-
-<jarvis-context kind="context" title="%[2]s">
-%[3]s%[4]s
-</jarvis-context>
-
-要做的：%[5]s
-
-- 先用工具把需要的信息查清楚（lark_messages 读更早的上下文、lark_search 或 lark-connector skill 的「ol GET …」查文档和日程、agents_list / agent_read 看各台电脑上的 Agent、
-  读代码、mail_* 读邮件、上网）。只做只读的调查，不改任何东西。
-- **不要自己发送**（不用 ol 发飞书、不调用 mail_send、agent_send），也不要用 ask_user / notify_user 打扰%[1]s。
-- 最后**必须**调用 inbox_draft 提交：text 是以%[1]s口吻写的回复正文（第一人称；飞书口语、短，不要客套；邮件按来信的语言和正式程度）；
-  查不到或要%[1]s本人定的地方用【】标出来，不要编；note 是一两句你查到了什么、依据在哪，给%[1]s核对用。
-- 提交以后就结束，不用再总结。`, owner, xmlAttr(title), triageInput(it), "\n"+ref, it.Agent.Task)
-}
-
-func xmlAttr(s string) string {
-	return strings.NewReplacer("&", "&amp;", `"`, "&quot;", "<", "&lt;", ">", "&gt;").Replace(s)
+	return prompts.RenderInboxAgent(a)
 }
 
 func (h *Hub) ownerName() string {

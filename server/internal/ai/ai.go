@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 type Config struct {
@@ -207,7 +209,7 @@ func (c *Client) JSON(ctx context.Context, system, user string, out any) error {
 
 // JSONMax is JSON with room for a longer answer (summaries).
 func (c *Client) JSONMax(ctx context.Context, system, user string, maxTokens int, out any) error {
-	text, err := c.Complete(ctx, system+"\n\nReply with a single JSON object only, no prose, no code fences.", user, maxTokens)
+	text, err := c.Complete(ctx, prompts.RenderJSONOnly(system), user, maxTokens)
 	if err != nil {
 		return err
 	}

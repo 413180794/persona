@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // Kinds of entities, also the directory names under the data dir.
@@ -125,7 +127,7 @@ func NewStore(dir string) (*Store, error) {
 		}
 	}
 	s := &Store{Dir: dir}
-	_ = writeIfMissing(filepath.Join(dir, "README.md"), readme)
+	_ = writeIfMissing(filepath.Join(dir, "README.md"), prompts.RenderKBReadme())
 	return s, nil
 }
 
@@ -478,20 +480,6 @@ func addUnique(list []string, v ...string) []string {
 	}
 	return list
 }
-
-const readme = `# Jarvis 知识库
-
-hub 自动维护的数据（说明见仓库 docs/knowledge.md）。可以直接读、grep；改 summary.md 也可以，下次压缩会接着用。
-
-- chats/<id>/messages/YYYY-MM-DD.md  每个会话每天的全量文字（保留 365 天）
-- chats/<id>/attachments/            附件（保留 30 天）
-- chats/<id>/summary.md              压缩后的上下文；meta.json 里是名称、成员、关联项目、打标
-- people/<id>/                       人：summary.md（是谁、和我的关系）、meta.json
-- projects/<slug>/                   项目：summary.md（目标、现状、下一步）、log.md（时间线）、meta.json
-- docs/ meetings/ events/            文档、会议、日程，各一个 json，带打标和关联项目
-
-打标：importance P0–P3（重要级），relevance 0–100（与我相关性），tags（自动生成的标签）。
-`
 
 // PrependMessages writes lines older than what a chat's day files hold: each day file gets them before its own lines.
 func (s *Store) PrependMessages(c *Chat, lines []Line) error {

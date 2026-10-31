@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -825,7 +826,7 @@ func (c *codexConn) tellModel(reason string) {
 		if turn == "" {
 			return
 		}
-		input := []map[string]any{{"type": "text", "text": "（没有执行）" + reason, "text_elements": []any{}}}
+		input := []map[string]any{{"type": "text", "text": prompts.RenderRefused(reason), "text_elements": []any{}}}
 		if err := c.call(ctx, "turn/steer", map[string]any{"threadId": thread, "input": input, "expectedTurnId": turn}, nil); err != nil {
 			c.n.logger.Printf("assistant codex %s: pass the refusal on: %v", short(thread), err)
 		}

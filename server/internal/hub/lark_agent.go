@@ -13,6 +13,7 @@ import (
 
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -285,7 +286,6 @@ var docLink = regexp.MustCompile(`https?://[^\s<>"'）)]+/(?:docx|docs|wiki|shee
 // conversation (the thread, or the messages before the request), the quoted message, the docs linked there, and what
 // the knowledge base knows about the chat and its projects. Returns the chat's name too.
 func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID string, m lark.Message) (string, string) {
-	var b strings.Builder
 	chat := feedID
 	var kc *kb.Chat
 	if e := h.kb.eng; e != nil {
@@ -293,15 +293,11 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 			kc, chat = c, c.Name
 		}
 	}
-	kind := "会话"
+	d := prompts.LarkChatContext{Known: kc != nil, InThread: m.ThreadKind != "", Chat: chat, FeedID: feedID, MessageID: m.ID,
+		At: m.CreatedAt.Local()}
 	if kc != nil {
-		kind = map[string]string{"dm": "私聊", "group": "群聊", "bot": "机器人会话"}[kc.Kind]
+		d.Kind = kc.Kind
 	}
-	if m.ThreadKind != "" {
-		kind += "里的一个话题"
-	}
-	fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n位置：%s「%s」（feed_id %s）；请求消息 id %s，%s 发出。\n</jarvis-context>\n",
-		xmlAttr("请求的位置"), kind, chat, feedID, m.ID, m.CreatedAt.Local().Format("2006-01-02 15:04"))
 
 	// The conversation around it.
 	var msgs []lark.Message
@@ -320,14 +316,10 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 		}
 	}
 	if len(msgs) > 0 {
-		title := "前面的聊天"
-		if m.ThreadKind != "" {
-			title = "这个话题里的消息"
-		}
-		fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s</jarvis-context>\n", xmlAttr(title), larkTranscript(msgs, m.ID, 30000))
+		d.Transcript = larkTranscript(msgs, m.ID, 30000)
 	}
 	if q := m.ReplyTo; q != nil && !q.Recalled {
-		fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s：%s\n</jarvis-context>\n", xmlAttr("请求引用的消息"), q.SenderName, clipRunes(q.Text, 4000))
+		d.Quote = &prompts.LarkQuote{Sender: q.SenderName, Text: clipRunes(q.Text, 4000)}
 	}
 
 	// Docs linked in the request, the quote, and the last messages.
@@ -347,95 +339,40 @@ func (h *Hub) larkAgentContext(ctx context.Context, cfg LarkAgentConfig, feedID 
 			seen[link] = true
 			title, md, err := h.lark.DocMarkdown(ctx, link)
 			if err != nil {
-				fmt.Fprintf(&b, "<jarvis-context kind=\"doc\" title=\"%s\" url=\"%s\">\n（读不到：%s）\n</jarvis-context>\n", xmlAttr("文档"), xmlAttr(link), clip(oneLine(err.Error()), 120))
+				d.Docs = append(d.Docs, prompts.LarkDoc{URL: link, Err: clip(oneLine(err.Error()), 120)})
 				continue
 			}
-			fmt.Fprintf(&b, "<jarvis-context kind=\"doc\" title=\"%s\" url=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("文档 · "+title), xmlAttr(link), clipRunes(md, 8000))
+			d.Docs = append(d.Docs, prompts.LarkDoc{URL: link, Title: title, Markdown: clipRunes(md, 8000)})
 		}
 	}
 
 	// What the knowledge base knows.
 	if e := h.kb.eng; e != nil && kc != nil {
-		if sum := e.Store.Summary(kb.KindChat, kc.ID); sum != "" {
-			fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("会话档案 · "+kc.Name), clipRunes(sum, 4000))
-		}
-		for i, slug := range kc.Projects {
-			if i >= 3 {
-				break
-			}
-			if p, ok := e.Store.Project(slug); ok {
-				fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("项目 · "+p.Name), clipRunes(e.Store.Summary(kb.KindProject, slug), 3000))
-			}
-		}
-		fmt.Fprintf(&b, "\n知识库里这个会话的 id：%s（kb_get / kb_search 查更多）。\n", kc.ID)
+		d.KB = h.kbContext(e, kc)
 	}
-	return chat, b.String()
+	return chat, prompts.RenderLarkChatContext(d)
 }
 
 // larkTranscript: one line per message, "01-02 15:04 名字：文字", oldest first, the request marked; the newest that fit.
 func larkTranscript(msgs []lark.Message, requestID string, limit int) string {
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].CreatedAt.Before(msgs[j].CreatedAt) })
-	lines := make([]string, 0, len(msgs))
+	lines := make([]prompts.LarkLine, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Type == "SYSTEM" {
 			continue
 		}
 		text := strings.TrimSpace(m.Text)
-		if m.Recalled {
-			text = "[已撤回]"
-		}
-		if text == "" {
+		if text == "" && !m.Recalled {
 			continue
 		}
-		who := m.SenderName
-		if m.IsMine {
-			who += "（我）"
-		}
-		mark := ""
-		if m.ID == requestID {
-			mark = "  ← 请求"
-		}
-		lines = append(lines, fmt.Sprintf("%s %s：%s%s", m.CreatedAt.Local().Format("01-02 15:04"), who, clipRunes(text, 2000), mark))
+		lines = append(lines, prompts.LarkLine{At: m.CreatedAt.Local(), Who: m.SenderName, Mine: m.IsMine, Text: clipRunes(text, 2000),
+			Recalled: m.Recalled, Request: m.ID == requestID})
 	}
-	var out []string
-	n := 0
-	for i := len(lines) - 1; i >= 0; i-- {
-		n += len(lines[i]) + 1
-		if n > limit {
-			break
-		}
-		out = append([]string{lines[i]}, out...)
-	}
-	return strings.Join(out, "\n") + "\n"
+	return prompts.RenderLarkTranscript(lines, limit)
 }
 
 func larkAgentPrompt(owner, chat, task, contextText string, resumed bool) string {
-	if owner == "" {
-		owner = "我"
-	}
-	var b strings.Builder
-	if resumed {
-		fmt.Fprintf(&b, "%s在同一个话题里又发了一条 /agent 请求（下面是最新的上下文）。\n\n", owner)
-	} else {
-		fmt.Fprintf(&b, "%s在飞书「%s」里用 /agent 叫你。这不是在电脑上开的会话，你只知道下面给出的上下文；不够就自己查（lark_*、kb_*、"+
-			"读文档、看各台电脑上的 Agent）。\n\n", owner, chat)
-	}
-	if task == "" {
-		task = "（没写具体要求：看上下文和引用的消息，判断他想让你做什么，比如回答问题、总结、给结论。）"
-	}
-	fmt.Fprintf(&b, "## 请求\n\n%s\n\n## 上下文\n\n%s\n", task, contextText)
-	b.WriteString(`
-## 怎么做
-
-- 能做的直接做掉：查资料、读代码、看日志、跑命令、开 Agent 干活都可以。
-- 做完用 lark_agent_reply 回复一次（只调一次，在最后）：hub 会以` + owner + `的身份回复那条请求（话题里就回在话题里），末尾自动加「> 🤖」。
-  回复写给在场的人看：直接给结论和要点，Markdown，中文，短一些；不要写「我查了一下」这类过程，不要贴大段日志。
-- **不替` + owner + `做承诺**：回复是以他的名义发的。只写已经做完的事（「已经下掉了」）；没做的事别写成「我这边会去做」，
-  要么现在就做掉再写，要么写成建议（「建议先下掉这个泳道」）。排期、答应别人的事、要花钱或影响别人的操作，一律只给建议。
-- 别用 lark_send 或别的方式自己往飞书发消息，别 ask_user / notify_user 打扰` + owner + `：这里的回复就是交付。
-- 有新结论（项目进展、谁负责什么、截止时间）用 kb_update 写回知识库。
-`)
-	return b.String()
+	return prompts.RenderLarkChatAgent(prompts.LarkAgent{Owner: owner, Title: chat, Task: task, Context: contextText, Resumed: resumed})
 }
 
 // --- replying ---

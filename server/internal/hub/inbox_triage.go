@@ -3,13 +3,13 @@ package hub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/ai"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // InboxConfig tunes the inbox (hub.json "inbox").
@@ -33,21 +33,6 @@ func (h *Hub) triageModel() *ai.Client {
 }
 
 const triageConcurrency = 4
-
-const triagePrompt = `你是用户（称呼：%s）的私人助理，替用户分拣收到的工作消息（飞书）和邮件，让用户只看需要自己的事。对给你的这一件事判断：
-
-- action（需要你）：需要用户本人回复、决定、处理，或者用户应该尽快知道。例如：有人直接问用户问题、@用户要用户做事或表态、私聊里找用户、
-  审批 / 确认 / 评审请求、和用户负责的东西有关的故障告警、需要回复的邮件、截止时间临近的事。
-- fyi（知悉即可）：和用户有关、值得扫一眼，但不需要用户做什么。例如：群里同步的进展和结论、抄送给用户的邮件、有信息量的通知。
-- noise（噪音）：营销、订阅、newsletter、广告、自动化通知、和用户无关的群聊闲聊、机器人刷屏。
-
-拿不准 action 还是 fyi 时选 action；私聊和 @用户 的默认是 action，除非内容明显只是通知或寒暄。
-
-summary：一句中文（不超过 40 个字），说清楚这件事是什么、要用户做什么，比如「刘森问压测目标，等你确认是否只测 code 沙箱」。
-不要写「有人发了消息」这种空话，不要加引号和标点以外的修饰。
-reason：不超过 12 个字，为什么这么分。
-
-回复 JSON：{"tier":"action|fyi|noise","summary":"…","reason":"…"}`
 
 // triageInbox sorts open items whose content changed since they were last looked at into 需要你 / 知悉即可 / 噪音
 // with a one-line summary (the hub's small-task model, ai.go). It runs in the background; one pass at a time.
@@ -93,14 +78,7 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	h.inbox.mu.Lock()
 	last, input := it.Last, triageInput(it)
 	h.inbox.mu.Unlock()
-	owner := h.cfg.Assistant.Owner
-	if owner == "" {
-		owner = "你"
-	}
-	system := fmt.Sprintf(triagePrompt, owner)
-	if r := strings.TrimSpace(h.cfg.Inbox.Rules); r != "" {
-		system += "\n\n用户自己定的规则（优先于上面的默认判断）：\n" + r
-	}
+	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: h.cfg.Assistant.Owner, Rules: strings.TrimSpace(h.cfg.Inbox.Rules)})
 	var out struct {
 		Tier    string `json:"tier"`
 		Summary string `json:"summary"`
@@ -154,64 +132,27 @@ func ruleTier(it *InboxItem) string {
 	return TierNoise
 }
 
-func triageInput(it *InboxItem) string {
-	var b strings.Builder
-	switch it.Kind {
-	case KindDM:
-		b.WriteString("类型：飞书私聊\n")
-	case KindMention:
-		b.WriteString("类型：飞书群里 @ 了用户\n")
-	case KindGroup:
-		b.WriteString("类型：飞书群的新消息（没有 @ 用户）\n")
-	case KindBot:
-		b.WriteString("类型：飞书机器人 / 应用发来的消息\n")
-	case KindDoc:
-		b.WriteString("类型：飞书云文档里 @ 了用户或评论了用户（表格、多维表格里可能要用户跟进某一行、改状态）\n")
-	case KindMoment:
-		b.WriteString("类型：removed（公司内的公开动态，类似朋友圈）里有人评论了用户的帖子、回复了用户的评论或 @ 了用户；" +
-			"多数是闲聊和捧场，有人在问用户问题、要用户回应时才需要用户\n")
-	case KindMail:
-		if it.Mail != nil && it.Mail.Direct {
-			b.WriteString("类型：邮件（直接发给用户）\n")
-		} else {
-			b.WriteString("类型：邮件（抄送、群发或邮件列表）\n")
-		}
-	}
-	b.WriteString(it.Context)
-	return b.String()
+// triageInput is the item as the models read it (prompts/inbox/item.md).
+func triageInput(it *InboxItem) string { return prompts.RenderInboxItem(promptItem(it)) }
+
+func promptItem(it *InboxItem) prompts.InboxItem {
+	return prompts.InboxItem{Kind: it.Kind, MailDirect: it.Mail != nil && it.Mail.Direct, Context: it.Context}
 }
-
-const draftPrompt = `你替用户（称呼：%s）起草一条回复，用户看过、改过之后自己发出去。
-
-- 用用户的口吻，第一人称，简洁自然，直接回应对方要的东西；不要解释你在做什么，只输出回复正文。
-- 飞书消息：口语、短，像同事之间聊天，不要「您好」「此致」这类客套；群里回复时不用 @ 对方（发送时会在原会话里）。
-- 邮件：按来信的语言和正式程度，可以有简短的称呼和落款；营销邮件一般不需要回，真要回也要短。
-- removed评论：全公司都看得到，像在公开场合说话：短、友好、不透露内部细节；只是捧场或闲聊的，一句就够。
-- 不知道的事实（时间、数字、结论）不要编，用【】标出来让用户补，比如「【周几】之前给你」。`
 
 // draftReply writes a reply to an inbox item in the user's voice (optionally following their instruction).
 func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, error) {
 	h.inbox.mu.Lock()
 	it, ok := h.inbox.items[id]
-	var input string
+	var item prompts.InboxItem
 	if ok {
-		input = triageInput(it)
+		item = promptItem(it)
 	}
 	h.inbox.mu.Unlock()
 	if !ok {
 		return "", errNoInboxItem
 	}
-	owner := h.cfg.Assistant.Owner
-	if owner == "" {
-		owner = "你"
-	}
-	system := fmt.Sprintf(draftPrompt, owner)
-	if n := strings.TrimSpace(h.cfg.Assistant.Notes); n != "" {
-		system += "\n\n关于用户：\n" + n
-	}
-	if s := strings.TrimSpace(instruction); s != "" {
-		input += "\n\n用户希望这样回：" + s
-	}
+	system := prompts.RenderInboxDraft(prompts.InboxDraft{Owner: h.cfg.Assistant.Owner, Notes: strings.TrimSpace(h.cfg.Assistant.Notes)})
+	input := prompts.RenderInboxDraftInput(prompts.InboxDraftInput{Item: item, Instruction: strings.TrimSpace(instruction)})
 	text, err := h.ai.Complete(ctx, system, input, 1024)
 	if err != nil {
 		return "", err

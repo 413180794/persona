@@ -1,0 +1,78 @@
+# 提示词
+
+jarvisd 写给模型的每一段提示词都在 `server/internal/prompts/`：一个提示词一个文件，Go `text/template` 语法，`//go:embed` 编进二进制。
+调用方只准备数据（机器列表、主人称呼、收集到的上下文……），调这个包里带类型的渲染函数拿到文字；Go 代码里不再用 `fmt` / `+` 拼提示词。
+`prompts` 不依赖 `hub`、`kb`、`node`，数据结构定义在 `prompts` 里，调用方把自己的类型转过来。
+
+什么算提示词：交给模型的 system / user 文字、写进助手目录的 CLAUDE.md、`--append-system-prompt` 的快照、发进对话的第一条消息，
+以及「把数据放进提示词的那段说明文字」（`<jarvis-context>` 块、「类型：飞书私聊」这类行）。用户的原话、收集到的聊天记录和文档正文是**数据**，不在模板里。
+MCP 工具的描述（`proto.Tool` 的 `Description`）和工具返回给模型的结果文字暂时还在各自的代码里。
+
+## 目录
+
+| 文件 | 是什么 | 谁用 |
+| --- | --- | --- |
+| `assistant/claude_md.md` | 助手目录 `~/.jarvis/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
+| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照（`--append-system-prompt`）：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进 | `hub/assistant_snapshot.go` |
+| `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
+| `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
+| `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
+| `assistant/lost_tasks.md` | jarvisd 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
+| `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
+| `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
+| `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
+| `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `hub/inbox_triage.go` |
+| `inbox/item.md` | 一件事给模型看的样子（类型行 + 内容），分拣、代写、判断、AI 分身共用 | 同上 |
+| `inbox/draft.md`、`draft_input.md` | 代写回复 | 同上 |
+| `inbox/judge.md`、`judge_input.md` | 要不要交给 AI 分身 | `hub/inbox_agent.go` |
+| `inbox/agent.md`、`agent_title.md`、`agent_ref.md` | AI 分身的第一条消息（来源相关的说明、知识库背景） | 同上 |
+| `kb/compress.md`、`compress_input.md` | 会话压缩 + 打标 | `kb/compress.go` |
+| `kb/project.md`、`project_input.md` | 重写项目档案 | 同上 |
+| `kb/items.md`、`items_input.md` | 文档 / 会议 / 日程打标 | `kb/items.go` |
+| `kb/known_projects.md` | 「已知项目」那一行，压缩和打标共用 | 同上 |
+| `kb/digest.md` | 快照里的知识库重点（`Engine.Prompt`） | `kb/items.go` |
+| `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
+| `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |
+| `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
+| `tools/mail_account.md` | 从粘贴的文字里认邮箱配置 | `hub/ai.go` |
+| `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
+| `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
+| `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
+| `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
+
+Go 那一侧：`prompts.go`（解析、模板函数），`assistant.go`、`lark.go`、`inbox.go`、`kb.go`、`tools.go`（每个提示词一个数据结构和一个 `RenderXxx`）。
+
+## 模板的规矩
+
+- 模板名是去掉 `.md` 的路径（`inbox/triage`）；一个提示词引用另一个用 `{{template "shared/user_rules" .}}`。
+  同一个 Agent 的几段（主体、可选段、列表）在模板里用 `{{if}}` / `{{range}}` / `{{template}}` 组合，不在 Go 里拼。
+- **文件最后一个换行不算**（编辑器总会加）。提示词本身要以换行结尾，就在最后留一个空行。`TestFilesEndWithANewline` 要求每个文件以换行结尾。
+- 默认值写在模板里（`{{or .Owner "用户"}}`、没写要求时的那句话），不在调用方。各提示词的称呼默认不一样（「用户」「我」「你」），照原样保留。
+- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
+  截断这类整理数据的事（`clip`、`clipRunes`、`oneLine`）在调用方做，传进来的已经是要放进去的值。
+- 包初始化时解析全部模板（`template.Must`，`missingkey=error`）：语法错误启动即崩，测试里先暴露；渲染出错（字段名写错）直接 panic，
+  不会把半截提示词交给模型。`TestEveryTemplateIsUsed` 抓没人用的模板。
+- 提示词里要写字面的 `{{`：`{{"{{"}}`。
+
+## 改一个提示词
+
+1. 改 `server/internal/prompts/` 里的文件。
+2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/kb ./internal/node -run Golden`。
+3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/kb ./internal/node -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
+   `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
+   （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test-server.sh ./internal/hub`），再把那两个文件拷回来。
+
+注意 `hub/assistant_schedule.go` 的 `scheduleHeader` 按 `assistant/task_run.md` 的头几行认出抄回来的旧头部：改那几行的写法要一起改它。
+
+## 加一个提示词
+
+1. 在对应场景的子目录加 `xxx.md`（没有合适的就新开一个子目录，并加进 `prompts.go` 的 `//go:embed`）。
+2. 在同场景的 Go 文件里加数据结构和 `RenderXxx`，调用方只填数据。
+3. 在调用方的包里加 golden 测试（`*_golden_test.go` 里照现有的写：几组有代表性的输入，可选段有 / 没有、列表空 / 多项），`UPDATE_GOLDEN=1` 生成。
+   输入一律用占位数据（`示例用户`、`example.com`），`scripts/privacy_check.py` 会查。
+
+## 金标准测试
+
+`hub/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
+system / user、临时目录的知识库），所以数据转换也一起测到。快照里的时钟两行换成 `HH:MM` 占位后再比。
+2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。

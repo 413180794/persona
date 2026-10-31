@@ -89,7 +89,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 
 模型会把通知邮件里的产品名（App Store 的每个 App、各种订阅服务）当成项目。所以只有**有真人在说话**的会话才能产生项目
 （`kb.HasPeople`：不是机器人会话；邮件要么自己回过、要么发件人不像 noreply / newsletter / support 之类的自动地址），
-提示词里也写明通知、营销、账单里的东西不是项目。hub 启动时把只来自这类会话、没手动打过标的项目标成 `ignored`：
+提示词（`server/internal/prompts/kb/`，`docs/prompts.md`）里也写明通知、营销、账单里的东西不是项目。hub 启动时把只来自这类会话、没手动打过标的项目标成 `ignored`：
 不再更新、不进快照和提示词，App 里收在「不是项目」；在打标里改回状态就恢复。
 
 ## 谁在用

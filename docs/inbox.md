@@ -57,7 +57,7 @@
 | `noise` | 已折叠 | 营销、订阅、newsletter、自动通知、无关闲聊、机器人刷屏 |
 
 - 喂给模型的是类型（私聊 / @了用户 / 群 / 机器人 / 直接发给用户的邮件 / 抄送或列表）+ 这件事的文字（`context`：飞书最近最多 20 条新消息、
-  邮件最新一封的全文前 3000 字）。称呼取 `assistant.owner`；`hub.json` 的 `inbox.rules` 是用户自己的分拣规则，附在提示词最后、优先。
+  邮件最新一封的全文前 3000 字）。提示词在 `server/internal/prompts/inbox/`（分拣 `triage.md`、代写 `draft.md`、判断 `judge.md`、AI 分身 `agent.md`，`docs/prompts.md`）。称呼取 `assistant.owner`；`hub.json` 的 `inbox.rules` 是用户自己的分拣规则，附在提示词最后、优先。
 - 拿不准 action / fyi 时选 action。模型失败时按规则兜底（私聊 / @我 → action，群 → fyi，直接发来的邮件 → fyi，其余 → noise），理由写「按规则」。
 - 每件只在内容变了（`last` 变了）时重新分拣；后台并发 4 个，一轮跑完才开下一轮。分拣前的事在界面上算「需要你」。
 - 2026-10-27 第一次跑：51 件里 3 件需要你、29 件噪音（全是营销邮件），摘要像「Sample Contact问 codex 代码是否已合入 1013，等你确认答复」。

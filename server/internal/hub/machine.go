@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/db"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -522,11 +523,8 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			SessionID string `json:"session_id"`
 		}
 		_ = json.Unmarshal(params, &p)
-		text := m.hub.assistantSnapshot(ctx)
-		if p.SessionID != "" && p.SessionID == m.hub.assistantConfig(ctx).Main {
-			text = "**这是主对话**：{{owner}}平时都在这里找你，接着之前聊过的事往下做。\n\n" + text
-			text = strings.ReplaceAll(text, "{{owner}}", m.hub.ownerName())
-		}
+		text := prompts.RenderAssistantContext(prompts.AssistantContext{Snapshot: m.hub.assistantSnapshot(ctx), Owner: m.hub.ownerName(),
+			Main: p.SessionID != "" && p.SessionID == m.hub.assistantConfig(ctx).Main})
 		return map[string]any{"text": text}, nil
 	}
 	return nil, fmt.Errorf("unknown method %s", method)

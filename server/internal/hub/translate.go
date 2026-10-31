@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // Translation (docs/ios.md「翻译」): the app decides what needs translating (its own setting, its own language
@@ -59,11 +60,6 @@ var languageNames = map[string]string{
 	"fr": "Français", "de": "Deutsch", "es": "Español", "ru": "Русский", "pt": "Português",
 }
 
-const translatePrompt = `你是翻译。把用户给的内容翻译成%s。
-- 只输出译文，不要解释、不要加引号或前言。
-- 保留原有的段落、换行、列表符号、链接、邮箱地址、数字和格式；代码、命令、人名、产品名、公司名保持原样。
-- 已经是%s的部分原样保留。`
-
 func (h *Hub) translateModel() error {
 	if h.triageModel() == nil {
 		return errors.New("hub.json has no ai model configured for translation")
@@ -103,8 +99,7 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 		total += len([]rune(in[j]))
 	}
 	body, _ := json.Marshal(map[string]any{"texts": in})
-	system := fmt.Sprintf(translatePrompt, lang, lang) +
-		"\n\n输入是 JSON {\"texts\":[…]}，逐条翻译，回复 JSON {\"texts\":[…]}，条数和顺序与输入完全一致。"
+	system := prompts.RenderTranslateTexts(lang)
 	var res struct {
 		Texts []string `json:"texts"`
 	}
@@ -168,11 +163,10 @@ func (h *Hub) translateMail(ctx context.Context, accountID string, uid uint32, m
 	if r := []rune(text); len(r) > translateMailText {
 		text, t.Clipped = string(r[:translateMailText]), true
 	}
-	system := fmt.Sprintf(translatePrompt, lang, lang) +
-		"\n\n输入是一封邮件：第一行「主题：…」，空一行后是正文。回复 JSON {\"subject\":\"译后的主题\",\"text\":\"译后的正文\"}。"
+	system := prompts.RenderTranslateMail(lang)
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	in := "主题：" + m.Subject + "\n\n" + text
+	in := prompts.RenderTranslateMailInput(m.Subject, text)
 	if err := h.triageModel().JSONMax(cctx, system, in, min(4000+len([]rune(in))*3, 48000), &t); err != nil {
 		return mailTranslation{}, err
 	}

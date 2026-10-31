@@ -36,6 +36,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   默认和其他主题的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
 - **界面只用设计系统**（2026-10-31 用户要求：设计系统是仓库的约束）：字号、间距、圆角、尺寸、动画、颜色、图标、品牌标志、风格一律取自设计系统，
   页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色；缺什么先加 token。见下面「设计系统（iOS）」。
+- **提示词一律放 `server/internal/prompts/`**（2026-11-01 用户要求）：一个提示词一个文件（按场景分子目录），同一个 Agent 的几段用模板组合，不在 Go 代码里 fmt / + 提示词；调用方只准备数据。改了提示词要更新 golden 测试并看 diff，见 `docs/prompts.md`。
 - 质量标准：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ## 设计系统（iOS）
@@ -107,6 +108,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
+| `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、macOS、测试，索引 `docs/lessons/README.md` |
 

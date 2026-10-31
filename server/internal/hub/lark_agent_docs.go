@@ -2,12 +2,12 @@ package hub
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/lark"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // /agent in a document's comment (docs/lark-agent.md): no realtime event and no notification for a comment of one's
@@ -105,65 +105,27 @@ func (h *Hub) runLarkAgentDoc(ctx context.Context, cfg LarkAgentConfig, d lark.R
 
 // larkAgentDocContext: the document (as Markdown), what the comment is on (its quote), and the thread so far.
 func (h *Hub) larkAgentDocContext(ctx context.Context, d lark.RecentDoc, t lark.CommentThread, at int) string {
-	var b strings.Builder
-	kind := map[int]string{22: "文档", 2: "文档", 3: "电子表格", 8: "多维表格", 16: "知识库文档"}[d.Type]
-	if kind == "" {
-		kind = "文档"
-	}
-	fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n位置：%s「%s」里的一条评论（%s）；评论 id %s。\n</jarvis-context>\n",
-		xmlAttr("请求的位置"), kind, d.Title, d.URL, t.ID)
+	c := prompts.LarkDocContext{Type: d.Type, Title: d.Title, URL: d.URL, CommentID: t.ID}
 	if q := strings.TrimSpace(t.Quote); q != "" && !t.Whole {
-		fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("评论划选的原文"), clipRunes(q, 3000))
+		c.Quote = clipRunes(q, 3000)
 	}
-	var lines []string
 	for i, r := range t.Replies {
 		if i > at {
 			break
 		}
-		who := r.Author.Name
-		if r.Mine {
-			who += "（我）"
-		}
-		mark := ""
-		if i == at {
-			mark = "  ← 请求"
-		}
-		lines = append(lines, fmt.Sprintf("%s %s：%s%s", r.CreatedAt.Local().Format("01-02 15:04"), who, clipRunes(commentText(r), 2000), mark))
+		c.Lines = append(c.Lines, prompts.LarkLine{At: r.CreatedAt.Local(), Who: r.Author.Name, Mine: r.Mine, Text: clipRunes(commentText(r), 2000),
+			Request: i == at})
 	}
-	fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("这条评论里的讨论"), strings.Join(lines, "\n"))
 	if title, md, err := h.lark.DocMarkdown(ctx, d.URL); err == nil {
-		fmt.Fprintf(&b, "<jarvis-context kind=\"doc\" title=\"%s\" url=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("文档 · "+title), xmlAttr(d.URL), clipRunes(md, 20000))
+		c.DocTitle, c.Markdown = title, clipRunes(md, 20000)
 	} else {
-		fmt.Fprintf(&b, "（文档正文读不到：%s；需要的话用 lark-connector 的 documents/read 自己读，表格 / 多维表格按它们的接口读。）\n", clip(oneLine(err.Error()), 120))
+		c.DocErr = clip(oneLine(err.Error()), 120)
 	}
-	return b.String()
+	return prompts.RenderLarkDocContext(c)
 }
 
 func larkAgentDocPrompt(owner, title, task, contextText string, resumed bool) string {
-	if owner == "" {
-		owner = "我"
-	}
-	var b strings.Builder
-	if resumed {
-		fmt.Fprintf(&b, "%s在同一条评论里又写了一条 /agent 请求（下面是最新的上下文）。\n\n", owner)
-	} else {
-		fmt.Fprintf(&b, "%s在飞书文档「%s」的评论里用 /agent 叫你。你只知道下面给出的上下文；不够就自己查（读文档、lark_*、kb_*、看各台电脑上的 Agent）。\n\n", owner, title)
-	}
-	if task == "" {
-		task = "（没写具体要求：看评论划选的原文和讨论，判断他想让你做什么，比如解释、核对、给修改建议。）"
-	}
-	fmt.Fprintf(&b, "## 请求\n\n%s\n\n## 上下文\n\n%s\n", task, contextText)
-	b.WriteString(`
-## 怎么做
-
-- 能做的直接做掉：查资料、读代码、看日志、跑命令、开 Agent 干活都可以。**不要改这份文档的正文**，要改就在回复里给出建议的写法。
-- 做完用 lark_agent_reply 回复一次（只调一次，在最后）：hub 会以` + owner + `的身份回复在这条评论里，末尾自动加「🤖」。
-  评论是纯文本：不用 Markdown 符号，分点用「1. 2.」或换行；直接给结论，短一些。
-- **不替` + owner + `做承诺**：回复是以他的名义发的。只写已经做完的事；没做的写成建议，排期、答应别人的事一律只给建议。
-- 别用别的方式往飞书发消息或评论，别 ask_user / notify_user 打扰` + owner + `：这里的回复就是交付。
-- 有新结论用 kb_update 写回知识库。
-`)
-	return b.String()
+	return prompts.RenderLarkDocAgent(prompts.LarkAgent{Owner: owner, Title: title, Task: task, Context: contextText, Resumed: resumed})
 }
 
 var (

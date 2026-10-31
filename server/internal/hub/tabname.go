@@ -8,12 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
-
-const tabNamePrompt = `Name a terminal tab for a coding agent after the task it is given: 1 to 3 lowercase English words joined by
-hyphens, at most 20 characters, saying what the work is (duo-sidebar, inbox-agent, fix-login, release-notes). The task may
-be in Chinese; the name is always English. Reply with the name only.`
 
 // autoTabName is a short name for the herdr tab of a new agent, from its first message (the small-task model, a few
 // seconds at most). "" when there is no message or the model fails: the node names it agent-<n>.
@@ -27,7 +24,7 @@ func (h *Hub) autoTabName(ctx context.Context, prompt string) string {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	out, err := h.ai.Complete(cctx, tabNamePrompt, prompt, 200) // reasoning models think first: 20 came back empty
+	out, err := h.ai.Complete(cctx, prompts.RenderTabName(), prompt, 200) // reasoning models think first: 20 came back empty
 	if err != nil {
 		h.logf("tab name: %v", err)
 		return ""

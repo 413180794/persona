@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -29,7 +30,7 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 		return proto.LauncherCheck{Error: err.Error()}
 	}
 	defer os.RemoveAll(dir)
-	const prompt = "Reply with exactly one word: ok"
+	prompt := prompts.RenderLauncherCheck()
 	args := ` -p ` + shellQuote(prompt) + ` --output-format json --max-turns 1`
 	if agent != "claude" { // Codex / TRAEX: one non-interactive turn
 		args = ` exec --skip-git-repo-check ` + shellQuote(prompt)

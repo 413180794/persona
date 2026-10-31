@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -174,13 +175,8 @@ type schedule struct {
 func defaultRoutines() []Routine {
 	weekdays := []int{1, 2, 3, 4, 5}
 	return []Routine{
-		{ID: "morning", Title: "早报", Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: "给我今天的早报，一屏以内，结论先行：\n" +
-			"1. 今天的日程（飞书日历 + iPhone 日历，合并去重），标出需要准备的会；\n" +
-			"2. 需要我处理的：飞书里 @我 / 单聊未读里要我回复或决定的事、重要邮件；\n" +
-			"3. 各台电脑上的 Agent：哪些在等我、哪些昨晚跑完了结果是什么；\n" +
-			"对今天每个值得准备的会，用 schedule_followup 在会前 10 分钟安排一次会前准备（材料、上次纪要、要点）。"},
-		{ID: "evening", Title: "晚间回顾", Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: "今天的晚间回顾：今天开了哪些会、" +
-			"有哪些待办和承诺没落实（会议纪要、飞书消息里我答应别人的事）、各台电脑上还在跑或卡住的 Agent、明天最早的安排。最后问我要不要把待办加进提醒事项。"},
+		{ID: "morning", Title: "早报", Time: "09:00", Weekdays: weekdays, Enabled: true, Prompt: prompts.RenderMorningRoutine()},
+		{ID: "evening", Title: "晚间回顾", Time: "21:30", Weekdays: weekdays, Enabled: false, Prompt: prompts.RenderEveningRoutine()},
 	}
 }
 
@@ -356,7 +352,7 @@ func parseWhen(s string, now time.Time, loc *time.Location) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("can't read time %q: use RFC 3339 (2026-10-27T09:50:00+08:00) or 30m / 2h / 1d", s)
 }
 
-// scheduleHeader is the first line of a run's message (taskPrompt) and the notes under it. A patrol told to
+// scheduleHeader is the first line of a run's message (taskPrompt, prompts/assistant/task_run.md) and the notes under it. A patrol told to
 // "schedule the next one with the same prompt" copies them along; they are dropped so they don't pile up.
 var scheduleHeader = regexp.MustCompile(`^(?:⏰[^\n]*（[^\n]*(?:跟进|定时任务)[^\n]*）|（本该[^\n]*）|（Jarvis 会[^\n]*）)\s*`)
 
@@ -908,27 +904,15 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 // taskPrompt is what the conversation gets: a ⏰ line saying what this is, how late when the hub was down, and for a
 // repeating one that it repeats by itself (so the run doesn't schedule the next one too).
 func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb bool) string {
-	var prompt string
-	switch t.Repeat {
-	case repeatOnce:
-		prompt = "⏰ " + t.label() + "（你之前安排的跟进）"
-	case repeatInterval:
-		prompt = "⏰ " + t.label() + "（定时任务，每 " + everyText(t.EveryMinutes) + "）"
-	default:
-		prompt = "⏰ " + t.label() + "（定时任务）"
+	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
+		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily}
+	if r.Interval {
+		r.Every = everyText(t.EveryMinutes)
 	}
 	if late := now.Sub(due); !manual && t.Repeat != repeatDaily && late > 2*time.Minute {
-		prompt += fmt.Sprintf("\n（本该 %s 运行，Jarvis 当时没在运行，晚了 %s；看看还有没有必要按原计划做。）",
-			due.In(loc).Format("01-02 15:04"), humanDuration(late))
+		r.Late = humanDuration(late)
 	}
-	if t.Repeat == repeatInterval {
-		prompt += "\n（Jarvis 会按时再运行它，不用再用 schedule_followup 安排下一次。）"
-	}
-	prompt += "\n\n" + t.Prompt
-	if kb && t.Repeat == repeatDaily {
-		prompt += "\n\n" + routineKBHint
-	}
-	return prompt
+	return prompts.RenderTaskRun(r)
 }
 
 // lateness for the log: "0.4s".
@@ -1173,8 +1157,3 @@ func (h *Hub) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"session_id": sess.SessionID, "machine_id": sess.MachineID})
 }
-
-// routineKBHint goes under every daily run (saved prompts keep their own wording; this way they all use the
-// knowledge base): projects first, and what the run concludes goes back into it.
-const routineKBHint = `（知识库 ~/.jarvis/data：先用 kb_list projects 看重点项目，按项目说进展和在等我的事，而不是按消息来源罗列；
-相关的会话档案用 kb_get 看。这次得出的新进展、新待办用 kb_update 记回对应项目的时间线。）`

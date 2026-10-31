@@ -1,0 +1,20 @@
+{{- $w := .Now.Weekday -}}
+# 实时快照（{{.Now.Format "15:04"}} 生成；之后的变化用工具查）
+
+- 现在：{{.Now.Format "2006-01-02"}} 周{{if eq $w 0}}日{{else if eq $w 1}}一{{else if eq $w 2}}二{{else if eq $w 3}}三{{else if eq $w 4}}四{{else if eq $w 5}}五{{else}}六{{end}} {{.Now.Format "15:04"}}（{{.Zone}}）
+- 在线的电脑：{{range $i, $m := .Up}}{{if $i}}、{{end}}{{$m.Name}}（{{$m.ID}}）{{end}}{{with .Down}}；离线：{{range $i, $m := .}}{{if $i}}、{{end}}{{$m.Name}}（{{$m.ID}}）{{end}}{{end}}
+- Agents：需要你 {{len .Needs}} 个，完成未看 {{len .Unread}} 个，工作中 {{len .Working}} 个（详情用 agents_list）
+{{with .Needs}}  - 需要你：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Unread}}  - 完成未看：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
+{{end}}{{if .PhoneOnline}}- iPhone：App 在线，phone_* 工具可用
+{{else}}- iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App
+{{end}}{{with .KB}}- 知识库（kb_get 看详情）：
+{{indent "  " .}}{{end}}{{with .Chats}}{{if .Total}}- 飞书未读会话 {{.Total}} 个（免打扰的不算；用 lark_chats / lark_messages 看）
+{{with .AtMe}}  - @我：{{range $i, $c := first 6 .}}{{if $i}}；{{end}}{{$c.Name}}（{{$c.Unread}} 条）：{{$c.Preview}}{{end}}
+{{end}}{{with .Other}}  - 其他：{{range $i, $c := first 8 .}}{{if $i}}、{{end}}{{$c.Name}}（{{$c.Unread}} 条）{{end}}
+{{end}}{{else}}- 飞书：没有未读（免打扰的不算）
+{{end}}{{end}}{{with .Calendar}}{{if .Events}}- 飞书日历今天接下来：{{range $i, $e := .Events}}{{if $i}}；{{end}}{{$e.Start.Format "15:04"}}–{{$e.End.Format "15:04"}} {{$e.Title}}{{end}}
+{{else}}- 飞书日历：今天接下来没有会
+{{end}}{{end}}{{with .Followups}}- 已安排的跟进：{{range $i, $f := .}}{{if $i}}；{{end}}{{$f.At.Format "01-02 15:04"}} {{$f.Label}}{{with $f.Every}}（每 {{.}}）{{end}}{{end}}
+{{end}}

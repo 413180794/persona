@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chyroc/jarvis/server/internal/prompts"
 )
 
 // Model is the small model that compresses and tags (the hub's ai.Client).
@@ -41,26 +43,6 @@ type chatDigest struct {
 		Note string `json:"note"`
 	} `json:"people"`
 }
-
-const compressPrompt = `你在维护 {{owner}} 的工作知识库。输入是一个会话（飞书私聊 / 群 / 邮件往来）已有的压缩上下文，加上之后的新消息。
-「我」就是 {{owner}}。输出这个会话新的压缩上下文和打标，全部用中文。
-
-JSON 字段：
-- summary：Markdown，800 字以内，覆盖已有上下文和新消息，旧的不重要的细节可以删。固定小节：
-  「## 这是什么」（会话的用途、谁在里面）、「## 进展」（按时间的要点，最近的在后，带日期）、「## 待办和未决」（谁要做什么、是否在等我）、
-  「## 关于我」（和我相关的事、别人对我的期待）。没有的小节写「无」。
-- one_line：一句话（30 字内）说这个会话现在在干什么。
-- importance：P0（关键：老板 / 核心项目 / 线上事故 / 截止临近）、P1（重要）、P2（一般）、P3（可忽略：通知、闲聊、广告）。
-- relevance：0–100，与我相关性。直接找我、我负责、在等我 → 70 以上；我参与但不是主角 → 40–70；只是旁观 → 40 以下。
-- 通知类（输入里标了「自动发出」的邮件，或者内容是系统通知、推广营销，哪怕署了人名）：收据、账单、续费 / 订阅、订单、推广营销、newsletter、欢迎信、
-  「协议已接受 / 资料已验证 / 已加入某计划」这类告知、测试邀请，一律 importance P3、relevance 20 以下，哪怕提到的是我的账号或产品。
-  只有要我在期限内去做点什么、不做会有后果的才按实际打高：存储超限要删文件、账号受限、扣款失败、不是我触发的安全提醒、
-  审核被拒要改、银行 / 平台要我补材料或约时间。
-- tags：2–6 个短标签，不预设；优先复用「已有标签」里意思相同的。
-- projects：会话里真人在推进的项目（需求、版本、活动、团队方向）。系统通知、营销、订阅、账单、自动提醒里提到的产品或服务**不是项目**，不要列。name 优先用「已知项目」里的原名；kind 是 short（有交付的短期项目）或 long
-  （团队使命、长期方向）；aliases 是别称；update 一句话说这批新消息里这个项目有什么进展（没有就不要列这个项目）；my_role 是我在里面的角色（不知道就空）。
-- people：新消息里值得记住的人，name 用消息里的名字，note 一句话说他是谁、和我什么关系（不知道就不列）。
-不知道的不要编。`
 
 // DueForCompression lists chats with news to fold into their summary.
 func (e *Engine) DueForCompression(now time.Time) []*Chat {
@@ -97,18 +79,13 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 		c.Pending = 0
 		return e.Store.PutChat(c)
 	}
-	kind := map[string]string{"dm": "私聊", "group": "群聊", "bot": "机器人 / AI", "mail": "邮件往来", "moment": "removed帖子和评论（公司内公开）"}[c.Kind]
-	if c.Kind == "mail" && !HasPeople(c) {
-		kind += "，自动发出（通知 / 营销地址，不是真人写的）"
-	}
-	var in strings.Builder
-	fmt.Fprintf(&in, "会话：%s（%s）\n\n已知项目：%s\n已有标签：%s\n\n# 已有的压缩上下文\n%s\n\n# 新消息\n%s",
-		c.Name, kind, e.projectNames(), strings.Join(e.TopTags(40), "、"), orNone(e.Store.Summary(KindChat, c.ID)), news)
+	in := prompts.RenderKBCompressInput(prompts.KBCompressInput{Name: c.Name, Kind: c.Kind, Automated: c.Kind == "mail" && !HasPeople(c),
+		Projects: e.knownProjects(), Tags: e.TopTags(40), Summary: e.Store.Summary(KindChat, c.ID), News: news})
 
 	var d chatDigest
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	if err := e.Model.JSONMax(cctx, strings.ReplaceAll(compressPrompt, "{{owner}}", e.Owner), in.String(), 4000, &d); err != nil {
+	if err := e.Model.JSONMax(cctx, prompts.RenderKBCompress(prompts.KBOwner{Owner: e.Owner}), in, 4000, &d); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
@@ -235,13 +212,6 @@ func (e *Engine) RetagMail() int {
 	return n
 }
 
-func orNone(s string) string {
-	if strings.TrimSpace(s) == "" {
-		return "（还没有）"
-	}
-	return s
-}
-
 func applyTags(t *Tagging, importance string, relevance int, tags []string, now time.Time) {
 	if !t.Locked {
 		if importanceRe.MatchString(importance) {
@@ -298,22 +268,16 @@ func (e *Engine) FindProject(name string) *Project {
 	return nil
 }
 
-func (e *Engine) projectNames() string {
-	var names []string
+// knownProjects are the projects the models may name: not done or ignored.
+func (e *Engine) knownProjects() []prompts.KnownProject {
+	var out []prompts.KnownProject
 	for _, p := range e.Store.Projects() {
 		if p.Status == "done" || p.Status == "ignored" {
 			continue
 		}
-		n := p.Name
-		if len(p.Aliases) > 0 {
-			n += "（" + strings.Join(p.Aliases, "、") + "）"
-		}
-		names = append(names, n)
+		out = append(out, prompts.KnownProject{Name: p.Name, Aliases: p.Aliases})
 	}
-	if len(names) == 0 {
-		return "（还没有）"
-	}
-	return strings.Join(names, "；")
+	return out
 }
 
 // evolveProject merges a mention into its project (creating it), links the chat and its people, and logs the update.
@@ -385,15 +349,6 @@ type projectDigest struct {
 	Tags       []string `json:"tags"`
 }
 
-const projectPrompt = `你在维护 {{owner}} 的项目档案。「我」就是 {{owner}}。输入是一个项目已有的档案、最近的时间线、相关会话的压缩上下文。
-重写这个项目的档案，全部用中文。JSON 字段：
-- summary：Markdown，1000 字以内。固定小节：「## 目标」「## 现状」（最新进展，带日期）「## 下一步」（谁做什么、什么时候）
-  「## 风险和阻塞」「## 我的角色」「## 相关的人」（名字 + 一句话角色）。没有的写「无」。
-- one_line：一句话（30 字内）说项目现在到哪了。
-- goal：一句话目标。kind：short（有交付的短期项目）或 long（团队使命 / 长期方向）。status：active / paused / done。
-- importance：P0–P3（对我的重要级）；relevance：0–100（与我相关性）；tags：2–6 个短标签，优先复用已有标签。
-不知道的不要编。`
-
 // RefreshProjects rewrites the summaries of projects with news, at most max per run.
 func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 	if e.Model == nil {
@@ -421,10 +376,8 @@ func (e *Engine) RefreshProjects(ctx context.Context, max int) int {
 }
 
 func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
-	var in strings.Builder
-	fmt.Fprintf(&in, "项目：%s（%s）\n别称：%s\n已有标签：%s\n\n# 已有档案\n%s\n\n# 最近的时间线\n%s\n\n# 相关会话\n",
-		p.Name, p.Kind, strings.Join(p.Aliases, "、"), strings.Join(e.TopTags(40), "、"),
-		orNone(e.Store.Summary(KindProject, p.Slug)), strings.Join(e.Store.Log(p.Slug, 40), "\n"))
+	in := prompts.KBProjectInput{Name: p.Name, Kind: p.Kind, Aliases: p.Aliases, Tags: e.TopTags(40),
+		Summary: e.Store.Summary(KindProject, p.Slug), Log: e.Store.Log(p.Slug, 40)}
 	for i, cid := range p.Chats {
 		if i >= 8 {
 			break
@@ -433,12 +386,12 @@ func (e *Engine) refreshProject(ctx context.Context, p *Project) error {
 		if r := []rune(sum); len(r) > 1500 {
 			sum = string(r[:1500]) + "…"
 		}
-		fmt.Fprintf(&in, "\n## %s\n%s\n", cid, sum)
+		in.Chats = append(in.Chats, prompts.KBProjectChat{ID: cid, Summary: sum})
 	}
 	var d projectDigest
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	if err := e.Model.JSONMax(cctx, strings.ReplaceAll(projectPrompt, "{{owner}}", e.Owner), in.String(), 4000, &d); err != nil {
+	if err := e.Model.JSONMax(cctx, prompts.RenderKBProject(prompts.KBOwner{Owner: e.Owner}), prompts.RenderKBProjectInput(in), 4000, &d); err != nil {
 		return err
 	}
 	now := time.Now().UTC()

@@ -19,6 +19,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/kb"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -597,10 +598,10 @@ func prefix(p, s string) string {
 
 // kbContextFor is what the knowledge base knows about an inbox item's chat and its projects, for the inbox agent
 // (AI 分身): the compressed context makes the draft sound like the owner, and the agent writes conclusions back.
-func (h *Hub) kbContextFor(it *InboxItem) string {
+func (h *Hub) kbContextFor(it *InboxItem) *prompts.KBContext {
 	e := h.kb.eng
 	if e == nil {
-		return ""
+		return nil
 	}
 	var c *kb.Chat
 	switch {
@@ -610,23 +611,26 @@ func (h *Hub) kbContextFor(it *InboxItem) string {
 		c, _ = e.Store.Chat(kb.ChatID("mail", it.Mail.AccountID+"-"+strings.ToLower(it.Mail.From.Email)))
 	}
 	if c == nil {
-		return ""
+		return nil
 	}
-	var b strings.Builder
-	b.WriteString("\n\n## 知识库里的背景（~/.jarvis/data）\n\n")
+	return h.kbContext(e, c)
+}
+
+// kbContext is a chat's summary and its first three projects' (shared/kb_blocks.md).
+func (h *Hub) kbContext(e *kb.Engine, c *kb.Chat) *prompts.KBContext {
+	out := &prompts.KBContext{ChatID: c.ID, ChatName: c.Name}
 	if sum := e.Store.Summary(kb.KindChat, c.ID); sum != "" {
-		fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("会话档案 · "+c.Name), clipRunes(sum, 4000))
+		out.Summary = clipRunes(sum, 4000)
 	}
 	for i, slug := range c.Projects {
 		if i >= 3 {
 			break
 		}
 		if p, ok := e.Store.Project(slug); ok {
-			fmt.Fprintf(&b, "<jarvis-context kind=\"context\" title=\"%s\">\n%s\n</jarvis-context>\n", xmlAttr("项目 · "+p.Name), clipRunes(e.Store.Summary(kb.KindProject, slug), 3000))
+			out.Projects = append(out.Projects, prompts.KBProject{Name: p.Name, Summary: clipRunes(e.Store.Summary(kb.KindProject, slug), 3000)})
 		}
 	}
-	fmt.Fprintf(&b, "\n会话 id：%s。更多用 kb_get / kb_search 查。处理完如果得出了新结论（项目进展、谁负责什么、截止时间），用 kb_update 写回对应项目的 log（这是允许的写操作）。\n", c.ID)
-	return b.String()
+	return out
 }
 
 // --- app API (docs/protocol.md 知识库) ---
