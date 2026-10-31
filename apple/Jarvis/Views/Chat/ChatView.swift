@@ -164,8 +164,14 @@ struct ChatView: View {
         .macInspector(isPresented: $showInfo) {
             SessionInfoSheet(key: key, session: session)
         }
-        .onChange(of: MacShellState.shared.inspector) { _, t in
-            if let t, t.key == key { showInfo.toggle() }
+        .onChange(of: MacShellState.shared.chatRequest) { _, r in // the Agent menu (MacAgentMenu)
+            guard let r, r.key == key else { return }
+            switch r.kind {
+            case .inspector: showInfo.toggle()
+            case .rename: renaming = session
+            case .close: if session?.status.isLive == true { closing = session }
+            case .clear: break // the composer's
+            }
         }
         #endif
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
@@ -2082,6 +2088,11 @@ struct Composer: View {
             try? await Task.sleep(for: .seconds(4))
             for _ in 0..<20 where !canClear { try? await Task.sleep(for: .seconds(1)) } // the session list loads
             confirmClear = canClear
+        }
+        #endif
+        #if os(macOS)
+        .onChange(of: MacShellState.shared.chatRequest) { _, r in // Agent › 清空上下文…
+            if let r, r.key == key, r.kind == .clear { confirmClear = canClear }
         }
         #endif
         .confirmationDialog("清空上下文？", isPresented: $confirmClear, titleVisibility: .visible) {

@@ -65,9 +65,26 @@ struct MacAgentMenu: Commands {
             .disabled(!model.allSessions.contains { $0.state == .needsYou && !model.isMuted($0) })
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
-            Button("显示会话信息") { if let key { MacShellState.shared.inspector = .init(key: key) } }
+            // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
+            Button("交给 Jarvis") {
+                if let key, let s = model.session(key) {
+                    Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) }
+                }
+            }
+            .keyboardShortcut("j", modifiers: .command)
+            .disabled(key.flatMap { model.session($0) } == nil || key.flatMap { model.session($0)?.assistant } == true)
+            Button("显示会话信息") { ask(.inspector) }
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 .disabled(key == nil)
+            Divider()
+            // The chat page's own dialogs (ChatView's ⋯ menu, the composer's /clear), so only for an Agent's chat.
+            let agent = key.flatMap { model.session($0) }.flatMap { $0.assistant ? nil : $0 }
+            Button("重命名…") { ask(.rename) }
+                .disabled(agent == nil)
+            Button("清空上下文…") { ask(.clear) }
+                .disabled(agent.map { $0.paneID == nil || $0.isCodex || $0.isTraex } ?? true)
+            Button("关闭 Agent…") { ask(.close) }
+                .disabled(agent?.status.isLive != true)
             Divider()
             Button("标为已读") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)
@@ -85,6 +102,10 @@ struct MacAgentMenu: Commands {
             }
             .disabled(key == nil)
         }
+    }
+
+    private func ask(_ kind: MacShellState.ChatRequest.Kind) {
+        if let key = model.visibleSession { MacShellState.shared.chatRequest = .init(key: key, kind: kind) }
     }
 
     private func copy(_ text: String, _ toast: String) {

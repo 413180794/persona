@@ -152,6 +152,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 批准当前待处理 ⇧⌘⏎（允许工具 / 批准计划，计划按「自动接受编辑」批，和通知上的「批准」一样）、拒绝 ⇧⌘⌫（只拒绝工具；打回计划要写理由，在卡片里）、
 下一个需要你的 ⌃⌘N（等得最久的在前，循环）、标为已读、置顶 / 取消置顶、屏蔽 / 开启通知、拷贝会话 ID、拷贝恢复命令。
 问题和终端对话框要选选项，留在对话里的卡片上。
+交给 Jarvis ⌘J（和行菜单一样，把 Agent 的状态和最后的回复交给主对话）；重命名… / 清空上下文… / 关闭 Agent…：经 `MacShellState.chatRequest` 让对话页弹它自己的对话框
+（和 ⋯ 菜单、输入框的 /clear 是同一个），清空只对 herdr 里的 Claude 可点、关闭只对还在跑的。截图：`-openSession <m>/<s> -macAgentAsk rename|clear|close|inspector`。
 
 快捷键和清单最早写的不一样，因为撞了：⌘⏎ 是输入框的发送（`ComposerParts`），⌘⌫ 在输入框里是删到行首（菜单快捷键会抢走），
 ⇧⌘N 是新建 Jarvis 对话，⌥⌘N 是收件箱的写邮件。

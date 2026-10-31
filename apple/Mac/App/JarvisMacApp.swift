@@ -251,6 +251,13 @@ enum MacLaunchArguments {
         if let key = sessionKey(d.string(forKey: "openChatWindow")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MacShellState.shared.chatWindow = key }
         }
+        // `-macAgentAsk rename|clear|close|inspector` with `-openSession`: what that Agent menu item does, 3 s in.
+        if let key = sessionKey(d.string(forKey: "openSession")), let ask = d.string(forKey: "macAgentAsk") {
+            let kinds: [String: MacShellState.ChatRequest.Kind] = ["rename": .rename, "clear": .clear, "close": .close, "inspector": .inspector]
+            if let kind = kinds[ask] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MacShellState.shared.chatRequest = .init(key: key, kind: kind) }
+            }
+        }
         // `-macSection knowledge|machines|…`: that sidebar section.
         if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
         if let key = sessionKey(d.string(forKey: "simulateTap")) {

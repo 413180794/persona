@@ -12,13 +12,16 @@ import SwiftUI
     var chatWindow: SessionKey?
     /// What ⌘K opens with typed in (DEBUG `-openQuickOpen <query>`).
     var seed = ""
-    /// 显示会话信息 ⌥⌘I: the chat showing this session opens / closes its inspector (a new value each time).
-    var inspector: InspectorToggle?
+    /// What the Agent menu asks of the chat showing `key` (a new value each time): toggle the inspector
+    /// (显示会话信息 ⌥⌘I), or bring up its own 重命名 / 清空上下文 / 关闭 Agent dialogs.
+    var chatRequest: ChatRequest?
     /// The Agents list's 全部折叠 / 全部展开 (its own ⋯ menu's), for 显示 › 全部折叠 / 全部展开.
     var agentsList: AgentsListMenu.Actions?
 
-    struct InspectorToggle: Equatable {
+    struct ChatRequest: Equatable {
+        enum Kind { case inspector, rename, clear, close }
         let key: SessionKey
+        let kind: Kind
         let id = UUID()
     }
 }
