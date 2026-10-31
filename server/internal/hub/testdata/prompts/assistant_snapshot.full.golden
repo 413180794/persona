@@ -1,0 +1,20 @@
+# 实时快照（HH:MM 生成；之后的变化用工具查）
+
+- 现在：YYYY-MM-DD 周X HH:MM（Asia/Shanghai）
+- 在线的电脑：服务器（server）、笔记本（laptop）；离线：台式机（desk）
+- Agents：需要你 1 个，完成未看 1 个，工作中 10 个（详情用 agents_list）
+  - 需要你：修登录（server，session_id=aaaaaaaa）
+  - 完成未看：写文档（server，session_id=bbbbbbbb）
+  - 工作中：示例空间 › 测试「跑测试」；wa；wb；wc；wd；we；wf；wg 等 10 个
+- iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App
+- 知识库（kb_get 看详情）：
+  重点项目（知识库 projects/）：
+  - 示例发布 [P0 相关95] 周五灰度（projects/demo-release）
+  - 示例基建 [P2 相关40] （projects/demo-infra）
+  重点会话（知识库 chats/）：
+  - 发布群 [P1 相关70] 在推示例发布（chats/lark-f1）
+- 飞书未读会话 3 个（免打扰的不算；用 lark_chats / lark_messages 看）
+  - @我：发布群（3 条）：@我 周五灰度能不能提前到周四？这条预览很长很长很长很长很长很长很长很长很长很长…
+  - 其他：张三（1 条）、李四（0 条）
+- 飞书日历今天接下来：09:30–10:00 评审；11:00–12:00 周会
+- 已安排的跟进：01-02 09:30 看 CI；01-02 09:30 巡检一下各台电脑上的 Agent 有没有卡住的，这句话会被截…（每 30 分钟）；01-02 09:30 x（每 2 小时）

@@ -1,0 +1,7 @@
+<jarvis-context kind="context" title="请求的位置">
+位置：文档「坏文档」里的一条评论（https://example.feishu.cn/docx/Broken）；评论 id c1。
+</jarvis-context>
+<jarvis-context kind="context" title="这条评论里的讨论">
+10-31 09:00 张三：这一步要先清缓存吧  ← 请求
+</jarvis-context>
+（文档正文读不到：lark: document not found (NOT_FOUND)；需要的话用 lark-connector 的 documents/read 自己读，表格 / 多维表格按它们的接口读。）
