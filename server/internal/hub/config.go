@@ -135,6 +135,9 @@ func LoadConfig() (*Config, error) {
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("%s: token is empty", path)
 	}
+	if err := cfg.Lark.Validate(); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
 	if cfg.HookTimeoutMinutes <= 0 {
 		cfg.HookTimeoutMinutes = 30
 	}

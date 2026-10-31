@@ -176,6 +176,7 @@ func Run(ctx context.Context, version string) error {
 		h.judgeAI = ai.New(c.Over(cfg.AI))
 	}
 	h.lark = lark.New(cfg.Lark)
+	h.inbox.larkAccount = h.lark.Account()
 	for _, mc := range cfg.Machines {
 		m := newMachine(h, mc)
 		h.machines = append(h.machines, m)

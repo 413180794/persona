@@ -5,9 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
+
+func TestAssistantLarkAccountEnvironment(t *testing.T) {
+	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), larkCfg: proto.AssistantLark{
+		Base: "http://127.0.0.1:18000", Token: "test-token", Account: 2,
+	}}
+	env := n.assistantLarkEnv(t.TempDir())
+	if !strings.Contains(strings.Join(env, "\n"), "lark-connector_ACCOUNT=2") {
+		t.Fatal("assistant did not inherit the configured account")
+	}
+}
 
 // The assistant's Bash calls to lark-connector: which run at once, which the phone approves, which are refused, and which
 // the gate leaves to the usual permission flow.

@@ -152,6 +152,8 @@
 | GET | `/api/v1/machines/{id}/metrics?range=1h\|6h\|24h` | `{"metrics": {同上一台}, "range", "step"}`：机器详情的曲线，步长 10 / 60 / 240 秒（约 360 个点）；没有这台机器 404，range 不对 400 |
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
 | GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
+| GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.jarvis/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
+| GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
 
 邮件见下文「邮件 API」。错误统一 `{"error":"…"}` + 4xx/5xx。
 

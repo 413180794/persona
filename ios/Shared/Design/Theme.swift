@@ -19,7 +19,7 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
 
     nonisolated(unsafe) static var current: AppStyle =
         AppStyle(rawValue: UserDefaults.standard.string(forKey: "ui.style") ?? "") ?? .glass {
-        didSet { StyleSpec.current = current.spec }
+        didSet { StyleSpec.current = current.spec.tinted(PersonaPalette.current) }
     }
 
     var id: String { rawValue }
@@ -35,8 +35,9 @@ nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
 }
 
 nonisolated extension StyleSpec {
-    /// The current style's spec, kept with `AppStyle.current` so the tokens read one value.
-    nonisolated(unsafe) static var current: StyleSpec = AppStyle.current.spec
+    /// The current style's spec with the current persona's colors over it, kept with `AppStyle.current` and
+    /// `PersonaPalette.current` so the tokens read one value.
+    nonisolated(unsafe) static var current: StyleSpec = AppStyle.current.spec.tinted(PersonaPalette.current)
 }
 
 nonisolated enum Theme {
@@ -50,7 +51,11 @@ nonisolated enum Theme {
     #endif
 
     static var accent: Color { spec.accent }
-    static func accent(_ style: AppStyle) -> Color { style.spec.accent }
+    /// A style's accent as it would be now (the persona's over it): the style picker's previews.
+    static func accent(_ style: AppStyle) -> Color { style.spec.tinted(PersonaPalette.current).accent }
+    /// The persona's own color (主色, docs/persona.md): its face's glow and backdrop, never something to tap (that is
+    /// `accent`). The accent when the persona brings none (the built-in Jarvis is drawn in the accent).
+    static var persona: Color { spec.personaPrimary ?? spec.accent }
     /// The app icon's coral. Only for Jarvis' own mark (the glyph in 设置 / 对话, the Live Activity's star), never for
     /// something to tap: that is `accent`, whatever the style.
     static let brand = Palette.coral
@@ -296,14 +301,17 @@ nonisolated enum Theme {
         static let box380: CGFloat = 380
     }
 
-    /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot and the work spinner,
-    /// and those stop with Reduce Motion (the spinner is the system's).
+    /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot, the work spinner and
+    /// the persona's dot in the Jarvis tab's top bar (docs/persona.md), and those stop with Reduce Motion (the spinner
+    /// is the system's).
     enum Motion {
         static let state = Animation.snappy(duration: 0.25)
         static let layout = Animation.smooth(duration: 0.3)
         /// Opening and closing things (a work card, a menu, a section): a state change, 0.25 s (it was the system's
         /// default snappy, 0.5 s, which trailed behind the finger).
         static let standard = state
+        /// One way of a blink (the built-in persona's eyes): a blink is shut and open again, well under a quarter second.
+        static let blink = Animation.easeInOut(duration: 0.07)
     }
 
     /// Categories with no meaning beyond telling them apart (memory types).
@@ -316,7 +324,7 @@ nonisolated enum Theme {
 
     /// The user's own messages.
     static var userBubble: Color { spec.userBubble }
-    static func userBubble(_ style: AppStyle) -> Color { style.spec.userBubble }
+    static func userBubble(_ style: AppStyle) -> Color { style.spec.tinted(PersonaPalette.current).userBubble }
     static var userBubbleText: Color { spec.userBubbleText }
     /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient that only darkens toward the bottom
     /// (`Color.gradient` lightened the top, and the white words on it fell to 3:1).

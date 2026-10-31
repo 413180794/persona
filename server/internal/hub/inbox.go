@@ -85,6 +85,7 @@ type InboxItem struct {
 }
 
 type InboxLark struct {
+	AccountID       int    `json:"account_id,omitempty"` // zero in legacy rows means primary account 1
 	FeedID          string `json:"feed_id"`
 	IsGroup         bool   `json:"is_group"`
 	IsTopic         bool   `json:"is_topic,omitempty"`
@@ -121,14 +122,15 @@ func (it *InboxItem) listed() InboxItem {
 }
 
 type inbox struct {
-	mu       sync.Mutex
-	items    map[string]*InboxItem
-	kick     chan struct{}
-	once     sync.Once
-	running  sync.Mutex // one collection at a time
-	triaging sync.Mutex // one triage pass at a time (inbox_triage.go)
-	handing  sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
-	me       lark.Me    // the Feishu account (who @me is in documents), read once
+	larkAccount int // selected once at startup; zero is primary for legacy callers
+	mu          sync.Mutex
+	items       map[string]*InboxItem
+	kick        chan struct{}
+	once        sync.Once
+	running     sync.Mutex // one collection at a time
+	triaging    sync.Mutex // one triage pass at a time (inbox_triage.go)
+	handing     sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
+	me          lark.Me    // the Feishu account (who @me is in documents), read once
 }
 
 func (b *inbox) init() {
@@ -175,6 +177,11 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 }
 
 func (h *Hub) loadInbox(ctx context.Context) {
+	if h.lark != nil {
+		h.inbox.mu.Lock()
+		h.inbox.larkAccount = h.lark.Account()
+		h.inbox.mu.Unlock()
+	}
 	if h.store == nil {
 		return
 	}
@@ -187,10 +194,26 @@ func (h *Hub) loadInbox(ctx context.Context) {
 	defer h.inbox.mu.Unlock()
 	for _, raw := range rows {
 		var it InboxItem
-		if json.Unmarshal(raw, &it) == nil && it.ID != "" {
+		if json.Unmarshal(raw, &it) == nil && it.ID != "" && h.inbox.acceptsAccount(&it) {
 			h.inbox.items[it.ID] = &it
 		}
 	}
+}
+
+// Keep persisted items from another account out of all inbox reads and actions.
+// They stay in Postgres and become available again after switching back.
+func (b *inbox) acceptsAccount(it *InboxItem) bool {
+	if it.Lark == nil {
+		return true
+	}
+	account, selected := it.Lark.AccountID, b.larkAccount
+	if account == 0 {
+		account = 1
+	}
+	if selected == 0 {
+		selected = 1
+	}
+	return account == selected
 }
 
 // collectInbox reads Feishu (and mail) once and applies what changed.
@@ -391,8 +414,13 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		}
 		it := open
 		if it == nil {
-			it = &InboxItem{ID: "lark:" + c.ID + ":" + others[0].Position, Source: "lark", Account: "feishu", AccountName: "飞书",
-				StartedAt: others[0].CreatedAt, Lark: &InboxLark{FeedID: c.ID, StartPosition: others[0].Position}}
+			account := max(b.larkAccount, 1)
+			id := "lark:" + c.ID + ":" + others[0].Position
+			if account != 1 {
+				id = fmt.Sprintf("lark:account:%d:%s:%s", account, c.ID, others[0].Position)
+			}
+			it = &InboxItem{ID: id, Source: "lark", Account: "feishu", AccountName: "飞书",
+				StartedAt: others[0].CreatedAt, Lark: &InboxLark{AccountID: account, FeedID: c.ID, StartPosition: others[0].Position}}
 			b.items[it.ID] = it
 		}
 		last := others[len(others)-1]

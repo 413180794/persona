@@ -510,7 +510,8 @@ type LarkRule struct {
 // agent API's base (without /agent/v1), its token, and the write gate's extra rules. Sent by the hub to the assistant's
 // node only; never written to disk or logs.
 type AssistantLark struct {
-	Base  string     `json:"base"`
-	Token string     `json:"token"`
-	Rules []LarkRule `json:"rules,omitempty"`
+	Account int        `json:"account,omitempty"`
+	Base    string     `json:"base"`
+	Token   string     `json:"token"`
+	Rules   []LarkRule `json:"rules,omitempty"`
 }

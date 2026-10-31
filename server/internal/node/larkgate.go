@@ -526,6 +526,9 @@ func (n *Node) assistantLarkEnv(cwd string) []string {
 	defer cancel()
 	if cfg := n.assistantLark(ctx); cfg.Base != "" && cfg.Token != "" {
 		env = append(env, "lark-connector_AGENT_BASE="+cfg.Base, "lark-connector_AGENT_TOKEN="+cfg.Token)
+		if cfg.Account > 0 {
+			env = append(env, fmt.Sprintf("lark-connector_ACCOUNT=%d", cfg.Account))
+		}
 	}
 	return env
 }

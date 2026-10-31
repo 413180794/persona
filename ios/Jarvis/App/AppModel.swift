@@ -10,7 +10,9 @@ final class AppModel {
     static let shared = AppModel()
 
     /// Set by pair / unpair and when the phone gets its own credential (DeviceCredentials.swift).
-    var config: ServerConfig?
+    var config: ServerConfig? { didSet { if config?.isDemo != oldValue?.isDemo { applyPersonaColors() } } }
+    /// Jarvis's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
+    let personas = PersonaStore()
     let live: LiveConnection
     /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus
@@ -120,6 +122,8 @@ final class AppModel {
             WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
             WatchSync.shared.push(summary: self.watchSummary())
         }
+        personas.onChange = { [weak self] in self?.applyPersonaColors() }
+        applyPersonaColors()
         live.onConnected = { [weak self] in self?.didConnect() }
         live.onChange = { [weak self] in self?.connection.update() }
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
@@ -536,6 +540,7 @@ final class AppModel {
 
     private func didConnect() {
         registerPhone()
+        Task { await personas.refresh(api) }
         AgentSync.shared.schedule()
         LarkSync.shared.reconnected()
         InboxStore.shared.reload()
@@ -869,6 +874,23 @@ final class AppModel {
             AppStyle.current = style
             UserDefaults.standard.set(style.rawValue, forKey: "ui.style")
         }
+    }
+
+    /// The persona on screen: the chosen one, the built-in in 体验模式 (its packages are the user's hub's).
+    var persona: Persona { isDemo ? .builtin : personas.current }
+
+    /// What RootView keys the whole tree by: a new style, or a persona with other colors, rebuilds it (tokens are static).
+    var look: Look { Look(style: style, palette: persona.palette) }
+
+    nonisolated struct Look: Hashable {
+        var style: AppStyle
+        var palette: PersonaPalette?
+    }
+
+    /// The persona's colors over the style's (`StyleSpec.tinted`), before RootView builds with them.
+    private func applyPersonaColors() {
+        let palette = persona.palette
+        if PersonaPalette.current != palette { PersonaPalette.current = palette }
     }
 
     /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it.

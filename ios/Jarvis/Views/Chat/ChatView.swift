@@ -807,7 +807,7 @@ struct ChatView: View {
                 if viewing == nil, session?.isCodex != true, session?.isTraex != true {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
-                Composer(key: key, status: status, placeholder: style == .assistant ? "问 Jarvis…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
+                Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
             }
             .padding(.horizontal, Theme.Space.m)

@@ -121,9 +121,9 @@ struct AssistantProfileView: View {
 
     private var header: some View {
         VStack(spacing: Theme.Space.m) {
-            JarvisAvatar(size: 88, working: working)
-                .shadow(color: Theme.accent.opacity(0.3), radius: 16, y: 6)
-            Text("Jarvis").font(Theme.Font.display).fontDesign(.rounded)
+            PersonaAvatar(size: 88, working: working)
+                .shadow(color: Theme.persona.opacity(0.3), radius: 16, y: 6)
+            Text(model.persona.name).font(Theme.Font.display).fontDesign(.rounded)
             Text("你的私人助手 · 运行在 \(machineName)")
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)

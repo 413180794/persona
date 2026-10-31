@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +50,9 @@ func (c *Client) followEvents(ctx context.Context, fn func(Event)) error {
 	u := strings.TrimSuffix(c.cfg.BaseURL, "/") + "/events"
 	u = "ws" + strings.TrimPrefix(u, "http") // http → ws, https → wss
 	dctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	conn, _, err := websocket.Dial(dctx, u, &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": {"Bearer " + tok}}})
+	conn, _, err := websocket.Dial(dctx, u, &websocket.DialOptions{HTTPHeader: http.Header{
+		"Authorization": {"Bearer " + tok}, "X-lark-connector-Account": {strconv.Itoa(c.Account())},
+	}})
 	cancel()
 	if err != nil {
 		return err

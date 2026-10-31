@@ -28,7 +28,24 @@ struct AssistantTopBar: View {
 
     private var session: Session? { key.flatMap { model.session($0) } }
     private var machineID: String { key?.machineID ?? model.assistantConfig?.machineID ?? model.hubMachineID }
-    private var working: Bool { session?.state == .working }
+
+    /// What the face in the bar shows (docs/persona.md「状态」): 离线 when the hub or Jarvis's machine is out of reach,
+    /// 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn runs (thinking until it writes or
+    /// calls a tool), else 空闲.
+    private var dotState: PersonaState {
+        #if DEBUG
+        // `-showPersonaState idle|thinking|working|needs_you|offline`: hold the bar in one state (screenshots).
+        if let s = UserDefaults.standard.string(forKey: "showPersonaState").flatMap(PersonaState.init(rawValue:)) { return s }
+        #endif
+        // 更新中… is the hub answering again: not 离线.
+        let link = model.connection.shown
+        if link == .waitingForNetwork || link == .connecting || model.machine(machineID)?.online == false { return .offline }
+        guard let key, let session else { return .idle }
+        if session.state == .needsYou || !model.interactions(for: key).isEmpty { return .needsYou }
+        guard session.state == .working else { return .idle }
+        let last = model.chats[key]?.items.last
+        return last == nil || last?.role == "user" || last?.kind == .thinking ? .thinking : .working
+    }
 
     var body: some View {
         bar
@@ -127,8 +144,8 @@ struct AssistantTopBar: View {
         let link = model.connection.shown
         return Menu { menuItems(link) } label: {
             VStack(spacing: -7) {
-                JarvisAvatar(size: 46, working: working)
-                    .shadow(color: Theme.accent.opacity(0.25), radius: 8, y: 3)
+                PersonaDot(size: Theme.Size.avatarL, state: dotState)
+                    .shadow(color: Theme.persona.opacity(0.3), radius: 8, y: 3)
                 ZStack {
                     if link != .online {
                         ConnectionLabel(phase: link, compact: true).transition(.opacity)
@@ -156,11 +173,13 @@ struct AssistantTopBar: View {
         .connectionDetails($showLink)
     }
 
-    /// The pill's name: Jarvis on the main conversation and the new-conversation page, a side conversation's title.
+    /// The pill's name: the persona's (Jarvis's) on the main conversation and the new-conversation page, a side
+    /// conversation's title.
     private var name: String {
-        guard let key, key != model.assistantMain else { return "Jarvis" }
+        let persona = model.persona.name
+        guard let key, key != model.assistantMain else { return persona }
         let t = session?.title ?? ""
-        return t.isEmpty || t == "Claude Code" ? "Jarvis" : t
+        return t.isEmpty || t == "Claude Code" ? persona : t
     }
 
     /// The conversation's launcher (the next message uses it) or, on the new-conversation page, the default one.
@@ -225,7 +244,7 @@ struct AssistantTopBar: View {
     /// The menu's heading: which conversation, and what it runs on.
     private var menuTitle: String {
         guard let key else { return "新对话 · \(launcher)" }
-        let title = name == "Jarvis" && key == model.assistantMain ? "主对话" : name
+        let title = name == model.persona.name && key == model.assistantMain ? "主对话" : name
         return [title, launcher, Fmt.model(session?.model)].compactMap { $0 }.joined(separator: " · ")
     }
 

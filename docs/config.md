@@ -139,6 +139,12 @@
 - `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
   这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。
+- `lark.account`（可选整数）：lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号。
+  例如 `"lark": {"base_url": "http://127.0.0.1:<隧道端口>/agent/v1", "token": "<Agent Token>", "account": 2}`。
+  账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。允许范围为 1–999999999，账号不存在时上游报错，不会回退到主账号。
+  修改后重启 hub（`systemctl --user restart jarvisd`），收件箱、默认飞书请求、媒体和实时事件统一切换，不需要更新 iOS。
+  助手的 `ol` 在新进程启动时继承所选账号；已有助手进程保留启动时的环境，需要重新启动才切换。
+  不同账号的服务端收件箱记录隔离并保留，切回后可继续查看；不会同时聚合多个账号。
 - `lark_gate`（可选）：助手用 lark-connector skill 写飞书时的闸门规则，排在内置规则前面，第一条匹配的说了算：
   `[{"method":"POST","path":"/conversations/*/messages","action":"allow"}]`（`action` 是 `allow` / `confirm` / `deny`，可加 `body` 按顶层字段匹配；
   `docs/assistant.md`「飞书：lark-connector skill」）。

@@ -17,8 +17,8 @@ struct RootView: View {
                 WelcomeView()
             }
         }
-        // A new style rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
-        .id(model.style)
+        // A new style or a persona's colors rebuild the whole tree (tokens are static); the open tab and chat are remembered.
+        .id(model.look)
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
         .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))

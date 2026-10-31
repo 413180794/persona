@@ -15,6 +15,7 @@ nonisolated extension StyleSpec {
             components: .jarvis,
             // lark-connector's --message-outgoing / --message-incoming and its card chrome.
             lark: LarkChrome(blue: blue, myBubble: bubble, otherBubble: larkGrayBubble,
-                             cardBackground: Color(light: 0xFFFFFF, dark: 0x1E1F23), cardStroke: stroke))
+                             cardBackground: Color(light: 0xFFFFFF, dark: 0x1E1F23), cardStroke: stroke),
+            larkFollowsAccent: false)
     }()
 }

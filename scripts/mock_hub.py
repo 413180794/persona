@@ -896,6 +896,48 @@ HISTORY = "mock-1"
 # MOCK_GAP=1: the first conversation's subscribe backlog leaves out its last items, then a live push brings only the
 # final two, as if a batch in between had been lost; the app should notice the hole and fetch it (after_seq).
 GAP = os.environ.get("MOCK_GAP") == "1"
+
+# ---------- personas (docs/persona.md) ----------
+# MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.jarvis/personas. MOCK_PERSONAS=demo: the
+# original placeholder (scripts/persona/make_persona.py demo), made into a temporary directory at start.
+PERSONAS_DIR = os.environ.get("MOCK_PERSONAS", "")
+if PERSONAS_DIR == "demo":
+    import subprocess, tempfile
+    PERSONAS_DIR = tempfile.mkdtemp(prefix="mock-personas-")
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "persona", "make_persona.py"),
+                    "demo", "--out", PERSONAS_DIR], check=True, stdout=sys.stderr)
+
+
+def personas():
+    out = []
+    if not PERSONAS_DIR or not os.path.isdir(PERSONAS_DIR):
+        return out
+    for pid in sorted(os.listdir(PERSONAS_DIR)):
+        root = os.path.join(PERSONAS_DIR, pid)
+        mpath = os.path.join(root, "persona.json")
+        if pid.startswith(".") or not os.path.isfile(mpath):
+            continue
+        files = sorted(os.path.relpath(os.path.join(r, f), root) for r, ds, fs in os.walk(root) for f in fs
+                       if not f.startswith(".") and not any(x.startswith(".") for x in os.path.relpath(r, root).split(os.sep) if x != "."))
+        h, total = hashlib.sha256(), 0
+        for f in files:
+            b = open(os.path.join(root, f), "rb").read()
+            h.update(("%s\0%d\0" % (f, len(b))).encode()); h.update(b)
+            total += len(b)
+        out.append({"id": pid, "rev": h.hexdigest()[:16], "bytes": total, "manifest": json.load(open(mpath))})
+    return out
+
+
+def persona_file(rest):
+    """<id>/<file> inside the directory, or None."""
+    if not PERSONAS_DIR:
+        return None
+    pid, _, f = rest.partition("/")
+    root = os.path.realpath(os.path.join(PERSONAS_DIR, pid))
+    p = os.path.realpath(os.path.join(root, f))
+    if not p.startswith(root + os.sep) or not os.path.isfile(p) or os.path.basename(p).startswith("."):
+        return None
+    return p
 # MOCK_STREAM=1: the first conversation keeps working after it is opened: every 2 s a thought, a tool call or a reply
 # arrives (a reply then folds into the work line), 12 times. For checking that reading history holds still.
 STREAM = os.environ.get("MOCK_STREAM") == "1"
@@ -1008,6 +1050,17 @@ class H(BaseHTTPRequestHandler):
                                    "timezone": "Asia/Shanghai", "notes_effective": "", "conversations": ASSISTANT,
                                    "main": ASK1})
         if p == "/api/v1/assistant/tasks": return self.send_json({"tasks": SCHEDULE})
+        if p == "/api/v1/personas": return self.send_json({"personas": personas()})
+        if p.startswith("/api/v1/personas/"):
+            f = persona_file(p[len("/api/v1/personas/"):])
+            if not f: return self.send_json({"error": "no such file"}, 404)
+            body = open(f, "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json" if f.endswith(".json") else "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if p == "/api/v1/assistant/runs":
             ref = parse_qs(urlparse(self.path).query).get("ref", [""])[0]
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})

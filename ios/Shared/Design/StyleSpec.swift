@@ -63,6 +63,10 @@ nonisolated struct StyleSpec: Sendable {
     var previewCorner: CGFloat
     var components: Components
     var lark: LarkChrome
+    /// 飞书's links and my bubbles follow the accent, a persona's included (`tinted`); 飞书's own style keeps its blue.
+    var larkFollowsAccent = true
+    /// The persona's own color (`Theme.persona`), when one is on (docs/persona.md).
+    var personaPrimary: Color? = nil
 
     /// 飞书 inside a style that is not 飞书: the style's accent for chrome, its cards for cards.
     static func larkFollowing(accent: Color, card: Color, cardStroke: Color, otherBubble: Color? = nil) -> LarkChrome {

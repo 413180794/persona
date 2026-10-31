@@ -47,10 +47,10 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 间距 | `Theme.Space`：4pt 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32 |
 | 圆角 | `Theme.Radius`：badge 6 · control 10 · card 14 · bubble 20 · panel 22 |
 | 尺寸 | `Theme.Size` + `.scaledFrame(…)`：图标框、圆点、头像、点按区域随字号缩放（最多 1.6×）；4pt 及以下的线、条用普通 `frame` |
-| 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s） |
-| 颜色 | `Theme` 的角色色（`accent`、`danger`、`positive`、`caution`、`ai`…）、`Theme.Fill`、`Theme.Diff`、`Theme.Hue`；基础色 `Palette`；Agent 状态色 `AgentState.tone`（`StatusPalette`） |
+| 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s）、`blink`（默认形象眨眼） |
+| 颜色 | `Theme` 的角色色（`accent`、`danger`、`positive`、`caution`、`ai`、形象的主色 `persona`…）、`Theme.Fill`、`Theme.Diff`、`Theme.Hue`；基础色 `Palette`；Agent 状态色 `AgentState.tone`（`StatusPalette`） |
 | 图标、标志 | `Theme.Icon`（一个意思一个 SF Symbol）、`Theme.Brand`（官方标志，原样用） |
-| 风格 | `StyleSpec.current`；`Shared/Design/Styles/` 每种风格一个文件 |
+| 风格 | `StyleSpec.current`；`Shared/Design/Styles/` 每种风格一个文件；形象的配色叠在上面（`StyleSpec.tinted`，`docs/persona.md`） |
 
 - **组件和配方**在 `ios/Jarvis/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
   `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
@@ -103,6 +103,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/web.md` | 网页版：hub 托管、登录换设备 token、各页面、连接与补洞、细节约定 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
+| `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 
 ## 构建与验证
 
@@ -179,6 +180,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   改了认窗格的逻辑，部署（重启）后要再跑一次复核，重启前后的结果可能不一样。
 - herdr `agent.prompt` 先粘贴、约 300 ms 后才回车：同一会话的两次发送要串行，否则第二次读屏会把第一条当成输入框里的草稿。发送去重放在 hub 的 Postgres（`sent_messages`）：
   node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/lanes/session-verify.md`。
+- Codex 生图（`scripts/persona/make_persona.py generate`）：`codex exec` 的内置 `image_gen` 用 Codex 自己的 ChatGPT 登录就能出透明背景的 PNG，
+  但它的 HTTP 客户端不认 `socks5h://` 代理（对话请求认），要给 HTTP CONNECT 代理；`-i` 吃多个值，提示词从 stdin 给；ChatGPT 登录只能用部分模型。
 
 ### 助手（无头 Claude）
 
@@ -458,6 +461,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - 弱网 / 断网不弹横幅，标题位换成「转圈 + 等待网络 / 连接中… / 更新中…」（`docs/ios.md`「连接状态」）。`.toolbar(removing: .title)`
   会连 `.principal` 的工具栏项一起藏掉：没有标题的页面要显示状态，就去掉它、只放一个平时为空的 principal 项（不会露出 navigationTitle）。
   大标题页面的 principal 项平时也要留空，否则标题出现两遍。弱网判断只认及时回来的 pong（晚到的 pong 也算慢），不然标题每次 ping 都闪一下。
+- 形象（`docs/persona.md`）可能是第三方角色：角色的图和生成物只放 hub 的 `~/.jarvis/personas`，不进仓库、不进 App 包。
+  换形象和换风格一样按 `AppModel.look` 重建整棵视图树，所以选择界面放在设置列表里（`PersonaPicker`），放在推出来的页面上会被重建关掉。
 
 ### 测试与验证
 

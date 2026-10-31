@@ -26,6 +26,30 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
   详见 `docs/assistant.md`「飞书：lark-connector skill」。下面的接口速查是这边实测的补充，lark-connector 的 references 更全，以它和 `ol GET /` 为准。
 - 会话、消息、已读、发消息、表情回复、卡片按钮走 hub 的专用路由（`docs/protocol.md` 飞书 API）。
 
+## lark-connector 与 hub 分机部署
+
+lark-connector 的 Agent API 保持只监听源端回环地址。源端能主动访问 hub 时，可用专用 SSH 用户建立反向隧道，
+把 hub 的回环端口转发到源端 Agent API；由源端用户级 systemd 服务维护，配置 `Restart=always`、
+`ExitOnForwardFailure=yes` 和 SSH keepalive，并开启 linger，避免依赖开发机在线。源端必须固定 hub 的 SSH host key。
+
+hub 上的隧道用户只允许公钥认证和 remote forwarding：`GatewayPorts no`、`PermitListen 127.0.0.1:<隧道端口>`、
+`PermitOpen none`、`MaxSessions 0`；禁用 TTY、agent、X11 和 Unix socket 转发。公钥另加
+`restrict,port-forwarding,permitlisten="127.0.0.1:<隧道端口>"`，使用 `ssh -N -T` 连接。
+用 `sshd -t` 与 `sshd -T -C user=<隧道用户>,host=localhost,addr=127.0.0.1` 核对生效范围，再 reload，避免影响管理账号。
+
+hub 的 `hub.json` 配置 `lark.base_url=http://127.0.0.1:<隧道端口>/agent/v1` 和 `lark.token`，文件保持 0600。
+Token 从源端环境安全传递，不打印、不入库；变更前备份配置。验证回环监听、无凭据 health 返回 401、
+授权 health 和会话读取，以及 `/events` WebSocket；重启后再次检查。验证过程不需要发送消息或更改已读状态。
+
+`hub.json` 的 `lark.account` 可选择默认账号（整数 `1` 为主账号，`2` 为第二账号，省略或 `0` 默认主账号），
+重启 hub 后，收件箱采集、专用会话接口、媒体和常驻事件连接统一使用该账号；无需修改 iOS。
+助手的新进程会通过 `lark-connector_ACCOUNT` 继承配置，已有进程需要重新启动。账号编号是 `/accounts` 的 `id`，不是飞书用户 ID。
+服务端收件箱持久记录带账号编号，不同账号不会混入同一列表；旧记录视为主账号，切回后仍可加载。
+不修改飞书已读状态，也不同时聚合多个账号。
+
+raw 代理不透传客户端的 `x-lark-connector-account` 请求头，默认使用配置账号；显式 `ol_account` 查询参数仍可覆盖默认账号，
+用于单次只读查询。专用会话接口不接受这个覆盖参数。不要把查询串塞进 `base_url`，客户端会在其后拼接接口路径。
+
 ## 接口速查（hub 机器上实测过；助手现在用 lark-connector skill，lark-connector 的 references 为准）
 
 ### 搜索

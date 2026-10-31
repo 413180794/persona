@@ -40,6 +40,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    PersonaPicker()
+                        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+                } header: {
+                    Text("形象")
+                } footer: {
+                    Text(model.isDemo ? "体验模式只有默认形象。" :
+                        "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
+                }
+
+                Section {
                     StylePicker()
                         .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
                     LabeledContent("字号") {

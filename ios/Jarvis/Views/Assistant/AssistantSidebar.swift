@@ -266,9 +266,9 @@ struct AssistantSidebar: View {
         let online = machine?.online ?? false
         return Button(action: openProfile) {
             HStack(spacing: Theme.Space.m) {
-                JarvisAvatar(size: 42)
+                PersonaAvatar(size: Theme.Size.avatarM)
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text("Jarvis").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
+                    Text(model.persona.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {
                         Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
                         Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
@@ -285,7 +285,7 @@ struct AssistantSidebar: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Jarvis，\(online ? "在线" : "离线")，查看资料")
+        .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，查看资料")
     }
 
     /// 定时任务 and 知识库, side by side.

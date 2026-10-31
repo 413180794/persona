@@ -40,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -71,7 +70,6 @@ import jarvis.android.data.Hub
 import jarvis.android.data.HubException
 import jarvis.android.data.Item
 import jarvis.android.data.SessionKey
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
@@ -199,6 +197,11 @@ fun ChatScreen(
             }
             sending = false
         }
+    }
+
+    if (terminal) {
+        jarvis.android.terminal.TerminalScreen(hub, key, session?.displayTitle ?: key.sessionId.take(8), onClose = { terminal = false })
+        return
     }
 
     Scaffold(
@@ -349,9 +352,6 @@ fun ChatScreen(
         )
     }
 
-    if (terminal) {
-        ModalBottomSheet(onDismissRequest = { terminal = false }) { TerminalPeek(hub, key) }
-    }
 }
 
 @Composable
@@ -430,34 +430,4 @@ private fun LazyImage(hub: Hub, key: SessionKey, item: Item) {
     }
     bmp?.let { Image(it.asImageBitmap(), null, Modifier.widthIn(max = 280.dp).heightIn(max = 360.dp)) }
         ?: Box(Modifier.size(120.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)))
-}
-
-/** The pane's visible text, polled (`/screen`), with keys for when a dialog or menu needs pressing. */
-@Composable
-private fun TerminalPeek(hub: Hub, key: SessionKey) {
-    var text by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(key) {
-        while (true) {
-            runCatching { hub.api.screen(key, 50) }.onSuccess { text = it.text; error = null }.onFailure { error = it.message }
-            delay(1_000)
-        }
-    }
-    Column(Modifier.padding(horizontal = 12.dp).navigationBarsPadding()) {
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Text(
-            text, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 12.sp, softWrap = false,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 460.dp)
-                .background(androidx.compose.ui.graphics.Color(0xFF111418), RoundedCornerShape(8.dp))
-                .horizontalScroll(rememberScrollState()).padding(8.dp),
-            color = androidx.compose.ui.graphics.Color(0xFFE5E7EB),
-        )
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("esc" to "Esc", "up" to "↑", "down" to "↓", "enter" to "回车", "tab" to "Tab", "1" to "1", "2" to "2", "3" to "3", "ctrl+c" to "Ctrl-C")
-                .forEach { (k, l) ->
-                    AssistChip(onClick = { scope.launch { runCatching { hub.api.keys(key, listOf(k)) }.onFailure { error = it.message } } }, label = { Text(l, maxLines = 1) })
-                }
-        }
-    }
 }

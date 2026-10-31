@@ -67,6 +67,8 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。
   UI 测试 `TerminalTypingTests/testDrivingTheTerminalSendsItsBytes` 要连这样的 mock；其余终端 UI 测试固定 `-terminalSize mirror`。
+- 形象（`docs/persona.md`）：`MOCK_PERSONAS=demo` 启动 mock 时用 `scripts/persona/make_persona.py demo` 现画一个原创的演示形象「小薄荷」；
+  `MOCK_PERSONAS=<目录>` 则列出那个目录里的包（看别的形象的效果，包不进仓库）。UI 测试 `PersonaPickerTests` 要连 `MOCK_PERSONAS=demo` 的 mock。
 - 接管的真实链路（不用部署）：在 hub 机器上编一个 darwin 的 jarvisd，本机起一个测试 hub（假 HOME、`HERDR_SOCKET_PATH` 指向真 herdr 的 socket、
   单独的库 `jarvis_termlab` 经 SSH 隧道、`machines` 只有一台 `kind: local`），模拟器配对它，开 lab 窗格的终端（`docs/terminal.md` 第十一节的实测就是这么量的）。
 - 终端断线：`MOCK_SCREEN_FAIL_AFTER=3:14` 启动 mock（第一次读终端 3 秒后每次都 503，再过 14 秒恢复），

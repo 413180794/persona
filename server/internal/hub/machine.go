@@ -483,7 +483,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if err != nil {
 			return nil, err
 		}
-		return proto.AssistantLark{Base: base, Token: token, Rules: m.hub.cfg.LarkGate}, nil
+		return proto.AssistantLark{Base: base, Token: token, Account: m.hub.lark.Account(), Rules: m.hub.cfg.LarkGate}, nil
 	case "state.load":
 		out := map[string]db.NodeSession{}
 		if m.hub.store != nil {

@@ -177,7 +177,8 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun keys(k: SessionKey, keys: List<String>, text: String = "") { post(sp(k) + "/keys", Keys(keys, text)) }
 
     @Serializable data class Screen(val text: String = "", val status: String? = null)
-    suspend fun screen(k: SessionKey, lines: Int = 60): Screen = get(sp(k) + "/screen", mapOf("lines" to lines.toString()))
+    suspend fun screen(k: SessionKey, lines: Int = 60, ansi: Boolean = false): Screen =
+        get(sp(k) + "/screen", mapOf("lines" to lines.toString()) + if (ansi) mapOf("format" to "ansi") else emptyMap())
 
     @Serializable private data class Interactions(val interactions: List<Interaction> = emptyList())
     suspend fun interactions(): List<Interaction> = get<Interactions>("/api/v1/interactions").interactions

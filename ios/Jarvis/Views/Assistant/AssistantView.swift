@@ -115,7 +115,7 @@ struct AssistantView: View {
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
             // `-openAssistantSidebar YES`: the sidebar is out.
-            .navigationDestination(isPresented: $showAvatars) { JarvisAvatarGallery() }
+            .navigationDestination(isPresented: $showAvatars) { PersonaGallery() }
             .onAppear {
                 switch UserDefaults.standard.string(forKey: "openAssistantPage") {
                 case "avatars": showAvatars = true
@@ -353,7 +353,7 @@ struct StarterComposer: View {
         VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            ComposerRow(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
+            ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
                         send: {
                             let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
                             send(t.isEmpty ? "请看图片" : t, images.map(\.1))
@@ -424,7 +424,7 @@ struct BeautifulStarterComposer: View {
             if !quotes.isEmpty { ContextChips(refs: $quotes) }
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            PromptComposer(placeholder: "问 Jarvis…", text: $text, selection: $selection, focused: $focused,
+            PromptComposer(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.allSessions, except: nil) },

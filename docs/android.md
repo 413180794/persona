@@ -17,7 +17,7 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 搜索和筛选 | 右上角搜索（标题、目录、空间名、标签页名、最后一句，不分大小写）；快捷筛选「全部 / 需要你 / 未读 / 工作中」带数量，筛出来的 Agent 看过以后也留在原位，重新点筛选才刷新（和 iOS 一样）；「全部电脑 / 某一台」只看一台电脑，记住选择；完成未看的不止一个时有「全部标为已读」。搜索和筛选时所有折叠都展开 |
 | 对话 | 历史分页（`turns=2`，滚到顶自动往前翻）、实时 items（WebSocket `subscribe`，按「items 的连续性」补洞）、工具调用和结果合成一行（点开看命令 / diff / 输出，截断的点「看全文」）、图片按需取（`lazy_images`）、Markdown；发消息带 `client_msg_id`，被拒（`dialog_open` / `input_draft`）时弹窗说明，单行草稿可以「清空并发送」；中断（Esc）；Claude 给的下一条建议点一下填进输入框 |
 | 交互卡片 | 提问（单选直接点、多选 / 自定义文本再提交）、计划（批准 / 批准并全部放行 / 打回带反馈）、授权（允许 / 总是允许 / 拒绝）、终端对话框（按 hub 解析出的 `option` 回答，`prompt_changed` 时提示）、密码框；都能「交给电脑处理」（`dismiss`） |
-| 终端 | 对话页右上角：每秒读一次 `/screen`，下面一排按键（Esc、↑↓、回车、Tab、1/2/3、Ctrl-C） |
+| 终端 | 对话页右上角，实时终端（`docs/terminal.md`）：`terminal_subscribe` 收 herdr 的帧，VT 子集画进格子（颜色、宽字符、框线逐格画、OSC 8 链接），断线后带 epoch / seq 续上，丢帧就从整帧重来。默认「手机尺寸」接管终端（`control`），Claude 按手机宽度排版；键盘打的字和键栏（Esc、Tab、Ctrl、方向键、^C、⇧Tab、退格、回车）直接写进终端，上下拖是 herdr 的滚轮，点一下是在那一格单击；电脑上别的程序占着时问「接管 / 只看」，被抢走后顶栏有「接管」。可切「电脑尺寸」只看（按窗格原尺寸镜像，左右滑，键走 `/keys`）。旧 hub / node 不能推流时退回每秒读一次 `/screen?format=ansi`。离开页面或 App 进后台立刻放手，窗格回到电脑上的尺寸 |
 | Agent 操作 | 长按一行：置顶 / 取消置顶（置顶的只在顶部「置顶」里出现一次）、屏蔽 / 开启通知（规则和 hub 一样：Agent 自己 → `allowed` → 它的空间；屏蔽的灰点加 🔕、不弹通知）、重命名（herdr 标签页名和 Claude 会话名一起改）、关闭 Agent（先说明会退出哪台电脑上的什么、关掉哪个标签页）。置顶 / 屏蔽存在 hub（`/api/v1/pins`、`/api/v1/mutes`），点了立刻生效，hub 拒绝时退回原样 |
 | 新开会话 | 列表右下角 +：选电脑、目录（家目录里列「最近用过」，点一下选中、再点进入）、启动器、权限模式（和 iOS 同一组，「默认」交给启动器）、可选的第一条消息。hub 说没启动起来但新窗格里其实起来了（停在对话框上，或者 node 不认识这个版本的输入框底栏）时，照样打开新会话 |
 | Jarvis（助手） | 底部 tab「Jarvis / Agents」。Jarvis 是 hub 配置的那台机器上无头运行的 Claude（`docs/assistant.md`）：打开时进主对话（没有就进最近一段）；左上角菜单是历史对话和「新对话」，主对话带星标。新对话从首页开始：问候、5 个和 iOS 一样的建议、输入框，发出第一句就显示气泡和「正在准备」；第一段对话自动成为主对话。打开时 `POST /api/v1/assistant/warm`，第一句不用等 claude 启动。回复逐字显示（WebSocket `delta`），没有终端按钮。助手自己的提问不进 Agents 的「需要你处理」，通知标题是「Jarvis 在问你」，点开进 Jarvis tab |
@@ -27,8 +27,8 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 手机数据工具 | 设置 › 手机数据：设备信息、剪贴板、通知、通讯录、日历、位置，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`ios/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。还没有：提醒事项、照片、健康（iOS 有） |
 | 设置 | hub 地址和连接状态、各台机器（在线、版本、`node_mismatch` 提示、重新连接）、后台通知设置入口、断开 hub |
 
-还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、实时终端流（`terminal_subscribe`）、
-手表。协议都在，后续按 iOS 的做法补。
+还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、
+终端的选择复制（现在只能拷贝整屏）、字号和主题、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
 
 hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub）时不再无限重连，直接回到配对页并说明原因；已配对时打开配对链接也会回到配对页重新配。
 
@@ -68,6 +68,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 | `data/Hub.kt` | WebSocket、重连、machines / sessions / interactions 的状态和事件流 |
 | `data/ChatStore.kt` | 一个会话的 items：`covered`、`history`、补洞（`after_seq`）、往前翻页 |
 | `service/HubService.kt`、`Notifier.kt`、`ActionReceiver.kt` | 前台服务、通知、通知上的按钮 |
+| `terminal/` | 实时终端：`TerminalGrid`（VT 子集，移植自 iOS 的 `TerminalGrid.swift`）、`TerminalFeed`（帧按序应用、接管时自己攒滚出屏幕的行）、`TerminalLink`（订阅 / 续传 / 接管 / 轮询降级）、`TerminalKeys`（键名 → 终端字节）、`BoxDrawing`、`TerminalScreen` |
 | `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`Markdown` |
 
 ## 验证记录
@@ -78,6 +79,8 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
 - 手机发消息到 Mac 上 herdr 里的 claude；claude 的 AskUserQuestion 变成卡片（hook 拦下的走 `question`，TUI 里的走 `screen`），在手机上选择后 claude 收到
 - 计划模式下 ExitPlanMode 的对话框在手机上批准，claude 继续执行改了文件
 - App 在后台：提问通知上直接点选项，claude 收到；一轮做完弹「做完了」
+- 实时终端：打开 Mac 上 Claude 的窗格，接管成 46×39（herdr `session control`），打字、退格、^C 写进终端，上下拖滚 Claude 的对话；
+  电脑上另一个程序占着时弹「接管 / 只看」；切「电脑尺寸」改成按 120 列镜像；关掉页面后 control 进程退出、窗格回到电脑尺寸
 - hub 重启后几秒内自动重连；长会话往前翻到两天前的内容；深色模式截图检查
 
 真机（Redmi K60 Pro，Android 16，澎湃 OS 3，没有 Google 服务），手机经 USB（`adb reverse tcp:18660 tcp:18660`）连 hub：
@@ -106,3 +109,8 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
   （`INSTALL_FAILED_USER_RESTRICTED`）。`adb shell input` 代点屏幕要再打开「USB 调试（安全设置）」，否则报 `INJECT_EVENTS`。
 - 手机没法直接访问 hub 时（hub 在内网、手机在流量上），联调可以走 USB：电脑上把本机 18660 转到 hub，再 `adb reverse tcp:18660 tcp:18660`，
   手机配对时用 `http://127.0.0.1:18660`。
+- 终端里打字：安卓输入法对每个英文词也走 composition（为了联想），等 commit 再发的话一个词要到空格才出现；所以输入框里的文字（含正在拼的）
+  每次变化只发和上次的差（新字，或若干个退格）。按这个规则，拼音选字时终端里先出现拼音，选好后退格换成汉字（模拟器没有中文输入法，还没在真机上试）。安卓的 emoji 字体会把 ⏺ ⏸ ⏵ 画成两格宽的彩色图标，
+  加 U+FE0E 也没用，这几个按形状自己画。
+- hub 前面的转发断过以后，hub 那边可能还以为 node 在线，但每个调用都回 `rpc: connection closed`（/screen 也一样）。重启常驻 node
+  （`launchctl kickstart -k gui/$UID/com.jarvis.node`）再让 hub 重连这台机器就好了，App 这边不用动。

@@ -21,9 +21,17 @@ import (
 )
 
 type Config struct {
-	BaseURL   string `json:"base_url"`  // default http://127.0.0.1:8095/agent/v1
-	Container string `json:"container"` // docker container to read lark-connector_AGENT_TOKEN from (default lark-connector-yunpeng)
+	Account   int    `json:"account,omitempty"` // lark-connector account ID; zero selects primary account 1
+	BaseURL   string `json:"base_url"`          // default http://127.0.0.1:8095/agent/v1
+	Container string `json:"container"`         // docker container to read lark-connector_AGENT_TOKEN from (default lark-connector-yunpeng)
 	Token     string `json:"token,omitempty"`
+}
+
+func (cfg Config) Validate() error {
+	if cfg.Account < 0 || cfg.Account > 999999999 {
+		return errors.New("lark.account must be an integer between 1 and 999999999 (or 0 for the primary account)")
+	}
+	return nil
 }
 
 type Client struct {
@@ -40,6 +48,9 @@ type Client struct {
 }
 
 func New(cfg Config) *Client {
+	if cfg.Account == 0 {
+		cfg.Account = 1
+	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "http://127.0.0.1:8095/agent/v1"
 	}
@@ -47,6 +58,17 @@ func New(cfg Config) *Client {
 		cfg.Container = "lark-connector-yunpeng"
 	}
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 30 * time.Second}, media: &http.Client{}, token: cfg.Token}
+}
+
+// Account is the default account for reads, writes, media and realtime events.
+func (c *Client) Account() int { return c.cfg.Account }
+
+func (c *Client) authorize(req *http.Request, token string) {
+	req.Header.Set("Authorization", "Bearer "+token)
+	// Preserve explicit account selection on raw requests, including upstream validation.
+	if !req.URL.Query().Has("ol_account") {
+		req.Header.Set("x-lark-connector-account", strconv.Itoa(c.Account()))
+	}
 }
 
 // AgentAccess is the agent API's base (without /agent/v1) and token, for the assistant's own lark-connector helper.
@@ -92,7 +114,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
+	c.authorize(req, tok)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -461,7 +483,7 @@ func (c *Client) Media(ctx context.Context, w http.ResponseWriter, path string, 
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
+	c.authorize(req, tok)
 	copyRangeHeaders(req, inbound)
 	resp, err := c.media.Do(req)
 	if err != nil {
@@ -598,7 +620,7 @@ func (c *Client) Raw(ctx context.Context, w http.ResponseWriter, method, path st
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+tok)
+	c.authorize(req, tok)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

@@ -43,6 +43,26 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 - hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
 - 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
 
+### 轻量 hub 与部署前检查
+
+轻量 hub（例如 2 核 / 2 GB）可以只运行 hub 和 Postgres，把 Agent 放在其他执行机器上。初次部署尚未接入执行机器时，
+在 `hub.json` 显式写 `"machines": []`，避免省略后加载默认本机 node；`inbox.agent.enabled` 和 `kb.enabled` 可先设为 false，
+接入数据源后再按需开启。以上是部署方式建议，尚无硬件最低配置的压测结论。
+
+Linux 的 systemd 用户服务要在退出 SSH 后持续运行，需由管理员为部署用户执行 `loginctl enable-linger <用户>`。
+安装 Docker 后先验证 `postgres:18-alpine` 能拉取；系统软件源可访问不代表 Docker Hub 可访问。拉取失败时不要把数据库初始化
+或 hub 部署标记为完成，也不要输出 `hub.json` 中的 token 和数据库连接串。
+国内网络若无法访问 Docker Hub，可尝试 AWS 公共仓库的 Docker 官方镜像
+`public.ecr.aws/docker/library/postgres:18-alpine`，拉取成功后重新标记为 `postgres:18-alpine` 再运行数据库脚本。
+
+公网入口使用独立域名的 HTTPS 反向代理，hub 和数据库只监听回环地址。Nginx 要转发 WebSocket 的 Upgrade / Connection，
+关闭响应缓冲并延长读取超时；访问日志不要记录带 token 的查询字符串。重载 Nginx 后立即请求可能仍命中旧 worker，
+应等待新配置生效后再验证证书、鉴权接口和 WSS 101。通过云控制台申请的免费证书需要在到期前重新申请并安装，
+不要将已有 certbot 定时器视为这类证书的自动续期。
+
+Windows PowerShell 通过管道传 shell 脚本时，末尾可能额外带 CR，导致远端报 `$'\r': command not found`；
+使用 UTF-8 文件上传，或先编码为 base64 再在远端解码执行，避免依赖管道的换行编码。
+
 ## 常驻 node（Mac，`scripts/node-launchd.sh`）
 
 hub 通过 ssh 起 node（`jarvisd node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的
@@ -105,6 +125,9 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 ## 运维
 
 - 机器离线：App 里显示 ssh 的最后一行错误。NAT 后面的电脑要先建好反向隧道（`docs/config.md`）。
+- 机器显示在线但所有任务立即报 `rpc: connection closed`：检查启动器和助手接口是否同时返回 502。
+  关闭 RPC 不会自动关闭 SSH 的 stdout；连接循环必须同时等待 `peer.Done()`，随后取消旧 SSH 子进程并重连，
+  否则会一直保留已关闭的 peer 和过期的在线状态。`TestMachineReconnectReplacesClosedPeer` 用真实子进程覆盖此场景。
 - 手动调接口：`curl -H "Authorization: Bearer $TOKEN" http://<hub 地址>:18660/api/v1/machines`。
 - 请求 ID：每个响应带 `X-Request-Id`（App 发了 `X-Client-Request-Id` 就沿用它）。hub 只记失败（≥400）和慢（>2 秒）的请求，
   一行 `[<id>] 方法 路径 -> 状态码 (耗时)`，不记 query、body、token。App 的 5xx 错误提示后面带「（请求 <id>）」，拿它在

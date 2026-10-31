@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -82,6 +83,46 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     var serverVersion: String? = null
         private set
+    /** What the hub can do (hello `features`): terminal_stream, terminal_control, terminal_scroll, terminal_click, … */
+    @Volatile var features: Set<String> = emptySet()
+        private set
+
+    /** A pane's live terminal (docs/terminal.md): one handler per session, told every frame / control / reconnect. */
+    sealed interface TerminalEvent {
+        data class Frame(val epoch: String, val seq: Int, val full: Boolean, val cols: Int, val rows: Int, val data: ByteArray) : TerminalEvent
+        data class Ended(val error: String, val unsupported: Boolean) : TerminalEvent
+        data class Control(val state: String, val error: String?) : TerminalEvent
+        /** A new connection's hello: subscribe again (continuing from the last frame). */
+        data object Reconnected : TerminalEvent
+    }
+    private val terminalHandlers = java.util.concurrent.ConcurrentHashMap<SessionKey, (TerminalEvent) -> Unit>()
+
+    fun terminalSubscribe(k: SessionKey, epoch: String?, afterSeq: Int, control: Pair<Int, Int>?, takeover: Boolean, handler: (TerminalEvent) -> Unit) {
+        terminalHandlers[k] = handler
+        send(buildJsonObject {
+            put("type", "terminal_subscribe"); put("machine_id", k.machineId); put("session_id", k.sessionId)
+            if (epoch != null) { put("epoch", epoch); put("after_seq", afterSeq) }
+            if (control != null) put("control", buildJsonObject { put("cols", control.first); put("rows", control.second) })
+            if (takeover) put("takeover", true)
+        })
+    }
+
+    /** Bytes typed into a terminal the phone drives, a new size, the wheel (lines, > 0 back) or a click at [col, row]. */
+    fun terminalInput(k: SessionKey, text: String = "", control: Pair<Int, Int>? = null, scroll: Int? = null, at: Pair<Int, Int>? = null, click: Pair<Int, Int>? = null) {
+        send(buildJsonObject {
+            put("type", "terminal_input"); put("machine_id", k.machineId); put("session_id", k.sessionId)
+            if (text.isNotEmpty()) put("text", text)
+            if (control != null) put("control", buildJsonObject { put("cols", control.first); put("rows", control.second) })
+            if (scroll != null) put("scroll", scroll)
+            at?.let { put("at", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(it.first), JsonPrimitive(it.second)))) }
+            click?.let { put("click", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive(it.first), JsonPrimitive(it.second)))) }
+        })
+    }
+
+    fun terminalUnsubscribe(k: SessionKey) {
+        if (terminalHandlers.remove(k) == null) return
+        send(buildJsonObject { put("type", "terminal_unsubscribe"); put("machine_id", k.machineId); put("session_id", k.sessionId) })
+    }
 
     /** Phone tools declared on every (re)connect; set before start() so the first hello registers them. */
     @Volatile var phoneTools: JsonArray? = null
@@ -177,7 +218,30 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private fun onMessage(text: String) {
         val msg = JsonCodec.parseToJsonElement(text).jsonObject
         when (msg["type"]?.jsonPrimitive?.content) {
-            "hello" -> serverVersion = msg["server_version"]?.jsonPrimitive?.content
+            "hello" -> {
+                serverVersion = msg["server_version"]?.jsonPrimitive?.content
+                features = (msg["features"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty()
+                terminalHandlers.values.forEach { it(TerminalEvent.Reconnected) }
+            }
+            "terminal" -> {
+                val k = SessionKey(msg["machine_id"]?.jsonPrimitive?.content ?: return, msg["session_id"]?.jsonPrimitive?.content ?: return)
+                val h = terminalHandlers[k] ?: return
+                val err = msg["error"]?.jsonPrimitive?.content
+                if (err != null) {
+                    h(TerminalEvent.Ended(err, msg["unsupported"]?.jsonPrimitive?.booleanOrNull == true))
+                } else {
+                    val data = android.util.Base64.decode(msg["data"]?.jsonPrimitive?.content.orEmpty(), android.util.Base64.DEFAULT)
+                    h(TerminalEvent.Frame(
+                        msg["epoch"]?.jsonPrimitive?.content.orEmpty(), msg["seq"]?.jsonPrimitive?.intOrNull ?: 0,
+                        msg["full"]?.jsonPrimitive?.booleanOrNull == true, msg["cols"]?.jsonPrimitive?.intOrNull ?: 0,
+                        msg["rows"]?.jsonPrimitive?.intOrNull ?: 0, data,
+                    ))
+                }
+            }
+            "terminal_control" -> {
+                val k = SessionKey(msg["machine_id"]?.jsonPrimitive?.content ?: return, msg["session_id"]?.jsonPrimitive?.content ?: return)
+                terminalHandlers[k]?.invoke(TerminalEvent.Control(msg["state"]?.jsonPrimitive?.content.orEmpty(), msg["error"]?.jsonPrimitive?.content))
+            }
             "ping" -> send(buildJsonObject { put("type", "pong") })
             "machines" -> _machines.value = decode(msg["machines"]) ?: emptyList()
             "sessions" -> {
