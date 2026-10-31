@@ -177,6 +177,7 @@
 - `kb`：知识库（`docs/knowledge.md`）：`enabled`（默认开）、`text_days`（文字保留天数，365）、`attachment_days`（附件，30）、
   `ai`（压缩和打标的模型，字段同 `ai`；不写用 `inbox.triage_ai`，再没有用 `ai`）。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
+- `plugins`：hub 跑起来、转发给 App 的插件（语音对话等，实现在各自的仓库），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件），见 `docs/plugins.md`。
 
 ## 给写代码的人
 

@@ -71,6 +71,7 @@ type Hub struct {
 	launchersSeen map[string][]proto.Launcher
 	devtok        devTokens // device token lookups (devicetokens.go)
 	sends         sendLog   // messages being / just sent, by client_msg_id (send.go)
+	plugins       *plugins  // processes that add to the app, relayed under /api/v1/plugins (plugins.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -196,6 +197,8 @@ func Run(ctx context.Context, version string) error {
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
+	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
+	h.startPlugins(ctx)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: h.routes()}
 	go func() {

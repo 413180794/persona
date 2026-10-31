@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -61,6 +62,7 @@ import jarvis.android.data.ApiClient
 import jarvis.android.data.Hub
 import jarvis.android.data.Session
 import jarvis.android.data.SessionKey
+import jarvis.android.voice.voicePlugin
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -91,6 +93,9 @@ fun AssistantScreen(
     val drawer = rememberDrawerState(DrawerValue.Closed)
     var profile by rememberSaveable { mutableStateOf(false) }
     var knowledge by rememberSaveable { mutableStateOf(false) }
+    var talking by rememberSaveable { mutableStateOf(false) }
+    // The hub's voice plugin (docs/plugins.md), when it has a running one: the mic in the top bar opens it.
+    var voicePlugin by remember { mutableStateOf<jarvis.android.voice.Plugin?>(null) }
     val machines by hub.machines.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -101,6 +106,7 @@ fun AssistantScreen(
         reload()
         runCatching { hub.api.warmAssistant() } // the first message then skips claude's startup
     }
+    LaunchedEffect(Unit) { voicePlugin = runCatching { hub.api.voicePlugin() }.getOrNull() }
     // First open: the main conversation, else the most recent one (iOS picks up where you left off).
     LaunchedEffect(state) {
         val s = state ?: return@LaunchedEffect
@@ -189,9 +195,18 @@ fun AssistantScreen(
         },
     ) {
         val historyButton: @Composable () -> Unit = { IconButton({ scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "历史对话") } }
-        val newButton: @Composable () -> Unit = { IconButton({ current = null; chose = true }) { Icon(Icons.Default.Edit, "新对话") } }
+        val voiceButton: @Composable () -> Unit = {
+            if (voicePlugin != null) IconButton({ talking = true }) { Icon(Icons.Default.Mic, "语音对话") }
+        }
+        val newButton: @Composable () -> Unit = {
+            voiceButton()
+            IconButton({ current = null; chose = true }) { Icon(Icons.Default.Edit, "新对话") }
+        }
         val shown = current
-        if (knowledge) {
+        val plugin = voicePlugin
+        if (talking && plugin != null) {
+            VoiceScreen(hub, plugin, onBack = { talking = false })
+        } else if (knowledge) {
             jarvis.android.ui.knowledge.KnowledgeScreen(hub, onBack = { knowledge = false }, onAsk = ::ask, onOpenSession = onOpenSession)
         } else if (profile) {
             AssistantProfile(
@@ -215,7 +230,7 @@ fun AssistantScreen(
             }
         } else {
             Scaffold(
-                topBar = { TopAppBar(title = { Text("Jarvis") }, navigationIcon = historyButton) },
+                topBar = { TopAppBar(title = { Text("Jarvis") }, navigationIcon = historyButton, actions = { voiceButton() }) },
                 bottomBar = bottomBar,
             ) { pad ->
                 AssistantHome(

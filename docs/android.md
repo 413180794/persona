@@ -107,6 +107,13 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
 - 进程在后台被拉起（磁贴、小组件更新、通知按钮）时，Android 12+ 不许开前台服务：`HubService.start` 吞掉这个异常，
   App 下次回到前台（`MainActivity.onStart`）或开机时再开。以前直接崩，连带磁贴 / 小组件 / 按钮一起没了。
 
+## 语音对话
+
+hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏多一个麦克风，进语音页（`ui/VoiceScreen.kt`、`voice/`）：
+全双工，一直在听（静音也照送，什么时候轮到谁说由模型决定），模型说话时直接开口就能打断，也有「打断」键；静音、挂断；字幕按 id 原地替换。
+音色在页面右上角选，存在本机（每个插件一份），换了就重开一次对话。录音是 `VOICE_COMMUNICATION` 音源 + 系统回声消除 / 降噪，
+外放走扬声器（接了耳机 / 蓝牙就走它们）；对话期间屏幕常亮，离开页面就结束（不在后台录音）。
+
 ## 构建和安装
 
 ```sh

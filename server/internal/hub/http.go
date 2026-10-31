@@ -186,6 +186,7 @@ func (h *Hub) routes() http.Handler {
 	h.larkRoutes(api)
 	h.inboxRoutes(api)
 	h.translateRoutes(api)
+	h.pluginRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())
@@ -239,7 +240,8 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		w.Header().Set("X-Request-Id", id)
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
-		if r.URL.Path != "/api/v1/ws" && (sw.status >= 400 || time.Since(start) > 2*time.Second) {
+		long := strings.HasPrefix(r.URL.Path, "/api/v1/plugins/") // a plugin's sockets and streams
+		if r.URL.Path != "/api/v1/ws" && (sw.status >= 400 || (!long && time.Since(start) > 2*time.Second)) {
 			h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
 		}
 	})
