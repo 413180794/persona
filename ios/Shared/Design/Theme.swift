@@ -299,6 +299,13 @@ nonisolated enum Theme {
         static let box280: CGFloat = 280
         static let box300: CGFloat = 300
         static let box380: CGFloat = 380
+        // Wide screens (iPad).
+        /// A page meant to be read, not a list (the welcome page): no wider than this, centered.
+        static let readable: CGFloat = 560
+        /// The list column of a split on iPad: wide enough for the agents' cards and the inbox rows.
+        static let sidebarMin: CGFloat = 340
+        static let sidebar: CGFloat = 400
+        static let sidebarMax: CGFloat = 480
     }
 
     /// Motion: a state change snaps, a layout change glides. Nothing repeats except the 需要你 dot, the work spinner and

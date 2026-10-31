@@ -80,7 +80,7 @@ struct SettingsView: View {
                         }
                     }
                     NavigationLink(value: ModelLaunchersRoute()) {
-                        Label("模型", systemImage: "cpu")
+                        Label("模型", systemImage: Theme.Icon.cpu)
                     }
                     NavigationLink(value: SettingsPage.claude) {
                         Label("Claude Code 设置", systemImage: Theme.Icon.options)
@@ -390,6 +390,9 @@ struct WelcomeView: View {
                 .padding(.top, Theme.Space.s)
                 .padding(.bottom, Theme.Space.m)
         }
+        // iPad: a centered column, not buttons from edge to edge.
+        .frame(maxWidth: Theme.Size.readable)
+        .frame(maxWidth: .infinity)
         .sheet(isPresented: $showPair) { PairView() }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
     }

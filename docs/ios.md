@@ -273,6 +273,18 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
   没有命令行。截图要指定屏幕：`xcrun simctl io <udid> screenshot --display=1`（外屏）/ `--display=3`（内屏，横放时是 2853×2007），
   不指定时可能拍到熄灭的那块（全黑）；先算一下亮度确认拍到的是亮着的屏。启动参数照常用（`-tab`、`-openSession` 等）。
 
+## iPad（2026-10-31）
+
+iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：在 iPad 上是放大按钮的手机兼容窗口。
+
+- 布局和 iPhone Duo 一样按宽度分：常规宽度（iPad 全屏、大一些的分屏）是 `SplitNavigation` 左右两栏，紧凑宽度（窄的分屏 / 侧拉）是一个栈。
+- iPad 上左栏用 `Theme.Size.sidebar`（340…480，理想 400；系统默认太窄，Agents 卡片的标题全折行），Jarvis tab 的对话列表也一样，切 tab 时左栏不跳。
+  iPhone Duo 不设宽度（系统按折痕分栏）。
+- iPad 支持四个方向（分屏和台前调度要求）；iPhone 仍然只竖屏。
+- 欢迎页的内容宽度不超过 `Theme.Size.readable`（560），不在大屏上铺满。
+- 测试：`IPadLayoutTests`（只在 iPad 模拟器上跑：竖屏 / 横屏都是原生全屏、左栏够宽、对话在右栏打开）。XCUITest 自己在横屏下截的图是转过的，
+  看横屏要 `TEST_RUNNER_JARVIS_HOLD=<秒>` 停住、用 `simctl io screenshot` 拍。
+
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），

@@ -62,7 +62,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
         PRODUCT_NAME: Jarvis
-        TARGETED_DEVICE_FAMILY: "1"
+        # iPhone and iPad (2026-10-31: on iPad it ran as a phone-sized window). Wide layouts come from the size class
+        # (SplitNavigation), as on an open iPhone Duo.
+        TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -84,6 +86,9 @@ targets:
           UIColorName: LaunchBackground
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # iPad: every orientation (Split View and Stage Manager need it).
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
+                                                UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIBackgroundModes: [remote-notification]
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
@@ -126,7 +131,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).liveactivity
         PRODUCT_NAME: JarvisWidgets
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES

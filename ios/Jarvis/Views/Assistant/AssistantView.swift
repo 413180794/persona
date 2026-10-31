@@ -34,9 +34,10 @@ struct AssistantView: View {
         if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.
             NavigationSplitView(columnVisibility: $columns) {
-                // No width of our own: the system sizes the column, and moves the divide onto the fold.
+                // The system sizes the column on iPhone Duo (and moves the divide onto the fold); iPad, as the other tabs.
                 sidebar(column: true)
                     .toolbarVisibility(.hidden, for: .navigationBar)
+                    .modifier(SidebarWidth())
             } detail: {
                 stack
             }

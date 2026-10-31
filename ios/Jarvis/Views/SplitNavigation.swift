@@ -25,7 +25,7 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
                 // stack that refused its pushes (a path binding that always read empty) first slid the list away, then
                 // back: the sidebar folded and unfolded on every tap.
                 sidebar.modifier(destinations)
-                // No width of our own: the system sizes the columns, and partly folded it moves the divide onto the fold.
+                    .modifier(SidebarWidth())
             } detail: {
                 NavigationStack(path: $path) {
                     empty.modifier(destinations)
@@ -39,6 +39,19 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
             NavigationStack(path: $path) {
                 sidebar.modifier(destinations)
             }
+        }
+    }
+}
+
+/// The list column's width. iPhone Duo: none of our own (the system sizes the columns, and partly folded it moves the
+/// divide onto the fold). iPad: the system's sidebar is narrow for the agents' cards (they wrapped every title), so a
+/// wider one.
+struct SidebarWidth: ViewModifier {
+    func body(content: Content) -> some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            content.navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin, ideal: Theme.Size.sidebar, max: Theme.Size.sidebarMax)
+        } else {
+            content
         }
     }
 }
