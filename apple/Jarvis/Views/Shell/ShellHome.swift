@@ -196,7 +196,7 @@ struct ShellNeedsYou: View {
     }
 }
 
-/// The pages the shell pushes onto the 聊天 page by value (docs/ios.md「新外壳」), and what those push in turn: the
+/// The pages the shell pushes onto the 助手 page by value (docs/ios.md「新外壳」), and what those push in turn: the
 /// inbox (its items and Feishu pages), the machines (a machine, its agents). One stack, values only: a value pushed on
 /// top of a view-based push lands under it (docs/lessons/ios.md).
 struct ShellDestinations: ViewModifier {

@@ -3,8 +3,8 @@ import SwiftUI
 // Components of the ChatGPT-style shell (docs/ios.md「新外壳」). Neutral in every style (Theme.Shell): the shell is laid
 // out like ChatGPT's, the styles still color the rest of the app.
 
-/// The top switch: 聊天 | 工作 in a glass capsule, the selected one on a soft gray pill that glides across. 工作 carries
-/// the count of agents waiting on the user. Tapping 聊天 while it is selected opens `chatMenu` (the conversation's
+/// The top switch: 助手 | Agents in a glass capsule, the selected one on a soft gray pill that glides across. Agents carries
+/// the count of agents waiting on the user. Tapping 助手 while it is selected opens `chatMenu` (the conversation's
 /// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT.
 struct ShellSwitch<ChatMenu: View>: View {
     @Binding var tab: AppTab
@@ -15,15 +15,15 @@ struct ShellSwitch<ChatMenu: View>: View {
     var body: some View {
         HStack(spacing: .zero) {
             if tab == .assistant {
-                Menu { chatMenu() } label: { segment("聊天", selected: true) }
+                Menu { chatMenu() } label: { segment("助手", selected: true) }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("shell-chat")
+                    .accessibilityIdentifier("shell-assistant")
                     .accessibilityHint("对话的菜单")
             } else {
-                button("聊天", .assistant, id: "shell-chat")
+                button("助手", .assistant, id: "shell-assistant")
             }
-            button("工作", .chats, id: "shell-work", badge: waiting)
+            button("Agents", .chats, id: "shell-agents", badge: waiting)
         }
         .padding(Theme.Space.xs)
         .surface(interactive: true, in: .capsule)
@@ -67,8 +67,8 @@ struct ShellSwitch<ChatMenu: View>: View {
     }
 }
 
-/// A round glass button of the shell's top bar (☰, 新对话): the same size as the system toolbar's, so the 聊天 page's
-/// floating bar and the 工作 page's navigation bar line up. `dot` marks something waiting behind it (☰: the inbox).
+/// A round glass button of the shell's top bar (☰, 新对话): the same size as the system toolbar's, so the 助手 page's
+/// floating bar and the Agents page's navigation bar line up. `dot` marks something waiting behind it (☰: the inbox).
 struct ShellCircleButton: View {
     var symbol: String
     var label: String

@@ -365,7 +365,7 @@ nonisolated enum Theme {
     enum Shell {
         /// The user's own messages: a soft gray bubble with ordinary text, not the style's colored one.
         static let userBubble = Color(light: 0xF2F2F2, dark: 0x2F2F2F)
-        /// The 聊天 | 工作 switch's selected segment, inside its glass capsule.
+        /// The 助手 | Agents switch's selected segment, inside its glass capsule.
         static let segment = Color(light: 0xE6E6E6, dark: 0x3A3A3C)
         /// The composer's field and its expanded card.
         static let composer = Color(light: 0xFFFFFF, dark: 0x1F1F21)
@@ -380,7 +380,7 @@ nonisolated enum Theme {
         /// The composer: its field's corner when it is one line (a capsule) and when it has grown into a card.
         static let composerRadius: CGFloat = 28
         /// The switch's segments: width of each, and its height.
-        static let segmentWidth: CGFloat = 64
+        static let segmentWidth: CGFloat = 72
         static let switchHeight: CGFloat = 44
     }
 

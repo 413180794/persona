@@ -32,7 +32,7 @@ struct AppearanceSettingsView: View {
                 } header: {
                     Text("布局")
                 } footer: {
-                    Text("打开后回到底部四个标签（Jarvis、Agents、收件箱、设置）。新布局是顶部「聊天 | 工作」，收件箱、定时任务、知识库在左上角的侧边栏里。过渡几天后会去掉这个开关。")
+                    Text("打开后回到底部四个标签（Jarvis、Agents、收件箱、设置）。新布局是顶部「助手 | Agents」，收件箱、定时任务、知识库在左上角的侧边栏里。过渡几天后会去掉这个开关。")
                 }
             }
             #endif

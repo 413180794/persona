@@ -224,17 +224,17 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 ## 新外壳（ChatGPT 式，2026-11-01）
 
 用户要求（2026-11-01）：照 ChatGPT 的 iOS App 重排 iPhone 的外壳，「聊天是 Jarvis（大改），工作是 Agents（改个入口）」，
-没有待办时首页不放建议；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
+两页叫「助手」「Agents」（2026-11-01 用户要求，原来叫「聊天」「工作」）；没有待办时首页不放建议；设置 › 外观 › 布局 里留一个「旧布局」开关过渡几天（`AppModel.oldLayout`，`ui.oldLayout`）。
 只在 iPhone 宽度（compact）生效；iPad、iPhone Duo 打开、Mac、手表不变。代码在 `Jarvis/Views/Shell/`，组件在
 `DesignSystem/ShellComponents.swift`、`ShellComposerBar.swift`，颜色和尺寸是 `Theme.Shell`（各风格都用这一套中性色）。
 
 | 部分 | 做法 |
 | --- | --- |
 | 底部 | 没有 tab 栏 |
-| 顶栏 | ☰（收件箱有「需要你」时带红点）· 聊天 \| 工作（工作带等你的 Agent 数）· 右边按钮。聊天页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；工作页是 `WorkTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。聊天页再点一下「聊天」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
-| 两页 | `ShellView` 里一个 ZStack：聊天（`AssistantView`）一直在，工作（`ChatsView`）第一次切过去时建好，之后都留着（和 TabView 一样，切换不丢位置）；藏起来的一页透明、不接触摸 |
-| 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。聊天页在根部时全页右滑打开；工作页只从左边缘（24pt）滑，列表行自己有右滑的「置顶 / 中断」（`DrawerPan.edgeOnly`）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
-| 侧边栏的页面 | 都推到聊天页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
+| 顶栏 | ☰（收件箱有「需要你」时带红点）· 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
+| 两页 | `ShellView` 里一个 ZStack：助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去时建好，之后都留着（和 TabView 一样，切换不丢位置）；藏起来的一页透明、不接触摸 |
+| 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；Agents 页只从左边缘（24pt）滑，列表行自己有右滑的「置顶 / 中断」（`DrawerPan.edgeOnly`）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
+| 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 只有输入框；上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`）。没有就什么都不显示 |
 | 输入框 | 一行：[+] 问 Jarvis [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [权限和思考强度] [麦克风] [发送]（`ShellComposerBar`）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。权限 / 思考强度从输入框上面那排挪进了量表菜单（`SessionModesMenu`、新对话的 `StarterModesMenu`，后者还能选启动器） |
@@ -242,7 +242,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
 
 路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Jarvis、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
-`.mail` 变成「在聊天页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
+`.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
 
 UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
 壳自己的在 `ShellTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`。

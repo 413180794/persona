@@ -33,7 +33,7 @@ extension InboxView {
     static func short(_ email: String) -> String { InboxPage.short(email) }
 }
 
-/// The inbox's page itself, in whatever stack shows it: 收件箱's own (InboxView), or the shell's 聊天 page (pushed from
+/// The inbox's page itself, in whatever stack shows it: 收件箱's own (InboxView), or the shell's 助手 page (pushed from
 /// the drawer, docs/ios.md「新外壳」), which passes `embedded` so the page brings its destinations and link handling.
 struct InboxPage: View {
     @Environment(AppModel.self) private var model

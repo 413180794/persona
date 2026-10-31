@@ -103,7 +103,7 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
 /// (2026-10-31): nothing here reads the sessions.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
-    /// The shell (docs/ios.md「新外壳」): its ☰ and 聊天 | 工作 switch take the navigation bar.
+    /// The shell (docs/ios.md「新外壳」): its ☰ and 助手 | Agents switch take the navigation bar.
     @Environment(\.shell) private var shell
     @State private var path = NavigationPath()
     /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
@@ -153,7 +153,7 @@ struct ChatsView: View {
                 }
                 .toolbar {
                     if shell != nil {
-                        // The shell's own bar floats over this one (WorkTopBar): the bar stays for the search field.
+                        // The shell's own bar floats over this one (AgentsTopBar): the bar stays for the search field.
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
                             .sharedBackgroundVisibility(.hidden)
                     } else {
@@ -198,7 +198,7 @@ struct ChatsView: View {
         }
         .overlay(alignment: .top) {
             if let shell, path.isEmpty {
-                WorkTopBar(shell: shell, menuActions: menuActions) { showNew = true }
+                AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
                     .transition(.opacity)
             }
         }
@@ -1319,9 +1319,9 @@ private struct SearchCloseProbe: UIViewRepresentable {
 }
 #endif
 
-/// The 工作 page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 聊天's, in the same places,
+/// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 助手's, in the same places,
 /// over the navigation bar (kept for its search field); on the right the list's options and 新建会话.
-struct WorkTopBar: View {
+struct AgentsTopBar: View {
     @Environment(AppModel.self) private var model
     let shell: ShellState
     var menuActions: AgentsListMenu.Actions
@@ -1333,7 +1333,7 @@ struct WorkTopBar: View {
             ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "work-sidebar-button",
                               dot: InboxStore.shared.actionCount > 0) { shell.drawer.open() }
             Spacer(minLength: 0)
-            ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "work-new", action: newSession)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "agents-new", action: newSession)
         }
         .overlay(alignment: .top) {
             ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { EmptyView() }

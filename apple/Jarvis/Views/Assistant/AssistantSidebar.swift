@@ -138,7 +138,7 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     var enabled: Bool
     /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/ios.md「新外壳」).
     var backdrop: Color = Color(.secondarySystemBackground)
-    /// The drag opens only from the screen's left edge: the page's rows swipe to the right themselves (工作's 置顶 / 中断).
+    /// The drag opens only from the screen's left edge: the page's rows swipe to the right themselves (the Agents page's 置顶 / 中断).
     var edgeOnly = false
     @ViewBuilder var sidebar: Sidebar
     var page: Page

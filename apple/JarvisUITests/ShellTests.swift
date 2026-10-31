@@ -1,6 +1,6 @@
 import XCTest
 
-/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」), in 体验模式: no tab bar; 聊天 | 工作; the drawer with
+/// The ChatGPT-style shell on an iPhone (docs/ios.md「新外壳」), in 体验模式: no tab bar; 助手 | Agents; the drawer with
 /// 收件箱 / 设置; the empty chat lists what needs the user; the composer grows while typing; 旧布局 brings the tabs back.
 final class ShellTests: XCTestCase {
     private var app: XCUIApplication!
@@ -36,23 +36,23 @@ final class ShellTests: XCTestCase {
 
     @MainActor func testSwitchBetweenChatAndWork() {
         launch()
-        see(button("shell-chat"), "the 聊天 | 工作 switch", timeout: 15)
+        see(button("shell-assistant"), "the 助手 | Agents switch", timeout: 15)
         XCTAssertFalse(app.tabBars.firstMatch.exists, "the tab bar in the shell")
         // The empty chat: what needs the user (the demo has agents waiting and inbox items to answer).
         see(button("shell-needs-agent"), "an agent waiting, over the composer")
         XCTAssertTrue(button("shell-needs-inbox").exists, "the inbox's 需要你 over the composer")
-        see(button("shell-work"), "工作").tap()
-        see(button("work-new"), "新建会话 on 工作")
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "the agents' search on 工作")
-        button("shell-chat").tap()
-        see(button("assistant-new"), "新对话 on 聊天")
+        see(button("shell-agents"), "Agents").tap()
+        see(button("agents-new"), "新建会话 on Agents")
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "the agents' search on Agents")
+        button("shell-assistant").tap()
+        see(button("assistant-new"), "新对话 on 助手")
     }
 
     @MainActor func testDrawerOpensTheInboxAndSettings() {
         launch()
         see(button("assistant-sidebar-button"), "☰", timeout: 15).tapCenter()
         see(button("sidebar-inbox"), "收件箱 in the drawer").tap()
-        see(app.navigationBars["收件箱"], "the inbox pushed on 聊天")
+        see(app.navigationBars["收件箱"], "the inbox pushed on 助手")
         // Back once the push has settled (a tap during the push's animation can be lost).
         let inbox = app.navigationBars["收件箱"]
         for _ in 0..<2 where inbox.exists {
@@ -65,7 +65,7 @@ final class ShellTests: XCTestCase {
         // The drawer's hosting view names every element in it "assistant-sidebar": find 设置 by its label.
         see(app.buttons.matching(NSPredicate(format: "label == '设置'")).firstMatch, "设置 at the drawer's foot").tap()
         see(button("settings-close"), "设置's ×").tap()
-        XCTAssertTrue(button("shell-chat").waitForExistence(timeout: 5), "back on 聊天 after closing 设置")
+        XCTAssertTrue(button("shell-assistant").waitForExistence(timeout: 5), "back on 助手 after closing 设置")
     }
 
     @MainActor func testComposerGrowsWhileTyping() {
@@ -91,6 +91,6 @@ final class ShellTests: XCTestCase {
         XCTAssertFalse(app.tabBars.firstMatch.exists, "a tab bar after turning 旧布局 off")
         app.navigationBars["外观"].buttons["BackButton"].tap()
         see(button("settings-close"), "设置's ×").tap()
-        see(button("shell-chat"), "聊天 after closing 设置")
+        see(button("shell-assistant"), "助手 after closing 设置")
     }
 }

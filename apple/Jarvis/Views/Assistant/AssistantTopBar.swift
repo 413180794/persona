@@ -7,7 +7,7 @@ import SwiftUI
 /// the name pill shows the spinner and 等待网络 / 连接中… / 更新中….
 struct AssistantTopBar: View {
     @Environment(AppModel.self) private var model
-    /// In the shell (docs/ios.md「新外壳」) the middle is the 聊天 | 工作 switch; its 聊天 opens this bar's menu.
+    /// In the shell (docs/ios.md「新外壳」) the middle is the 助手 | Agents switch; its 助手 opens this bar's menu.
     @Environment(\.shell) private var shell
     /// The conversation on screen; nil on the new-conversation page.
     var key: SessionKey?
