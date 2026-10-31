@@ -469,6 +469,9 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   长修饰符链里的多语句闭包（`.task { … }`）会和整条链一起推断类型，报错的行号还会跟着改动乱跳。把闭包体挪成方法、id 挪成计算属性（`ChatView.prewarmRows`）。
 - Swift 按位置先读出参数再调用后面的参数：`emit(s, i, word(…, &i, …))` 里传给 `emit` 的 `i` 是 `word` 改它之前的值（文件查看器的宏 `println!` 少了 `!`）。
   一个参数要改另一个参数用到的变量时，先把结果存进变量。
+- 改构建产物 Info.plist 的脚本阶段（设置 › 关于 › 构建 的 commit，`project.yml` 的 `Stamp the commit`）要把 `$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)`
+  声明成输入，否则 Xcode 可能先跑脚本、后重写 Info.plist，写进去的值就丢了（bundle id 一变就会重写，2026-10-31）。脚本要读 `.git`，
+  这个 target 关了 `ENABLE_USER_SCRIPT_SANDBOXING`。
 
 ### iOS：系统能力与页面约定
 

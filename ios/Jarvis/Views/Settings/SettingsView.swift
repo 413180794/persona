@@ -139,6 +139,12 @@ struct SettingsView: View {
 
                 Section("关于") {
                     LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+                    // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
+                    LabeledContent("构建") {
+                        Text(Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知")
+                            .font(Theme.Font.code)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .themedPage()

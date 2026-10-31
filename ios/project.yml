@@ -70,6 +70,20 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
         GENERATE_INFOPLIST_FILE: NO
+        # The commit stamp below reads the repository's .git, which the script sandbox does not let it see.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    # Which commit a build is (设置 › 关于 › 构建): stamped into the built Info.plist on every build, before signing;
+    # "+" when the working tree had changes not committed.
+    postBuildScripts:
+      - name: Stamp the commit
+        basedOnDependencyAnalysis: false
+        # Its input, so it runs after the Info.plist is written (ran before it once, and the stamp was lost).
+        inputFiles: ["$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"]
+        script: |
+          sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+          git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
+          plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
     info:
       path: Jarvis/Resources/Info.plist
       properties:
