@@ -1077,7 +1077,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "claude did not become ready within 1m0s\nzsh: command not found: claude"}, 502)
             n = len(STARTED)
             s = sess(body["machine_id"], "d4e6f8a0-0000-4000-8000-%012d" % n, body.get("prompt") or "新会话", body.get("cwd", ""),
-                     "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, "new%d" % n, n, 0, "")
+                     "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "")
             SESSIONS.append(s)
             return self.send_json({"session": s})
         if p.startswith("/api/v1/auth/tokens/") and self.command == "DELETE":

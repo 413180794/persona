@@ -22,6 +22,7 @@ struct NewChatView: View {
     @State private var mode = ""   // "" = whatever the launcher uses
     @State private var effort = ""
     @State private var prompt = ""
+    @State private var tabName = ""
     @State private var launchers: [Launcher] = []
     @State private var recent: [RecentDir] = []
     @State private var loading = false
@@ -133,6 +134,16 @@ struct NewChatView: View {
                         .lineLimit(3...10)
                         .focused($promptFocused)
                 } header: { Text("第一条消息") }
+
+                Section {
+                    TextField("留空就按第一条消息起名", text: $tabName)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .accessibilityIdentifier("newChat.tabName")
+                } header: { Text("标签名（可选）") } footer: {
+                    Text("herdr 里这个标签页的名字。不填时按第一条消息起一个短英文名（比如 fix-login），没有第一条消息就叫 agent-1、agent-2…")
+                }
 
             }
             .themedPage()
@@ -246,9 +257,10 @@ struct NewChatView: View {
         defer { starting = false }
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = tabName.trimmingCharacters(in: .whitespacesAndNewlines)
             let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: p.isEmpty ? nil : p,
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
-                                              effort: effort.isEmpty ? nil : effort))
+                                              effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name))
             UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
             UserDefaults.standard.set(mode, forKey: "mode.\(machineID)")
             UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")

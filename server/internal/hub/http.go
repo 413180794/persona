@@ -413,6 +413,8 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID     string `json:"workspace_id"`
 		PermissionMode  string `json:"permission_mode,omitempty"`
 		Effort          string `json:"effort,omitempty"`
+		// TabName names the herdr tab; empty: one made from the first message (tabname.go), else agent-<n>.
+		TabName string `json:"tab_name,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -425,6 +427,9 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
+	if p.TabName = strings.TrimSpace(p.TabName); p.TabName == "" && p.ResumeSessionID == "" {
+		p.TabName = h.autoTabName(ctx, p.Prompt)
+	}
 	var res struct {
 		Session proto.Session `json:"session"`
 	}

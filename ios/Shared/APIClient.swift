@@ -245,10 +245,12 @@ nonisolated struct APIClient: Sendable {
         var workspaceID: String?
         var permissionMode: String? = nil
         var effort: String? = nil
+        /// The herdr tab's name; nil: the hub makes one from the first message (else agent-<n>).
+        var tabName: String? = nil
         enum CodingKeys: String, CodingKey {
             case cwd, launcher, prompt, effort
             case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id",
-                 permissionMode = "permission_mode"
+                 permissionMode = "permission_mode", tabName = "tab_name"
         }
     }
 

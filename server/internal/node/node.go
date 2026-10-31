@@ -276,7 +276,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "sessions.list":
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort)
+		tab := ""
+		if p.TabName != nil {
+			tab = *p.TabName
+		}
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab)
 		return map[string]any{"session": s}, err
 	case "assistant.send":
 		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort)

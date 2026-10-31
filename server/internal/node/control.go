@@ -29,7 +29,8 @@ func newUUID() string {
 // start launches `<launcher> --session-id …` (or --resume) in a new herdr tab and waits until claude is ready.
 // workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
 // after the directory is reused or created.
-func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort string) (*proto.Session, error) {
+// tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
+func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName string) (*proto.Session, error) {
 	if launcher == "" {
 		launcher = "claude"
 	}
@@ -67,9 +68,11 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	var created *herdr.Created
 	var err error
 	if ws == "" {
-		created, err = n.herdr.WorkspaceCreate(ctx, cwd, filepath.Base(cwd))
+		if created, err = n.herdr.WorkspaceCreate(ctx, cwd, filepath.Base(cwd)); err == nil && created.Tab.ID != "" {
+			_ = n.herdr.TabRename(ctx, created.Tab.ID, tabLabel(tabName, nil)) // its first tab
+		}
 	} else {
-		created, err = n.herdr.TabCreate(ctx, ws, cwd, "jarvis")
+		created, err = n.herdr.TabCreate(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, ws)))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create herdr tab: %w", err)
@@ -111,6 +114,43 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 	return n.sessionFor(id, *a), nil
+}
+
+// tabLabels are the names of the workspace's tabs.
+func (n *Node) tabLabels(ctx context.Context, ws string) map[string]bool {
+	taken := map[string]bool{}
+	if snap, err := n.herdr.Snapshot(ctx); err == nil {
+		for _, t := range snap.Tabs {
+			if t.WorkspaceID == ws {
+				taken[t.Label] = true
+			}
+		}
+	}
+	return taken
+}
+
+// tabLabel is the name a new tab gets: the given one (one line, at most 32 characters), else agent-<n>; a name the
+// workspace already has gets -2, -3….
+func tabLabel(name string, taken map[string]bool) string {
+	name = strings.Join(strings.Fields(name), " ")
+	if r := []rune(name); len(r) > 32 {
+		name = strings.TrimSpace(string(r[:32]))
+	}
+	if name == "" {
+		for i := 1; ; i++ {
+			if l := fmt.Sprintf("agent-%d", i); !taken[l] {
+				return l
+			}
+		}
+	}
+	if !taken[name] {
+		return name
+	}
+	for i := 2; ; i++ {
+		if l := fmt.Sprintf("%s-%d", name, i); !taken[l] {
+			return l
+		}
+	}
 }
 
 // workspaceFor reuses the workspace named after the project directory (the user keeps one workspace per project).
@@ -275,7 +315,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			}
 		}
 		mode, effort := n.modesOf(id) // resume with what it ran with
-		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort)
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "")
 		if err != nil {
 			return err
 		}

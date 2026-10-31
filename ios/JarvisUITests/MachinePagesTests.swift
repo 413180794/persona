@@ -263,6 +263,14 @@ final class MachinePagesTests: XCTestCase {
         see(button("codex"), "codex launcher").tap()
         see(text("codex"), "launcher picked")
 
+        // 标签名 (optional, below the fold): what is typed names the herdr tab.
+        let tabName = app.textFields["newChat.tabName"]
+        for _ in 0..<4 where !tabName.isHittable { app.swipeUp() }
+        see(tabName, "the tab name field").tap()
+        tabName.typeText("blog-astro")
+        shot("new-chat-tab-name")
+        app.keyboards.buttons.matching(NSPredicate(format: "label IN %@", ["完成", "done", "Done"])).firstMatch.tap()
+
         let start = see(button("开始对话"), "开始对话")
         XCTAssertTrue(start.isEnabled)
         start.tap()
@@ -271,6 +279,7 @@ final class MachinePagesTests: XCTestCase {
         XCTAssertEqual(body["machine_id"] as? String, "macbook")
         XCTAssertEqual(body["cwd"] as? String, "/Users/me/code/blog")
         XCTAssertEqual(body["launcher"] as? String, "codex")
+        XCTAssertEqual(body["tab_name"] as? String, "blog-astro")
         XCTAssertFalse(app.navigationBars["新对话"].waitForExistence(timeout: 3), "the sheet closes on start")
         // The new chat knows its session at once (not 「对话 · 对话」 until the hub's next list).
         see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blog")).firstMatch, "the new chat's place in its header")
