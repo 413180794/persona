@@ -522,6 +522,28 @@ func (n *Node) offline(live map[string]bool) []proto.Session {
 	return out
 }
 
+// setKept replaces the sessions that are always listed; the next list has them.
+func (n *Node) setKept(ids []string) {
+	m := map[string]bool{}
+	for _, id := range ids {
+		if validID(id) {
+			m[id] = true
+		}
+	}
+	n.mu.Lock()
+	n.kept = m
+	n.mu.Unlock()
+	offlineCache.Lock()
+	offlineCache.at = time.Time{}
+	offlineCache.Unlock()
+}
+
+func (n *Node) keptSessions() map[string]bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.kept
+}
+
 func (n *Node) scanOffline() []proto.Session {
 	var out []proto.Session
 	files := n.globProjects("*", "*.jsonl")
@@ -529,14 +551,22 @@ func (n *Node) scanOffline() []proto.Session {
 		path string
 		st   os.FileInfo
 	}
-	var cands []cand
+	var cands, kept []cand
+	keep := n.keptSessions()
 	for _, p := range files {
 		id := strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		if !validID(id) {
 			continue
 		}
 		st, err := os.Stat(p)
-		if err != nil || time.Since(st.ModTime()) > offlineWindow || st.Size() < 2048 {
+		if err != nil {
+			continue
+		}
+		if keep[id] { // the main conversation: listed however long it has been quiet and however busy the machine
+			kept = append(kept, cand{p, st})
+			continue
+		}
+		if time.Since(st.ModTime()) > offlineWindow || st.Size() < 2048 {
 			continue
 		}
 		cands = append(cands, cand{p, st})
@@ -545,6 +575,8 @@ func (n *Node) scanOffline() []proto.Session {
 	if len(cands) > 80 {
 		cands = cands[:80]
 	}
+	cands = append(cands, kept...)
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].st.ModTime().After(cands[j].st.ModTime()) })
 	listed := map[string]bool{}
 	for _, c := range cands {
 		id := strings.TrimSuffix(filepath.Base(c.path), ".jsonl")

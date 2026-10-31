@@ -185,12 +185,18 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 			}
 		}
 	}
-	var files, days []string
+	var files, days, moments []string
+	sep := string(filepath.Separator)
 	_ = filepath.WalkDir(e.Store.Dir, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		switch {
+		case strings.Contains(p, sep+"moments"+sep+"posts"+sep):
+			// The removed archive (moments.go): thousands of posts, read after everything else so they never crowd it out.
+			if strings.HasSuffix(p, ".md") {
+				moments = append(moments, p)
+			}
 		case strings.Contains(p, string(filepath.Separator)+"attachments"+string(filepath.Separator)):
 		case strings.Contains(p, string(filepath.Separator)+"messages"+string(filepath.Separator)):
 			if messages {
@@ -220,6 +226,13 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 	}
 	sort.Slice(days, func(i, j int) bool { return filepath.Base(days[i]) > filepath.Base(days[j]) })
 	for _, p := range days {
+		if len(hits) >= limit {
+			break
+		}
+		scan(p)
+	}
+	sort.Slice(moments, func(i, j int) bool { return moments[i] > moments[j] }) // newer post ids first
+	for _, p := range moments {
 		if len(hits) >= limit {
 			break
 		}

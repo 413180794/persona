@@ -144,3 +144,64 @@ func (c *Client) CommentMoment(ctx context.Context, postID, replyTo, text string
 	}
 	return c.do(ctx, "POST", "/moments/posts/"+url.PathEscape(postID)+"/comments", nil, body, nil)
 }
+
+// MomentTab is one tab of the feed: 推荐 ("1") or a category.
+type MomentTab struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type int    `json:"type"` // 1 推荐, 2 a category
+}
+
+func (c *Client) MomentTabs(ctx context.Context) ([]MomentTab, error) {
+	var out struct {
+		Tabs []MomentTab `json:"tabs"`
+	}
+	err := c.do(ctx, "GET", "/moments/tabs", nil, nil, &out)
+	return out.Tabs, err
+}
+
+// MomentFeedPost is a post as a feed page lists it.
+type MomentFeedPost struct {
+	MomentPost
+	Anonymous  bool
+	Categories []string
+	Images     int
+	Reactions  int
+}
+
+// MomentFeed is one page of a tab (count ≤ 50; 推荐 ignores it), with the token for the next page ("" at the end).
+func (c *Client) MomentFeed(ctx context.Context, tabID, pageToken string, count int) ([]MomentFeedPost, string, error) {
+	var out struct {
+		Posts []struct {
+			ID            string   `json:"id"`
+			UserID        string   `json:"userId"`
+			UserName      string   `json:"userName"`
+			IsAnonymous   bool     `json:"isAnonymous"`
+			CommentCount  int      `json:"commentCount"`
+			ReactionCount int      `json:"reactionCount"`
+			CreateTime    int64    `json:"createTime"`
+			CategoryNames []string `json:"categoryNames"`
+			Images        []any    `json:"images"`
+			Content       struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"posts"`
+		NextPageToken string `json:"nextPageToken"`
+	}
+	q := url.Values{"tabId": {tabID}, "count": {strconv.Itoa(count)}}
+	if pageToken != "" {
+		q.Set("pageToken", pageToken)
+	}
+	if err := c.do(ctx, "GET", "/moments/feed", q, nil, &out); err != nil {
+		return nil, "", err
+	}
+	ps := make([]MomentFeedPost, 0, len(out.Posts))
+	for _, p := range out.Posts {
+		ps = append(ps, MomentFeedPost{
+			MomentPost: MomentPost{ID: p.ID, UserID: p.UserID, UserName: p.UserName, Text: p.Content.Text, CommentCount: p.CommentCount,
+				At: time.UnixMilli(p.CreateTime)},
+			Anonymous: p.IsAnonymous, Categories: p.CategoryNames, Images: len(p.Images), Reactions: p.ReactionCount,
+		})
+	}
+	return ps, out.NextPageToken, nil
+}

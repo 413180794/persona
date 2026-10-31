@@ -31,6 +31,8 @@ type KBConfig struct {
 	// ExtraDirs are directories on the hub's machine that kb_search also reads (Markdown, read only), e.g. a
 	// repository of notes the user keeps; "~/" is the home there (docs/knowledge.md).
 	ExtraDirs []string `json:"extra_dirs,omitempty"`
+	// Moments archives the whole removed feed under <data>/moments (kb_moments_crawl.go); off unless enabled.
+	Moments *MomentsCrawl `json:"moments,omitempty"`
 }
 
 const (
@@ -103,6 +105,13 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		h.logf("kb: %d mail chat(s) queued to be tagged again under the current rules", n)
 	}
 	go h.kbLoop(ctx)
+	if m := cfg.Moments; m != nil && m.Enabled && h.lark != nil {
+		days := cfg.TextDays
+		if days <= 0 {
+			days = 365
+		}
+		go h.momentsCrawlLoop(ctx, st, *m, days)
+	}
 }
 
 func (h *Hub) kbLoop(ctx context.Context) {

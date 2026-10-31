@@ -262,6 +262,9 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		if in.Main != "" {
+			h.keepMain(r.Context())
+		}
 		writeJSON(w, h.assistantState(r.Context()))
 	})
 	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup.
@@ -330,6 +333,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
 				h.logf("assistant: save main: %v", err)
 			}
+			h.keepMain(ctx)
 		}
 		writeJSON(w, map[string]any{"session": s})
 	})
@@ -400,4 +404,29 @@ func (h *Hub) assistantMemory(ctx context.Context, op map[string]any, out any) e
 	}
 	op["cwd"] = cwd
 	return m.call(ctx, "assistant.memory", op, out)
+}
+
+// keptSessions are the sessions machine id's node lists however long they have been quiet: the assistant's main
+// conversation, on the assistant's machine. Otherwise a busy machine's 80 newest transcripts crowd it out of the
+// list and the Jarvis tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone).
+func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
+	cfg := h.assistantConfig(ctx)
+	if cfg.Main == "" || cfg.MachineID != machine {
+		return []string{}
+	}
+	return []string{cfg.Main}
+}
+
+// keepMain tells the assistant's node the main conversation changed.
+func (h *Hub) keepMain(ctx context.Context) {
+	cfg := h.assistantConfig(ctx)
+	m := h.byID[cfg.MachineID]
+	if m == nil {
+		return
+	}
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := m.call(cctx, "node.configure", map[string]any{"keep_sessions": h.keptSessions(cctx, m.cfg.ID)}, nil); err != nil {
+		h.logf("assistant: keep main: %v", err)
+	}
 }

@@ -63,6 +63,8 @@
 ## 主对话、知识库和上下文流动（2026-10-30）
 
 - **主对话**：第一段对话是主对话（hub settings `assistant.main`），Jarvis tab 默认打开它；快照开头写明「这是主对话」，提示词要求接着之前聊的往下做。
+  node 的会话列表里离线会话只列 7 天内最新的 80 个，忙的机器上安静两天的主对话就被挤掉了，侧边栏没有「主对话」（2026-11-01）。
+  hub 在 node 连上时、主对话换了时用 `node.configure` 的 `keep_sessions` 告诉 node，这几个会话不管多旧都列出来。
   其他页面交给 Jarvis 的东西（Agents 长按「交给 Jarvis」、知识库「问 Jarvis」）都以 `<jarvis-context>` 发进主对话。
 - **知识库**（`docs/knowledge.md`）：工具 `kb_search` / `kb_list` / `kb_get` / `kb_update`；快照带重点项目和会话；提示词要求把对话里得出的结论写回
   （项目进展写时间线、项目代码目录写 `dirs` 让 Agents 对上项目、给 Agent 派活前先读项目档案）。

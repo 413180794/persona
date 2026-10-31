@@ -58,6 +58,7 @@ type Node struct {
 	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
 	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
 	typing   typingLocks               // one send at a time per session (sendsafe.go)
+	kept     map[string]bool           // sessions always listed (node.configure keep_sessions)
 	starts   startLog                  // sessions starting in the background (starting.go)
 	ups      uploads                   // files arriving from the phone (upload.go)
 	sysOnce  sync.Once                 // system: read once (metrics.go)
@@ -269,11 +270,18 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "node.configure":
 		var c struct {
 			ClaudeDirs []string `json:"claude_dirs"`
+			// Keep: sessions always listed, however old or crowded out (the assistant's main conversation).
+			Keep *[]string `json:"keep_sessions"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
 		}
-		n.setKnownClaudeDirs(c.ClaudeDirs)
+		if c.ClaudeDirs != nil || c.Keep == nil { // a call that only changes what is kept leaves the directories
+			n.setKnownClaudeDirs(c.ClaudeDirs)
+		}
+		if c.Keep != nil {
+			n.setKept(*c.Keep)
+		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":
 		ls, err := n.launchers(ctx)
