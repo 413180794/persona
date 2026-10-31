@@ -58,8 +58,7 @@ struct MacAgentMenu: Commands {
             Divider()
             Button("下一个需要你的") {
                 if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.allSessions, muted: { model.isMuted($0) }) {
-                    MacShellState.shared.section = nil
-                    model.open(next)
+                    MacShellState.shared.open(next, model)
                 }
             }
             .keyboardShortcut("n", modifiers: [.command, .control]) // ⌥⌘N is 收件箱's 写邮件
@@ -77,7 +76,9 @@ struct MacAgentMenu: Commands {
             Button("拷贝会话 ID") { if let key { copy(key.sessionID, "已拷贝会话 ID") } }
                 .disabled(key == nil)
             Button("拷贝恢复命令") {
-                if let key, let s = model.session(key) { copy("cd \(s.cwd) && \(s.resumeCommand) \(key.sessionID)", "已拷贝恢复命令") }
+                if let key, let s = model.session(key) {
+                    copy(MacAgentCommands.resumeLine(cwd: s.cwd, command: s.resumeCommand, id: key.sessionID), "已拷贝恢复命令")
+                }
             }
             .disabled(key == nil)
         }
@@ -87,5 +88,12 @@ struct MacAgentMenu: Commands {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         model.toast = Toast(toast, style: .success)
+    }
+}
+
+extension MacAgentCommands {
+    /// `cd '<folder>' && claude --resume <id>`: the folder single-quoted, so a space, `;` or `$(…)` in it stays a path.
+    static func resumeLine(cwd: String, command: String, id: String) -> String {
+        "cd '" + cwd.replacingOccurrences(of: "'", with: #"'\''"#) + "' && \(command) \(id)"
     }
 }

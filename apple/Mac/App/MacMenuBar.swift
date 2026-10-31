@@ -111,7 +111,7 @@ struct MacMenuBarMenu: View {
 
     private func open(_ key: SessionKey) {
         show()
-        model.open(key)
+        MacShellState.shared.open(key, model)
     }
 
     private func show() {

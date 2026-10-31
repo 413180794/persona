@@ -74,13 +74,11 @@ extension MacAttention {
     static let shared = MacAttentionWatcher()
 
     private var last: [Session] = []
-    /// Nothing pings until a few seconds after launch: the cached list and the first refresh can disagree about
-    /// things that changed while the app was closed, and those are old news.
-    private var quietUntil = Date.distantFuture
+    /// When the socket first connected (MacAttention.armed); nil until then.
+    private var connectedAt: Date?
     private var asked = false
 
     func start(_ model: AppModel) {
-        quietUntil = Date().addingTimeInterval(5)
         observe(model)
     }
 
@@ -88,6 +86,9 @@ extension MacAttention {
         let sessions = withObservationTracking {
             _ = model.pendingInteractions.count
             _ = model.config?.url
+            _ = model.live.state
+            // Muting changes the badge too: read what isMuted reads.
+            _ = model.allSessions.map { model.isMuted($0) }
             return model.allSessions
         } onChange: {
             // Called before the change lands; read the new values on the next turn of the main queue.
@@ -100,24 +101,60 @@ extension MacAttention {
         let muted: (Session) -> Bool = { model.isMuted($0) }
         NSApp.dockTile.badgeLabel = model.isPaired ? MacAttention.badge(sessions, muted: muted) : nil
         defer { last = sessions }
+        if connectedAt == nil, model.live.state == .connected {
+            connectedAt = Date()
+            // Nothing else may change after the settle time: look again then.
+            DispatchQueue.main.asyncAfter(deadline: .now() + MacAttention.settle + 0.1) { [weak self] in
+                MainActor.assumeIsolated { self?.last = model.allSessions }
+            }
+        }
         // 体验模式's agents are made up.
-        guard !model.isDemo, Date() >= quietUntil, !last.isEmpty else { return }
+        guard !model.isDemo, MacAttention.armed(connectedAt: connectedAt, now: Date()), !last.isEmpty else { return }
         let prefs = LiveActivityController.shared.prefs ?? NotifyPrefs()
         let ping = MacAttention.transitions(old: last, new: sessions, open: model.visibleSession, appActive: NSApp.isActive,
                                             prefs: prefs, now: Date(), muted: muted)
         guard !ping.isEmpty else { return }
-        let center = UNUserNotificationCenter.current()
-        if !asked {
-            // Asked the first time there is something to say, not at launch.
-            asked = true
-            center.requestAuthorization(options: [.alert, .sound, .badge]) { @Sendable _, _ in }
-        }
-        for (s, state) in ping {
-            let ix = model.pendingInteractions.first { $0.sessionKey == s.key }
+        let requests = ping.map { s, state in
             // One per session and state: a second 做完了 for the same agent replaces the first.
-            let req = UNNotificationRequest(identifier: "\(s.machineID)/\(s.sessionID)#\(state.rawValue)",
-                                            content: MacAttention.content(s, state, interaction: ix), trigger: nil)
-            center.add(req) { @Sendable _ in }
+            UNNotificationRequest(identifier: "\(s.machineID)/\(s.sessionID)#\(state.rawValue)",
+                                  content: MacAttention.content(s, state, interaction: model.pendingInteractions.first { $0.sessionKey == s.key }),
+                                  trigger: nil)
         }
+        waiting += requests
+        if asked {
+            postWaiting()
+        } else {
+            // Asked the first time there is something to say, not at launch; posted once answered (added while
+            // the question is open, they would be dropped).
+            asked = true
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { @Sendable granted, _ in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        if granted { MacAttentionWatcher.shared.postWaiting() } else { MacAttentionWatcher.shared.waiting = [] }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Notifications made before permission was answered, then posted.
+    private var waiting: [UNNotificationRequest] = []
+
+    private func postWaiting() {
+        let center = UNUserNotificationCenter.current()
+        for r in waiting { center.add(r) { @Sendable _ in } }
+        waiting = []
+    }
+}
+
+extension MacAttention {
+    /// How long after the socket connects the list counts as the hub's: the refresh and the catch-up land then.
+    static let settle: TimeInterval = 3
+
+    /// Notifications start once the hub has answered: before, the list is the cache from the last run, and its
+    /// differences from the first refresh are things that happened while the app was closed.
+    static func armed(connectedAt: Date?, now: Date) -> Bool {
+        guard let connectedAt else { return false }
+        return now.timeIntervalSince(connectedAt) >= settle
     }
 }

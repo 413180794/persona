@@ -127,8 +127,9 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 - Mac 没有 APNs（target 没有推送权限），hub 推不到这里：`MacAttentionWatcher` 盯着 AppModel 的会话列表（App 开着时 WebSocket 一直连着），
   有 Agent 刚变成「需要你」/「完成未看」就发一条本地通知，规则和 hub 给手机推送的一样，读同一份 设置 › 通知（`NotifyPrefs`：需要你处理时、
   Agent 做完时 不推送 / 只推长任务（这一轮干了 `long_turn_seconds`，默认 60 秒以上）/ 每次都推）。不发的：App 在前台时正开着的那个对话、屏蔽了的、
-  列表里刚出现的、答完紧接着做完的（同一次停下）、Jarvis 对话做完（它问你时照发）、体验模式、启动后 5 秒内（缓存和第一次刷新的差别是旧事）。
-  第一次真有通知要发时才申请权限。
+  列表里刚出现的、答完紧接着做完的（同一次停下）、Jarvis 对话做完（它问你时照发）、体验模式、WebSocket 第一次连上后 3 秒内
+  （之前的列表是上次退出时的缓存，和第一次刷新的差别是 App 关着时的旧事；按连上算，不按启动算，网络晚到也不会补发一堆）。
+  第一次真有通知要发时才申请权限，答应了再发（问的时候加进去的会丢）。屏蔽 / 取消屏蔽立刻改 Dock 角标。
 - 通知带和 hub 推送一样的 userInfo（`machine_id` / `session_id` / `interaction_id`）和类别：授权有「允许 / 拒绝」，计划有「批准 / 打回修改」，
   点按钮由 `MacAppDelegate` 直接交给 hub，点通知打开对话；同一个 Agent 的第二条「做完了」替换第一条。
 - Dock 角标：需要你的数量（不算屏蔽的），和侧边栏的角标同口径。
@@ -176,7 +177,9 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 ## 链接交给系统时（Mac）
 
 `apple/Mac/Link/LinkPolicy.swift`。Mac 上 `NSWorkspace.open` 不问就照 URL 去做（`file://` 的 App 直接启动、`smb://` 挂共享、别的 App 的 scheme），
-而链接来自 Agent 的回复和别人的消息：App 自己不显示的链接，只有 http / https / mailto / `jarvis://` 交给系统，别的拷贝到剪贴板并提示。
+而链接来自 Agent 的回复和别人的消息：App 自己不显示的链接，只有 http / https / mailto 交给系统，别的拷贝到剪贴板并提示。
+`jarvis://` 也不放：消息里一条 `jarvis://pair` 链接点一下就会把 App 换到它写的那个 hub。从浏览器、Finder 打开的配对链接照常处理，
+但已经连着真 hub 时不换（提示先在 设置 › 服务器 里断开；体验模式照常让位），`MacPairing`。
 对话、飞书消息 / 文档、链接面板、定时任务说明里的 `.systemAction`，和兼容层的 `UIApplication.open`，Mac 上都走这里（iOS 不变）。
 
 从网页版 Mac App（PR #162，已关）带过来的几项健壮性修复，在这一版里逐个对过：401 不清配对（iOS 的 AppModel 从不因 401 解除配对，不用改）、

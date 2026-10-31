@@ -96,7 +96,7 @@ struct MacRootView: View {
             NavigationStack {
                 NewChatView { session in
                     MacShellState.shared.newAgent = false
-                    model.open(session.key)
+                    MacShellState.shared.open(session.key, model)
                 }
             }
             .macSheet()

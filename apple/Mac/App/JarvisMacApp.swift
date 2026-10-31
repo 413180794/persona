@@ -65,6 +65,10 @@ extension AppModel {
     /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
     func openPairing(_ url: URL) {
         guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
+        guard MacPairing.accepts(isPaired: isPaired, isDemo: isDemo) else {
+            toast = Toast("已经连着 \(config?.url.host() ?? "一个 hub")：要换 hub，先在 设置 › 服务器 里断开", style: .error)
+            return
+        }
         Task {
             do { try await pair(cfg); toast = Toast("已连接到 \(cfg.url.host() ?? "服务器")", style: .success) }
             catch { show(error) }
@@ -83,6 +87,7 @@ struct MacCommands: Commands {
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(!model.isPaired)
             Button("新建 Jarvis 对话") {
+                MacShellState.shared.willOpen()
                 model.selectedTab = .assistant
                 model.assistantCurrent = nil
             }
@@ -180,7 +185,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
                 }
                 if action != UNNotificationDismissActionIdentifier, let key {
                     NSApp.activate()
-                    AppModel.shared.open(key, latestAnswer: ixID == nil)
+                    MacShellState.shared.open(key, AppModel.shared, latestAnswer: ixID == nil)
                 }
                 done()
             }
@@ -259,3 +264,9 @@ enum MacLaunchArguments {
     }
 }
 #endif
+
+/// Whether a `jarvis://pair` link (from the browser, `jarvisd hub pair`, Finder) may pair: not over a real pairing,
+/// which a link from anywhere would otherwise replace without a word; 体验模式 makes way for a real hub.
+enum MacPairing {
+    static func accepts(isPaired: Bool, isDemo: Bool) -> Bool { !isPaired || isDemo }
+}

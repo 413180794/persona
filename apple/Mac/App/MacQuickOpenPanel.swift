@@ -93,13 +93,15 @@ struct MacQuickOpenPanel: View {
     private func open(_ hit: MacQuickOpen.Hit) {
         close()
         switch hit.target {
-        case .agent(let k), .conversation(let k): model.open(k)
+        case .agent(let k), .conversation(let k): MacShellState.shared.open(k, model)
         case .inbox(let id):
+            MacShellState.shared.willOpen()
             model.selectedTab = .mail
             MacInboxState.shared.selection = [.item(id)]
         case .section(let s): MacShellState.shared.go(s, model)
         case .newAgent: MacShellState.shared.newAgent = true
         case .newConversation:
+            MacShellState.shared.willOpen()
             model.selectedTab = .assistant
             model.assistantCurrent = nil
         }
@@ -165,5 +167,17 @@ extension MacShellState {
         let p = MacSection.pick(s)
         section = p.override
         if let tab = p.tab { model.selectedTab = tab }
+    }
+}
+
+extension MacShellState {
+    /// Something is about to open a chat or a tab's page: 知识库 / 机器 make way. Called directly because when the tab
+    /// and the open chat are already the ones asked for, nothing changes for MacShell's onChange to see.
+    func willOpen() { section = nil }
+
+    /// `AppModel.open` for the Mac: the section comes to the front too.
+    func open(_ key: SessionKey, _ model: AppModel, latestAnswer: Bool = false) {
+        willOpen()
+        model.open(key, latestAnswer: latestAnswer)
     }
 }
