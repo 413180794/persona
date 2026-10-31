@@ -103,6 +103,9 @@ struct ChatsView: View {
     @State private var spaceAt: [Int: String] = [:]
     @State private var query = ""
     @State private var searching = false
+    /// What was searched for when a result was opened: closing the search empties the system field (our text stays,
+    /// so nothing writes it back), and on coming back the list showed the results under an empty field (2026-10-31).
+    @State private var searchedBeforePush: String?
 
     /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
     /// header; closing the search once pushed is too late): opening something from the results closes the search
@@ -110,6 +113,7 @@ struct ChatsView: View {
     private var pushing: Binding<NavigationPath> {
         Binding(get: { path }, set: { new in
             guard searching, new.count > path.count else { return path = new }
+            searchedBeforePush = query
             searching = false
             DispatchQueue.main.async { path = new }
         })
@@ -283,6 +287,13 @@ struct ChatsView: View {
             .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "搜索空间、标签、会话、内容")
             .refreshable { await model.refresh() }
+            .onChange(of: path.isEmpty) { _, atList in
+                // Back at the list: the field shows what the results are for again (set it anew, the field is empty).
+                guard atList, let q = searchedBeforePush else { return }
+                searchedBeforePush = nil
+                query = ""
+                DispatchQueue.main.async { query = q }
+            }
             .toolbar {
                 ToolbarItem(placement: .principal) { ConnectionTitle() }
                 ToolbarItem(placement: .topBarLeading) { listMenu(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned)) }
