@@ -936,6 +936,8 @@ nonisolated struct SlotRow: View, Equatable {
     var machine: String? = nil
     /// The section already says the state (grouped by state): no state word on the row.
     var hideState = false
+    /// The state dot; off where something beside the row already shows the state in its color (SessionRow's avatar).
+    var dot = true
 
     @MainActor
     var body: some View {
@@ -943,7 +945,7 @@ nonisolated struct SlotRow: View, Equatable {
         let _ = PerfTrace.body("SlotRow")
         #endif
         HStack(alignment: .top, spacing: Theme.Space.m) {
-            StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm)
+            if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
                     Text(session.displayTitle)
@@ -1091,8 +1093,9 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
-            SessionAvatar(machine: machine, state: session.state)
-            SlotRow(session: session).equatable()
+            // The avatar's color is the state: no dot on its corner nor beside the title (2026-10-31, three said it once).
+            SessionAvatar(machine: machine, state: session.state, dot: false)
+            SlotRow(session: session, dot: false).equatable()
         }
     }
 }

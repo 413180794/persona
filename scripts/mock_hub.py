@@ -1937,6 +1937,23 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/sessions/") and p.endswith("/seen"):
             mark_seen(p.split("/")[5])
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/machines/") and p.endswith("/deploy"):  # 重新部署: deploying for 3 s, then the hub's build
+            mid = p.split("/")[4]
+            m = next((m for m in MACHINES if m["id"] == mid), None)
+            if not m or not m.get("node_mismatch"):
+                return self.send_json({"error": "这台电脑已经是 hub 这一版"}, 409)
+            m["deploying"] = True
+            def done(m=m):
+                time.sleep(3)
+                m.pop("deploying", None); m.pop("node_mismatch", None)
+                for send, _ in list(LIVE):
+                    try: send({"type": "machines", "machines": MACHINES})
+                    except Exception: pass
+            threading.Thread(target=done, daemon=True).start()
+            for send, _ in list(LIVE):
+                try: send({"type": "machines", "machines": MACHINES})
+                except Exception: pass
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/reconnect"):
             mid = p.split("/")[4]
             RECONNECTS.append(mid)

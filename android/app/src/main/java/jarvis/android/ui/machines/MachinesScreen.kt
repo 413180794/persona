@@ -20,7 +20,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -101,14 +111,48 @@ fun MachineCard(hub: Hub, machine: Machine, modifier: Modifier = Modifier, onCli
                 machine.herdrVersion?.takeIf { it.isNotEmpty() }?.let { KitChip("herdr $it") }
                 machine.claudeVersion?.takeIf { it.isNotEmpty() }?.let { KitChip("claude $it") }
             }
-            if (machine.nodeMismatch == true) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Default.Warning, null, tint = c.caution, modifier = Modifier.size(14.dp))
-                    Text("jarvisd 和 hub 不是同一次部署，要重新部署", fontSize = 12.sp, color = c.caution)
-                }
-            }
+            if (machine.nodeMismatch == true || machine.deploying == true) DeployRow(hub, machine)
         } else if (!machine.error.isNullOrEmpty()) {
             Text(machine.error, fontSize = 12.sp, color = c.secondaryLabel, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Not the hub's build: says so, and 重新部署 has the hub install its own build there (iOS `DeployRow`). */
+@Composable
+private fun DeployRow(hub: Hub, machine: Machine) {
+    val c = kitColors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var starting by remember { mutableStateOf(false) }
+    val busy = machine.deploying == true || starting
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(if (busy) Icons.Default.Refresh else Icons.Default.Warning, null, tint = c.caution, modifier = Modifier.size(14.dp))
+        Text(
+            when {
+                busy -> "正在把 hub 这一版的 jarvisd 装到这台电脑…"
+                !machine.deployError.isNullOrBlank() -> "上次部署没成：${machine.deployError}"
+                else -> "jarvisd 和 hub 不是同一次部署"
+            },
+            fontSize = 12.sp, color = c.caution, modifier = Modifier.weight(1f),
+        )
+        if (busy) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            TextButton(onClick = {
+                scope.launch {
+                    starting = true
+                    try {
+                        hub.api.deploy(machine.id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        kitToast(ctx, "部署失败：${e.kitMessage}")
+                    } finally {
+                        starting = false
+                    }
+                }
+            }) { Text("重新部署", maxLines = 1) }
         }
     }
 }

@@ -219,6 +219,8 @@ nonisolated struct APIClient: Sendable {
         try await get("/api/v1/machines/\(machine)/dirs", query: ["path": path])
     }
     func reconnect(machine: String) async throws { try await post("/api/v1/machines/\(machine)/reconnect") }
+    /// The hub installs its own jarvisd build on the machine and reconnects; progress comes with the machine list.
+    func deploy(machine: String) async throws { try await post("/api/v1/machines/\(machine)/deploy") }
 
     /// Every machine's latest sample and its last hour by minute (docs/machines.md).
     func metricsOverview() async throws -> [MachineMetrics] {

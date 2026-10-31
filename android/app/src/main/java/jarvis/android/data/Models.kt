@@ -37,6 +37,9 @@ data class Machine(
     @SerialName("claude_version") val claudeVersion: String? = null,
     @SerialName("last_seen") val lastSeen: String? = null,
     @SerialName("node_mismatch") val nodeMismatch: Boolean? = null,
+    /** The hub is installing its own build there (重新部署); deployError: why the last try did not work. */
+    val deploying: Boolean? = null,
+    @SerialName("deploy_error") val deployError: String? = null,
     val arch: String? = null,
     @SerialName("node_version") val nodeVersion: String? = null,
     /** What the machine runs (docs/machines.md); null from hubs without monitoring. */

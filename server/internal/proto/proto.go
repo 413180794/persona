@@ -33,6 +33,9 @@ type Machine struct {
 	// deployed it alone). Hub and node read terminal dialogs with the same code, so a mismatch can refuse answers.
 	NodeVersion  string `json:"node_version,omitempty"`
 	NodeMismatch bool   `json:"node_mismatch,omitempty"`
+	// Deploying: the hub is installing its own node build there (POST …/deploy); DeployError: why the last one failed.
+	Deploying   bool   `json:"deploying,omitempty"`
+	DeployError string `json:"deploy_error,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
 }

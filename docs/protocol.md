@@ -16,7 +16,10 @@
 - 功能协商：`/api/v1/health` 和 WebSocket 的 `hello` 带 `features`（`proto.Features`：`client_msg_id`、`send_refusals`、
   `screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`）。新字段都是可选的，App 目前靠字段在不在判断；
   以后有「旧 hub 会误解」的新请求时先查这里。机器列表里的 `node_version` / `node_mismatch`：那台电脑上的 jarvisd 不是 hub 这次部署的
-  （`deploy.sh` 只部署了一部分），App 在「设置 › 机器」里提示重新部署，hub 连上时也记一行日志。
+  （`deploy.sh` 只部署了一部分），App 在「设置 › 机器」里提示并给一个「重新部署」按钮，hub 连上时也记一行日志。
+  `POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.jarvis/bin/nodes/jarvisd-<os>-<arch>`）
+  经 ssh 装到那台电脑，杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，
+  立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
 ## 数据类型

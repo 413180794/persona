@@ -57,6 +57,10 @@ for t in "${TARGETS[@]}"; do
   case "$t" in
     "$HUB")
       ssh "$JARVIS_HUB_SSH" 'bash -s' < ../scripts/db.sh
+      # Every node binary of this build stays on the hub machine: the app's 重新部署 sends a machine whose node is not
+      # the hub's build its own (server/internal/hub/deploy.go).
+      ssh "$JARVIS_HUB_SSH" 'mkdir -p ~/.jarvis/bin/nodes' &&
+        scp -q bin/jarvisd-linux-amd64 bin/jarvisd-darwin-arm64 "$JARVIS_HUB_SSH:.jarvis/bin/nodes/"
       install_bin "$t" "bin/jarvisd-$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
       ssh "$JARVIS_HUB_SSH" 'bash -s' <<'EOF'
 set -e

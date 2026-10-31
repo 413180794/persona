@@ -72,10 +72,8 @@ struct MachineCard: View {
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
                     if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
                 }
-                if machine.nodeMismatch == true {
-                    Label("这台电脑上的 Jarvis 和 hub 不是同一次部署，重新部署一下", systemImage: Theme.Icon.errorFilled)
-                        .font(Theme.Font.label)
-                        .foregroundStyle(Theme.cautionText)
+                if machine.nodeMismatch == true || machine.deploying == true {
+                    DeployRow(machine: machine)
                 }
             } else if let err = machine.error, !err.isEmpty {
                 Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(3)
@@ -90,6 +88,51 @@ struct MachineCard: View {
             Text(label).font(Theme.Font.label).foregroundStyle(Color.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// A machine whose jarvisd is not the hub's build: says so, and 重新部署 has the hub install its own build there.
+private struct DeployRow: View {
+    @Environment(AppModel.self) private var model
+    var machine: Machine
+    @State private var starting = false
+
+    var body: some View {
+        let busy = machine.deploying == true || starting
+        HStack(spacing: Theme.Space.m) {
+            Label(text(busy), systemImage: busy ? Theme.Icon.retry : Theme.Icon.errorFilled)
+                .font(Theme.Font.label)
+                .foregroundStyle(Theme.cautionText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button { Task { await deploy() } } label: {
+                if busy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Text("重新部署").font(Theme.Font.labelStrong).lineLimit(1)
+                }
+            }
+            .themedButton()
+            .disabled(busy)
+            .accessibilityLabel(busy ? "正在部署" : "重新部署")
+        }
+    }
+
+    private func text(_ busy: Bool) -> String {
+        if busy { return "正在把 hub 这一版的 Jarvis 装到这台电脑…" }
+        if let e = machine.deployError, !e.isEmpty { return "上次部署没成：\(e)" }
+        return "这台电脑上的 Jarvis 和 hub 不是同一次部署"
+    }
+
+    private func deploy() async {
+        starting = true
+        defer { starting = false }
+        do {
+            try await model.api?.deploy(machine: machine.id)
+            Haptics.tap()
+            await model.refresh()
+        } catch {
+            if let m = error.shown { model.toast = Toast("部署失败：\(m)", style: .error) }
+        }
     }
 }
 

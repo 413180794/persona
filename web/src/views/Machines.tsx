@@ -36,6 +36,14 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       toast(`重连失败：${errorText(e)}`, "error");
     }
   };
+  // The hub installs its own build there; the machine list says when it is done (deploying / deploy_error).
+  const deploy = async (id: string) => {
+    try {
+      await api(`/machines/${encodeURIComponent(id)}/deploy`, { method: "POST" });
+    } catch (e) {
+      toast(`部署失败：${errorText(e)}`, "error");
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -78,7 +86,16 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   )}
                 </div>
                 {m.online && m.error && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
-                {m.node_mismatch && <p className="mx-4 mt-2 rounded-[8px] bg-orange-tint px-2.5 py-1.5 text-[12px] text-orange">这台电脑上的 jarvisd 和 hub 不是同一版，需要重新部署。</p>}
+                {(m.node_mismatch || m.deploying) && (
+                  <div className="mx-4 mt-2 flex items-center gap-2 rounded-[8px] bg-orange-tint py-1.5 pl-2.5 pr-1.5 text-[12px] text-orange">
+                    <p className="min-w-0 flex-1">
+                      {m.deploying ? "正在把 hub 这一版的 jarvisd 装到这台电脑…" : m.deploy_error ? `上次部署没成：${m.deploy_error}` : "这台电脑上的 jarvisd 和 hub 不是同一版。"}
+                    </p>
+                    <Button tone="secondary" icon="retry" busy={m.deploying} disabled={m.deploying} onClick={() => deploy(m.id)}>
+                      {m.deploying ? "部署中" : "重新部署"}
+                    </Button>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-px px-4 pt-3">
                   <Stat label="CPU" value={l?.cpu !== undefined ? `${Math.round(l.cpu)}%` : "—"} warn={(l?.cpu ?? 0) > 85} />
                   <Stat label="内存" value={memPct !== undefined ? `${Math.round(memPct)}%` : "—"} sub={l?.mem_used ? `${bytes(l.mem_used)} / ${bytes(l.mem_total)}` : undefined} warn={(memPct ?? 0) > 90} />

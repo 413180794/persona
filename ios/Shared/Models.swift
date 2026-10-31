@@ -22,13 +22,16 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var nodeMismatch: Bool?
     /// The machine's jarvisd build.
     var nodeVersion: String?
+    /// The hub is installing its own build there (重新部署); deployError: why the last try did not work.
+    var deploying: Bool?
+    var deployError: String?
     /// OS and hardware (docs/machines.md); nil from hubs before machine monitoring, or a machine never connected.
     var system: MachineSystem?
 
     enum CodingKeys: String, CodingKey {
         case id, name, kind, icon, online, error, hostname, os, arch, home, system
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
-        case nodeMismatch = "node_mismatch", nodeVersion = "node_version"
+        case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
     }
 
     var symbol: String {

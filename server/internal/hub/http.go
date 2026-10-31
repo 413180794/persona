@@ -30,6 +30,13 @@ func (h *Hub) routes() http.Handler {
 		m.reconnect()
 		writeJSON(w, map[string]any{"ok": true})
 	}))
+	api.HandleFunc("POST /api/v1/machines/{mid}/deploy", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
+		if err := m.startDeploy(); err != nil {
+			writeErr(w, http.StatusConflict, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/launchers", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()

@@ -12,6 +12,8 @@ export interface Machine {
   claude_version?: string;
   herdr_version?: string;
   node_mismatch?: boolean;
+  deploying?: boolean;
+  deploy_error?: string;
   system?: { name?: string; model?: string; cpu?: string; cores?: number; memory?: number };
 }
 

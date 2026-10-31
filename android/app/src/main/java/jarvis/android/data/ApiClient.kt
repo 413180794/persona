@@ -73,6 +73,8 @@ class ApiClient(val baseUrl: String, val token: String) {
     @Serializable private data class Machines(val machines: List<Machine> = emptyList())
     suspend fun machines(): List<Machine> = get<Machines>("/api/v1/machines").machines
     suspend fun reconnect(machine: String) { raw("POST", "/api/v1/machines/$machine/reconnect") }
+    /** The hub installs its own jarvisd build on the machine and reconnects; progress comes with the machine list. */
+    suspend fun deploy(machine: String) { raw("POST", "/api/v1/machines/$machine/deploy") }
 
     @Serializable private data class Sessions(val sessions: List<Session> = emptyList())
     suspend fun sessions(): List<Session> = get<Sessions>("/api/v1/sessions").sessions

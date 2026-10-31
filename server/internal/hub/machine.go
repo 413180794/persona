@@ -36,6 +36,9 @@ type Machine struct {
 	watchers map[string]int // session id -> subscribed clients
 	lastSeq  map[string]int // session id -> highest item seq seen
 	kick     chan struct{}
+	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
+	deploying bool
+	deployErr string
 	// nodeCmd replaces the node command (tests).
 	nodeCmd func(context.Context) *exec.Cmd
 }
@@ -56,6 +59,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
+		Deploying: m.deploying, DeployError: m.deployErr,
 		System: m.hub.metrics.system(m.cfg.ID),
 	}
 }
