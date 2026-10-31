@@ -38,6 +38,8 @@
   （`editorType: markdown`，话题里 `replyMode: thread`）。Agent 这一轮结束却没调它，hub 把它最后一段回复发出去；
   超过 `timeout_minutes`（默认 30）没答完，回一句「这次 N 分钟内没处理完」。
 - 同一个话题里再发 `/agent`，接着用上次那个对话（`--resume`），它记得之前说过什么。
+- 提示词要求它**不替我做承诺**：回复是以我的名义发的，只写已经做完的事，没做的写成建议。（2026-10-31 第一次真实使用，
+  它在回复里写了「我这边下掉这个旧泳道的 orchestrator」，其实没做。）
 - 记录存在 settings 表的 `lark_agent.runs`（3 天）。
 
 ## 配置
