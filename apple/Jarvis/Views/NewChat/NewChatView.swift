@@ -152,6 +152,13 @@ struct NewChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                #if os(macOS)
+                // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话") { Task { await start() } }
+                        .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
+                }
+                #endif
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: Theme.Space.s) {
@@ -165,6 +172,7 @@ struct NewChatView: View {
                         .background(.regularMaterial, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .accessibilityIdentifier("newChat.error")
                 }
+                #if os(iOS)
                 Button {
                     Task { await start() }
                 } label: {
@@ -178,6 +186,7 @@ struct NewChatView: View {
                 .themedButton(prominent: true)
                 .controlSize(.large)
                 .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
+                #endif
                 }
                 .padding(.horizontal, Theme.Space.xl)
                 .padding(.bottom, Theme.Space.s)

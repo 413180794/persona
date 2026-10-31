@@ -68,6 +68,24 @@ struct MacCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
+        // 文件: 新建 Agent 对话 ⌘N, 新建 Jarvis 对话 ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
+        CommandGroup(replacing: .newItem) {
+            Button("新建 Agent 对话…") { MacShellState.shared.newAgent = true }
+                .keyboardShortcut("n", modifiers: .command)
+                .disabled(!model.isPaired)
+            Button("新建 Jarvis 对话") {
+                model.selectedTab = .assistant
+                model.assistantCurrent = nil
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(!model.isPaired)
+        }
+        // 前往: 快速打开 ⌘K.
+        CommandMenu("前往") {
+            Button("快速打开…") { MacShellState.shared.quickOpen.toggle() }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(!model.isPaired)
+        }
         CommandGroup(after: .sidebar) {
             ForEach(Array(MacSection.allCases.enumerated()), id: \.element) { i, section in
                 Button(section.title) { model.selectedTab = section.tab }
@@ -208,6 +226,12 @@ enum MacLaunchArguments {
             model.assistantCurrent = nil
         }
         model.debugShowNewChat = d.bool(forKey: "showNewChat")
+        // `-openQuickOpen <query>` (`""` for none): ⌘K open, that typed in. `-openNewAgent YES`: the 新建 Agent sheet.
+        if let q = d.string(forKey: "openQuickOpen") {
+            MacShellState.shared.seed = q
+            MacShellState.shared.quickOpen = true
+        }
+        if d.bool(forKey: "openNewAgent") { MacShellState.shared.newAgent = true }
         if let key = sessionKey(d.string(forKey: "simulateTap")) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { model.open(key) }
         }

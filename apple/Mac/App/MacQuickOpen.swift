@@ -1,0 +1,133 @@
+import Foundation
+
+/// ⌘K 快速打开 (docs/mac.md「搜索」): one field over the agents, the Jarvis conversations, the inbox, the window's
+/// sections and the two "new" actions, like Xcode's Open Quickly. ↑↓ choose, ⏎ opens, Esc closes.
+enum MacQuickOpen {
+    enum Target: Hashable {
+        case agent(SessionKey)
+        case conversation(SessionKey)
+        case inbox(String)
+        case section(MacSection)
+        case newAgent
+        case newConversation
+    }
+
+    struct Hit: Identifiable, Hashable {
+        var id: String
+        var title: String
+        var subtitle: String
+        var icon: String
+        var state: AgentState?
+        var target: Target
+        var score: Int
+        var date: Date?
+        /// Waiting on you: listed before the rest of the same score.
+        var urgent = false
+    }
+
+    struct Group: Identifiable, Hashable {
+        var id: String { title }
+        var title: String
+        var hits: [Hit]
+    }
+
+    static let agentLimit = 30
+    static let otherLimit = 10
+
+    /// Title starts with the query 100, contains it 80, every word somewhere (title, folder, machine, space, last
+    /// line) 40, else no match. An empty query matches everything with 1.
+    static func score(title: String, hay: [String?], query q: String) -> Int {
+        if q.isEmpty { return 1 }
+        let t = title.lowercased()
+        if t.hasPrefix(q) { return 100 }
+        if t.contains(q) { return 80 }
+        let h = (hay.compactMap { $0 } + [title]).joined(separator: " ").lowercased()
+        let words = q.split(whereSeparator: \.isWhitespace).map(String.init)
+        return !words.isEmpty && words.allSatisfy { h.contains($0) } ? 40 : 0
+    }
+
+    /// The groups to list, empty ones dropped: Agent, Jarvis 对话, 收件箱, 前往, 动作 — unless a later group has a
+    /// better kind of match (typing 设置 puts the section above an agent that merely mentions it).
+    static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem]) -> [Group] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let names = Dictionary(machines.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        var agents: [Hit] = [], conversations: [Hit] = []
+        for s in sessions {
+            let machine = names[s.machineID] ?? s.machineID
+            let sc = score(title: s.displayTitle, hay: [s.cwd, s.spaceName, machine, s.lastText], query: q)
+            guard sc > 0 else { continue }
+            if s.assistant {
+                conversations.append(Hit(id: "j:\(s.machineID)/\(s.sessionID)", title: s.displayTitle, subtitle: "Jarvis",
+                                         icon: Theme.Icon.ai, state: s.state, target: .conversation(s.key), score: sc,
+                                         date: s.updatedAt, urgent: s.state == .needsYou))
+            } else {
+                let place = [machine, s.spaceName ?? s.folderName].filter { !$0.isEmpty }.joined(separator: " › ")
+                agents.append(Hit(id: "a:\(s.machineID)/\(s.sessionID)", title: s.displayTitle, subtitle: place,
+                                  icon: Theme.Icon.agents, state: s.state, target: .agent(s.key), score: sc,
+                                  date: s.updatedAt, urgent: s.state == .needsYou))
+            }
+        }
+        let mail = inbox.compactMap { it -> Hit? in
+            let sc = score(title: it.title, hay: [it.sender, it.preview, it.accountName], query: q)
+            guard sc > 0 else { return nil }
+            return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "："),
+                       icon: Theme.Icon.inbox, target: .inbox(it.id), score: sc, date: it.updatedAt)
+        }
+        let groups = [
+            Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
+            Group(title: "Jarvis 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
+            Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
+            Group(title: "前往", hits: places(q)),
+            Group(title: "动作", hits: actions(q)),
+        ].filter { !$0.hits.isEmpty }
+        let tier = { (g: Group) in (g.hits.map(\.score).max() ?? 0) / 20 }
+        return groups.enumerated().sorted { a, b in
+            let (x, y) = (tier(a.element), tier(b.element))
+            return x != y ? x > y : a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// Best match first, then what waits on you, then newest; ties keep the list's order.
+    private static func ranked(_ hits: [Hit]) -> [Hit] {
+        hits.enumerated().sorted { a, b in
+            let (x, y) = (a.element, b.element)
+            if x.score != y.score { return x.score > y.score }
+            if x.urgent != y.urgent { return x.urgent }
+            let (dx, dy) = (x.date ?? .distantPast, y.date ?? .distantPast)
+            return dx != dy ? dx > dy : a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// The window's sections, with the other words they answer to.
+    private static func places(_ q: String) -> [Hit] {
+        let words: [MacSection: [String]] = [
+            .assistant: ["jarvis", "assistant", "助手", "主对话"],
+            .agents: ["agents", "claude", "codex", "会话"],
+            .inbox: ["inbox", "mail", "lark", "邮件", "飞书"],
+            .settings: ["settings", "preferences", "偏好"],
+        ]
+        return MacSection.allCases.compactMap { s in
+            let sc = score(title: s.title, hay: words[s] ?? [], query: q)
+            guard sc > 0 else { return nil }
+            return Hit(id: "p:\(s.rawValue)", title: s.title, subtitle: "", icon: s.icon, target: .section(s), score: sc)
+        }
+    }
+
+    private static func actions(_ q: String) -> [Hit] {
+        let all: [(String, String, String, Target, [String])] = [
+            ("a:new-agent", "新建 Agent", "在一台电脑上启动 Claude Code / Codex  ⌘N", .newAgent, ["new agent", "start", "启动", "claude", "codex"]),
+            ("a:new-jarvis", "新建 Jarvis 对话", "问 Jarvis  ⇧⌘N", .newConversation, ["new chat", "jarvis", "对话", "助手"]),
+        ]
+        return all.compactMap { id, title, sub, target, words in
+            let sc = score(title: title, hay: words, query: q)
+            guard sc > 0 else { return nil }
+            return Hit(id: id, title: title, subtitle: sub, icon: Theme.Icon.compose, target: target, score: sc)
+        }
+    }
+
+    /// ↑ / ↓, wrapping around.
+    static func move(_ index: Int, by delta: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return ((index + delta) % count + count) % count
+    }
+}

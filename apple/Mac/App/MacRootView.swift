@@ -71,6 +71,18 @@ struct MacRootView: View {
             Text(c.summary)
         }
         .sendRefusalAlert(model)
+        .overlay { if model.isPaired { MacQuickOpenLayer() } }
+        .sheet(isPresented: Binding(get: { MacShellState.shared.newAgent }, set: { MacShellState.shared.newAgent = $0 })) {
+            // 新建 Agent (⌘N, the menu bar, ⌘K): the iOS form in a window sheet; the new agent opens in Agents.
+            NavigationStack {
+                NewChatView { session in
+                    MacShellState.shared.newAgent = false
+                    model.open(session.key)
+                }
+            }
+            .macSheet()
+            .environment(model)
+        }
         #if DEBUG
         .preferredColorScheme(MacSnapshot.colorScheme)
         #endif

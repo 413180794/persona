@@ -136,6 +136,19 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   「做完了，还没看」（最近 5 个）。需要你的一项是子菜单：说了什么 + 卡片上一点就能答的那几个（单个问题的选项、允许 / 拒绝、批准计划、
   hub 读出来的终端短选项）+ 打开对话；别的点一下打开对话。最后是「打开 Jarvis」「退出 Jarvis」。
 
+## 快速打开、新建（Mac）
+
+`apple/Mac/App/MacQuickOpen.swift`（搜索、排序，有测试）、`MacQuickOpenPanel.swift`（浮层）。
+
+- ⌘K（菜单「前往 › 快速打开…」）：窗口上方浮起一个像 Xcode「Open Quickly」的面板，焦点在搜索框，↑↓ 选、⏎ 打开、Esc 或点外面关。
+  搜 Agent（标题 / 目录 / 机器 / 空间 / 最后一句）、Jarvis 对话、收件箱（标题 / 发件人 / 预览）、窗口的四个分区、两个「新建」。
+  标题开头命中 100、包含 80、每个词都在别处出现 40；同分时需要你的在前、再按时间；分组顺序固定（Agent、Jarvis 对话、收件箱、前往、动作），
+  除非后面的组命中得更好（搜「设置」时「前往 › 设置」排在只是提到设置的 Agent 前面）。没输入时列出全部，需要你的在前。
+  DEBUG：`-openQuickOpen <搜索词>`（`""` 为空）。
+- 新建 Agent 对话 ⌘N（菜单「文件」、菜单栏、⌘K）：iOS 的新对话表单放在窗口的 sheet 里，「开始对话」在 Mac 上是 sheet 底部「取消」旁边的默认按钮（⏎），
+  不是 iOS 浮在底部的大按钮；开起来后在 Agents 里打开。新建 Jarvis 对话 ⇧⌘N：切到 Jarvis 的新对话。没配对时这几条命令不可用。DEBUG：`-openNewAgent YES`。
+- 截图里 ⌘K 面板后面透出列表：离屏截图把 `List` 的行单独再画一遍贴回原处（见上面「截图和屏幕上的差别」），盖在了浮层上面，屏幕上不会这样。
+
 ## 收件箱、飞书、邮件、链接（Mac）
 
 `apple/Mac/Inbox/`、`apple/Mac/Link/MacLinkPanel.swift`。逻辑和行、会话、邮件页都是 iOS 那一份，Mac 只换了外面的组织方式：
@@ -307,7 +320,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 - [x] Feishu docs/wiki links → native reader — Views/Feishu/Docs/FeishuDocReader.swift
 
 ## 10. New chat form
-- [ ] Machine picker, launcher picker (per-machine launchers, 跟随启动器), directory browser with search, 加入空间, title, first prompt, mode picker; remembers machine/launcher/cwd for Siri — Views/NewChat/NewChatView.swift (NewChatView, LauncherPicker, DirectoryBrowser)
+- [x] Machine picker, launcher picker (per-machine launchers, 跟随启动器), directory browser with search, 加入空间, title, first prompt, mode picker; remembers machine/launcher/cwd for Siri — Views/NewChat/NewChatView.swift (NewChatView, LauncherPicker, DirectoryBrowser)（Mac：⌘N 打开 sheet，见「快速打开、新建」）
 - [ ] Prefilled new chat (from mail 「让 Claude 处理」) — Views/Mail/MailViews.swift (NewChatPrefilled)
 
 ## 11. Machines / monitoring

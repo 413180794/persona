@@ -30,4 +30,15 @@ extension Theme.Size {
     static let macInboxListIdeal: CGFloat = 380
     static let macInboxListMax: CGFloat = 520
     static let macInboxFiltersWidth: CGFloat = 190
+    /// ⌘K 快速打开: the panel's width, the most its list grows to, and how far below the window's top it sits.
+    static let macQuickOpenWidth: CGFloat = 600
+    static let macQuickOpenListMax: CGFloat = 420
+    static let macQuickOpenTop: CGFloat = 96
+}
+
+extension Theme.Fill {
+    /// The faint dim behind ⌘K (a click on it closes the panel).
+    static let macScrim = Color.black.opacity(0.12)
+    /// Floating panels over the page (⌘K): the window background, opaque like Xcode's Open Quickly.
+    static let macPanel = Color(nsColor: .windowBackgroundColor)
 }

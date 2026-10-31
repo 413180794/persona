@@ -79,6 +79,11 @@ struct MacMenuBarMenu: View {
         }
         Divider()
         Button("打开 Jarvis") { show() }
+        Button("新建 Agent 对话…") {
+            show()
+            MacShellState.shared.newAgent = true
+        }
+        .disabled(!model.isPaired)
         Divider()
         Button("退出 Jarvis") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
