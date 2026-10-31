@@ -27,7 +27,13 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 附件 | 对话页输入框左边的「+」：照片（系统的照片选择器，一次最多 4 张，长边缩到 1600、JPEG 0.75，和 iOS 一样，作为 `images` 随消息发出，输入框上方是缩略图、可以移除）；文件（系统的文件选择器，传到会话所在那台电脑的临时目录，`POST /api/v1/machines/{mid}/files`，超过 200 MB 不传，传完把路径插到输入框末尾、带空格或引号的用单引号包起来，**不自动发送**）。只有图片没有字时发「请看图片」 |
 | 手机数据工具 | 设置 › 手机数据：设备信息、剪贴板、通知、通讯录、日历、位置，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`ios/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。还没有：提醒事项、照片、健康（iOS 有） |
 | 界面风格 | 设置 › 外观 › 界面风格：液态玻璃（默认）、Claude、黏土、Island、飞书，和 iOS 同一组（`docs/ios.md`「设计语言」），浅色 / 深色跟系统。选择页上面是当前风格的一段对话示例，下面五张预览卡，点一下整个 App 立刻换；存在手机上（SharedPreferences `ui`，键 `ui.style`），断开 hub 也保留。见下面「界面风格」 |
-| 设置 | 界面风格、hub 地址和连接状态、各台机器（在线、版本、`node_mismatch` 提示、重新连接）、后台通知设置入口、断开 hub |
+| 设置 | 外观（界面风格）；hub 地址和连接状态；「电脑」：机器（在线数，有 `node_mismatch` 的机器名）、Claude Code 设置、设备；手机数据；后台通知（通知、电池优化、自启动）；存储空间；断开 hub。子页面是 `SettingsRoute` 的一个栈（Root 保存），从机器页打开的对话返回时回到机器页 |
+| 机器 | 设置 › 机器，和 iOS `MachinesView` 对应：每台一张卡片（系统图标、在线、运行中 / 工作中 / 需要你、系统名和 herdr / claude 版本、`node_mismatch` 提示，离线时显示错误）。点开是机器页：卡片、运行中的 Claude（不含助手的对话，点开进对话）、系统与监控、启动器（名字和模型）、重新连接（最多等 15 秒看连没连上） |
+| 系统与监控 | 机器页里点开，`docs/machines.md`「机器详情」的安卓版：系统名、在线时长；现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换（偏高、过高标出来）；1 / 6 / 24 小时的 CPU、内存、网络、负载（虚线是核数）、磁盘曲线，hub 给的 `gap` 处断开不连线（`segments`），单调三次曲线不过冲；按住或横拖读某一刻，所有图一起跟；每个核心（Linux）；系统信息（内核、架构、机型、处理器、开机时间、herdr / Claude Code / node 版本）。页面在前台时 1 小时每 10 秒、其余每分钟刷新 |
+| Claude Code 设置 | 选一台在线的机器（默认 hub 所在的那台），列出 node 白名单里的 `~/.claude/settings.json` 项（开关、枚举、文本，没设过的标「默认」，文本清空就是回到默认）；「同时改所有在线机器」默认开，每台各写一次，失败的逐台列出来并重新读 |
+| 设备 | `GET /api/v1/auth/tokens`：每台设备的凭据（本机、手表「只能回答」），最近使用 / 撤销时间，已撤销的单独一组；撤销先确认，撤销的是这台手机自己就回到配对页 |
+| 通知 | 「需要你处理时」开关，「Agent 做完时」不推送 / 只推长任务 / 每次都推，系统里每类通知的设置入口。和 iOS 一样存在 hub 的 `devices/{id}/prefs`（只发 `input` / `done`，iPhone 的实时活动、灵动岛字段不动；id 是这台手机第一次用时生成的 `android-…`），每次连上 hub 时读回来，所以在别处改了也生效；改的时候 hub 连不上，下次连上先把这边的发上去。`Notifier` 按它决定弹不弹（见下面「通知」） |
+| 存储空间 | 这台手机上 Jarvis 占的空间按类分（对话、图片、网页、网络缓存……，没有的类不显示）、一条比例条，点一类单独清、或清除全部缓存；设置和配对信息不清 |
 
 还没做（iOS 有）：收件箱里的「交给某个 Agent」、邮件和飞书的单独页面、手机数据里的提醒事项 / 照片 / 健康、
 终端的选择复制（现在只能拷贝整屏）、字号和主题、电脑尺寸下按手机宽度折行、往上翻 `/screen/before` 的历史，手表。协议都在，后续按 iOS 的做法补。
@@ -42,6 +48,7 @@ hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub
   网络变了马上重连，断线指数退避到 30 秒；开机后自动启动（`BootReceiver`）。
 - 收到 `interaction` 就弹「需要你处理」通知（高优先级），能直接在通知上点：授权「允许 / 拒绝」、计划「批准 / 打回（可输入反馈）」、
   单选提问的前 3 个选项、终端对话框的前 3 个选项。`interaction_resolved` 时收回通知。
+- 设置 › 通知（`SettingsPrefs`）：「需要你处理时」关掉就不弹「需要你处理」；「Agent 做完时」不推送 / 每次都推 / 只推长任务（这一轮从开始干到做完超过 hub 的 `long_turn_seconds`，没看到开头的一轮算长）。
 - 一轮做完（工作中 → 完成未看）且 App 不在前台时弹「做完了」。对话页只在 App 真的在前台时才上报已看（`/seen`），
   否则放在后台的对话页会把「做完了」吞掉。
 - 规则对照 hub 给 iPhone 的推送（`docs/server.md`「推送策略」），但时机在手机上算：需要你立即弹；做完了不等 `done_delay_seconds`。
@@ -116,6 +123,8 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
 | `ui/` | Compose 页面：`AgentsScreen`、`ChatScreen`、`InteractionCard`、`PairScreen`、`SettingsScreen`、`StylePicker`、`Markdown`；`Theme` 是界面风格的 token |
 | `data/Knowledge.kt`、`ui/knowledge/` | 知识库：线上类型、项目分组、搜索结果合并、时间线解析、「问 Jarvis / 开 Agent」带的上下文（`KnowledgeTest`）；列表页和条目页、打标 |
 | `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
+| `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
+| `ui/settings/`、`ui/machines/` | 设置的子页面和它们共用的分组、行（`SettingsKit.kt`，颜色取自 MaterialTheme）；机器列表、机器页、监控页和曲线（`MetricCharts.kt`） |
 
 ## 验证记录
 
@@ -162,6 +171,9 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
   `⏸ manual mode on · ← for agents`，node 认不出，等满 1 分钟报「did not become ready」，其实会话已经能用：App 按「启动前没有、启动后在这个目录里的窗格」找到它并打开。
 - 小米 / 红米：`adb install` 要先在开发者选项里打开「USB 安装」（要登录小米账号），手机上还会弹「通过 USB 安装」的确认框，几秒内不点就自动拒绝
   （`INSTALL_FAILED_USER_RESTRICTED`）。`adb shell input` 代点屏幕要再打开「USB 调试（安全设置）」，否则报 `INJECT_EVENTS`。
+- 无窗口（`-no-window`）的模拟器上 `adb exec-out screencap` 有时拿到的是上一帧：点完马上截图像是没反应，其实已经跳过去了。截两次、中间等一秒。
+- 只读地连真实 hub 看界面：配对页会 `POST /api/v1/auth/tokens` 在 hub 上多出一台设备。debug 包可以 `run-as` 直接写 `shared_prefs/pairing.xml`（`url`、`token`）再启动，看完 `pm clear`；别点会写 hub 的开关（Claude Code 设置、通知、手机数据）。
+- 曲线的纵轴按字节时要按 1024 取整（`ChartMath.yTicks(binary = true)`），按十进制取整的刻度显示出来是「1.91 MB/s」「3.81 MB/s」；数值标签的宽度按最宽的那个量，固定宽度会被裁掉。
 - 手机没法直接访问 hub 时（hub 在内网、手机在流量上），联调可以走 USB：电脑上把本机 18660 转到 hub，再 `adb reverse tcp:18660 tcp:18660`，
   手机配对时用 `http://127.0.0.1:18660`。
 - 终端里打字：安卓输入法对每个英文词也走 composition（为了联想），等 commit 再发的话一个词要到空格才出现；所以输入框里的文字（含正在拼的）

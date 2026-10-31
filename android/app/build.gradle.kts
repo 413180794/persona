@@ -61,4 +61,6 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
 
     testImplementation("junit:junit:4.13.2")
+    // REST calls against a local HTTP server (same version as okhttp).
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

@@ -45,6 +45,7 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Agents) }
     var settings by rememberSaveable { mutableStateOf(false) }
+    val settingsStack = rememberSaveable { mutableStateOf(emptyList<String>()) } // 设置's sub-pages (SettingsRoute)
     var space by rememberSaveable { mutableStateOf<String?>(null) }
     var handoff by remember { mutableStateOf<String?>(null) } // inbox → Jarvis
     val open = openSession.value
@@ -103,25 +104,26 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     }
 
     when {
+        // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
+        open != null -> {
+            BackHandler { openSession.value = null }
+            ChatScreen(hub, open, onBack = { openSession.value = null })
+        }
         settings -> {
             BackHandler { settings = false }
-            SettingsScreen(hub, onBack = { settings = false })
+            SettingsScreen(hub, onBack = { settings = false }, stack = settingsStack, onOpenSession = { openSession.value = it })
         }
         tab == Tab.Jarvis -> AssistantScreen(
             hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
             focusComposer = askFocus, onFocusTaken = { askFocus = false },
         )
         tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandToJarvis = { handoff = it; tab = Tab.Jarvis })
-        open != null -> {
-            BackHandler { openSession.value = null }
-            ChatScreen(hub, open, onBack = { openSession.value = null })
-        }
         space != null -> {
             BackHandler { space = null }
             SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
         }
         else -> AgentsScreen(
-            hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settings = true },
+            hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settingsStack.value = emptyList(); settings = true },
             bottomBar = bar,
         )
     }

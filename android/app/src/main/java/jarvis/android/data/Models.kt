@@ -37,9 +37,31 @@ data class Machine(
     @SerialName("claude_version") val claudeVersion: String? = null,
     @SerialName("last_seen") val lastSeen: String? = null,
     @SerialName("node_mismatch") val nodeMismatch: Boolean? = null,
+    val arch: String? = null,
+    @SerialName("node_version") val nodeVersion: String? = null,
+    /** What the machine runs (docs/machines.md); null from hubs without monitoring. */
+    val system: MachineSystem? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
 }
+
+/** A machine's OS and hardware as its node reports them (docs/machines.md「系统」). */
+@Serializable
+data class MachineSystem(
+    val os: String? = null,
+    val distro: String? = null,
+    val like: String? = null,
+    val name: String? = null,
+    val version: String? = null,
+    val build: String? = null,
+    val kernel: String? = null,
+    val arch: String? = null,
+    val model: String? = null,
+    val cpu: String? = null,
+    val cores: Int? = null,
+    val memory: Long? = null,
+    @SerialName("boot_time") val bootTime: Long? = null,
+)
 
 /** Unified agent state computed by the hub (docs/agent-states.md). */
 enum class AgentState(val wire: String, val priority: Int) {

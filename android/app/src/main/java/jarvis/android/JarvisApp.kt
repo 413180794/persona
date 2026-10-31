@@ -32,6 +32,7 @@ class JarvisApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        jarvis.android.settings.SettingsPrefs.init(this)
         pairings = PairingStore(this)
         notifier = Notifier(this)
         phoneTools = jarvis.android.phone.PhoneToolRunner(this)
@@ -57,6 +58,7 @@ class JarvisApp : Application() {
         _hub.value?.stop()
         _hub.value = null
         pairings.clear()
+        jarvis.android.settings.SettingsPrefs.forgetHub()
         HubService.stop(this)
         jarvis.android.fleet.FleetStore.clear(this)
         scope.launch { refreshFleetViews() }

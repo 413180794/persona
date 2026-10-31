@@ -5,8 +5,21 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.SdStorage
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,24 +49,43 @@ import androidx.compose.ui.unit.dp
 import jarvis.android.JarvisApp
 import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
-import kotlinx.coroutines.launch
+import jarvis.android.data.SessionKey
+import jarvis.android.settings.StorageUsage
+import jarvis.android.settings.storageText
+import jarvis.android.ui.settings.SettingsPage
+import jarvis.android.ui.settings.SettingsRoute
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
+/**
+ * 设置. Its sub-pages (机器 and a machine's page and charts, Claude Code 设置, 设备, 通知, 存储空间) are a stack of
+ * [SettingsRoute] paths in [stack], kept by the caller so it survives opening a chat from a machine's page.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
+fun SettingsScreen(
+    hub: Hub,
+    onBack: () -> Unit,
+    stack: MutableState<List<String>> = remember { mutableStateOf(emptyList()) },
+    onOpenSession: (SessionKey) -> Unit = {},
+) {
+    val push: (SettingsRoute) -> Unit = { stack.value = stack.value + it.path }
+    val top = stack.value.lastOrNull()?.let(SettingsRoute::of)
+    if (top != null) {
+        val pop = { stack.value = stack.value.dropLast(1) }
+        BackHandler(onBack = pop)
+        SettingsPage(hub, top, push, pop, onOpenSession)
+        return
+    }
     val ctx = LocalContext.current
     val machines by hub.machines.collectAsState()
     val conn by hub.conn.collectAsState()
-    val scope = rememberCoroutineScope()
     var confirmUnpair by remember { mutableStateOf(false) }
+    // Measured each time 设置 shows (so after clearing in 存储空间, too).
+    var storage by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) { storage = withContext(Dispatchers.IO) { StorageUsage.scan(ctx.applicationContext).values.sum() } }
     val pm = ctx.getSystemService(PowerManager::class.java)
     var unrestricted by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
-    var stylePicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    if (stylePicker) {
-        androidx.activity.compose.BackHandler { stylePicker = false }
-        StylePickerScreen(onBack = { stylePicker = false })
-        return
-    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -70,25 +102,19 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
                 },
             )
             Header("外观")
-            StyleSettingsRow(onClick = { stylePicker = true })
-            Header("机器")
-            machines.forEach { m ->
-                ListItem(
-                    headlineContent = { Text(m.displayName) },
-                    supportingContent = {
-                        Text(
-                            if (m.online) listOfNotNull("在线", m.os, m.herdrVersion?.let { "herdr $it" }, m.claudeVersion?.let { "claude $it" }).joinToString(" · ") +
-                                (if (m.nodeMismatch == true) "\n这台电脑上的 jarvisd 不是 hub 这次部署的，需要重新部署" else "")
-                            else "离线" + (m.error?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: ""),
-                        )
-                    },
-                    trailingContent = {
-                        TextButton(onClick = { scope.launch { runCatching { hub.api.reconnect(m.id) } } }) { Text("重新连接", maxLines = 1) }
-                    },
-                )
-            }
+            StyleSettingsRow(onClick = { push(SettingsRoute.Style) })
+            Header("电脑")
+            val mismatch = machines.filter { it.online && it.nodeMismatch == true }
+            NavItem(
+                "机器", Icons.Default.Devices,
+                "${machines.count { it.online }} / ${machines.size} 在线" +
+                    (if (mismatch.isNotEmpty()) "\n${mismatch.joinToString("、") { it.displayName }} 要重新部署 jarvisd" else ""),
+            ) { push(SettingsRoute.Machines) }
+            NavItem("Claude Code 设置", Icons.Default.Tune, "各台电脑上的常用选项，可以一起改") { push(SettingsRoute.Claude) }
+            NavItem("设备", Icons.Default.Key, "能连 hub 的手机、手表和网页") { push(SettingsRoute.Devices) }
             PhoneDataSection()
             Header("后台通知")
+            NavItem("通知", Icons.Default.NotificationsActive, "需要你处理时、Agent 做完时") { push(SettingsRoute.Notifications) }
             Text(
                 "这个 App 不用推送服务：它在后台和 hub 保持连接，有事就直接弹通知（通知栏里会常驻一条「已连接 hub」）。" +
                     "小米 / 红米等系统会清理后台，需要把电池策略设成「无限制」并打开「自启动」，否则锁屏一会儿就收不到。",
@@ -112,6 +138,10 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
                 supportingContent = { Text("打开系统里这个 App 的设置页：省电策略选「无限制」，打开「自启动」") },
                 trailingContent = { TextButton(onClick = { openAutostart(ctx) }) { Text("去设置", maxLines = 1) } },
             )
+            Header("这台手机")
+            NavItem("存储空间", Icons.Default.SdStorage, "占用的空间，可以清除缓存", value = storage?.let(::storageText)) {
+                push(SettingsRoute.Storage)
+            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             ListItem(
                 headlineContent = { Text("断开 hub", color = MaterialTheme.colorScheme.error) },
@@ -130,6 +160,23 @@ fun SettingsScreen(hub: Hub, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("取消", maxLines = 1) } },
         )
     }
+}
+
+/** A row that opens a sub-page of 设置. */
+@Composable
+private fun NavItem(title: String, icon: ImageVector, detail: String, value: String? = null, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title, maxLines = 1) },
+        supportingContent = { Text(detail) },
+        leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }
 
 @Composable

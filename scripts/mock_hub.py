@@ -635,6 +635,19 @@ TOKENS = [  # 设置 › 设备 (GET/POST/DELETE /api/v1/auth/tokens)
     {"id": "dev_ipad", "name": "iPad", "kind": "phone", "role": "full", "created_at": ago(days=40), "last_seen": ago(days=20),
      "revoked_at": ago(days=2)},
 ]
+def _claude_settings():  # 设置 › Claude Code 设置: the node's whitelist (server/internal/node/claudeconfig.go)
+    return [
+        {"key": "awaySummaryEnabled", "title": "离开回顾（recap）", "detail": "离开 5 分钟以上回来时，Claude 先写一段进展回顾",
+         "type": "bool", "default": True, "value": None},
+        {"key": "alwaysThinkingEnabled", "title": "总是深度思考", "detail": "每轮都开启 extended thinking", "type": "bool",
+         "default": False, "value": True},
+        {"key": "effortLevel", "title": "思考强度", "detail": "越高越慢、越仔细", "type": "enum",
+         "options": ["low", "medium", "high", "xhigh", "max"], "default": "high", "value": None},
+        {"key": "language", "title": "回复语言", "detail": "Claude 回复用的语言，比如「中文」", "type": "string", "default": "", "value": "中文"},
+    ]
+
+
+CLAUDE_SETTINGS = {}  # machine id → its settings, made on first use
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
@@ -1441,7 +1454,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(mock_dirs(p.split("/")[4], (q.get("path") or [""])[0]))
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}]})
-        if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"): return self.send_json({"settings": []})
+        if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
+            return self.send_json({"settings": CLAUDE_SETTINGS.setdefault(p.split("/")[4], _claude_settings())})
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
             sid = p.split("/")[5]
             items = find_items(sid)
@@ -1644,6 +1658,14 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。",
                                        "code": "prompt_changed", "delivered": "none"}, 409)
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings") and self.command == "PUT":
+            body, mid = json.loads(self.last_body or b"{}"), p.split("/")[4]
+            if not machine_online(mid):
+                return self.send_json({"error": "machine is offline"}, 503)
+            for st in CLAUDE_SETTINGS.setdefault(mid, _claude_settings()):
+                if st["key"] == body.get("key"):
+                    st["value"] = body.get("value")
+            return self.send_json({"settings": CLAUDE_SETTINGS[mid]})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"):  # 设置 › 通知
             body = json.loads(self.last_body or b"{}")
             PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})

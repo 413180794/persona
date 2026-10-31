@@ -21,6 +21,7 @@ import jarvis.android.data.Hub
 import jarvis.android.data.HubEvent
 import jarvis.android.data.Interaction
 import jarvis.android.data.Session
+import jarvis.android.settings.SettingsPrefs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -50,10 +51,13 @@ class Notifier(private val context: Context) {
     fun attach(hub: Hub) {
         job?.cancel()
         job = jarvis.android.JarvisApp.instance.scope.launch {
+            // 设置 › 通知 lives on the hub per device (devices/{id}/prefs, like iOS): line it up on every connect.
+            launch { hub.conn.collect { if (it == ConnState.Online) SettingsPrefs.sync(hub.api) } }
             hub.events.collect { e ->
                 when (e) {
                     // Muted agents and spaces get no notifications, as with the hub's pushes to iPhone.
-                    is HubEvent.NewInteraction -> {
+                    // 设置 › 通知「需要你处理时」 off: none at all.
+                    is HubEvent.NewInteraction -> if (SettingsPrefs.notifyInput.value) {
                         val s = hub.session(e.interaction.sessionKey)
                         if (s == null || !hub.isMuted(s)) postInteraction(e.interaction, assistant = s?.assistant == true)
                     }
@@ -134,10 +138,18 @@ class Notifier(private val context: Context) {
         else -> ix.headline
     }
 
-    /** A turn just ended unseen: notify unless the app is open (the user sees it there). */
+    /** When each session's current turn started (seen going to working), for「只推长任务」. */
+    private val turnStarted = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** A turn just ended unseen: notify unless the app is open (the user sees it there) or 设置 › 通知 says not to. */
     private fun onSessionChanged(before: Session?, after: Session) {
         if (before == null || after.assistant) return
-        if (before.agentState == AgentState.Working && after.agentState == AgentState.Unread && !foreground && allowed()) {
+        val path = after.key.path
+        if (after.agentState == AgentState.Working && before.agentState != AgentState.Working) turnStarted[path] = System.currentTimeMillis()
+        val took = if (after.agentState != AgentState.Working) turnStarted.remove(path)?.let { System.currentTimeMillis() - it } else null
+        if (before.agentState == AgentState.Working && after.agentState == AgentState.Unread && !foreground && allowed() &&
+            SettingsPrefs.wantsDone(took)
+        ) {
             val n = NotificationCompat.Builder(context, CH_DONE)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("${after.displayTitle} 做完了")
