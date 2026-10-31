@@ -1324,19 +1324,20 @@ struct ChatView: View {
     }
 
     /// Agents: the title's second line — the state (and for how long it has worked this turn), then where it runs.
-    /// The state's words take its color; the place stays secondary. Short of room the machine goes, then the space
-    /// name; the tab's name always stays (cut short if it must), so the line keeps one shape whatever the state.
+    /// The state's words take its color; the place stays secondary. The tab's name is left out when the strip below
+    /// shows the space's tabs (the selected one is this agent's; 2026-11-01 user request: it said it twice). Short of
+    /// room the machine goes; the place always stays (cut short if it must), so the line keeps one shape whatever the state.
     private func devSubtitle(_ s: Session) -> some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let words = stateWords(s, now: ctx.date)
-            let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
+            let tabShown = model.siblings(of: key).count > 1
+            let place = [s.spaceName, tabShown ? nil : s.slotLabel].compactMap { $0 }.joined(separator: " › ")
             let machine = model.machine(s.machineID)?.name ?? s.machineID
             HStack(spacing: Theme.Space.xs) {
                 StatusDot(state: s.state, size: 7)
                 ViewThatFits(in: .horizontal) {
                     subtitleLine(s, words, [machine, place])
-                    subtitleLine(s, words, [place.isEmpty ? machine : place])
-                    subtitleLine(s, words, [s.slotLabel ?? (place.isEmpty ? machine : place)]) // truncates when it must
+                    subtitleLine(s, words, [place.isEmpty ? machine : place]) // truncates when it must
                 }
             }
         }
