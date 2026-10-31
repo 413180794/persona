@@ -15,7 +15,7 @@ final class SiblingTabsTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",
                                "-holdChromeOpen", "YES"] // the header stays open: the test taps in it
-        app.launch()
+        app.launchJarvis()
     }
 
     @MainActor private func shot(_ name: String) {

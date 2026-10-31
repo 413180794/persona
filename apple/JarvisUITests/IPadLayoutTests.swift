@@ -30,7 +30,7 @@ final class IPadLayoutTests: XCTestCase {
     @MainActor func testFillsTheScreenWithASidebar() {
         for (name, orientation) in [("portrait", UIDeviceOrientation.portrait), ("landscape", .landscapeLeft)] {
             XCUIDevice.shared.orientation = orientation
-            app.launch()
+            app.launchJarvis()
             let empty = app.staticTexts["选一个 Agent"]
             XCTAssertTrue(empty.waitForExistence(timeout: 20), "no detail column in \(name):\n\(app.debugDescription)")
             let window = app.windows.firstMatch.frame
@@ -60,7 +60,7 @@ final class IPadLayoutTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         for style in ["glass", "claude"] {
             app.launchArguments += ["-ui.style", style]
-            app.launch()
+            app.launchJarvis()
             XCTAssertTrue(app.staticTexts["选一个 Agent"].waitForExistence(timeout: 20))
             sleep(1)
             var image = app.screenshot().image

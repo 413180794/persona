@@ -136,6 +136,10 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     let drawer: AssistantDrawer
     /// The page is at its root (nothing pushed): only then does a drag open the sidebar.
     var enabled: Bool
+    /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/ios.md「新外壳」).
+    var backdrop: Color = Color(.secondarySystemBackground)
+    /// The drag opens only from the screen's left edge: the page's rows swipe to the right themselves (工作's 置顶 / 中断).
+    var edgeOnly = false
     @ViewBuilder var sidebar: Sidebar
     var page: Page
 
@@ -151,8 +155,8 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
                     .modifier(DrawerPageMotion(drawer: drawer, width: width))
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
-            .background { Color(.secondarySystemBackground).ignoresSafeArea() }
-            .gesture(DrawerPan(drawer: drawer, enabled: enabled))
+            .background { backdrop.ignoresSafeArea() }
+            .gesture(DrawerPan(drawer: drawer, enabled: enabled, edgeOnly: edgeOnly))
             .background { DrawerTabBarProbe(drawer: drawer) }
             .onAppear { drawer.width = width }
             .onChange(of: width) { drawer.width = width }
@@ -324,10 +328,15 @@ private struct DrawerPageMotion: ViewModifier {
 struct DrawerPan: UIGestureRecognizerRepresentable {
     let drawer: AssistantDrawer
     var enabled: Bool
+    var edgeOnly = false
+
+    /// How far from the left edge a drag may start when `edgeOnly`: the system's back swipe takes about as much.
+    static let edge: CGFloat = Theme.Space.xl
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var drawer: AssistantDrawer
         var enabled = true
+        var edgeOnly = false
         init(drawer: AssistantDrawer) { self.drawer = drawer }
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
@@ -345,6 +354,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             #endif
             guard AssistantDrawer.takes(dx: dx, dy: dy, isOpen: drawer.isOpen) else { return refused("direction") }
             if drawer.isOpen { return true }
+            if edgeOnly, start.x > DrawerPan.edge { return refused("not from the edge") }
             return Self.sidewaysScroller(at: start, in: view) ? refused("sideways scroller") : true
         }
 
@@ -416,6 +426,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: Recognizer, context: Context) {
         context.coordinator.enabled = enabled
+        context.coordinator.edgeOnly = edgeOnly
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
@@ -475,6 +486,10 @@ struct AssistantSidebar: View {
     var openSettings: (() -> Void)?
     /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
     var drawer: AssistantDrawer?
+    /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's.
+    var openInbox: (() -> Void)? = nil
+    var openMachines: (() -> Void)? = nil
+    private var isShell: Bool { openInbox != nil }
     @State private var query = ""
     @State private var searchOpen = false
     @State private var showAll = false
@@ -584,15 +599,38 @@ struct AssistantSidebar: View {
 
     // MARK: What to start
 
-    private var actions: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
-            action("定时任务", Theme.Icon.schedule, run: openRoutines)
-            action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+    @ViewBuilder private var actions: some View {
+        if let openInbox, let openMachines {
+            // The shell's: Jarvis's own page first (认识 Jarvis, like ChatGPT's 认识 Dot), then the places to go.
+            VStack(alignment: .leading, spacing: 0) {
+                Button(action: openProfile) {
+                    HStack(spacing: Theme.Space.l) {
+                        PersonaAvatar(size: Theme.Size.icon)
+                            .scaledFrame(width: Theme.Size.icon)
+                        Text("认识 \(model.persona.name)").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .scaledFrame(minHeight: Theme.Size.avatarL)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sidebar-profile")
+                action("收件箱", Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
+                action("定时任务", Theme.Icon.schedule, run: openRoutines)
+                action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+                action("机器", Theme.Icon.machines, id: "sidebar-machines", run: openMachines)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
+                action("定时任务", Theme.Icon.schedule, run: openRoutines)
+                action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+            }
         }
     }
 
-    private func action(_ title: String, _ symbol: String, id: String? = nil, run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             HStack(spacing: Theme.Space.l) {
                 // One box for every symbol: a wide one (知识库's books) scales down into it instead of pushing its words.
@@ -601,6 +639,7 @@ struct AssistantSidebar: View {
                     .scaledFrame(width: Theme.Size.icon)
                 Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: 0)
+                if count > 0 { CountBadge(count: count, look: .solid(Theme.needsYou)) }
             }
             .padding(.horizontal, Theme.Space.m)
             .scaledFrame(minHeight: Theme.Size.avatarL)
@@ -781,7 +820,45 @@ struct AssistantSidebar: View {
 
     /// Jarvis's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
     /// the drawer is out).
-    private var footer: some View {
+    @ViewBuilder private var footer: some View {
+        if isShell { shellFooter } else { profileFooter }
+    }
+
+    /// The shell's foot, ChatGPT's: a 新对话 pill on the left, 设置 in a glass circle on the right.
+    private var shellFooter: some View {
+        HStack(spacing: Theme.Space.m) {
+            Button(action: newConversation) {
+                Label("新对话", systemImage: Theme.Icon.compose)
+                    .font(Theme.Font.bodyStrong)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, Theme.Space.xl)
+                    .scaledFrame(height: Theme.Size.avatarL)
+                    .background(Theme.Shell.newChat, in: .capsule)
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sidebar-new")
+            Spacer(minLength: Theme.Space.s)
+            if let openSettings {
+                Button(action: openSettings) {
+                    Image(systemName: Theme.Icon.settings)
+                        .font(Theme.Font.heading)
+                        .foregroundStyle(Color.primary)
+                        .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .surface(interactive: true, in: .circle)
+                .accessibilityLabel("设置")
+                .accessibilityIdentifier("sidebar-settings")
+            }
+        }
+        .padding(.horizontal, Theme.Space.xl)
+        .padding(.vertical, Theme.Space.m)
+    }
+
+    private var profileFooter: some View {
         let machine = model.machine(machineID)
         let online = machine?.online ?? false
         return VStack(spacing: 0) {

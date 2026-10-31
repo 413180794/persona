@@ -361,6 +361,29 @@ nonisolated enum Theme {
         LinearGradient(colors: [c, c.mix(with: .black, by: 0.12)], startPoint: .top, endPoint: .bottom)
     }
 
+    /// The ChatGPT-style shell (docs/ios.md「新外壳」, iPhone without 旧布局): neutral like ChatGPT's, in every style.
+    enum Shell {
+        /// The user's own messages: a soft gray bubble with ordinary text, not the style's colored one.
+        static let userBubble = Color(light: 0xF2F2F2, dark: 0x2F2F2F)
+        /// The 聊天 | 工作 switch's selected segment, inside its glass capsule.
+        static let segment = Color(light: 0xE6E6E6, dark: 0x3A3A3C)
+        /// The composer's field and its expanded card.
+        static let composer = Color(light: 0xFFFFFF, dark: 0x1F1F21)
+        static let composerStroke = Color(light: 0xE3E3E3, dark: 0x3A3A3C)
+        /// Send / dictation's round button: ink on paper, like ChatGPT's (the style's accent tints nothing here).
+        static let ink = Color(light: 0x0D0D0D, dark: 0xF2F2F2)
+        static let inkText = Color(light: 0xFFFFFF, dark: 0x0D0D0D)
+        /// The drawer behind the page.
+        static let drawer = Color(light: 0xF9F9F9, dark: 0x171717)
+        /// The 新对话 pill at the drawer's foot.
+        static let newChat = Color(light: 0x2F6FED, dark: 0x3B7BF2)
+        /// The composer: its field's corner when it is one line (a capsule) and when it has grown into a card.
+        static let composerRadius: CGFloat = 28
+        /// The switch's segments: width of each, and its height.
+        static let segmentWidth: CGFloat = 64
+        static let switchHeight: CGFloat = 44
+    }
+
     /// The page behind lists and chats.
     static var pageBackground: Color { spec.page }
     static func pageBackground(_ style: AppStyle) -> Color { style.spec.page }

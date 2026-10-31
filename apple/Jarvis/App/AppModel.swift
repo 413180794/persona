@@ -941,6 +941,22 @@ final class AppModel {
         if PersonaPalette.current != palette { PersonaPalette.current = palette }
     }
 
+    /// Agents (not the assistant) waiting on the user, not muted: the Agents tab's badge, the shell's 工作.
+    var agentsWaiting: Int {
+        pendingInteractions.filter { session($0.sessionKey)?.assistant != true && !isMuted($0.sessionKey) }.count
+    }
+
+    /// 设置 › 外观 › 旧布局 (2026-11-01, docs/ios.md「新外壳」): on, the iPhone keeps the four tabs exactly as before;
+    /// off (the default), it is the ChatGPT-style shell (聊天 | 工作, the drawer, 设置 as a sheet). Kept for a few days
+    /// of transition. iPad, iPhone Duo open and the Mac always use their own layouts.
+    var oldLayout: Bool = UserDefaults.standard.bool(forKey: "ui.oldLayout") {
+        didSet { UserDefaults.standard.set(oldLayout, forKey: "ui.oldLayout") }
+    }
+
+    /// The shell's 设置 sheet is up. Here and not in the shell's state: picking a style in it rebuilds the whole tree
+    /// (`look`), and the rebuilt shell puts the sheet back on the same page (`settingsPath`).
+    var shellSettings = false
+
     /// 小 / 标准 / 大 on top of the system's text size (设置 › 界面风格 › 字号); RootView applies it.
     var textSize: TextSize = TextSize.current {
         didSet { UserDefaults.standard.set(textSize.rawValue, forKey: "ui.textSize") }

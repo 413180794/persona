@@ -33,7 +33,7 @@ final class AgentsListTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES"] : [])
-        app.launch()
+        app.launchJarvis()
         if chat.isEmpty { see(filter("all"), "the quick filters", timeout: 15) }
     }
 
@@ -440,7 +440,7 @@ final class AgentsListTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-dev.grouping", "state"]
-        app.launch()
+        app.launchJarvis()
         see(filter("all"), "the quick filters", timeout: 15)
         // 已看 is the last section, under every other agent (~120 in the mock).
         for _ in 0..<20 where !(header("已看").exists && header("已看").isHittable) { app.swipeUp(velocity: .fast) }

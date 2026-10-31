@@ -22,7 +22,7 @@ final class AssistantTopBarTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant"]
             + (open.map { ["-openAssistant", $0] } ?? ["-newAssistant", "YES"]) + extra
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

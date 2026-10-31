@@ -108,6 +108,7 @@ struct ImageViewing: Identifiable {
 }
 
 struct UserBubble: View, Equatable {
+    @Environment(\.shellChat) private var shellChat
     var item: Item
     /// Only the message itself: the chat page re-evaluates its body on every hub push, and without this every row on
     /// screen (and in the lazy list's buffer) ran its body again too (about 45 a push on a long Jarvis conversation).
@@ -133,10 +134,10 @@ struct UserBubble: View, Equatable {
                     Spacer(minLength: 48)
                     Text(shown)
                         .font(Theme.Font.body).lineHeight(.body)
-                        .foregroundStyle(Theme.userBubbleText)
+                        .foregroundStyle(Theme.userBubbleText(shell: shellChat))
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.vertical, Theme.Space.m)
-                        .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                        .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                         .messageLongPress(id: item.id)
                 }
             }
@@ -217,6 +218,7 @@ struct PeerMessage: View {
 /// quiet clock while the request runs, the clock and 连上后自动发送 while it waits for the network (Outbox.swift),
 /// and a red "重发" when it failed.
 struct PendingBubble: View {
+    @Environment(\.shellChat) private var shellChat
     var msg: PendingMessage
     var retry: () -> Void
     var discard: () -> Void
@@ -260,10 +262,10 @@ struct PendingBubble: View {
                 }
                 Text(ContextRef.parse(msg.text).rest)
                     .font(Theme.Font.body).lineHeight(.body)
-                    .foregroundStyle(Theme.userBubbleText)
+                    .foregroundStyle(Theme.userBubbleText(shell: shellChat))
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.m)
-                    .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                    .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {
@@ -278,6 +280,7 @@ struct PendingBubble: View {
 
 /// Several messages of a finished turn as one input: one bubble, the messages separated by short light rules.
 struct MergedUserBubble: View {
+    @Environment(\.shellChat) private var shellChat
     var items: [Item]
 
     var body: some View {
@@ -287,15 +290,15 @@ struct MergedUserBubble: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
                     if n > 0 {
-                        Capsule().fill(Theme.userBubbleText.opacity(0.22)).scaledFrame(width: Theme.Size.wellL, height: Theme.Size.lineMedium)
+                        Capsule().fill(Theme.userBubbleText(shell: shellChat).opacity(0.22)).scaledFrame(width: Theme.Size.wellL, height: Theme.Size.lineMedium)
                             .frame(maxWidth: .infinity) // centered in the bubble
                     }
-                    Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText)
+                    Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shellChat))
                 }
             }
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
-            .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
+            .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
             .messageLongPress(id: items.first?.id ?? "")
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

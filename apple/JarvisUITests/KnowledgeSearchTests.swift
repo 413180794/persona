@@ -14,7 +14,7 @@ final class KnowledgeSearchTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
             + "&token=" + token.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistantPage", "knowledge"]
-        app.launch()
+        app.launchJarvis()
 
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 15), "no search field:\n\(app.debugDescription)")

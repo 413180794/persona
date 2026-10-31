@@ -2,6 +2,7 @@ import SwiftUI
 import VisionKit
 
 struct SettingsView: View {
+    @Environment(\.shell) private var shell
     @Environment(AppModel.self) private var model
     @State private var confirmUnpair = false
     @State private var showPair = false
@@ -128,7 +129,17 @@ struct SettingsView: View {
                 }
             }
             .themedPage()
-            .navigationTitle("设置")
+            .toolbar {
+                    // As a sheet over the shell (docs/ios.md「新外壳」): ChatGPT's × to close it.
+                    if shell != nil {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { model.shellSettings = false } label: { Label("关闭", systemImage: Theme.Icon.close) }
+                                .foregroundStyle(Color.primary)
+                                .accessibilityIdentifier("settings-close")
+                        }
+                    }
+                }
+                .navigationTitle("设置")
             .task { await model.refreshAssistant() }
             // Measured each time the page shows and whenever a page closes (back from 存储空间 after clearing; in the
             // split the list never leaves the screen).

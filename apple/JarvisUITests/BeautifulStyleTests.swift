@@ -19,7 +19,7 @@ final class BeautifulStyleTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-ui.style", style, "-tab", "dev",
                                "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

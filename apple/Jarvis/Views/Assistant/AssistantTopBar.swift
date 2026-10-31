@@ -7,6 +7,8 @@ import SwiftUI
 /// the name pill shows the spinner and 等待网络 / 连接中… / 更新中….
 struct AssistantTopBar: View {
     @Environment(AppModel.self) private var model
+    /// In the shell (docs/ios.md「新外壳」) the middle is the 聊天 | 工作 switch; its 聊天 opens this bar's menu.
+    @Environment(\.shell) private var shell
     /// The conversation on screen; nil on the new-conversation page.
     var key: SessionKey?
     /// The sidebar is a column beside the conversation (a wide display): the button shows or hides it.
@@ -63,7 +65,39 @@ struct AssistantTopBar: View {
         .task(id: machineID) { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant) }
     }
 
-    private var bar: some View {
+    @ViewBuilder private var bar: some View {
+        if shell != nil { shellBar } else { classicBar }
+    }
+
+    /// ChatGPT's top bar: ☰ (a dot while the inbox has something for the user), the switch, 新对话.
+    private var shellBar: some View {
+        @Bindable var model = model
+        let link = model.connection.shown
+        return HStack(alignment: .top) {
+            ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "assistant-sidebar-button",
+                              dot: InboxStore.shared.actionCount > 0, action: openSidebar)
+            Spacer(minLength: Theme.Space.s)
+            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { menuItems(link) }
+            Spacer(minLength: Theme.Space.s)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: "新对话", id: "assistant-new", action: newConversation)
+                .disabled(key == nil)
+                .opacity(key == nil ? 0.4 : 1)
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.xxs)
+        .frame(height: Self.height, alignment: .top)
+        .background(alignment: .top) {
+            GeometryReader { g in
+                let solid = g.safeAreaInsets.top + Self.height - 6
+                TopFog(solidHeight: solid, fadeHeight: Self.fade)
+                    .frame(width: g.size.width, height: solid + Self.fade)
+                    .offset(y: -g.safeAreaInsets.top)
+            }
+        }
+        .connectionDetails($showLink)
+    }
+
+    private var classicBar: some View {
         HStack(alignment: .top) {
             GlassEffectContainer {
                 circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {

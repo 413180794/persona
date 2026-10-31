@@ -19,7 +19,7 @@ final class FileViewerUITests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", widget] + extra
-        app.launch()
+        app.launchJarvis()
         return app
     }
 
@@ -84,7 +84,7 @@ final class FileViewerPerfTests: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",
                                    "-openFile", "/Users/me/code/weather/" + file, "-showFilePerf", "YES", "-showFileAutoScroll", "YES"] + extra
-            app.launch()
+            app.launchJarvis()
             let view = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ["file-code", "file-markdown"])).firstMatch
             XCTAssertTrue(view.waitForExistence(timeout: 30), "\(file) did not open")
             // The app scrolls itself (`-showFileAutoScroll`): no XCUITest gestures while it measures.

@@ -86,6 +86,8 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismissChat
     /// In the detail column of a split (iPhone Duo open): the list is beside the chat, the tab bar stays.
     @Environment(\.splitDetail) private var split
+    /// The Jarvis conversation in the shell (docs/ios.md「新外壳」).
+    @Environment(\.shellChat) private var shellChat
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
     @State private var barsVertical = false
     /// The slim header's height while the actions are in the side column (`sideHeader`).
@@ -946,7 +948,8 @@ struct ChatView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
-                if viewing == nil, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
+                // In the shell the modes are in the composer's gauge menu (ShellComposerBar).
+                if viewing == nil, !shellChat, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
@@ -1988,6 +1991,7 @@ struct Composer: View, Equatable {
     }
 
     @Environment(AppModel.self) private var model
+    @Environment(\.shellChat) private var shellChat
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?
@@ -2069,8 +2073,24 @@ struct Composer: View, Equatable {
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
-            // The BeautifulUI style's prompt bar; every other style keeps the original input line.
-            if AppStyle.current.usesBeautifulUI {
+            if shellChat {
+                // The shell's composer (docs/ios.md「新外壳」), whatever the style.
+                ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? "问 \(model.persona.name)"),
+                                 text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
+                                 hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
+                                 stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                                 modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
+                                 send: { Task { await sendText(text) } }) {
+                    Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
+                    }
+                    Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+                } modes: {
+                    SessionModesMenu(key: key, session: model.session(key))
+                }
+            } else if AppStyle.current.usesBeautifulUI {
+                // The BeautifulUI style's prompt bar; every other style keeps the original input line.
                 PromptComposer(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
@@ -2108,7 +2128,7 @@ struct Composer: View, Equatable {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button { showCamera = true } label: { Label("拍照", systemImage: "camera") }
+                        Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Section("快捷指令") {

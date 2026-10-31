@@ -14,7 +14,7 @@ final class MessageMenuTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", "jarvis://pair?url=\(url)&token=mock", "-tab", "dev",
                                "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

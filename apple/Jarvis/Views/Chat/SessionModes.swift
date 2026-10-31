@@ -106,6 +106,40 @@ struct SessionModeBar: View {
     }
 }
 
+/// The shell composer's gauge menu for a running conversation (docs/ios.md「新外壳」): the same two choices as
+/// `SessionModeBar`, as pickers in one menu.
+struct SessionModesMenu: View {
+    @Environment(AppModel.self) private var model
+    let key: SessionKey
+    var session: Session?
+
+    var body: some View {
+        let mode = session?.permissionMode
+        let effort = session?.effort
+        Picker(selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
+            ForEach(SessionModes.switchableModes + (mode.flatMap { m in SessionModes.switchableModes.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
+                Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+            }
+        } label: {
+            Label("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
+        }
+        .pickerStyle(.menu)
+        Picker(selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
+            ForEach(SessionModes.effortLevels) { o in
+                Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+            }
+        } label: {
+            Label("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")", systemImage: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort)
+        }
+        .pickerStyle(.menu)
+    }
+
+    private func change(mode: String? = nil, effort: String? = nil) {
+        guard mode != session?.permissionMode || effort != session?.effort else { return }
+        Task { await model.setModes(key, permissionMode: mode, effort: effort) }
+    }
+}
+
 /// One tappable chip of `SessionModeBar` / the assistant's starter row.
 struct ModeChip: View {
     var symbol: String

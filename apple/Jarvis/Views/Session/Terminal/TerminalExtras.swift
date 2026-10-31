@@ -194,7 +194,7 @@ struct TerminalSettingsView: View {
                     Label("双指上下滑：切换到相邻的空间", systemImage: Theme.Icon.upDown)
                     Label("双击终端：粘贴剪贴板", systemImage: Theme.Icon.paste)
                     Label("长按：选择、拷贝", systemImage: Theme.Icon.insert)
-                    Label("听写：键盘上的麦克风", systemImage: "mic")
+                    Label("听写：键盘上的麦克风", systemImage: Theme.Icon.dictate)
                 }
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)

@@ -34,7 +34,7 @@ final class LongSessionTests: XCTestCase {
         // The default style: under BeautifulUI (left set by another test) the steps fold into chips and none shows.
         app.launchArguments = ["-pairURL", pair, "-ui.style", "glass", "-tab", "dev", "-openSession", session]
         let opened = Date.now
-        app.launch()
+        app.launchJarvis()
 
         let answer = app.staticTexts["构建脚本整理完了：650 个步骤都过了一遍。"]
         XCTAssertTrue(answer.waitForExistence(timeout: 20), "the chat did not open:\n\(app.debugDescription)")

@@ -103,6 +103,8 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
 /// (2026-10-31): nothing here reads the sessions.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
+    /// The shell (docs/ios.md「新外壳」): its ☰ and 聊天 | 工作 switch take the navigation bar.
+    @Environment(\.shell) private var shell
     @State private var path = NavigationPath()
     /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
     /// page goes back to it instead of stacking another copy.
@@ -150,10 +152,16 @@ struct ChatsView: View {
                     DispatchQueue.main.async { query = q }
                 }
                 .toolbar {
-                    ToolbarItem(placement: .principal) { ConnectionTitle() }
-                    ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
+                    if shell != nil {
+                        // The shell's own bar floats over this one (WorkTopBar): the bar stays for the search field.
+                        ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
+                            .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .principal) { ConnectionTitle() }
+                        ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
+                        }
                     }
                 }
                 .sheet(isPresented: $showNew) {
@@ -162,6 +170,7 @@ struct ChatsView: View {
                         openFromList(session.key)
                     }
                 }
+                .onChange(of: path.isEmpty, initial: true) { _, root in shell?.workAtRoot = root }
                 .onChange(of: path) { _, p in
                     spaceAt = spaceAt.filter { $0.key < p.count }
                     if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
@@ -187,6 +196,13 @@ struct ChatsView: View {
             SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
                              message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
+        .overlay(alignment: .top) {
+            if let shell, path.isEmpty {
+                WorkTopBar(shell: shell, menuActions: menuActions) { showNew = true }
+                    .transition(.opacity)
+            }
+        }
+        .animation(Theme.Motion.state, value: path.isEmpty)
         .environment(\.openSpace) { space in
             if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
         }
@@ -1302,3 +1318,35 @@ private struct SearchCloseProbe: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) { watcher.view = uiView }
 }
 #endif
+
+/// The 工作 page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 聊天's, in the same places,
+/// over the navigation bar (kept for its search field); on the right the list's options and 新建会话.
+struct WorkTopBar: View {
+    @Environment(AppModel.self) private var model
+    let shell: ShellState
+    var menuActions: AgentsListMenu.Actions
+    var newSession: () -> Void
+
+    var body: some View {
+        @Bindable var model = model
+        HStack(alignment: .top, spacing: Theme.Space.s) {
+            ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "work-sidebar-button",
+                              dot: InboxStore.shared.actionCount > 0) { shell.drawer.open() }
+            Spacer(minLength: 0)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "work-new", action: newSession)
+        }
+        .overlay(alignment: .top) {
+            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { EmptyView() }
+        }
+        .overlay(alignment: .topTrailing) {
+            // The list's options (分组, 显示, 机器…) just left of 新建会话.
+            AgentsListMenu(actions: menuActions)
+                .foregroundStyle(Color.primary)
+                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                .surface(interactive: true, in: .circle)
+                .offset(x: -(Theme.Size.tapTarget + Theme.Space.s))
+        }
+        .padding(.horizontal, Theme.Space.l)
+        .padding(.top, Theme.Space.xxs)
+    }
+}

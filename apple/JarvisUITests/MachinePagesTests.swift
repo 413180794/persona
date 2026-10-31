@@ -32,7 +32,7 @@ final class MachinePagesTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // Nothing kept from an earlier run: the last dev chat (reopened at launch), 新对话's last machine and launcher. The argument domain wins over what the app saves, so only for values the test never changes.
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-newChat.machine", "macbook", "-launcher.macbook", ""] + args
-        app.launch()
+        app.launchJarvis()
     }
 
     private func attachment(_ a: XCTAttachment, _ name: String) -> XCTAttachment {

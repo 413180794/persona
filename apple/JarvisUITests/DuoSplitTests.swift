@@ -15,7 +15,7 @@ final class DuoSplitTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES"]
-        app.launch()
+        app.launchJarvis()
         guard app.windows.firstMatch.frame.width > 600 else { throw XCTSkip("not a split: needs iPhone Duo open") }
     }
 

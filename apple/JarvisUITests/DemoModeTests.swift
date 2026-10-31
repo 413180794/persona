@@ -117,7 +117,7 @@ final class DemoModeTests: XCTestCase {
     @MainActor func testWalkThroughAndLeave() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-dev.openChat", "", "-openAgentsFresh", "YES"]
-        app.launch()
+        app.launchJarvis()
 
         // The pairing page: the way in, on one line.
         let demo = see(app.buttons["welcome.demo"], "体验模式 on the pairing page", timeout: 15)
@@ -268,7 +268,7 @@ final class DemoModeTests: XCTestCase {
         see(app.buttons["welcome.demo"], "the pairing page after leaving")
         app.terminate()
         app.launchArguments = ["-dev.openChat", ""]
-        app.launch()
+        app.launchJarvis()
         see(app.buttons["welcome.demo"], "the pairing page after a relaunch", timeout: 15)
     }
 
@@ -276,12 +276,12 @@ final class DemoModeTests: XCTestCase {
     @MainActor func testStaysAcrossLaunches() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-dev.openChat", ""]
-        app.launch()
+        app.launchJarvis()
         see(app.buttons["welcome.demo"], "体验模式 on the pairing page", timeout: 15).tap()
         see(text(Self.firstAgent), "the demo's agents")
         app.terminate()
         app.launchArguments = ["-dev.openChat", ""]
-        app.launch()
+        app.launchJarvis()
         see(text(Self.firstAgent), "the demo after a relaunch", timeout: 15)
         tab("设置")
         let leave = app.buttons["settings.leaveDemo"]

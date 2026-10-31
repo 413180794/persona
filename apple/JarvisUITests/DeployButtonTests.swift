@@ -12,7 +12,7 @@ final class DeployButtonTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-dev.openChat", ""]
-        app.launch()
+        app.launchJarvis()
         let deploy = app.buttons["重新部署"]
         XCTAssertTrue(deploy.waitForExistence(timeout: 15), "no 重新部署:\n\(app.debugDescription)")
         if !deploy.isHittable { app.swipeUp() }

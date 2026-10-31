@@ -14,7 +14,7 @@ final class TerminalKeysTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror",
                                "-terminalKeys", "esc,tab,ctrlc,shortcuts,paste,alt,shift,pad"] // alt and ⇧ are off by default
-        app.launch()
+        app.launchJarvis()
 
         func sent() -> [[String: String]] {
             guard let data = try? Data(contentsOf: URL(string: hub + "/mock/keys")!),
@@ -72,7 +72,7 @@ final class TerminalKeysTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
-        app.launch()
+        app.launchJarvis()
         let screen = app.descendants(matching: .any)["terminal-screen"]
         XCTAssertTrue(screen.waitForExistence(timeout: 15), "no terminal:\n\(app.debugDescription)")
         sleep(2)
@@ -109,7 +109,7 @@ final class TerminalKeysTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "field", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
-        app.launch()
+        app.launchJarvis()
         let bolt = app.buttons["快捷命令"]
         XCTAssertTrue(bolt.waitForExistence(timeout: 15), "no shortcuts button:\n\(app.debugDescription)")
         func keysSent() -> [[String: Any]] {

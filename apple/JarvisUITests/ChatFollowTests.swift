@@ -24,7 +24,7 @@ final class ChatFollowTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", ""] + open
-        app.launch()
+        app.launchJarvis()
         return app
     }
 
@@ -182,7 +182,7 @@ final class ChatFollowTests: XCTestCase {
         func open(_ args: [String]) -> XCUIApplication {
             let app = XCUIApplication()
             app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", ""] + args
-            app.launch()
+            app.launchJarvis()
             return app
         }
         func real(_ app: XCUIApplication, _ name: String, grows: Bool) {

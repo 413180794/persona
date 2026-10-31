@@ -18,7 +18,7 @@ final class SendSafetyTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

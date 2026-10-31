@@ -10,7 +10,7 @@ final class SwipeBackTests: XCTestCase {
         }
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session] + extra
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

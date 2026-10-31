@@ -18,7 +18,7 @@ final class AssistantProfileTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES"]
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

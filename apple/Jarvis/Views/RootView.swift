@@ -5,6 +5,16 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     /// The system's text size, before 小 / 标准 / 大 moves it.
     @Environment(\.dynamicTypeSize) private var systemTypeSize
+    @Environment(\.horizontalSizeClass) private var widthClass
+
+    /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless 设置 › 外观 › 旧布局 is on.
+    private var usesShell: Bool {
+        #if os(iOS)
+        return !model.oldLayout && widthClass == .compact
+        #else
+        return false
+        #endif
+    }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -12,7 +22,11 @@ struct RootView: View {
         #endif
         Group {
             if model.isPaired {
+                #if os(iOS)
+                if usesShell { ShellView() } else { RootTabs() }
+                #else
                 RootTabs()
+                #endif
             } else {
                 WelcomeView()
             }

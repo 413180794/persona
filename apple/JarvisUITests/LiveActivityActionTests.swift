@@ -12,7 +12,7 @@ final class LiveActivityActionTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-showFleetSample", "needsYou"]
-        app.launch()
+        app.launchJarvis()
         sleep(4)
         XCUIDevice.shared.press(.home)
         sleep(1)

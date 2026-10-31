@@ -1,6 +1,6 @@
 import SwiftUI
 
-@MainActor private final class InboxAccountState: ObservableObject {
+@MainActor final class InboxAccountState: ObservableObject {
     @Published var accounts = StateCache.load("mail-accounts", as: [MailAccount].self) ?? []
 }
 
@@ -11,11 +11,38 @@ import SwiftUI
 /// (飞书, one mail account) and kind (私聊, @我, 群聊); a row swipes away as 已处理, and the done ones stay at the bottom
 /// for a few days in case of a slip.
 struct InboxView: View {
+    @State private var path = NavigationPath()
+    @StateObject private var accountState = InboxAccountState()
+
+    var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("InboxView")
+        #endif
+        SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accountState.accounts)) {
+            InboxPage(path: $path, accountState: accountState)
+        } empty: {
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
+        }
+        .environment(\.feishuOpen) { path.append($0) }
+        .feishuHandlesLinks { path.append($0) }
+    }
+}
+
+extension InboxView {
+    /// A mail account's short name in the filters (the Mac's inbox uses it too).
+    static func short(_ email: String) -> String { InboxPage.short(email) }
+}
+
+/// The inbox's page itself, in whatever stack shows it: 收件箱's own (InboxView), or the shell's 聊天 page (pushed from
+/// the drawer, docs/ios.md「新外壳」), which passes `embedded` so the page brings its destinations and link handling.
+struct InboxPage: View {
     @Environment(AppModel.self) private var model
+    @Binding var path: NavigationPath
+    @ObservedObject var accountState: InboxAccountState
+    var embedded = false
     @AppStorage("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
     @AppStorage("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
     @State private var query = ""
-    @StateObject private var accountState = InboxAccountState()
     private var accounts: [MailAccount] {
         get { accountState.accounts }
         nonmutating set { accountState.accounts = newValue }
@@ -24,7 +51,6 @@ struct InboxView: View {
     @State private var expanded: Set<String> = ["action", "fyi"]
     @State private var composing: ComposeDraft?
     @State private var editingDraft: InboxItem? // 修改 on the AI 分身's draft
-    @State private var path = NavigationPath()
     private var store: InboxStore { .shared }
 
     private func matches(_ it: InboxItem) -> Bool {
@@ -46,10 +72,16 @@ struct InboxView: View {
     }
 
     var body: some View {
-        #if DEBUG || PERF_SIGNPOST
-        let _ = PerfTrace.body("InboxView")
-        #endif
-        SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accounts)) {
+        if embedded { // its destinations are the shell's (ShellDestinations)
+            page
+                .environment(\.feishuOpen) { path.append($0) }
+                .feishuHandlesLinks { path.append($0) }
+        } else {
+            page
+        }
+    }
+
+    private var page: some View {
             list
                 .navigationTitle("收件箱")
                 .navigationBarTitleDisplayMode(.inline)
@@ -83,11 +115,6 @@ struct InboxView: View {
                     }
                     #endif
                 }
-        } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.inbox, title: "选一件事", message: "左边列表里点一件事，详情会在这里打开。")
-        }
-        .environment(\.feishuOpen) { path.append($0) }
-        .feishuHandlesLinks { path.append($0) }
     }
 
     private var list: some View {
@@ -535,7 +562,7 @@ struct InboxDetailView: View {
 }
 
 /// The pages the inbox opens, in either layout (`SplitNavigation`).
-private struct InboxDestinations: ViewModifier {
+struct InboxDestinations: ViewModifier {
     var accounts: [MailAccount]
 
     func body(content: Content) -> some View {

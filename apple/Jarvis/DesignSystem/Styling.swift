@@ -140,6 +140,10 @@ extension View {
 }
 
 extension Theme {
+    /// The user's bubble: the style's, or the shell's neutral gray in its Jarvis conversation (docs/ios.md「新外壳」).
+    static func userBubbleFill(shell: Bool) -> AnyShapeStyle { shell ? AnyShapeStyle(Shell.userBubble) : userBubbleFill }
+    static func userBubbleText(shell: Bool) -> Color { shell ? .primary : userBubbleText }
+
     /// The color `themedGroupedPage()` paints: what floats over such a page (a composer) is backed with it, so text
     /// that scrolls under it at large sizes does not show through.
     static var groupedPage: Color { AppStyle.current.usesGlass ? Color(.systemGroupedBackground) : pageBackground }

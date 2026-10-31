@@ -18,7 +18,7 @@ final class CompactListShots: XCTestCase {
         app.launchArguments = ["-openWelcome", "YES", "-demo.on", "YES", "-tab", "dev", "-dev.openChat", "", "-openAgentsFresh", "YES",
                                "-dev.machineFilter", machine, "-dev.compact", compact ? "YES" : "NO", "-ui.textSize", size,
                                "-dev.grouping", grouping]
-        app.launch()
+        app.launchJarvis()
         XCTAssertTrue(app.buttons["agents.filter.all"].waitForExistence(timeout: 15), "the Agents list")
         sleep(2)
     }

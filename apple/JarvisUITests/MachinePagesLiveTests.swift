@@ -37,7 +37,7 @@ final class MachinePagesLiveTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + token
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", ""] + args
-        app.launch()
+        app.launchJarvis()
     }
 
     private func api(_ path: String) -> [String: Any] {

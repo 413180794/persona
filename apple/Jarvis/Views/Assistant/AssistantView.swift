@@ -8,7 +8,11 @@ import SwiftUI
 struct AssistantView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var widthClass
+    /// The ChatGPT-style shell (docs/ios.md「新外壳」): it owns the drawer, and pushes its pages here.
+    @Environment(\.shell) private var shell
     @State private var pending: PendingStart?
+    /// Pages pushed by value: the shell's 收件箱 and 机器 (and what they push themselves).
+    @State private var path = NavigationPath()
     @State private var startError: String?
     @State private var starterLauncher: String?
     @State private var showProfile = false
@@ -31,7 +35,9 @@ struct AssistantView: View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("AssistantView")
         #endif
-        if widthClass == .regular {
+        if shell != nil {
+            stack // the shell holds the drawer around both of its pages
+        } else if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.
             NavigationSplitView(columnVisibility: $columns) {
                 // The system sizes the column on iPhone Duo (and moves the divide onto the fold); iPad, as the other tabs.
@@ -68,7 +74,9 @@ struct AssistantView: View {
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
     private func toggleSidebar() {
-        if widthClass == .regular {
+        if let shell {
+            shell.drawer.open()
+        } else if widthClass == .regular {
             withAnimation(Theme.Motion.standard) { columns = columns == .detailOnly ? .all : .detailOnly }
         } else {
             drawer.open()
@@ -77,19 +85,28 @@ struct AssistantView: View {
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
     private var atRoot: Bool {
-        var pushed = showProfile || showKnowledge || showRoutines
+        var pushed = showProfile || showKnowledge || showRoutines || !path.isEmpty
         #if DEBUG
         pushed = pushed || showAvatars
         #endif
         return !pushed
     }
 
+    /// The drawer the page slides with: the shell's, or its own.
+    private var activeDrawer: AssistantDrawer { shell?.drawer ?? drawer }
+
     private var stack: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if let key = current, pending == nil {
                     ChatView(key: key, style: .assistant)
                         .id(key)
+                        .environment(\.shellChat, shell != nil)
+                } else if shell != nil {
+                    ShellHome(pending: pending, error: startError, launcher: $starterLauncher, mode: $starterMode,
+                              effort: $starterEffort, openInbox: { path.append($0) }) { text, images in
+                        Task { await start(text, images) }
+                    }
                 } else {
                     AssistantHome(pending: pending, error: startError, launcher: $starterLauncher, mode: $starterMode,
                                   effort: $starterEffort) { text, images in
@@ -110,10 +127,13 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
+            .modifier(ShellDestinations(path: $path, enabled: shell != nil))
+            .onChange(of: shell?.request?.serial, initial: true) { show(shell?.request?.page) }
+            .onChange(of: atRoot, initial: true) { _, root in shell?.chatAtRoot = root }
             // Opening a conversation from the profile (a run, a follow-up) shows it: back to the root. So does 问 Jarvis
             // from the knowledge base, even when its conversation is the one already open.
             .onChange(of: model.assistantCurrent) { backToRoot() }
-            .onChange(of: model.assistantReveal) { backToRoot(); drawer.close() }
+            .onChange(of: model.assistantReveal) { backToRoot(); activeDrawer.close() }
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
             // `-openAssistantSidebar YES`: the sidebar is out; `-showDrawerAutoDrag <rounds>`: scripted drags, measured
@@ -126,16 +146,40 @@ struct AssistantView: View {
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
-                if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { drawer.progress = 1 }
+                if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { activeDrawer.progress = 1 }
                 let rounds = UserDefaults.standard.integer(forKey: "showDrawerAutoDrag")
-                if rounds > 0 { Task { await DrawerAutoDrag(drawer: drawer).run(rounds: rounds) } }
+                if rounds > 0 { Task { await DrawerAutoDrag(drawer: activeDrawer).run(rounds: rounds) } }
+                // `-openShellPage inbox|machines|routines|knowledge|profile` (the new shell): that page pushed.
+                switch UserDefaults.standard.string(forKey: "openShellPage") {
+                case "inbox": show(.inbox)
+                case "machines": show(.machines)
+                case "routines": show(.routines)
+                case "knowledge": show(.knowledge)
+                case "profile": show(.profile)
+                default: break
+                }
             }
             #endif
             .task { await model.refreshAssistant() }
         }
     }
 
+    /// A page the shell asked for (the drawer, the home page): from the conversation's root, so back comes to it.
+    private func show(_ page: ShellPage?) {
+        guard let page else { return }
+        backToRoot()
+        switch page {
+        case .newConversation: newConversation()
+        case .profile: showProfile = true
+        case .routines: showRoutines = true
+        case .knowledge: showKnowledge = true
+        case .inbox: path.append(ShellRoute.inbox)
+        case .machines: path.append(ShellRoute.machines)
+        }
+    }
+
     private func backToRoot() {
+        if !path.isEmpty { path = NavigationPath() }
         showProfile = false
         showRoutines = false
         showKnowledge = false
@@ -347,7 +391,17 @@ struct TypingIndicator: View {
 struct StarterComposer: View {
     @Environment(AppModel.self) private var model
     var disabled: Bool
+    /// The shell's composer (docs/ios.md「新外壳」): the launcher, mode and effort are in its gauge menu.
+    var shell: ShellModes? = nil
     var send: (String, [ImagePayload]) -> Void
+
+    struct ShellModes {
+        @Binding var launcher: String?
+        @Binding var mode: String
+        @Binding var effort: String
+    }
+
+    @State private var launchers: [Launcher] = []
     @State private var text = ""
     @State private var picks: [PhotosPickerItem] = []
     @State private var images: [(UIImage, ImagePayload)] = []
@@ -359,20 +413,37 @@ struct StarterComposer: View {
 
     private var canSend: Bool { !disabled && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) }
 
+    private func submit() {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        send(t.isEmpty ? "请看图片" : t, images.map(\.1))
+        text = ""
+        images = []
+    }
+
+    /// A PhotosPicker inside a Menu never presents (the menu dismisses first): the buttons present it from here.
+    @ViewBuilder private var attachments: some View {
+        Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
+        Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+    }
+
     var body: some View {
         VStack(spacing: Theme.Space.s) {
             if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
             if !images.isEmpty { ComposerImages(images: $images) }
-            ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
-                        send: {
-                            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            send(t.isEmpty ? "请看图片" : t, images.map(\.1))
-                            text = ""
-                            images = []
-                        }) {
-                // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
-                Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+            if let shell {
+                ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
+                                 canSend: canSend, hasAttachments: !images.isEmpty, modesWarn: shell.mode == "bypassPermissions",
+                                 send: submit) {
+                    attachments
+                } modes: {
+                    StarterModesMenu(modes: shell, launchers: launchers)
+                }
+                .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID))?.filter(\.runsAssistant) ?? [] }
+            } else {
+                ComposerRow(placeholder: "问 \(model.persona.name)…", text: $text, selection: $selection, focused: $focused, canSend: canSend,
+                            send: submit) {
+                    attachments
+                }
             }
         }
         .photosPicker(isPresented: $showPhotos, selection: $picks, maxSelectionCount: 4, matching: .images)
@@ -591,5 +662,40 @@ struct StarterModelChip: View {
             ModeChip(symbol: Theme.Icon.model, text: current, tint: .secondary) // neutral, like the mode and effort chips beside it
         }
         .task { launchers = (try? await model.launchers(model.assistantConfig?.machineID ?? model.hubMachineID)) ?? [] }
+    }
+}
+
+/// The shell composer's gauge menu for a conversation not started yet: the launcher (model), the permission mode and
+/// the effort it starts with ("" keeps the launcher's own).
+struct StarterModesMenu: View {
+    @Environment(AppModel.self) private var model
+    var modes: StarterComposer.ShellModes
+    var launchers: [Launcher]
+
+    var body: some View {
+        if !launchers.isEmpty {
+            Picker(selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
+                ForEach(launchers) { l in
+                    Text(l.name).tag(l.name)
+                }
+            } label: {
+                Label("启动器", systemImage: Theme.Icon.model)
+            }
+            .pickerStyle(.menu)
+        }
+        Picker(selection: modes.$mode) {
+            Text("跟随启动器").tag("")
+            ForEach(SessionModes.switchableModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+        } label: {
+            Label("权限模式", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
+        }
+        .pickerStyle(.menu)
+        Picker(selection: modes.$effort) {
+            Text("跟随启动器").tag("")
+            ForEach(SessionModes.effortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+        } label: {
+            Label("思考强度", systemImage: SessionModes.effort(modes.effort)?.symbol ?? Theme.Icon.effort)
+        }
+        .pickerStyle(.menu)
     }
 }

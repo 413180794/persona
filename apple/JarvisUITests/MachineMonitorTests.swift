@@ -16,7 +16,7 @@ final class MachineMonitorTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", ""] + args
-        app.launch()
+        app.launchJarvis()
         return app
     }
 

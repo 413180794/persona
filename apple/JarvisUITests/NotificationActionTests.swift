@@ -12,7 +12,7 @@ final class NotificationActionTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-showTestNotification", "permission"]
-        app.launch()
+        app.launchJarvis()
 
         // The system's permission alert (worded in the simulator's language).
         let allowAlert = springboard.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch
