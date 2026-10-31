@@ -1,0 +1,739 @@
+[
+  {
+    "name": "mail_accounts",
+    "description": "List the mail accounts the user has configured (name, address, provider). Call this before searching or sending mail so you know which account_id to use.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mail_search",
+    "description": "Search mail. Returns message summaries (uid, subject, from, date, snippet). Use account_id from mail_accounts; omit it to search every account's inbox at once. For Gmail the query uses Gmail search syntax (from:, subject:, has:attachment, newer_than:7d); other providers treat it as a full-text search.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "description": "Account id from mail_accounts; omit to search all inboxes"
+        },
+        "mailbox": {
+          "type": "string",
+          "description": "Mailbox name, default INBOX"
+        },
+        "query": {
+          "type": "string",
+          "description": "Search text or Gmail query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results, default 20, max 200"
+        },
+        "before_uid": {
+          "type": "integer",
+          "description": "Return messages with UID lower than this, for paging"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mail_read",
+    "description": "Read one message in full: headers, plain text, HTML and the attachment list. Does not mark the message as read.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "uid": {
+          "type": "integer"
+        },
+        "mailbox": {
+          "type": "string",
+          "description": "Mailbox name, default INBOX"
+        }
+      },
+      "required": [
+        "account_id",
+        "uid"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mail_send",
+    "description": "Send an email from one of the user's accounts. The user must approve each send on their phone before it goes out, so fill in a clear subject and body. To reply, pass in_reply_to with the original Message-ID and references with the original References chain plus that Message-ID.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          }
+        },
+        "cc": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          }
+        },
+        "bcc": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/address"
+          }
+        },
+        "subject": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "description": "Plain-text body"
+        },
+        "html": {
+          "type": "string",
+          "description": "Optional HTML body"
+        },
+        "in_reply_to": {
+          "type": "string",
+          "description": "Message-ID being replied to"
+        },
+        "references": {
+          "type": "string",
+          "description": "Space-separated Message-IDs from the original thread"
+        }
+      },
+      "required": [
+        "account_id",
+        "to",
+        "subject",
+        "text"
+      ],
+      "$defs": {
+        "address": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "email"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "ask_user",
+    "description": "Ask the user one or more multiple-choice questions on their iPhone (a card in this conversation plus a push notification) and wait for the answers. Use it to confirm anything risky (sending messages / email for them, deleting, changing live systems) or to let them pick between options. AskUserQuestion does not work here; use this instead. The user can also type a free-form answer. Waits up to 30 minutes.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "questions"
+      ],
+      "properties": {
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": [
+              "question",
+              "options"
+            ],
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "header": {
+                "type": "string",
+                "description": "short label, ≤12 chars"
+              },
+              "multiSelect": {
+                "type": "boolean"
+              },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "notify_user",
+    "description": "Send the user a push notification right now (works when the app is closed). Tapping it opens this conversation. Use for results of scheduled runs and anything time-sensitive; don't notify for ordinary replies (they get one automatically).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "title",
+        "body"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "schedule_followup",
+    "description": "Wake yourself up later: at the given time Jarvis sends `prompt` into this conversation (or a new one) as if the user wrote it, you do the work, and the user gets a push with your answer. Use for \"remind me…\", \"check again in an hour\", meeting prep 10 minutes before a meeting, watching something until it changes. `at` is RFC 3339 (2026-10-27T09:50:00+08:00) or relative (\"30m\", \"2h\", \"1d\"). For something to do again and again (a patrol every 30 minutes) pass `every` (\"30m\", \"2h\", at least 5m) once: Jarvis repeats it by itself and the user sees, edits and stops it in the app; never schedule the next run from inside a run. Which model and permission mode a task runs with is the user's choice in the app.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "prompt"
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "description": "when (the first run, with every); default with every: one interval from now"
+        },
+        "every": {
+          "type": "string",
+          "description": "repeat this often, e.g. 30m"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "what to do then, self-contained"
+        },
+        "title": {
+          "type": "string",
+          "description": "short label shown in the app"
+        },
+        "new_conversation": {
+          "type": "boolean",
+          "description": "start a fresh conversation instead of continuing this one"
+        }
+      }
+    }
+  },
+  {
+    "name": "schedule_routine",
+    "description": "Set up a recurring routine: every day (or on some weekdays) at a time, Jarvis starts a new conversation with `prompt`, you do the work, and the user gets a push with your answer. Use for \"每天 9 点给我早报\", \"每周五下午起草周报\". For one-off reminders use schedule_followup. Pass `id` (from list_followups) to change an existing routine: only the fields you give change; `enabled: false` pauses it. Times are in the user's time zone.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "to change an existing routine"
+        },
+        "title": {
+          "type": "string",
+          "description": "short name shown in the app, e.g. 早报"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "what to do each time, self-contained"
+        },
+        "time": {
+          "type": "string",
+          "description": "HH:MM, 24-hour"
+        },
+        "weekdays": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "description": "1 = Monday … 7 = Sunday; omit or empty = every day"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_routine",
+    "description": "Delete a scheduled task (routine or follow-up) by id (from list_followups). Confirm with the user first unless they asked for it.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "list_followups",
+    "description": "List every scheduled task (with ids): follow-ups that have not run yet, repeating ones, daily routines.",
+    "input_schema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "cancel_followup",
+    "description": "Cancel a scheduled follow-up or a repeating task by id (from list_followups).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "agents_list",
+    "description": "The Claude Code / Codex agents running on the user's computers (herdr), with their state: needs_you (waiting for an answer / approval), working, unread (finished, result not looked at), idle. Each line has machine, session id, project, title, last update and the last thing the agent said. Much faster and more accurate than ssh + herdr.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "active",
+            "needs_you",
+            "working",
+            "unread",
+            "idle",
+            "all"
+          ],
+          "description": "default active = needs_you + working + unread"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "description": "filter by title / project / directory"
+        }
+      }
+    }
+  },
+  {
+    "name": "agent_read",
+    "description": "Read the recent conversation of one agent (from agents_list): the user's messages, what the agent said, tool calls in short form. `turns` = how many recent exchanges (default 2, max 10).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "machine",
+        "session_id"
+      ],
+      "properties": {
+        "machine": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "full id or its first 8 characters"
+        },
+        "turns": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "agent_send",
+    "description": "Send a message to an agent as the user would type it (answers its question, tells it to continue, gives new instructions). Queued if the agent is working. Only send what the user asked for.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "machine",
+        "session_id",
+        "text"
+      ],
+      "properties": {
+        "machine": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "agent_start",
+    "description": "Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first prompt. Use for real development work instead of doing it here. Returns the new session id.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "machine",
+        "cwd",
+        "prompt"
+      ],
+      "properties": {
+        "machine": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "absolute path or ~/…"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "launcher": {
+          "type": "string",
+          "description": "shell command that starts claude (default: the machine's default)"
+        }
+      }
+    }
+  },
+  {
+    "name": "inbox_draft",
+    "description": "Submit the reply you drafted for the inbox item this conversation was started for. It waits in the user's inbox; they read it and send it with one tap (you never send it yourself). `text` is the reply in the user's voice; `note` is one or two sentences on what you found and where, for the user to check the draft against. For a Feishu sheet / Base item, `changes` proposes moving rows' status (ref, field and one of the values the item lists); they are made when the user sends. Call it once, at the end.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "ref",
+              "field",
+              "value"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "lark_agent_reply",
+    "description": "Answer the Feishu /agent request this conversation was started for: the hub posts `text` (Markdown) as the user's reply to the request, in its thread if it was asked in one, with a footer saying an agent wrote it. Call it once, at the end, with the answer for the people in that chat.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "kb_search",
+    "description": "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "boolean",
+          "description": "also search the message archive (default true)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "default 40"
+        }
+      }
+    }
+  },
+  {
+    "name": "kb_list",
+    "description": "List knowledge-base entities of one kind ranked by importance (P0 first), relevance to the user, recency: projects (short = a feature / launch, long = a team mission), chats, people, docs, meetings, events. Optional tag filter.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "projects",
+            "chats",
+            "people",
+            "docs",
+            "meetings",
+            "events"
+          ]
+        },
+        "tag": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "default 30"
+        }
+      }
+    }
+  },
+  {
+    "name": "kb_get",
+    "description": "Read one entity: its metadata (links to people / chats / projects, tags), compressed context (summary.md), a project's timeline, a chat's messages of the last 7 days. id from kb_list / kb_search (a project also by name).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "projects",
+            "chats",
+            "people",
+            "docs",
+            "meetings",
+            "events"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "kb_update",
+    "description": "Write to the knowledge base: create or change a project (name, project_kind short|long, status, goal, my_role, aliases, link chats / people, code dirs as \"\u003cmachine\u003e:\u003cpath\u003e\" so Agents there belong to it, append a timeline `log` line, replace its summary), or tag / annotate a chat, person, doc, meeting, event (importance P0–P3, relevance 0–100, tags, note, link projects). Tags set here are kept over the automatic ones. Use it whenever a conversation settles something about a project or person.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "projects",
+            "chats",
+            "people",
+            "docs",
+            "meetings",
+            "events"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "description": "id, or a project's name (created when new)"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project_kind": {
+          "type": "string",
+          "enum": [
+            "short",
+            "long"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused",
+            "done"
+          ]
+        },
+        "goal": {
+          "type": "string"
+        },
+        "my_role": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "importance": {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "relevance": {
+          "type": "integer"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Markdown, replaces summary.md"
+        },
+        "log": {
+          "type": "string",
+          "description": "one line appended to a project's timeline"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "people": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dirs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "lark_chats",
+    "description": "The user's Feishu (Lark) chats from their own account: unread ones by default, or the ones that @mention them, or the latest. Each line has the chat id (for lark_messages; the lark-connector skill calls it feedId), name, unread count, @me, muted, last message preview and time.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "type": "string",
+          "enum": [
+            "unread",
+            "at_me",
+            "recent"
+          ],
+          "description": "default unread"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "default 30"
+        }
+      }
+    }
+  },
+  {
+    "name": "lark_messages",
+    "description": "Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. Pass `before` (a message position from an earlier page) to read further back. Reading does not mark anything as read.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "chat_id"
+      ],
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "default 40, max 100"
+        },
+        "before": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "lark_search",
+    "description": "Search the user's Feishu: messages, docs, people, chats, calendar events, meeting minutes, tasks, mail.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "messages",
+            "docs",
+            "people",
+            "chats",
+            "calendar",
+            "minutes",
+            "todos",
+            "mail"
+          ],
+          "description": "default messages"
+        }
+      }
+    }
+  }
+]
