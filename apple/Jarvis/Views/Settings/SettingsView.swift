@@ -485,7 +485,11 @@ struct PairView: View {
             Haptics.success()
             dismiss()
         } catch {
+            #if os(macOS)
+            if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上）。" }
+            #else
             if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认手机能访问这个地址（比如在同一个网络或 VPN 上）。" }
+            #endif
             Haptics.error()
         }
     }

@@ -701,6 +701,10 @@ final class AppModel {
 
     private func confirm(_ summary: String) async -> Bool {
         Haptics.attention()
+        #if os(macOS)
+        // The alert hangs off the main window: bring it up (reopen it if it was closed) so the question is seen.
+        MacShellState.shared.showMain()
+        #endif
         return await withCheckedContinuation { cont in
             pendingConfirmation = PhoneConfirmation(summary: summary) { cont.resume(returning: $0) }
         }

@@ -185,6 +185,9 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 窗口里的对话是这个窗口的第一页（`SplitDetail(isFirstPage: true)`），对话页自己画的返回箭头不显示。
 Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（`MacTerminalWindow`，`WindowGroup(id: "terminal", for: SessionKey.self)`，标题「终端 · Agent 名」），
 和对话里「终端」浮层是同一个面板，⌘W 关；只有 herdr 里的 Agent 可点。截图：`-openTerminalWindow <m>/<s>`（存成 `<名字>.chat.png`）。
+菜单要开的窗口（对话、终端）由菜单栏图标上的 `MacWindowOpener` 打开：主窗口关了、只剩一个对话窗口时也能开（原来挂在主窗口上，主窗口一关就点了没反应，两个截图参数都验过）。
+「下一个需要你的」、⌘[ / ⌘] 打开的对话在主窗口里，先把主窗口叫出来（关了就重开，最小化了就还原）。终端窗口顶上的手柄点了关窗口。
+手机工具的写操作确认（「Claude 想在这台 Mac 上执行」）挂在主窗口上，弹之前先把主窗口叫出来；没连真 hub，没实际触发过。
 
 ## 显示 / 前往菜单（Mac）
 

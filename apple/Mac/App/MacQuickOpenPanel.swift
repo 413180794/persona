@@ -221,6 +221,7 @@ extension MacShellState {
     func showMain() {
         NSApp.activate()
         if let w = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true }) {
+            if w.isMiniaturized { w.deminiaturize(nil) }
             w.makeKeyAndOrderFront(nil)
         } else {
             openMain?()

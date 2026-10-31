@@ -105,7 +105,11 @@ struct ConnectionDetails: View {
     static func explanation(_ phase: ConnectionStatus.Phase, stalled: Bool) -> String {
         switch phase {
         case .online: "消息和状态都是最新的。"
+        #if os(macOS)
+        case .waitingForNetwork: "这台 Mac 现在没有网络。网络恢复后会自动连上，期间写的消息会自动发出去。"
+        #else
         case .waitingForNetwork: "iPhone 现在没有网络。网络恢复后会自动连上，期间写的消息会自动发出去。"
+        #endif
         case .connecting:
             stalled ? "网络很慢：hub 好几秒没有回应了，正在等它。"
                 : "有网络，但连不上 hub（它所在的机器可能关机、休眠或断网）。会一直自动重试。"

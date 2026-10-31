@@ -38,8 +38,8 @@ struct MacOpenInWindowButton: View {
     }
 }
 
-/// Opens what the menus ask for (`MacShellState.chatWindow`): Commands have no `openWindow` of their own, the main
-/// window's view does it for them.
+/// Opens what the menus ask for (`MacShellState.chatWindow`): Commands have no `openWindow` of their own, the menu
+/// bar icon's view (always there, unlike the main window) does it for them.
 struct MacWindowOpener: ViewModifier {
     @Environment(\.openWindow) private var openWindow
 
@@ -67,7 +67,7 @@ struct MacTerminalWindow: View {
     var body: some View {
         Group {
             if let key {
-                TerminalPanel(key: key, switchTo: nil, grab: TerminalGrab(dragged: { _ in }, released: { _, _ in }, close: {}))
+                TerminalPanel(key: key, switchTo: nil, grab: TerminalGrab(dragged: { _ in }, released: { _, _ in }, close: { NSApp.keyWindow?.close() }))
                     .padding(Theme.Space.xs)
                     .navigationTitle("终端 · " + (model.session(key)?.displayTitle ?? key.sessionID))
             } else {

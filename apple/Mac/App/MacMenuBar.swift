@@ -53,6 +53,8 @@ struct MacMenuBarLabel: View {
         .accessibilityLabel(n > 0 ? "Jarvis，\(n) 个需要你" : "Jarvis")
         // Always there (unlike the main window): what reopens the main window for the Dock menu and notifications.
         .onAppear { MacShellState.shared.openMain = { openWindow(id: "main") } }
+        // Also always there: opens the windows the menus ask for, with or without a main window.
+        .modifier(MacWindowOpener())
     }
 }
 

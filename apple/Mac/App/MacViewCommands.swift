@@ -64,6 +64,8 @@ struct MacViewMenu: Commands {
         let current = MacShellState.shared.focusedChat(model).flatMap { model.session($0)?.assistant == true ? nil : $0 }
         if let next = MacViewCommands.neighbour(of: current, by: delta, in: model.allSessions, order: order) {
             MacShellState.shared.open(next, model)
+            // The chat shows in the main window: bring it up (a chat window may be the key one, or none open).
+            MacShellState.shared.showMain()
         }
     }
 }

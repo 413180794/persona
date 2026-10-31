@@ -39,8 +39,11 @@ private struct MacWindowNumberReader: NSViewRepresentable {
         var changed: (Int?) -> Void = { _ in }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            let n = window?.windowNumber
-            DispatchQueue.main.async { [weak self] in self?.changed(n) }
+            // Read on the next turn: a window not yet on screen can still report -1 here.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.changed(self.window.map(\.windowNumber).flatMap { $0 > 0 ? $0 : nil })
+            }
         }
     }
 }
