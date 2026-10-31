@@ -293,6 +293,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.launcherCheck(ctx, p.Name), nil
 	case "launchers.probe":
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
+	case "launchers.quota":
+		r, err := n.launcherQuota(ctx, p.Name)
+		return map[string]any{"quota": r}, err
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":

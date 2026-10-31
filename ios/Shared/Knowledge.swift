@@ -72,6 +72,7 @@ nonisolated struct KBDetail: Decodable, Sendable {
 nonisolated struct KBDetailResponse: Decodable, Sendable {
     var detail: KBDetail
     var agents: [Session]?
+    var matches: [KBMatch]?
 }
 
 /// A change made in the app; tagging set here is kept over the automatic one.
@@ -89,9 +90,70 @@ nonisolated struct KBUpdate: Encodable, Sendable {
     }
 }
 
+/// One entry a search found (`/api/v1/kb-search?results=1`): the entry, how many lines matched, the first few.
+nonisolated struct KBResult: Decodable, Identifiable, Hashable, Sendable {
+    var entry: KBEntry
+    var count: Int
+    var hits: [KBHit]?
+    var inName: Bool?
+    var id: String { entry.kind + "/" + entry.id }
+    enum CodingKeys: String, CodingKey {
+        case entry, count, hits
+        case inName = "in_name"
+    }
+}
+
+/// A place in an entry matching the search it was opened from; a message comes with the ones around it.
+nonisolated struct KBMatch: Decodable, Identifiable, Hashable, Sendable {
+    var path: String
+    var n: Int
+    var line: String
+    var day: String?
+    var before: [String]?
+    var after: [String]?
+    var id: String { path + "#\(n)" }
+    var hit: KBHit { KBHit(path: path, line: line, n: n) }
+}
+
+/// One day of a chat's archive.
+nonisolated struct KBDay: Decodable, Sendable {
+    struct Message: Decodable, Identifiable, Hashable, Sendable {
+        var n: Int
+        var text: String
+        var id: Int { n }
+    }
+    var day: String
+    var messages: [Message]
+    var prev: String?
+    var next: String?
+}
+
+/// An archived message, `14:03 张三: text` (continuation lines after a newline): when, who, what.
+nonisolated struct KBMessageLine: Hashable, Sendable {
+    var time: String
+    var sender: String
+    var text: String
+
+    init(_ raw: String) {
+        let t = raw.hasPrefix("- ") ? String(raw.dropFirst(2)) : raw
+        let parts = t.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+        if parts.count == 2, parts[0].count == 5, parts[0].dropFirst(2).first == ":", parts[0].first?.isNumber == true,
+           let colon = parts[1].range(of: ": ") {
+            time = String(parts[0])
+            sender = String(parts[1][..<colon.lowerBound])
+            text = String(parts[1][colon.upperBound...])
+        } else {
+            time = ""
+            sender = ""
+            text = t
+        }
+    }
+}
+
 nonisolated struct KBHit: Decodable, Hashable, Sendable {
     var path: String
     var line: String
+    var n: Int?
 
     /// The entry a hit is in: `chats/<id>/summary.md` → (chats, id), `docs/<id>.json` → (docs, id); nil for anything else.
     var entry: (kind: KBKind, id: String)? {
@@ -101,10 +163,16 @@ nonisolated struct KBHit: Decodable, Hashable, Sendable {
         return id.isEmpty ? nil : (kind, id)
     }
 
+    /// The day of a message hit ("2026-10-30"), nil for the other files.
+    var day: String? {
+        guard path.contains("/messages/") else { return nil }
+        return ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+    }
+
     /// Which file the line is from, said plainly.
     var source: String {
         let file = (path as NSString).lastPathComponent
-        if path.contains("/messages/") { return "聊天记录 · " + (file as NSString).deletingPathExtension }
+        if let day { return "聊天记录 · " + day }
         switch file {
         case "summary.md": return "档案"
         case "log.md": return "时间线"
@@ -157,8 +225,20 @@ extension APIClient {
     func kbList(_ kind: KBKind, tag: String? = nil) async throws -> KBList {
         try await get("/api/v1/kb/\(kind.rawValue)", query: tag.map { ["tag": $0] } ?? [:])
     }
-    func kbDetail(_ kind: String, id: String) async throws -> KBDetailResponse {
-        try await get("/api/v1/kb/\(kind)/\(id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id)")
+    /// `query`: opened from a search, the places it is in come back as `matches`.
+    func kbDetail(_ kind: String, id: String, query: String? = nil) async throws -> KBDetailResponse {
+        try await get("/api/v1/kb/\(kind)/\(Self.kbID(id))", query: query.map { ["q": $0] } ?? [:])
+    }
+    func kbDay(chat: String, day: String) async throws -> KBDay {
+        try await get("/api/v1/kb/chats/\(Self.kbID(chat))/days/\(Self.kbID(day))")
+    }
+    func kbFind(_ q: String) async throws -> [KBResult] {
+        struct R: Decodable { var results: [KBResult] }
+        let r: R = try await get("/api/v1/kb-search", query: ["q": q, "results": "1"])
+        return r.results
+    }
+    nonisolated static func kbID(_ id: String) -> String {
+        id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id
     }
     func kbUpdate(_ kind: String, id: String, _ u: KBUpdate) async throws {
         _ = try await request("PUT", "/api/v1/kb/\(kind)/\(id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) ?? id)", body: u)

@@ -189,6 +189,8 @@ struct ModelLauncherDetailView: View {
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
+                // How much is left comes before trying it: it is why the page is opened more often.
+                LauncherQuotaSection(name: l.name)
                 availability(l)
                 // What the launcher really sets, once for the machines where it is the same.
                 ForEach(detailGroups(l), id: \.machines) { g in

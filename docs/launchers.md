@@ -62,6 +62,23 @@ stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.z
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Jarvis 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Jarvis 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
+| `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
 | `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Jarvis 管理的；每项带 `source` |
 
 「设置 › 助手」的启动器选择器和新对话的一样读最后这个接口，所以用的就是这里的数据；助手页有「管理启动器」。
+
+## 额度（2026-10-31）
+
+启动器页的「额度」读启动器的 Key 在网关那边还剩多少，支持 **relay-history** 和 **FAKEMODEL**（`server/internal/quota`）：
+
+- relay-history：`GET <网关>/me/usage?timezone=Asia/Shanghai`，用 Key 本身鉴权（relay-history 的 `docs/api-key-self-usage.md`），回 `service: relay-history` 才算。
+  取 Key 的预算（`budget`：累计 / 每周美元上限）、它能用的每个账号的窗口（5 小时 / 每周 / 每月…，按模型的窗口不列），和 Key 自己今日 / 本周 / 本月的用量。
+  同一 provider 的几个席位名字一样，用账号 ID 的后 6 位区分；同名窗口只留读数最全的那个（一个账号会报两遍 5 小时）；`traex_weekly` 这类带前缀的叫「每周」。
+  Key 的「额度可见性」是「不开放」时只显示这一句。
+- FAKEMODEL（Key 以 `fm_` 开头）：`POST /auth/key-login {"key"}` 换一个只读会话，`GET /api/quota`，用完 `POST /auth/logout`。
+  每个供应商只列**有上限**的窗口（网关自己的计数没有上限，说明不了还剩多少），按模型的放在「按模型 N」里。
+- 其他网关、没设网关地址（官方接口、codex）：说明查不了，不报错。
+- 谁去读：Jarvis 管理的启动器由 hub 用解封的 Key 读；~/.zshrc 的由**有这个启动器的那台电脑**读（node 的 `launchers.quota`：跑一遍探测拿到地址和 Key，就地请求网关），
+  Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。
+- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。mock：`scripts/mock_hub.py` 的 `cc_kiro` / `example-cli` / `cc_glm`，
+  DEBUG `-openLauncherPage <名字>` 直接打开。实测：`TestQuotaLive`（`JARVIS_LIVE_QUOTA=<探测写出的 env 文件>`）。

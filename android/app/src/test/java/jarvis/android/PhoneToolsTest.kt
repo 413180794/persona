@@ -56,3 +56,26 @@ class PhoneToolsTest {
         assertFalse(runCatching { parseTime("tomorrow") }.isSuccess)
     }
 }
+
+class PhotosTest {
+    @Test fun idsNameTheMediaStoreRow() {
+        assertEquals("image" to 42L, jarvis.android.phone.Photos.parseId("image:42"))
+        assertEquals("video" to 7L, jarvis.android.phone.Photos.parseId("video:7"))
+        assertEquals(null, jarvis.android.phone.Photos.parseId("42"))
+        assertEquals(null, jarvis.android.phone.Photos.parseId("audio:1"))
+        assertEquals(null, jarvis.android.phone.Photos.parseId("image:x"))
+    }
+
+    @Test fun screenshotsAreTheScreenshotsFolder() {
+        assertTrue(jarvis.android.phone.Photos.isScreenshot("Pictures/Screenshots/"))
+        assertTrue(jarvis.android.phone.Photos.isScreenshot("DCIM/Screenshots/"))
+        assertFalse(jarvis.android.phone.Photos.isScreenshot("DCIM/Camera/"))
+        assertFalse(jarvis.android.phone.Photos.isScreenshot(null))
+    }
+
+    @Test fun photosAreReadOnlyAndDeclaredTogether() {
+        val names = jarvis.android.phone.PhoneTools.specs(setOf(jarvis.android.phone.Source.Photos)).map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        assertEquals(listOf("phone_photos_recent", "phone_photo_get"), names)
+        assertTrue(jarvis.android.phone.PhoneTools.all.filter { it.source == jarvis.android.phone.Source.Photos }.all { it.confirm == null })
+    }
+}

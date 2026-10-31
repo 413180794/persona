@@ -383,6 +383,29 @@ KB_DETAIL = {
                                            "status": "active", "dirs": ["macbook:/Users/me/code/weather"]}},
 }
 
+# The archived messages of a chat (chats/<id>/messages/<day>.md), for search and its day page.
+KB_DAYS = {
+    "oc_team": {
+        "2026-10-29": ["- 09:12 韩梅梅: 早，设计稿 v3 今天发", "- 09:40 我: 好，降雨条先按逐小时柱状做", "- 10:05 韩梅梅: 灰度名单我来拉"],
+        "2026-10-30": ["- 10:15 韩梅梅: 周五前要一版能装的", "- 10:20 我: 可以，今晚先灰度给自己", "  明天再给你", "- 10:22 韩梅梅: 👍"],
+    },
+}
+
+
+def kb_messages(cid):
+    """(day, line number, text) of every message of a chat, continuation lines folded in."""
+    out = []
+    for day, lines in sorted(KB_DAYS.get(cid, {}).items()):
+        for i, l in enumerate(lines):
+            if l.startswith("- "): out.append([day, i + 3, l[2:]])  # after the "# title" line and a blank one
+            elif out: out[-1][2] += "\n" + l.strip()
+    return out
+
+
+def kb_match(text, q):
+    return all(w in text.lower() for w in q.lower().split())
+
+
 # ---------- items ----------
 _seq = [0]
 
@@ -772,6 +795,38 @@ LARK_MESSAGES = {"f2": [
     _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
     _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
 ]}
+
+# 设置 › 模型: two ~/.zshrc launchers, one through relay-history and one through FAKEMODEL, with their quota.
+LAUNCHERS = [
+    {"name": "cc_kiro", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "kiro/claude-opus-5-5", "machines": ["macbook"]},
+    {"name": "example-cli", "source": "zshrc", "base_url": "http://fakemodel.example.com", "model": "gpt-6.1-sol", "machines": ["macbook"]},
+    {"name": "cc_glm", "source": "zshrc", "base_url": "https://open.bigmodel.example.com/api/anthropic", "model": "glm-5.3", "machines": ["macbook"]},
+]
+def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
+    w = {"label": label, "unit": unit}
+    if ratio is not None: w["used_ratio"] = ratio
+    if used is not None: w["used"] = used
+    if limit is not None: w["limit"] = limit
+    if resets: w["resets_at"] = resets
+    if exhausted: w["exhausted"] = True
+    return w
+LAUNCHER_QUOTAS = {
+    "cc_kiro": {"gateway": "relay-history", "key_name": "cc_kiro",
+        "budget": [_w("每周预算", 0.62, 496, 800, "usd", later(hours=60))],
+        "pools": [
+            {"name": "kiro #2328da", "state": "available", "detail": "可用", "windows": [_w("每月", 0.64, 6401, 10000, "credits", later(hours=11))]},
+            {"name": "claude · max", "state": "cooldown", "detail": "冷却中，23:00 恢复",
+             "windows": [_w("5 小时", 1.0, resets=later(hours=2), exhausted=True), _w("每周", 0.77, resets=later(hours=70))]}],
+        "usage": [{"label": "今日", "requests": 287, "tokens": 210552323, "cost_usd": 123.12},
+                  {"label": "本周", "requests": 10432, "tokens": 3359748900, "cost_usd": 1109.02},
+                  {"label": "本月", "requests": 20004, "tokens": 6012000000, "cost_usd": 2190.4}]},
+    "example-cli": {"gateway": "fakemodel",
+        "pools": [
+            {"name": "火山 · Agent Plan", "state": "ok", "windows": [_w("5 小时额度", 0.42, 42, 100, "percent", later(hours=3)),
+                                                                   _w("每周额度", 0.86, 86, 100, "percent", later(hours=50))],
+             "models": [{"model": "deepseek-v4.1-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
+            {"name": "modelhub", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
+}
 
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
@@ -1662,6 +1717,16 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "%s: machine is offline" % p.split("/")[4]}, 503)
         if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):
             return self.send_json(mock_dirs(p.split("/")[4], (q.get("path") or [""])[0]))
+        if p == "/api/v1/launchers": return self.send_json({"launchers": [dict(l) for l in LAUNCHERS]})
+        if p.startswith("/api/v1/launchers/") and p.endswith("/quota"):
+            n = p.split("/")[4]
+            q = LAUNCHER_QUOTAS.get(n)
+            return self.send_json({"machine": "macbook", "checked_at": ago(minutes=0), **({"quota": q} if q else
+                {"error": "这个网关没有能查的额度（只支持 relay-history 和 FAKEMODEL）", "unsupported": True})})
+        if p.startswith("/api/v1/launchers/"):
+            n = p.split("/")[4]
+            l = next((x for x in LAUNCHERS if x["name"] == n), None)
+            if l: return self.send_json({"launcher": l})
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}]})
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
@@ -1713,17 +1778,45 @@ class H(BaseHTTPRequestHandler):
                 tag = (q.get("tag") or [""])[0]
                 items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
                 return self.send_json({"items": items, "tags": KB_TAGS.get(kind, [])})
+            if kind == "chats" and len(parts) == 4 and parts[2] == "days":
+                days = sorted(KB_DAYS.get(parts[1], {}))
+                if parts[3] not in days: return self.send_json({"error": "not found"}, 404)
+                i = days.index(parts[3])
+                return self.send_json({"day": parts[3], "messages": [{"n": n, "text": t} for d, n, t in kb_messages(parts[1]) if d == parts[3]],
+                                       "prev": days[i - 1] if i else "", "next": days[i + 1] if i + 1 < len(days) else ""})
             e = next((e for e in KB.get(kind, []) if e["id"] == parts[1]), None)
             if e is None: return self.send_json({"error": "not found"}, 404)
             d = dict({"kind": kind, "id": e["id"], "path": "/home/me/.jarvis/data/%s/%s" % (kind, e["id"]), "summary": e.get("one_line")},
                      **KB_DETAIL.get((kind, e["id"]), {}))
             out = {"detail": d}
+            word = (q.get("q") or [""])[0]
+            if word:
+                ms = [{"path": "%s/%s/summary.md" % (kind, e["id"]), "n": i + 1, "line": l.strip()}
+                      for i, l in enumerate((d.get("summary") or "").split("\n")) if l.strip() and kb_match(l, word)]
+                msgs = kb_messages(e["id"]) if kind == "chats" else []
+                for j in range(len(msgs) - 1, -1, -1):
+                    day, n, t = msgs[j]
+                    if kb_match(t, word):
+                        ms.append({"path": "chats/%s/messages/%s.md" % (e["id"], day), "n": n, "line": t, "day": day,
+                                   "before": [m[2] for m in msgs[max(0, j - 2):j] if m[0] == day],
+                                   "after": [m[2] for m in msgs[j + 1:j + 3] if m[0] == day]})
+                out["matches"] = ms
             if kind == "projects":
                 dirs = [x.split(":", 1)[1] for x in (d.get("meta") or {}).get("dirs", [])]
                 out["agents"] = [x for x in SESSIONS if x.get("cwd") in dirs]
             return self.send_json(out)
         if p == "/api/v1/kb-search":
             word = (q.get("q") or [""])[0].lower()
+            if (q.get("results") or [""])[0] == "1":
+                res = []
+                for k, l in KB.items():
+                    for e in l:
+                        found = [{"path": "%s/%s/messages/%s.md" % (k, e["id"], d), "n": n, "line": t}
+                                 for d, n, t in reversed(kb_messages(e["id"])) if kb_match(t, word)] if k == "chats" else []
+                        named = kb_match(e["name"], word) or kb_match(e.get("one_line") or "", word)
+                        if found or named:
+                            res.append({"entry": e, "count": len(found), "hits": found[:3], "in_name": kb_match(e["name"], word)})
+                return self.send_json({"results": res})
             hits = [{"path": "%s/%s/summary.md" % (k, e["id"]), "line": "- " + e["name"] + "：" + (e.get("one_line") or "")}
                     for k, l in KB.items() for e in l if word and (word in e["name"].lower() or word in (e.get("one_line") or "").lower())]
             return self.send_json({"hits": hits})

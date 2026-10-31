@@ -650,6 +650,14 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 			return
 		}
 		out := map[string]any{"detail": d}
+		// Opened from a search: every place the query is in it, so the page can start there.
+		if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+			m := e.Matches(d.Kind, d.ID, q, 40)
+			if m == nil {
+				m = []kb.Match{}
+			}
+			out["matches"] = m
+		}
 		// A project's Agents: the live sessions working in its code directories.
 		if d.Kind == kb.KindProject {
 			if p, ok := e.Store.Project(d.ID); ok && len(p.Dirs) > 0 {
@@ -671,6 +679,19 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 			}
 		}
 		writeJSON(w, out)
+	})
+	// One day of a chat's archive, for reading a found message in place.
+	api.HandleFunc("GET /api/v1/kb/chats/{id}/days/{day}", func(w http.ResponseWriter, r *http.Request) {
+		e := engine(w)
+		if e == nil {
+			return
+		}
+		msgs, prev, next, err := e.Day(r.PathValue("id"), r.PathValue("day"))
+		if err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, map[string]any{"day": r.PathValue("day"), "messages": msgs, "prev": prev, "next": next})
 	})
 	api.HandleFunc("PUT /api/v1/kb/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)
@@ -695,6 +716,15 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/kb-search", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)
 		if e == nil {
+			return
+		}
+		// results=1: entries ranked, a few lines each (the app since 2026-10-31); otherwise the lines as found.
+		if r.URL.Query().Get("results") == "1" {
+			res := e.Find(r.URL.Query().Get("q"), 80)
+			if res == nil {
+				res = []kb.Result{}
+			}
+			writeJSON(w, map[string]any{"results": res})
 			return
 		}
 		hits := e.Search(r.URL.Query().Get("q"), r.URL.Query().Get("messages") != "0", 60)

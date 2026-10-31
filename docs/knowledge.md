@@ -105,4 +105,18 @@ Jarvis 和 AI 分身要「代替我上班」，前提是它们知道的和我一
 | `GET /api/v1/kb/{kind}?tag=` | 排好序的列表（`items`）和常用标签（`tags`）；kind 是 projects / chats / people / docs / meetings / events |
 | `GET /api/v1/kb/{kind}/{id}` | `detail`（meta、summary、项目时间线、会话最近 7 天消息）；项目还带 `agents` |
 | `PUT /api/v1/kb/{kind}/{id}` | 改（字段同 `kb_update`）；项目不存在就新建 |
-| `GET /api/v1/kb-search?q=&messages=0` | 全文搜索 |
+| `GET /api/v1/kb-search?q=&messages=0` | 全文搜索（按行，MCP 和旧版 App 用） |
+| `GET /api/v1/kb-search?q=&results=1` | App 的搜索：按条目合并、排好序（`results`：`entry`、`count`、前 3 行 `hits`，`in_name`），见下面「搜索」 |
+| `GET /api/v1/kb/{kind}/{id}?q=` | 从搜索打开：多带 `matches`（这个条目里每一处命中；消息带 `day` 和前后各两条 `before` / `after`），最多 40 处 |
+| `GET /api/v1/kb/chats/{id}/days/{day}` | 会话某一天的全部消息（`messages[].n` 是在文件里的行号）和前后有消息的那天（`prev` / `next`） |
+
+## 搜索
+
+2026-10-31 用户反馈「搜到了点进去找不到在哪、返回还报错」后重做（`kb/find.go`）：
+
+- 结果是条目，不是行：所有含全部关键词的行都找出来（档案、时间线、资料，再从新到旧扫聊天记录，最多约 10 万行，真实数据约 125 ms），
+  按条目合并，名字命中的在前，再按重要级、相关性、命中数、更新时间排。以前是按目录遍历顺序取前 60 行，常常被几个群的档案占满。
+- 点开条目，顶部是「搜索「词」」：这个条目里的每一处命中，消息带前后各一条；点消息打开那一天（`KBDayView`），滚到并标出那条，可以翻到前后一天。
+- 返回不再出错：知识库页本身是 `navigationDestination(isPresented:)` 推出来的，里面再用 `NavigationLink(value:)` 推条目，
+  新页面会被插到它下面（CLAUDE.md「导航」），点了像没反应，返回才看到条目页的黄色 ⚠️。知识库里的链接一律视图式。
+  返回时 `.task(id: query)` 会重跑：同一个词已有结果就不再搜，取消不算错误。

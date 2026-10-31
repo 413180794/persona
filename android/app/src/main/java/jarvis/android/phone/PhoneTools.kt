@@ -64,13 +64,24 @@ enum class Source(val title: String, val detail: String, val permissions: List<S
     Contacts("通讯录", "按姓名、公司、邮箱、电话搜索联系人", listOf(Manifest.permission.READ_CONTACTS)),
     Calendar("日历", "看日程；新建日程前先在手机上确认", listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)),
     Location("位置", "一次性定位和地址", listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)),
+    Photos("照片", "看最近的照片和截图，按需读出一张给 Claude 看", photoPermissions()),
 }
+
+/** Reading the gallery: Android 13+ asks for images and videos apart; older ones for all of storage. */
+private fun photoPermissions(): List<String> =
+    if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+    else listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 
 /** What a tool returns: MCP content blocks plus whether it's an error (docs/protocol.md `tool_result`). */
 data class ToolOutput(val content: JsonArray, val isError: Boolean = false) {
     companion object {
         fun text(t: String, error: Boolean = false) = ToolOutput(buildJsonArray { addJsonObject { put("type", "text"); put("text", t) } }, error)
         fun json(o: JsonElement) = text(prettyJson.encodeToString(JsonElement.serializer(), o))
+        /** A text block and an image the model sees (proto.Content: `data` base64, `mime_type`). */
+        fun image(description: JsonElement, jpeg: ByteArray) = ToolOutput(buildJsonArray {
+            addJsonObject { put("type", "text"); put("text", prettyJson.encodeToString(JsonElement.serializer(), description)) }
+            addJsonObject { put("type", "image"); put("data", android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP)); put("mime_type", "image/jpeg") }
+        })
     }
 }
 
@@ -156,6 +167,24 @@ object PhoneTools {
             "Get the phone's current location. Returns latitude, longitude, horizontal accuracy in meters, altitude, the reverse-geocoded address (country, province, city, district, street, formatted address), the device timezone and the timestamp of the fix (ISO 8601). Waits at most 15 seconds for a fix. Only call this when the user asks something that needs their location.",
             schema(), Source.Location,
         ) { c, _ -> location(c) },
+        PhoneTool(
+            "phone_photos_recent",
+            "List recent photos and videos, newest first. Each row has the Photos local identifier, creation date (ISO 8601), media type (image/video), pixel width and height, whether it is a screenshot, whether it is a favorite, duration in seconds for videos, and the latitude/longitude where the photo was taken when it is geotagged. Pass an id to phone_photo_get to actually see the image.",
+            schema(
+                "limit" to int("Maximum number of assets, default 20, max 100.", 1, 100),
+                "days" to int("Only assets from the last N days. Default: no limit.", 1, 3650),
+                "screenshots_only" to bool("Only screenshots. Default false."),
+            ), Source.Photos,
+        ) { c, a -> Photos.recent(c, a) },
+        PhoneTool(
+            "phone_photo_get",
+            "Get one photo as an image so you can look at it (read a screenshot, describe a photo, transcribe a whiteboard). Pass the id from phone_photos_recent. The image is JPEG, at most max_size pixels on the long edge (default 1280, max 2048), quality 0.7. Returns the image plus a short text description.",
+            schema(
+                "id" to str("Photos local identifier from phone_photos_recent."),
+                "max_size" to int("Longest edge in pixels, default 1280, max 2048.", 256, 2048),
+                required = listOf("id"),
+            ), Source.Photos,
+        ) { c, a -> Photos.get(c, a) },
     )
 
     fun byName(name: String) = all.firstOrNull { it.name == name }
@@ -194,7 +223,7 @@ fun parseTime(s: String): Instant =
 
 fun isoLocal(t: Instant): String = t.atZone(ZoneId.systemDefault()).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
-private fun need(c: Context, s: Source) {
+internal fun need(c: Context, s: Source) {
     if (!PhoneTools.granted(c, s)) throw ToolFailure("没有权限：${s.title}。请在安卓手机的 Jarvis › 设置 › 手机数据 里授权。\nPermission denied: ${s.name}. Grant access in Jarvis › Settings › Phone data on the Android phone.")
 }
 

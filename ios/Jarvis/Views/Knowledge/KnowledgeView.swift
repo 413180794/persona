@@ -14,9 +14,10 @@ struct KnowledgeView: View {
     @State private var lists: [KBKind: KBList] = [:]
     @State private var error: String?
     @State private var query = ""
-    @State private var hits: [KBHit]?
-    /// Entries by "kind/id", from every list loaded (search hits only carry a path; this gives them a name).
-    @State private var index: [String: KBEntry] = [:]
+    @State private var results: [KBResult]?
+    /// What `results` were found for (the field may already say more).
+    @State private var resultsFor = ""
+    @State private var searchError: String?
     @State private var showIgnored = false
     #if DEBUG
     @State private var debugEntry: KBEntry?
@@ -55,21 +56,12 @@ struct KnowledgeView: View {
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
         // section goes), taking the typed text out of sight (2026-10-31).
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索档案和聊天记录")
-        .task(id: query) {
-            guard !query.isEmpty, let api = model.api else { hits = nil; return }
-            try? await Task.sleep(for: .milliseconds(300)) // typing
-            guard !Task.isCancelled else { return }
-            let found = (try? await api.kbSearch(query)) ?? []
-            // Names for the hits: the lists of the kinds they are in, once each.
-            for k in Set(found.compactMap { $0.entry?.kind }) where !index.keys.contains(where: { $0.hasPrefix(k.rawValue + "/") }) {
-                if let l = try? await api.kbList(k) { remember(l.items) }
-            }
-            guard !Task.isCancelled else { return }
-            hits = found
-        }
+        .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
         .refreshable { await load() }
-        .navigationDestination(for: KBEntry.self) { e in KnowledgeDetailView(entry: e) }
+        // Entries open with view-based links, not `navigationDestination(for:)`: this page is itself pushed with
+        // `navigationDestination(isPresented:)`, and a value-pushed page on top of that lands *under* it (CLAUDE.md):
+        // a hit seemed not to open, and back showed the entry's ⚠️ placeholder (2026-10-31).
         #if DEBUG
         // `-showKnowledgeEntry <kind>/<id>` (with `-openAssistantPage knowledge`): that entry's page, for screenshots;
         // `-showKnowledgeSearch <text>`: searching for it.
@@ -127,7 +119,7 @@ struct KnowledgeView: View {
 
     private func rows(_ items: [KBEntry]) -> some View {
         ForEach(items) { e in
-            NavigationLink(value: e) { KBRow(entry: e) }
+            NavigationLink { KnowledgeDetailView(entry: e) } label: { KBRow(entry: e) }
         }
     }
 
@@ -161,35 +153,48 @@ struct KnowledgeView: View {
     // MARK: Search
 
     @ViewBuilder private var searchResults: some View {
-        if let hits {
-            if hits.isEmpty {
+        if let results, !results.isEmpty {
+            // By kind, the kinds in the order of their best result (the hub ranks across kinds).
+            let kinds = results.reduce(into: [String]()) { if !$0.contains($1.entry.kind) { $0.append($1.entry.kind) } }
+            ForEach(kinds, id: \.self) { k in
+                let these = results.filter { $0.entry.kind == k }
                 Section {
-                    ContentUnavailableView.search(text: query).listRowBackground(Color.clear)
-                }
-            } else {
-                let groups = KBSearchGroup.make(hits)
-                ForEach(KBKind.allCases) { k in
-                    let these = groups.filter { $0.kind == k }
-                    if !these.isEmpty {
-                        Section { ForEach(these) { g in groupRow(g) } } header: { header(k.title, these.count) }
+                    ForEach(these) { r in
+                        NavigationLink { KnowledgeDetailView(entry: r.entry, query: resultsFor) } label: {
+                            KBHitRow(result: r, query: resultsFor)
+                        }
+                        .accessibilityIdentifier("kb.hit")
                     }
-                }
+                } header: { header(KBKind(rawValue: k)?.title ?? k, these.count) }
             }
+        } else if results != nil {
+            Section {
+                ContentUnavailableView.search(text: resultsFor).listRowBackground(Color.clear)
+            }
+        } else if let searchError {
+            Section { Label(searchError, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
         } else {
             Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
         }
     }
 
-    private func groupRow(_ g: KBSearchGroup) -> some View {
-        let known = index[g.key]
-        let entry = known ?? KBEntry(kind: g.kind.rawValue, id: g.id, name: g.id, relevance: 0)
-        return NavigationLink(value: entry) {
-            KBHitRow(entry: entry, named: known != nil, group: g, query: query)
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty, let api = model.api else { results = nil; resultsFor = ""; return }
+        // Coming back from an entry the task runs again for the same text: keep what is shown.
+        if q == resultsFor, results != nil { return }
+        try? await Task.sleep(for: .milliseconds(300)) // typing
+        guard !Task.isCancelled else { return }
+        do {
+            let found = try await api.kbFind(q)
+            guard !Task.isCancelled else { return }
+            results = found
+            resultsFor = q
+            searchError = nil
+        } catch {
+            guard !Task.isCancelled, let shown = error.shown else { return }
+            searchError = shown
         }
-    }
-
-    private func remember(_ items: [KBEntry]) {
-        for e in items { index[e.kind + "/" + e.id] = e }
     }
 
     private func load() async {
@@ -197,7 +202,6 @@ struct KnowledgeView: View {
         do {
             let l = try await api.kbList(kind, tag: tag)
             lists[kind] = l
-            remember(l.items)
             error = nil
         } catch {
             self.error = error.shown
@@ -358,49 +362,28 @@ enum RelevanceMeter {
     }
 }
 
-/// The hits of one entry: in the order found, with the files they are in.
-struct KBSearchGroup: Identifiable {
-    var kind: KBKind
-    var id: String
-    var hits: [KBHit]
-    var key: String { kind.rawValue + "/" + id }
-
-    static func make(_ hits: [KBHit]) -> [KBSearchGroup] {
-        var order: [String] = []
-        var by: [String: KBSearchGroup] = [:]
-        for h in hits {
-            guard let ref = h.entry else { continue }
-            let key = ref.kind.rawValue + "/" + ref.id
-            if by[key] == nil { order.append(key); by[key] = KBSearchGroup(kind: ref.kind, id: ref.id, hits: []) }
-            if !by[key]!.hits.contains(where: { $0.text == h.text }) { by[key]!.hits.append(h) }
-        }
-        // 档案 and 时间线 say more than a tag in 资料: those lines first.
-        return order.compactMap { by[$0] }.map { g in
-            var g = g
-            g.hits = g.hits.filter { $0.source != "资料" } + g.hits.filter { $0.source == "资料" }
-            return g
-        }
-    }
-}
-
 /// One entry found by a search: its tile and name, then up to two matching lines with what was searched for in bold.
 struct KBHitRow: View {
-    var entry: KBEntry
-    var named: Bool
-    var group: KBSearchGroup
+    var result: KBResult
     var query: String
 
     var body: some View {
+        let hits = Array((result.hits ?? []).prefix(2))
         HStack(alignment: .top, spacing: Theme.Space.m) {
-            KBAvatar(entry: entry, size: 30)
+            KBAvatar(entry: result.entry, size: 30)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(spacing: Theme.Space.sm) {
-                    Text(named ? entry.name : group.kind.title).font(Theme.Font.secondaryStrong).lineLimit(1)
-                    if group.hits.count > 2 {
-                        Text("\(group.hits.count) 处").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
+                    Text(Self.marked(result.entry.name, query)).font(Theme.Font.secondaryStrong).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if result.count > hits.count {
+                        Text(result.count >= 99 ? "99+ 处" : "\(result.count) 处").font(Theme.Font.label).foregroundStyle(.tertiary)
+                            .lineLimit(1).fixedSize()
                     }
                 }
-                ForEach(group.hits.prefix(2), id: \.self) { h in
+                if hits.isEmpty, let line = result.entry.oneLine, !line.isEmpty {
+                    Text(line).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
+                }
+                ForEach(hits, id: \.self) { h in
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         Text(h.source).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                         Text(Self.marked(h.text, query)).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
@@ -411,15 +394,16 @@ struct KBHitRow: View {
         .padding(.vertical, Theme.Space.xxs)
     }
 
+    /// The text with every word searched for in bold primary (the hub matches lines with all the words).
     static func marked(_ text: String, _ query: String) -> AttributedString {
         var a = AttributedString(text)
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return a }
-        var from = a.startIndex
-        while let r = a[from...].range(of: q, options: .caseInsensitive) {
-            a[r].foregroundColor = .primary
-            a[r].inlinePresentationIntent = .stronglyEmphasized
-            from = r.upperBound
+        for q in query.split(whereSeparator: \.isWhitespace).map(String.init) where !q.isEmpty {
+            var from = a.startIndex
+            while from < a.endIndex, let r = a[from...].range(of: q, options: .caseInsensitive) {
+                a[r].foregroundColor = .primary
+                a[r].inlinePresentationIntent = .stronglyEmphasized
+                from = r.upperBound
+            }
         }
         return a
     }
@@ -428,8 +412,11 @@ struct KBHitRow: View {
 struct KnowledgeDetailView: View {
     @Environment(AppModel.self) private var model
     var entry: KBEntry
+    /// Opened from a search: the places it was found come first.
+    var query: String? = nil
     @State private var detail: KBDetailResponse?
     @State private var error: String?
+    @State private var allMatches = false
     @State private var editing = false
     @State private var newAgent = false
     @State private var showRecent = false
@@ -447,6 +434,8 @@ struct KnowledgeDetailView: View {
     static let logShown = 6
     /// Related entries of one kind shown before 全部.
     static let linksShown = 4
+    /// Search matches shown before 显示全部.
+    static let matchesShown = 5
 
     var body: some View {
         List {
@@ -456,6 +445,7 @@ struct KnowledgeDetailView: View {
                     .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 8, trailing: 4))
             }
             if let d = detail?.detail {
+                if let query, let matches = detail?.matches { found(matches, query: query, chat: d.kind == KBKind.chats.rawValue ? d.id : nil) }
                 if !Self.debugLower, let agents = detail?.agents, !agents.isEmpty {
                     Section {
                         ForEach(agents) { s in
@@ -467,9 +457,10 @@ struct KnowledgeDetailView: View {
                     } header: { sectionHeader("在做这个项目的 Agent", agents.count) }
                 }
                 if let log = d.log, !log.isEmpty { timeline(log) }
-                if let sum = d.summary, !sum.isEmpty {
+                // Empty once the header's parts are taken out (a summary that is just the one line): no blank card.
+                if let sum = d.summary, case let profile = Self.profile(sum, oneLine: shown.oneLine), !profile.isEmpty {
                     Section("档案") {
-                        Markdown(Links.markdown(Self.profile(sum, oneLine: shown.oneLine))).markdownTheme(.jarvis).textSelection(.enabled)
+                        Markdown(Links.markdown(profile)).markdownTheme(.jarvis).textSelection(.enabled)
                             .padding(.vertical, Theme.Space.sm)
                     }
                 }
@@ -581,6 +572,41 @@ struct KnowledgeDetailView: View {
         }
     }
 
+    // MARK: Found
+
+    /// Where the search is in this entry: each place with what is around it; a message opens its day at it.
+    @ViewBuilder private func found(_ matches: [KBMatch], query: String, chat: String?) -> some View {
+        let shownMatches = allMatches ? matches : Array(matches.prefix(Self.matchesShown))
+        Section {
+            if matches.isEmpty {
+                // Found by its name, or in a part of it the page shows below.
+                Text("「\(query)」在名字或资料里").font(Theme.Font.secondary).foregroundStyle(.secondary)
+            }
+            ForEach(shownMatches) { m in
+                if let chat, let day = m.day {
+                    NavigationLink {
+                        KBDayView(chat: chat, chatName: shown.name, day: day, focus: m.n, query: query)
+                    } label: { KBMatchRow(match: m, query: query) }
+                    .accessibilityIdentifier("kb.match")
+                } else {
+                    KBMatchRow(match: m, query: query)
+                }
+            }
+            if matches.count > Self.matchesShown {
+                Button { withAnimation(Theme.Motion.standard) { allMatches.toggle() } } label: {
+                    Text(allMatches ? "收起" : "显示全部 \(matches.count) 处").font(Theme.Font.secondaryMedium).lineLimit(1)
+                }
+            }
+        } header: {
+            HStack(spacing: Theme.Space.sm) {
+                Text("搜索「\(query)」")
+                Text(matches.count >= 40 ? "40+" : "\(matches.count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("kb.matches")
+        }
+    }
+
     // MARK: Timeline
 
     /// Newest first, a dot and a rail down the left, when and from where above each line.
@@ -614,7 +640,7 @@ struct KnowledgeDetailView: View {
                 let open = openKinds.contains(k.rawValue)
                 Section {
                     ForEach(open ? group : Array(group.prefix(Self.linksShown))) { e in
-                        NavigationLink(value: e) { KBLinkRow(entry: e) }
+                        NavigationLink { KnowledgeDetailView(entry: e) } label: { KBLinkRow(entry: e) }
                     }
                     if group.count > Self.linksShown {
                         Button {
@@ -689,11 +715,186 @@ struct KnowledgeDetailView: View {
     private func load() async {
         guard let api = model.api else { return }
         do {
-            detail = try await api.kbDetail(entry.kind, id: entry.id)
+            detail = try await api.kbDetail(entry.kind, id: entry.id, query: query)
             error = nil
         } catch {
-            self.error = error.shown
+            // Cancelled (the page went away mid-load) is not an error to show.
+            if let shown = error.shown { self.error = shown }
         }
+    }
+}
+
+/// A place a search found in an entry: where (档案, 聊天记录 · day), the line with the words in bold, and for a message
+/// the one before and after it in grey.
+struct KBMatchRow: View {
+    var match: KBMatch
+    var query: String
+
+    var body: some View {
+        let hit = match.hit
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(hit.day.map { "聊天记录 · " + KBDayView.title($0) } ?? hit.source)
+                .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
+            if match.day != nil {
+                if let b = match.before?.last { context(b) }
+                KBMessageText(line: KBMessageLine(match.line), query: query, lineLimit: 4)
+                if let a = match.after?.first { context(a) }
+            } else {
+                Text(KBHitRow.marked(hit.text, query)).font(Theme.Font.secondary).lineLimit(4)
+            }
+        }
+        .padding(.vertical, Theme.Space.xxs)
+    }
+
+    private func context(_ raw: String) -> some View {
+        let l = KBMessageLine(raw)
+        return Text(l.sender.isEmpty ? l.text : l.sender + "：" + l.text)
+            .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
+    }
+}
+
+/// One archived message: who and when on a line, then what was said, the searched words in bold.
+struct KBMessageText: View {
+    var line: KBMessageLine
+    var query: String
+    var lineLimit: Int? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            if !line.sender.isEmpty || !line.time.isEmpty {
+                HStack(spacing: Theme.Space.sm) {
+                    Text(line.sender).font(Theme.Font.labelStrong).lineLimit(1)
+                    Text(line.time).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.tertiary).lineLimit(1)
+                }
+            }
+            Text(KBHitRow.marked(line.text, query)).font(Theme.Font.secondary).lineLimit(lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// One day of a chat's archive, opened at a found message (marked, and scrolled to), with the days around it.
+struct KBDayView: View {
+    @Environment(AppModel.self) private var model
+    var chat: String
+    var chatName: String
+    @State var day: String
+    /// The found message's line in the day file (it may be a continuation line of a longer message).
+    var focus: Int?
+    var query: String
+    @State private var page: KBDay?
+    @State private var error: String?
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            List {
+                if let page {
+                    Section {
+                        ForEach(page.messages) { m in
+                            let on = m.n == target(page)
+                            KBMessageText(line: KBMessageLine(m.text), query: query)
+                                .padding(.vertical, Theme.Space.xxs)
+                                .listRowBackground(on ? Theme.accent.opacity(0.12) : nil)
+                                .id(m.n)
+                                .accessibilityIdentifier(on ? "kb.focus" : "")
+                        }
+                    } header: {
+                        Text("\(page.messages.count) 条消息")
+                    }
+                    Section {
+                        HStack {
+                            if let prev = page.prev, !prev.isEmpty {
+                                Button { go(prev) } label: { Label(Self.title(prev), systemImage: Theme.Icon.back).lineLimit(1) }
+                            }
+                            Spacer()
+                            if let next = page.next, !next.isEmpty {
+                                Button { go(next) } label: {
+                                    Label(Self.title(next), systemImage: Theme.Icon.disclosure).labelStyle(TrailingIcon()).lineLimit(1)
+                                }
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .font(Theme.Font.secondaryMedium)
+                    }
+                } else if let error {
+                    Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
+                } else {
+                    Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .themedPage()
+            .navigationTitle(Self.title(day))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(Self.title(day)).font(Theme.Font.heading).lineLimit(1)
+                        Text(chatName).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
+            .task(id: day) {
+                await load()
+                // Laid out first, then to the found message (a few rows above it stay in sight).
+                guard let page, let t = target(page), page.day == day else { return }
+                try? await Task.sleep(for: .milliseconds(80))
+                proxy.scrollTo(t, anchor: .center)
+            }
+        }
+    }
+
+    /// The message the focus line is in: the last one starting at or before it.
+    private func target(_ page: KBDay) -> Int? {
+        guard let focus, page.day == day else { return nil }
+        return page.messages.last(where: { $0.n <= focus })?.n
+    }
+
+    private func go(_ d: String) {
+        Haptics.tap()
+        day = d
+    }
+
+    private func load() async {
+        guard let api = model.api else { return }
+        do {
+            page = try await api.kbDay(chat: chat, day: day)
+            error = nil
+        } catch {
+            if let shown = error.shown { self.error = shown }
+        }
+    }
+
+    /// "2026-10-30" → "10月30日 周五" (with the year when it is not this one).
+    static func title(_ day: String) -> String {
+        guard let d = dayFormat.date(from: day) else { return day }
+        let sameYear = Calendar.current.component(.year, from: d) == Calendar.current.component(.year, from: .now)
+        return (sameYear ? shortFormat : longFormat).string(from: d)
+    }
+    private static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private static let shortFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日 EEE"
+        return f
+    }()
+    private static let longFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy年M月d日 EEE"
+        return f
+    }()
+}
+
+/// Title, then icon (a "next day ›" button).
+private struct TrailingIcon: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Theme.Space.xs) { configuration.title; configuration.icon }
     }
 }
 

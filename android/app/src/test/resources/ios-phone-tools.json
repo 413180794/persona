@@ -63,5 +63,22 @@
    "body",
    "title"
   ]
+ },
+ "phone_photo_get": {
+  "properties": [
+   "id",
+   "max_size"
+  ],
+  "required": [
+   "id"
+  ]
+ },
+ "phone_photos_recent": {
+  "properties": [
+   "days",
+   "limit",
+   "screenshots_only"
+  ],
+  "required": []
  }
 }

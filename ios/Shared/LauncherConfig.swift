@@ -109,3 +109,74 @@ extension APIClient {
         _ = try await request("POST", "/api/v1/launchers/\(name)/restore")
     }
 }
+
+/// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」): relay-history or
+/// FAKEMODEL; `error` when there is nothing to read (`unsupported`) or the gateway said no.
+nonisolated struct LauncherQuotaAnswer: Decodable, Hashable, Sendable {
+    var machine: String?
+    var checkedAt: Date?
+    var quota: LauncherQuota?
+    var error: String?
+    var unsupported: Bool?
+
+    enum CodingKeys: String, CodingKey { case machine, quota, error, unsupported; case checkedAt = "checked_at" }
+}
+
+nonisolated struct LauncherQuota: Decodable, Hashable, Sendable {
+    var gateway: String
+    var keyName: String?
+    var usage: [Usage]?
+    var budget: [Window]?
+    var pools: [Pool]?
+    var note: String?
+
+    enum CodingKeys: String, CodingKey { case gateway, usage, budget, pools, note; case keyName = "key_name" }
+
+    var gatewayName: String { gateway == "relay-history" ? "relay-history" : gateway == "fakemodel" ? "FAKEMODEL" : gateway }
+
+    nonisolated struct Usage: Decodable, Hashable, Sendable {
+        var label: String
+        var requests: Int64
+        var tokens: Int64
+        var costUSD: Double?
+        enum CodingKeys: String, CodingKey { case label, requests, tokens; case costUSD = "cost_usd" }
+    }
+
+    nonisolated struct Pool: Decodable, Hashable, Sendable {
+        var name: String
+        var state: String?
+        var detail: String?
+        var windows: [Window]?
+        var models: [ModelWindows]?
+    }
+
+    nonisolated struct ModelWindows: Decodable, Hashable, Sendable {
+        var model: String
+        var windows: [Window]
+    }
+
+    nonisolated struct Window: Decodable, Hashable, Sendable {
+        var label: String
+        var usedRatio: Double?
+        var used: Double?
+        var limit: Double?
+        var unit: String?
+        var resetsAt: Date?
+        var exhausted: Bool?
+        enum CodingKeys: String, CodingKey {
+            case label, used, limit, unit, exhausted
+            case usedRatio = "used_ratio", resetsAt = "resets_at"
+        }
+    }
+}
+
+extension APIClient {
+    /// `refresh`: read the gateway again now (the hub keeps an answer a minute).
+    func launcherQuota(_ name: String, machine: String? = nil, refresh: Bool = false) async throws -> LauncherQuotaAnswer {
+        var q: [String: String] = [:]
+        if let machine { q["machine"] = machine }
+        if refresh { q["refresh"] = "1" }
+        let data = try await request("GET", "/api/v1/launchers/\(name)/quota", query: q, timeout: 50)
+        return try JSON.decoder.decode(LauncherQuotaAnswer.self, from: data)
+    }
+}

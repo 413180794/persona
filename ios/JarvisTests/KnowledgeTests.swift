@@ -25,10 +25,14 @@ struct KnowledgeTests {
         let c = KBHit(path: "chats/lark-1/messages/2026-10-30.md", line: "10:01 张三：MCP 挂了")
         #expect(c.source == "聊天记录 · 2026-10-30")
         #expect(KBHit(path: "README.md", line: "x").entry == nil)
-        // One row per entry, its 档案 lines before its 资料 lines, repeats dropped.
-        let groups = KBSearchGroup.make([KBHit(path: "chats/lark-1/meta.json", line: "\"MCP\","), a, a, b])
-        #expect(groups.map(\.key) == ["chats/lark-1", "docs/abc"])
-        #expect(groups[0].hits.map(\.source) == ["档案", "资料"])
+        #expect(c.day == "2026-10-30" && a.day == nil)
+        // An archived message: time, sender, text (a colon in the text stays there).
+        let m = KBMessageLine("- 10:01 张三: MCP 挂了: 重启了\n第二行")
+        #expect(m.time == "10:01" && m.sender == "张三" && m.text == "MCP 挂了: 重启了\n第二行")
+        #expect(KBMessageLine("没有格式的一行").text == "没有格式的一行")
+        // Every word searched for is marked.
+        let marked = KBHitRow.marked("MCP 挂了，重启 mcp", "mcp 重启")
+        #expect(marked.runs.filter { $0.inlinePresentationIntent == .stronglyEmphasized }.count == 3)
     }
 }
 

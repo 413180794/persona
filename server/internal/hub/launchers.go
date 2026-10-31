@@ -327,6 +327,7 @@ func (in launcherInput) check() error {
 }
 
 func (h *Hub) launcherRoutes(api *http.ServeMux) {
+	h.launcherQuotaRoutes(api)
 	api.HandleFunc("GET /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
