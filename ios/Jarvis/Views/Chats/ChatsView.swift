@@ -243,14 +243,30 @@ private struct AgentsList: View {
 
     /// Folded as shown: a search opens every folded section, so no match hides behind a fold (folded spaces showed
     /// only their header, and the agent searched for was not there to open; quiet spaces and idle rows already open).
-    private func isFolded(_ id: String) -> Bool { query.isEmpty && folded.contains(id) }
+    /// Sections that start folded: 按状态's 已看 is the long tail. For them the saved list holds "!<id>" once opened.
+    private static let foldedByDefault: Set<String> = ["state/idle"]
+
+    private func isFolded(_ id: String) -> Bool {
+        guard query.isEmpty else { return false }
+        return Self.foldedByDefault.contains(id) ? !folded.contains("!" + id) : folded.contains(id)
+    }
 
     private func setFolded(_ ids: Set<String>) { foldedList = ids.sorted().joined(separator: "\n") }
 
+    /// `ids` folded (true) or open, on top of what is saved.
+    private func folding(_ ids: some Sequence<String>, _ fold: Bool, in f: Set<String>) -> Set<String> {
+        var f = f
+        for id in ids {
+            let key = Self.foldedByDefault.contains(id) ? "!" + id : id
+            let marks = Self.foldedByDefault.contains(id) ? !fold : fold // a default-folded section marks being open
+            if marks { f.insert(key) } else { f.remove(key) }
+        }
+        return f
+    }
+
     private func toggleFold(_ id: String) {
         Haptics.tap()
-        var f = folded
-        if f.contains(id) { f.remove(id) } else { f.insert(id) }
+        let f = folding([id], !isFolded(id), in: folded)
         withAnimation(Theme.Motion.standard) { setFolded(f) }
     }
 
@@ -286,8 +302,8 @@ private struct AgentsList: View {
 
         // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list.
         let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
-                                   foldAll: { setFolded(folded.union($0)); expandedQuiet = [] },
-                                   unfoldAll: { setFolded([]) },
+                                   foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
+                                   unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
                                    onMonitor: { openFromList(MachineDashboardRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
@@ -541,8 +557,9 @@ private struct AgentsList: View {
     /// The fold ids of the sections 按状态 / 按机器 shows now (全部折叠).
     private func sectionIDs(_ sessions: [Session]) -> [String] { order.sectionIDs(sessions, byMachine: grouping == .machine) }
 
-    /// A section per rank (`rank`); 已看 folded, it is the long tail. 待唤醒: nothing new yet, but a /loop or background
-    /// work will bring some.
+    /// A section per rank (`rank`); 已看 starts folded, it is the long tail, and its header is its one fold: no
+    /// 还有 N 个空闲 row inside it as well (2026-10-31: it took two taps where the other states take one). 待唤醒: nothing new
+    /// yet, but a /loop or background work will bring some.
     @ViewBuilder private func stateSections(_ live: [Session]) -> some View {
         let byRank = Dictionary(grouping: live, by: rank)
         let buckets = Self.stateTitles.enumerated().map { i, t in (key: t.key, title: t.title, rows: byRank[i] ?? [], tint: t.tint) }
@@ -553,7 +570,7 @@ private struct AgentsList: View {
                 Section {
                     if isFolded(id) {
                     } else if b.key == "idle" {
-                        foldedRows(rows, key: "state-idle", label: "已看", inStateSection: true)
+                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: true) }
                     } else {
                         // 已屏蔽 mixes states: each row says its own. Loops and background work stay off the rows (the chat shows them).
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }

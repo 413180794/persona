@@ -433,4 +433,31 @@ final class AgentsListTests: XCTestCase {
             list.swipeDown(velocity: .fast)
         }
     }
+
+    /// 按状态: 已看 starts folded and its header is its one fold — one tap shows its agents, with no 还有 N 个空闲 row to
+    /// tap as well (2026-10-31: it took two taps where the other states take one); a second tap folds it again.
+    @MainActor func testStateGroupingOpensSeenInOneTap() throws {
+        app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES", "-dev.grouping", "state"]
+        app.launch()
+        see(filter("all"), "the quick filters", timeout: 15)
+        // 已看 is the last section, under every other agent (~120 in the mock).
+        for _ in 0..<20 where !(header("已看").exists && header("已看").isHittable) { app.swipeUp(velocity: .fast) }
+        let seen = see(header("已看"), "已看's header")
+        XCTAssertTrue(seen.label.contains("已折叠"), "已看 starts folded: \(seen.label)")
+        seen.tap()
+        wait("已看 opens") { self.header("已看").label.contains("已展开") }
+        // Its agents come right under the header (the list builds them as they scroll in).
+        app.swipeUp(velocity: .slow)
+        let top = header("已看").exists ? header("已看").frame.maxY : 0
+        let under = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["agents.row", "agents.compactRow"]))
+            .allElementsBoundByIndex.filter { $0.exists && $0.frame.minY > top }
+        XCTAssertFalse(under.isEmpty, "no agents under 已看 after one tap")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "展开 ")).firstMatch.exists,
+                       "a 还有 N 个空闲 row inside 已看")
+        shot("agents-state-seen-open")
+        header("已看").tap()
+        wait("已看 folds again") { self.header("已看").label.contains("已折叠") }
+    }
 }
