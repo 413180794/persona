@@ -503,7 +503,7 @@ struct AssistantTaskEditor: View {
             guard let id = saved?.id, !id.isEmpty, let api = model.api else { return }
             runs = (try? await api.scheduleRuns(ref: id)) ?? []
         }
-        .task { launchers = (try? await model.launchers(machineID)) ?? [] }
+        .task { launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsClaude) }
         #if DEBUG
         .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") == "bypassTask" { confirmBypass = true } }
         #endif

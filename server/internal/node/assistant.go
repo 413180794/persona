@@ -121,6 +121,9 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if launcher == "" {
 		launcher = "claude"
 	}
+	if err := n.assistantLauncherOK(ctx, launcher); err != nil {
+		return "", err
+	}
 	if cwd == "" {
 		cwd = st.Cwd
 	}
@@ -628,4 +631,17 @@ func (n *Node) notifySessions() {
 	n.revsChanged(list)
 	n.mu.Unlock()
 	_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
+}
+
+// assistantLauncherOK refuses a launcher that does not run Claude Code: the assistant is headless claude (-p,
+// --input-format stream-json), and a codex launcher fails on its first flag with "unexpected argument
+// '--input-format'" (2026-11-01: 设置 › 助手 had been set to cx_gpt and every message failed that way).
+func (n *Node) assistantLauncherOK(ctx context.Context, launcher string) error {
+	if launcher == "claude" {
+		return nil
+	}
+	if d := n.launcherProbeCached(ctx, launcher); d.Agent != "" && d.Agent != "claude" {
+		return fmt.Errorf("启动器 %s 跑的是 %s，Jarvis 助手只能用启动 Claude Code 的启动器：在 设置 › 助手 换一个", launcher, d.Agent)
+	}
+	return nil
 }

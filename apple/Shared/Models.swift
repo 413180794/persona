@@ -55,6 +55,11 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+extension Launcher {
+    /// Runs Claude Code (not codex): what the Jarvis assistant can use (it is headless `claude -p`).
+    var runsClaude: Bool { baseURL != "(codex)" }
+}
+
 nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {
     var name: String
     var path: String

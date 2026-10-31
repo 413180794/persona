@@ -219,6 +219,19 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			cfg.MachineID = in.MachineID
 		}
 		if in.Launcher != "" {
+			// The assistant is headless Claude Code: a launcher that runs codex would fail every message.
+			if m := h.byID[cfg.MachineID]; m != nil && in.Launcher != "claude" {
+				var res struct {
+					Detail proto.LauncherDetail `json:"detail"`
+				}
+				pctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+				err := m.call(pctx, "launchers.probe", map[string]any{"name": in.Launcher}, &res)
+				cancel()
+				if err == nil && res.Detail.Agent != "" && res.Detail.Agent != "claude" {
+					writeErr(w, http.StatusBadRequest, fmt.Errorf("%s 跑的是 %s，助手只能用启动 Claude Code 的启动器", in.Launcher, res.Detail.Agent))
+					return
+				}
+			}
 			cfg.Launcher = in.Launcher
 		}
 		if in.Main != "" {
