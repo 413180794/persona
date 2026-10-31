@@ -34,6 +34,18 @@ struct NewChatView: View {
 
     private var machine: Machine? { model.machine(machineID) }
 
+    @ViewBuilder private var promptField: some View {
+        #if os(macOS)
+        // A grouped Mac form shows a titled field as label + trailing value: the prompt took the right half.
+        TextField("想让 Claude 做什么？（可以留空）", text: $prompt, prompt: Text("想让 Claude 做什么？（可以留空）"), axis: .vertical)
+            .labelsHidden()
+            .lineLimit(3...10)
+        #else
+        TextField("想让 Claude 做什么？（可以留空）", text: $prompt, axis: .vertical)
+            .lineLimit(3...10)
+        #endif
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -130,8 +142,7 @@ struct NewChatView: View {
                 .tint(Theme.accent)
 
                 Section {
-                    TextField("想让 Claude 做什么？（可以留空）", text: $prompt, axis: .vertical)
-                        .lineLimit(3...10)
+                    promptField
                         .focused($promptFocused)
                         .accessibilityIdentifier("newChat.prompt")
                 } header: { Text("第一条消息") }

@@ -408,8 +408,15 @@ struct AssistantTaskEditor: View {
             }
             whenSection
             Section {
+                #if os(macOS)
+                // A grouped Mac form shows a titled field as label + trailing value: the prompt took the right half.
+                TextField("要 Jarvis 做什么", text: $draft.prompt, prompt: Text("要 Jarvis 做什么"), axis: .vertical)
+                    .labelsHidden()
+                    .lineLimit(8...)
+                #else
                 TextField("要 Jarvis 做什么", text: $draft.prompt, axis: .vertical)
                     .lineLimit(8...)
+                #endif
             } header: {
                 Text("提示词")
             } footer: {

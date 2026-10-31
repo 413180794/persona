@@ -341,7 +341,12 @@ struct ComposeView: View {
                 TextField("抄送", text: $draft.cc).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                 TextField("主题", text: $draft.subject)
                 Section {
+                    #if os(macOS)
+                    // A grouped Mac form shows a titled field as label + trailing value: the body took the right half.
+                    TextField("正文", text: $draft.body, prompt: Text("正文"), axis: .vertical).labelsHidden().lineLimit(10...40)
+                    #else
                     TextField("正文", text: $draft.body, axis: .vertical).lineLimit(10...40)
+                    #endif
                 }
                 if let error { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
@@ -491,8 +496,16 @@ struct AddMailAccountView: View {
         NavigationStack {
             Form {
                 Section {
+                    #if os(macOS)
+                    // A grouped Mac form shows a titled field as label + trailing value: the paste box took the right half.
+                    TextField("把邮箱信息整段粘贴进来：账号、密码、服务器…", text: $pasted,
+                              prompt: Text("把邮箱信息整段粘贴进来：账号、密码、服务器…"), axis: .vertical)
+                        .labelsHidden()
+                        .lineLimit(3...8)
+                    #else
                     TextField("把邮箱信息整段粘贴进来：账号、密码、服务器…", text: $pasted, axis: .vertical)
                         .lineLimit(3...8)
+                    #endif
                     HStack {
                         Button {
                             if let s = UIPasteboard.general.string { pasted = s }
