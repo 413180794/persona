@@ -133,7 +133,7 @@ struct AssistantTopBar: View {
         .task(id: hint) { await clearHint() }
     }
 
-    /// A multi-line closure in the modifier chain slows the release build's type-check (CLAUDE.md): a method instead.
+    /// A multi-line closure in the modifier chain slows the release build's type-check (docs/lessons/ios.md): a method instead.
     private func clearHint() async {
         guard hint != nil else { return }
         try? await Task.sleep(for: .seconds(3))

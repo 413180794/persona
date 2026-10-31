@@ -5,7 +5,7 @@ import { copyText } from "./atoms";
 import { Icon } from "./icons";
 
 // A link ends at whitespace or any non-ASCII character (Chinese text, full-width punctuation), without trailing
-// .,;:!? or an unbalanced ) ] (CLAUDE.md「链接在哪结束只有一个规则」). GFM's autolinks only end at whitespace, so
+// .,;:!? or an unbalanced ) ] (docs/lessons/ios.md: where a link ends). GFM's autolinks only end at whitespace, so
 // bare URLs are written as <url> before markdown sees them. Code is left alone.
 const BARE = /(^|[^\x21-\x7e]|[\s(])(https?:\/\/[\x21-\x7e]+)/g;
 

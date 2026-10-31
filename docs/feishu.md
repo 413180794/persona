@@ -97,4 +97,4 @@ raw 代理不透传客户端的 `x-lark-connector-account` 请求头，默认使
 
 ### 会话
 - `conversations/:feedId/settings`（公告）、`/pins`、`/resources?kind=docs|files|media`、`/todos`、`/members`；`favorites`；`threads/feed`。
-- 会话列表的坑见 `CLAUDE.md`（`isDone` 不可靠、置顶看 `onTopRankAt`、未知 scope 被当成 inbox）。
+- 会话列表的坑见 `docs/lessons/lark-mail.md`（`isDone` 不可靠、置顶看 `onTopRankAt`、未知 scope 被当成 inbox）。

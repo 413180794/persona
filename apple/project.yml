@@ -27,7 +27,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
   configs:
     Debug:
-      # The release machine's Swift gives up on expressions that dev machines still type-check (CLAUDE.md); warn early.
+      # The release machine's Swift gives up on expressions that dev machines still type-check (docs/lessons/ios.md); warn early.
       OTHER_SWIFT_FLAGS: "$(inherited) -Xfrontend -warn-long-expression-type-checking=150"
     Release:
       # Anti-tampering basics: no symbols or reflection names in the shipped binary.

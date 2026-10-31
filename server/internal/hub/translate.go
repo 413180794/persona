@@ -110,7 +110,7 @@ func (h *Hub) translateTexts(ctx context.Context, texts []string, target string)
 	}
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	// A reasoning model spends hidden tokens first (CLAUDE.md): leave plenty.
+	// A reasoning model spends hidden tokens first (docs/lessons/agents.md): leave plenty.
 	if err := h.triageModel().JSONMax(cctx, system, string(body), min(4000+total*3, 32000), &res); err != nil {
 		return nil, err
 	}

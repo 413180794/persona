@@ -413,7 +413,7 @@ struct AssistantText: View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Markdown(d.markdown)
                 .task(id: item.id) { await Self.preloadLinks(item) }
-                // Inside the theme (applied first), or the theme's text style wins (CLAUDE.md).
+                // Inside the theme (applied first), or the theme's text style wins (docs/lessons/ios.md).
                 .modifier(QuietMarkdown(on: quiet))
                 .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)

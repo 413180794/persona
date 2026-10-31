@@ -4,7 +4,7 @@ import XCTest
 /// opens at the bottom; at the bottom a new reply is followed; scrolled up, ↓ (回到最新) shows and brings you back; a
 /// reply that arrives while you read history does not pull you down. On an Agent's chat (working, 完成未看, and opened
 /// where you left off) and on the Jarvis page. Replies come from `/mock/say`. Where the list is comes from the app's `-showScrollState` probe:
-/// XCUITest's frames of rows in the flipped list are wrong (CLAUDE.md).
+/// XCUITest's frames of rows in the flipped list are wrong (docs/lessons/ios.md).
 final class ChatFollowTests: XCTestCase {
     private var hub: String!
     private let working = "macbook/a1f3c2d4-0000-4000-8000-000000000001" // 给天气 App 加主屏幕小组件, 15 exchanges in front

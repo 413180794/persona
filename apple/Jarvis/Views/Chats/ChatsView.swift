@@ -827,7 +827,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             if compact {
-                // Color.primary: a section header dims hierarchical styles a level (CLAUDE.md).
+                // Color.primary: a section header dims hierarchical styles a level (docs/lessons/ios.md).
                 Text(title).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
             } else {
                 Text(title)

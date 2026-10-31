@@ -61,7 +61,7 @@ struct KnowledgeView: View {
         .onChange(of: kind) { showIgnored = false }
         .refreshable { await load() }
         // Entries open with view-based links, not `navigationDestination(for:)`: this page is itself pushed with
-        // `navigationDestination(isPresented:)`, and a value-pushed page on top of that lands *under* it (CLAUDE.md):
+        // `navigationDestination(isPresented:)`, and a value-pushed page on top of that lands *under* it (docs/lessons/ios.md):
         // a hit seemed not to open, and back showed the entry's ⚠️ placeholder (2026-10-31).
         #if DEBUG
         // `-showKnowledgeEntry <kind>/<id>` (with `-openAssistantPage knowledge`): that entry's page, for screenshots;
@@ -237,7 +237,7 @@ struct KnowledgeView: View {
     }
 }
 /// The six kinds as chips with their icon (and how many, once loaded), all in sight: no sideways scroll view (the
-/// navigation stack can take one at the top of a page for the page's own and inset it, CLAUDE.md「布局与组件」, and
+/// navigation stack can take one at the top of a page for the page's own and inset it, docs/lessons/ios.md「布局与组件」, and
 /// 日程 was off the edge). Chips that do not fit drop their icons, then go to a second row.
 struct KBKindBar: View {
     @Binding var kind: KBKind
@@ -805,7 +805,7 @@ struct ItemFacts {
         openLabel = k == .docs ? "打开文档" : k == .meetings ? "打开会议纪要" : "打开日程"
     }
 
-    /// "10月30日 周五 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, CLAUDE.md), the year when not this one.
+    /// "10月30日 周五 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, docs/lessons/ios.md), the year when not this one.
     static func format(_ d: Date, now: Date = .now) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")

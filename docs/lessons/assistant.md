@@ -1,0 +1,23 @@
+# 经验：助手（无头 Claude / Codex）
+
+踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+
+- 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
+  （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
+- 无头助手（`claude -p`）默认权限模式下，连 Jarvis 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、
+  Monitor 事件就卡在批准上（2026-10-30 实测）。助手进程带 `--allowedTools mcp__jarvis`，会替用户出面的工具由 hub 自己再问（`docs/assistant.md`）。
+- 助手的后台任务和 Monitor 是 claude 进程的子进程：回收空闲进程、systemd 重启 jarvisd（杀整个 cgroup）都会把它们一起杀掉，对话永远等不到通知。
+  node 从 stream-json 的 `system/background_tasks_changed` 知道还有什么在跑，有任务就不回收，任务列表随时落库，重启后告诉对话丢了什么。
+- 助手按时做的事只能有一张表（2026-10-31，`docs/assistant.md`「定时任务」）：以前定时任务和跟进分两套，重复的巡检只能一轮接一轮地
+  `schedule_followup`，跑起来那一刻就从列表消失，卡在审批上的一个多小时里用户看不到、停不了。重复就做成重复（`every`），
+  一轮重排自己时 hub 认出是同一个任务；任务的模型 / 权限模式只让用户在 App 里改，助手不能自己提权。`bypassPermissions` 对无头 claude 只能启动时给。
+- 助手调飞书用 lark-connector 自带的 lark-connector skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；
+  `scripts/sync_lark-connector_skill.sh` 同步上游）。token 只进助手进程的环境变量；写操作靠 node 的 Bash PreToolUse 闸门（`node/larkgate.go`），
+  只给助手用的 `assistant-settings.json` 带这个 hook。闸门读不懂的命令里只要有 `ol POST/PUT/PATCH/DELETE` 也要手机确认，否则 bypass 模式会直接放过。
+  在 hub 上起测试实例用独立 HOME / 端口 / 库（`/tmp/jt`），别碰线上 jarvisd；`ssh … 'pkill -f 模式'` 会匹配到 ssh 自己的命令行把会话杀掉，模式写成 `[/]tmp/…`。
+- 助手用 Codex 时是 `codex app-server`（`docs/assistant.md`「Codex」）。踩过的：MCP 工具调用要批准，来的是 `mcpServer/elicitation/request`
+  （`_meta.codex_approval_kind: mcp_tool_call`），不是命令审批；MCP 工具默认 60 秒超时（ask_user 要调大 `tool_timeout_sec`）；命令的环境默认去掉
+  `*KEY*` / `*TOKEN*` 变量（ol 拿不到 token）；`turn/interrupt` 不停正在跑的命令，要再 `thread/backgroundTerminals/clean`（实验接口，导出协议要
+  `generate-ts --experimental` 才看得到）；thread id 由 Codex 定，MCP 进程起来时还不知道会话 id。飞书闸门靠「审批总会来」：别用 `approvalPolicy: never`。
+- 在 hub 机器上用假 HOME 起测试 hub 时，`~/.local/bin/codex` 包装脚本按 `$HOME/.npm-global` 找安装目录，假 HOME 里要软链过去，否则 app-server 一启动就退出。
+  `ssh … 'pkill -f "[d]rive.py x"'` 照样会杀掉 ssh 自己：命令行里后面还有一段原文 `drive.py x` 能匹配上；按 pid 杀（`pgrep -f '^/完整路径'`）。
