@@ -61,6 +61,7 @@ type Chat struct {
 	CompressedAt time.Time `json:"compressed_at,omitempty"`
 	CoveredUntil time.Time `json:"covered_until,omitempty"`
 	OneLine      string    `json:"one_line,omitempty"` // the summary's first line, for lists
+	TagRev       int       `json:"tag_rev,omitempty"`  // the tagging rules it was last tagged under (compress.go tagRev)
 	Created      time.Time `json:"created"`
 }
 

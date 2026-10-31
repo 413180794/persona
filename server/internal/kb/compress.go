@@ -52,6 +52,10 @@ JSON 字段：
 - one_line：一句话（30 字内）说这个会话现在在干什么。
 - importance：P0（关键：老板 / 核心项目 / 线上事故 / 截止临近）、P1（重要）、P2（一般）、P3（可忽略：通知、闲聊、广告）。
 - relevance：0–100，与我相关性。直接找我、我负责、在等我 → 70 以上；我参与但不是主角 → 40–70；只是旁观 → 40 以下。
+- 通知类（输入里标了「自动发出」的邮件，或者内容是系统通知、推广营销，哪怕署了人名）：收据、账单、续费 / 订阅、订单、推广营销、newsletter、欢迎信、
+  「协议已接受 / 资料已验证 / 已加入某计划」这类告知、测试邀请，一律 importance P3、relevance 20 以下，哪怕提到的是我的账号或产品。
+  只有要我在期限内去做点什么、不做会有后果的才按实际打高：存储超限要删文件、账号受限、扣款失败、不是我触发的安全提醒、
+  审核被拒要改、银行 / 平台要我补材料或约时间。
 - tags：2–6 个短标签，不预设；优先复用「已有标签」里意思相同的。
 - projects：会话里真人在推进的项目（需求、版本、活动、团队方向）。系统通知、营销、订阅、账单、自动提醒里提到的产品或服务**不是项目**，不要列。name 优先用「已知项目」里的原名；kind 是 short（有交付的短期项目）或 long
   （团队使命、长期方向）；aliases 是别称；update 一句话说这批新消息里这个项目有什么进展（没有就不要列这个项目）；my_role 是我在里面的角色（不知道就空）。
@@ -94,6 +98,9 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 		return e.Store.PutChat(c)
 	}
 	kind := map[string]string{"dm": "私聊", "group": "群聊", "bot": "机器人 / AI", "mail": "邮件往来"}[c.Kind]
+	if c.Kind == "mail" && !HasPeople(c) {
+		kind += "，自动发出（通知 / 营销地址，不是真人写的）"
+	}
 	var in strings.Builder
 	fmt.Fprintf(&in, "会话：%s（%s）\n\n已知项目：%s\n已有标签：%s\n\n# 已有的压缩上下文\n%s\n\n# 新消息\n%s",
 		c.Name, kind, e.projectNames(), strings.Join(e.TopTags(40), "、"), orNone(e.Store.Summary(KindChat, c.ID)), news)
@@ -124,6 +131,7 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	c.Pending = 0
 	c.CompressedAt = now
 	c.CoveredUntil = c.LastAt.Add(time.Minute)
+	c.TagRev = tagRev
 	if err := e.Store.PutChat(c); err != nil {
 		return err
 	}
@@ -146,7 +154,25 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 
 // automatedSender matches mail addresses of notifications and newsletters (only the inbox is read, so a reply of
 // the owner's rarely shows up: the sender is what tells).
-var automatedSender = regexp.MustCompile(`(?i)(^|[-_.@])(no[-_]?reply|do[-_]?not[-_]?reply|notifications?|notify|news(letter)?|marketing|mailer|info|support|service|billing|account|alerts?|updates?|hello|team)([-_.@]|$)`)
+var automatedSender = regexp.MustCompile(`(?i)(^|[-_.@])(no[-_]?reply|do[-_]?not[-_]?reply|notifications?|notify|news(letter)?|marketing|mailer|mailer-daemon|postmaster|bounces?|info|support|service|billing|account|alerts?|updates?|hello|team|receipts?|orders?|invoices?|payments?|contact|sales|promo(tions)?|offers?|rewards?|digest|submissions?|feedback|welcome)([-_.@]|$)`)
+
+// automatedLocal: a local part ending in one of those words ("applesupport", "teamnotify").
+var automatedLocal = regexp.MustCompile(`(?i)(support|service|notify|notifications?|alerts?|news|updates?|receipts?|billing)$`)
+
+// bulkDomain: the subdomains bulk mail goes out from (email.apple.com, em-s.dropbox.com, txn.dropbox.com, mg.…).
+var bulkDomain = regexp.MustCompile(`(?i)^(e|em|em-[a-z]+|email|emails|emessaging|message|messages|mail|mailer|mailing|news|newsletter|txn|transactional|notify|notifications|mg|send|sendgrid|bounce|marketing)[.]`)
+
+// newsletterHost: platforms every sender on is a newsletter.
+var newsletterHost = regexp.MustCompile(`(?i)(^|[.])(substack\.com|beehiiv\.com|mailchimp(app)?\.com|convertkit\.com|buttondown\.email|ghost\.io|medium\.com)$`)
+
+// automatedAddress reports whether a mail address looks like a system or bulk sender rather than a person.
+func automatedAddress(addr string) bool {
+	if automatedSender.MatchString(addr) {
+		return true
+	}
+	local, domain, ok := strings.Cut(addr, "@")
+	return ok && (automatedLocal.MatchString(local) || bulkDomain.MatchString(domain) || newsletterHost.MatchString(domain))
+}
 
 // HasPeople reports whether real people talk in a chat: chats with bots and automated mail (notifications,
 // newsletters) do not make projects.
@@ -155,7 +181,7 @@ func HasPeople(c *Chat) bool {
 	case "bot":
 		return false
 	case "mail":
-		return c.Mine || !automatedSender.MatchString(c.SourceID[strings.Index(c.SourceID, "-")+1:])
+		return c.Mine || !automatedAddress(c.SourceID[strings.Index(c.SourceID, "-")+1:])
 	}
 	return true
 }
@@ -182,6 +208,28 @@ func (e *Engine) IgnoreNoiseProjects() int {
 				e.index(KindProject, p.Slug, p.Name, p.Tagging, p.OneLine, p.Updated)
 				n++
 			}
+		}
+	}
+	return n
+}
+
+// tagRev is the version of the tagging rules; chats tagged under an older one can be tagged again (RetagMail).
+// 1: notifications (receipts, renewals, promotions, invitations) are P3 and at most 20 unless they need me to act.
+const tagRev = 1
+
+// RetagMail queues mail the owner never replied to, tagged under older rules, for one more compression, so the rules
+// reach what is already there (receipts and promotions had come out at relevance 60–75, some from addresses that
+// passed for people). Hand-tagged ones stay. Returns how many were queued.
+func (e *Engine) RetagMail() int {
+	n := 0
+	for _, c := range e.Store.Chats() {
+		if c.Kind != "mail" || c.Mine || c.Locked || c.TagRev >= tagRev || c.CompressedAt.IsZero() {
+			continue
+		}
+		c.CoveredUntil = time.Time{} // read its messages again; the old summary goes in as context
+		c.Pending = max(c.Pending, 1)
+		if e.Store.PutChat(c) == nil {
+			n++
 		}
 	}
 	return n

@@ -90,6 +90,9 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	if n := e.IgnoreNoiseProjects(); n > 0 {
 		h.logf("kb: %d project(s) from notifications marked ignored", n)
 	}
+	if n := e.RetagMail(); n > 0 {
+		h.logf("kb: %d mail chat(s) queued to be tagged again under the current rules", n)
+	}
 	go h.kbLoop(ctx)
 }
 

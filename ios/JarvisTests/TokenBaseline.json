@@ -13,8 +13,6 @@
     "padding" : 1
   },
   "Jarvis\/Views\/Assistant\/AssistantSidebar.swift" : {
-    "animation" : 2,
-    "cornerRadius" : 3,
     "padding" : 1
   },
   "Jarvis\/Views\/Chat\/ChatView.swift" : {

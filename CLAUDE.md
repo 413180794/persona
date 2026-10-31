@@ -126,6 +126,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 
 - 多个 agent 同时在这个仓库干活：模拟器各用各的（`SIM=<udid> scripts/sim.sh`），别人没写完的文件编译不过时在 `git worktree` 里构建自己的改动；
   提交只暂存自己的文件 / hunk。
+- mock hub 的端口也会撞（2026-10-31：别的车道的 `mock_hub.py` 占着 18794，自己带 `MOCK_DRAWER=1` 的 mock 起不来，测试连到别人的 mock 上，
+  报「对话没加载」）：起 mock 前 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 看一眼，失败要看 mock 的日志，别只看测试报错。
 - 多个 agent 同时往 master 推：rebase 冲突时不要用自己的旧副本整文件覆盖别人的改动（2026-10-25 一次 rebase 把浅蓝气泡、通知跳转修复整个盖回去了）；
   解决冲突只改冲突块，push 前 `git diff origin/master...HEAD --stat` 看看有没有动到不是自己的文件。打 TestFlight 前确认 master 是修好的那一版。
 - 多个 agent 并行改同一仓库（飞书工作台 6 个 worker，见 `docs/feishu.md`）：每人独立 worktree + 独立克隆模拟器；新增类型带领域前缀
@@ -433,6 +435,21 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   而且别开 `.textSelection(.enabled)`：实测打开慢约 40%，每段进屏的长帧从约 40 ms 变成约 60 ms（`docs/ios.md`「文件查看器」）。
 - 消息里的路径只在那台机器上真的有时才做成可点的文件块（`FilePresence` 批量问 `GET …/stat`，不确定就不链接）：以前别的机器的路径（hub 的
   `~/.jarvis/…`）也能点，点开只说「打不开这个文件」。
+
+- 自己判断方向的 `UIPanGestureRecognizer`：`gestureRecognizerShouldBegin` 被调用时 `translation` 还是 0，`velocity` 是最后两个采样的猜测
+  （一次 30° 的斜划读成 (1, 68)，几乎竖直向下），按它判断就会把斜着的拖动交给列表。要在识别器子类里记下按下的位置，按实际位移判断
+  （`DrawerPan.Recognizer`，2026-10-31「划了没反应」）。外层的 pan 和里面的 ScrollView 是赛跑：斜一点（40°）的拖动，竖直分量先过滚动视图的门槛，
+  外层连问都没被问（日志里什么都没有，测试时好时坏）；横向滚动的代码块在边缘也会抢去做回弹。让滚动视图的 pan 等外层先判断
+  （`gestureRecognizer(_:shouldBeRequiredToFailBy:)`），外层在同样的几个点内判断完，滚动不会变晚。
+- 跟手的拖动里别切 tab 栏（`.toolbarVisibility(_, for: .tabBar)`）：它改页面的安全区，整页（导航栈、输入框、每个 UITextField）在拖动第一帧
+  重新布局一次（Jarvis 侧边栏 20–40 ms）。要让它让开就淡出：UIKit 的 tab 栏控制器会在 SwiftUI 刷新 tab 栏时把 `tabBar.alpha` 改回 1，
+  淡出 tab 栏外面只装着它的那层容器（`AssistantDrawer.applyToUIKit`）。
+- SwiftUI 的 `.accessibilityHidden(true)` 藏不住里面由 UIKit 承载的部分（TextField、ScrollView 和其中的行）：XCUITest 照样找得到，
+  VoiceOver 也会走进去；`opacity(0)` 也一样。一直建着、平时藏起来的大块界面（Jarvis 侧边栏）放进自己的 `UIHostingController`，用 UIKit 的
+  `isHidden` 藏。SwiftUI 会在每次更新时重设 representable 给它的那个视图的 frame、transform、alpha、isHidden，自己要动的是里面一层
+  （`DrawerSidebarHost.Container`）；整套环境用 `.environment(\.self, context.environment)` 带进去。
+- 量拖动 / 动画每帧的主线程耗时别在 XCUITest 下量：它打开无障碍，SwiftUI 每帧多做很多事。App 里用脚本按显示帧驱动同一条代码路径，
+  `simctl launch` 启动后量（`DrawerAutoDrag`，`docs/testing.md`「侧边栏拖动」）。
 
 ### iOS：Swift 与编译
 

@@ -2,37 +2,133 @@ import SwiftUI
 import UIKit
 
 /// How far the Jarvis tab's sidebar is out (0 closed … 1 open). Its own object so following the finger only redraws
-/// the drawer's frame (offsets, the page's corners), never the conversation.
+/// the page's motion modifier (offset, scale, opacities) and moves two UIKit views, never the conversation or the sidebar.
 @Observable final class AssistantDrawer {
     var progress: CGFloat = 0 {
-        didSet { if (progress > 0) != isOut { isOut = progress > 0 } }
+        didSet {
+            if (progress > 0) != isOut { isOut = progress > 0 }
+            applyToUIKit()
+        }
     }
     /// Out at all: changes only when the sidebar starts to come out or is fully back, so views that only care
-    /// whether it is out (the tab bar) do not redraw on every frame of a drag.
+    /// whether it is out (the sidebar clearing its search) do not redraw on every frame of a drag.
     private(set) var isOut = false
     /// The sidebar's width, measured by `AssistantDrawerLayout`.
     @ObservationIgnored var width: CGFloat = 300
     @ObservationIgnored var dragStart: CGFloat = 0
+    /// The tab bar fades out as the sidebar comes out (it would sit over the sidebar's bottom row and repeat its 设置).
+    /// Faded, not hidden: hiding it changes the page's safe area, and the whole conversation was laid out again on the
+    /// first frame of every drag and the last of every close (20–40 ms each, sampled). Set by `DrawerTabBarProbe`.
+    @ObservationIgnored weak var tabBar: UITabBar? {
+        didSet { applyToUIKit() }
+    }
+    /// The sidebar's own hosting view (`DrawerSidebarHost`): moved and faded here, hidden while closed.
+    @ObservationIgnored weak var sidebarView: UIView? {
+        didSet { applyToUIKit() }
+    }
+    /// The screen's own bottom inset (the home indicator) without the tab bar: the sidebar reaches down to it.
+    var screenBottom: CGFloat = 0
+    /// A settle's animation is running: the sidebar is hidden when it ends, not when it starts.
+    @ObservationIgnored private var settling = false
 
     var isOpen: Bool { isOut }
 
-    func open() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        withAnimation(.snappy(duration: 0.32)) { progress = 1 }
+    /// The UIKit side of the progress: the tab bar's fade, the sidebar's slide and fade. Inside `settle` these
+    /// animate with UIKit, on the same spring as the page.
+    func applyToUIKit() {
+        if let tabBar {
+            // The bar's own container, when it holds only the bar: the tab bar controller sets the bar's alpha back to
+            // 1 whenever SwiftUI refreshes the tab bar's visibility (a launch with the sidebar out showed it again).
+            let fading = tabBar.superview.flatMap { $0.subviews == [tabBar] ? $0 : nil } ?? tabBar
+            let alpha = 1 - progress
+            if fading.alpha != alpha { fading.alpha = alpha }
+            tabBar.isUserInteractionEnabled = progress == 0
+            tabBar.accessibilityElementsHidden = progress > 0
+        }
+        if let sidebarView {
+            sidebarView.transform = CGAffineTransform(translationX: -(1 - progress) * width * 0.3, y: 0)
+            let hidden = progress == 0 && !settling
+            sidebarView.alpha = hidden ? 0 : 0.4 + 0.6 * progress
+            sidebarView.isHidden = hidden
+            sidebarView.accessibilityElementsHidden = hidden
+        }
     }
 
-    func close() { withAnimation(.snappy(duration: 0.3)) { progress = 0 } }
+    /// `velocity`: the finger's, in points per second, when a drag lets go (the spring carries on at that speed).
+    func open(velocity: CGFloat = 0) {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        settle(at: 1, velocity: velocity)
+    }
 
-    /// Where a drag lets go: past half way (or flicked) open, otherwise closed. `velocity` in points per second.
+    func close(velocity: CGFloat = 0) { settle(at: 0, velocity: velocity) }
+
+    /// A drag took hold: the finger takes over where the page is (even mid-animation).
+    func dragBegan() {
+        dragStart = progress
+        if progress == 0 {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+    }
+
+    /// The finger is `x` points to the right of where the drag took hold. Straight to the value: no animation.
+    func drag(_ x: CGFloat) {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { progress = min(1, max(0, dragStart + x / max(width, 1))) }
+    }
+
+    /// The finger let go at `velocity` points per second; returns whether it settles open.
+    @discardableResult func letGo(velocity: CGFloat) -> Bool {
+        let opens = Self.settlesOpen(progress: progress, velocity: velocity, width: max(width, 1))
+        if opens {
+            if dragStart == 0 { Haptics.tap() }
+            open(velocity: velocity)
+        } else {
+            close(velocity: velocity)
+        }
+        return opens
+    }
+
+    private func settle(at target: CGFloat, velocity: CGFloat) {
+        let way = (target - progress) * max(width, 1)
+        let share = abs(way) > 1 ? max(0, Double(velocity / way)) : 0
+        let motion = Theme.Motion.drawer(velocity: share)
+        #if DEBUG
+        DrawerProbe.note("settle", ["from": Double(progress), "to": Double(target), "share": share])
+        #endif
+        // The same spring for the tab bar and the sidebar (UIKit) as for the page (SwiftUI).
+        settling = true
+        UIView.animate(motion) {
+            withAnimation(motion) { progress = target }
+        } completion: { [weak self] in
+            guard let self else { return }
+            settling = false
+            applyToUIKit()
+        }
+    }
+
+    /// Where a drag lets go, like the system's back swipe: a flick goes its way, otherwise past half way (counting a
+    /// little of where it is heading) opens. `velocity` in points per second.
     nonisolated static func settlesOpen(progress: CGFloat, velocity: CGFloat, width: CGFloat) -> Bool {
-        if abs(velocity) > 600 { return velocity > 0 }
-        return progress + velocity * 0.15 / max(width, 1) > 0.5
+        if abs(velocity) > 300 { return velocity > 0 }
+        return progress + velocity * 0.2 / max(width, 1) > 0.5
+    }
+
+    /// Whether a touch that has moved `dx`, `dy` from where it went down is the drawer's: within 45° of horizontal
+    /// (a thumb's slant; vertical scrolls are steeper), and while closed only to the right.
+    nonisolated static func takes(dx: CGFloat, dy: CGFloat, isOpen: Bool) -> Bool {
+        abs(dx) > abs(dy) && (isOpen || dx > 0)
     }
 }
 
 /// The sidebar beside the page, ChatGPT-style: it comes out from the left and pushes the page to the right, where
 /// the page stays as a rounded card at the edge (a tap on it, or a drag back, closes). Dragging to the right
 /// anywhere on the page opens it (`DrawerPan`).
+///
+/// The sidebar stays built while closed (hidden): building it on the first frame of a drag was most of that frame.
+/// While the finger moves only `DrawerPageMotion` reads the progress (the sidebar and the tab bar are moved by UIKit,
+/// `AssistantDrawer.applyToUIKit`), and it changes nothing but transforms and opacities: the corners, shadow and edge
+/// line are fixed shapes faded in, not redrawn per frame. docs/testing.md「侧边栏拖动」has the numbers.
 struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     let drawer: AssistantDrawer
     /// The page is at its root (nothing pushed): only then does a drag open the sidebar.
@@ -43,63 +139,185 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.82, 380)
-            let p = drawer.progress
             ZStack(alignment: .leading) {
-                if p > 0 {
-                    sidebar
-                        .frame(width: width)
-                        .offset(x: -(1 - p) * width * 0.3)
-                        .opacity(0.4 + 0.6 * p)
-                        .accessibilityIdentifier("assistant-sidebar")
-                }
+                DrawerSidebarHost(drawer: drawer, content: sidebar.padding(.bottom, drawer.screenBottom))
+                    .frame(width: width)
+                    // Down under the faded tab bar, to the screen's own edge.
+                    .ignoresSafeArea(.container, edges: .bottom)
                 page
-                    // While the sidebar is out the page is only a card to tap back to (the overlay below says so).
-                    .accessibilityHidden(p > 0)
-                    .mask { RoundedRectangle(cornerRadius: 34 * p, style: .continuous).ignoresSafeArea() }
-                    .background {
-                        RoundedRectangle(cornerRadius: 34 * p, style: .continuous)
-                            .fill(Theme.pageBackground)
-                            .shadow(color: .black.opacity(0.18 * p), radius: 24)
-                            .ignoresSafeArea()
-                    }
-                    // In dark mode the shadow is invisible: a hairline keeps the card apart from the sidebar.
-                    .overlay {
-                        if p > 0 {
-                            RoundedRectangle(cornerRadius: 34 * p, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.12 * p), lineWidth: 1)
-                                .ignoresSafeArea()
-                                .allowsHitTesting(false)
-                        }
-                    }
-                    .overlay {
-                        if p > 0 {
-                            // The page at the edge: dimmed a little, and a tap on it closes the sidebar.
-                            Color.black.opacity(0.06 * p)
-                                .contentShape(.rect)
-                                .ignoresSafeArea()
-                                .onTapGesture { drawer.close() }
-                                .accessibilityElement()
-                                .accessibilityLabel("关闭侧边栏")
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityAction { drawer.close() }
-                                .accessibilityIdentifier("assistant-drawer-close")
-                        }
-                    }
-                    .scaleEffect(1 - 0.06 * p, anchor: .leading)
-                    .offset(x: p * width)
+                    .modifier(DrawerPageMotion(drawer: drawer, width: width))
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
             .background { Color(.secondarySystemBackground).ignoresSafeArea() }
             .gesture(DrawerPan(drawer: drawer, enabled: enabled))
+            .background { DrawerTabBarProbe(drawer: drawer) }
             .onAppear { drawer.width = width }
             .onChange(of: width) { drawer.width = width }
         }
     }
 }
 
-/// The drag that opens and closes the sidebar. A UIKit pan so it can decide at the start of the touch: it only
-/// starts sideways (vertical drags stay the list's), only to the right while closed, and never on something that
-/// scrolls sideways itself (a wide code block or table that is not at its left edge) — those scroll first.
+/// Finds the tab bar and the screen's bottom inset for `AssistantDrawer`.
+private struct DrawerTabBarProbe: UIViewRepresentable {
+    let drawer: AssistantDrawer
+
+    func makeUIView(context: Context) -> Probe {
+        let v = Probe()
+        v.drawer = drawer
+        v.isUserInteractionEnabled = false
+        return v
+    }
+
+    func updateUIView(_ v: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        weak var drawer: AssistantDrawer?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard let drawer else { return }
+            guard let window else {
+                // Another tab (a notification can switch while the sidebar is out): the bar is that tab's again.
+                // Without animation: the bar shows on the other tab, and the sidebar is in when the user comes back.
+                drawer.progress = 0
+                drawer.tabBar = nil
+                return
+            }
+            var r: UIResponder? = self
+            while let next = r?.next, !(next is UIViewController) { r = next }
+            drawer.tabBar = (r?.next as? UIViewController)?.tabBarController?.tabBar
+            drawer.screenBottom = window.safeAreaInsets.bottom
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            if let window, let drawer, drawer.screenBottom != window.safeAreaInsets.bottom { drawer.screenBottom = window.safeAreaInsets.bottom }
+        }
+    }
+}
+
+/// The sidebar in a hosting controller of its own, with the page's whole environment. It stays built while closed
+/// (building it on a drag's first frame cost that frame 15–20 ms on the simulator), and closed it has to be gone from
+/// VoiceOver too: SwiftUI's `accessibilityHidden` left its search field, scroll view and rows in the tree. A UIKit view
+/// can be hidden for real (`AssistantDrawer.sidebarView`), and moved and faded without SwiftUI updating anything.
+private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
+    let drawer: AssistantDrawer
+    let content: Content
+
+    /// SwiftUI sets the frame, transform, alpha and hidden flag of the view it is given (every update put the
+    /// sidebar back in place, shown): the hosting view inside it is the drawer's own.
+    final class Container: UIViewController {
+        let host: UIHostingController<AnyView>
+
+        init(_ root: AnyView) {
+            host = UIHostingController(rootView: root)
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        /// Touches only for the sidebar itself: closed (hidden), the container is clear room over the page's top bar and
+        /// conversation, and took the 历史对话 button's tap on a 6.3" phone.
+        final class PassThrough: UIView {
+            override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+                let hit = super.hitTest(point, with: event)
+                return hit === self ? nil : hit
+            }
+        }
+
+        override func loadView() { view = PassThrough() }
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .clear
+            // The frame given here is the sidebar's whole room; only the keyboard still insets it.
+            host.safeAreaRegions = .keyboard
+            host.sizingOptions = []
+            host.view.backgroundColor = .clear
+            addChild(host)
+            view.addSubview(host.view)
+            host.didMove(toParent: self)
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            // Bounds and center, not frame: the drawer keeps a transform on it.
+            host.view.bounds = view.bounds
+            host.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        }
+    }
+
+    func makeUIViewController(context: Context) -> Container {
+        let c = Container(root(context))
+        c.loadViewIfNeeded()
+        drawer.sidebarView = c.host.view
+        return c
+    }
+
+    func updateUIViewController(_ c: Container, context: Context) {
+        c.host.rootView = root(context)
+        if drawer.sidebarView !== c.host.view { drawer.sidebarView = c.host.view }
+    }
+
+    private func root(_ context: Context) -> AnyView {
+        AnyView(content.accessibilityIdentifier("assistant-sidebar").environment(\.self, context.environment))
+    }
+}
+
+/// The page pushed aside: a card with rounded corners, a shadow and (dark mode) an edge line, dimmed a little; a tap on
+/// it closes the sidebar.
+private struct DrawerPageMotion: ViewModifier {
+    let drawer: AssistantDrawer
+    let width: CGFloat
+
+    func body(content: Content) -> some View {
+        let p = drawer.progress
+        let out = p > 0
+        // The corners only change when the page leaves or comes back to full screen (where the screen's own, rounder
+        // corners hide them), so the mask and the shadow are not redrawn on every frame.
+        let card = RoundedRectangle(cornerRadius: out ? Theme.Radius.page : 0, style: .continuous)
+        content
+            // While the sidebar is out the page is only a card to tap back to (the overlay below says so).
+            .accessibilityHidden(out)
+            .mask { card.ignoresSafeArea() }
+            .background {
+                ZStack {
+                    card.fill(Color.black).shadow(color: .black.opacity(0.18), radius: 24).opacity(p)
+                    card.fill(Theme.pageBackground)
+                }
+                .ignoresSafeArea()
+            }
+            .overlay {
+                if out {
+                    // In dark mode the shadow is invisible: a hairline keeps the card apart from the sidebar.
+                    card.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                        .opacity(p)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                    // The page at the edge: dimmed a little, and a tap on it closes the sidebar.
+                    Color.black.opacity(0.06)
+                        .opacity(p)
+                        .contentShape(.rect)
+                        .ignoresSafeArea()
+                        .onTapGesture { drawer.close() }
+                        .accessibilityElement()
+                        .accessibilityLabel("关闭侧边栏")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { drawer.close() }
+                        .accessibilityIdentifier("assistant-drawer-close")
+                }
+            }
+            .scaleEffect(1 - 0.06 * p, anchor: .leading)
+            .offset(x: p * width)
+    }
+}
+
+/// The drag that opens and closes the sidebar. A UIKit pan so it can decide when the finger has moved a little: it takes
+/// the touch when that move is within 45° of horizontal (steeper drags stay the list's), only to the right while closed,
+/// and never on something that scrolls sideways itself (a wide code block or table that is not at its left edge) —
+/// those scroll first. The direction comes from where the touch went down (`Recognizer.start`): the pan's own
+/// translation is still zero when it asks, and its velocity then is a guess from the last two samples (a 30° drag
+/// read as almost straight down, so a slanted swipe did nothing).
 struct DrawerPan: UIGestureRecognizerRepresentable {
     let drawer: AssistantDrawer
     var enabled: Bool
@@ -110,14 +328,30 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         init(drawer: AssistantDrawer) { self.drawer = drawer }
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard enabled, let pan = g as? UIPanGestureRecognizer, let view = pan.view else { return false }
-            let v = pan.velocity(in: view), t = pan.translation(in: view)
-            let dx = t.x != 0 ? t.x : v.x, dy = t.y != 0 ? t.y : v.y
-            guard abs(dx) > abs(dy) * 1.2 else { return false } // sideways only
+            guard enabled, let pan = g as? Recognizer, let view = pan.view, let start = pan.start else { return false }
+            let now = pan.location(in: view)
+            let dx = now.x - start.x, dy = now.y - start.y
+            #if DEBUG
+            pan.asked = true
+            func refused(_ why: String) -> Bool {
+                DrawerProbe.note("refused", ["why": why, "dx": Int(dx), "dy": Int(dy)])
+                return false
+            }
+            #else
+            func refused(_ why: String) -> Bool { false }
+            #endif
+            guard AssistantDrawer.takes(dx: dx, dy: dy, isOpen: drawer.isOpen) else { return refused("direction") }
             if drawer.isOpen { return true }
-            guard dx > 0 else { return false } // closed: only a drag to the right opens it
-            let start = CGPoint(x: pan.location(in: view).x - t.x, y: pan.location(in: view).y - t.y)
-            return !Self.sidewaysScroller(at: start, in: view)
+            return Self.sidewaysScroller(at: start, in: view) ? refused("sideways scroller") : true
+        }
+
+        /// Scroll views under the page wait for the drawer to decide, which it does within the same few points they
+        /// would start in (so scrolling starts no later). Without this the conversation's pan won the race on a
+        /// thumb's 40° swipe (its vertical part passed the list's threshold first) and the drawer was never asked:
+        /// the swipe did nothing. A code block at its left edge likewise took a drag to the right to bounce.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            guard let s = other.view as? UIScrollView else { return false }
+            return other === s.panGestureRecognizer
         }
 
         /// Something under the finger scrolls sideways and has room to go back (it is not at its left edge).
@@ -134,40 +368,90 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         }
     }
 
+    /// The pan, remembering where the touch went down.
+    final class Recognizer: UIPanGestureRecognizer {
+        private(set) var start: CGPoint?
+        #if DEBUG
+        var asked = false
+        private var moved: CGPoint = .zero
+        #endif
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            if start == nil { start = touches.first?.location(in: view) }
+            #if DEBUG
+            asked = false
+            moved = .zero
+            #endif
+            super.touchesBegan(touches, with: event)
+        }
+
+        #if DEBUG
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesMoved(touches, with: event)
+            if let s = start, let p = touches.first?.location(in: view) { moved = CGPoint(x: p.x - s.x, y: p.y - s.y) }
+        }
+        #endif
+
+        override func reset() {
+            #if DEBUG
+            // Another gesture took the touch before this one was asked (`DrawerProbe`).
+            if !asked, hypot(moved.x, moved.y) > 10 { DrawerProbe.note("lost", ["dx": Int(moved.x), "dy": Int(moved.y)]) }
+            #endif
+            start = nil
+            super.reset()
+        }
+    }
+
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator(drawer: drawer) }
 
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let g = UIPanGestureRecognizer()
+    func makeUIGestureRecognizer(context: Context) -> Recognizer {
+        let g = Recognizer()
         g.delegate = context.coordinator
         g.maximumNumberOfTouches = 1
         return g
     }
 
-    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+    func updateUIGestureRecognizer(_ recognizer: Recognizer, context: Context) {
         context.coordinator.enabled = enabled
     }
 
-    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        let width = max(drawer.width, 1)
+    func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
         switch recognizer.state {
         case .began:
-            drawer.dragStart = drawer.progress
-            if drawer.progress == 0 {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
+            #if DEBUG
+            DrawerProbe.note("began", ["from": Double(drawer.progress)])
+            DrawerProbe.shared.dragBegan()
+            #endif
+            drawer.dragBegan()
+            drawer.drag(recognizer.translation(in: recognizer.view).x)
         case .changed:
-            let x = recognizer.translation(in: recognizer.view).x
-            drawer.progress = min(1, max(0, drawer.dragStart + x / width))
-        case .ended, .cancelled, .failed:
+            drawer.drag(recognizer.translation(in: recognizer.view).x)
+        case .ended:
             let v = recognizer.velocity(in: recognizer.view).x
-            if recognizer.state == .ended, AssistantDrawer.settlesOpen(progress: drawer.progress, velocity: v, width: width) {
-                if drawer.dragStart == 0 { Haptics.tap() }
-                drawer.open()
-            } else {
-                drawer.close()
-            }
+            let at = drawer.progress
+            let opens = drawer.letGo(velocity: v)
+            #if DEBUG
+            DrawerProbe.note("ended", ["at": Double(at), "velocity": Int(v), "open": opens])
+            DrawerProbe.shared.dragEnded(opens ? "open" : "closed")
+            #endif
+        case .cancelled, .failed:
+            drawer.close()
+            #if DEBUG
+            DrawerProbe.shared.dragEnded("cancelled")
+            #endif
         default: break
         }
+    }
+}
+
+/// Calls `closed` when the drawer is back in: only this empty view reads whether it is out, so the sidebar itself is
+/// not redrawn when it comes out.
+private struct SidebarClosed: View {
+    let drawer: AssistantDrawer
+    var closed: () -> Void
+
+    var body: some View {
+        Color.clear.onChange(of: drawer.isOut) { _, out in if !out { closed() } }
     }
 }
 
@@ -183,6 +467,8 @@ struct AssistantSidebar: View {
     var openKnowledge: () -> Void
     /// nil when the tab bar is beside the sidebar (a column on a wide display): no second way to 设置.
     var openSettings: (() -> Void)?
+    /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
+    var drawer: AssistantDrawer?
     @State private var query = ""
     @State private var showAllOlder = false
     @State private var ending: Session?
@@ -221,6 +507,14 @@ struct AssistantSidebar: View {
             if let openSettings { settingsRow(openSettings) }
         }
         .confirmClose($ending)
+        .background {
+            if let drawer {
+                SidebarClosed(drawer: drawer) {
+                    query = ""
+                    searching = false
+                }
+            }
+        }
     }
 
     // MARK: Top: search and 新对话

@@ -921,6 +921,17 @@ if os.environ.get("MOCK_LONG_HISTORY") == "1":
         _d["seq"] = _i + 1
     ITEMS[WIDGET] = _all
 
+# MOCK_DRAWER=1: the main conversation ends with a reply whose code block is much wider than the phone, for the sidebar's
+# drag (DrawerSwipeTests: a drag on the code block scrolls it, a drag anywhere else opens the sidebar).
+if os.environ.get("MOCK_DRAWER") == "1":
+    ITEMS[ASK1] = ITEMS[ASK1] + [
+        it("user", "text", 2, text="给我一条命令，把今天的照片按拍摄时间改名"),
+        it("assistant", "text", 1, text=(
+            "在照片目录里跑这一条：\n\n```sh\n"
+            "exiftool '-FileName<DateTimeOriginal' -d '%Y-%m-%d %H.%M.%S%%-c.%%e' -ext jpg -ext heic -if '$DateTimeOriginal ge \"$(date +%Y:%m:%d)\"' .\n"
+            "```\n\n同一秒拍的会自动加上 -1、-2。")),
+    ]
+
 # MOCK_RICH=1: a reply with a link in Chinese prose (full-width brackets right after it), a three-column table whose
 # last column is long Chinese text, and a seven-column table that cannot fit (RichReplyTests).
 RICH = "a1f3c2d4-0000-4000-8000-00000000000a"

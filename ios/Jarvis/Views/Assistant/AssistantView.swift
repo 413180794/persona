@@ -44,10 +44,9 @@ struct AssistantView: View {
             .modifier(SidebarTopFill(shown: columns != .detailOnly))
             .navigationSplitViewStyle(.balanced)
         } else {
+            // The sidebar takes the whole height, like ChatGPT's: the tab bar fades away as it comes out
+            // (`AssistantDrawer.tabBar`).
             AssistantDrawerLayout(drawer: drawer, enabled: atRoot, sidebar: { sidebar(column: false) }, page: stack)
-                // The sidebar takes the whole height, like ChatGPT's: the tab bar would sit over its bottom row and
-                // repeat its 设置 right under the sidebar's own.
-                .toolbarVisibility(drawer.isOpen ? .hidden : .automatic, for: .tabBar)
         }
     }
 
@@ -63,7 +62,8 @@ struct AssistantView: View {
                          openProfile: { drawer.close(); showProfile = true },
                          openRoutines: { drawer.close(); showRoutines = true },
                          openKnowledge: { drawer.close(); showKnowledge = true },
-                         openSettings: column ? nil : { drawer.close(); model.selectedTab = .settings })
+                         openSettings: column ? nil : { drawer.close(); model.selectedTab = .settings },
+                         drawer: column ? nil : drawer)
     }
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
@@ -116,7 +116,8 @@ struct AssistantView: View {
             .onChange(of: model.assistantReveal) { backToRoot(); drawer.close() }
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
-            // `-openAssistantSidebar YES`: the sidebar is out.
+            // `-openAssistantSidebar YES`: the sidebar is out; `-showDrawerAutoDrag <rounds>`: scripted drags, measured
+            // (`DrawerProbe`, with `-showDrawerProbe YES`).
             .navigationDestination(isPresented: $showAvatars) { PersonaGallery() }
             .onAppear {
                 switch UserDefaults.standard.string(forKey: "openAssistantPage") {
@@ -126,6 +127,8 @@ struct AssistantView: View {
                 default: break
                 }
                 if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { drawer.progress = 1 }
+                let rounds = UserDefaults.standard.integer(forKey: "showDrawerAutoDrag")
+                if rounds > 0 { Task { await DrawerAutoDrag(drawer: drawer).run(rounds: rounds) } }
             }
             #endif
             .task { await model.refreshAssistant() }

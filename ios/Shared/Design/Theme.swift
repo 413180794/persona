@@ -105,6 +105,8 @@ nonisolated enum Theme {
         static let bubble: CGFloat = 20
         /// Floating panels over the chat (interactions, strips, the key bar), the terminal card, the composer's field.
         static let panel: CGFloat = 22
+        /// A whole page pushed aside as a card (the Jarvis tab's page beside its sidebar).
+        static let page: CGFloat = 34
     }
 
     /// Spacing on a 4 pt grid, BeautifulUI's (`BUISpacing`): 2 4 6 8 12 16 24 32, nothing in between. Pages and the
@@ -329,6 +331,11 @@ nonisolated enum Theme {
         static let concealTime = 0.2
         static let reveal = Animation.easeOut(duration: revealTime)
         static let conceal = Animation.easeIn(duration: concealTime)
+        /// A drawer let go by the finger (the Jarvis tab's sidebar): no bounce, carrying on at the finger's speed.
+        /// `velocity` is the share of the remaining way covered per second when it lets go (0 from a button).
+        static func drawer(velocity: Double = 0) -> Animation {
+            .interpolatingSpring(duration: 0.32, bounce: 0, initialVelocity: velocity)
+        }
     }
 
     /// Categories with no meaning beyond telling them apart (memory types).

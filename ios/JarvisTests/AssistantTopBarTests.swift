@@ -27,6 +27,17 @@ struct AssistantTopBarTests {
         #expect(AssistantDrawer.settlesOpen(progress: 0.2, velocity: 900, width: 300)) // flicked open
         #expect(!AssistantDrawer.settlesOpen(progress: 0.9, velocity: -900, width: 300)) // flicked shut
         #expect(AssistantDrawer.settlesOpen(progress: 0.4, velocity: 400, width: 300)) // still moving towards open
+        #expect(AssistantDrawer.settlesOpen(progress: 0.22, velocity: 495, width: 360)) // a short quick flick (the simulator's)
+        #expect(!AssistantDrawer.settlesOpen(progress: 0.25, velocity: 212, width: 360)) // half way, let go slowly: back
+    }
+
+    /// The drawer takes a touch within 45° of horizontal — a thumb's slant — and while closed only to the right.
+    @Test func dragDirection() {
+        #expect(AssistantDrawer.takes(dx: 11, dy: 6, isOpen: false)) // 30°: the drag that did nothing before
+        #expect(AssistantDrawer.takes(dx: 10, dy: -8, isOpen: false)) // 40° upwards
+        #expect(!AssistantDrawer.takes(dx: 6, dy: 10, isOpen: false)) // steeper: the list scrolls
+        #expect(!AssistantDrawer.takes(dx: -12, dy: 2, isOpen: false)) // to the left while closed
+        #expect(AssistantDrawer.takes(dx: -12, dy: 2, isOpen: true)) // closing
     }
 
     @Test func searchMatchesTitleOrLastMessage() throws {

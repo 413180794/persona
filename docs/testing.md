@@ -230,6 +230,38 @@ App 数据目录的 `Documents/frames.json`：卡顿次数（晚于半帧）、�
 2026-10-26 一轮优化的结果（长会话 `codex 需求 leader`，3 次）：每秒卡顿 149–245ms → 156–171ms，最长一帧 0.5–2.4s → 0.5–0.9s，
 主线程上我们自己代码的采样从 ~1,900 降到 ~400；剩下的是 SwiftUI / CoreText 给新出现的行量文字、画字形。
 
+## 侧边栏拖动（Jarvis tab）
+
+量拖动时每帧主线程的耗时，不用 Instruments（这台 Mac 上 xctrace 卡在授权）：DEBUG 的 `DrawerProbe`（`-showDrawerProbe YES`）在拖动开始到松手后
+0.6 秒里，用 run loop 的 afterWaiting / beforeWaiting（排在 Core Animation 提交之后）算每一帧里主线程忙了多久，加上 CADisplayLink 的帧间隔，
+拖动中和松手后分开统计，追加到 App 容器的 `Documents/drawer-probe.jsonl`；`DrawerPan` 每次拒绝 / 丢掉一个触摸也记一行（为什么没打开）。
+
+- 手势本身：`DrawerSwipeTests`（mock 加 `MOCK_DRAWER=1`，主对话末尾有一个比屏幕宽的代码块），斜划、气泡上、快甩停下后、代码块上。
+- 数字别在 XCUITest 下量：它开着无障碍，SwiftUI 每帧多做很多事。用 `-showDrawerAutoDrag <轮数>`，`simctl launch` 启动、不接 XCUITest：
+  每轮拖开松手、拖回、半路松手（弹回）、快甩、点页面关闭，经过和手指一样的 `AssistantDrawer.dragBegan / drag / letGo`，每个显示帧一步。
+  用开了优化的 Debug 构建（`SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule`，单独的 derivedData）。对照组用 `git worktree`
+  在旧提交上加同样的 `DrawerProbe.swift` 和三个同名方法。
+- 看主线程在忙什么：`sample <pid> 30 1`，pid 要按自己模拟器的设备目录找（`pgrep -f "Devices/<udid>/.*Jarvis.app/Jarvis"`，别的车道的模拟器也在跑 Jarvis）。
+
+2026-10-31 改前（master e4fca3b）/ 改后，模拟器 iPhone 18 Pro Max（60 Hz），长对话，每种 10 次（5 轮 × 2 次启动）：
+
+| 操作 | 版本 | 次数 | 拖动中每帧主线程 p50 | 拖动中 p95 | 第一帧 | 拖动中最长 | 松手后最长 | 掉帧（拖动 / 松手后） |
+|---|---|---|---|---|---|---|---|---|
+| 拖开 | 改前 | 10 | 6.6 ms | 27.6 ms | 28.5 ms | 107.3 ms | 13.8 ms | 14 / 0 |
+| 拖开 | 改后 | 10 | 3.8 ms | 5.2 ms | 2.5 ms | 28.8 ms | 30.7 ms | 2 / 2 |
+| 拖回 | 改前 | 10 | 6.7 ms | 9.1 ms | 4.3 ms | 15.2 ms | 29.8 ms | 0 / 18 |
+| 拖回 | 改后 | 10 | 4.0 ms | 4.8 ms | 3.8 ms | 15.1 ms | 21.5 ms | 1 / 2 |
+| 半路松手 | 改前 | 10 | 6.4 ms | 24.0 ms | 24.3 ms | 35.5 ms | 23.3 ms | 12 / 20 |
+| 半路松手 | 改后 | 10 | 3.8 ms | 5.0 ms | 2.2 ms | 14 ms | 8.1 ms | 0 / 0 |
+| 快甩 | 改前 | 10 | 10.8 ms | 25.9 ms | 23.2 ms | 35.6 ms | 8.7 ms | 12 / 0 |
+| 快甩 | 改后 | 10 | 3.8 ms | 12.8 ms | 2.2 ms | 15.2 ms | 15.1 ms | 1 / 1 |
+
+「第一帧」是拖动开始那一帧，改前在这一帧里建整个侧边栏、藏 tab 栏（改安全区，整页重新布局）；「松手后最长」改前是关上最后一帧把 tab 栏放回来。
+掉帧（晚于 1.5 帧）合计 76 → 9。
+用 XCUITest 真拖（`testMeasureDrags`，`JARVIS_DRAWER_MEASURE=4`）：改后 16 次拖动每帧主线程 p50 约 4 ms、最长 15 ms，快甩全部打开；
+改前那一轮第一次快甩就没打开（松手速度 495pt/s 不到旧阈值 600），第一帧 18.6 ms，关上后 40–50 ms。
+模拟器跑在 Mac 的 CPU 上，绝对值比真机小，看相对变化；真机 120 Hz 每帧只有 8.3 ms。
+
 ## 实时活动截图（`LiveActivityShots`）
 
 `simctl io screenshot` 拍不到灵动岛和锁屏上的活动。UI 测试 `LiveActivityShots` 用 `-showFleetSample` 开一个编造的活动，

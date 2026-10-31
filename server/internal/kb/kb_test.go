@@ -258,7 +258,11 @@ func (s *topicSource) Download(context.Context, string, string) error { return n
 
 func TestHasPeople(t *testing.T) {
 	cases := map[string]bool{"acc-no_reply@email.apple.com": false, "acc-noreply@example.com": false, "acc-newsletter@example.org": false,
-		"acc-zhang.san@example.com": true, "acc-hello@example.org": false}
+		"acc-zhang.san@example.com": true, "acc-hello@example.org": false,
+		// Missed before the 2026-10-31 widening: they came out as people, and their receipts and promotions as relevant.
+		"acc-receipts@shop.example": false, "acc-applesupport@email.apple.com": false, "acc-contact@tools.example": false,
+		"acc-12345-abc@submissions.list.example": false, "acc-someone@em-s.storage.example": false, "acc-x@txn.storage.example": false,
+		"acc-mailer-daemon@mail.example": false, "acc-notify@example.com": false, "acc-bank@message.us.bank.example": false, "acc-remy.yu@bank.example": true, "acc-emma@agency.example": true}
 	for src, want := range cases {
 		if got := HasPeople(&Chat{Kind: "mail", SourceID: src}); got != want {
 			t.Errorf("%s: %v", src, got)
@@ -322,5 +326,56 @@ func TestBackfill(t *testing.T) {
 	c, _ := st.Chat("lark-f")
 	if !c.BackfillDone || c.Messages != 5 {
 		t.Fatalf("chat: %+v", c)
+	}
+}
+
+// Mail never replied to, tagged under older rules, goes through compression once more (automated senders told so);
+// exchanges the owner wrote in, hand-tagged chats and chats already under the current rules stay as they are.
+func TestRetagMail(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Now().Add(-2 * time.Hour).Truncate(time.Minute)
+	done := t0.Add(time.Hour)
+	put := func(c *Chat) {
+		c.Created, c.LastAt, c.CompressedAt, c.CoveredUntil = t0, t0, done, t0.Add(time.Minute)
+		if err := st.PutChat(c); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.AppendMessages(c, []Line{{At: t0, Sender: "Shop", Text: "Your receipt"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	receipt := &Chat{ID: "mail-a-receipts@shop.example", Source: "mail", SourceID: "a-receipts@shop.example", Kind: "mail", Name: "Shop · 邮件",
+		Tagging: Tagging{Importance: "P2", Relevance: 70}}
+	person := &Chat{ID: "mail-a-zhang.san@example.com", Source: "mail", SourceID: "a-zhang.san@example.com", Kind: "mail", Name: "张三 · 邮件", Mine: true}
+	locked := &Chat{ID: "mail-a-noreply@bank.example", Source: "mail", SourceID: "a-noreply@bank.example", Kind: "mail", Name: "Bank · 邮件",
+		Tagging: Tagging{Importance: "P1", Relevance: 90, Locked: true}}
+	current := &Chat{ID: "mail-a-news@site.example", Source: "mail", SourceID: "a-news@site.example", Kind: "mail", Name: "Site · 邮件", TagRev: tagRev}
+	for _, c := range []*Chat{receipt, person, locked, current} {
+		put(c)
+	}
+	model := &fakeModel{}
+	e := &Engine{Store: st, Model: model, Owner: "我"}
+	if n := e.RetagMail(); n != 1 {
+		t.Fatalf("queued %d, want only the receipt", n)
+	}
+	due := e.DueForCompression(time.Now())
+	if len(due) != 1 || due[0].ID != receipt.ID {
+		t.Fatalf("due = %v", due)
+	}
+	if err := e.Compress(context.Background(), due[0]); err != nil {
+		t.Fatal(err)
+	}
+	if len(model.calls) != 1 || !strings.Contains(model.calls[0], "自动发出") || !strings.Contains(model.calls[0], "Your receipt") {
+		t.Fatalf("model input = %q", model.calls)
+	}
+	c, _ := st.Chat(receipt.ID)
+	if c.TagRev != tagRev || c.Pending != 0 {
+		t.Fatalf("after: rev %d pending %d", c.TagRev, c.Pending)
+	}
+	if e.RetagMail() != 0 {
+		t.Fatal("queued again under the same rules")
 	}
 }
