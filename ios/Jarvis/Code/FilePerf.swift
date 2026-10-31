@@ -139,7 +139,12 @@ import QuartzCore
             FilePerf.write("autoscroll done")
             return
         }
+        // The switch's name only in DEBUG: release.sh refuses a Release binary that carries it.
+        #if DEBUG
         let speed = UserDefaults.standard.double(forKey: "showFileAutoScrollSpeed")
+        #else
+        let speed = 0.0
+        #endif
         let v = speed > 0 ? speed : 4000
         move(CGFloat((t < 4 ? v : -v) * dt))
     }
