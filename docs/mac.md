@@ -128,6 +128,11 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   - 扫码配对（VisionKit `DataScannerViewController`）：换成「粘贴配对链接」按钮（`Mac/Settings/PairingPaste+Mac.swift`），或直接打开 `jarvis://pair?…` 链接。
   - 远程推送：target 还没有 APNs entitlement，`PushRegistrar` 不注册；App 开着时靠 WebSocket，本地通知照常。
   - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置里手机数据的健康开关还在，待收掉。
+  - **待定（2026-11-01 查到，没改）**：Mac 版连上真 hub 后也发 `register_phone`（`AppModel.registerPhone`，`simulator: false`，设备名是 Mac 的）。hub 只有一个「手机」
+    （`hub.phoneClient`：真机优先于模拟器，再取最近注册的），于是 Mac 一直在线时 phone_* 全落到 Mac 上；iPhone 进后台断开时 hub 看见有「手机」在线，
+    不再静默推送唤醒 iPhone（`callPhone` → `wakePhone` 只在一个都没有时才走）；而且 `setPhoneTools` 用 Mac 报的工具表整个替换，Mac 不注册健康，
+    `phone_health_summary` 就从 Claude 那里消失了。要不要让 Mac 提供 phone_*、两台都在时听谁的（比如 Mac 只在没有 iPhone 时兜底、或工具按设备分开注册）是产品决定，
+    得 hub 一起改；在那之前别让 Mac 版常驻连真 hub。
 - 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（应做成真正的三栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；终端的 option 键不当 meta；代码行只有整行选择、没有 ⌘F；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
