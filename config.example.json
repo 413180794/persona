@@ -30,6 +30,10 @@
     { "id": "server", "ssh": "server", "os": "linux" },
     { "id": "laptop", "ssh": "laptop", "os": "darwin", "hostnames": ["MyMacBook"] }
   ],
+  "publish": {
+    "site_url": "https://jarvis.example.com",
+    "wrangler": ""
+  },
   "simulator": "",
   "xcode": "",
   "android": {

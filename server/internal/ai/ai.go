@@ -48,19 +48,11 @@ func (c Config) Over(base Config) Config {
 	return c
 }
 
-// Defaults mirror the launcher used on the hub machine.
-func (c Config) withDefaults() Config {
-	if c.BaseURL == "" {
-		c.BaseURL = "http://127.0.0.1:18000"
-	}
-	if c.APIKeyFile == "" {
-		c.APIKeyFile = "~/.claude-relay-history/ds-chain-api-key"
-	}
-	if c.Model == "" {
-		c.Model = "deepseek/v4.1-flash-chain"
-	}
-	return c
-}
+// configured: there is a model to call. Nothing is assumed (it used to default to one person's gateway and key file):
+// without hub.json's "ai" the helpers that need a model say so.
+func (c Config) configured() bool { return c.BaseURL != "" && c.Model != "" && c.APIKeyFile != "" }
+
+var errNotConfigured = errors.New(`ai: no model configured (set "ai" in hub.json: base_url, api_key_file, model)`)
 
 type Client struct {
 	cfg  Config
@@ -68,7 +60,7 @@ type Client struct {
 }
 
 func New(cfg Config) *Client {
-	return &Client{cfg: cfg.withDefaults(), http: &http.Client{Timeout: 60 * time.Second}}
+	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second}}
 }
 
 func (c *Client) key() (string, error) {
@@ -86,6 +78,9 @@ func (c *Client) key() (string, error) {
 
 // Complete sends one user message with a system prompt and returns the text reply.
 func (c *Client) Complete(ctx context.Context, system, user string, maxTokens int) (string, error) {
+	if !c.cfg.configured() {
+		return "", errNotConfigured
+	}
 	key, err := c.key()
 	if err != nil {
 		return "", err

@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 extension View {
     /// Hides the tab bar while this pushed page shows, the UIKit way: animated, with the push.

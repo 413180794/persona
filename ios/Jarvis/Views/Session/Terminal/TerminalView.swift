@@ -1,6 +1,8 @@
 import CoreText
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// What the terminal view shows: rows of cells (scrollback pages above, the live screen below) and the cursor.
 struct TerminalContent: Equatable {

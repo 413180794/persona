@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestWebAppServesFilesAndFallsBackToIndex(t *testing.T) {
@@ -46,6 +47,37 @@ func TestWebAppServesFilesAndFallsBackToIndex(t *testing.T) {
 		webApp(t.TempDir()).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 		if w.Code != 404 {
 			t.Fatalf("no web dir: %d", w.Code)
+		}
+	}
+}
+
+// Without a data dir copy, the web client built into jarvisd serves; the data dir wins when it has one.
+func TestWebAppFallsBackToTheEmbeddedCopy(t *testing.T) {
+	embedded := fstest.MapFS{"index.html": {Data: []byte("<html>embedded</html>")}, "assets/b-2.js": {Data: []byte("ejs")}}
+	dir := t.TempDir()
+	h := webFrom(dir, embedded)
+	get := func(p string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", p, nil))
+		return w
+	}
+	if w := get("/machines"); w.Code != 200 || !strings.Contains(w.Body.String(), "embedded") {
+		t.Fatalf("embedded index: %d %q", w.Code, w.Body)
+	}
+	if w := get("/assets/b-2.js"); w.Code != 200 || w.Body.String() != "ejs" {
+		t.Fatalf("embedded asset: %d %q", w.Code, w.Body)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>disk</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w := get("/"); !strings.Contains(w.Body.String(), "disk") {
+		t.Fatalf("data dir should win: %q", w.Body)
+	}
+	// A build without the web client (only the placeholder) is a 404, as before.
+	if w := httptest.NewRecorder(); true {
+		webApp(t.TempDir()).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+		if w.Code != 404 {
+			t.Fatalf("no web client: %d", w.Code)
 		}
 	}
 }

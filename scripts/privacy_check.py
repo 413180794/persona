@@ -22,8 +22,9 @@ HOME = os.path.expanduser("~")
 IGNORE = {"darwin", "linux", "local", "ssh", "true", "false", "server", "localhost"}
 # Files that may hold placeholders that look like the real thing.
 SKIP_FILES = {"scripts/privacy_check.py"}
-# Config keys whose values are published on purpose (App Store contact, the site's address): fine in PUBLIC_DIRS.
-PUBLIC_KEYS = {"feedback_email", "privacy_url"}
+# Config keys whose values are published on purpose (App Store contact, the site's address, where jarvisd is published):
+# fine in PUBLIC_DIRS.
+PUBLIC_KEYS = {"feedback_email", "privacy_url", "site_url"}
 
 
 def strings(o, key=""):

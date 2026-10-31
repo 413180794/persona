@@ -3,7 +3,9 @@ import CryptoKit
 import ImageIO
 import QuickLook
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Loads Feishu media through the hub (`/api/v1/lark/media/...`, bearer auth) or straight from a CDN URL.
 /// Media keys never change content, so decoded images live in memory and the raw bytes on disk.

@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// What `CodeLinesView` shows: lines of monospaced text with a gutter (line numbers, or JSON's fold arrows).
 @MainActor protocol CodeLineSource: AnyObject {

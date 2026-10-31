@@ -1,7 +1,9 @@
 import Foundation
 import Observation
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 import UserNotifications
 
 /// App-wide state: server pairing, live connection, machines, sessions, interactions and per-session chats.

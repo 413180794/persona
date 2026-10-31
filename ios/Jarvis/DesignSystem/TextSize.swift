@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The app's own text size (设置 › 界面风格 › 字号: 小 / 标准 / 大), on top of the system's. It moves the Dynamic Type
 /// size one step down or up from whatever the system is set to, so every `Theme.Font` level, every `@ScaledMetric`

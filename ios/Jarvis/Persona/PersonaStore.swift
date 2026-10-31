@@ -1,6 +1,8 @@
 import Foundation
 import ImageIO
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The personas on this phone (docs/persona.md「手机上」): which one is chosen, what the hub offers, and the packages
 /// downloaded, one directory per rev under Application Support/Personas/<id>/<rev>. A package is used only once all of

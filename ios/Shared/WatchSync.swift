@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(WatchConnectivity)
 import WatchConnectivity
+#endif
 
 /// What the watch needs to render without its own WebSocket: live sessions and pending interactions.
 nonisolated struct WatchSummary: Codable, Sendable {

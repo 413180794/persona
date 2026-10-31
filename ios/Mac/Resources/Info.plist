@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh-Hans</string>
+	<key>CFBundleDisplayName</key>
+	<string>Jarvis</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jarvis</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your hub.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Jarvis saves images Claude produces to your library when you ask, for example a chart it generated.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude.</string>
+</dict>
+</plist>

@@ -1,6 +1,8 @@
 import Photos
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Full-screen viewer for the images of a conversation: swipe through all of them, pinch / double-tap zoom, tap or
 /// pull down to close; n / m on top; save, edit (box + pen, then into the composer for the next message), share and

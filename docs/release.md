@@ -121,3 +121,25 @@ python3 scripts/asc_testflight.py external   # 建群组、按配置开 / 关公
   自己建 Google OAuth 客户端、写进自己 hub 的 `hub.json`（`docs/mail.md`）。
 - 测试信息要有隐私政策地址（`app_store.external.privacy_url`），中英文说明在 `asc_testflight.py` 的 `BETA_INFO`。
 - App 没有 hub 就只有配对页：审核备注（`review.notes`）要讲清楚这是配合自建 hub 的 App，否则容易被问「怎么用」。
+
+## 发布 jarvisd（`scripts/publish.sh`，2026-10-31）
+
+让别人不拿源代码也能装服务端：编好的 `jarvisd` 和安装脚本放在 `site/` 那个 worker 上（配置的 `publish.site_url`）。
+
+```sh
+curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd，按 SHA256SUMS 校验，不对就不装
+```
+
+- `release.sh` 传完 TestFlight 后接着跑它，版本号是 `<提交>-<构建号>`，和这一版 TestFlight 对得上；`NO_PUBLISH=1` 只发 TestFlight，
+  配置里没有 `publish.site_url` 也不发。单独跑：`./scripts/publish.sh`，`NO_DEPLOY=1` 只编译和检查（产物在 `build-publish/`）。
+- 编四个平台（linux / darwin × amd64 / arm64），`-tags public -trimpath -s -w`：
+  - **网页打进二进制**（`server/internal/hub/webdist`，`go:embed`）：hub 机器上没有 `~/.jarvis/web` 时就用二进制里的；有就照旧用目录里的。
+  - **不带 lark-connector skill**（`assistantskills/files_public.go`）：它是从私有的上游仓库拷来的（GPL-3.0），不是我们能再分发的；
+    公开版的助手没有这个 skill，脚本会确认二进制里没有它。自己的机器照旧用 `deploy.sh` 编的完整版。
+  - 上传前跑 `check_bundle_privacy.py --whole-short`：二进制里不能有配置里的任何值（Go 的模块路径除外；四个字以内的值按整词比，
+    Unicode 表和压缩过的 JS 里到处是短的字母组合）。
+- 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
+  报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION` 和 `dl/SHA256SUMS` 确认上去的就是刚编的。
+- 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
+  推送中继（APNs key 是我们团队的，别人的 hub 发不了推送）、macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
+

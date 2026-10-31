@@ -3,6 +3,7 @@
 #
 #   ./scripts/release.sh [build-number]            # archive + check + upload
 #   NO_UPLOAD=1 ./scripts/release.sh               # archive + check + export only (build-release/export)
+#   NO_PUBLISH=1 ./scripts/release.sh              # TestFlight only, no jarvisd at publish.site_url (publish.sh)
 #
 # The App Store Connect API key, bundle id and team come from the config (docs/config.md). Builds into build-release/
 # so it never touches the simulator build. The export re-signs manually with the "Jarvis App Store" / "Jarvis Watch
@@ -72,4 +73,10 @@ if [ -n "${NO_UPLOAD:-}" ]; then
   echo "Build $BUILD archived and exported to $OUT/export (not uploaded)."
 else
   echo "Build $BUILD uploaded. It appears in App Store Connect → TestFlight in ~10–30 min (python3 scripts/asc_testflight.py wait 45 $BUILD)."
+fi
+
+# The same release of jarvisd for anyone to install (publish.sh, docs/release.md「发布 jarvisd」), versioned with this
+# build's number. Not with NO_UPLOAD or NO_PUBLISH, nor when the config has no publish.site_url.
+if [ -z "${NO_UPLOAD:-}" ] && [ -z "${NO_PUBLISH:-}" ] && [ -n "${JARVIS_PUBLISH_URL:-}" ]; then
+  VERSION="$(git describe --always --dirty 2>/dev/null || echo dev)-$BUILD" ./scripts/publish.sh
 fi

@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Images in a conversation. Inline ones decode from their base64; lazy ones (history leaves the bytes out) come from
 /// the hub the first time they are shown, then from memory and from disk: an item's image never changes.

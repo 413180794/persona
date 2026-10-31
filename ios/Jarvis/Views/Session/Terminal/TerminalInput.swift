@@ -1,4 +1,6 @@
+#if canImport(UIKit)
 import UIKit
+#endif
 
 // Typing straight into the terminal: the screen view takes the keyboard (UITextInput, so input methods with a
 // composition — pinyin — and dictation work), and every key becomes a key press for herdr. Nothing is kept here but

@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Clipboard tools. iOS shows a system "Allow Paste?" prompt the first time the
 /// app reads the pasteboard with content copied by another app; the user must

@@ -1,7 +1,11 @@
+#if canImport(ActivityKit)
 import ActivityKit
+#endif
 import Foundation
 import OSLog
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The app's half of the Fleet Live Activity (docs/live-activity.md). The hub decides what it shows and pushes it while
 /// the app is away; the app

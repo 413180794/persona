@@ -4,7 +4,6 @@ package assistantskills
 
 import (
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"io/fs"
 	"os"
@@ -12,15 +11,16 @@ import (
 	"strings"
 )
 
-//go:embed all:lark-connector
-var files embed.FS
+// files is the skills this build carries (files_bundled.go). Public builds (`-tags public`, scripts/publish.sh) carry
+// none: the lark-connector skill is copied from a private upstream and is not ours to redistribute.
+var files fs.FS = bundled
 
 // Version identifies the embedded skills (a hash of every file).
 func Version() string {
 	h := sha256.New()
 	_ = fs.WalkDir(files, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
-			b, _ := files.ReadFile(p)
+			b, _ := fs.ReadFile(files, p)
 			h.Write([]byte(p))
 			h.Write(b)
 		}
@@ -52,7 +52,7 @@ func Install(dir string) error {
 			if d.IsDir() {
 				return os.MkdirAll(out, 0o755)
 			}
-			b, err := files.ReadFile(p)
+			b, err := fs.ReadFile(files, p)
 			if err != nil {
 				return err
 			}

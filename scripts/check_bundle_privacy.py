@@ -2,6 +2,7 @@
 """Fail when a built app bundle holds this person's private values: anyone with the TestFlight public link can install it.
 
     python3 scripts/check_bundle_privacy.py <Jarvis.app>     # the watch app and extensions inside are scanned too
+    python3 scripts/check_bundle_privacy.py --whole-short <dir>  # published jarvisd builds (scripts/publish.sh)
 
 The values are scripts/privacy_check.py's (config, private-words.txt, CLAUDE.local.md, the home directory), plus private
 IPv4 addresses and emails outside placeholder domains, looked for in every file's printable strings (like `strings`,
@@ -11,6 +12,10 @@ Signing data is Apple's and is skipped: embedded.mobileprovision, _CodeSignature
 each Mach-O (certificate names; the archive's development profile lists device ids, which export replaces anyway).
 Values match as written or lowercased, not in any case: Swift's mangled symbol names are full of short fragments
 that equal a value in another case.
+The repo's own Go module path (it names the GitHub owner) is in every Go binary's imports and is removed too, as
+scripts/privacy_check.py does for the sources. --whole-short: a value of four characters or fewer only counts as a
+whole word, not inside a longer one (a Go binary carries Unicode tables and minified JavaScript, where short values turn
+up inside ordinary words: a surname inside "touchend"); app bundles keep the strict substring match.
 Prints the file and the kind of hit, never the value.
 """
 import os
@@ -48,9 +53,13 @@ def texts(path: str):
 
 
 def main():
-    if len(sys.argv) != 2 or not os.path.isdir(sys.argv[1]):
+    args = sys.argv[1:]
+    whole_short = "--whole-short" in args
+    args = [a for a in args if a != "--whole-short"]
+    if len(args) != 1 or not os.path.isdir(args[0]):
         sys.exit(__doc__)
-    root = sys.argv[1]
+    root = args[0]
+    modules = pc.module_paths()
     cfg = jarvis_config.load()
     inherent = [v for v in (jarvis_config.get(cfg, "app.bundle_id", ""), jarvis_config.get(cfg, "app.team_id", "")) if v]
     words, _ = pc.terms()
@@ -66,8 +75,13 @@ def main():
             for t in texts(path):
                 for v in inherent:
                     t = t.replace(v, "")
+                if modules:
+                    t = modules.sub("", t)
                 for w in words:
-                    if w in t or w.lower() in t:
+                    if whole_short and len(w) <= 4:
+                        if re.search(r"(?<![A-Za-z])(%s|%s)(?![A-Za-z])" % (re.escape(w), re.escape(w.lower())), t):
+                            kinds.add("private value (%d chars)" % len(w))
+                    elif w in t or w.lower() in t:
                         kinds.add("private value (%d chars)" % len(w))
                 for w in pc.problems(t, []):  # IPs and emails only
                     kinds.add("private IP" if pc.IPV4.fullmatch(w) else "email")

@@ -13,3 +13,6 @@ florak/
 /ios/Config.xcconfig
 # Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
 /CLAUDE.local.md
+/build-publish/
+/server/internal/hub/webdist/*
+!/server/internal/hub/webdist/README.md

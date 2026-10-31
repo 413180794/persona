@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(WatchConnectivity)
 import WatchConnectivity
+#endif
 
 // One credential per device (docs/protocol.md「鉴权」): the pairing token opens everything, so right after pairing the
 // phone trades it for a token of its own and stops keeping it, and gets the watch an answer-only one. A lost device is

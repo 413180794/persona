@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// A small markup editor: freehand pen and rectangles in a few colors, undo, clear. The marks are kept in image
 /// coordinates and burned into the bitmap on 完成.

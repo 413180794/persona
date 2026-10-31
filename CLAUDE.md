@@ -68,10 +68,10 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 路径 | 内容 |
 | --- | --- |
 | `server/` | Go 服务端 `jarvisd`（hub / node / hook / mcp 四种模式），见 `docs/server.md` |
-| `ios/` | XcodeGen 工程：iOS App `Jarvis`、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
+| `ios/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
 | `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
-| `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
+| `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）和公开的 jarvisd（`publish.sh`、`install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
 | `site/` | 官网 + 隐私政策 + 服务条款（静态，Cloudflare Workers 托管；Google OAuth 同意屏幕要求有隐私政策）。截图只用体验模式（`-demo.on YES`）拍的演示数据，深浅色各一张放 `site/public/img/` |
@@ -105,6 +105,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/launchers.md` | 启动器与「设置 › 模型」：~/.zshrc 的自动同步 / 隐藏，App 里加的（Key 加密存 hub、`jarvisd launch` 运行），接口 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
+| `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`ios/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 
 ## 构建与验证

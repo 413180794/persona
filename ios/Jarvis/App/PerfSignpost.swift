@@ -2,7 +2,9 @@
 import os
 import QuartzCore
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 nonisolated enum PerfTrace {
     private static let log = OSLog(subsystem: "Jarvis.Performance", category: .pointsOfInterest)

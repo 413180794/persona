@@ -1,6 +1,8 @@
 import Foundation
 import Network
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// `phone_device_info`: model, OS, battery, storage, network, locale.
 enum DeviceTool {

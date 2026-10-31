@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// How each kind of token looks: `Theme.Syntax` colors (and the diff colors), bold headings and strong text,
 /// italic emphasis, in the code font.

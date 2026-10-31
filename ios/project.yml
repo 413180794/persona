@@ -8,6 +8,7 @@ options:
   deploymentTarget:
     iOS: "26.0"
     watchOS: "26.0"
+    macOS: "26.0"
   developmentLanguage: zh-Hans
   createIntermediateGroups: true
 packages:
@@ -122,6 +123,79 @@ targets:
         NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
         NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
         NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
+  # The native macOS app (docs/mac.md): the iOS app's logic and content views, compiled for macOS, inside a Mac
+  # shell (Mac/): windows, sidebar, toolbar, menus, keyboard shortcuts, Settings, the menu bar. iOS-only parts are
+  # behind `#if os(iOS)`; Mac/Compat gives the iOS-only modifiers Mac meanings.
+  JarvisMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Mac
+        excludes: ["**/*.md"]
+      - path: Shared
+      - path: Jarvis
+        excludes: ["**/*.md", "App/JarvisApp.swift", "App/LiveActivityController.swift", "Resources/Info.plist", "Resources/Jarvis.entitlements"]
+    dependencies:
+      - package: MarkdownUI
+      - package: BeautifulUI
+    entitlements:
+      path: Mac/Resources/JarvisMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.personal-information.addressbook: true
+        com.apple.security.personal-information.calendars: true
+        com.apple.security.personal-information.location: true
+        com.apple.security.personal-information.photos-library: true
+        com.apple.security.device.audio-input: true
+        com.apple.security.device.camera: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
+        PRODUCT_NAME: Jarvis
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        COMBINE_HIDPI_IMAGES: YES
+    postBuildScripts:
+      - name: Stamp the commit
+        basedOnDependencyAnalysis: false
+        inputFiles: ["$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"]
+        script: |
+          sha=$(git -C "$SRCROOT/.." rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+          git -C "$SRCROOT/.." diff --quiet HEAD -- 2>/dev/null || sha="$sha+"
+          plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Set :JarvisCommit $sha" "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :JarvisCommit string $sha" "$plist"
+    info:
+      path: Mac/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Jarvis
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes: [jarvis]
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "26.0"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSCameraUsageDescription: "Jarvis uses the camera to scan the pairing QR code printed by `jarvisd hub pair`, for example when you first connect to your hub."
+        NSContactsUsageDescription: "Jarvis lets Claude look up your contacts when you ask, for example to find a colleague's phone number or email before drafting a message."
+        NSCalendarsFullAccessUsageDescription: "Jarvis lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Jarvis adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you."
+        NSRemindersFullAccessUsageDescription: "Jarvis lets Claude read and create reminders when you ask, for example to add “review the PR” to your Today list."
+        NSLocationWhenInUseUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSLocationUsageDescription: "Jarvis shares your current location with Claude only when you ask, for example to find what time it is where you are or which office you are in."
+        NSPhotoLibraryUsageDescription: "Jarvis lets Claude look at recent photos when you ask, for example to read a screenshot you took or describe a whiteboard photo."
+        NSPhotoLibraryAddUsageDescription: "Jarvis saves images Claude produces to your library when you ask, for example a chart it generated."
+        NSMicrophoneUsageDescription: "Jarvis uses the microphone for voice input when you hold the mic button, for example to dictate a message to Claude while walking."
+        NSSpeechRecognitionUsageDescription: "Jarvis turns your voice into text when you hold the mic button, for example to dictate a reply to Claude."
   # Draws the Fleet Live Activity. The app starts it and reports its tokens; the hub pushes its content.
   JarvisWidgets:
     type: app-extension
@@ -223,5 +297,11 @@ schemes:
     build:
       targets:
         JarvisWatch: all
+    run:
+      config: Debug
+  JarvisMac:
+    build:
+      targets:
+        JarvisMac: all
     run:
       config: Debug

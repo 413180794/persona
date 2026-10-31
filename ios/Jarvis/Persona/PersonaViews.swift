@@ -1,5 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// The persona's face, still (the sidebar's card, the profile, 设置): a package's avatar in a circle, or the
 /// built-in JarvisAvatar. `persona` defaults to the one on screen.
