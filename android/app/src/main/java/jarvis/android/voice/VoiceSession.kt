@@ -100,10 +100,19 @@ class VoiceSession(
                 playQueue.offer(bytes.toByteArray())
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = end(null)
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) =
+                end(if (code == 1001) RESTARTED else null) // 1001: the plugin is restarting (a deploy)
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                end(if (response?.code == 404) "hub 上没有语音插件" else "连接断开：${t.message ?: t.javaClass.simpleName}")
+                // A socket that drops mid-conversation (Broken pipe, reset) is nearly always the plugin or the hub
+                // restarting, or the network: say that, not the exception.
+                end(
+                    when {
+                        response?.code == 404 -> "hub 上没有语音插件"
+                        _state.value.phase == VoiceState.Phase.LIVE -> RESTARTED
+                        else -> "连不上语音服务：${t.message ?: t.javaClass.simpleName}"
+                    },
+                )
             }
         })
     }
@@ -225,6 +234,7 @@ class VoiceSession(
     }
 
     private companion object {
+        const val RESTARTED = "连接断了（语音服务可能刚重启，或网络不稳），点下面的按钮重新开始"
         val HEADSETS = setOf(
             AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
             AudioDeviceInfo.TYPE_USB_HEADSET, 26, /* TYPE_BLE_HEADSET */
