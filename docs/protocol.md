@@ -411,13 +411,16 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用） |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
-| POST | `/api/v1/inbox/{id}/reply` | `{text}`：飞书发到原会话 / 邮件按回复发出，并标为已处理（`done_by=replied`），返回这件 |
+| POST | `/api/v1/inbox/{id}/reply` | `{text, changes?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空 |
+| POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表 |
 
 `InboxItem`：`id`、`source`（lark / mail）、`kind`（dm / mention / group / bot / mail）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
 `tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、
-`lark{feed_id,is_group,is_topic,start_position,mention_position,at_all}`、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`。
+`lark{feed_id,is_group,is_topic,start_position,mention_position,at_all}`、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
+`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
+（`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态。
 列表变化时 WebSocket 推 `{"type":"inbox"}`（不带内容，App 自己拉）。
 
 ## 飞书 API（lark-connector）

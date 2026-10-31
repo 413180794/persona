@@ -23,6 +23,8 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var doneBy: String?
     var lark: Lark?
     var mail: Mail?
+    /// A Feishu document's @me / comment: the rows about the user with their status columns (docs/inbox.md「云文档」).
+    var doc: Doc?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
     /// The AI 分身's work on it: judged, handled by an agent, a reply drafted (docs/inbox.md).
@@ -37,9 +39,11 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         var draft: String?
         var note: String?
         var error: String?
+        /// Status moves the agent proposes with its draft (document items); 发送 makes the ones kept.
+        var changes: [DocChange]?
 
         enum CodingKeys: String, CodingKey {
-            case state, task, reason, draft, note, error
+            case state, task, reason, draft, note, error, changes
             case machineID = "machine_id", sessionID = "session_id"
         }
 
@@ -73,6 +77,72 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         }
     }
 
+    nonisolated struct Doc: Codable, Hashable, Sendable {
+        var url: String
+        var link: String?
+        var type: String   // docx | doc | sheet | base | other
+        var notice: String // mention | comment | reply
+        var rows: [DocRow]?
+        var reply: Reply?
+        var error: String?
+
+        nonisolated struct Reply: Codable, Hashable, Sendable {
+            var kind: String // thread | record | cell | doc
+            var label: String
+        }
+
+        /// 表格 / 多维表格 / 文档.
+        var typeName: String {
+            switch type {
+            case "sheet": "表格"
+            case "base": "多维表格"
+            case "docx", "doc": "文档"
+            default: "云文档"
+            }
+        }
+
+        var symbol: String {
+            switch type {
+            case "sheet": "tablecells"
+            case "base": "square.grid.3x2"
+            default: "doc.text"
+            }
+        }
+    }
+
+    nonisolated struct DocRow: Codable, Hashable, Sendable, Identifiable {
+        var ref: String
+        var table: String?
+        var title: String
+        var fields: [DocField]?
+        var status: [DocStatus]?
+        var id: String { ref }
+    }
+
+    nonisolated struct DocField: Codable, Hashable, Sendable {
+        var name: String
+        var value: String
+    }
+
+    nonisolated struct DocStatus: Codable, Hashable, Sendable, Identifiable {
+        var field: String
+        var name: String
+        var value: String
+        var options: [DocOption]
+        var id: String { field }
+    }
+
+    nonisolated struct DocOption: Codable, Hashable, Sendable {
+        var name: String
+        var color: String?
+    }
+
+    nonisolated struct DocChange: Codable, Hashable, Sendable {
+        var ref: String
+        var field: String
+        var value: String
+    }
+
     nonisolated struct Mail: Codable, Hashable, Sendable {
         var accountID: String
         var mailbox: String
@@ -89,7 +159,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, context, agent
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, context, agent
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -117,6 +187,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         case "dm": "私聊"
         case "mention": lark?.atAll == true ? "@所有人" : "@我"
         case "bot": "机器人"
+        case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? "评论" : "@我"
         default: nil
         }
     }
@@ -152,6 +223,7 @@ extension APIClient {
     }
 
     private struct InboxText: Codable { var text: String }
+    private struct InboxReplyBody: Encodable { var text: String; var changes: [InboxItem.DocChange]? }
     private struct InboxDraftBody: Encodable { var instruction: String }
 
     /// A reply drafted by the hub's model; `instruction` steers it ("同意，但下周再说").
@@ -159,8 +231,14 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/draft", body: InboxDraftBody(instruction: instruction), timeout: 90, as: InboxText.self).text
     }
 
-    /// Sends the user's reply (in the Feishu chat, or as a mail reply) and files the item as done.
-    func inboxReply(_ id: String, text: String) async throws {
-        try await post("/api/v1/inbox/" + id + "/reply", body: InboxText(text: text), timeout: 60)
+    /// Sends the user's reply (in the Feishu chat, as a mail reply, or as a comment in the document, moving the rows'
+    /// status in `changes` first) and files the item as done.
+    func inboxReply(_ id: String, text: String, changes: [InboxItem.DocChange] = []) async throws {
+        try await post("/api/v1/inbox/" + id + "/reply", body: InboxReplyBody(text: text, changes: changes.isEmpty ? nil : changes), timeout: 60)
+    }
+
+    /// Moves one row's status in the document; the item comes back read again.
+    func inboxDocStatus(_ id: String, _ change: InboxItem.DocChange) async throws -> InboxItem {
+        try await post("/api/v1/inbox/" + id + "/doc/status", body: change, timeout: 60, as: InboxItem.self)
     }
 }

@@ -137,7 +137,7 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 // ruleTier is the tier without a model: people talking to me need me, groups are FYI, bots and lists are noise.
 func ruleTier(it *InboxItem) string {
 	switch it.Kind {
-	case KindDM, KindMention:
+	case KindDM, KindMention, KindDoc:
 		return TierAction
 	case KindGroup:
 		return TierFYI
@@ -160,6 +160,8 @@ func triageInput(it *InboxItem) string {
 		b.WriteString("类型：飞书群的新消息（没有 @ 用户）\n")
 	case KindBot:
 		b.WriteString("类型：飞书机器人 / 应用发来的消息\n")
+	case KindDoc:
+		b.WriteString("类型：飞书云文档里 @ 了用户或评论了用户（表格、多维表格里可能要用户跟进某一行、改状态）\n")
 	case KindMail:
 		if it.Mail != nil && it.Mail.Direct {
 			b.WriteString("类型：邮件（直接发给用户）\n")
@@ -210,7 +212,7 @@ func (h *Hub) draftReply(ctx context.Context, id, instruction string) (string, e
 
 // replyInbox sends text as the user's reply — in the Feishu chat, or as a reply to the newest mail of the thread
 // from the account that received it — and files the item as done.
-func (h *Hub) replyInbox(ctx context.Context, id, text string) (InboxItem, error) {
+func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
 	h.inbox.mu.Lock()
 	it, ok := h.inbox.items[id]
 	var c InboxItem
@@ -220,12 +222,30 @@ func (h *Hub) replyInbox(ctx context.Context, id, text string) (InboxItem, error
 			m := *it.Mail
 			c.Mail = &m
 		}
+		if it.Doc != nil {
+			d := *it.Doc
+			c.Doc = &d
+		}
 	}
 	h.inbox.mu.Unlock()
 	if !ok {
 		return InboxItem{}, errNoInboxItem
 	}
 	switch {
+	case c.Doc != nil:
+		// The status moves first: a reply saying "done" with the row still 进行中 would be wrong.
+		for _, ch := range changes {
+			if err := h.writeDocStatus(ctx, *c.Doc, ch); err != nil {
+				return InboxItem{}, err
+			}
+		}
+		if text != "" {
+			if err := h.replyDoc(ctx, *c.Doc, text); err != nil {
+				return InboxItem{}, err
+			}
+		}
+	case len(changes) > 0:
+		return InboxItem{}, errors.New("only document items have a status to change")
 	case c.Lark != nil:
 		if err := h.lark.Send(ctx, c.Lark.FeedID, text); err != nil {
 			return InboxItem{}, err

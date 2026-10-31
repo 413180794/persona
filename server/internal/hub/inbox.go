@@ -72,6 +72,7 @@ type InboxItem struct {
 	DoneBy      string     `json:"done_by,omitempty"` // user | read | replied
 	Lark        *InboxLark `json:"lark,omitempty"`
 	Mail        *InboxMail `json:"mail,omitempty"`
+	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_docs.go)
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
 	Agent *InboxAgent `json:"agent,omitempty"`
 
@@ -112,6 +113,10 @@ func (it *InboxItem) listed() InboxItem {
 		a := *it.Agent
 		c.Agent = &a
 	}
+	if it.Doc != nil {
+		d := *it.Doc
+		c.Doc = &d
+	}
 	return c
 }
 
@@ -123,6 +128,7 @@ type inbox struct {
 	running  sync.Mutex // one collection at a time
 	triaging sync.Mutex // one triage pass at a time (inbox_triage.go)
 	handing  sync.Mutex // one judge / agent pass at a time (inbox_agent.go)
+	me       lark.Me    // the Feishu account (who @me is in documents), read once
 }
 
 func (b *inbox) init() {
@@ -198,6 +204,11 @@ func (h *Hub) collectInbox(ctx context.Context, withMail bool) {
 			h.logf("inbox: feishu: %v", err)
 		}
 		changed = append(changed, ch...)
+		docs, err := h.collectDocs(ctx)
+		if err != nil {
+			h.logf("inbox: feishu docs: %v", err)
+		}
+		changed = append(changed, docs...)
 	}
 	if withMail && h.mail != nil {
 		changed = append(changed, h.collectMail(ctx)...)
@@ -711,16 +722,35 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/inbox/{id}/reply", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text string `json:"text"`
+			Text    string      `json:"text"`
+			Changes []DocChange `json:"changes"` // documents: status moves to make with the reply
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" && len(in.Changes) == 0 {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
 			return
 		}
-		it, err := h.replyInbox(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text))
+		it, err := h.replyInbox(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.Changes...)
 		switch {
 		case errors.Is(err, errNoInboxItem):
 			writeErr(w, http.StatusNotFound, err)
+		case err != nil:
+			writeErr(w, http.StatusBadGateway, err)
+		default:
+			writeJSON(w, it)
+		}
+	})
+	api.HandleFunc("POST /api/v1/inbox/{id}/doc/status", func(w http.ResponseWriter, r *http.Request) {
+		var in DocChange
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Ref == "" || in.Field == "" || in.Value == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("ref, field and value are required"))
+			return
+		}
+		it, err := h.setDocStatus(r.Context(), r.PathValue("id"), in)
+		switch {
+		case errors.Is(err, errNoInboxItem):
+			writeErr(w, http.StatusNotFound, err)
+		case errors.Is(err, errNoDocRow):
+			writeErr(w, http.StatusBadRequest, err)
 		case err != nil:
 			writeErr(w, http.StatusBadGateway, err)
 		default:

@@ -30,7 +30,7 @@ struct InboxView: View {
 
     private func matches(_ it: InboxItem) -> Bool {
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot") { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && it.kind == "doc") { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }
@@ -195,7 +195,7 @@ struct InboxView: View {
 
     private func row(_ it: InboxItem) -> some View {
         InboxRow(item: it, showAccount: accounts.count > 1, sending: store.sending.contains(it.id),
-                 send: { text in Task { await store.send(it, text: text) } }, edit: { editingDraft = it })
+                 send: { text in Task { await store.send(it, text: text, changes: it.agent?.changes ?? []) } }, edit: { editingDraft = it })
             .background { NavigationLink(value: it) { EmptyView() }.opacity(0) }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
@@ -281,7 +281,7 @@ struct InboxRow: View {
                 HStack(spacing: Theme.Space.sm) {
                     Text(item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if let label = item.kindLabel {
-                        Chip(text: label, look: item.kind == "mention" ? .tint(Theme.danger) : .neutral)
+                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == "@我" ? .tint(Theme.danger) : .neutral)
                     }
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
@@ -302,12 +302,16 @@ struct InboxRow: View {
                         CountBadge(count: item.count, look: .solid(item.kind == "mention" ? Theme.accent : Theme.countBadge))
                     }
                 }
+                if item.doc != nil && !item.isDone {
+                    InboxDocRowsPreview(item: item).padding(.top, 2)
+                }
                 if showAccount && !item.isLark {
                     Text(item.accountName).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !item.isDone {
                     if let draft = item.agentDraft, let send {
-                        InboxDraftCard(draft: draft, sending: sending, send: { send(draft) }, edit: edit)
+                        InboxDraftCard(draft: draft, changes: (item.agent?.changes ?? []).map { DocChangeText.line($0, in: item.doc) },
+                                       sending: sending, send: { send(draft) }, edit: edit)
                             .padding(.top, Theme.Space.sm)
                     } else if item.agentWorking {
                         HStack(spacing: Theme.Space.sm) {
@@ -326,6 +330,7 @@ struct InboxRow: View {
 
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
+        if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: 李雷提及了你
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
         return sender + "：" + item.preview
     }
@@ -333,7 +338,9 @@ struct InboxRow: View {
     private var avatar: some View {
         ZStack(alignment: .bottomTrailing) {
             Group {
-            if item.isLark {
+            if let doc = item.doc {
+                InboxDocIcon(doc: doc)
+            } else if item.isLark {
                 LarkAvatarImage(name: item.title, url: item.avatar, isGroup: item.lark?.isGroup ?? false, size: 40)
             } else {
                 Monogram(name: item.sender ?? "", fill: Theme.monogramFill)
@@ -363,6 +370,8 @@ struct InboxRow: View {
 /// The AI 分身's reply under an inbox row: one tap sends it as it is, 修改 opens it in the draft sheet.
 struct InboxDraftCard: View {
     var draft: String
+    /// Status moves made with it (document items), one line each.
+    var changes: [String] = []
     var sending: Bool
     var send: () -> Void
     var edit: (() -> Void)?
@@ -378,6 +387,10 @@ struct InboxDraftCard: View {
                 .foregroundStyle(.primary)
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(changes, id: \.self) { c in
+                Label(c, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.footnote.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+            }
             HStack(spacing: Theme.Space.s) {
                 Spacer(minLength: 0)
                 if let edit {
@@ -491,7 +504,9 @@ struct InboxDetailView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let c = item.larkConversation {
+        if current.doc != nil {
+            InboxDocDetailView(item: current)
+        } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {
             MailDetailView(summary: m, accounts: accounts)

@@ -605,6 +605,42 @@ INBOX = [
      "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [503], "from": {"name": "Weekly Digest", "email": "news@example.com"}}},
 ]
 
+# MOCK_DOCS=1: Feishu documents that @'d me (docs/inbox.md「云文档」): a Base with my rows and their status, a sheet
+# whose AI 分身 proposes a status move with its draft, a docx comment.
+DOC_STATES = [{"name": "待处理", "color": "#bacefd"}, {"name": "进行中", "color": "#fed4a4"},
+              {"name": "待验收", "color": "#b1e8fc"}, {"name": "已完成", "color": "#c5f2bb"}]
+if os.environ.get("MOCK_DOCS"):
+    INBOX[1:1] = [
+        {"id": "doc:n1:1", "source": "lark", "kind": "doc", "account": "feishu", "account_name": "飞书", "title": "线上问题跟进表",
+         "sender": "李雷", "preview": "李雷提及了你", "count": 1, "started_at": ago(minutes=25), "updated_at": ago(minutes=25),
+         "tier": "action", "summary": "李雷在缺陷表里把两条线上问题指给你跟进", "reason": "@了你，要跟进", "read": False,
+         "doc": {"url": "https://example.com/base/demo", "type": "base", "notice": "mention", "notice_id": "n1",
+                 "reply": {"kind": "record", "label": "评论这条记录"},
+                 "rows": [
+                     {"ref": "tbl1/rec1", "table": "缺陷", "title": "任务结束后消息长时间没有推送",
+                      "fields": [{"name": "环境", "value": "PROD"}, {"name": "跟进人", "value": "@我"}],
+                      "status": [{"field": "fld1", "name": "状态", "value": "进行中", "options": DOC_STATES}]},
+                     {"ref": "tbl1/rec2", "table": "缺陷", "title": "带 PDF 的请求 Agent 读不到",
+                      "fields": [{"name": "环境", "value": "STG"}],
+                      "status": [{"field": "fld1", "name": "状态", "value": "待处理", "options": DOC_STATES}]}]}},
+        {"id": "doc:n2:1", "source": "lark", "kind": "doc", "account": "feishu", "account_name": "飞书", "title": "发版检查清单",
+         "sender": "韩梅梅", "preview": "韩梅梅提及了你", "count": 1, "started_at": ago(minutes=70), "updated_at": ago(minutes=70),
+         "tier": "action", "summary": "韩梅梅问压测报告做完没有，等你更新这一行", "reason": "@了你，等结果", "read": False,
+         "doc": {"url": "https://example.com/sheets/demo", "type": "sheet", "notice": "mention", "notice_id": "n2",
+                 "reply": {"kind": "cell", "label": "评论这一行"},
+                 "rows": [{"ref": "s1!4", "table": "Sheet1", "title": "压测报告",
+                           "fields": [{"name": "负责人", "value": "@我"}, {"name": "备注", "value": "数据在附件"}],
+                           "status": [{"field": "2", "name": "状态", "value": "待验收", "options": DOC_STATES}]}]},
+         "agent": {"state": "drafted", "task": "查压测报告是否已完成，回复并更新状态",
+                   "draft": "压测报告做完了，结论和数据都放在附件里，P99 在目标内。",
+                   "note": "压测 Agent 昨晚跑完，报告已上传到附件。", "changes": [{"ref": "s1!4", "field": "2", "value": "已完成"}]}},
+        {"id": "doc:n3:1", "source": "lark", "kind": "doc", "account": "feishu", "account_name": "飞书", "title": "收件箱方案评审",
+         "sender": "Tom", "preview": "Tom评论了你", "count": 1, "started_at": ago(hours=2), "updated_at": ago(hours=2),
+         "tier": "action", "summary": "Tom 在评论里请你周五前确认收件箱方案", "reason": "评论 @你", "read": False,
+         "doc": {"url": "https://example.com/docx/demo", "type": "docx", "notice": "comment", "notice_id": "n3",
+                 "reply": {"kind": "thread", "label": "回复评论"}}},
+    ]
+
 MAIL_ACCOUNTS = [{"id": "acc1", "name": "个人邮箱", "email": "me@example.com", "provider": "imap", "auth": "password",
                   "imap_host": "imap.example.com", "imap_port": 993, "smtp_host": "smtp.example.com", "smtp_port": 465}]
 
@@ -1037,6 +1073,26 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": INBOX})
+        if p.startswith("/api/v1/inbox/") and p.endswith("/doc/status"):
+            iid, ch = p[len("/api/v1/inbox/"):-len("/doc/status")], json.loads(self.last_body or b"{}")
+            for x in INBOX:
+                for r in (x.get("doc") or {}).get("rows") or []:
+                    for st in r.get("status") or []:
+                        if x["id"] == iid and r["ref"] == ch.get("ref") and st["field"] == ch.get("field"):
+                            st["value"] = ch.get("value")
+                            return self.send_json(x)
+            return self.send_json({"error": "no such row"}, 400)
+        if p.startswith("/api/v1/inbox/") and p.endswith("/reply"):
+            iid, body = p[len("/api/v1/inbox/"):-len("/reply")], json.loads(self.last_body or b"{}")
+            SENT.append(dict(body, inbox=iid))
+            for x in INBOX:
+                if x["id"] == iid:
+                    for ch in body.get("changes") or []:
+                        for r in (x.get("doc") or {}).get("rows") or []:
+                            for st in r.get("status") or []:
+                                if r["ref"] == ch["ref"] and st["field"] == ch["field"]: st["value"] = ch["value"]
+                    x["done_at"], x["done_by"] = ago(minutes=0), "replied"
+                    return self.send_json(x)
         if p == "/api/v1/assistant/routines" and self.command == "PUT":
             old = {r["id"]: r for r in ROUTINES}
             new = []

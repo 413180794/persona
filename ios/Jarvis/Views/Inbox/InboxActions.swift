@@ -58,6 +58,9 @@ struct InboxDraftSheet: View {
     @State private var sending = false
     @State private var error: String?
     @FocusState private var editing: Bool
+    /// The AI 分身's proposed status moves the user keeps (all of them to start with).
+    @State private var kept: Set<InboxItem.DocChange>?
+    private var proposed: [InboxItem.DocChange] { item.agentDraft == nil ? [] : item.agent?.changes ?? [] }
 
     var body: some View {
         NavigationStack {
@@ -65,6 +68,7 @@ struct InboxDraftSheet: View {
                 if let a = item.agent, item.agentDraft != nil {
                     agentNote(a)
                 }
+                if !proposed.isEmpty { changesList }
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $text)
                         .focused($editing)
@@ -102,7 +106,7 @@ struct InboxDraftSheet: View {
                 .padding(.vertical, Theme.Space.m)
             }
             .themedPage()
-            .navigationTitle(item.isLark ? "回复 " + item.title : "回复邮件")
+            .navigationTitle(item.doc != nil ? "评论 " + item.title : item.isLark ? "回复 " + item.title : "回复邮件")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
@@ -110,7 +114,7 @@ struct InboxDraftSheet: View {
                     Button { Task { await send() } } label: {
                         if sending { ProgressView() } else { Text("发送").lineLimit(1) }
                     }
-                    .disabled(sending || loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(sending || loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && keptChanges.isEmpty)
                 }
             }
             .task {
@@ -145,6 +149,32 @@ struct InboxDraftSheet: View {
         .background(Theme.accent.opacity(0.06))
     }
 
+    private var keptChanges: [InboxItem.DocChange] { proposed.filter { (kept ?? Set(proposed)).contains($0) } }
+
+    /// The status moves the AI 分身 proposes, each one a toggle; the kept ones are made when the reply is sent.
+    private var changesList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("发送时一起改").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            ForEach(proposed, id: \.self) { c in
+                let on = (kept ?? Set(proposed)).contains(c)
+                Button {
+                    var k = kept ?? Set(proposed)
+                    if on { k.remove(c) } else { k.insert(c) }
+                    kept = k
+                } label: {
+                    Label(DocChangeText.line(c, in: item.doc), systemImage: on ? "checkmark.circle.fill" : "circle")
+                        .font(.footnote).lineLimit(1)
+                        .foregroundStyle(on ? Color.primary : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
     private func load() async {
         guard let api = model.api else { return }
         loading = true
@@ -164,7 +194,7 @@ struct InboxDraftSheet: View {
         sending = true
         defer { sending = false }
         do {
-            try await api.inboxReply(item.id, text: body) // the hub sends it and files the item
+            try await api.inboxReply(item.id, text: body, changes: keptChanges) // the hub sends it and files the item
             InboxStore.shared.setDone(item, true, haptic: false)
             Haptics.success()
             model.toast = Toast("已发送，标为已处理", style: .success)

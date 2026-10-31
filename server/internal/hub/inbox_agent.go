@@ -61,17 +61,19 @@ const (
 
 // InboxAgent is the AI 分身's work on one item.
 type InboxAgent struct {
-	State     string     `json:"state"`
-	Task      string     `json:"task,omitempty"`   // model 2's instruction to the agent
-	Reason    string     `json:"reason,omitempty"` // model 2's why, short
-	MachineID string     `json:"machine_id,omitempty"`
-	SessionID string     `json:"session_id,omitempty"` // the agent's conversation (对话 tab): how it got there
-	Draft     string     `json:"draft,omitempty"`
-	Note      string     `json:"note,omitempty"` // what the agent found, for the user to check the draft against
-	Error     string     `json:"error,omitempty"`
-	Of        string     `json:"of,omitempty"` // the item's Last the work answers
-	StartedAt *time.Time `json:"started_at,omitempty"`
-	DraftedAt *time.Time `json:"drafted_at,omitempty"`
+	State     string `json:"state"`
+	Task      string `json:"task,omitempty"`   // model 2's instruction to the agent
+	Reason    string `json:"reason,omitempty"` // model 2's why, short
+	MachineID string `json:"machine_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"` // the agent's conversation (对话 tab): how it got there
+	Draft     string `json:"draft,omitempty"`
+	Note      string `json:"note,omitempty"` // what the agent found, for the user to check the draft against
+	// Changes are the status moves the agent proposes with its draft (document items); 发送 makes them.
+	Changes   []DocChange `json:"changes,omitempty"`
+	Error     string      `json:"error,omitempty"`
+	Of        string      `json:"of,omitempty"` // the item's Last the work answers
+	StartedAt *time.Time  `json:"started_at,omitempty"`
+	DraftedAt *time.Time  `json:"drafted_at,omitempty"`
 }
 
 func (h *Hub) judgeModel() *ai.Client {
@@ -290,6 +292,15 @@ func inboxAgentPrompt(it *InboxItem, owner string) string {
 	case it.Lark != nil:
 		title = "飞书 · " + it.Title
 		ref = "飞书会话 id（lark_messages 用）：" + it.Lark.FeedID + "\n"
+	case it.Doc != nil:
+		title = "飞书文档 · " + it.Title
+		ref = "文档链接（ol GET /documents/read?url=… 读全文，表格加 sheet=，多维表格用 /documents/base/table）：" + it.Doc.URL + "\n"
+		if len(it.Doc.Rows) > 0 {
+			ref += "如果某一行的状态该变（比如事情已经做完、开始跟进），在 inbox_draft 的 changes 里给出 [{ref, field, value}]（上面列出的 ref、field 和可选值之一），" +
+				"用户点发送时一起改；不该改就不给。回复会作为评论发在文档里。\n"
+		} else {
+			ref += "回复会作为评论发在文档里。\n"
+		}
 	case it.Mail != nil && len(it.Mail.UIDs) > 0:
 		title = "邮件 · " + it.Title
 		ref = fmt.Sprintf("邮箱账号 %s，文件夹 %s，最新一封 uid %d（mail_* 工具用）\n", it.Mail.AccountID, it.Mail.Mailbox, it.Mail.UIDs[len(it.Mail.UIDs)-1])
@@ -344,12 +355,17 @@ func (h *Hub) isInboxAgent(sessionID string) bool {
 var inboxDraftTool = proto.Tool{Name: "inbox_draft", Description: "Submit the reply you drafted for the inbox item this conversation " +
 	"was started for. It waits in the user's inbox; they read it and send it with one tap (you never send it yourself). `text` is the " +
 	"reply in the user's voice; `note` is one or two sentences on what you found and where, for the user to check the draft against. " +
-	"Call it once, at the end.",
-	InputSchema: schema(`{"type":"object","required":["text"],"properties":{"text":{"type":"string"},"note":{"type":"string"}}}`)}
+	"For a Feishu sheet / Base item, `changes` proposes moving rows' status (ref, field and one of the values the item lists); " +
+	"they are made when the user sends. Call it once, at the end.",
+	InputSchema: schema(`{"type":"object","required":["text"],"properties":{"text":{"type":"string"},"note":{"type":"string"},` +
+		`"changes":{"type":"array","items":{"type":"object","required":["ref","field","value"],"properties":{"ref":{"type":"string"},"field":{"type":"string"},"value":{"type":"string"}}}}}}`)}
 
 // toolInboxDraft stores the agent's draft on its item.
 func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.RawMessage) (string, error) {
-	var a struct{ Text, Note string }
+	var a struct {
+		Text, Note string
+		Changes    []DocChange
+	}
 	if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is required")
 	}
@@ -359,8 +375,18 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 		h.inbox.mu.Unlock()
 		return "", errors.New("this conversation was not started for an inbox item")
 	}
+	// Only moves the item offers (a row it lists, one of the column's values).
+	var changes []DocChange
+	for _, ch := range a.Changes {
+		if it.Doc != nil && docOffers(*it.Doc, ch) {
+			changes = append(changes, ch)
+		} else {
+			h.inbox.mu.Unlock()
+			return "", fmt.Errorf("change %+v is not one the item lists (ref, field and one of its values)", ch)
+		}
+	}
 	now := time.Now().UTC()
-	it.Agent.State, it.Agent.Error = AgentDrafted, ""
+	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
 	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = strings.TrimSpace(a.Text), clip(strings.TrimSpace(a.Note), 600), &now
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})

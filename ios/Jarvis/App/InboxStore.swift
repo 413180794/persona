@@ -92,13 +92,14 @@ final class InboxStore {
     /// Items whose reply is being sent from the list (the row shows a spinner, a second tap does nothing).
     private(set) var sending: Set<String> = []
 
-    /// 发送 on the AI 分身's draft: the hub replies in the chat / by mail and files the item as done.
-    func send(_ item: InboxItem, text: String) async -> Bool {
+    /// 发送 on the AI 分身's draft: the hub replies in the chat / by mail / in the document (moving the rows' status
+    /// in `changes` first) and files the item as done.
+    func send(_ item: InboxItem, text: String, changes: [InboxItem.DocChange] = []) async -> Bool {
         guard let api = AppModel.shared.api, !sending.contains(item.id) else { return false }
         sending.insert(item.id)
         defer { sending.remove(item.id) }
         do {
-            try await api.inboxReply(item.id, text: text)
+            try await api.inboxReply(item.id, text: text, changes: changes)
             if let i = items.firstIndex(where: { $0.id == item.id }) {
                 items[i].doneAt = .now
                 items[i].doneBy = "replied"
@@ -112,9 +113,50 @@ final class InboxStore {
         }
     }
 
+    /// Status moves being written, by "<item>|<row>|<field>" (the menu shows a spinner).
+    private(set) var moving: Set<String> = []
+
+    /// Moves a row's status in its document: shown at once, written by the hub, the item replaced by the hub's fresh
+    /// read; a failure puts the old value back.
+    func setDocStatus(_ item: InboxItem, row: InboxItem.DocRow, status: InboxItem.DocStatus, to value: String) {
+        guard value != status.value, let api = AppModel.shared.api else { return }
+        let key = item.id + "|" + row.ref + "|" + status.field
+        guard !moving.contains(key), let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+        let before = items[i]
+        items[i].doc?.set(row: row.ref, field: status.field, to: value)
+        moving.insert(key)
+        Haptics.tap()
+        Task {
+            defer { moving.remove(key) }
+            do {
+                let fresh = try await api.inboxDocStatus(item.id, .init(ref: row.ref, field: status.field, value: value))
+                if let j = items.firstIndex(where: { $0.id == item.id }) { items[j] = fresh }
+                let snapshot = items
+                saver.run { StateCache.save(Self.stateName, snapshot) }
+                AppModel.shared.toast = Toast("「\(status.name)」改成了\(value)", style: .success)
+            } catch {
+                if let j = items.firstIndex(where: { $0.id == item.id }) { items[j] = before }
+                AppModel.shared.show(error)
+            }
+        }
+    }
+
     /// Feishu chats in the inbox are the ones background sync keeps fresh (their pages open at once).
     private func teachLarkSync() {
         LarkSync.shared.know(items.compactMap(\.larkConversation))
+    }
+}
+
+extension InboxItem.Doc {
+    mutating func set(row ref: String, field: String, to value: String) {
+        guard let r = rows?.firstIndex(where: { $0.ref == ref }), let f = rows?[r].status?.firstIndex(where: { $0.field == field }) else { return }
+        rows?[r].status?[f].value = value
+    }
+
+    /// The row and column a change names, for showing it ("状态：进行中 → 已完成").
+    func describe(_ change: InboxItem.DocChange) -> (row: InboxItem.DocRow, status: InboxItem.DocStatus)? {
+        guard let row = rows?.first(where: { $0.ref == change.ref }), let st = row.status?.first(where: { $0.field == change.field }) else { return nil }
+        return (row, st)
     }
 }
 
