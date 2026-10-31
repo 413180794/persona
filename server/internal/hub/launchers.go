@@ -342,21 +342,41 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				continue
 			}
 			if v.Source == "zshrc" {
+				// Every machine at once, the text and the probe apart: a launcher that fetches a token first is slow to
+				// probe (the node allows 15 s), and its text should still show.
 				v.Definitions, v.Details = map[string]string{}, map[string]proto.LauncherDetail{}
+				var mu sync.Mutex
+				var wg sync.WaitGroup
 				for _, id := range v.Machines {
-					if m := h.byID[id]; m != nil {
+					m := h.byID[id]
+					if m == nil {
+						continue
+					}
+					wg.Add(2)
+					go func() {
+						defer wg.Done()
 						var res struct {
-							Definition string                `json:"definition"`
-							Detail     *proto.LauncherDetail `json:"detail"`
+							Definition string `json:"definition"`
 						}
 						if err := m.call(ctx, "launchers.show", map[string]any{"name": name}, &res); err == nil {
+							mu.Lock()
 							v.Definitions[id] = res.Definition
-							if res.Detail != nil {
-								v.Details[id] = *res.Detail
-							}
+							mu.Unlock()
 						}
-					}
+					}()
+					go func() {
+						defer wg.Done()
+						var res struct {
+							Detail proto.LauncherDetail `json:"detail"`
+						}
+						if err := m.call(ctx, "launchers.probe", map[string]any{"name": name}, &res); err == nil {
+							mu.Lock()
+							v.Details[id] = res.Detail
+							mu.Unlock()
+						}
+					}()
 				}
+				wg.Wait()
 			}
 			writeJSON(w, map[string]any{"launcher": v})
 			return

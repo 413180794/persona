@@ -286,13 +286,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"ok": true}, nil
 	case "launchers.show":
 		def, err := n.launcherDefinition(ctx, p.Name)
-		out := map[string]any{"definition": def}
-		if probe, perr := n.launcherProbe(ctx, p.Name); perr == nil {
-			out["detail"] = LauncherDetail(probe)
-		} else {
-			out["detail"] = proto.LauncherDetail{Error: perr.Error()}
-		}
-		return out, err
+		return map[string]any{"definition": def}, err
+	case "launchers.probe":
+		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":

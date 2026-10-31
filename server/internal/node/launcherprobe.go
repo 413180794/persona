@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
@@ -95,6 +96,34 @@ func parseProbe(out string) (Probe, bool) {
 		}
 	}
 	return p, found
+}
+
+var probeCache = struct {
+	sync.Mutex
+	at  map[string]time.Time
+	got map[string]proto.LauncherDetail
+}{at: map[string]time.Time{}, got: map[string]proto.LauncherDetail{}}
+
+// launcherProbeCached probes at most every 10 minutes per launcher: running one may run what it runs first (a script
+// that fetches a token), so opening its page again should not repeat that.
+func (n *Node) launcherProbeCached(ctx context.Context, name string) proto.LauncherDetail {
+	probeCache.Lock()
+	if at, ok := probeCache.at[name]; ok && time.Since(at) < 10*time.Minute {
+		d := probeCache.got[name]
+		probeCache.Unlock()
+		return d
+	}
+	probeCache.Unlock()
+	var d proto.LauncherDetail
+	if p, err := n.launcherProbe(ctx, name); err == nil {
+		d = LauncherDetail(p)
+	} else {
+		d = proto.LauncherDetail{Error: err.Error()}
+	}
+	probeCache.Lock()
+	probeCache.at[name], probeCache.got[name] = time.Now(), d
+	probeCache.Unlock()
+	return d
 }
 
 // launcherProbe runs the probe on this machine (a login shell, so ~/.zshrc defines the launcher).
