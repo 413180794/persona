@@ -7,8 +7,8 @@ struct RootView: View {
     @Environment(\.dynamicTypeSize) private var systemTypeSize
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("RootView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("RootView")
         #endif
         Group {
             if model.isPaired {
@@ -27,6 +27,9 @@ struct RootView: View {
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)
         .overlay(alignment: .top) { ToastOverlay() }
+        #if DEBUG
+        .overlay(alignment: .bottomTrailing) { PerfCountProbe() }
+        #endif
         .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
             set: { if !$0 { model.pendingConfirmation?.respond(false); model.pendingConfirmation = nil } }
@@ -44,8 +47,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("RootTabs.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("RootTabs")
         #endif
         @Bindable var model = model
         TabView(selection: $model.selectedTab) {
@@ -61,8 +64,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some TabContent<AppTab> {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("AssistantRootTab.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AssistantRootTab")
         #endif
         Tab("Jarvis", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
             AssistantView()
@@ -78,8 +81,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some TabContent<AppTab> {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("AgentsRootTab.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AgentsRootTab")
         #endif
         Tab("Agents", systemImage: Theme.Icon.agents, value: AppTab.chats) {
             ChatsView()
@@ -95,8 +98,8 @@ struct RootView: View {
 
 @MainActor private struct InboxRootTab: TabContent {
     var body: some TabContent<AppTab> {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("InboxRootTab.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("InboxRootTab")
         #endif
         Tab("收件箱", systemImage: Theme.Icon.inbox, value: AppTab.mail) {
             InboxView()
@@ -112,8 +115,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some TabContent<AppTab> {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("SettingsRootTab.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("SettingsRootTab")
         #endif
         Tab("设置", systemImage: Theme.Icon.settings, value: AppTab.settings) {
             SettingsView()

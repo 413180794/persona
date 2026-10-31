@@ -172,8 +172,8 @@ struct ToolRunRow: View, Equatable {
     }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("ToolRunRow.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ToolRunRow")
         #endif
         Button(action: toggle) {
             ToolChipGroup(ToolRunSummary.chips(calls), isOpen: open, isRunning: calls.contains(where: \.isRunning))
@@ -287,8 +287,15 @@ struct ToolCallRow: View {
     /// A row of an open work line's card (`WorkCardSlice` draws the card): no gray tile of its own, 44 pt tall.
     var grouped = false
     @State private var expanded: Bool?
+    @Environment(\.openTools) private var openTools
 
-    private var isOpen: Bool { expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil)) }
+    private var isOpen: Bool {
+        openTools?.isOpen(call.id) ?? expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil))
+    }
+
+    private func setOpen(_ open: Bool) {
+        if let openTools { openTools.set(call.id, open) } else { expanded = open }
+    }
 
     @Environment(\.chatPin) private var pin
     private var pinKey: String { "call-" + call.id }
@@ -321,7 +328,7 @@ struct ToolCallRow: View {
     private func header(_ base: String) -> some View {
         Button {
             Haptics.tap()
-            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { setOpen(!isOpen) }
         } label: {
             HStack(spacing: Theme.Space.m) {
                 ZStack {
@@ -359,7 +366,7 @@ struct ToolCallRow: View {
     private var chipHeader: some View {
         ToolChipRow(chip, isOpen: isOpen, isRunning: call.isRunning) {
             Haptics.tap()
-            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { expanded = !isOpen }
+            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: isOpen) { setOpen(!isOpen) }
         } accessory: {
             taskBadge
             if call.isError { Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.danger).font(Theme.Font.label) }
@@ -789,6 +796,8 @@ struct TodoList: View {
 struct Base64Image: View {
     @Environment(\.chatImages) private var chatImages
     @Environment(\.attachImage) private var attachImage
+    @Environment(\.viewImages) private var viewImages
+    @Environment(\.imageZoom) private var pageZoom
     var payload: ImagePayload
     var gallery: [ImagePayload] = []
     var index = 0
@@ -803,6 +812,9 @@ struct Base64Image: View {
     @Namespace private var zoom
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("Base64Image")
+        #endif
         Group {
             if let image {
                 Image(uiImage: image).resizable().scaledToFit()
@@ -810,8 +822,8 @@ struct Base64Image: View {
                     .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
                     .scaledFrame(maxHeight: Theme.Size.box280)
                     .contentShape(.rect)
-                    .onTapGesture { showViewer = true }
-                    .matchedTransitionSource(id: "image", in: zoom)
+                    .onTapGesture { open() }
+                    .matchedTransitionSource(id: pageZoom == nil ? "image" : payload.identity, in: pageZoom ?? zoom)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("图片，点按查看大图")
             } else if let aspect = payload.aspect { // lazy: hold the image's shape while it downloads
@@ -832,6 +844,13 @@ struct Base64Image: View {
             // Thumbnails only need ~2x their on-screen size.
             image = await ChatImageLoader.image(payload, side: 900)
         }
+    }
+
+    /// In a chat the page shows the viewer (`viewImages`); elsewhere this view does.
+    private func open() {
+        guard let viewImages else { return showViewer = true }
+        viewImages(ImageViewing(images: gallery.isEmpty ? [payload] : gallery, index: gallery.isEmpty ? 0 : index,
+                                conversation: chatImages, source: payload.identity))
     }
 }
 

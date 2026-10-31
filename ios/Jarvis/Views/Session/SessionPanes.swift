@@ -154,8 +154,8 @@ struct TerminalPanel: View {
     private var font: TerminalFont { TerminalFont(rawValue: fontID) ?? .jetbrains }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("TerminalPanel.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("TerminalPanel")
         #endif
         VStack(spacing: 0) {
             screen
@@ -656,8 +656,8 @@ private struct TerminalFeedLink: View {
     let feed: TerminalFeed
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("TerminalFeedLink.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("TerminalFeedLink")
         #endif
         TerminalLinkStatus(lastOK: feed.lastOK, failure: feed.failure, nextTry: feed.nextTry) {
             Haptics.tap()
@@ -671,8 +671,8 @@ private struct TerminalFeedFrame<Frame: View>: View {
     @ViewBuilder var frame: (TerminalContent) -> Frame
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("TerminalFeedFrame.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("TerminalFeedFrame")
         #endif
         frame(feed.content)
     }

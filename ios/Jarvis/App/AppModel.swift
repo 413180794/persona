@@ -16,7 +16,15 @@ final class AppModel {
     let live: LiveConnection
     /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus
-    private(set) var machines: [Machine] = [] { didSet { saveSnapshot() } }
+    private(set) var machines: [Machine] = [] {
+        didSet {
+            let choices = machines.map(MachineChoice.init)
+            if choices != machineChoices { machineChoices = choices }
+            saveSnapshot()
+        }
+    }
+    /// The machines as menus list them (name, icon): changes only when one is added, removed or renamed.
+    private(set) var machineChoices: [MachineChoice] = []
     private(set) var sessionsByMachine: [String: [Session]] = [:] {
         didSet {
             allSessions = sessionsByMachine.values.flatMap { $0 }
@@ -28,11 +36,16 @@ final class AppModel {
                 }
             }
             sessionIndex = index
+            for (key, cell) in sessionCells where cell.value != index[key] { cell.value = index[key] }
             saveSnapshot()
         }
     }
     private(set) var allSessions: [Session] = []
-    private var sessionIndex: [SessionKey: Session] = [:]
+    @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
+    /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
+    /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
+    /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
+    @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
     var toast: Toast?
     var openChat: SessionKey?
@@ -219,7 +232,10 @@ final class AppModel {
     // MARK: Derived
 
     func session(_ key: SessionKey) -> Session? {
-        sessionIndex[key]
+        if let cell = sessionCells[key] { return cell.value }
+        let cell = SessionCell(sessionIndex[key])
+        sessionCells[key] = cell
+        return cell.value
     }
 
     /// A session this app just started, until the hub's next list for its machine (which replaces it) has it: its
@@ -579,6 +595,9 @@ final class AppModel {
     }
 
     private func handle(_ ev: ServerEvent) {
+        #if DEBUG || PERF_SIGNPOST
+        PerfTrace.push(Self.perfName(ev))
+        #endif
         switch ev {
         case .hello(let features):
             hubFeatures = Set(features)
@@ -588,7 +607,8 @@ final class AppModel {
         case .machines(let list):
             // A machine that just came back: re-subscribe its open chats (their backlog failed while it was down).
             let wasOffline = Set(machines.filter { !$0.online }.map(\.id))
-            machines = list
+            // Every view that names a machine reads the list: the same list again is no change.
+            if machines != list { machines = list }
             for m in list where m.online && wasOffline.contains(m.id) {
                 for key in subscribed where key.machineID == m.id {
                     chat(key).error = nil
@@ -642,6 +662,17 @@ final class AppModel {
             if let key { chat(key).error = message } else { toast = Toast(message, style: .error) }
         }
     }
+
+    #if DEBUG || PERF_SIGNPOST
+    private static func perfName(_ ev: ServerEvent) -> String {
+        switch ev {
+        case .machines: "machines"
+        case .sessions(let m, _): "sessions " + m
+        case .items(let key, _, _, _, _, _): "items " + key.sessionID
+        default: "other"
+        }
+    }
+    #endif
 
     /// Haptic tick when a session we care about finishes while the user looks elsewhere.
     private func notifyTransitions(old: [Session], new: [Session]) {
@@ -1089,4 +1120,10 @@ enum Haptics {
     static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func error() { UINotificationFeedbackGenerator().notificationOccurred(.error) }
     static func attention() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+}
+
+/// One session's latest state, observed on its own (`AppModel.session(_:)`).
+@Observable final class SessionCell {
+    var value: Session?
+    init(_ value: Session?) { self.value = value }
 }

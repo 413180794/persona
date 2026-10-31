@@ -70,7 +70,7 @@ enum DevGrouping: String, CaseIterable, Identifiable {
 }
 
 /// The quick filters over the Agents list (the bar under the search field): one tap, stacked on the machine menu.
-enum AgentFilter: String, CaseIterable, Identifiable {
+nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     case all, needsYou, unread, working
     var id: String { rawValue }
     var title: String {
@@ -92,11 +92,12 @@ enum AgentFilter: String, CaseIterable, Identifiable {
     func matches(_ s: Session) -> Bool { state.map { s.state == $0 } ?? true }
 }
 
-/// 开发: every agent across machines, grouped by space (default), by state or by machine.
+/// 开发: every agent across machines, grouped by space (default), by state or by machine. The navigation and the
+/// toolbar are here; the list is `AgentsList`, the view that follows the hub. A toolbar declared by the view the hub's
+/// pushes redraw is handed to UIKit again on each of them, and the ⋯ menu open over the list jumped back to its top
+/// (2026-10-31): nothing here reads the sessions.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
-    /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
-    @Environment(\.horizontalSizeClass) private var widthClass
     @State private var path = NavigationPath()
     /// Which space page sits at which depth of `path` (only this view pushes them), so a chat opened from a space
     /// page goes back to it instead of stacking another copy.
@@ -106,6 +107,10 @@ struct ChatsView: View {
     /// What was searched for when a result was opened: closing the search empties the system field (our text stays,
     /// so nothing writes it back), and on coming back the list showed the results under an empty field (2026-10-31).
     @State private var searchedBeforePush: String?
+    @State private var showNew = false
+    /// The ⋯ menu's actions, kept current by the list (not observed: see `AgentsListMenu`).
+    @State private var menuActions = AgentsListMenu.Actions()
+    @AppStorage("dev.machineFilter") private var machineFilter = ""
 
     /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
     /// header; closing the search once pushed is too late): opening something from the results closes the search
@@ -118,6 +123,92 @@ struct ChatsView: View {
             DispatchQueue.main.async { path = new }
         })
     }
+
+    var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ChatsView")
+        #endif
+        // Closing the search before a push from its results redraws the navigation with it, as when the list was
+        // drawn here: drawn by the list alone, the chat came up under the system navigation bar again (SearchOpenTests).
+        let _ = searching
+        SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
+            AgentsList(path: $path, spaceAt: $spaceAt, query: $query, searching: $searching,
+                       searchedBeforePush: $searchedBeforePush, showNew: $showNew, menuActions: menuActions)
+                .onChange(of: path.isEmpty) { _, atList in
+                    // Back at the list: the field shows what the results are for again (set it anew, the field is empty).
+                    guard atList, let q = searchedBeforePush else { return }
+                    searchedBeforePush = nil
+                    query = ""
+                    DispatchQueue.main.async { query = q }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .principal) { ConnectionTitle() }
+                    ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
+                    }
+                }
+                .sheet(isPresented: $showNew) {
+                    NewChatView { session in
+                        showNew = false
+                        openFromList(session.key)
+                    }
+                }
+                .onChange(of: path) { _, p in
+                    spaceAt = spaceAt.filter { $0.key < p.count }
+                    if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
+                }
+                .onChange(of: model.openChat, initial: true) { _, key in
+                    guard let key else { return }
+                    path = NavigationPath([key])
+                    model.openChat = nil
+                }
+                .onAppear {
+                    if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
+                    #if DEBUG
+                    // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
+                    if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { openFromList(MachineRoute(id: m)) }
+                    // `-openMonitor all|<machine id>` (with `-tab dev`): 机器监控, or one machine's charts.
+                    if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMonitor") {
+                        if m == "all" { openFromList(MachineDashboardRoute()) } else { openFromList(MachineMonitorRoute(id: m)) }
+                    }
+                    #endif
+                    if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
+                }
+        } empty: {
+            SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
+                             message: "左边列表里点一个 Agent，对话会在这里打开。")
+        }
+        .environment(\.openSpace) { space in
+            if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
+        }
+    }
+
+    /// A space page from a page already open (a chat's 空间 menu): on top of it.
+    private func pushSpace(_ id: String) {
+        path.append(SpaceRoute(id: id))
+        spaceAt[path.count - 1] = id
+    }
+
+    /// Something opened from here (a new chat, a debug page): it replaces the detail column, or pushes onto the list.
+    private func openFromList(_ value: some Hashable) {
+        spaceAt = (value as? SpaceRoute).map { [0: $0.id] } ?? [:]
+        path = NavigationPath([value])
+    }
+}
+
+/// The Agents list itself: what follows the hub's pushes (`ChatsView` holds the navigation and the toolbar).
+private struct AgentsList: View {
+    @Environment(AppModel.self) private var model
+    /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
+    @Environment(\.horizontalSizeClass) private var widthClass
+    @Binding var path: NavigationPath
+    @Binding var spaceAt: [Int: String]
+    @Binding var query: String
+    @Binding var searching: Bool
+    @Binding var searchedBeforePush: String?
+    @Binding var showNew: Bool
+    var menuActions: AgentsListMenu.Actions
 
     /// How long the system search field takes to fold away.
     private static let searchCloses = Duration.milliseconds(350)
@@ -132,12 +223,13 @@ struct ChatsView: View {
     /// but keeps its place, so the next one is still right below it.
     @State private var kept = Set<SessionKey>()
     @State private var confirmReadAll = false
-    @State private var showNew = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
     @State private var renamingSpace: SpaceGroup?
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
+    /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
+    @State private var rowActions = AgentRowMenu.Actions()
 
     /// The agents the machine menu and the search leave.
     private var base: [Session] {
@@ -160,8 +252,8 @@ struct ChatsView: View {
     }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("ChatsView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AgentsList")
         #endif
         let base = base
         let matching = Set(base.filter { quick != .all && quick.matches($0) }.map(\.key))
@@ -189,183 +281,144 @@ struct ChatsView: View {
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
 
-        SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
-            List {
-                if !interactions.isEmpty && query.isEmpty {
+        // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list.
+        let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
+                                   foldAll: { setFolded(folded.union($0)); expandedQuiet = [] },
+                                   unfoldAll: { setFolded([]) },
+                                   openMonitor: { openFromList(MachineDashboardRoute()) })
+        let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
+
+        List {
+            if !interactions.isEmpty && query.isEmpty {
+                Section {
+                    ForEach(interactions) { ix in
+                        if compact {
+                            // 细列表: one row like an agent's; the chat answers it.
+                            NavigationLink(value: ix.sessionKey) {
+                                CompactInteractionRow(interaction: ix, machine: model.machine(ix.machineID)?.name)
+                            }
+                            .listRowInsets(CompactList.rowInsets)
+                            .accessibilityIdentifier("agents.interaction")
+                        } else {
+                            InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                } header: {
+                    SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
+                }
+            }
+
+            if quick == .unread && !unreadShown.isEmpty {
+                Section {
+                    Button { confirmReadAll = true } label: {
+                        if compact {
+                            HStack(spacing: CompactList.gap) {
+                                Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
+                                Text("全部标为已读").font(CompactList.title).lineLimit(1)
+                                Spacer()
+                                Text("\(unreadShown.count) 个完成未看").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        } else {
+                            HStack {
+                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
+                                Spacer()
+                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                    .listRowInsets(compact ? CompactList.rowInsets : nil)
+                    .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
+                        Button("全部标为已读（\(unreadShown.count)）") {
+                            model.markSeen(unreadShown)
+                            kept = []
+                        }
+                    }
+                }
+            }
+
+            if !pinnedAgents.isEmpty {
+                Section {
+                    // No state word: the dot and the name's color already say it.
+                    ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
+                } header: {
+                    SectionHeader(title: "置顶", count: nil, tone: StatusPalette.idle)
+                }
+            }
+
+            if grouping == .state {
+                stateSections(unpinned.filter { $0.state.isLive })
+            } else if grouping == .machine {
+                machineSections(unpinned.filter { $0.state.isLive })
+            } else {
+                ForEach(active) { g in spaceSection(g) }
+
+                if !quiet.isEmpty {
                     Section {
-                        ForEach(interactions) { ix in
-                            if compact {
-                                // 细列表: one row like an agent's; the chat answers it.
-                                NavigationLink(value: ix.sessionKey) {
-                                    CompactInteractionRow(interaction: ix, machine: model.machine(ix.machineID)?.name)
-                                }
-                                .listRowInsets(CompactList.rowInsets)
-                                .accessibilityIdentifier("agents.interaction")
-                            } else {
-                                InteractionPreviewCard(interaction: ix) { openFromList(ix.sessionKey) }
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
+                        ForEach(quiet) { g in
+                            if compact { compactQuietSpace(g) } else {
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
+                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
+                            )) {
+                                ForEach(g.sessions) { s in slotRow(s) }
+                            } label: {
+                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                            }
                             }
                         }
                     } header: {
-                        SectionHeader(title: "需要你处理", count: interactions.count, tone: StatusPalette.needsYou)
+                        SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
                     }
                 }
+            }
 
-                if quick == .unread && !unreadShown.isEmpty {
-                    Section {
-                        Button { confirmReadAll = true } label: {
-                            if compact {
-                                HStack(spacing: CompactList.gap) {
-                                    Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
-                                    Text("全部标为已读").font(CompactList.title).lineLimit(1)
-                                    Spacer()
-                                    Text("\(unreadShown.count) 个完成未看").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            } else {
-                                HStack {
-                                    Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
-                                    Spacer()
-                                    Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
-                        }
-                        .listRowInsets(compact ? CompactList.rowInsets : nil)
-                        .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
-                            Button("全部标为已读（\(unreadShown.count)）") {
-                                model.markSeen(unreadShown)
-                                kept = []
-                            }
-                        }
-                    }
+            if base.isEmpty {
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.agents,
+                                   title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
+                                   message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
+                                   action: ("新建会话", { showNew = true }))
                 }
-
-                if !pinnedAgents.isEmpty {
-                    Section {
-                        // No state word: the dot and the name's color already say it.
-                        ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
-                    } header: {
-                        SectionHeader(title: "置顶", count: nil, tone: StatusPalette.idle)
-                    }
+                .listRowBackground(Color.clear)
+            } else if filtered.isEmpty, let st = quick.state {
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.success, title: "没有\(st.label)的会话",
+                                   message: machineFilter.isEmpty ? "各台电脑上的 Agent 有新动静会出现在这里。" : "这台机器上的 Agent 有新动静会出现在这里。",
+                                   action: ("看全部", { choose(.all, base) }))
                 }
-
-                if grouping == .state {
-                    stateSections(unpinned.filter { $0.state.isLive })
-                } else if grouping == .machine {
-                    machineSections(unpinned.filter { $0.state.isLive })
-                } else {
-                    ForEach(active) { g in spaceSection(g) }
-
-                    if !quiet.isEmpty {
-                        Section {
-                            ForEach(quiet) { g in
-                                if compact { compactQuietSpace(g) } else {
-                                DisclosureGroup(isExpanded: Binding(
-                                    get: { expandedQuiet.contains(g.id) || !query.isEmpty },
-                                    set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
-                                )) {
-                                    ForEach(g.sessions) { s in slotRow(s) }
-                                } label: {
-                                    QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
-                                }
-                                }
-                            }
-                        } header: {
-                            SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
-                        }
-                    }
-                }
-
-                if base.isEmpty {
-                    Section {
-                        EmptyStateView(symbol: Theme.Icon.agents,
-                                       title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",
-                                       message: "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。",
-                                       action: ("新建会话", { showNew = true }))
-                    }
-                    .listRowBackground(Color.clear)
-                } else if filtered.isEmpty, let st = quick.state {
-                    Section {
-                        EmptyStateView(symbol: Theme.Icon.success, title: "没有\(st.label)的会话",
-                                       message: machineFilter.isEmpty ? "各台电脑上的 Agent 有新动静会出现在这里。" : "这台机器上的 Agent 有新动静会出现在这里。",
-                                       action: ("看全部", { choose(.all, base) }))
-                    }
-                    .listRowBackground(Color.clear)
-                }
+                .listRowBackground(Color.clear)
             }
-            .listStyle(.insetGrouped)
-            .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
-            .environment(\.compactList, compact)
-            .listSectionSpacing(compact ? .compact : .default)
-            .themedPage()
-            // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone in its safe area.
-            .modifier(TopBar(abovePage: widthClass == .regular) {
-                QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, base) }
-            })
-            .navigationTitle("Agents")
-            // No title over the list (the tab says it); the name stays for the back button. The principal item below
-            // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
-            // (toolbar(removing: .title) would hide that too).
-            .navigationBarTitleDisplayMode(.inline)
-            // The search field always shows: when scrolling folded it away, the filter bar (safeAreaBar) stayed where
-            // it sat under the open field on device (TestFlight 35), ~120 pt of blurred list between it and the bar.
-            .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "搜索空间、标签、会话、内容")
-            .refreshable { await model.refresh() }
-            .onChange(of: path.isEmpty) { _, atList in
-                // Back at the list: the field shows what the results are for again (set it anew, the field is empty).
-                guard atList, let q = searchedBeforePush else { return }
-                searchedBeforePush = nil
-                query = ""
-                DispatchQueue.main.async { query = q }
-            }
-            .toolbar {
-                ToolbarItem(placement: .principal) { ConnectionTitle() }
-                ToolbarItem(placement: .topBarLeading) { listMenu(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned)) }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
-                }
-            }
-            .renameSpaceAlert($renamingSpace)
-            .renameSessionAlert($renamingSession)
-            .confirmClose($closingSession)
-            .sheet(isPresented: $showNew) {
-                NewChatView { session in
-                    showNew = false
-                    openFromList(session.key)
-                }
-            }
-            .onChange(of: matching) { _, now in kept.formUnion(now) }
-            .onChange(of: machineFilter) { _, _ in kept = [] }
-            .onChange(of: path) { _, p in
-                spaceAt = spaceAt.filter { $0.key < p.count }
-                if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
-            }
-            .onChange(of: model.openChat, initial: true) { _, key in
-                guard let key else { return }
-                path = NavigationPath([key])
-                model.openChat = nil
-            }
-            .onAppear {
-                if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
-                #if DEBUG
-                // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
-                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { openFromList(MachineRoute(id: m)) }
-                // `-openMonitor all|<machine id>` (with `-tab dev`): 机器监控, or one machine's charts.
-                if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMonitor") {
-                    if m == "all" { openFromList(MachineDashboardRoute()) } else { openFromList(MachineMonitorRoute(id: m)) }
-                }
-                #endif
-                if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
-            }
-        } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
-                             message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
-        .environment(\.openSpace) { space in
-            if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
-        }
+        .listStyle(.insetGrouped)
+        .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
+        .environment(\.compactList, compact)
+        .listSectionSpacing(compact ? .compact : .default)
+        .themedPage()
+        // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone in its safe area.
+        .modifier(TopBar(abovePage: widthClass == .regular) {
+            // Equal while the counts are: the bar is not drawn again for pushes that change none of them. The
+            // tap reads the list as it is then.
+            QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, self.base) }.equatable()
+        })
+        .navigationTitle("Agents")
+        // No title over the list (the tab says it); the name stays for the back button. The principal item (ChatsView)
+        // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
+        // (toolbar(removing: .title) would hide that too).
+        .navigationBarTitleDisplayMode(.inline)
+        // The search field always shows: when scrolling folded it away, the filter bar (safeAreaBar) stayed where
+        // it sat under the open field on device (TestFlight 35), ~120 pt of blurred list between it and the bar.
+        // On the list itself, before the alerts, as it always was.
+        .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "搜索空间、标签、会话、内容")
+        .refreshable { await model.refresh() }
+        .renameSpaceAlert($renamingSpace)
+        .renameSessionAlert($renamingSession)
+        .confirmClose($closingSession)
+        .onChange(of: matching) { _, now in kept.formUnion(now) }
+        .onChange(of: machineFilter) { _, _ in kept = [] }
     }
 
     /// Each quick filter's count. Out of the body's modifier chain: closures in a long chain are type-checked with all
@@ -383,12 +436,6 @@ struct ChatsView: View {
         Haptics.tap()
         quick = f
         kept = Set(base.filter { f != .all && f.matches($0) }.map(\.key))
-    }
-
-    /// A space page from a page already open (a chat's 空间 menu): on top of it.
-    private func pushSpace(_ id: String) {
-        path.append(SpaceRoute(id: id))
-        spaceAt[path.count - 1] = id
     }
 
     /// Something the list opens: in the split it replaces the detail column; in one stack the list is at the root, so
@@ -464,7 +511,7 @@ struct ChatsView: View {
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
-            Menu { SpaceMenuItems(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }) } label: {
+            Menu { SpaceHeaderMenu(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }).equatable() } label: {
                 Image(systemName: compact ? Theme.Icon.more : Theme.Icon.moreMenu)
                     .font(compact ? CompactList.metaStrong : Theme.Font.body)
                     .foregroundStyle(.secondary)
@@ -641,80 +688,20 @@ struct ChatsView: View {
                 }
             }
             .contextMenu {
-                Button { model.togglePin(s.key) } label: {
-                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? Theme.Icon.unpin : Theme.Icon.pin)
-                }
-                Button { renamingSession = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
-                Button { model.toggleMute(s.key) } label: {
-                    Label(model.isMuted(s.key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(s.key) ? Theme.Icon.unmute : Theme.Icon.mute)
-                }
-                if s.loop != nil {
-                    Button(role: .destructive) { model.stopLoop(s.key) } label: { Label("停止循环", systemImage: Theme.Icon.stopLoop) }
-                }
-                Button { Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineID)?.name)) } } label: {
-                    Label("交给 Jarvis", systemImage: Theme.Icon.ai)
-                }
-                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
-                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal) }
-                if s.state.isLive {
-                    Button(role: .destructive) { closingSession = s } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
-                }
+                AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s.key), looping: s.loop != nil,
+                             live: s.state.isLive, actions: rowActions)
+                    .equatable()
             }
-    }
-
-    /// The menu at the top left: grouping, 卡片 / 细列表, folding, the machine filter. Shows the chosen machine's name
-    /// in the corner; "全部" keeps the plain filter icon. `sections`: the fold ids of what is listed now.
-    private func listMenu(sections: [String]) -> some View {
-        Menu {
-            Picker("分组", selection: $grouping) {
-                ForEach(DevGrouping.allCases) { g in Label(g.title, systemImage: g.symbol).tag(g) }
-            }
-            Picker("显示", selection: $compact) {
-                Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
-                Label("细列表", systemImage: "list.bullet").tag(true)
-            }
-            Section {
-                Button {
-                    withAnimation(Theme.Motion.standard) { setFolded(folded.union(sections)) }
-                    expandedQuiet = []
-                } label: { Label("全部折叠", systemImage: Theme.Icon.collapseAll) }
-                Button {
-                    withAnimation(Theme.Motion.standard) { setFolded([]) }
-                } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
-            }
-            Picker("机器", selection: $machineFilter) {
-                Label("全部机器", systemImage: "square.grid.2x2").tag("")
-                ForEach(model.machines) { m in
-                    Label(m.name, systemImage: m.symbol).tag(m.id)
-                }
-            }
-            Section {
-                Button { openFromList(MachineDashboardRoute()) } label: {
-                    Label("机器监控", systemImage: Theme.Icon.context)
-                }
-            }
-        } label: {
-            if let m = model.machine(machineFilter) {
-                HStack(spacing: Theme.Space.sm) {
-                    Image(systemName: m.symbol)
-                    Text(m.name).lineLimit(1)
-                    Image(systemName: Theme.Icon.expand).font(Theme.Font.labelHeavy)
-                }
-                .font(Theme.Font.secondaryStrong)
-                .fixedSize()
-            } else {
-                Image(systemName: grouping == .space ? "line.3.horizontal.decrease" : grouping.symbol)
-            }
-        }
-        .accessibilityLabel((model.machine(machineFilter).map { "当前机器：\($0.name)，" } ?? "") + "分组：" + grouping.title)
     }
 }
 
 /// 全部 / 需要你 / 未读 / 工作中 under the search field, each with its count; one tap switches.
-struct QuickFilterBar: View {
-    var selection: AgentFilter
-    var counts: [AgentFilter: Int]
+struct QuickFilterBar: View, Equatable {
+    nonisolated let selection: AgentFilter
+    nonisolated let counts: [AgentFilter: Int]
     var choose: (AgentFilter) -> Void
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.selection == b.selection && a.counts == b.counts }
 
     /// No sideways scroll view: the navigation stack can take one at the top of the page for the page's own and
     /// inset it by the whole top bar. It did behind a chat reopened at launch (the chips drawn ~170 pt under the
@@ -722,6 +709,9 @@ struct QuickFilterBar: View {
     /// do not show it (UIKit moves the content), the pixels do: `AgentsListTests.drawn`. Chips that do not fit
     /// tighten, then go to a second row.
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("QuickFilterBar")
+        #endif
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Theme.Space.s) { chips(padding: 12) }
             HStack(spacing: Theme.Space.sm) { chips(padding: 8) }
@@ -838,6 +828,9 @@ struct SpaceHeader: View {
     @Environment(\.compactList) private var compact
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("SpaceHeader")
+        #endif
         HStack(spacing: Theme.Space.s) {
             if compact {
                 // 细列表: the space is the title over its rows (Color.primary: a header dims `.primary` a level).
@@ -876,6 +869,9 @@ struct StateCounts: View {
     }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("StateCounts")
+        #endif
         HStack(spacing: Theme.Space.sm) {
             ForEach([AgentState.needsYou, .working, .unread], id: \.self) { st in
                 let n = group.count(st)
@@ -922,8 +918,8 @@ nonisolated struct SlotRow: View, Equatable {
 
     @MainActor
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("SlotRow.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("SlotRow")
         #endif
         HStack(alignment: .top, spacing: Theme.Space.m) {
             StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm)
@@ -984,6 +980,9 @@ nonisolated struct CompactSlotRow: View, Equatable {
 
     @MainActor
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("CompactSlotRow")
+        #endif
         HStack(spacing: CompactList.gap) {
             StatusDot(state: session.state, size: Theme.Size.dot).scaledFrame(width: CompactList.mark)
             HStack(alignment: .firstTextBaseline, spacing: CompactList.gap) {

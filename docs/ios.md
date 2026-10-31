@@ -475,6 +475,10 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 `-dropUsers YES`（隐藏那一轮的用户气泡，一屏看全过程行和答复）。`-openPane terminal|git|files` 打开会话页的终端（从底部弹出）/ Git / 文件；
 `-simulateTap <machine>/<session>` 启动 4 秒后走一遍「点通知」的处理；`-tab settings -openNotificationSettings YES`（设置 › 通知，再加 `-openIslandSettings YES` 进灵动岛）；`-showFleetSample needsYou|working|done`（`-fleetDetails YES`、`-fleetIsland b|c|custom:<左>,<右>`）用编造的数据开实时活动；`-showTestNotification permission|plan` 进后台 3 秒后弹一条和交互推送一样的本地通知（UI 测试用它试按钮）；`-showMenu YES` 在最后一条回复（配合 `-fromSeq` 是那一轮的回复）上打开长按操作条；`-openWelcome YES` 启动时忘掉配对、退出体验模式，停在配对页（`DemoModeTests`）。
 
+实时更新不打断操作的测试（`LiveUpdateTests`）用到两个：`-openChatsFresh YES` 启动时清掉磁盘上的对话缓存（上一次运行推进去的步骤不留下）；
+`-perfCounts YES` 计数：各视图 body 被算了几次、每次 hub 推送到主线程空闲用了多久，写在隐藏文字 `perf.counts` 里（JSON）给 UI 测试读
+（`PerfSignpost.swift`；同一处也发 os_signpost，Instruments 的 Points of Interest 能看到每个 body 和每次推送）。
+
 ## 飞书消息渲染（`Jarvis/Views/Inbox/Lark/`）
 
 照搬 lark-connector（github.com/Eric-2369/lark-connector，`src/ui/message-renderers/`）的消息渲染，数据是 hub 原样转发的 `parts`：

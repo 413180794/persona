@@ -15,8 +15,8 @@ struct SettingsView: View {
     private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("SettingsView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("SettingsView")
         #endif
         // By value, every page: in the split (iPhone Duo open) they open beside the list, not inside its column.
         SplitNavigation(path: $path, destinations: SettingsDestinations()) {

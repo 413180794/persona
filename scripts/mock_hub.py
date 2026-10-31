@@ -1008,6 +1008,97 @@ def net_control(path, q):
     return False
 
 
+# ---------- live churn (LiveUpdateTests) ----------
+# GET /mock/churn?n=20&ms=300&steps=1: n rounds, ms apart, of what a busy hub pushes: every machine's sessions again (the
+# working ones with a new last line and time, two of them trading working / idle so the order of spaces moves), the
+# machine list (a new last_seen), and `steps` new steps in the turn of each conversation a connection has open. GET
+# /mock/churned tells how many rounds have gone out. &final=1: then the turn ends (a last reply, the working agents
+# done; counted as one more round). For checking that what the user is doing survives the updates.
+# MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
+LIVE = []  # (send, subscribed session ids) of each open WebSocket
+CHURN = {"rounds": 0}
+CHURN_ITEMS = {}  # each conversation's items before churn added to them (/mock/reset puts them back)
+
+
+def png(w, h, rgb):
+    """A plain w×h PNG of one color (stdlib only)."""
+    import zlib
+    raw = b"".join(b"\0" + bytes(rgb) * w for _ in range(h))
+    def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def churn(rounds, ms, steps=1, final=False):
+    import time
+    for k in range(rounds):
+        time.sleep(ms / 1000)
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        working = [s for s in SESSIONS if s["state"] == "working"]
+        for s in working:
+            s.update(updated_at=now, last_text="第 %d 轮更新：还在跑，刚看完一处。" % (k + 1))
+        if len(working) >= 2 and k % 2 == 1:  # the busiest space is now a different one
+            working[0]["updated_at"] = ago(minutes=30)
+        for m in MACHINES:
+            m["last_seen"] = now
+        by = {}
+        for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
+        for send, subscribed in list(LIVE):
+            try:
+                send({"type": "machines", "machines": MACHINES})
+                for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
+                for sid in list(subscribed):
+                    items = ITEMS.get(sid)
+                    if not items: continue
+                    CHURN_ITEMS.setdefault(sid, list(items))
+                    before = items[-1]["seq"]
+                    new = [x for j in range(steps) for x in tool("Read", {"file_path": "/Users/me/code/weather/Step%d_%d.swift" % (k, j)},
+                                                                   "struct Step%d {}" % k, 0)]
+                    if k % 4 == 3:  # a word between the steps: it folds into the work line, the turn goes on
+                        new = [it("assistant", "text", 0, text="第 %d 处看完了，接着看下一处。" % (k + 1))] + new
+                    ITEMS[sid] = items + new
+                    mid = next((x["machine_id"] for x in all_sessions() if x["session_id"] == sid), "macbook")
+                    send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+            except Exception:
+                pass
+        CHURN["rounds"] = k + 1
+    if final:  # the turn ends: a last reply, and the agents that were working are done
+        time.sleep(ms / 1000)
+        for s in SESSIONS:
+            if s["state"] == "working":
+                s.update(state="unread", status="done", last_text="都看完了，改动已经提交。")
+        by = {}
+        for s in all_sessions(): by.setdefault(s["machine_id"], []).append(s)
+        for send, subscribed in list(LIVE):
+            try:
+                for sid in list(subscribed):
+                    items = ITEMS.get(sid)
+                    if not items: continue
+                    before = items[-1]["seq"]
+                    new = [it("assistant", "text", 0, text="都看完了，改动已经提交。")]
+                    ITEMS[sid] = items + new
+                    mid = next((x["machine_id"] for x in all_sessions() if x["session_id"] == sid), "macbook")
+                    send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
+                for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
+            except Exception:
+                pass
+        CHURN["rounds"] += 1
+
+
+if os.environ.get("MOCK_CHURN") == "1":
+    # Machines enough that the ⋯ menu scrolls, as it does with six on a phone.
+    for _i, _n in enumerate(["构建机", "测试机", "Mac mini", "Mac mini 2", "训练机"]):
+        MACHINES.append({"id": "extra%d" % _i, "name": _n, "kind": "ssh", "icon": "server", "ssh_host": "extra%d" % _i,
+                         "online": True, "last_seen": ago()})
+    _shot = tool("Bash", {"command": "xcrun simctl io booted screenshot /tmp/widget.png", "description": "截一张小组件的图"}, "", 6)
+    _img = it("user", "image", 6, tool_use_id=_shot[0]["tool_use_id"],
+              image={"mime": "image/png", "data": base64.b64encode(png(320, 240, (64, 140, 220))).decode()})
+    _w = ITEMS[WIDGET]
+    ITEMS[WIDGET] = _w[:-3] + _shot + [_img] + _w[-3:]  # before the last tool call (its use, its result) and the reply
+    for _n, _x in enumerate(ITEMS[WIDGET]):  # seqs in transcript order again (the new ones were numbered last)
+        _x["seq"] = _w[0]["seq"] + _n
+
+
 # ---------- HTTP ----------
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -1041,6 +1132,12 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
         if net_control(p, q): return self.send_json({"ok": True, **NET})
+        if p == "/mock/churn":
+            CHURN["rounds"] = 0
+            threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
+                                                 int(q.get("steps", ["1"])[0]), q.get("final", ["0"])[0] == "1"), daemon=True).start()
+            return self.send_json({"ok": True})
+        if p == "/mock/churned": return self.send_json(CHURN)
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
@@ -1066,6 +1163,7 @@ class H(BaseHTTPRequestHandler):
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
             del RECONNECTS[:], STARTED[:], SEEN[:]
+            for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests: the steps churn added go
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]
@@ -1342,6 +1440,8 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.write(hdr + data); self.wfile.flush()
 
         SOCKETS.add(self.connection)
+        subscribed = set()
+        LIVE.append((send, subscribed))
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8],
               "features": ["file_upload"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])})
         drive = {}  # the terminal this connection drives: cols, rows, typed, prompt row
@@ -1412,6 +1512,9 @@ class H(BaseHTTPRequestHandler):
                             mine()
                     threading.Thread(target=ticks, daemon=True).start()
                     continue
+                if msg.get("type") == "unsubscribe":
+                    subscribed.discard(msg.get("session_id"))
+                    continue
                 if msg.get("type") == "terminal_unsubscribe":
                     if drive: TERMINAL_INPUT.append(msg)  # letting go (the UI test looks for it)
                     drive.clear()
@@ -1430,6 +1533,7 @@ class H(BaseHTTPRequestHandler):
                     continue
                 if msg.get("type") == "subscribe":
                     sid, mid = msg.get("session_id"), msg.get("machine_id")
+                    subscribed.add(sid)
                     items = find_items(sid)
                     since = msg.get("since_seq") or 0
                     if GAP and sid == SESSIONS[0]["session_id"] and not GAP_STATE["started"]:
@@ -1472,6 +1576,7 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         SOCKETS.discard(self.connection)
+        LIVE[:] = [x for x in LIVE if x[0] is not send]
         self.close_connection = True
 
 

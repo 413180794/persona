@@ -936,6 +936,11 @@ nonisolated enum ChatCache {
         return (e.items, e.hasMore, e.history, e.covered)
     }
 
+    static func removeAll() {
+        guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        try? FileManager.default.removeItem(at: base.appending(path: "chats-v3"))
+    }
+
     static func remove(_ key: SessionKey) {
         guard let url = url(key) else { return }
         try? FileManager.default.removeItem(at: url)

@@ -79,6 +79,32 @@ extension EnvironmentValues {
     @Entry var loadImage: ((String) async -> ImagePayload?)? = nil
     /// Fetches the whole text of an item the page cut (`Item.fullSize`), by item id (set by ChatView).
     @Entry var loadFullText: ((String) async throws -> String)? = nil
+    /// Opens the full-screen image viewer from the chat page (set by ChatView). A viewer presented by the row it was
+    /// tapped in went away with the row: the lazy list drops rows it moves away from, and it moves to every new step
+    /// while you are at the newest end (2026-10-31: a screenshot in a working agent's steps closed itself).
+    @Entry var viewImages: ((ImageViewing) -> Void)? = nil
+    /// The chat page's namespace for the viewer's zoom from its thumbnail.
+    @Entry var imageZoom: Namespace.ID? = nil
+    /// Which tool calls are open (set by ChatView): like the work lines, kept by the page so a row the lazy list
+    /// dropped and made again comes back the way it was.
+    @Entry var openTools: OpenTools? = nil
+}
+
+/// The viewer to show: the images to page through, where to start, and the thumbnail it zooms from.
+struct ImageViewing: Identifiable {
+    let id = UUID()
+    var images: [ImagePayload]
+    var index: Int
+    /// The conversation's images (the viewer's 「对话里的图片」), as they were when it opened.
+    var conversation: [ImagePayload]
+    var source: String
+}
+
+/// Tool calls opened or closed by the user, by call id; the rest follow their own default.
+@Observable final class OpenTools {
+    private var state: [String: Bool] = [:]
+    func isOpen(_ id: String) -> Bool? { state[id] }
+    func set(_ id: String, _ open: Bool) { state[id] = open }
 }
 
 struct UserBubble: View {
@@ -276,6 +302,7 @@ struct MergedUserBubble: View {
 struct SentPhotos: View {
     @Environment(\.chatImages) private var chatImages
     @Environment(\.attachImage) private var attachImage
+    @Environment(\.viewImages) private var viewImages
     var images: [ImagePayload]
     @State private var viewer: Int?
 
@@ -284,7 +311,11 @@ struct SentPhotos: View {
             Spacer(minLength: 48)
             ForEach(Array(images.enumerated()), id: \.offset) { i, p in
                 let side: CGFloat = images.count == 1 ? 140 : 84
-                Button { viewer = i } label: {
+                Button {
+                    if let viewImages {
+                        viewImages(ImageViewing(images: images, index: i, conversation: chatImages, source: p.identity))
+                    } else { viewer = i }
+                } label: {
                     Theme.Fill.chip
                         .frame(width: side, height: side)
                         .overlay { ChatThumbnail(payload: p) }
@@ -306,6 +337,7 @@ struct SentPhotos: View {
 struct AttachedImages: View {
     @Environment(\.chatImages) private var chatImages
     @Environment(\.attachImage) private var attachImage
+    @Environment(\.viewImages) private var viewImages
     var paths: [String]
     var load: (String) async -> ImagePayload?
     @State private var loaded: [String: ImagePayload] = [:]
@@ -315,7 +347,7 @@ struct AttachedImages: View {
         HStack(spacing: Theme.Space.sm) {
             Spacer(minLength: 48)
             ForEach(Array(paths.enumerated()), id: \.element) { i, path in
-                Button { if loaded[path] != nil { viewer = i } } label: { thumb(path) }
+                Button { open(i) } label: { thumb(path) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("图片 \(i + 1)")
             }
@@ -334,6 +366,14 @@ struct AttachedImages: View {
             let images = paths.compactMap { loaded[$0] }
             if let i = viewer, !images.isEmpty { ImageViewer(images: images, index: min(i, images.count - 1), conversation: chatImages, attach: attachImage) }
         }
+    }
+
+    private func open(_ i: Int) {
+        guard loaded[paths[i]] != nil else { return }
+        guard let viewImages else { return viewer = i }
+        let images = paths.compactMap { loaded[$0] }
+        let at = paths.prefix(i).filter { loaded[$0] != nil }.count
+        viewImages(ImageViewing(images: images, index: at, conversation: chatImages, source: paths[i]))
     }
 
     private func thumb(_ path: String) -> some View {

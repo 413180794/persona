@@ -91,6 +91,13 @@ struct ChatView: View {
     @State private var chrome = ChatChrome()
     @Environment(\.openSpace) private var openSpace
     @State private var link: LinkTarget?
+    /// The image viewer, shown by the page rather than the row it was opened from (`viewImages`).
+    @State private var viewingImages: ImageViewing?
+    @Namespace private var imageZoom
+    /// Tool calls the user opened or closed (`openTools`).
+    @State private var openTools = OpenTools()
+    /// What the environment's actions call (`ChatActions`).
+    @State private var actions = ChatActions()
 
     init(key: SessionKey, style: ChatStyle = .dev) {
         _key = State(initialValue: key)
@@ -120,9 +127,10 @@ struct ChatView: View {
     }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("ChatView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ChatView")
         #endif
+        let _ = actions.set(handlers)
         swipeablePanes
         // A readable measure on a wide page (iPhone Duo open, nothing beside the chat); a no-op on other iPhones.
         .frame(maxWidth: Self.readableWidth)
@@ -196,28 +204,24 @@ struct ChatView: View {
             }
         }
         #endif
-        .environment(\.openFile) { path in
-            file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd)
-        }
+        .environment(\.openFile, actions.openFile)
         .environment(\.chatImages, store.images)
-        .environment(\.openLink) { url in link = LinkTarget(url: url) }
+        .environment(\.viewImages, actions.viewImages)
+        .environment(\.imageZoom, imageZoom)
+        .environment(\.openTools, openTools)
+        .fullScreenCover(item: $viewingImages) { v in
+            ImageViewer(images: v.images, index: v.index, conversation: v.conversation) { [model, key] img in
+                model.composerInbox[key, default: []].append(img)
+            }
+            .navigationTransition(.zoom(sourceID: v.source, in: imageZoom))
+        }
+        .environment(\.openLink, actions.openLink)
         // Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
-        .environment(\.openURL, OpenURLAction { url in
-            guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return .systemAction }
-            link = LinkTarget(url: url)
-            return .handled
-        })
+        .environment(\.openURL, actions.openURL)
         .sheet(item: $link) { t in LinkSheet(target: t, key: key) }
-        .environment(\.attachImage) { [model, key] img in model.composerInbox[key, default: []].append(img) }
-        .environment(\.loadImage) { [model, key] path in
-            guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
-            return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
-        }
-        // The session on screen: a subagent's items live in its own transcript.
-        .environment(\.loadFullText) { [model, shownKey] id in
-            guard let api = model.api else { throw CancellationError() }
-            return try await api.fullItem(shownKey, id: id).text ?? ""
-        }
+        .environment(\.attachImage, actions.attachImage)
+        .environment(\.loadImage, actions.loadImage)
+        .environment(\.loadFullText, actions.loadFullText)
         .onAppear(perform: appeared)
         // The same chat was already open (the app left on it) when its "完成" notification was tapped: no new entry.
         .onChange(of: model.latestAnswerFor) { _, k in
@@ -383,6 +387,29 @@ struct ChatView: View {
         log.append("RESULT: \(store.items.count - n0) items arrived while reading, line moved at most \(moved)pt; back at the newest: last line \(newest) on screen \(scratch.listFrame.minY < newestY && newestY < scratch.listFrame.maxY)")
     }
     #endif
+
+    /// What this render's actions do (`ChatActions`).
+    private var handlers: ChatActions.Handlers {
+        ChatActions.Handlers(
+            openFile: { [key, session] path in file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd) },
+            openLink: { link = LinkTarget(url: $0) },
+            viewImages: { viewingImages = $0 },
+            attachImage: { [model, key] img in model.composerInbox[key, default: []].append(img) },
+            loadImage: { [model, key] path in
+                guard let f = try? await model.api?.file(machine: key.machineID, path: path, cwd: nil), let data = f.data else { return nil }
+                return ImagePayload(mime: f.mime ?? "image/jpeg", data: data)
+            },
+            // The session on screen: a subagent's items live in its own transcript.
+            loadFullText: { [model, shownKey] id in
+                guard let api = model.api else { throw CancellationError() }
+                return try await api.fullItem(shownKey, id: id).text ?? ""
+            },
+            openSubagent: { toolUseID in
+                if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
+            },
+            openFold: openFold,
+            jumpToCall: { jumpToCall($0) })
+    }
 
     /// Folds or opens a work line without moving what you were reading. In the upside-down list the newest end holds
     /// still on its own: folding from 收起 under the last step leaves the reply below it where it was. From the header,
@@ -739,12 +766,10 @@ struct ChatView: View {
             }
             ChatRegion(name: "ChatFooter.body") { footer }
         }
-        .environment(\.openSubagent) { toolUseID in
-            if let a = session?.subagents?.first(where: { $0.toolUseID == toolUseID }) { view(a) }
-        }
-        .environment(\.openFold, openFold)
+        .environment(\.openSubagent, actions.openSubagent)
+        .environment(\.openFold, actions.openFold)
         .environment(\.taskIndex, store.tasks)
-        .environment(\.jumpToCall) { id in jumpToCall(id) }
+        .environment(\.jumpToCall, actions.jumpToCall)
     }
 
     /// From a background task's notice to the call that started it: opens the work line it is folded in and brings
@@ -1001,9 +1026,9 @@ struct ChatView: View {
             }
             .environment(\.chatPin, nil) // the drawer has a list of its own; the chat's must not scroll for it
             .environment(menu)
-            .environment(\.openFold, openFold)
+            .environment(\.openFold, actions.openFold)
             .environment(\.taskIndex, store.tasks)
-            .environment(\.jumpToCall) { id in jumpToCall(id) }
+            .environment(\.jumpToCall, actions.jumpToCall)
         }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
@@ -2421,8 +2446,8 @@ struct WorkStepView: View, Equatable {
 
     @MainActor
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("WorkStepView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("WorkStepView")
         #endif
         Group {
             switch item {
@@ -2464,6 +2489,54 @@ struct WorkStepView: View, Equatable {
 /// A slice of an open work line's card. The steps are lines of their own in the lazy chat list (a turn can hold
 /// hundreds; one view holding them all stalled the page), so each draws its part: rounded on top for the first, at
 /// the bottom for the 收起 foot, reaching halfway into the list's gaps to meet its neighbours.
+/// The chat's actions handed down through the environment (open a file, a link, an image, a subagent…), as closures
+/// made once per page that call whatever the page's last render set. A closure written in `body` is a new value on
+/// every render and SwiftUI cannot tell it is the same one: every row that reads one (each visible work step reads
+/// several) was evaluated again on every push from the hub (2026-10-31, `LiveUpdateTests`).
+@MainActor final class ChatActions {
+    struct Handlers {
+        var openFile: (String) -> Void = { _ in }
+        var openLink: (URL) -> Void = { _ in }
+        var viewImages: (ImageViewing) -> Void = { _ in }
+        var attachImage: (UIImage) -> Void = { _ in }
+        var loadImage: (String) async -> ImagePayload? = { _ in nil }
+        var loadFullText: (String) async throws -> String = { _ in "" }
+        var openSubagent: (String) -> Void = { _ in }
+        var openFold: (Item) async throws -> Void = { _ in }
+        var jumpToCall: (String) -> Void = { _ in }
+    }
+
+    private var handlers = Handlers()
+
+    func set(_ h: Handlers) { handlers = h }
+
+    private(set) lazy var openFile: (String) -> Void = { [weak self] in self?.handlers.openFile($0) }
+    private(set) lazy var openLink: (URL) -> Void = { [weak self] in self?.handlers.openLink($0) }
+    private(set) lazy var viewImages: (ImageViewing) -> Void = { [weak self] in self?.handlers.viewImages($0) }
+    private(set) lazy var attachImage: (UIImage) -> Void = { [weak self] in self?.handlers.attachImage($0) }
+    // The async ones run on the main actor, where the handlers are.
+    private(set) lazy var loadImage: (String) async -> ImagePayload? = { @MainActor [weak self] path in
+        guard let load = self?.handlers.loadImage else { return nil }
+        return await load(path)
+    }
+    private(set) lazy var loadFullText: (String) async throws -> String = { @MainActor [weak self] id in
+        guard let load = self?.handlers.loadFullText else { throw CancellationError() }
+        return try await load(id)
+    }
+    private(set) lazy var openSubagent: (String) -> Void = { [weak self] in self?.handlers.openSubagent($0) }
+    private(set) lazy var openFold: (Item) async throws -> Void = { @MainActor [weak self] item in
+        guard let open = self?.handlers.openFold else { return }
+        try await open(item)
+    }
+    private(set) lazy var jumpToCall: (String) -> Void = { [weak self] in self?.handlers.jumpToCall($0) }
+    /// Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
+    private(set) lazy var openURL = OpenURLAction { [weak self] url in
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let self else { return .systemAction }
+        handlers.openLink(url)
+        return .handled
+    }
+}
+
 struct WorkCardSlice: View {
     var top: Bool
     var bottom: Bool
@@ -2583,6 +2656,9 @@ struct WorkLine: View {
     }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("WorkLine")
+        #endif
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.m) {
                 Button(action: toggle) {
@@ -2671,8 +2747,8 @@ private struct ChatLiveText: View {
     let status: SessionStatus
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("ChatLiveText.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ChatLiveText")
         #endif
         let live = store.liveText
         let lastText: String? = {
@@ -2719,8 +2795,8 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
     @ViewBuilder var compact: () -> Compact
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("ChromeHeader.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ChromeHeader")
         #endif
         let maxC = chrome.maxCollapse
         let c = min(max(chrome.collapse, 0), maxC)

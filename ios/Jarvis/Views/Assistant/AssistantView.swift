@@ -28,8 +28,8 @@ struct AssistantView: View {
     private var current: SessionKey? { model.assistantCurrent }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("AssistantView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AssistantView")
         #endif
         if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.

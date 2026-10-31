@@ -47,8 +47,8 @@ struct InboxView: View {
     }
 
     var body: some View {
-        #if PERF_SIGNPOST
-        let _ = PerfTrace.event("InboxView.body")
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("InboxView")
         #endif
         SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accounts)) {
             list
