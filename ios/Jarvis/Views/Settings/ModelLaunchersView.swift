@@ -12,14 +12,27 @@ struct ModelLaunchersView: View {
     @State private var launchers: [LauncherView]?
     @State private var error: String?
     @State private var adding = false
+    @State private var query = ""
+
+    /// Name, model, gateway host, or a machine's name.
+    private func matches(_ l: LauncherView) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return true }
+        let machines = (l.machines ?? []).map { model.machine($0)?.name ?? $0 }
+        return ([l.name, l.model ?? "", l.smallModel ?? "", l.baseURL ?? ""] + machines).contains { $0.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         List {
-            if let launchers {
+            if let all = launchers {
+                let launchers = all.filter(matches)
                 let managed = launchers.filter(\.managed)
                 let zshrc = launchers.filter { !$0.managed && $0.hidden != true }
                 let hidden = launchers.filter { !$0.managed && $0.hidden == true }
-                Section {
+                if !query.isEmpty, launchers.isEmpty {
+                    ContentUnavailableView.search(text: query).listRowBackground(Color.clear)
+                }
+                if query.isEmpty || !managed.isEmpty { Section {
                     if managed.isEmpty {
                         Text("还没有。点右上角 + 加一个：填网关地址、Key 和模型，所有电脑都能用。")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
@@ -27,7 +40,7 @@ struct ModelLaunchersView: View {
                     ForEach(managed) { row($0) }
                 } header: { header("Jarvis 管理", managed.count) } footer: {
                     if !managed.isEmpty { Text("Key 加密存在 hub，启动时才交给那台电脑，不写进文件。") }
-                }
+                } }
                 if !zshrc.isEmpty {
                     Section {
                         ForEach(zshrc) { row($0) }
@@ -50,6 +63,7 @@ struct ModelLaunchersView: View {
         }
         .navigationTitle("模型")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("新增启动器")
@@ -60,6 +74,9 @@ struct ModelLaunchersView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        #if DEBUG
+        .onAppear { if let q = UserDefaults.standard.string(forKey: "showModelSearch") { query = q } } // `-showModelSearch kiro`
+        #endif
     }
 
     private func header(_ title: String, _ count: Int) -> some View {
