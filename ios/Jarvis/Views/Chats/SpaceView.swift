@@ -92,6 +92,10 @@ struct SiblingTabs: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        #if DEBUG
+        // `-showSpaceTabs YES`: open this sheet (screenshots).
+        .task { if UserDefaults.standard.bool(forKey: "showSpaceTabs") { try? await Task.sleep(for: .seconds(2)); showAll = true } }
+        #endif
     }
 }
 
@@ -129,7 +133,10 @@ private struct SiblingList: View {
                             Circle().fill(s.state.color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL).scaledFrame(width: Theme.Size.iconS) // a still dot
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.slotLabel ?? s.displayTitle).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
-                                Text(s.state.label).font(Theme.Font.label).foregroundStyle(s.state.tone.text).lineLimit(1)
+                                // The state in its color, then the model the tab runs on (2026-10-31: which tab is which model).
+                                (Text(s.state.label).foregroundStyle(s.state.tone.text)
+                                    + Text(Fmt.model(s.model).map { " · " + $0 } ?? "").foregroundStyle(.secondary))
+                                    .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                             }
                             Spacer(minLength: 8)
                             if on { Image(systemName: Theme.Icon.done).font(Theme.Font.captionStrong).foregroundStyle(Theme.accent) }
@@ -139,7 +146,7 @@ private struct SiblingList: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+                    .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
