@@ -176,7 +176,12 @@ struct AssistantRoutinesView: View {
                 } header: {
                     Text("定时任务")
                 } footer: {
+                    #if os(macOS)
+                    // The Mac writes its own time zone to the hub too (AppModel), so not "the phone's".
+                    Text("到点时 Jarvis 按提示词去做，跑完推送到手机。时间按你所在的时区。")
+                    #else
                     Text("到点时 Jarvis 按提示词去做，跑完推送到手机。时间按手机所在的时区。")
+                    #endif
                 }
             }
             if !oneOff.isEmpty {
@@ -545,7 +550,11 @@ struct AssistantTaskEditor: View {
             } else {
                 switch draft.repeats {
                 case .once: Text("到点运行一次，跑完就从列表里拿掉（运行记录里还在）。")
+                #if os(macOS)
+                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按你所在的时区。")
+                #else
                 case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按手机所在的时区。")
+                #endif
                 case .interval: Text("\(AssistantScheduleText.every(draft.everyMinutes))运行一次，从保存时算起。")
                 }
             }

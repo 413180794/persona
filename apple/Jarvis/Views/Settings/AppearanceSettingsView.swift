@@ -13,8 +13,13 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("形象")
             } footer: {
+                #if os(macOS)
+                Text(model.isDemo ? "体验模式只有默认形象。" :
+                    "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到这台 Mac。")
+                #else
                 Text(model.isDemo ? "体验模式只有默认形象。" :
                     "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
+                #endif
             }
 
             #if os(iOS)
