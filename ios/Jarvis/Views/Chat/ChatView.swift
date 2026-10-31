@@ -502,16 +502,20 @@ struct ChatView: View {
     /// The drawer's content: the results — each task's notice and what the agent answered it — in order; the steps in
     /// between (tools, thoughts, its narration) fold into one line at the end, closed. Opening the drawer's work used
     /// to unfold every task's steps at once, results and process mixed.
+    /// The drawer's lines: each wake (its task reports, then what the agent answered to them), **newest wake first**
+    /// (2026-10-31: with many reports the latest one sat at the bottom of a long drawer), then the folded work.
     private func wakeLines(_ t: Turn, live: Bool) -> [ChatLine] {
-        var results: [ChatLine] = []
+        var groups: [[ChatLine]] = []
         var process: [ChatRow] = []
         var chunk: [ChatRow] = []
         func flush() {
             let answer = chunk.lastIndex { if case .assistant = $0 { true } else { false } }
+            var group: [ChatLine] = []
             for (i, r) in chunk.enumerated() where i != answer {
-                if case .notice(let n) = r, n.task != nil || n.wake == true { results.append(.row(r)) } else { process.append(r) }
+                if case .notice(let n) = r, n.task != nil || n.wake == true { group.append(.row(r)) } else { process.append(r) }
             }
-            if let answer { results.append(.row(chunk[answer])) }
+            if let answer { group.append(.row(chunk[answer])) }
+            if !group.isEmpty { groups.append(group) }
             chunk = []
         }
         for r in t.afterWake {
@@ -519,6 +523,7 @@ struct ChatView: View {
             chunk.append(r)
         }
         flush()
+        var results = Array(groups.reversed().joined())
         let items = ChatLines.workItems(process)
         if !items.isEmpty || live {
             results.append(.work(id: "dw-" + t.id, items: items, live: live,
