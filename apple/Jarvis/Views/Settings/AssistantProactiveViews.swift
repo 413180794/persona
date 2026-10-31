@@ -1058,6 +1058,10 @@ struct AssistantMemoryEditor: View {
                 }
         }
         .interactiveDismissDisabled(saving)
+        #if os(macOS)
+        // A Mac sheet sizes to its content: a text editor alone came up a few lines tall.
+        .macSheet()
+        #endif
     }
 
     private func save() async {
