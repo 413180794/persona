@@ -191,7 +191,7 @@ struct AssistantHome: View {
 
     private let suggestions: [(symbol: String, title: String, prompt: String)] = [
         ("calendar", "今天的安排", "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。"),
-        ("envelope.badge", "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
+        (Theme.Icon.mailAccounts, "要处理的邮件", "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"),
         ("macbook.and.iphone", "电脑在忙什么", "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？"),
         ("bubble.left.and.text.bubble.right", "飞书消息", "总结一下我今天飞书上收到的重要消息，哪些需要我回复。"),
         ("person.2.wave.2", "会前准备", "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。"),

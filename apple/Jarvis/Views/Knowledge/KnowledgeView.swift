@@ -534,9 +534,13 @@ struct KnowledgeDetailView: View {
                     .accessibilityLabel("打标")
             }
         }
+        #if os(macOS)
+        .macLinkPanel($link) // the Mac's panel at the trailing edge; picks go to Jarvis
+        #else
         .sheet(item: $link) { t in
             if let key = model.assistantMain ?? model.assistantCurrent { LinkSheet(target: t, key: key) }
         }
+        #endif
         .sheet(isPresented: $editing) {
             KBTagEditor(entry: shown) { await load() }
         }

@@ -20,6 +20,11 @@ nonisolated enum Keychain {
                                     kSecAttrAccount as String: account, kSecReturnData as String: true,
                                     kSecMatchLimit as String: kSecMatchLimitOne]
         var out: AnyObject?
+        #if os(macOS) && DEBUG
+        // Screenshots (`-macSnapshot`, Mac/App/MacSnapshot.swift) run while the Mac is locked, and reading an item another
+        // (unsigned) build wrote then blocks in securityd for good, prompt skipped or not: they use demo data, no keychain.
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return nil }
+        #endif
         guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess else { return nil }
         return out as? Data
     }

@@ -28,6 +28,16 @@ struct JarvisMacApp: App {
             }
         }
 
+        // A link dragged out of the panel, an inbox item opened on its own (Mac/Link, Mac/Inbox).
+        WindowGroup("网页", id: MacLinkWindow.id, for: URL.self) { $url in
+            MacLinkWindow(url: url).environment(model)
+        }
+        .defaultSize(width: Theme.Size.macLinkPanelIdeal * 2, height: Theme.Size.macWindowHeight)
+        WindowGroup("收件箱", id: MacInboxItemWindow.id, for: String.self) { $id in
+            MacInboxItemWindow(itemID: id).environment(model)
+        }
+        .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
+
         Settings {
             MacSettingsWindow()
                 .environment(model)

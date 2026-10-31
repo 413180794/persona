@@ -107,6 +107,8 @@ extension Theme {
 
         static let disclosure = "chevron.right"
         static let back = "chevron.left"
+        /// Forward in a page's history (the link panel's web view).
+        static let forward = "chevron.forward"
         static let expand = "chevron.down"
         static let collapse = "chevron.up"
 
@@ -149,12 +151,30 @@ extension Theme {
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"
+        /// The default web browser (open a link outside the app).
+        static let safari = "safari"
+        /// Something opened in a window of its own (Mac).
+        static let newWindow = "macwindow.badge.plus"
+        /// Picked text or a page going along with the next message (作为上下文).
+        static let addContext = "text.badge.plus"
         static let person = "person.crop.circle"
         /// The user's own messages.
         static let user = "person.fill"
         static let inbox = "tray.full"
         static let mail = "envelope"
         static let mailFilled = "envelope.fill"
+        /// Feishu's chats as a source (the inbox's 飞书 filter, the knowledge base's 会话).
+        static let feishuChats = "bubble.left.and.bubble.right"
+        /// The mail accounts (管理邮箱).
+        static let mailAccounts = "envelope.badge"
+        /// AI 草拟回复: a reply drafted in the user's voice.
+        static let draftReply = "pencil.and.scribble"
+        /// 交给 AI: an inbox item handed to Jarvis or an agent.
+        static let handToAI = "paperplane"
+        /// Mentions of the user (@我).
+        static let mention = "at"
+        /// A group chat (群聊).
+        static let groupChat = "rectangle.3.group.bubble"
         /// Send someone a message.
         static let message = "bubble.left.fill"
         static let credentials = "key"

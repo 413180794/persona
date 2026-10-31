@@ -133,7 +133,7 @@ private struct MacShell: View {
         switch MacSection(model.selectedTab) {
         case .assistant: AssistantView()
         case .agents: ChatsView()
-        case .inbox: InboxView()
+        case .inbox: MacInboxPage()
         case .settings: SettingsView()
         }
     }

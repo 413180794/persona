@@ -19,4 +19,15 @@ extension Theme.Size {
     /// The 设置 window.
     static let macSettingsWidth: CGFloat = 620
     static let macSettingsHeight: CGFloat = 640
+    /// The link panel at the detail column's trailing edge: its first width, its narrowest, and the least it leaves the page.
+    static let macLinkPanelIdeal: CGFloat = 520
+    static let macLinkPanelMin: CGFloat = 360
+    static let macLinkPanelPageMin: CGFloat = 360
+    /// How wide a draggable divider takes the mouse (the line itself is a hairline).
+    static let macResizeHitWidth: CGFloat = 8
+    /// The inbox's list column (until the window's three columns take it over) and its filters column.
+    static let macInboxListMin: CGFloat = 300
+    static let macInboxListIdeal: CGFloat = 380
+    static let macInboxListMax: CGFloat = 520
+    static let macInboxFiltersWidth: CGFloat = 190
 }

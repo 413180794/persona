@@ -15,7 +15,7 @@ final class SelectableWebView: WKWebView {
         guard menu.items.contains(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierCopy" }) else { return }
         let ours = UIMenu(options: .displayInline, children: [
             UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
-            UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pickSelection("context") },
+            UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
         ])
         menu.insertItem(.separator(), at: 0)
         for item in ours.children.reversed() { menu.insertItem(item.nsMenuItem(), at: 0) }
@@ -76,7 +76,7 @@ struct PickTextView: NSViewRepresentable {
         t?.selectionItems = { selected in
             UIMenu(options: .displayInline, children: [
                 UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { _ in coordinator.pick(selected, "edit") },
-                UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { _ in coordinator.pick(selected, "context") },
+                UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { _ in coordinator.pick(selected, "context") },
             ]).children.map { $0.nsMenuItem() }
         }
         return scroll

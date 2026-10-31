@@ -120,6 +120,31 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；终端的 option 键不当 meta；代码行只有整行选择、没有 ⌘F；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
 
+## 收件箱、飞书、邮件、链接（Mac）
+
+`apple/Mac/Inbox/`、`apple/Mac/Link/MacLinkPanel.swift`。逻辑和行、会话、邮件页都是 iOS 那一份，Mac 只换了外面的组织方式：
+
+- 三块独立的视图，给主窗口的三栏接（区域 A）：`MacInboxFilters`（侧边栏「收件箱」「类型」两组行：全部 / 飞书 / 各个邮箱，@我 / 私聊 / 群聊 / 邮件 / Agent，
+  带「需要你」的数量；行的 tag 是 `MacInboxFilter`，侧边栏的 selection 用这个类型就能原生选中，或者绑 `MacInboxState.shared.filter`）、
+  `MacInboxList`（列表栏）、`MacInboxDetail`（详情栏）。三者共用 `MacInboxState.shared`（筛选沿用 iOS 的 `inbox.source` / `inbox.kind`、搜索词、选中、展开的分组、邮箱列表、要打开的弹层）。
+  A 接好三栏之前，`MacInboxPage`（筛选列 | 列表 | 详情，列表宽度可拖、记在 `mac.inbox.listWidth`）放在壳的「收件箱」里。
+- 列表：系统选中（⇧ / ⌘ 多选），↑↓ 移动，**E 或 ⌫ 标为已处理**并选中下一件（像 Mail 删信），⏎ / 双击在新窗口打开（Agent 行：打开它的对话），
+  右键：在新窗口打开、AI 草拟回复 / 查看草稿、交给 AI、已处理 / 移回（多选时「N 件都标为已处理」）、拷贝内容、在飞书中打开；触控板左滑 = 已处理；悬停有浅底。
+  工具栏：刷新 ⌘R、写邮件 ⌥⌘N、管理邮箱；搜索在工具栏（`.searchable(placement: .toolbar)`）。分组标题可点开 / 收起，「全部看过」「全部清除」照旧。
+- 详情：飞书会话（从第一条新消息开始）/ 邮件 / 云文档条目，顶上一行 AI 摘要（和「AI 分身正在处理」），iOS 的动作条换成工具栏按钮（AI 草拟回复、交给 AI、已处理 / 移回）。
+  窗口标题是条目标题，副标题是来源。人、别的会话这类飞书页面在详情栏自己的栈里推进去；飞书文档、网页链接在右侧的链接面板里开。多选时详情是「已选 N 件 · 全部标为已处理」。
+  弹层（草稿、交给 AI、写信、邮箱、添加邮箱）是窗口内的 sheet，`.macSheet()` 给最小尺寸并把 `Form` 换成 `.grouped`（Mac 默认的两列表单会把 iOS 的分组行挤到标签列、截掉）。
+- 链接面板 `.macLinkPanel($link, key:)`：详情栏右侧并排（页面变窄、不被盖住；窗口太窄放不下两边时盖在上面），宽度拖、记在 `mac.linkPanel.width`；
+  头部：后退 / 前进、标题和域名、重新载入、⋯（在浏览器打开、在单独窗口打开、拷贝链接、分享）、关闭（⌘W，面板开着时先关面板）。
+  网页来自 `WebViewPool`（和 iOS 同一个池，预加载、复用），右键选中文字有「AI 修改」「作为上下文」；飞书文档 / removed在面板里用原生阅读器（右上「把这篇文档作为上下文」）。
+  `key` 是对话（对话页）；收件箱、知识库里没有，「作为上下文」进 Jarvis 主对话的输入框、「AI 修改」直接问 Jarvis。
+  `.macOpensLinksInPanel($link)` 把一块视图里的 `openURL` / `openLink` 接到面板上（收件箱详情用；邮件 HTML 里的链接仍交给浏览器）。对话页、知识库在 Mac 上也换成了面板（`#if os(macOS)`）。
+- 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
+- DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱。
+  例：`scripts/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
+- 截图补充（2026-11-01）：窗口上的 sheet 是另一个窗口，`-macSnapshot` 现在把它另存成 `<名字>.sheet.png`；sheet 里有文本编辑器时 `terminate` 会被挡住，截完 1 秒后直接退出。
+  锁屏时未签名的新构建读另一个构建写的钥匙串条目会一直卡在 securityd（跳过授权界面也一样），截图模式（`-macSnapshot`）下 Mac 的 DEBUG 构建不读钥匙串。
+
 ## 验收清单
 
 下面是 iOS App 的全部功能，Mac 版逐条对上（做完一条勾一条）。
@@ -260,10 +285,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 - [ ] Path presence cache — Code/FilePresence.swift; perf log — Code/FilePerf.swift
 
 ## 9. Link viewer (in-app web)
-- [ ] Bottom sheet opening full height, 60% detent with background interaction — Views/Link/LinkSheet.swift (LinkSheet)
-- [ ] WKWebView pool (preload first 3 links per reply, LRU 6, shared data store, cache policy) — LinkSheet.swift (WebViewPool, PooledWebView)
-- [ ] Text selection menu: 「AI 修改这段」, 「作为上下文」; 选择文字… sheet; 在 Safari 打开; share — LinkSheet.swift (SelectableWebView, PickTextSheet, DocPickMenu)
-- [ ] Feishu docs/wiki links → native reader — Views/Feishu/Docs/FeishuDocReader.swift
+- [x] Bottom sheet opening full height, 60% detent with background interaction — Views/Link/LinkSheet.swift (LinkSheet)
+- [x] WKWebView pool (preload first 3 links per reply, LRU 6, shared data store, cache policy) — LinkSheet.swift (WebViewPool, PooledWebView)
+- [x] Text selection menu: 「AI 修改这段」, 「作为上下文」; 选择文字… sheet; 在 Safari 打开; share — LinkSheet.swift (SelectableWebView, PickTextSheet, DocPickMenu)
+- [x] Feishu docs/wiki links → native reader — Views/Feishu/Docs/FeishuDocReader.swift
 
 ## 10. New chat form
 - [ ] Machine picker, launcher picker (per-machine launchers, 跟随启动器), directory browser with search, 加入空间, title, first prompt, mode picker; remembers machine/launcher/cwd for Siri — Views/NewChat/NewChatView.swift (NewChatView, LauncherPicker, DirectoryBrowser)
@@ -285,36 +310,36 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 - [ ] Models — Shared/Knowledge.swift
 
 ## 13. Inbox (收件箱)
-- [ ] Unified list (Feishu + mail + docs + waiting agents), filters (全部/飞书/each mailbox | @我/私聊/群聊/邮件/Agent), search, sections 需要你 / 知悉即可 (全部看过) / 已折叠 (全部清除) / 已处理, swipe = done, pull refresh — Views/Inbox/InboxView.swift (InboxView, InboxRow, InboxAgentRow)
-- [ ] AI draft card (发送 / 修改), 「AI 分身正在处理」 — InboxView.swift (InboxDraftCard)
-- [ ] Detail: Lark chat at first new message or mail; 已处理; action bar (摘要, AI 草拟回复, 交给 AI) — InboxView.swift (InboxDetailView), Views/Inbox/InboxActions.swift (InboxActionBar)
-- [ ] Draft sheet (edit, 让 AI 改, 重写, doc status changes) — InboxActions.swift (InboxDraftSheet)
-- [ ] Hand-off sheet (Jarvis new chat / one of 8 agents, presets, mark done) — InboxActions.swift (InboxHandOffSheet)
-- [ ] Cloud doc items: doc icon, rows mentioning me, status menu writes to sheet/base, detail page — Views/Inbox/InboxDocViews.swift
-- [ ] Store: cache, optimistic done, badge, unsent replies — App/InboxStore.swift; models Shared/InboxModels.swift
+- [x] Unified list (Feishu + mail + docs + waiting agents), filters (全部/飞书/each mailbox | @我/私聊/群聊/邮件/Agent), search, sections 需要你 / 知悉即可 (全部看过) / 已折叠 (全部清除) / 已处理, swipe = done, pull refresh — Views/Inbox/InboxView.swift (InboxView, InboxRow, InboxAgentRow)
+- [x] AI draft card (发送 / 修改), 「AI 分身正在处理」 — InboxView.swift (InboxDraftCard)
+- [x] Detail: Lark chat at first new message or mail; 已处理; action bar (摘要, AI 草拟回复, 交给 AI) — InboxView.swift (InboxDetailView), Views/Inbox/InboxActions.swift (InboxActionBar)
+- [x] Draft sheet (edit, 让 AI 改, 重写, doc status changes) — InboxActions.swift (InboxDraftSheet)
+- [x] Hand-off sheet (Jarvis new chat / one of 8 agents, presets, mark done) — InboxActions.swift (InboxHandOffSheet)
+- [x] Cloud doc items: doc icon, rows mentioning me, status menu writes to sheet/base, detail page — Views/Inbox/InboxDocViews.swift
+- [x] Store: cache, optimistic done, badge, unsent replies — App/InboxStore.swift; models Shared/InboxModels.swift
 
 ## 14. Feishu views
-- [ ] Lark chat: avatars, sender names, 5-min grouping, date dividers, reply quote, reactions (toggle), edited, new-messages divider, load earlier, topic groups + thread view, focus message, mark read only seen — Views/Inbox/Lark/LarkChatView.swift
-- [ ] Send with outbox (sending, failed → resend/edit/delete) — Views/Inbox/Lark/LarkOutbox.swift
-- [ ] Paging — Views/Inbox/Lark/LarkPager.swift; realtime sync + background cache — App/LarkSync.swift
-- [ ] Rich content: rich-text blocks, images, stickers, file cards, video, voice, code, system msgs — Views/Inbox/Lark/LarkMessageContent.swift
-- [ ] Inline runs + emoji images — Views/Inbox/Lark/LarkInline.swift
-- [ ] Interactive cards (header, markdown, columns, table, list, panel, note, tag, icon, buttons with callback, overflow, chart) — Views/Inbox/Lark/LarkCard.swift
-- [ ] Summary cards (merge forward, share chat/user, meeting, calendar, vote) — Views/Inbox/Lark/LarkSummaryCards.swift
-- [ ] Media: authenticated image cache, gallery, video player, Quick Look files — Views/Inbox/Lark/LarkMedia.swift
-- [ ] Profile card (发消息) — Views/Inbox/Lark/LarkPeople.swift
-- [ ] Reaction picker, removed (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
-- [ ] Translation line under messages — LarkChatView.swift (LarkTranslationLine)
-- [ ] 「让 Jarvis 总结」 action — LarkChatView.swift
-- [ ] Time / name tag — Views/Inbox/Lark/LarkTime.swift; models — Views/Inbox/Lark/LarkModels.swift
-- [ ] Feishu doc reader: blocks, tables, images, files, link cards, outline, comments (resolved/unresolved), AI 摘要, 作为上下文, 在飞书中打开, share — Views/Feishu/Docs/*.swift
-- [ ] Feishu raw API routing + app icon — Views/Feishu/Foundation/FeishuFoundation.swift
+- [x] Lark chat: avatars, sender names, 5-min grouping, date dividers, reply quote, reactions (toggle), edited, new-messages divider, load earlier, topic groups + thread view, focus message, mark read only seen — Views/Inbox/Lark/LarkChatView.swift
+- [x] Send with outbox (sending, failed → resend/edit/delete) — Views/Inbox/Lark/LarkOutbox.swift
+- [x] Paging — Views/Inbox/Lark/LarkPager.swift; realtime sync + background cache — App/LarkSync.swift
+- [x] Rich content: rich-text blocks, images, stickers, file cards, video, voice, code, system msgs — Views/Inbox/Lark/LarkMessageContent.swift
+- [x] Inline runs + emoji images — Views/Inbox/Lark/LarkInline.swift
+- [x] Interactive cards (header, markdown, columns, table, list, panel, note, tag, icon, buttons with callback, overflow, chart) — Views/Inbox/Lark/LarkCard.swift
+- [x] Summary cards (merge forward, share chat/user, meeting, calendar, vote) — Views/Inbox/Lark/LarkSummaryCards.swift
+- [x] Media: authenticated image cache, gallery, video player, Quick Look files — Views/Inbox/Lark/LarkMedia.swift
+- [x] Profile card (发消息) — Views/Inbox/Lark/LarkPeople.swift
+- [x] Reaction picker, removed (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
+- [x] Translation line under messages — LarkChatView.swift (LarkTranslationLine)
+- [x] 「让 Jarvis 总结」 action — LarkChatView.swift
+- [x] Time / name tag — Views/Inbox/Lark/LarkTime.swift; models — Views/Inbox/Lark/LarkModels.swift
+- [x] Feishu doc reader: blocks, tables, images, files, link cards, outline, comments (resolved/unresolved), AI 摘要, 作为上下文, 在飞书中打开, share — Views/Feishu/Docs/*.swift
+- [x] Feishu raw API routing + app icon — Views/Feishu/Foundation/FeishuFoundation.swift
 
 ## 15. Mail
-- [ ] Mail detail (HTML via WKWebView, attachments, mark seen, translation banner/显示原文, reply, 让 Claude 处理) — Views/Mail/MailViews.swift (MailDetailView, HTMLView)
-- [ ] Compose / reply (account, to, cc, subject, body) — MailViews.swift (ComposeView)
-- [ ] Accounts management (list, status, provider marks) — MailViews.swift (MailAccountsView, MailProviderMark)
-- [ ] Add account: manual IMAP/SMTP form, 「AI 一键添加」 paste recognition (clipboard), Sign in with Google (web auth session) — MailViews.swift (AddMailAccountView, GoogleSignInLabel), Views/Mail/MailAccountForm.swift
+- [x] Mail detail (HTML via WKWebView, attachments, mark seen, translation banner/显示原文, reply, 让 Claude 处理) — Views/Mail/MailViews.swift (MailDetailView, HTMLView)
+- [x] Compose / reply (account, to, cc, subject, body) — MailViews.swift (ComposeView)
+- [x] Accounts management (list, status, provider marks) — MailViews.swift (MailAccountsView, MailProviderMark)
+- [x] Add account: manual IMAP/SMTP form, 「AI 一键添加」 paste recognition (clipboard), Sign in with Google (web auth session) — MailViews.swift (AddMailAccountView, GoogleSignInLabel), Views/Mail/MailAccountForm.swift
 
 ## 16. Model launchers
 - [ ] Launcher list (Jarvis-managed + ~/.zshrc, sources, hidden) with search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)
@@ -389,7 +414,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
 ## 25. Search
 - [ ] Agents search — ChatsView.swift (searchable, SearchCloseProbe)
 - [ ] Assistant sidebar search — AssistantSidebar.swift
-- [ ] Inbox search — InboxView.swift
+- [x] Inbox search — InboxView.swift
 - [ ] Knowledge search — KnowledgeView.swift
 - [ ] Launcher search, directory search, translation chat picker search — ModelLaunchersView.swift, NewChatView.swift, TranslationSettingsView.swift
 

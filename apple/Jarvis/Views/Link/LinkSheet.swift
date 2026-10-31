@@ -122,15 +122,15 @@ struct LinkSheet: View {
             Spacer(minLength: 6)
             if isFeishuDoc {
                 // The native reader has no custom selection menu: the whole doc can still go along.
-                Button { pick("", kind: "context") } label: { Image(systemName: "text.badge.plus") }
+                Button { pick("", kind: "context") } label: { Image(systemName: Theme.Icon.addContext) }
                     .accessibilityLabel("把这篇文档作为上下文")
             }
             Menu {
                 Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
                 #if os(iOS)
-                Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: "safari") }
+                Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: Theme.Icon.safari) }
                 #else
-                Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: "safari") }
+                Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
                 #endif
                 ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
             } label: { Image(systemName: Theme.Icon.moreMenu) }
@@ -202,6 +202,9 @@ final class WebViewPool {
         return v
     }
 
+    /// The view for this url if the pool has one (nothing is loaded).
+    func existing(for url: URL) -> SelectableWebView? { views[url.absoluteString] }
+
     /// Starts loading links that may be opened soon.
     func preload(_ urls: [URL]) {
         for u in urls.prefix(3) where views[u.absoluteString] == nil && FeishuLinks.route(u) == nil { _ = view(for: u) }
@@ -227,7 +230,7 @@ final class SelectableWebView: WKWebView {
         super.buildMenu(with: builder)
         let actions = UIMenu(options: .displayInline, children: [
             UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
-            UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pickSelection("context") },
+            UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
         ])
         builder.insertChild(actions, atStartOfMenu: .root)
     }
@@ -339,7 +342,7 @@ struct DocPickMenu: View {
 
     var body: some View {
         Button { pick(text, "edit") } label: { Label("AI 修改这段", systemImage: Theme.Icon.ai) }
-        Button { pick(text, "context") } label: { Label("这段作为上下文", systemImage: "text.badge.plus") }
+        Button { pick(text, "context") } label: { Label("这段作为上下文", systemImage: Theme.Icon.addContext) }
         Button { selecting = true } label: { Label("选择文字…", systemImage: Theme.Icon.select) }
         Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
     }
@@ -396,7 +399,7 @@ struct PickTextView: UIViewRepresentable {
             guard !selected.isEmpty else { return UIMenu(children: suggestedActions) }
             let ours = UIMenu(options: .displayInline, children: [
                 UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pick(selected, "edit") },
-                UIAction(title: "作为上下文", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in self?.pick(selected, "context") },
+                UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pick(selected, "context") },
             ])
             return UIMenu(children: [ours] + suggestedActions)
         }

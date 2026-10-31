@@ -61,7 +61,7 @@ struct InboxView: View {
                         Menu {
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
-                            Button { showAccounts = true } label: { Label("管理邮箱", systemImage: "envelope.badge") }
+                            Button { showAccounts = true } label: { Label("管理邮箱", systemImage: Theme.Icon.mailAccounts) }
                         } label: { Image(systemName: Theme.Icon.moreMenu) }
                         .accessibilityLabel("更多")
                     }
@@ -216,7 +216,7 @@ struct InboxView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.s) {
                 chip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
-                chip("飞书", symbol: "bubble.left.and.bubble.right", on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                chip("飞书", symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
                 }

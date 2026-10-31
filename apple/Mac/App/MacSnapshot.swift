@@ -35,7 +35,18 @@ import SwiftUI
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 let ok = capture(to: URL(fileURLWithPath: path))
                 FileHandle.standardError.write(Data("macSnapshot \(ok ? "wrote" : "FAILED") \(path)\n".utf8))
-                if d.bool(forKey: "macSnapshotQuit") { NSApp.terminate(nil) }
+                // A sheet is a window of its own, not drawn with the main one: it goes next to it as <name>-sheet.png.
+                if let sheet = mainWindow?.attachedSheet {
+                    let url = URL(fileURLWithPath: path)
+                    let sheetURL = url.deletingPathExtension().appendingPathExtension("sheet").appendingPathExtension(url.pathExtension)
+                    let wrote = capture(to: sheetURL, window: sheet)
+                    FileHandle.standardError.write(Data("macSnapshot \(wrote ? "wrote" : "FAILED") \(sheetURL.path)\n".utf8))
+                }
+                if d.bool(forKey: "macSnapshotQuit") {
+                    NSApp.terminate(nil)
+                    // A sheet with a text editor in it holds termination off: leave anyway.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exit(0) }
+                }
             }
         }
     }
@@ -96,8 +107,8 @@ import SwiftUI
     /// on its own and laid over its place; a selected row's material draws black off screen, so it is painted in the
     /// inactive selection color. Glass and other materials draw no blur: the window background shows through.
     /// `layer.render(in:)` and `dataWithPDF` were worse (upside-down, or most text missing).
-    static func capture(to url: URL) -> Bool {
-        guard let window = mainWindow, let frameView = window.contentView?.superview ?? window.contentView else { return false }
+    static func capture(to url: URL, window: NSWindow? = nil) -> Bool {
+        guard let window = window ?? mainWindow, let frameView = window.contentView?.superview ?? window.contentView else { return false }
         frameView.layoutSubtreeIfNeeded()
         frameView.displayIfNeeded()
         let bounds = frameView.bounds

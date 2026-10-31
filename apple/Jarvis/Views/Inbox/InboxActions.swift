@@ -18,8 +18,8 @@ struct InboxActionBar: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: Theme.Space.s) {
-                action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: "pencil.and.scribble", prominent: true, perform: draft)
-                action("交给 AI", symbol: "paperplane", prominent: false, perform: handOff)
+                action(item.agentDraft == nil ? "AI 草拟回复" : "查看草稿", symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                action("交给 AI", symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
             }
         }
         .padding(.horizontal, Theme.Space.l)

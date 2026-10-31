@@ -39,7 +39,7 @@ nonisolated enum StorageKind: String, CaseIterable, Identifiable, Sendable {
         case .chatImages: "photo.on.rectangle"
         case .feishuMedia: "paperclip"
         case .pageState: "list.bullet.rectangle"
-        case .web: "safari"
+        case .web: Theme.Icon.safari
         case .network: "network"
         case .other: "shippingbox"
         case .appData: "gearshape"

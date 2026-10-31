@@ -219,7 +219,11 @@ struct ChatView: View {
         .environment(\.openLink, actions.openLink)
         // Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
         .environment(\.openURL, actions.openURL)
+        #if os(macOS)
+        .macLinkPanel($link, key: key) // the Mac's panel at the trailing edge (Mac/Link/MacLinkPanel.swift)
+        #else
         .sheet(item: $link) { t in LinkSheet(target: t, key: key) }
+        #endif
         .environment(\.attachImage, actions.attachImage)
         .environment(\.loadImage, actions.loadImage)
         .environment(\.loadFullText, actions.loadFullText)

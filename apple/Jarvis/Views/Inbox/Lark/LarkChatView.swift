@@ -192,7 +192,7 @@ struct LarkChatView: View {
     @ViewBuilder private var mentionButton: some View {
         if let mention, !pager.seen.contains(mention) {
             Button { Task { await jump(to: mention) } } label: {
-                Label("有人@你", systemImage: "at").font(Theme.Font.captionMedium).lineLimit(1)
+                Label("有人@你", systemImage: Theme.Icon.mention).font(Theme.Font.captionMedium).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
                     .padding(.horizontal, Theme.Space.m).scaledFrame(minHeight: Theme.Size.wellM)
                     .surface(interactive: true, in: .capsule)
