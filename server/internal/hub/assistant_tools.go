@@ -61,6 +61,7 @@ func assistantTools(withLark bool) []proto.Tool {
 			"prompt. Use for real development work instead of doing it here. Returns the new session id.",
 			InputSchema: schema(`{"type":"object","required":["machine","cwd","prompt"],"properties":{"machine":{"type":"string"},"cwd":{"type":"string","description":"absolute path or ~/…"},"prompt":{"type":"string"},"launcher":{"type":"string","description":"shell command that starts claude (default: the machine's default)"}}}`)},
 		inboxDraftTool,
+		larkAgentReplyTool,
 	}
 	tools = append(tools, kbTools...)
 	if withLark {
@@ -82,7 +83,7 @@ func assistantTools(withLark bool) []proto.Tool {
 func isAssistantTool(name string) bool {
 	switch name {
 	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup", "schedule_routine", "delete_routine",
-		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft":
+		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply":
 		return true
 	}
 	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_")
@@ -136,6 +137,8 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return "Cancelled.", nil
 	case "inbox_draft":
 		return h.toolInboxDraft(ctx, sessionID, args)
+	case "lark_agent_reply":
+		return h.toolLarkAgentReply(ctx, sessionID, args)
 	case "kb_search", "kb_list", "kb_get", "kb_update":
 		return h.runKBTool(name, args)
 	case "agents_list":

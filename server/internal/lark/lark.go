@@ -145,7 +145,10 @@ type Message struct {
 	IsRead           bool            `json:"is_read,omitempty"`
 	Parts            json.RawMessage `json:"parts,omitempty"` // lark-connector MessagePart[], media URLs rewritten to the hub
 	ReplyTo          *ReplyTo        `json:"reply_to,omitempty"`
-	Reactions        []Reaction      `json:"reactions,omitempty"`
+	// ThreadID is the thread (topic) the message is in; ThreadKind is "root", "reply" or "" (a plain message).
+	ThreadID   string     `json:"thread_id,omitempty"`
+	ThreadKind string     `json:"thread_kind,omitempty"`
+	Reactions  []Reaction `json:"reactions,omitempty"`
 }
 
 // ReplyTo is the message a reply quotes.
@@ -166,27 +169,29 @@ type Reaction struct {
 }
 
 type rawMessage struct {
-	ID               string          `json:"id"`
-	Position         string          `json:"position"`
-	SenderID         string          `json:"senderId"`
-	SenderName       string          `json:"senderName"`
-	SenderAvatarURL  string          `json:"senderAvatarUrl"`
-	SenderType       string          `json:"senderType"`
-	IsMine           bool            `json:"isMine"`
-	MessageTypeName  string          `json:"messageTypeName"`
-	TextPreview      string          `json:"textPreview"`
-	CreatedAt        time.Time       `json:"createdAt"`
-	IsRecalled       bool            `json:"isRecalled"`
-	IsDeleted        bool            `json:"isDeleted"`
-	IsEdited         bool            `json:"isEdited"`
-	ReplyCount       int             `json:"replyCount"`
-	ThreadReplyCount int             `json:"threadReplyCount"`
-	BadgeCount       *int            `json:"badgeCount"`
-	IsAtMe           bool            `json:"isAtMe"`
-	IsAtAll          bool            `json:"isAtAll"`
-	IsRead           bool            `json:"isRead"`
-	Parts            json.RawMessage `json:"parts"`
-	ReplyTo          *struct {
+	ID                string          `json:"id"`
+	Position          string          `json:"position"`
+	SenderID          string          `json:"senderId"`
+	SenderName        string          `json:"senderName"`
+	SenderAvatarURL   string          `json:"senderAvatarUrl"`
+	SenderType        string          `json:"senderType"`
+	IsMine            bool            `json:"isMine"`
+	MessageTypeName   string          `json:"messageTypeName"`
+	TextPreview       string          `json:"textPreview"`
+	CreatedAt         time.Time       `json:"createdAt"`
+	IsRecalled        bool            `json:"isRecalled"`
+	IsDeleted         bool            `json:"isDeleted"`
+	IsEdited          bool            `json:"isEdited"`
+	ReplyCount        int             `json:"replyCount"`
+	ThreadReplyCount  int             `json:"threadReplyCount"`
+	BadgeCount        *int            `json:"badgeCount"`
+	IsAtMe            bool            `json:"isAtMe"`
+	IsAtAll           bool            `json:"isAtAll"`
+	IsRead            bool            `json:"isRead"`
+	Parts             json.RawMessage `json:"parts"`
+	ThreadID          string          `json:"threadId"`
+	ThreadMessageType string          `json:"threadMessageType"`
+	ReplyTo           *struct {
 		ID          string          `json:"id"`
 		SenderName  string          `json:"senderName"`
 		TextPreview string          `json:"textPreview"`
@@ -206,7 +211,10 @@ func (m rawMessage) normalize() Message {
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
 		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,
-		IsRead: m.IsRead, Parts: rewriteMedia(m.Parts)}
+		IsRead: m.IsRead, Parts: rewriteMedia(m.Parts), ThreadID: m.ThreadID}
+	if m.ThreadMessageType == "root" || m.ThreadMessageType == "reply" {
+		out.ThreadKind = m.ThreadMessageType
+	}
 	if r := m.ReplyTo; r != nil {
 		out.ReplyTo = &ReplyTo{ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
 	}
@@ -507,6 +515,22 @@ func (c *Client) Send(ctx context.Context, feedID, text string) error {
 	clientID := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 	return c.do(ctx, "POST", "/conversations/"+url.PathEscape(feedID)+"/messages", nil,
 		map[string]any{"text": text, "clientId": clientID}, nil)
+}
+
+// Reply answers a message as the user, quoting it; `thread` posts into its thread (lark-connector finds the root).
+// `markdown` sends rich text (bold, lists, code, links), else plain text.
+func (c *Client) Reply(ctx context.Context, messageID, text string, thread, markdown bool) error {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	body := map[string]any{"text": text, "clientId": fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])}
+	if thread {
+		body["replyMode"] = "thread"
+	}
+	if markdown {
+		body["editorType"] = "markdown"
+	}
+	return c.do(ctx, "POST", "/messages/"+url.PathEscape(messageID)+"/replies", nil, body, nil)
 }
 
 // Read is what the reader has actually seen: everything up to Position, plus the unread messages from

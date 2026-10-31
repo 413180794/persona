@@ -14,6 +14,8 @@ import (
 type Event struct {
 	Type    string   // message.upserted, conversation.upserted, …
 	FeedIDs []string // conversations it touches
+	// Message is the message a message.upserted event carries (new, edited, or a thread's root updated).
+	Message *Message
 }
 
 // Events follows lark-connector's realtime stream (GET /agent/v1/events, a WebSocket of {"type":…} events) until ctx ends,
@@ -72,6 +74,7 @@ func parseEvent(data []byte) (Event, bool) {
 		Conversations []struct {
 			FeedID string `json:"feedId"`
 		} `json:"conversations"`
+		Message *rawMessage `json:"message"`
 	}
 	if json.Unmarshal(data, &raw) != nil {
 		return Event{}, false
@@ -83,6 +86,10 @@ func parseEvent(data []byte) (Event, bool) {
 		return Event{}, false // presence, typing, todo, mail, meetings…
 	}
 	ev := Event{Type: raw.Type}
+	if raw.Type == "message.upserted" && raw.Message != nil && raw.Message.ID != "" {
+		m := raw.Message.normalize()
+		ev.Message = &m
+	}
 	if raw.FeedID != "" {
 		ev.FeedIDs = append(ev.FeedIDs, raw.FeedID)
 	}

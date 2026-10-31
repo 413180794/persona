@@ -60,11 +60,13 @@ type Hub struct {
 	usage         usageBook            // token usage of every machine (usage.go)
 	metrics       metricsBook          // OS and load of every machine (metrics.go)
 
-	sched  schedule  // the assistant's routines and follow-ups (assistant_schedule.go)
-	inbox  inbox     // the unified inbox (inbox.go)
-	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
-	devtok devTokens // device token lookups (devicetokens.go)
-	sends  sendLog   // messages being / just sent, by client_msg_id (send.go)
+	sched schedule // the assistant's routines and follow-ups (assistant_schedule.go)
+	inbox inbox    // the unified inbox (inbox.go)
+	kb    kbState  // the knowledge base under ~/.jarvis/data (kb.go)
+	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
+	larkAgent larkAgents
+	devtok    devTokens // device token lookups (devicetokens.go)
+	sends     sendLog   // messages being / just sent, by client_msg_id (send.go)
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -185,6 +187,7 @@ func Run(ctx context.Context, version string) error {
 	go h.live.run(ctx)
 	go h.scheduleLoop(ctx)
 	go h.larkEvents(ctx)
+	go h.larkAgentLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)

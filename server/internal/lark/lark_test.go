@@ -311,3 +311,15 @@ func TestParseEvent(t *testing.T) {
 		t.Fatal("unrelated events should be dropped")
 	}
 }
+
+func TestParseEventCarriesTheMessage(t *testing.T) {
+	ev, ok := parseEvent([]byte(`{"type":"message.upserted","feedId":"f1","messageId":"m1","message":{"id":"m1","senderName":"我","isMine":true,
+		"messageTypeName":"TEXT","textPreview":"/agent 看下","createdAt":"2026-10-31T01:00:00Z","threadId":"t1","threadMessageType":"reply"}}`))
+	if !ok || ev.Message == nil || ev.Message.ID != "m1" || !ev.Message.IsMine || ev.Message.Text != "/agent 看下" ||
+		ev.Message.ThreadID != "t1" || ev.Message.ThreadKind != "reply" || len(ev.FeedIDs) != 1 {
+		t.Fatalf("%+v %+v", ev, ev.Message)
+	}
+	if ev, _ := parseEvent([]byte(`{"type":"conversation.upserted","feedId":"f1"}`)); ev.Message != nil {
+		t.Fatal("only message events carry a message")
+	}
+}

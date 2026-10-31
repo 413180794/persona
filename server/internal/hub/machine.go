@@ -536,7 +536,8 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	if ok && !s.Assistant && s.Status != proto.StatusWorking {
 		m.hub.kbAgentDone(m.cfg.ID, s)
 	}
-	if !ok || m.hub.isInboxAgent(id) { // an inbox agent's result is the draft in the inbox
+	// An inbox agent's result is the draft in the inbox; a /agent request's is its reply in Feishu.
+	if !ok || m.hub.isInboxAgent(id) || m.hub.isLarkAgent(id) {
 		return
 	}
 	m.hub.mu.Lock()

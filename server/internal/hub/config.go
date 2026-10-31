@@ -72,6 +72,9 @@ type Config struct {
 	Notify NotifyConfig `json:"notify,omitempty"`
 	// KB is the knowledge base under ~/.jarvis/data: chat archives, compressed context, projects, tags (docs/knowledge.md).
 	KB KBConfig `json:"kb,omitempty"`
+	// LarkAgent: a message of the user's starting with /agent anywhere in Feishu starts an agent with the context of
+	// where it was asked, and its answer is posted as the reply (lark_agent.go, docs/lark-agent.md).
+	LarkAgent LarkAgentConfig `json:"lark_agent,omitempty"`
 
 	dir string
 }
