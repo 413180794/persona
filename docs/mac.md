@@ -386,19 +386,20 @@ DEBUG：`-openChatWindow <machine>/<session>`；`-macSnapshot` 会把这个窗�
 - [ ] Prefilled new chat (from mail 「让 Claude 处理」) — Views/Mail/MailViews.swift (NewChatPrefilled)
 
 ## 11. Machines / monitoring
-- [ ] 设置 › 机器 list: online, sessions, version, launcher, reconnect; version-mismatch 重新部署 — Views/Machines/MachinesView.swift (MachinesView, MachineCard, DeployRow)
+- [x] 设置 › 机器 list: online, sessions, version, launcher, reconnect; version-mismatch 重新部署 — Views/Machines/MachinesView.swift (MachinesView, MachineCard, DeployRow)
 - [ ] Machine detail (系统与监控, running Claude list) — MachinesView.swift (MachineDetailView)
 - [x] Dashboard: N/M online, per-machine card with CPU/mem/net now + 1h sparklines, alert rings, 10s polling — Views/Machines/MachineDashboardView.swift（Mac：侧边栏「机器」⌘5）
 - [ ] Monitor page: 1/6/24h, CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps — Views/Machines/MachineMonitorView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
 - [ ] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
 
 ## 12. Knowledge base
-- [ ] Kind pills (项目/会话/人/文档/会议/日程 with counts), tag filter, project sections (重点/其他进行中/已完成/不是项目) — Views/Knowledge/KnowledgeView.swift (KnowledgeView, KBKindBar, KBRow, KBAvatar, ImportanceBadge, KBPill)
+- [x] Kind pills (项目/会话/人/文档/会议/日程 with counts), tag filter, project sections (重点/其他进行中/已完成/不是项目) — Views/Knowledge/KnowledgeView.swift (KnowledgeView, KBKindBar, KBRow, KBAvatar, ImportanceBadge, KBPill)
 - [ ] Full-text search, merged per entry, highlighted hits — KnowledgeView.swift (KBHitRow)
 - [ ] Detail: header, 问 Jarvis / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
 - [ ] Day view of chat messages with prev/next — KnowledgeView.swift (KBDayView)
 - [ ] 打标 editor (importance, relevance, tags, project type/status) — KnowledgeView.swift (KBTagEditor)
 - [ ] Models — Shared/Knowledge.swift
+  Mac（2026-11-01 截图）：侧栏「知识库」整页，类型胶囊、项目分组、人列表、条目详情（问 Jarvis / 开 Agent、档案、目录）都对；体验模式的搜索固定回空（DemoHub），搜索命中、日视图、打标还没在 Mac 上看过。
 
 ## 13. Inbox (收件箱)
 - [x] Unified list (Feishu + mail + docs + waiting agents), filters (全部/飞书/each mailbox | @我/私聊/群聊/邮件/Agent), search, sections 需要你 / 知悉即可 (全部看过) / 已折叠 (全部清除) / 已处理, swipe = done, pull refresh — Views/Inbox/InboxView.swift (InboxView, InboxRow, InboxAgentRow)
