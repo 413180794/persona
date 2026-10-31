@@ -14,7 +14,7 @@ struct JarvisMacApp: App {
         WindowGroup("Jarvis", id: "main") {
             MacRootView()
                 .environment(model)
-                .onOpenURL { url in model.openPairing(url) }
+                .onOpenURL { url in model.openURL(url) }
         }
         .defaultSize(width: Theme.Size.macWindowWidth, height: Theme.Size.macWindowHeight)
         .windowToolbarStyle(.unified)
@@ -64,6 +64,15 @@ struct JarvisMacApp: App {
 
 extension AppModel {
     /// `jarvis://pair?…` (a link from `jarvisd hub pair`, or pasted): pair with that hub.
+    /// A `jarvis://` link from outside (MacOpenURL): open a chat, or pair.
+    func openURL(_ url: URL) {
+        switch MacOpenURL.route(url) {
+        case .session(let key): MacShellState.shared.open(key, self)
+        case .pair: openPairing(url)
+        case .app, .ignore: break
+        }
+    }
+
     func openPairing(_ url: URL) {
         guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
         guard MacPairing.accepts(isPaired: isPaired, isDemo: isDemo) else {
@@ -259,6 +268,10 @@ enum MacLaunchArguments {
             if let kind = kinds[ask] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { MacShellState.shared.chatRequest = .init(key: key, kind: kind) }
             }
+        }
+        // `-macOpenURL <jarvis://…>`: what handing the app that link does, 2 s in.
+        if let u = d.string(forKey: "macOpenURL").flatMap(URL.init(string:)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.openURL(u) }
         }
         // `-macSection knowledge|machines|…`: that sidebar section.
         if let s = d.string(forKey: "macSection").flatMap(MacSection.init(rawValue:)) { MacShellState.shared.go(s, model) }
