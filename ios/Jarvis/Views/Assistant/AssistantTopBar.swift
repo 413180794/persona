@@ -199,7 +199,7 @@ struct AssistantTopBar: View {
             if link != .online {
                 Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.offline) }
             }
-            Button(action: openKnowledge) { Label("知识库", systemImage: "books.vertical") }
+            Button(action: openKnowledge) { Label("知识库", systemImage: Theme.Icon.knowledge) }
             Button(action: openProfile) { Label("详细信息", systemImage: Theme.Icon.person) }
             if let main = model.assistantMain, key != main {
                 Button {

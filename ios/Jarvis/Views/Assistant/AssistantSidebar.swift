@@ -455,8 +455,9 @@ private struct SidebarClosed: View {
     }
 }
 
-/// What the sidebar lists: search and 新对话 on top, Jarvis itself (its card, 定时任务, 知识库), then its conversations —
-/// 置顶 (the main one first), the rest by day (今天 / 昨天 / 最近 7 天 / 更早). Each conversation shows its last message.
+/// What the sidebar lists (2026-10-31, laid out like 豆包's): Jarvis's name with a search button; the things to start
+/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first) and 最近, one line each with a round mark; Jarvis's face,
+/// where it runs and 设置 at the foot.
 struct AssistantSidebar: View {
     @Environment(AppModel.self) private var model
     var current: SessionKey?
@@ -470,14 +471,15 @@ struct AssistantSidebar: View {
     /// The drawer it is in (nil as a column). The drawer's sidebar stays built while closed: closing it clears the search.
     var drawer: AssistantDrawer?
     @State private var query = ""
-    @State private var showAllOlder = false
+    @State private var searchOpen = false
+    @State private var showAll = false
     @State private var ending: Session?
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
     @AppStorage("assistant.pinned") private var pinnedRaw = ""
 
-    /// 更早 shows this many until 查看全部.
-    private static let olderCount = 8
+    /// 最近 shows this many until 查看全部.
+    private static let recentCount = 30
 
     private var pinnedIDs: Set<String> { Set(pinnedRaw.split(separator: ",").map(String.init)) }
 
@@ -487,124 +489,113 @@ struct AssistantSidebar: View {
         let all = model.assistantConversations
         VStack(spacing: 0) {
             topBar
-                .padding(.horizontal, Theme.Space.l)
+                .padding(.horizontal, Theme.Space.xl)
                 .padding(.top, Theme.Space.s)
-                .padding(.bottom, Theme.Space.m)
+                .padding(.bottom, Theme.Space.s)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if query.isEmpty {
-                        jarvisCard.padding(.bottom, Theme.Space.m)
-                        shortcuts
+                        actions
+                        Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                         conversations(all)
                     } else {
                         results(AssistantSidebarSearch.filter(all, query))
                     }
                 }
-                .padding(.horizontal, Theme.Space.m)
+                .padding(.horizontal, Theme.Space.s)
                 .padding(.bottom, Theme.Space.l)
             }
             .scrollDismissesKeyboard(.interactively)
-            if let openSettings { settingsRow(openSettings) }
+            footer
         }
         .confirmClose($ending)
         .background {
             if let drawer {
                 SidebarClosed(drawer: drawer) {
                     query = ""
+                    searchOpen = false
                     searching = false
                 }
             }
         }
     }
 
-    // MARK: Top: search and 新对话
+    // MARK: Top: the name, search
 
-    private var topBar: some View {
-        HStack(spacing: Theme.Space.m) {
-            HStack(spacing: Theme.Space.s) {
-                Image(systemName: "magnifyingglass").font(Theme.Font.secondaryMedium).foregroundStyle(.secondary)
-                TextField("搜索对话", text: $query)
-                    .focused($searching)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: Theme.Icon.clear).foregroundStyle(.tertiary) }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("清除搜索")
+    @ViewBuilder private var topBar: some View {
+        if searchOpen {
+            HStack(spacing: Theme.Space.m) {
+                HStack(spacing: Theme.Space.s) {
+                    Image(systemName: Theme.Icon.search).font(Theme.Font.secondaryMedium).foregroundStyle(.secondary)
+                    TextField("搜索对话", text: $query)
+                        .focused($searching)
+                        .submitLabel(.search)
+                        .autocorrectionDisabled()
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: Theme.Icon.clear).foregroundStyle(.tertiary) }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("清除搜索")
+                    }
                 }
+                .padding(.horizontal, Theme.Space.m)
+                .scaledFrame(height: Theme.Size.avatar)
+                .background(Theme.Fill.chip, in: .capsule)
+                Button("取消") {
+                    withAnimation(Theme.Motion.state) {
+                        query = ""
+                        searchOpen = false
+                        searching = false
+                    }
+                }
+                .font(Theme.Font.body)
+                .lineLimit(1)
+            }
+        } else {
+            HStack {
+                Text(model.persona.name).font(Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: Theme.Space.s)
+                Button {
+                    withAnimation(Theme.Motion.state) { searchOpen = true }
+                    searching = true
+                } label: {
+                    Image(systemName: Theme.Icon.search)
+                        .font(Theme.Font.heading)
+                        .foregroundStyle(Color.primary)
+                        .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                        .surface(interactive: true, in: .circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("搜索对话")
+            }
+        }
+    }
+
+    // MARK: What to start
+
+    private var actions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
+            action("定时任务", Theme.Icon.schedule, run: openRoutines)
+            action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+        }
+    }
+
+    private func action(_ title: String, _ symbol: String, id: String? = nil, run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack(spacing: Theme.Space.l) {
+                // One box for every symbol: a wide one (知识库's books) scales down into it instead of pushing its words.
+                Image(systemName: symbol).resizable().scaledToFit().fontWeight(.regular).foregroundStyle(Color.primary)
+                    .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+                    .scaledFrame(width: Theme.Size.icon)
+                Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, Theme.Space.m)
-            .scaledFrame(height: Theme.Size.avatar)
-            .background(Theme.Fill.chip, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-            Button(action: newConversation) {
-                Image(systemName: Theme.Icon.compose)
-                    .font(Theme.Font.heading)
-                    .foregroundStyle(Theme.accent)
-                    .scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
-                    .background(Theme.accent.opacity(0.12), in: .circle)
-                    .contentShape(.circle)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("新对话")
-            .accessibilityIdentifier("sidebar-new")
-        }
-    }
-
-    // MARK: Jarvis itself
-
-    private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
-
-    /// Jarvis: its face, where it runs and whether that machine is up; a tap opens its profile.
-    private var jarvisCard: some View {
-        let machine = model.machine(machineID)
-        let online = machine?.online ?? false
-        return Button(action: openProfile) {
-            HStack(spacing: Theme.Space.m) {
-                PersonaAvatar(size: Theme.Size.avatarM)
-                VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text(model.persona.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
-                    HStack(spacing: Theme.Space.sm) {
-                        Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5)).scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
-                        Text(online ? "在线 · \(machine?.name ?? machineID)" : "离线 · \(machine?.name ?? machineID)")
-                            .lineLimit(1)
-                    }
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
-            }
-            .card(padding: 12)
+            .scaledFrame(minHeight: Theme.Size.avatarL)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，查看资料")
-    }
-
-    /// 定时任务 and 知识库, side by side.
-    private var shortcuts: some View {
-        HStack(spacing: Theme.Space.m) {
-            tile("定时任务", "alarm", action: openRoutines)
-            tile("知识库", "books.vertical", action: openKnowledge)
-        }
-    }
-
-    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: Theme.Space.s) {
-                Image(systemName: symbol)
-                    .font(Theme.Font.secondaryStrong)
-                    .foregroundStyle(Theme.accent)
-                    .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
-                    .background(Theme.accent.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .card(padding: 10)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
+        .accessibilityIdentifier(id ?? "sidebar-" + title)
     }
 
     // MARK: Conversations
@@ -613,29 +604,37 @@ struct AssistantSidebar: View {
         let main = model.assistantMain
         let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
         if !pinned.isEmpty {
-            heading("置顶")
+            heading("置顶") {
+                if pinned.contains(where: { $0.key != main }) {
+                    Button { unpinAll() } label: { Label("全部取消置顶", systemImage: Theme.Icon.unpin) }
+                }
+            }
             ForEach(pinned) { row($0) }
         }
-        let rest = all.filter { !isPinned($0) }
+        let rest = AssistantSidebarGroups.newestFirst(all.filter { !isPinned($0) })
         if rest.isEmpty {
-            Text(pinned.isEmpty ? "还没有对话：点右上角的新对话开始" : "还没有别的对话")
+            Text(pinned.isEmpty ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
-        }
-        ForEach(AssistantSidebarGroups.group(rest), id: \.title) { group in
-            heading(group.title)
-            let older = group.title == AssistantSidebarGroups.older
-            let shown = older && !showAllOlder ? Array(group.sessions.prefix(Self.olderCount)) : group.sessions
-            ForEach(shown) { row($0) }
-            if older, group.sessions.count > Self.olderCount {
+        } else {
+            heading("最近") {
+                Button { newConversation() } label: { Label("新对话", systemImage: Theme.Icon.compose) }
+                if rest.count > Self.recentCount {
+                    Button { withAnimation(Theme.Motion.standard) { showAll.toggle() } } label: {
+                        Label(showAll ? "只看最近 \(Self.recentCount) 个" : "查看全部（\(rest.count)）", systemImage: Theme.Icon.list)
+                    }
+                }
+            }
+            ForEach(showAll ? rest : Array(rest.prefix(Self.recentCount))) { row($0) }
+            if rest.count > Self.recentCount {
                 Button {
-                    withAnimation(Theme.Motion.standard) { showAllOlder.toggle() }
+                    withAnimation(Theme.Motion.standard) { showAll.toggle() }
                 } label: {
-                    Text(showAllOlder ? "收起" : "查看全部（\(group.sessions.count)）")
-                        .font(Theme.Font.secondaryMedium)
-                        .foregroundStyle(Theme.accent)
+                    Text(showAll ? "收起" : "查看全部（\(rest.count)）")
+                        .font(Theme.Font.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.leading, Theme.Space.m + Theme.Size.wellM + Theme.Space.m)
                         .padding(.vertical, Theme.Space.m)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
@@ -648,69 +647,66 @@ struct AssistantSidebar: View {
     @ViewBuilder private func results(_ hits: [Session]) -> some View {
         if hits.isEmpty {
             VStack(spacing: Theme.Space.sm) {
-                Image(systemName: "magnifyingglass").font(Theme.Font.title).foregroundStyle(.tertiary)
+                Image(systemName: Theme.Icon.search).font(Theme.Font.title).foregroundStyle(.tertiary)
                 Text("没有找到「\(query)」").font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
         } else {
-            heading("\(hits.count) 个对话")
+            heading("\(hits.count) 个对话") { EmptyView() }
             ForEach(hits) { row($0) }
         }
     }
 
-    private func heading(_ text: String) -> some View {
-        Text(text)
-            .font(Theme.Font.sectionHeader)
-            .foregroundStyle(Color.secondary)
-            .padding(.horizontal, Theme.Space.m)
-            .padding(.top, Theme.Space.xl)
-            .padding(.bottom, Theme.Space.sm)
-            .accessibilityAddTraits(.isHeader)
+    /// A section's name, small and gray, with its ⋯ menu on the right when it has one.
+    private func heading<Menu: View>(_ text: String, @ViewBuilder menu: () -> Menu) -> some View {
+        let items = menu()
+        return HStack {
+            Text(text).font(Theme.Font.caption).foregroundStyle(Color.secondary).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            if !(items is EmptyView) {
+                SwiftUI.Menu { items } label: {
+                    Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
+                        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellXS)
+                        .contentShape(.rect)
+                }
+                .tint(Color.secondary) // a gray ⋯, not the accent
+                .accessibilityLabel(text + "的更多操作")
+            }
+        }
+        .padding(.leading, Theme.Space.m)
+        .padding(.top, Theme.Space.l)
+        .padding(.bottom, Theme.Space.xs)
     }
 
-    /// A conversation: its title (主对话 marked) over its last message; when, and its state, on the right.
+    /// A conversation: a round mark (Jarvis's face for the main one), its title on one line, its state on the right.
     private func row(_ s: Session) -> some View {
         let selected = s.key == current
         let isMain = s.key == model.assistantMain
-        let title = s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = isMain ? "主对话" : s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
-            HStack(alignment: .center, spacing: Theme.Space.m) {
-                VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    HStack(spacing: Theme.Space.sm) {
-                        Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
-                        if isMain {
-                            Text("主对话")
-                                .font(Theme.Font.labelStrong)
-                                .foregroundStyle(Theme.accent)
-                                .padding(.horizontal, Theme.Space.sm)
-                                .padding(.vertical, Theme.Space.xxs)
-                                .background(Theme.accent.opacity(0.12), in: .capsule)
-                                .fixedSize()
-                        }
-                    }
-                    if !preview.isEmpty {
-                        Text(preview).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
+            HStack(spacing: Theme.Space.m) {
+                if isMain {
+                    PersonaAvatar(size: Theme.Size.wellM)
+                } else {
+                    ConversationMark(id: s.sessionID)
                 }
-                Spacer(minLength: 4)
-                VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-                    Text(Fmt.relative(s.updatedAt)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
-                    mark(s)
-                }
+                Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: Theme.Space.xs)
+                mark(s)
             }
             .padding(.horizontal, Theme.Space.m)
-            .padding(.vertical, Theme.Space.m)
+            .scaledFrame(minHeight: Theme.Size.box50)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.accent.opacity(0.12))
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(Theme.Fill.well)
                 }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([title, isMain ? "主对话" : nil, stateWord(s), preview.isEmpty ? nil : preview]
+        .accessibilityLabel([title, isMain && s.title != title ? s.title : nil, stateWord(s), preview.isEmpty ? nil : preview]
             .compactMap { $0 }.joined(separator: "，"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .contextMenu {
@@ -726,16 +722,25 @@ struct AssistantSidebar: View {
             if s.status.isLive {
                 Button(role: .destructive) { ending = s } label: { Label("结束…", systemImage: Theme.Icon.end) }
             }
+        } preview: {
+            // The long-press preview: what it last said (the row itself shows only the title).
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text(title).font(Theme.Font.heading).lineLimit(2)
+                if !preview.isEmpty { Text(preview).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(6) }
+                Text(Fmt.relative(s.updatedAt)).font(Theme.Font.label).foregroundStyle(.tertiary)
+            }
+            .padding(Theme.Space.l)
+            .frame(width: Theme.Size.box280, alignment: .leading)
         }
     }
 
-    /// Waiting for you, working or unread as a small mark under the time; nothing otherwise.
+    /// Waiting for you, working or unread at the end of the row; nothing otherwise.
     @ViewBuilder private func mark(_ s: Session) -> some View {
         switch s.state {
-        case .working: ProgressView().controlSize(.mini).scaledFrame(height: Theme.Size.dot)
+        case .working: ProgressView().controlSize(.mini)
         case .needsYou: Circle().fill(Theme.needsYou).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
         case .unread: Circle().fill(Theme.accent).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
-        default: Color.clear.scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
+        default: EmptyView()
         }
     }
 
@@ -753,23 +758,76 @@ struct AssistantSidebar: View {
         Haptics.tap()
     }
 
-    /// 设置 at the bottom of the drawer (the tab bar is hidden while it is out).
-    private func settingsRow(_ action: @escaping () -> Void) -> some View {
-        VStack(spacing: 0) {
-            Divider().padding(.horizontal, Theme.Space.l)
-            Button(action: action) {
-                HStack(spacing: Theme.Space.m) {
-                    Image(systemName: Theme.Icon.settings).font(Theme.Font.heading).foregroundStyle(.secondary).scaledFrame(width: Theme.Size.wellXS)
-                    Text("设置").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
-                    Spacer(minLength: 0)
+    private func unpinAll() {
+        pinnedRaw = ""
+        Haptics.tap()
+    }
+
+    // MARK: Foot: Jarvis, 设置
+
+    private var machineID: String { model.assistantConfig?.machineID ?? model.hubMachineID }
+
+    /// Jarvis's face and name with where it runs (a tap: its profile), 设置 on the right (the tab bar is hidden while
+    /// the drawer is out).
+    private var footer: some View {
+        let machine = model.machine(machineID)
+        let online = machine?.online ?? false
+        return VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: Theme.Space.m) {
+                Button(action: openProfile) {
+                    HStack(spacing: Theme.Space.m) {
+                        PersonaAvatar(size: Theme.Size.avatarL)
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                            HStack(spacing: Theme.Space.xs) {
+                                Text(model.persona.name).font(Theme.Font.bodyStrong).foregroundStyle(Color.primary).lineLimit(1)
+                                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                            }
+                            HStack(spacing: Theme.Space.xs) {
+                                Circle().fill(online ? Theme.positive : Color.secondary.opacity(0.5))
+                                    .scaledFrame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
+                                Text((online ? "在线 · " : "离线 · ") + (machine?.name ?? machineID)).lineLimit(1)
+                            }
+                            .font(Theme.Font.label)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    .contentShape(.rect)
                 }
-                .padding(.horizontal, Theme.Space.xl)
-                .scaledFrame(height: Theme.Size.box50)
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(model.persona.name)，\(online ? "在线" : "离线")，查看资料")
+                Spacer(minLength: Theme.Space.s)
+                if let openSettings {
+                    Button(action: openSettings) {
+                        Image(systemName: Theme.Icon.settings).font(Theme.Font.title).foregroundStyle(Color.primary)
+                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("设置")
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("设置")
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
         }
+    }
+}
+
+/// A conversation's round mark in the sidebar: a chat bubble in a soft color picked by its id, so neighbours differ.
+struct ConversationMark: View {
+    var id: String
+
+    private static let hues = [Theme.Hue.orange, Theme.Hue.purple, Theme.Hue.blue, Theme.Hue.green]
+
+    var body: some View {
+        let hue = Self.hues[Int(id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }) % Self.hues.count]
+        Circle()
+            .fill(hue.opacity(0.14))
+            .overlay(Circle().stroke(hue.opacity(0.25), lineWidth: Theme.Size.hairline))
+            .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+            .overlay(Image(systemName: Theme.Icon.conversation).font(Theme.Font.label).foregroundStyle(hue))
+            .accessibilityHidden(true)
     }
 }
 
@@ -780,6 +838,14 @@ nonisolated enum AssistantSidebarGroups {
     struct Group: Equatable {
         var title: String
         var sessions: [Session]
+    }
+
+    /// Newest first, a fixed order for equal times (the sidebar's 最近).
+    static func newestFirst(_ sessions: [Session]) -> [Session] {
+        sessions.sorted {
+            let a = $0.updatedAt ?? .distantPast, b = $1.updatedAt ?? .distantPast
+            return a != b ? a > b : $0.sessionID < $1.sessionID
+        }
     }
 
     static func group(_ sessions: [Session], now: Date = .now, calendar: Calendar = .current) -> [Group] {

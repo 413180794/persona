@@ -125,9 +125,11 @@ final class DrawerSwipeTests: XCTestCase {
         drag(app, from: point(app, 0.3, 0.5), dx: 220, dy: 20)
         XCTAssertTrue(isOpen(app))
         XCTAssertFalse(agents.isHittable, "the tab bar is still there over the sidebar")
-        // The sidebar's 设置 row (the tab bar's 设置 is on the right, faded away).
+        // The sidebar's 设置, at the right of its foot (the tab bar's 设置 under it is faded away).
+        // (Its own identifier is the sidebar's: the container's wins.) Inside the sidebar's width, not the tab bar's.
+        let edge = app.windows.firstMatch.frame.width * 0.85 // the sidebar is most of the width; the tab bar's 设置 is at its far right
         let settings = app.buttons.matching(NSPredicate(format: "label == '设置'")).allElementsBoundByIndex
-            .first { $0.frame.minX < 100 && $0.isHittable }
+            .first { $0.frame.maxX <= edge + 1 && $0.isHittable }
         XCTAssertNotNil(settings, "the sidebar's 设置 is covered:\n\(app.debugDescription)")
         settings?.tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5), "设置 did not open")

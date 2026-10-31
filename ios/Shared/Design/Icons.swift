@@ -159,6 +159,10 @@ extension Theme {
         static let message = "bubble.left.fill"
         static let credentials = "key"
         static let memory = "brain"
+        /// Search (a list's, the sidebar's).
+        static let search = "magnifyingglass"
+        /// The knowledge base (~/.jarvis/data).
+        static let knowledge = "books.vertical"
         /// A tool the app has no symbol for.
         static let unknownTool = "wrench.and.screwdriver"
     }
