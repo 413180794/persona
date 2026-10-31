@@ -62,6 +62,10 @@ if not os.environ.get("MOCK_MACHINES"):  # that mode has its own offline machine
     MACHINES.append({"id": "nas", "name": "NAS", "kind": "ssh", "icon": "server", "ssh_host": "nas", "online": False,
                      "error": "ssh: connect to host nas port 22: Operation timed out", "hostname": "nas", "os": "linux",
                      "arch": "arm64", "home": "/home/me", "last_seen": ago(hours=3)})
+# MOCK_LONG_OS=1: the server's OS has a long name, so its card's chips (OS, herdr, claude) do not fit on one line.
+if os.environ.get("MOCK_LONG_OS"):
+    SYSTEMS["server"]["name"] = "Example GNU/Linux 2 (codename)"
+    MACHINES[0]["node_mismatch"] = True
 for _m in MACHINES:
     _m["system"] = dict(SYSTEMS[_m["id"]], boot_time=int((NOW - timedelta(days=3, hours=4)).timestamp()))
 # Machines added later (MOCK_MACHINES) have no system and never sent a sample.

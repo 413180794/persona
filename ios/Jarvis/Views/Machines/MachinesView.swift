@@ -64,7 +64,9 @@ struct MachineCard: View {
                     Divider().scaledFrame(height: Theme.Size.wellXS)
                     stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
                 }
-                HStack(spacing: Theme.Space.sm) {
+                // Wraps: OS, herdr and claude side by side are wider than a phone, and Chip does not shrink, so one row
+                // pushed the whole card (and the page) past both edges of the screen.
+                FlowLayoutRow {
                     if let sys = machine.system { Chip(text: sys.name, symbol: Theme.Icon.cpu) }
                     else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: Theme.Icon.cpu) }
                     if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
