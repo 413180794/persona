@@ -79,7 +79,28 @@ struct ChatLines {
                 out += t.trailing.map { .row($0) }
             }
         }
-        return Self.foldAPIErrors(out)
+        return Self.foldRecaps(Self.foldAPIErrors(out))
+    }
+
+    /// Claude Code writes a recap each time an idle session is looked at again: several in a row (nothing else
+    /// between) are one line, like the background tasks' reports (2026-10-31: three 离开期间回顾 lines stacked up).
+    /// The line keeps the first recap's id, so it stays put as more arrive.
+    static func foldRecaps(_ lines: [ChatLine]) -> [ChatLine] {
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count)
+        var run: [Item] = []
+        func flush() {
+            if run.count == 1 { out.append(.row(.recap(run[0]))) }
+            if run.count > 1 { out.append(.recaps(id: "rc-" + run[0].id, items: run)) }
+            run = []
+        }
+        for line in lines {
+            if case .row(.recap(let i)) = line.content { run.append(i); continue }
+            flush()
+            out.append(line)
+        }
+        flush()
+        return out
     }
 
     /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error

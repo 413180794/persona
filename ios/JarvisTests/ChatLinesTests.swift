@@ -89,4 +89,23 @@ struct ChatLinesTests {
         guard case .turn(let t) = b.last else { Issue.record("expected a turn"); return }
         #expect(!kinds(ChatLines(openWork: []).build(b, live: t.id)).contains("merged"))
     }
+
+    /// Recaps in a row are one line (newest last in it, the first one's id); a recap with something after it stays.
+    @Test func recapsInARowFold() {
+        let items = [item(1, .text, role: "user", text: "看一下"), item(2, .text, text: "好了"),
+                     item(3, .recap, text: "第一次"), item(4, .recap, text: "第二次"), item(5, .recap, text: "第三次")]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        guard case .recaps(let id, let recaps)? = lines.last?.content else {
+            Issue.record("no merged recaps: \(lines.map(\.id))")
+            return
+        }
+        #expect(recaps.map(\.text) == ["第一次", "第二次", "第三次"])
+        #expect(id == "rc-3#0")
+        #expect(lines.last?.holds("5#0") == true)
+
+        let apart = [item(1, .recap, text: "一"), item(2, .text, role: "user", text: "在吗"), item(3, .text, text: "在"), item(4, .recap, text: "二")]
+        let kept = ChatLines(openWork: []).build(blocks(apart), live: nil)
+        #expect(kept.filter { if case .row(.recap) = $0.content { true } else { false } }.count == 2)
+        #expect(!kept.contains { if case .recaps = $0.content { true } else { false } })
+    }
 }

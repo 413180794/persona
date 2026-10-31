@@ -549,6 +549,8 @@ struct ChatView: View {
                 Haptics.tap()
                 wakeDrawer = t.id
             }
+        case .recaps(_, let items):
+            RecapCard(items: items)
         }
     }
 
@@ -2367,6 +2369,8 @@ struct ChatLine: Identifiable {
         case mergedUsers(id: String, rows: [ChatRow])
         case splitHeader(id: String, count: Int)
         case wakes(Turn, live: Bool)
+        /// Two or more "while you were away" recaps in a row, as one line (they open in one drawer, newest first).
+        case recaps(id: String, items: [Item])
         case workStep(group: String, item: WorkItem, first: Bool)
         /// Two or more tool calls in a row of an open work line, as one line of chips.
         case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
@@ -2385,6 +2389,7 @@ struct ChatLine: Identifiable {
             case .mergedUsers(let id, _): id
             case .splitHeader(let id, _): id + "-h"
             case .wakes(let t, _): "wk-" + t.id
+            case .recaps(let id, _): id
             case .apiError(let item, _, _): item.id
             }
         }
@@ -2403,6 +2408,7 @@ struct ChatLine: Identifiable {
     static func mergedUsers(id: String, rows: [ChatRow]) -> Self { Self(.mergedUsers(id: id, rows: rows)) }
     static func splitHeader(id: String, count: Int) -> Self { Self(.splitHeader(id: id, count: count)) }
     static func wakes(_ turn: Turn, live: Bool) -> Self { Self(.wakes(turn, live: live)) }
+    static func recaps(id: String, items: [Item]) -> Self { Self(.recaps(id: id, items: items)) }
     static func workStep(group: String, item: WorkItem, first: Bool) -> Self {
         Self(.workStep(group: group, item: item, first: first))
     }
@@ -2417,6 +2423,7 @@ struct ChatLine: Identifiable {
         switch content {
         case .row(let r): return r.id == id
         case .mergedUsers(_, let rows): return rows.first?.id == id
+        case .recaps(_, let items): return items.contains { $0.id == id }
         default: return false
         }
     }

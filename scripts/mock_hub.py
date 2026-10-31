@@ -460,6 +460,10 @@ ITEMS[ORDERS] = (
 )
 ITEMS[REVIEW] = [it("user", "text", 100, text="看一下 PR #42")] + [it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。")] + [
     it("system", "recap", 30, text="在审 PR #42：逻辑没问题，留了两条命名建议（`fetchAll` → `loadAll`，`tmp` → `cached`）。下一步等作者改完再看一遍，顺便确认新加的重试测试在 CI 上稳定。")]
+# MOCK_RECAPS=1: three recaps in a row on the review chat (one line, newest first in its drawer).
+if os.environ.get("MOCK_RECAPS"):
+    ITEMS[REVIEW] += [it("system", "recap", 11, text="作者改了 `fetchAll` 的命名，`tmp` 还没改。CI 上新的重试测试跑了 3 次都过。"),
+                      it("system", "recap", 3, text="两条建议都改完了，CI 绿。等你看一眼就可以合。")]
 ITEMS[RECIPE] = [it("user", "text", 60 * 27, text="菜谱网站加个搜索")] + [it("assistant", "text", 60 * 26, text="搜索做好了，支持按食材和用时筛选。")]
 
 ITEMS[ASK1] = (

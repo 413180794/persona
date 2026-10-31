@@ -652,10 +652,17 @@ struct WakeDrawer<Content: View>: View {
 }
 
 /// Claude Code's "while you were away" recap: like a background task's report, one short line ("离开期间回顾 · 10:02 ›");
-/// the recap itself opens in a drawer.
+/// the recap itself opens in a drawer. Several in a row are one line ("离开期间回顾 · 3 次 · 10:02 ›"), the newest first
+/// in the drawer.
 struct RecapCard: View {
-    var item: Item
+    /// Oldest first, as they came.
+    var items: [Item]
     @State private var open = false
+
+    init(item: Item) { items = [item] }
+    init(items: [Item]) { self.items = items }
+
+    private var newest: Item { items[items.count - 1] }
 
     var body: some View {
         Button {
@@ -665,7 +672,8 @@ struct RecapCard: View {
             HStack(spacing: Theme.Space.sm) {
                 Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
                 Text("离开期间回顾").lineLimit(1)
-                if let ts = item.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
+                if items.count > 1 { Text("· \(items.count) 次").lineLimit(1) }
+                if let ts = newest.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
             }
             .font(Theme.Font.caption)
@@ -677,9 +685,9 @@ struct RecapCard: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu { CopyButton(text: item.text ?? "") }
-        .accessibilityLabel("离开期间回顾，点击查看")
-        .sheet(isPresented: $open) { RecapDrawer(item: item) }
+        .contextMenu { CopyButton(text: newest.text ?? "") }
+        .accessibilityLabel(items.count > 1 ? "\(items.count) 次离开期间回顾，点击查看" : "离开期间回顾，点击查看")
+        .sheet(isPresented: $open) { RecapDrawer(items: items) }
         #if DEBUG
         .task { if UserDefaults.standard.bool(forKey: "showRecapDrawer") { try? await Task.sleep(for: .seconds(3)); open = true } }
         #endif
@@ -731,24 +739,31 @@ struct RecapStrip: View {
 /// The recap in full, in the same kind of drawer as a background task's report.
 struct RecapDrawer: View {
     @Environment(\.dismiss) private var dismiss
-    var item: Item
+    /// Oldest first, as they came; shown newest first (it is the one that says where things are now).
+    var items: [Item]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Space.m) {
-                    if let ts = item.ts, ts.isMeaningful {
-                        Text("写于 " + Fmt.relative(ts)).font(Theme.Font.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    ForEach(Array(items.reversed().enumerated()), id: \.element.id) { n, item in
+                        if n > 0 { Divider() }
+                        VStack(alignment: .leading, spacing: Theme.Space.m) {
+                            if let ts = item.ts, ts.isMeaningful {
+                                Text((n == 0 && items.count > 1 ? "最新 · " : "") + "写于 " + Fmt.relative(ts))
+                                    .font(Theme.Font.caption).foregroundStyle(.secondary)
+                            }
+                            Markdown(Links.markdown(item.text ?? ""))
+                                .markdownTheme(.jarvis)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    Markdown(Links.markdown(item.text ?? ""))
-                        .markdownTheme(.jarvis)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
-            .navigationTitle("离开期间回顾")
+            .navigationTitle(items.count > 1 ? "离开期间回顾 · \(items.count) 次" : "离开期间回顾")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
