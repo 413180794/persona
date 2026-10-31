@@ -522,7 +522,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 22. Demo mode
 - [ ] 「没有 hub？先体验一下」, ServerConfig.demo, local APIClient + local socket, Demo.json with relative times, generated metrics, echo replies, demo errors shown as blue info — App/DemoHub.swift, App/AppModel.swift (enterDemo), Shared/APIClient.swift, Shared/LiveConnection.swift
-- [ ] Settings demo section (连接我的 hub / 退出体验模式), 体验 tab badge — SettingsView.swift (DemoSection), RootView.swift
+- [x] Settings demo section (连接我的 hub / 退出体验模式), 体验 tab badge — SettingsView.swift (DemoSection), RootView.swift
+  - Mac 截图看过：设置顶上的「体验模式 · 数据都是编造的」、连接我的 hub / 退出体验模式，侧栏「设置」旁的「体验」角标。
 
 ## 23. Pairing / credentials / watch
 - [ ] Welcome page, QR scan (VisionKit), manual entry, jarvis://pair link — Views/Settings/SettingsView.swift (WelcomeView, PairView, QRScanner)
@@ -551,9 +552,12 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Root: header (demo note), 形象, 界面风格 + 字号, 助手, 模型, Claude Code 设置, 机器, 设备, 手机数据, 通知, 翻译, 存储空间, 服务器, 关于, 同步到 Apple Watch — Views/Settings/SettingsView.swift (SettingsDestinations, SettingsPage)
 - [ ] 助手 → profile page; 定时任务 (upcoming timeline, daily/interval/once rows, toggle, swipe delete, long-press run now, templates, editor with model/permission/effort, bypass confirm, continue conversation, history) — Views/Settings/AssistantProactiveViews.swift (AssistantRoutinesView, AssistantTaskRow, AssistantTaskEditor, AssistantWeekdayPicker), Views/Settings/AssistantRoutinesModel.swift
 - [ ] 记忆 (frontmatter, type tags, markdown detail, edit, swipe delete, MEMORY.md read-only) — AssistantProactiveViews.swift (AssistantMemoryView, AssistantMemoryDetail, AssistantMemoryEditor)
+  - Mac 上编辑 sheet 截图看过（`-openAssistantPage memoryEdit`，`macSheet` 给了尺寸）；列表、左滑删除、MEMORY.md 只读没截。
 - [ ] 关于我 notes — AssistantProactiveViews.swift (AssistantNotesView)
+  - Mac 截图看到编辑框和说明（`-openAssistantPage about`）；保存没试（体验模式）。
 - [ ] Claude Code 设置 (settings.json whitelist keys, apply to all machines) — SettingsView.swift (ClaudeSettingsView)
 - [ ] 翻译 (auto translate, mail, chat picker) + Translator (NLLanguageRecognizer, batching) — Views/Settings/TranslationSettingsView.swift, App/Translator.swift
+  - Mac 上设置页截图看到「自动翻译」开关和说明；翻译本身（NLLanguageRecognizer）没在 Mac 上跑过。
 - [ ] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
 - [ ] 通知 / 灵动岛 — see §18, §19
 
