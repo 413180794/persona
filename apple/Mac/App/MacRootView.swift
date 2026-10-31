@@ -151,6 +151,9 @@ private struct MacShell: View {
                 }
             }
             .listStyle(.sidebar)
+            // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
+            // iPhone's title spot does (docs/mac.md「主窗口」).
+            .safeAreaInset(edge: .bottom, spacing: 0) { MacConnectionFooter() }
             .frame(width: Theme.Size.macSidebarIdeal)
             .background(Theme.systemSidebar)
             Divider()
@@ -189,6 +192,29 @@ private struct MacShell: View {
                     .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
             }
         case .settings: SettingsView()
+        }
+    }
+}
+
+/// The connection state at the sidebar's foot; nothing while connected.
+struct MacConnectionFooter: View {
+    @Environment(AppModel.self) private var model
+    @State private var details = false
+
+    var body: some View {
+        let phase = model.connection.shown
+        if phase != .online {
+            Button { details = true } label: {
+                ConnectionLabel(phase: phase, compact: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Space.l)
+                    .padding(.vertical, Theme.Space.s)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("查看连接详情")
+            .accessibilityLabel("\(phase.title)，查看连接详情")
+            .connectionDetails($details)
         }
     }
 }
