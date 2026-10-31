@@ -209,7 +209,11 @@ struct SpaceView: View {
                             Text("在这个空间开新标签").font(Theme.Font.captionMedium)
                         }
                         .foregroundStyle(Theme.accent)
+                        // Same box as a SlotCard (min height + the card's 12pt padding), and it fills its grid row
+                        // so it is as tall as the card next to it instead of floating centered and shorter.
                         .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box150)
+                        .padding(Theme.Space.m)
+                        .frame(maxHeight: .infinity)
                         .background(Theme.accent.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Theme.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5])))
                     }
