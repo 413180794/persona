@@ -16,11 +16,21 @@ import Testing
     @Test func eachFilterKeepsItsState() {
         let all = [session("a", state: "needs_you"), session("b", state: "unread"), session("c", state: "unread"),
                    session("d", state: "working"), session("e", state: "idle")]
-        #expect(all.filter(AgentFilter.all.matches).count == 5)
-        #expect(all.filter(AgentFilter.needsYou.matches).map(\.sessionID) == ["a"])
-        #expect(all.filter(AgentFilter.unread.matches).map(\.sessionID) == ["b", "c"])
-        #expect(all.filter(AgentFilter.working.matches).map(\.sessionID) == ["d"])
+        #expect(all.filter { AgentFilter.all.matches($0) }.count == 5)
+        #expect(all.filter { AgentFilter.needsYou.matches($0) }.map(\.sessionID) == ["a"])
+        #expect(all.filter { AgentFilter.unread.matches($0) }.map(\.sessionID) == ["b", "c"])
+        #expect(all.filter { AgentFilter.working.matches($0) }.map(\.sessionID) == ["d"])
         #expect(AgentFilter.all.state == nil)
+    }
+
+    /// Muted agents sit under 已屏蔽: 未读 and 工作中 neither count nor list them; 需要你 still does.
+    @Test func mutedAgentsAreNotUnreadOrWorking() {
+        let unread = session("b", state: "unread"), working = session("d", state: "working"), needs = session("a", state: "needs_you")
+        #expect(!AgentFilter.unread.matches(unread, muted: true))
+        #expect(!AgentFilter.working.matches(working, muted: true))
+        #expect(AgentFilter.needsYou.matches(needs, muted: true))
+        #expect(AgentFilter.all.matches(unread, muted: true))
+        #expect(AgentFilter.unread.matches(unread, muted: false))
     }
 
     @Test func foldedHeaderSpeaksItsCounts() {

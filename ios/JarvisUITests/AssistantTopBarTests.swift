@@ -97,14 +97,17 @@ final class AssistantTopBarTests: XCTestCase {
         _ = avatar(app)
         let new = app.buttons["新对话"].firstMatch
         XCTAssertTrue(new.exists && new.isHittable, "no 新对话 on the right:\n\(app.debugDescription)")
-        new.tap()
-        XCTAssertTrue(app.textViews["问 Jarvis…"].waitForExistence(timeout: 5) || app.textFields["问 Jarvis…"].waitForExistence(timeout: 2),
+        new.tapCenter()
+        // The conversation's own composer says 问 Jarvis… too: the page changed when its messages are gone and 新对话
+        // (nothing to start anew from) is off.
+        XCTAssertTrue(app.staticTexts["今天有什么需要我处理的？"].waitForNonExistence(timeout: 5) && !new.isEnabled,
                       "新对话 did not open the new-conversation page:\n\(app.debugDescription)")
+        XCTAssertTrue(app.textViews["问 Jarvis…"].exists || app.textFields["问 Jarvis…"].exists, "no composer on the new-conversation page")
         shot(app, "home")
 
         let history = app.buttons["历史对话"]
         XCTAssertTrue(history.isHittable, "no 历史对话 on the left")
-        history.tap()
+        history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
         for row in ["定时任务", "知识库", "置顶"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")

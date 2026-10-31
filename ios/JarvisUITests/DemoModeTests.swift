@@ -226,7 +226,7 @@ final class DemoModeTests: XCTestCase {
         see(text("今天有"), "the main conversation", timeout: 10)
         noErrors("jarvis")
         shot("jarvis")
-        see(app.buttons["历史对话"], "历史对话").tap()
+        see(app.buttons["历史对话"], "历史对话").tapCenter()
         see(app.descendants(matching: .any)["assistant-sidebar"], "the sidebar")
         shot("jarvis-sidebar")
         app.swipeLeft()

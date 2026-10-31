@@ -89,7 +89,12 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
         case .working: .working
         }
     }
-    func matches(_ s: Session) -> Bool { state.map { s.state == $0 } ?? true }
+    /// A muted agent that is working or finished unread is not counted or listed under 未读 / 工作中 (it sits under
+    /// 已屏蔽); one that needs you still is, the same as the list's order (`AgentListOrder.rank`).
+    func matches(_ s: Session, muted: Bool = false) -> Bool {
+        guard let state else { return true }
+        return s.state == state && (state == .needsYou || !muted)
+    }
 }
 
 /// 开发: every agent across machines, grouped by space (default), by state or by machine. The navigation and the
@@ -275,7 +280,7 @@ private struct AgentsList: View {
         let _ = PerfTrace.body("AgentsList")
         #endif
         let base = base
-        let matching = Set(base.filter { quick != .all && quick.matches($0) }.map(\.key))
+        let matching = Set(base.filter { quick != .all && quick.matches($0, muted: model.isMuted($0)) }.map(\.key))
         let filtered = quick == .all ? base : base.filter { matching.contains($0.key) || kept.contains($0.key) }
         // A pinned agent shows once, under 置顶; every grouping below is built from the rest.
         let unpinned = filtered.filter { !model.isPinned($0.key) }
@@ -418,7 +423,7 @@ private struct AgentsList: View {
         .modifier(TopBar(abovePage: widthClass == .regular) {
             // Equal while the counts are: the bar is not drawn again for pushes that change none of them. The
             // tap reads the list as it is then.
-            QuickFilterBar(selection: quick, counts: Self.counts(base)) { choose($0, self.base) }.equatable()
+            QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
         })
         .navigationTitle("Agents")
         // No title over the list (the tab says it); the name stays for the back button. The principal item (ChatsView)
@@ -441,10 +446,10 @@ private struct AgentsList: View {
 
     /// Each quick filter's count. Out of the body's modifier chain: closures in a long chain are type-checked with all
     /// of it (Release builds on the release machine time out).
-    private static func counts(_ base: [Session]) -> [AgentFilter: Int] {
+    private static func counts(_ base: [Session], muted: (Session) -> Bool) -> [AgentFilter: Int] {
         var out: [AgentFilter: Int] = [:]
-        for f in AgentFilter.allCases {
-            if let st = f.state { out[f] = base.count { $0.state == st } }
+        for f in AgentFilter.allCases where f != .all {
+            out[f] = base.count { f.matches($0, muted: muted($0)) }
         }
         return out
     }
@@ -453,7 +458,7 @@ private struct AgentsList: View {
     private func choose(_ f: AgentFilter, _ base: [Session]) {
         Haptics.tap()
         quick = f
-        kept = Set(base.filter { f != .all && f.matches($0) }.map(\.key))
+        kept = Set(base.filter { f != .all && f.matches($0, muted: model.isMuted($0)) }.map(\.key))
     }
 
     /// Something the list opens: in the split it replaces the detail column; in one stack the list is at the root, so
