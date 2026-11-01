@@ -161,3 +161,21 @@ class ModelPickerTest {
         org.junit.Assert.assertEquals(listOf("default", "opus", "sonnet", "haiku"), jarvis.android.ui.SessionModes.claudeModels.map { it.id })
     }
 }
+
+class SessionInfoTest {
+    @Test fun resumeCommandAndTokens() {
+        val claude = jarvis.android.data.Session(sessionId = "s")
+        org.junit.Assert.assertEquals("cd /tmp/a && claude --resume abc", jarvis.android.ui.resumeCommand(claude, "/tmp/a", "abc"))
+        org.junit.Assert.assertEquals("cd '/tmp/my dir' && codex resume abc",
+            jarvis.android.ui.resumeCommand(claude.copy(agent = "codex"), "/tmp/my dir", "abc"))
+        org.junit.Assert.assertEquals("950", jarvis.android.ui.tokens(950))
+        org.junit.Assert.assertEquals("12.3k", jarvis.android.ui.tokens(12_345))
+        org.junit.Assert.assertEquals("1.20M", jarvis.android.ui.tokens(1_200_000))
+    }
+
+    @Test fun infoDecodes() {
+        val i = jarvis.android.data.JsonCodec.decodeFromString<jarvis.android.data.ApiClient.SessionInfo>(
+            """{"session_id":"s1","cwd":"/x","model":"claude-opus","context_tokens":51234,"output_tokens":9,"turns":3,"compactions":1,"git_branch":"main","started_at":"2026-11-01T02:00:00Z"}""")
+        org.junit.Assert.assertEquals(51234L, i.contextTokens); org.junit.Assert.assertEquals("main", i.gitBranch); org.junit.Assert.assertEquals(3, i.turns)
+    }
+}

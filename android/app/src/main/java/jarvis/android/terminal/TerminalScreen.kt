@@ -8,6 +8,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -353,7 +355,9 @@ private val TEXT_STYLE = setOf(0x2714, 0x2716, 0x2733, 0x2734, 0x2747, 0x2705, 0
 /** Keys that are not on the phone's keyboard, and the keyboard itself (Ctrl arms the next key). */
 @Composable
 private fun KeyBar(link: TerminalLink) {
-    var ctrl by remember { mutableStateOf(false) }
+    var mods by remember { mutableStateOf(TerminalModifiers()) }
+    // When the last tap on each modifier was, to tell a double tap (lock) from two taps.
+    val lastTap = remember { HashMap<TerminalModifiers.Key, Long>() }
     var typing by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -362,7 +366,12 @@ private fun KeyBar(link: TerminalLink) {
     // word for their suggestions, so waiting for the commit would hold back each word until a space; pinyin shows in
     // the terminal while it is chosen and is replaced (backspaces, then the characters) when it is.
     var field by remember { mutableStateOf(TextFieldValue("")) }
-    fun press(name: String) { link.key(if (ctrl) "ctrl+$name" else name); ctrl = false }
+    fun press(name: String) { link.key(mods.apply(name)); mods = mods.pressed() }
+    fun tapMod(k: TerminalModifiers.Key) {
+        val now = System.currentTimeMillis()
+        mods = mods.tap(k, quick = now - (lastTap[k] ?: 0L) < 350)
+        lastTap[k] = now
+    }
 
     Column(Modifier.fillMaxWidth().background(Color(0xFF16171B))) {
         if (typing) {
@@ -377,9 +386,14 @@ private fun KeyBar(link: TerminalLink) {
                     repeat(before.length - common.length) { link.key("backspace") }
                     val typed = now.substring(common.length)
                     if (typed.isNotEmpty()) {
-                        if (ctrl && typed.length == 1) {
-                            press(typed.lowercase())
-                            field = TextFieldValue(before.substring(0, common.length), TextRange(common.length)) // ctrl+x is not text
+                        if (mods.active && typed.length == 1) {
+                            // One character with modifiers down: a key for herdr (ctrl+c), or shifted text.
+                            val (key, text) = mods.typed(typed[0])
+                            if (key != null) {
+                                link.key(key)
+                                field = TextFieldValue(before.substring(0, common.length), TextRange(common.length)) // ctrl+x is not text
+                            } else if (text != null) link.type(text)
+                            mods = mods.pressed()
                         } else link.type(typed)
                     }
                     if (field.composition == null && field.text.length > 200) field = TextFieldValue("")
@@ -400,12 +414,17 @@ private fun KeyBar(link: TerminalLink) {
         ) {
             KeyText("Esc") { press("esc") }
             KeyText("Tab") { press("tab") }
-            KeyText("Ctrl", on = ctrl) { ctrl = !ctrl }
+            ModKey("Ctrl", mods.ctrl, onTap = { tapMod(TerminalModifiers.Key.Ctrl) },
+                onHold = { mods = mods.hold(TerminalModifiers.Key.Ctrl) }, onRelease = { mods = mods.release(TerminalModifiers.Key.Ctrl) })
+            ModKey("Alt", mods.alt, onTap = { tapMod(TerminalModifiers.Key.Alt) },
+                onHold = { mods = mods.hold(TerminalModifiers.Key.Alt) }, onRelease = { mods = mods.release(TerminalModifiers.Key.Alt) })
+            ModKey("⇧", mods.shift, onTap = { tapMod(TerminalModifiers.Key.Shift) },
+                onHold = { mods = mods.hold(TerminalModifiers.Key.Shift) }, onRelease = { mods = mods.release(TerminalModifiers.Key.Shift) })
             KeyIcon(Icons.Default.KeyboardArrowUp, "上") { press("up") }
             KeyIcon(Icons.Default.KeyboardArrowDown, "下") { press("down") }
             KeyIcon(Icons.Default.KeyboardArrowLeft, "左") { press("left") }
             KeyIcon(Icons.Default.KeyboardArrowRight, "右") { press("right") }
-            KeyText("^C") { link.key("ctrl+c"); ctrl = false }
+            KeyText("^C") { link.key("ctrl+c"); mods = mods.pressed() }
             KeyText("⇧Tab") { press("shift+tab") }
             KeyIcon(Icons.AutoMirrored.Filled.KeyboardBackspace, "退格") { press("backspace") }
             KeyIcon(Icons.Default.KeyboardReturn, "回车") { press("enter") }
@@ -416,6 +435,40 @@ private fun KeyBar(link: TerminalLink) {
                 if (!typing) keyboard?.hide()
             }
         }
+    }
+}
+
+/**
+ * A modifier on the key bar (iOS TerminalKeyBar): tap arms it once (light), double tap locks it (solid, underlined),
+ * holding keeps it down while held.
+ */
+@Composable
+private fun ModKey(label: String, state: ModifierState, onTap: () -> Unit, onHold: () -> Unit, onRelease: () -> Unit) {
+    val bg = when (state) {
+        ModifierState.Off -> Color.Transparent
+        ModifierState.Once -> FG.copy(alpha = 0.2f)
+        ModifierState.Held, ModifierState.Locked -> FG.copy(alpha = 0.38f)
+    }
+    Box(
+        Modifier.height(36.dp).background(bg, RoundedCornerShape(8.dp))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown()
+                    val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }
+                    if (up != null) { onTap(); return@awaitEachGesture }
+                    onHold()
+                    waitForUpOrCancellation()
+                    onRelease()
+                }
+            }
+            .semantics { contentDescription = label + when (state) { ModifierState.Off -> ""; ModifierState.Once -> "（下一个键）"; else -> "（锁定）" } }
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, color = FG, fontFamily = FontFamily.Monospace, fontSize = 13.sp, maxLines = 1,
+            textDecoration = if (state == ModifierState.Locked) androidx.compose.ui.text.style.TextDecoration.Underline else null,
+        )
     }
 }
 

@@ -282,6 +282,7 @@ fun ChatScreen(
     var notice by remember { mutableStateOf<String?>(null) }
     var terminal by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     FocusComposer(focusComposer, focus, onFocusTaken)
     // Excerpts picked 「作为上下文」 (a message's menu or a page in the link sheet): chips above the input box, sent as
@@ -429,7 +430,8 @@ fun ChatScreen(
                 TopAppBar(
                     navigationIcon = navigation ?: { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
                     title = {
-                        Column {
+                        // Tapping the title shows 会话信息 (iOS: the title opens SessionInfoSheet).
+                        Column(Modifier.clickable(enabled = session != null) { showInfo = true }) {
                             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             val where = if (assistant) listOfNotNull(
                                 "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
@@ -470,6 +472,7 @@ fun ChatScreen(
                                         moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
                                     })
                                 }
+                                DropdownMenuItem({ Text("会话信息", maxLines = 1) }, { moreMenu = false; showInfo = true })
                                 DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
                                     moreMenu = false
                                     jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
@@ -640,6 +643,7 @@ fun ChatScreen(
                 }
             }
         }
+        if (showInfo) SessionInfoSheet(hub, key, session, machine?.displayName, onDismiss = { showInfo = false })
         MessageMenuHost(menu)
         menu.selecting?.let { text -> SelectTextDialog(text) { menu.selecting = null } }
     }

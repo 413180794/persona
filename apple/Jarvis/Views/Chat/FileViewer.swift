@@ -160,6 +160,9 @@ struct FileViewer: View {
                 .task(id: ref) { await open() }
                 .onAppear { FrameMeter.shared.start((ref.path as NSString).lastPathComponent) }
                 .onDisappear { FrameMeter.shared.stop() }
+                #if os(macOS)
+                .macLargeSheet(bars: true) // code wants the room; sized to its toolbar the sheet was 470 × 280
+                #endif
         }
     }
 

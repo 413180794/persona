@@ -35,6 +35,19 @@ struct GitPane: View {
         .task(id: cwd) { await load() }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, cwd: cwd, target: t) }
         .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, cwd: cwd, commit: c) }
+        #if os(macOS) && DEBUG
+        .onAppear {
+            // `-macGitSheet diff|commit`: a made-up change / commit's sheet, to see its size on the Mac (demo mode has
+            // no repositories, so it shows its error state).
+            switch UserDefaults.standard.string(forKey: "macGitSheet") {
+            case "diff":
+                diff = GitDiffTarget(file: GitFile(path: "Sources/App.swift", index: "M", worktree: "M", added: 3, deleted: 1), staged: false)
+            case "commit":
+                commit = GitCommit(hash: String(repeating: "0", count: 40), short: "0000000", subject: "Add the widget", author: "me")
+            default: break
+            }
+        }
+        #endif
     }
 
     private func header(_ s: GitStatus) -> some View {
@@ -277,6 +290,9 @@ struct GitDiffSheet: View {
                     diff = try await model.api?.gitDiff(machine: machineID, cwd: cwd, path: target.file.path, staged: target.staged)
                 } catch { self.error = error.shown }
             }
+            #if os(macOS)
+            .macLargeSheet(bars: true)
+            #endif
         }
     }
 }
@@ -344,6 +360,9 @@ struct GitCommitSheet: View {
                 do { show = try await model.api?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
                 catch { self.error = error.shown }
             }
+            #if os(macOS)
+            .macLargeSheet(bars: true)
+            #endif
         }
     }
 }

@@ -7,6 +7,8 @@ extension Theme.Size {
     /// The smallest a sheet standing in for an iOS full-screen cover opens.
     static let macSheetMinWidth: CGFloat = 640
     static let macSheetMinHeight: CGFloat = 520
+    /// A sheet's title bar and bottom toolbar together, on top of the height its navigation stack's content asks for.
+    static let macSheetBars: CGFloat = 116
     /// The main window: its smallest, and its size the first time it opens.
     static let macWindowMinWidth: CGFloat = 820
     static let macWindowMinHeight: CGFloat = 560
@@ -38,6 +40,20 @@ extension Theme.Size {
     static let macInspectorMin: CGFloat = 260
     static let macInspector: CGFloat = 300
     static let macInspectorMax: CGFloat = 420
+}
+
+extension Theme.Icon {
+    /// A click with the mouse or trackpad (the Mac's version of a tap, 终端设置 › 操作).
+    static let click = "cursorarrow.click"
+    /// The right-click menu.
+    static let contextMenu = "contextualmenu.and.cursorarrow"
+    /// A trackpad swipe sideways.
+    static let swipe = "arrow.left.arrow.right"
+    /// This window takes the terminal over (iOS: `handoff`, the phone does).
+    static let takeOverWindow = "macwindow.and.cursorarrow"
+    /// Moving an item one place up / down in a list without an edit mode (终端设置 › 快捷命令).
+    static let moveUp = "arrow.up"
+    static let moveDown = "arrow.down"
 }
 
 extension Theme.Fill {

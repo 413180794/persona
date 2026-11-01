@@ -85,15 +85,16 @@ extension View {
 // MARK: Presentation
 
 extension View {
-    /// A cover on iOS; a sheet over the window on a Mac.
+    /// A cover on iOS; on a Mac a sheet as large as the window (`macLargeSheet`). Counted with bars: some covers are
+    /// navigation stacks (the image editor), whose bars would push the sheet past the window.
     func fullScreenCover<Item: Identifiable, Content: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
                                                             @ViewBuilder content: @escaping (Item) -> Content) -> some View {
-        sheet(item: item, onDismiss: onDismiss) { content($0).frame(minWidth: Theme.Size.macSheetMinWidth, minHeight: Theme.Size.macSheetMinHeight) }
+        sheet(item: item, onDismiss: onDismiss) { content($0).macLargeSheet(bars: true) }
     }
 
     func fullScreenCover<Content: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
                                         @ViewBuilder content: @escaping () -> Content) -> some View {
-        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().frame(minWidth: Theme.Size.macSheetMinWidth, minHeight: Theme.Size.macSheetMinHeight) }
+        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().macLargeSheet(bars: true) }
     }
 }
 

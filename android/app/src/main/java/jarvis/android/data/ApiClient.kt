@@ -208,6 +208,25 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun start(machine: String, cwd: String, launcher: String, nameHint: String?, mode: String? = null, workspaceId: String? = null): Session =
         JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint))).session
 
+    /** What the node knows about a session from its transcript (GET …/info, iOS SessionInfo). */
+    @Serializable
+    data class SessionInfo(
+        @SerialName("session_id") val sessionId: String = "",
+        val cwd: String? = null,
+        val model: String? = null,
+        val launcher: String? = null,
+        @SerialName("git_branch") val gitBranch: String? = null,
+        val version: String? = null,
+        @SerialName("permission_mode") val permissionMode: String? = null,
+        val effort: String? = null,
+        @SerialName("context_tokens") val contextTokens: Long = 0,
+        @SerialName("output_tokens") val outputTokens: Long = 0,
+        val compactions: Int = 0,
+        val turns: Int = 0,
+        @SerialName("started_at") val startedAt: String? = null,
+    )
+    suspend fun sessionInfo(k: SessionKey): SessionInfo = get(sp(k) + "/info")
+
     @Serializable private data class QueueEdit(val keep: List<Int>)
     @Serializable private data class QueueResp(val queue: List<String> = emptyList())
     /** Pulls the queued input back out of claude and re-queues the indexes in `keep`; returns what was queued. */

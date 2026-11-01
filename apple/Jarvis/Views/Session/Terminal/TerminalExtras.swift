@@ -145,7 +145,7 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("文字")
                 } footer: {
-                    Text("在终端上双指捏合也能调字号。中文用系统字体，每个字占两格。")
+                    Text(TerminalHelpText.textFooter)
                 }
                 Section {
                     Picker("输入方式", selection: $inputMode) {
@@ -157,7 +157,7 @@ struct TerminalSettingsView: View {
                     Text("输入")
                 } footer: {
                     Text(inputMode == "field" ? "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。"
-                         : "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。")
+                         : TerminalHelpText.directFooter)
                 }
                 #if os(macOS)
                 Section {
@@ -170,8 +170,13 @@ struct TerminalSettingsView: View {
                 }
                 #endif
                 Section {
-                    ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { _, s in
+                    ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { i, s in
                         Text(s).font(Theme.Font.body.monospaced()).lineLimit(1)
+                        #if os(macOS)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(.rect)
+                            .contextMenu { shortcutMenu(i) }
+                        #endif
                     }
                     .onDelete { shortcuts.wrappedValue.remove(atOffsets: $0) }
                     .onMove { shortcuts.wrappedValue.move(fromOffsets: $0, toOffset: $1) }
@@ -186,7 +191,7 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("快捷命令")
                 } footer: {
-                    Text("在键栏的闪电里：单击输入，双击带回车执行。左上角「编辑」可以删除、排序。")
+                    Text(TerminalHelpText.shortcutsFooter)
                 }
                 Section {
                     Toggle(isOn: .constant(true)) { Text("ctrl") }.disabled(true)
@@ -197,8 +202,15 @@ struct TerminalSettingsView: View {
                 } header: {
                     Text("键栏")
                 } footer: {
-                    Text("ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。")
+                    Text(TerminalHelpText.keysFooter)
                 }
+                #if os(macOS)
+                Section("操作") {
+                    ForEach(TerminalHelpText.gestures) { Label($0.text, systemImage: $0.symbol) }
+                }
+                .font(Theme.Font.secondary)
+                .foregroundStyle(.secondary)
+                #else
                 Section("手势") {
                     Label("点终端：点在终端里（Claude 的「Jump to bottom」、顶上的提问）", systemImage: "hand.tap")
                     Label("上下拖：在终端里滚动（Claude 往回翻对话）", systemImage: "arrow.up.and.down")
@@ -212,6 +224,7 @@ struct TerminalSettingsView: View {
                 }
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
+                #endif
             }
             .themedPage()
             .navigationTitle("终端设置")
@@ -222,6 +235,19 @@ struct TerminalSettingsView: View {
             }
         }
     }
+
+    #if os(macOS)
+    /// A Mac list has no edit mode (`EditButton` is empty there): a command moves or goes from its context menu.
+    @ViewBuilder private func shortcutMenu(_ i: Int) -> some View {
+        let list = shortcuts.wrappedValue
+        Button { shortcuts.wrappedValue = MacShortcutOrder.move(list, at: i, by: -1) } label: { Label("上移", systemImage: Theme.Icon.moveUp) }
+            .disabled(i == 0)
+        Button { shortcuts.wrappedValue = MacShortcutOrder.move(list, at: i, by: 1) } label: { Label("下移", systemImage: Theme.Icon.moveDown) }
+            .disabled(i == list.count - 1)
+        Divider()
+        Button(role: .destructive) { shortcuts.wrappedValue.remove(at: i) } label: { Label("删除", systemImage: Theme.Icon.delete) }
+    }
+    #endif
 
     private func add() {
         let s = newShortcut.trimmingCharacters(in: .whitespaces)
@@ -362,6 +388,7 @@ enum TerminalSizeText {
     static let wrap = "长行按窗口宽度换行"
     static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成这个窗口的尺寸；离开终端时窗格回到电脑上的尺寸。"
     static let icon = Theme.Icon.laptop
+    static let takeOverIcon = Theme.Icon.takeOverWindow
     #else
     static let own = "手机尺寸"
     static let ownFooter = "打开终端时由手机接管：电脑上的窗格变成手机的行列数，Claude 按手机宽度排版；离开终端、App 进后台或断线后，窗格回到电脑上的尺寸。"
@@ -369,5 +396,48 @@ enum TerminalSizeText {
     static let wrap = "长行按手机宽度换行"
     static let takeOver = "比如 Ovis 或另一个 herdr 客户端。接管后它会断开，终端改成手机的尺寸；离开终端时窗格回到电脑上的尺寸。"
     static let icon = Theme.Icon.phone
+    static let takeOverIcon = Theme.Icon.handoff
+    #endif
+}
+
+/// The terminal's help wording: touches on iOS; on the Mac a click, the keyboard, the wheel and the trackpad.
+enum TerminalHelpText {
+    struct Gesture: Identifiable {
+        var text: String
+        var symbol: String
+        var id: String { text }
+    }
+
+    #if os(macOS)
+    static let loadOlder = "往上滚动加载更早的输出"
+    static let noWrap = "不换行 · 左右滚动"
+    static let noWrapValue = "关，左右滚动看"
+    static let textFooter = "⌘+ / ⌘− / ⌘0 或在触控板上捏合也能调字号。中文用系统字体，每个字占两格。"
+    static let directFooter = "点一下终端就能直接打字，每个键发到终端（输入法也能用），⌘ 组合键留给 App；键栏的键盘按钮把输入移到终端或移开，双击它是回车。点终端同时是点在终端里（比如 Claude 的「Jump to bottom」）。"
+    static let shortcutsFooter = "在键栏的闪电里：单击输入，双击带回车执行。右键一条可以上移、下移或删除。"
+    static let keysFooter = "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滚动。"
+    static let gestures: [Gesture] = [
+        Gesture(text: "点终端：开始打字，也是点在终端里（Claude 的「Jump to bottom」、顶上的提问）", symbol: Theme.Icon.click),
+        Gesture(text: "滚轮或触控板：在终端里滚动（Claude 往回翻对话）", symbol: Theme.Icon.upDown),
+        Gesture(text: "拖动选择，⌘C 拷贝；右键菜单里有拷贝、粘贴、全选", symbol: Theme.Icon.contextMenu),
+        Gesture(text: "⌘V：粘贴剪贴板（多行先问一下）", symbol: Theme.Icon.paste),
+        Gesture(text: "⌘+ / ⌘− / ⌘0、触控板捏合：调字号", symbol: Theme.Icon.enlarge),
+        Gesture(text: "触控板三指左右轻扫：切换同一空间里的 Agent（系统设置 › 触控板里「在页面之间轻扫」选三指时）", symbol: Theme.Icon.swipe),
+    ]
+    #else
+    static let loadOlder = "上滑加载更早的输出"
+    static let noWrap = "不换行 · 左右滑"
+    static let noWrapValue = "关，左右滑动看"
+    static let textFooter = "在终端上双指捏合也能调字号。中文用系统字体，每个字占两格。"
+    static let directFooter = "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。"
+    static let shortcutsFooter = "在键栏的闪电里：单击输入，双击带回车执行。左上角「编辑」可以删除、排序。"
+    static let keysFooter = "ctrl 一直在，键盘按钮和方向键在最右。放不下时键栏可以左右滑。"
+    #endif
+    #if os(macOS)
+
+    /// Everything above, for the wording check (MacTerminalWordingTests).
+    static var all: [String] {
+        [loadOlder, noWrap, noWrapValue, textFooter, directFooter, shortcutsFooter, keysFooter] + gestures.map(\.text)
+    }
     #endif
 }

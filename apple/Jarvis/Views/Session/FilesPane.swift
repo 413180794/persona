@@ -75,6 +75,11 @@ struct FilesPane: View {
             } label: {
                 Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
             }
+            #if os(macOS)
+            // A Mac menu draws as a pop-up button with its own arrow: the ⋯ was squeezed to two dots inside the circle.
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            #endif
             .themedButton()
             .clipShape(.circle)
         }

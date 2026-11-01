@@ -184,3 +184,57 @@ class TerminalTest {
         assertEquals("\u001B[200~a\rb\u001B[201~", TerminalKeys.text("a\nb"))
     }
 }
+
+/** The key bar's Ctrl / Alt / Shift, against the iOS app's TerminalModifiers tests. */
+class TerminalModifiersTest {
+    private fun m() = jarvis.android.terminal.TerminalModifiers()
+    private val Off = jarvis.android.terminal.ModifierState.Off
+    private val Once = jarvis.android.terminal.ModifierState.Once
+    private val Held = jarvis.android.terminal.ModifierState.Held
+    private val Locked = jarvis.android.terminal.ModifierState.Locked
+    private val Ctrl = jarvis.android.terminal.TerminalModifiers.Key.Ctrl
+    private val Alt = jarvis.android.terminal.TerminalModifiers.Key.Alt
+    private val Shift = jarvis.android.terminal.TerminalModifiers.Key.Shift
+
+    @Test fun tapArmsForOneKey() {
+        var x = m().tap(Ctrl, quick = false)
+        assertEquals(Once, x.ctrl); assertEquals("ctrl+c", x.apply("c"))
+        x = x.pressed()
+        assertEquals(Off, x.ctrl); assertFalse(x.active); assertEquals("c", x.apply("c"))
+    }
+
+    @Test fun doubleTapLocksUntilTappedAgain() {
+        var x = m().tap(Ctrl, false).tap(Ctrl, true)
+        assertEquals(Locked, x.ctrl)
+        x = x.pressed().pressed()
+        assertEquals(Locked, x.ctrl)
+        assertEquals(Off, x.tap(Ctrl, false).ctrl)
+    }
+
+    @Test fun slowSecondTapDisarms() {
+        assertEquals(Off, m().tap(Alt, false).tap(Alt, false).alt)
+    }
+
+    @Test fun holdingKeepsItDownUntilLetGo() {
+        var x = m().hold(Ctrl).pressed().pressed()
+        assertEquals(Held, x.ctrl)
+        assertEquals(Off, x.release(Ctrl).ctrl)
+        assertEquals(Once, m().hold(Shift).release(Shift).shift) // let go without pressing anything: armed
+    }
+
+    @Test fun combinesInHerdrOrder() {
+        val x = m().tap(Shift, false).tap(Ctrl, false).tap(Alt, false)
+        assertEquals("ctrl+alt+shift+x", x.apply("x"))
+        assertEquals("esc", x.apply("esc"))
+    }
+
+    @Test fun typedCharacters() {
+        var x = m().copy(ctrl = Once)
+        assertEquals("ctrl+c" to null, x.typed('C'))
+        assertEquals("ctrl+space" to null, x.typed(' '))
+        assertEquals("ctrl+[" to null, x.typed('['))
+        assertEquals(null to "中", x.typed('中'))
+        x = m().copy(shift = Once)
+        assertEquals(null to "A", x.typed('a'))
+    }
+}

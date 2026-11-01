@@ -458,7 +458,7 @@ struct TerminalPanel: View {
             } else if !feed.hasOlder {
                 Text("— 已到最前面 —").lineLimit(1)
             } else {
-                Text("上滑加载更早的输出").lineLimit(1).minimumScaleFactor(0.8)
+                Text(TerminalHelpText.loadOlder).lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .font(Theme.Font.labelMedium)
@@ -487,7 +487,7 @@ struct TerminalPanel: View {
                 Haptics.tap()
                 feed.takeOver(model)
             } label: {
-                Label("只看 · 接管", systemImage: Theme.Icon.handoff)
+                Label("只看 · 接管", systemImage: TerminalSizeText.takeOverIcon)
                     .font(Theme.Font.labelStrong)
                     .lineLimit(1)
                     .fixedSize()
@@ -520,7 +520,7 @@ struct TerminalPanel: View {
             Haptics.tap()
             wrap.toggle()
         } label: {
-            Label(wrap ? "换行" : "不换行 · 左右滑", systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
+            Label(wrap ? "换行" : TerminalHelpText.noWrap, systemImage: wrap ? "arrow.turn.down.left" : "arrow.left.and.right")
                 .font(Theme.Font.labelStrong)
                 .lineLimit(1)
                 .fixedSize()
@@ -531,7 +531,7 @@ struct TerminalPanel: View {
         .buttonStyle(.plain)
         .foregroundStyle(Color(hex: side.foreground).opacity(0.75))
         .accessibilityLabel("长行换行")
-        .accessibilityValue(wrap ? "开" : "关，左右滑动看")
+        .accessibilityValue(wrap ? "开" : TerminalHelpText.noWrapValue)
     }
 
     // MARK: Actions

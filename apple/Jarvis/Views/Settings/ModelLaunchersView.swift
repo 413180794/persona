@@ -94,6 +94,9 @@ struct ModelLaunchersView: View {
         .sheet(isPresented: $adding) {
             LauncherEditor(existing: nil) { await load() }
         }
+        #if os(macOS) && DEBUG
+        .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = true } } // `-macLauncherEditor YES`: 新增启动器
+        #endif
         .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { l in
             Button("删除", role: .destructive) { Task { await delete(l) } }
@@ -466,6 +469,9 @@ struct LauncherEditor: View {
                 args = (e.args ?? []).joined(separator: " ")
             }
         }
+        #if os(macOS)
+        .macSheet()
+        #endif
     }
 
     private func save() async {
