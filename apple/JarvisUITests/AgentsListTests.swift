@@ -247,6 +247,8 @@ final class AgentsListTests: XCTestCase {
         wait("the hub hears of 35 seen (\(seen().count))") { seen().count == 35 }
         let h = header("platform")
         wait("no finished-unread left on the header (\(h.label))") { !h.label.contains("完成未看") }
+        // The filters are the first list row now; return to them after inspecting a lower space.
+        for _ in 0..<4 where !filter("unread").exists { app.collectionViews.firstMatch.swipeDown(velocity: .fast) }
         XCTAssertEqual(filter("unread").label, "未读 12")
         shot("agents-space-read")
     }
@@ -281,25 +283,40 @@ final class AgentsListTests: XCTestCase {
         shot("agents-unread-empty")
     }
 
-    // MARK: The filter bar stays under the bar
+    // MARK: The first row and the search drawer
 
-    /// How far the quick filters sit below the search field. The field must be there, open, in the navigation bar,
-    /// and the bar drawn right under it: in the TestFlight 35 / 38 screenshot the field was gone and the bar sat far
-    /// lower, blurred list between.
-    private func gapAboveFilters(_ state: String) -> CGFloat {
-        let bar = filter("all").frame
+    /// At rest the first row hugs the navigation bar (or its revealed search field). Check both layout and pixels:
+    /// UIKit once moved the drawn chips down by the whole top inset while accessibility still reported their old frame.
+    private func gapAboveFilters(_ state: String, searchShown: Bool = false) -> CGFloat {
+        let bar = see(filter("all"), "the first-row quick filters").frame
         let nav = app.navigationBars.firstMatch.frame
         let search = app.searchFields.firstMatch
+        let visible = search.exists && search.isHittable && search.frame.height > 30
+        XCTAssertEqual(visible, searchShown, "\(state): unexpected search drawer visibility")
+        if searchShown && search.exists {
+            XCTAssertGreaterThanOrEqual(search.frame.minY, nav.minY - 1, "\(state): search starts inside the navigation bar")
+            XCTAssertLessThanOrEqual(search.frame.maxY, nav.maxY + 1, "\(state): search ends inside the navigation bar")
+        }
+        let edge = max(nav.maxY, searchShown && search.exists ? search.frame.maxY : nav.maxY)
         print("filters \(state): bar \(bar) nav \(nav) search \(search.exists ? search.frame : .zero)")
-        XCTAssertTrue(search.exists, "\(state): no search field")
-        guard search.exists else { return .infinity }
-        let field = search.frame
-        XCTAssertGreaterThan(field.height, 30, "\(state): the search field is folded")
-        XCTAssertTrue(field.minY >= nav.minY && field.maxY <= nav.maxY + 1, "\(state): the search field is not in the navigation bar")
-        XCTAssertGreaterThanOrEqual(bar.minY, field.maxY, "\(state): the bar is under the search field")
+        XCTAssertGreaterThanOrEqual(bar.minY, edge - 1, "\(state): the first row is under the bar")
         XCTAssertTrue(drawn(bar), "\(state): the bar is not drawn where it is laid out")
-        print("filters \(state): gap \(bar.minY - field.maxY)")
-        return bar.minY - field.maxY
+        return bar.minY - edge
+    }
+
+    /// The filters are a list row, so a scroll takes them out of view, with no pinned copy left over the list.
+    private func filtersScrolledAway(_ state: String) {
+        let chip = filter("all")
+        XCTAssertTrue(!chip.exists || chip.frame.maxY <= app.navigationBars.firstMatch.frame.maxY,
+                      "\(state): the filters stayed pinned instead of scrolling with the list")
+    }
+
+    @MainActor private func returnToTop() {
+        for _ in 0..<14 {
+            if filter("all").exists && filter("all").isHittable { break }
+            app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        }
+        app.revealAgentsSearch()
     }
 
     /// Whether the selected chip (全部: an accent-tinted capsule) is on screen at `frame`. Element frames come from
@@ -310,6 +327,7 @@ final class AgentsListTests: XCTestCase {
         guard let cg = image.cgImage else { return false }
         let scale = CGFloat(cg.width) / app.windows.firstMatch.frame.width
         let r = frame.insetBy(dx: 4, dy: 4)
+        guard r.width > 0, r.height > 0, app.windows.firstMatch.frame.contains(frame) else { return false }
         let w = Int(r.width * scale), h = Int(r.height * scale)
         var px = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
@@ -335,80 +353,81 @@ final class AgentsListTests: XCTestCase {
         sleep(1)
     }
 
-    /// The bar hugs the search field in every state: scrolling (TestFlight 35 folded the field away and left the bar
-    /// where it was), a chat and back, the app switcher, another tab, searching.
+    /// The first row scrolls with the list. At every rest position at the top there is no blurred gap; a pull
+    /// reveals search, which starts folded. Keep the chat, refresh, foreground, tab and search transitions covered.
     @MainActor func testFilterBarHugsTheTop() throws {
         launch()
-        let limit: CGFloat = 24 // 16 pt as laid out
-        XCTAssertLessThan(gapAboveFilters("top"), limit, "before scrolling")
+        sleep(1)
+        let limit: CGFloat = 24
         shot("filters-top")
-        // And it does not move with the list: the search field above it stays open (nothing folds away to leave a gap).
-        let y = filter("all").frame.minY
-        app.swipeUp(velocity: .slow)
-        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "scrolled")
-        XCTAssertLessThan(gapAboveFilters("scrolled"), limit, "after scrolling a screen")
+        XCTAssertLessThan(gapAboveFilters("open"), limit, "before scrolling, with search folded")
+        app.revealAgentsSearch()
+        XCTAssertLessThan(gapAboveFilters("pulled", searchShown: true), limit)
+        shot("filters-pulled")
+
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        filtersScrolledAway("scrolled")
         shot("filters-scrolled")
-        // While the list still moves.
-        app.swipeUp(velocity: .fast)
-        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "moving")
-        XCTAssertLessThan(gapAboveFilters("moving"), limit, "while scrolling")
-        for _ in 0..<12 { app.swipeUp(velocity: .fast) }
-        sleep(1)
-        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "bottom")
-        XCTAssertLessThan(gapAboveFilters("bottom"), limit, "at the bottom")
+        app.collectionViews.firstMatch.swipeUp(velocity: .fast)
+        filtersScrolledAway("moving")
+        for _ in 0..<12 { app.collectionViews.firstMatch.swipeUp(velocity: .fast) }
+        filtersScrolledAway("bottom")
         shot("filters-bottom")
-        for _ in 0..<14 { app.swipeDown(velocity: .fast) }
+        returnToTop()
+        XCTAssertLessThan(gapAboveFilters("back", searchShown: true), limit)
+
+        // Pull to refresh, then let the list settle before looking for the old blurred gap.
+        app.collectionViews.firstMatch.swipeDown(velocity: .slow)
         sleep(1)
-        XCTAssertLessThan(gapAboveFilters("back"), limit, "back at the top")
-        // Pull to refresh.
-        let w = app.windows.firstMatch
-        w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
-            .press(forDuration: 0.05, thenDragTo: w.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
-        XCTAssertEqual(filter("all").frame.minY, y, accuracy: 1, "refreshed")
-        XCTAssertLessThan(gapAboveFilters("refreshed"), limit, "after pulling to refresh")
+        XCTAssertLessThan(gapAboveFilters("refreshed", searchShown: true), limit)
         shot("filters-refreshed")
-        // A chat and back.
         row(0).tap()
         backToList()
-        XCTAssertLessThan(gapAboveFilters("chat-back"), limit, "back from a chat")
-        app.swipeUp(velocity: .slow)
-        XCTAssertLessThan(gapAboveFilters("chat-back-scrolled"), limit, "back from a chat, scrolled")
-        // Away and back (the app switcher's snapshot).
+        XCTAssertLessThan(gapAboveFilters("chat-back", searchShown: true), limit)
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        filtersScrolledAway("chat-back-scrolled")
+        returnToTop()
+        XCTAssertLessThan(gapAboveFilters("chat-back-top", searchShown: true), limit)
+
         XCUIDevice.shared.press(.home)
         sleep(2)
         app.activate()
         see(filter("all"), "the list after coming back")
-        XCTAssertLessThan(gapAboveFilters("foreground"), limit, "back in the foreground")
-        // Another tab and back.
-        app.tabBars.buttons["Jarvis"].tap()
+        XCTAssertLessThan(gapAboveFilters("foreground", searchShown: true), limit)
+        app.buttons["Jarvis"].firstMatch.tap()
         sleep(1)
-        app.tabBars.buttons["Agents"].tap()
+        app.buttons["Agents"].firstMatch.tap()
         see(filter("all"), "the list after switching tabs")
-        XCTAssertLessThan(gapAboveFilters("tabs"), limit, "after switching tabs")
+        XCTAssertLessThan(gapAboveFilters("tabs"), limit, "the reopened tab starts with folded search")
         shot("filters-after-tabs")
-        // Searching.
-        let search = app.searchFields.firstMatch
-        search.tap()
+
+        let search = app.revealAgentsSearch()
+        search.tapCenter()
         search.typeText("platform")
         sleep(1)
-        XCTAssertLessThan(gapAboveFilters("searching"), limit, "while searching")
+        XCTAssertLessThan(gapAboveFilters("searching", searchShown: true), limit)
         shot("filters-searching")
-        app.swipeUp(velocity: .slow)
-        XCTAssertLessThan(gapAboveFilters("searching-scrolled"), limit, "searching, scrolled")
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        filtersScrolledAway("searching-scrolled")
         shot("filters-searching-scrolled")
     }
 
-    /// Opening the app on the chat left open: the list is first laid out under it. Back at the list, the search field
-    /// and the bar are where they always are.
+    /// The initial layout can happen behind a restored chat. Returning must still show a folded search and the
+    /// selected chip drawn at its frame, with no duplicate top inset; pulling then reveals the search drawer.
     @MainActor func testFilterBarHugsTheTopBehindARestoredChat() throws {
         let key = try XCTUnwrap(firstAgentKey())
         launch(chat: key)
         see(app.buttons["更多"].firstMatch, "the restored chat", timeout: 15)
         backToList()
-        XCTAssertLessThan(gapAboveFilters("restored-back"), 24, "back from the restored chat")
         shot("filters-restored-back")
-        app.swipeUp(velocity: .slow)
-        XCTAssertLessThan(gapAboveFilters("restored-back-scrolled"), 24, "back from the restored chat, scrolled")
+        XCTAssertLessThan(gapAboveFilters("restored-back"), 24)
+        app.revealAgentsSearch()
+        XCTAssertLessThan(gapAboveFilters("restored-pulled", searchShown: true), 24)
+        shot("filters-restored-pulled")
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        filtersScrolledAway("restored-back-scrolled")
+        returnToTop()
+        XCTAssertLessThan(gapAboveFilters("restored-top", searchShown: true), 24)
     }
 
     private func firstAgentKey() -> String? {

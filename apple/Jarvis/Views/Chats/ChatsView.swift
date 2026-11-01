@@ -469,6 +469,9 @@ private struct AgentsList: View {
             }
         }
         .listStyle(.insetGrouped)
+        // Keep the phone's first-row controls close to the bar: active search otherwise adds the grouped list's
+        // default first-section margin. The split's sidebar keeps its native content margins.
+        .contentMargins(.top, widthClass == .regular ? nil : Theme.Space.xs, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
         .environment(\.compactList, compact)
         .listSectionSpacing(compact ? .compact : .default)
@@ -1347,6 +1350,7 @@ private struct TopBar<Bar: View>: ViewModifier {
                 if abs(list.contentOffset.y - top) < 1 {
                     // x kept as it is: the list's side margins live in its content offset.
                     list.setContentOffset(CGPoint(x: list.contentOffset.x, y: top + bar), animated: false)
+                    settleInitialFold(list, search: sc, initialInset: -top, requestedOffset: top + bar, barHeight: bar)
                 }
                 folded = true
                 return
@@ -1356,6 +1360,30 @@ private struct TopBar<Bar: View>: ViewModifier {
             }
         }
         DispatchQueue.main.async(execute: attempt)
+    }
+
+    /// UIKit shrinks the navigation inset after the drawer folds, and can add that same delta to the offset we
+    /// just set (-168 -> -116 -> -64 on iOS 27). That scrolls the first row under the navigation buttons. Once the
+    /// inset settles, align the first row with its new top, only if UIKit made that exact extra adjustment and no
+    /// user scroll or search has taken over. Other UIKit versions that keep the requested offset need no correction.
+    private func settleInitialFold(_ list: UIScrollView, search: UISearchController, initialInset: CGFloat,
+                                   requestedOffset: CGFloat, barHeight: CGFloat, attempts: Int = 20) {
+        guard !search.isActive, !list.isTracking, !list.isDragging, !list.isDecelerating else { return }
+        let inset = list.adjustedContentInset.top
+        if initialInset - inset >= barHeight - 1 {
+            let adjustedOffset = requestedOffset + initialInset - inset
+            if abs(list.contentOffset.y - adjustedOffset) < 1 {
+                list.setContentOffset(CGPoint(x: list.contentOffset.x, y: -inset), animated: false)
+                return
+            }
+        }
+        // Inset and offset changes can arrive on separate layout turns; keep the same bounded, exact-match check.
+        if attempts > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
+                self.settleInitialFold(list, search: search, initialInset: initialInset,
+                                       requestedOffset: requestedOffset, barHeight: barHeight, attempts: attempts - 1)
+            }
+        }
     }
 
     /// The list's scroll view: the largest collection view in the page the probe is in (List is one).

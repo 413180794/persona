@@ -81,13 +81,13 @@ final class DemoModeTests: XCTestCase {
     }
 
     @MainActor private func tab(_ name: String) {
-        app.tabBars.buttons[name].firstMatch.tap()
+        app.buttons[name].firstMatch.tap()
         sleep(1)
     }
 
     /// An agent's row in the Agents list (scrolling to it).
     @MainActor private func openAgent(_ title: String) {
-        let list = app.buttons["agents.filter.all"]
+        let list = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch
         // Back on the list already, it can take a moment to be hittable: wait for that first. A back() on the list
         // itself found no 返回 and tapped the first bar button, 新建会话, and the search went on inside its sheet.
         func onList() -> Bool { list.exists && list.isHittable }
@@ -97,11 +97,20 @@ final class DemoModeTests: XCTestCase {
             if !onList() { back() } // a back that did not take
         }
         let row = text(title)
-        // Clear of the filter bar and the tab bar (a row under the bar is "hittable" but the tap lands on a filter).
-        func clear() -> Bool { row.exists && row.frame.minY > 260 && row.frame.maxY < app.frame.maxY - 140 }
+        // Stay inside the visible list. The filters scroll with it; their former pinned height is not a top inset.
+        func top() -> CGFloat {
+            let nav = app.navigationBars.firstMatch
+            let filters = app.buttons["agents.filter.all"]
+            return max(nav.exists ? nav.frame.maxY : 0, filters.exists && filters.isHittable ? filters.frame.maxY : 0)
+        }
+        func clear() -> Bool {
+            let tabs = app.tabBars.firstMatch
+            let bottom = tabs.exists ? tabs.frame.minY : app.frame.maxY
+            return row.exists && row.frame.minY > top() + 8 && row.frame.maxY < bottom - 8
+        }
         toTop()
         for _ in 0..<10 where !clear() { // a third of a screen at a time: a swipe would fling past it
-            let up = !(row.exists && row.frame.minY <= 260)
+            let up = !(row.exists && row.frame.minY <= top() + 8)
             let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.7 : 0.4))
             from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.4 : 0.7)))
             sleep(1)

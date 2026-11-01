@@ -44,7 +44,7 @@ final class ShellSearchTests: XCTestCase {
         app.launchJarvis()
         // Agents (a stored tab from another test, 设置, would open its sheet over the shell).
         see(app.buttons["agents-new"].firstMatch, "新建会话 on Agents", timeout: 15)
-        let field = see(app.searchFields.firstMatch, "the agents' search")
+        let field = app.revealAgentsSearch()
         assertClear(of: field, "before searching")
         attachScreen("before searching")
 
