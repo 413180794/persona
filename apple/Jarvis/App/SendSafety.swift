@@ -21,6 +21,10 @@ extension AppModel {
     /// no answer at all (no network, the hub out of reach, a timeout): then it waits and goes again by itself, which
     /// the same id makes safe too.
     func sendPending(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) async -> SendOutcome {
+        // Restored outbox entries wait for metadata; opaque IDs do not identify a writable source.
+        guard let session = session(key) else { return .waiting }
+        guard session.canSend else { return .failed }
+        guard msg.mayHaveArrived != true else { return .failed }
         guard let api else { return .failed }
         do {
             try await api.send(key, text: msg.text, images: msg.images, launcher: assistantLaunchers[key],

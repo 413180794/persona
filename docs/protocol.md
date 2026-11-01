@@ -22,6 +22,18 @@
   立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
+## Codex 来源与能力
+
+外部 Codex 会话继续使用 `(machine_id, session_id)`。固定 legacy home 保持既有 raw thread ID，其他 canonical home 的 thread 使用 `c0de-` 加确定性摘要的 opaque ID；PID、endpoint 或连接代际变化不换会话 ID。`source_thread_id` 是原 thread ID，不可将 opaque ID 放进 `claude --resume`。
+
+Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
+
+`POST /api/v1/sessions/{mid}/{sid}/attach`：用户要求实时接入，node 只对原实例仍 loaded、owner 唯一的 thread 请求 resume，且不带运行配置覆盖。发现/普通读历史不调用 resume。加入许可按 thread/稳定实例记在 settings；断线重验 owner，不自动冷恢复或换实例。loaded/list 与 resume 不原子，不能承诺中间没有 unload 竞态。
+
+外部发送同样用 `/messages`，必须带 `client_msg_id` 并成功登记 Postgres 去重记录；不能在存储不可用时无保护地发出。未知发送结果（包括可能发生在 admission 后的通用 server error）返回 `delivered: unknown`，不能自动重发或将 steer 失败改成 start。发送记录不按一天过期，避免恢复很久以前的 outbox 后重复执行；只有明确未发送的记录可忘记。
+
+审批 ID 含 machine/instance/connection generation/thread/原始带类型 request ID。手机明确回答才给原连接回复；未知请求、取消和断线不自动发 error/decline。`serverRequest/resolved` 只将卡片记 dismissed 并撤下，不生成批准。外部 interrupt 不清理所有后台终端；父管子 thread 的直接驱动尚未开放。
+
 ## 数据类型
 
 ```jsonc

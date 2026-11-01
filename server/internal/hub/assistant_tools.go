@@ -148,6 +148,9 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		if s.Assistant {
 			return "", fmt.Errorf("that is an assistant conversation, not a coding agent")
 		}
+		if s.SourceKind != "" && (s.Capabilities == nil || !s.Capabilities.Send) {
+			return "", fmt.Errorf("这个 Agent 仅支持查看：%s", s.ReadOnlyReason)
+		}
 		if strings.TrimSpace(a.Text) == "" {
 			return "", fmt.Errorf("text is empty")
 		}
@@ -259,15 +262,23 @@ func (h *Hub) findAgent(machine, id string) (*Machine, proto.Session, error) {
 	if len(id) < 6 {
 		return nil, proto.Session{}, fmt.Errorf("session_id is required (at least its first 8 characters)")
 	}
+	var found *Machine
+	var session proto.Session
 	for _, m := range h.machines {
 		if machine != "" && h.machineByName(machine) != m {
 			continue
 		}
 		for _, s := range h.decorated(m) {
 			if s.SessionID == id || strings.HasPrefix(s.SessionID, id) {
-				return m, s, nil
+				if found != nil {
+					return nil, proto.Session{}, fmt.Errorf("session_id %s is ambiguous; use the full id and machine", id)
+				}
+				found, session = m, s
 			}
 		}
+	}
+	if found != nil {
+		return found, session, nil
 	}
 	return nil, proto.Session{}, fmt.Errorf("no agent %s (use agents_list)", id)
 }
@@ -366,6 +377,12 @@ func (h *Hub) describeAgents(state, machine, query string) string {
 	for _, r := range rows {
 		s := r.s
 		fmt.Fprintf(&b, "- [%s] %s · machine=%s session_id=%s · %s", stateNames[s.State], agentLabel(s), r.m.cfg.ID, s.SessionID, s.Cwd)
+		if s.SourceKind != "" {
+			fmt.Fprintf(&b, " · source=%s instance=%s", s.SourceKind, s.SourceInstanceID)
+			if s.Capabilities == nil || !s.Capabilities.Send {
+				fmt.Fprintf(&b, " · 仅查看：%s", s.ReadOnlyReason)
+			}
+		}
 		if !s.UpdatedAt.IsZero() {
 			fmt.Fprintf(&b, " · %s", ago(s.UpdatedAt))
 		}

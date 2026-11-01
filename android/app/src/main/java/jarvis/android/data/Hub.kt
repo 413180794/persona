@@ -54,8 +54,12 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private val _sessions = MutableStateFlow<Map<String, List<Session>>>(emptyMap())
     val sessions: StateFlow<Map<String, List<Session>>> = _sessions.asStateFlow()
 
+    init { api.sessionLookup = ::session }
+
     private val _interactions = MutableStateFlow<List<Interaction>>(emptyList())
     val interactions: StateFlow<List<Interaction>> = _interactions.asStateFlow()
+
+    init { api.interactionLookup = { id -> _interactions.value.firstOrNull { it.id == id } } }
 
     /** The inbox list; refreshed when the hub says it changed (WebSocket `inbox`), on (re)connect and on demand. */
     private val _inbox = MutableStateFlow<List<InboxItem>>(emptyList())
@@ -106,6 +110,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
     private val terminalHandlers = java.util.concurrent.ConcurrentHashMap<SessionKey, (TerminalEvent) -> Unit>()
 
     fun terminalSubscribe(k: SessionKey, epoch: String?, afterSeq: Int, control: Pair<Int, Int>?, takeover: Boolean, handler: (TerminalEvent) -> Unit) {
+        if (session(k)?.canTerminal != true) return
         terminalHandlers[k] = handler
         send(buildJsonObject {
             put("type", "terminal_subscribe"); put("machine_id", k.machineId); put("session_id", k.sessionId)
@@ -117,6 +122,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     /** Bytes typed into a terminal the phone drives, a new size, the wheel (lines, > 0 back) or a click at [col, row]. */
     fun terminalInput(k: SessionKey, text: String = "", control: Pair<Int, Int>? = null, scroll: Int? = null, at: Pair<Int, Int>? = null, click: Pair<Int, Int>? = null) {
+        if (session(k)?.canTerminal != true) return
         send(buildJsonObject {
             put("type", "terminal_input"); put("machine_id", k.machineId); put("session_id", k.sessionId)
             if (text.isNotEmpty()) put("text", text)
@@ -453,6 +459,7 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     /** Resolves and drops the card at once (the hub's interaction_resolved follows). */
     suspend fun resolve(ix: Interaction, r: Resolution) {
+        if (session(ix.sessionKey)?.canApprove != true) throw HubException(403, "此会话不允许审批", "session_read_only")
         api.resolve(ix.id, r)
         _interactions.update { list -> list.filterNot { it.id == ix.id } }
     }

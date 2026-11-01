@@ -44,11 +44,14 @@ const codexToolTimeout = 86400
 const codexStartTimeout = 90 * time.Second
 
 type codexConn struct {
-	n      *Node
-	p      *assistantProc
-	key    string // what the jarvis MCP server reports as its session until the thread exists (resolveAssistantKey)
-	memDir string // the assistant's memory, shared with Claude (codexMemoryPrompt)
-	nextID int64
+	n            *Node
+	p            *assistantProc
+	key          string // what the jarvis MCP server reports as its session until the thread exists (resolveAssistantKey)
+	memDir       string // the assistant's memory, shared with Claude (codexMemoryPrompt)
+	nextID       int64
+	writeMessage func([]byte) error
+	ended        <-chan struct{}
+	onMessage    func(codexMessage)
 
 	mu       sync.Mutex
 	pending  map[int64]chan codexReply
@@ -86,6 +89,9 @@ func (c *codexConn) send(v any) error {
 	if err != nil {
 		return err
 	}
+	if c.writeMessage != nil {
+		return c.writeMessage(b)
+	}
 	return c.p.write(b)
 }
 
@@ -109,6 +115,10 @@ func (c *codexConn) call(ctx context.Context, method string, params any, out any
 	if err := c.send(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
 		return err
 	}
+	ended := c.ended
+	if ended == nil {
+		ended = c.p.exited
+	}
 	select {
 	case r := <-ch:
 		if r.Err != nil {
@@ -118,7 +128,7 @@ func (c *codexConn) call(ctx context.Context, method string, params any, out any
 			return json.Unmarshal(r.Result, out)
 		}
 		return nil
-	case <-c.p.exited:
+	case <-ended:
 		return errors.New("codex app-server exited")
 	case <-ctx.Done():
 		return ctx.Err()
@@ -470,24 +480,36 @@ func (c *codexConn) read(r io.Reader) {
 		if json.Unmarshal(line, &m) != nil {
 			continue
 		}
-		switch {
-		case m.Method == "" && len(m.ID) > 0: // a response
-			var id int64
-			if json.Unmarshal(m.ID, &id) != nil {
-				continue
-			}
-			c.mu.Lock()
-			ch := c.pending[id]
-			c.mu.Unlock()
-			if ch != nil {
-				ch <- codexReply{Result: m.Result, Err: m.Error}
-			}
-		case m.Method != "" && len(m.ID) > 0: // a request
-			go c.serve(m)
-		case m.Method != "":
-			c.notification(m.Method, m.Params)
-		}
+		c.receive(m)
 	} // the exit goroutine in spawnCodex cleans up
+}
+
+func (c *codexConn) receive(m codexMessage) {
+	if m.Method == "" && len(m.ID) > 0 {
+		var id int64
+		if json.Unmarshal(m.ID, &id) != nil {
+			return
+		}
+		c.mu.Lock()
+		ch := c.pending[id]
+		c.mu.Unlock()
+		if ch != nil {
+			select {
+			case ch <- codexReply{Result: m.Result, Err: m.Error}:
+			default:
+			}
+		}
+		return
+	}
+	if c.onMessage != nil {
+		c.onMessage(m)
+		return
+	}
+	if m.Method != "" && len(m.ID) > 0 {
+		go c.serve(m)
+	} else if m.Method != "" {
+		c.notification(m.Method, m.Params)
+	}
 }
 
 func (c *codexConn) notification(method string, params json.RawMessage) {

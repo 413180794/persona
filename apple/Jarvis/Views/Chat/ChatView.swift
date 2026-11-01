@@ -178,8 +178,8 @@ struct ChatView: View {
             guard let r, r.key == key, r.window == nil || r.window == macWindow else { return }
             switch r.kind {
             case .inspector: showInfo.toggle()
-            case .rename: renaming = session
-            case .close: if session?.status.isLive == true { closing = session }
+            case .rename: if session?.canTerminal == true { renaming = session }
+            case .close: if session?.status.isLive == true && session?.canTerminal == true { closing = session }
             case .clear: break // the composer's
             }
         }
@@ -211,7 +211,9 @@ struct ChatView: View {
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
         .hidesTabBarWhenShown(style == .dev && split == nil)
-        .fullScreenCover(isPresented: $showTerminal) { TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear) }
+        .fullScreenCover(isPresented: Binding(get: { showTerminal && session?.canTerminal == true }, set: { showTerminal = $0 })) {
+            TerminalCover(key: key, switchTo: switchTo).presentationBackground(.clear)
+        }
         .renameSessionAlert($renaming)
         .confirmClose($closing)
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
@@ -582,7 +584,7 @@ struct ChatView: View {
             .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id + "-h", $0) }
         case .work(let id, let items, let live, let start, let end):
             WorkLine(items: items, live: live, start: start, end: end, open: isOpen(id),
-                     openTerminal: live && style == .dev ? { showTerminal = true } : nil) {
+                     openTerminal: live && style == .dev && session?.canTerminal == true ? { showTerminal = true } : nil) {
                 toggleWork(id, fromHeader: true)
             }
             .equatable()
@@ -815,9 +817,11 @@ struct ChatView: View {
         switch pane {
         case .chat: chatPane.transition(.move(edge: .leading))
         case .terminal:
-            TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
-                .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
-                .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
+            if session?.canTerminal == true {
+                TerminalPanel(key: key, switchTo: switchTo, onKeyboard: terminalKeyboard)
+                    .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
+                    .padding(.top, style == .dev ? chrome.height - min(chrome.collapse, chrome.maxCollapse) : 0)
+            } else { chatPane }
         // Files and Git come in from the right (a swipe to the left), the chat back from the left.
         case .git: GitPane(machineID: key.machineID, cwd: session?.cwd ?? "", status: $git).padding(.top, headerRoom)
             .transition(.move(edge: .trailing))
@@ -839,7 +843,8 @@ struct ChatView: View {
 
     /// Git only for repositories, files only when we know the directory; the assistant has neither.
     private var panes: [SessionPane] {
-        var p: [SessionPane] = [.chat, .terminal]
+        var p: [SessionPane] = [.chat]
+        if session?.canTerminal == true { p.append(.terminal) }
         if git?.isRepo == true { p.append(.git) }
         if !(session?.cwd ?? "").isEmpty { p.append(.files) }
         return p
@@ -980,7 +985,9 @@ struct ChatView: View {
 
     private var mainFooter: some View {
             VStack(spacing: Theme.Space.m) {
-                ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }
+                ForEach(model.interactions(for: key)) { ix in
+                    InteractionPanel(interaction: ix).disabled(session?.canApprove != true)
+                }
                 #if DEBUG
                 if UserDefaults.standard.bool(forKey: "showSampleQuestion"), let ix = Interaction.sampleQuestion(key) {
                     InteractionPanel(interaction: ix) // `-showSampleQuestion YES`: the question UI, for screenshots
@@ -1001,8 +1008,11 @@ struct ChatView: View {
                 }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
                 // In the shell the modes are in the composer's gauge menu (ShellComposerBar).
-                if viewing == nil, !shellChat, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
+                if viewing == nil, !shellChat, session?.canSend == true, session?.assistant == true || (session?.isCodex != true && session?.isTraex != true) {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
+                }
+                if let s = session, !s.canSend, let reason = s.sourceSubtitle {
+                    Text(reason).font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Composer(key: key, status: status, placeholder: style == .assistant ? "问 \(model.persona.name)…" : "给 \(session?.agentLabel ?? "Claude") 发消息",
                          onCleared: { switchTo($0) })
@@ -1345,7 +1355,9 @@ struct ChatView: View {
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
     @ViewBuilder private var moreMenuItems: some View {
             if style == .dev {
-                Button { showTerminal = true } label: { Label("终端", systemImage: Theme.Icon.terminal) }
+                if session?.canTerminal == true {
+                    Button { showTerminal = true } label: { Label("终端", systemImage: Theme.Icon.terminal).lineLimit(1) }
+                }
                 if pane != .chat {
                     Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
                 }
@@ -1355,10 +1367,13 @@ struct ChatView: View {
                     }
                 }
             }
-            if status.isActive {
+            if session?.canAttach == true {
+                Button { Task { await model.attach(key) } } label: { Label("实时接入", systemImage: Theme.Icon.link).lineLimit(1) }
+            }
+            if status.isActive, session?.canInterrupt == true {
                 Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
             }
-            if style == .dev, let s = session {
+            if style == .dev, let s = session, s.canTerminal {
                 Button { renaming = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
             }
             if style == .dev {
@@ -1368,14 +1383,16 @@ struct ChatView: View {
             }
             Divider()
             if let s = session {
-                Button { UIPasteboard.general.string = "claude --resume \(s.sessionID)" } label: {
-                    Label("拷贝恢复命令", systemImage: Theme.Icon.copy)
+                if s.canTerminal {
+                    Button { UIPasteboard.general.string = "\(s.resumeCommand) \(s.sourceThreadID ?? s.sessionID)" } label: {
+                        Label("拷贝恢复命令", systemImage: Theme.Icon.copy).lineLimit(1)
+                    }
                 }
                 Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
                 if let space = s.spaceKey, let openSpace {
                     Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: Theme.Icon.space) }
                 }
-                if s.status.isLive {
+                if s.status.isLive && s.canTerminal {
                     Button(role: .destructive) { closing = s } label: {
                         Label("关闭 Agent…", systemImage: Theme.Icon.end)
                     }
@@ -1443,7 +1460,7 @@ struct ChatView: View {
     /// Quiet states (已看, 未运行) say nothing in words (2026-10-31 user request): the dot carries them, the line is where
     /// it runs. 需要你 / 工作中 N 分 / 完成未看 still lead the line.
     private func subtitleLine(_ s: Session, _ words: String, _ rest: [String]) -> some View {
-        let parts = rest.filter { !$0.isEmpty }
+        let parts = ([s.sourceSubtitle].compactMap { $0 } + rest).filter { !$0.isEmpty }
         if Self.quiet(s.state) {
             return Text(parts.isEmpty ? words : parts.joined(separator: " · ")).foregroundStyle(.secondary).lineLimit(1)
         }
@@ -1556,7 +1573,9 @@ struct ChatView: View {
             if pane != .chat {
                 Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
             }
-            Button { Haptics.tap(); showTerminal = true } label: { Label("终端", systemImage: SessionPane.terminal.symbol) }
+            if session?.canTerminal == true {
+                Button { Haptics.tap(); showTerminal = true } label: { Label("终端", systemImage: SessionPane.terminal.symbol).lineLimit(1) }
+            }
             ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
                 Button { Haptics.tap(); withAnimation(Theme.Motion.standard) { pane = p } } label: {
                     Label(paneBadges[p].map { "\(p.title)（\($0)）" } ?? p.title, systemImage: p.symbol)
@@ -1946,7 +1965,7 @@ struct ChatView: View {
         }
         let machine = model.machine(s.machineID)?.name ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-        return [machine, place.isEmpty ? nil : place, s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
+        return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
@@ -2088,17 +2107,19 @@ struct Composer: View, Equatable {
     /// /clear only for Claude in a herdr pane (the headless assistant and Codex / TRAEX have no such command here).
     private var canClear: Bool {
         guard let s = model.session(key) else { return false }
-        return s.paneID != nil && !s.isCodex && !s.isTraex
+        return s.canSend && s.canTerminal && s.paneID != nil && !s.isCodex && !s.isTraex
     }
 
+    private var allowsSend: Bool { model.session(key)?.canSend == true }
+
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty
+        allowsSend && (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty)
     }
 
     /// Claude in a herdr pane takes `/model`; Codex and TRAEX pick theirs in a full-screen menu the phone cannot drive.
     private var canPickModel: Bool {
         guard let s = model.session(key) else { return false }
-        return s.paneID != nil && !s.isCodex && !s.isTraex && !s.assistant
+        return s.canSend && s.canTerminal && s.paneID != nil && !s.isCodex && !s.isTraex && !s.assistant
     }
 
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
@@ -2146,7 +2167,7 @@ struct Composer: View, Equatable {
                 ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? "问 \(model.persona.name)"),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                                  hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
-                                 stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                                 stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
@@ -2162,7 +2183,7 @@ struct Composer: View, Equatable {
                 PromptComposer(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: !images.isEmpty || !(model.composerContexts[key] ?? []).isEmpty,
-                               stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                               stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                attach: PromptItems.attachments(camera: UIImagePickerController.isSourceTypeAvailable(.camera)),
                                mentions: mentions,
                                commands: PromptItems.commands(clear: canClear && !status.isActive && !clearing),
@@ -2191,7 +2212,7 @@ struct Composer: View, Equatable {
             } else {
                 ComposerRow(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? placeholder ?? "给 Claude 发消息"),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
-                            stop: status.isActive ? { Task { await model.interrupt(key) } } : nil,
+                            stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                             send: { Task { await sendText(text) } }) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
@@ -2213,6 +2234,7 @@ struct Composer: View, Equatable {
                 }
             }
         }
+        .disabled(!allowsSend)
         #if DEBUG
         .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
             if UserDefaults.standard.bool(forKey: "focusComposer") {
@@ -2302,6 +2324,7 @@ struct Composer: View, Equatable {
     }
 
     private func sendText(_ raw: String) async {
+        guard model.allowSend(key) else { return }
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let ctx = model.composerContexts[key] ?? []
         guard !t.isEmpty || !images.isEmpty || !ctx.isEmpty else { return }
@@ -2546,7 +2569,9 @@ struct SessionInfoSheet: View {
                     }
                     Section {
                         copyButton("拷贝 session id", symbol: Theme.Icon.id, text: info.sessionID, toast: "已拷贝 session id")
-                        copyButton("拷贝恢复命令", symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(info.sessionID), toast: "已拷贝恢复命令")
+                        if session?.canTerminal == true {
+                            copyButton("拷贝恢复命令", symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: "已拷贝恢复命令")
+                        }
                     } footer: {
                         Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
                     }

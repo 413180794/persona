@@ -32,6 +32,44 @@ struct SyncEventTests {
         #expect(old.permissionMode == nil && old.effort == nil)
     }
 
+    @Test func sessionSourcesDecodeConservatively() throws {
+        func decode(_ body: String) throws -> Session { try JSON.decoder.decode(Session.self, from: Data(body.utf8)) }
+        let old = try decode(#"{"session_id":"aabbccdd","status":"working"}"#)
+        #expect(old.canRead && old.canSend && old.canInterrupt && old.canApprove && old.canTerminal)
+        #expect(!old.canAttach && old.sourceSubtitle == nil)
+        let missing = try decode(#"{"session_id":"opaque","source_kind":"codex_app_server"}"#)
+        #expect(!missing.canRead && !missing.canSend && !missing.canInterrupt && !missing.canApprove && !missing.canTerminal && !missing.canAttach)
+        let history = try decode(#"{"session_id":"opaque","source_kind":"codex_history","source_thread_id":"thread","source_instance_id":"instance","parent_thread_id":"parent","capabilities":{"read":true},"read_only_reason":"外部进程正在使用此会话"}"#)
+        #expect(history.canRead && !history.canSend && !history.canInterrupt && !history.canApprove && !history.canTerminal && !history.canAttach)
+        #expect(history.sourceSubtitle == "Codex 历史 · 仅查看：外部进程正在使用此会话")
+        #expect(history.resumeCommand == "codex resume")
+        #expect(history.sourceThreadID == "thread" && history.sourceInstanceID == "instance" && history.parentThreadID == "parent")
+        let roundTrip = try JSON.decoder.decode(Session.self, from: JSON.encoder.encode(history))
+        #expect(roundTrip == history)
+    }
+
+    @Test func liveSourceMenusFollowCapabilitiesNotStatus() throws {
+        var live = try JSON.decoder.decode(Session.self, from: Data(#"{"session_id":"opaque","source_kind":"codex_app_server","status":"working","capabilities":{"read":true,"send":true,"attach":true},"attached":false}"#.utf8))
+        #expect(live.canSend && live.canAttach && !live.canTerminal && !live.canInterrupt && !live.canApprove)
+        live.attached = true
+        #expect(!live.canAttach)
+        live.capabilities?.interrupt = true
+        #expect(live.canInterrupt)
+        #expect(live.agentLabel == "Codex" && live.resumeCommand == "codex resume")
+    }
+
+    @MainActor @Test func rowMenuEqualityIncludesPermissions() {
+        let actions = AgentRowMenu.Actions()
+        let key = SessionKey(machineID: "m", sessionID: "s")
+        let old = AgentRowMenu(key: key, pinned: false, muted: false, looping: false, live: true, actions: actions)
+        let external = AgentRowMenu(key: key, pinned: false, muted: false, looping: false, live: true, terminal: false, attachable: true, actions: actions)
+        #expect(old != external)
+        var attached = external
+        attached.attachable = false
+        #expect(attached != external)
+        #expect(external == external)
+    }
+
     @Test func lazyImagesLearnTheirRef() {
         var it = Item(id: "u#1", seq: 3, ts: nil, role: "user", kind: .image, text: nil, toolUseID: nil, toolName: nil, toolInput: nil, isError: nil, image: nil)
         var img = ImagePayload(mime: "image/png", data: "")

@@ -457,6 +457,7 @@ final class AppModel {
     /// that size (the phone's); takeover: even if another program on the computer holds it.
     func terminalSubscribe(_ key: SessionKey, epoch: String?, after: Int, grid: TerminalGridSize? = nil, takeover: Bool = false,
                            handler: @escaping (TerminalEvent) -> Void) {
+        guard session(key)?.canTerminal == true else { return }
         terminalHandlers[key] = handler
         var msg: [String: Any] = ["type": "terminal_subscribe", "machine_id": key.machineID, "session_id": key.sessionID]
         if let epoch { msg["epoch"] = epoch; msg["after_seq"] = after }
@@ -468,6 +469,7 @@ final class AppModel {
     /// Typed into a terminal the phone drives: the bytes go straight to it (in order, over the WebSocket). grid: the
     /// terminal's new size (the keyboard came up, the font changed).
     func terminalInput(_ key: SessionKey, _ text: String, grid: TerminalGridSize? = nil) {
+        guard session(key)?.canTerminal == true else { return }
         var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID]
         if !text.isEmpty { msg["text"] = text }
         if let grid { msg["control"] = ["cols": grid.cols, "rows": grid.rows] }
@@ -478,7 +480,7 @@ final class AppModel {
     /// gives it to a program that takes the mouse (Claude Code, Codex scroll their conversation) and scrolls its own
     /// scrollback for one that does not — what a herdr client does with the wheel, as in Moshi.
     func terminalScroll(_ key: SessionKey, lines: Int, at: (col: Int, row: Int)?) {
-        guard lines != 0 else { return }
+        guard session(key)?.canTerminal == true, lines != 0 else { return }
         var msg: [String: Any] = ["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "scroll": lines]
         if let at { msg["at"] = [at.col, at.row] }
         live.send(msg)
@@ -486,6 +488,7 @@ final class AppModel {
 
     /// A tap on a terminal the app drives: a left click at that cell of its screen (0-based).
     func terminalClick(_ key: SessionKey, column: Int, row: Int) {
+        guard session(key)?.canTerminal == true else { return }
         live.send(["type": "terminal_input", "machine_id": key.machineID, "session_id": key.sessionID, "click": [column, row]])
     }
 
@@ -803,7 +806,7 @@ final class AppModel {
     // MARK: Actions
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
-        guard let api else { return }
+        guard session(ix.sessionKey)?.canApprove == true, let api else { return }
         // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
         guard connection.networkUp else { notDone(); return }
         interactions[ix.id] = nil
@@ -828,7 +831,7 @@ final class AppModel {
 
     /// Edit or delete one queued message: everything is pulled back out of claude and the others re-queued.
     func editQueued(_ key: SessionKey, index: Int, delete: Bool) async {
-        guard let api, let queue = session(key)?.queued, queue.indices.contains(index) else { return }
+        guard allowSend(key), let api, let queue = session(key)?.queued, queue.indices.contains(index) else { return }
         do {
             let pulled = try await api.editQueue(key, keep: queue.indices.filter { $0 != index })
             if !delete, pulled.indices.contains(index) {
@@ -845,8 +848,19 @@ final class AppModel {
     /// Launcher chosen in an assistant chat for its next messages (model switch).
     var assistantLaunchers: [SessionKey: String] = [:]
 
+    /// Check at dispatch time too: capabilities can change while a menu or outbox bubble is on screen.
+    func allowSend(_ key: SessionKey) -> Bool {
+        guard let s = session(key) else { return false }
+        guard s.canSend else {
+            toast = Toast(s.sourceSubtitle ?? "此会话仅可查看", style: .error)
+            return false
+        }
+        return true
+    }
+
     /// Puts the message on screen immediately and sends it in the background; a failure marks it for retry.
     func sendNow(_ key: SessionKey, text: String, images: [ImagePayload] = []) {
+        guard allowSend(key) else { return }
         let msg = PendingMessage(text: text, images: images)
         chat(key).pending.append(msg)
         saveOutbox()
@@ -870,6 +884,7 @@ final class AppModel {
     }
 
     func retry(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
+        guard allowSend(key) else { return }
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
         if chat(key).pending[i].mayHaveArrived == true {
             // The user looked and wants it sent again: as a new message (the old id is answered "may have arrived").
@@ -893,7 +908,7 @@ final class AppModel {
         }
     }
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
-        guard let api else { return false }
+        guard allowSend(key), let api else { return false }
         do {
             try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key])
             if haptic { Haptics.tap() }
@@ -957,14 +972,24 @@ final class AppModel {
     }
 
     func interrupt(_ key: SessionKey) async {
+        guard session(key)?.canInterrupt == true else { return }
         do { try await api?.interrupt(key); Haptics.tap() } catch { show(error) }
+    }
+
+    func attach(_ key: SessionKey) async {
+        guard session(key)?.canAttach == true, let api else { return }
+        do {
+            try await api.attach(key)
+            await refresh()
+            toast = Toast("已实时接入", style: .success)
+        } catch { show(error) }
     }
 
     /// Changes a session's permission mode / effort level (nil leaves one). Shown right away; the hub's next session
     /// list confirms it. Returns whether it worked.
     @discardableResult
     func setModes(_ key: SessionKey, permissionMode: String? = nil, effort: String? = nil) async -> Bool {
-        guard let api else { return false }
+        guard allowSend(key), let api else { return false }
         do {
             try await api.setModes(key, permissionMode: permissionMode, effort: effort)
             if var list = sessionsByMachine[key.machineID], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }) {
@@ -982,10 +1007,12 @@ final class AppModel {
     }
 
     func keys(_ key: SessionKey, _ keys: [String], text: String = "") async {
+        guard session(key)?.canTerminal == true else { return }
         do { try await api?.keys(key, keys: keys, text: text) } catch { show(error) }
     }
 
     func close(_ key: SessionKey) async {
+        guard session(key)?.canTerminal == true else { return }
         do { try await api?.close(key); toast = Toast("已关闭会话", style: .success) } catch { show(error) }
     }
 
@@ -1147,7 +1174,7 @@ final class AppModel {
 
     /// Renames an agent's herdr tab and / or its Claude session name (nil leaves that one alone).
     func renameSession(_ k: SessionKey, tab: String?, title: String?) async {
-        guard let api else { return }
+        guard session(k)?.canTerminal == true, let api else { return }
         let tab = tab?.trimmingCharacters(in: .whitespacesAndNewlines), title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         edit(machine: k.machineID) { s in
             guard s.sessionID == k.sessionID else { return }

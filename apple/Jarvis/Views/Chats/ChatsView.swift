@@ -837,7 +837,7 @@ private struct AgentsList: View {
                                ?? Self.capsuleInsets
                            : nil) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
-                if s.state.isLive {
+                if s.state.isLive && s.canTerminal {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
                 }
             }
@@ -846,7 +846,7 @@ private struct AgentsList: View {
                     Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : Theme.Icon.pinned)
                 }
                 .tint(Theme.accent)
-                if s.state == .working || s.state == .needsYou {
+                if (s.state == .working || s.state == .needsYou) && s.canInterrupt {
                     Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
                         .tint(Theme.busy)
                 }
@@ -857,7 +857,7 @@ private struct AgentsList: View {
             }
             .contextMenu {
                 AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s.key), looping: s.loop != nil,
-                             live: s.state.isLive, actions: rowActions)
+                             live: s.state.isLive, terminal: s.canTerminal, attachable: s.canAttach, actions: rowActions)
                     .equatable()
             }
     }
@@ -1192,7 +1192,7 @@ nonisolated struct SlotRow: View, Equatable {
         if session.state == .needsYou && !muted && !hideState {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
-        parts.append(Text(session.agentLabel))
+        parts.append(Text(session.sourceSubtitle ?? session.agentLabel))
         let slot = session.slotLabel
         if let space, !space.isEmpty {
             parts.append(Text(slot.map { space + " › " + $0 } ?? space))
@@ -1205,7 +1205,7 @@ nonisolated struct SlotRow: View, Equatable {
 
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
-        var parts = [session.agentLabel]
+        var parts = [session.sourceSubtitle ?? session.agentLabel]
         let slot = session.slotLabel
         if let space, !space.isEmpty {
             parts.append(slot.map { space + " › " + $0 } ?? space)
@@ -1256,8 +1256,9 @@ nonisolated struct CompactSlotRow: View, Equatable {
 
     @MainActor private var place: String? {
         let slot = session.slotLabel
-        guard let space, !space.isEmpty else { return slot }
-        return slot.map { space + " › " + $0 } ?? space
+        let location = space.flatMap { $0.isEmpty ? nil : $0 }.map { name in slot.map { name + " › " + $0 } ?? name } ?? slot
+        let parts = [session.sourceSubtitle, location].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

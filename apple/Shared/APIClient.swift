@@ -373,6 +373,7 @@ nonisolated struct APIClient: Sendable {
                                                            clientMsgID: clientMsgID, clearDraft: clearDraft), timeout: 100)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
+    func attach(_ k: SessionKey) async throws { try await post(sp(k) + "/attach") }
 
     // MARK: Device credentials (DeviceCredentials.swift)
 

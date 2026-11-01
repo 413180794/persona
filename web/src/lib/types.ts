@@ -25,6 +25,15 @@ export interface Subagent {
   running?: boolean;
 }
 
+export interface SessionCapabilities {
+  read?: boolean;
+  send?: boolean;
+  interrupt?: boolean;
+  approve?: boolean;
+  terminal?: boolean;
+  attach?: boolean;
+}
+
 export interface Session {
   machine_id: string;
   session_id: string;
@@ -34,6 +43,14 @@ export interface Session {
   state?: AgentState;
   state_since?: string;
   agent?: string;
+  agent_name?: string;
+  source_kind?: string;
+  source_thread_id?: string;
+  source_instance_id?: string;
+  parent_thread_id?: string;
+  read_only_reason?: string;
+  capabilities?: SessionCapabilities;
+  attached?: boolean;
   launcher?: string;
   model?: string;
   permission_mode?: string;

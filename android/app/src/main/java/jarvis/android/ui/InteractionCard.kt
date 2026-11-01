@@ -60,6 +60,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -92,6 +93,8 @@ fun InteractionCard(
     collapsible: Boolean = true,
     onResolved: () -> Unit = {},
 ) {
+    val sessions by hub.sessions.collectAsState()
+    val allowed = sessions[ix.machineId]?.firstOrNull { it.sessionId == ix.sessionId }?.canApprove == true
     val c = chatColors
     var busy by remember(ix.id) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
@@ -100,7 +103,7 @@ fun InteractionCard(
     var error by remember(ix.id) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val submit: (Resolution) -> Unit = { r ->
-        if (!busy) {
+        if (!busy && allowed && hub.session(ix.sessionKey)?.canApprove == true) {
             busy = true
             error = null
             scope.launch {
@@ -179,6 +182,7 @@ fun InteractionCard(
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(
                             text = { Text("交回电脑处理", maxLines = 1) },
+                            enabled = allowed,
                             onClick = { menu = false; submit(Resolutions.dismiss()) },
                         )
                     }
@@ -193,10 +197,10 @@ fun InteractionCard(
             if (!folded) {
                 Column(Modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when (ix.kind) {
-                        "question" -> QuestionBody(ix, busy, submit)
-                        "plan" -> PlanBody(ix, busy, submit)
-                        "permission" -> PermissionBody(ix, busy, submit)
-                        "screen" -> ScreenBody(ix, busy, submit)
+                        "question" -> QuestionBody(ix, busy || !allowed, submit)
+                        "plan" -> PlanBody(ix, busy || !allowed, submit)
+                        "permission" -> PermissionBody(ix, busy || !allowed, submit)
+                        "screen" -> ScreenBody(ix, busy || !allowed, submit)
                         else -> Text(
                             "这个请求手机还不支持，在电脑上处理",
                             style = MaterialTheme.typography.bodyMedium,

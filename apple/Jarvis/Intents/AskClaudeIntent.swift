@@ -72,6 +72,7 @@ struct AskClaudeIntent: AppIntent {
         guard let session = IntentPicker.session(sessions, machine: machine.id) else {
             throw IntentFailure.noSession(machine.name)
         }
+        guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? "此会话仅可查看") }
         try await api.send(session.key, text: text)
         return session
     }

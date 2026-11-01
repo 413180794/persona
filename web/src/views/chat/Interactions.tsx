@@ -2,11 +2,17 @@
 import { useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import type { Interaction } from "../../lib/types";
+import { sessionCan } from "../../lib/format";
+import { getSession, useStore } from "../../lib/store";
 import { Button, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 
 async function resolve(ix: Interaction, body: Record<string, unknown>) {
+  if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
+    toast("此会话不允许审批", "error");
+    return false;
+  }
   try {
     await api(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
     return true;
@@ -350,14 +356,9 @@ function ScreenCard({ ix }: { ix: Interaction }) {
 }
 
 export function InteractionCard({ ix }: { ix: Interaction }) {
-  switch (ix.kind) {
-    case "question":
-      return <QuestionCard ix={ix} />;
-    case "plan":
-      return <PlanCard ix={ix} />;
-    case "permission":
-      return <PermissionCard ix={ix} />;
-    default:
-      return <ScreenCard ix={ix} />;
-  }
+  const canApprove = useStore(() => sessionCan(getSession(ix.machine_id, ix.session_id), "approve"));
+  const card = ix.kind === "question" ? <QuestionCard ix={ix} />
+    : ix.kind === "plan" ? <PlanCard ix={ix} />
+    : ix.kind === "permission" ? <PermissionCard ix={ix} /> : <ScreenCard ix={ix} />;
+  return canApprove ? card : <fieldset disabled>{card}</fieldset>;
 }

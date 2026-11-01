@@ -100,7 +100,11 @@ fun AgentActionsSheet(
                 leadingContent = { Icon(if (muted) Icons.Default.Notifications else Icons.Default.NotificationsOff, null) },
                 modifier = Modifier.clickable { act(if (muted) "开启通知" else "屏蔽通知") { hub.toggleMute(s) } },
             )
-            if (s.isLive) {
+            if (s.canAttach) ListItem(
+                headlineContent = { Text("实时接入", maxLines = 1) },
+                modifier = Modifier.clickable { act("实时接入") { hub.api.attach(s.key); hub.refresh() } },
+            )
+            if (s.isLive && s.canTerminal) {
                 ListItem(
                     headlineContent = { Text("重命名…") },
                     supportingContent = { Text("同时改 herdr 的标签页名和 Claude 的会话名") },
@@ -150,6 +154,7 @@ fun CloseAgentDialog(
         },
         confirmButton = {
             TextButton(onClick = {
+                if (hub.session(s.key)?.canTerminal != true) return@TextButton
                 onDismiss(); onConfirmed()
                 // The app scope: the dialog's own would be cancelled as it closes.
                 JarvisApp.instance.scope.launch { runCatching { hub.api.close(s.key) }.onFailure { onError("关闭 没成功：${it.message}") } }

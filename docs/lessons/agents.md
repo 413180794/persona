@@ -53,6 +53,7 @@
   之后在单独的 herdr 会话里试了 42 次（小 PNG、1.8 MB JPEG、CPU 跑满）都没再出现，原因没找到；11-01 用手机拍的照片又出现一次。node 的兜底（`ensureSubmitted`）：发完 2 秒后
   看一次输入框，还是刚发的那段（`[Image #n]` / `[Pasted text #n]` 去掉后比开头几个字）就补一次回车；框空了、或者是别的内容，什么都不按。
   只看等完以后的那一次：第一版发完马上就读、一看不对就放弃，11-01 那次就是这样漏掉的（刚粘贴完的一瞬间框里可能还不是这段）。
+- Codex app-server 接入（2026-11-02）：Unix socket 中是 WebSocket，不是 JSON-lines；外部 stdio 没有第二 attach 口。目录发现不 resume，控制只回原 loaded owner；未知/取消请求不发 error/decline，否则也可能消费桌面的审批 callback。`serverRequest/resolved` 撤卡记 dismissed，不生成批准；代际和带类型 request ID 一起去重。发送 admission 后的通用 server error 也不能当「确定未发送」自动重试，旧 outbox 的操作标识不按一天过期（`docs/codex-app-server.md`）。
 - `codex app-server` 的协议以导出的为准（`codex app-server generate-ts --out <目录>`），实验接口（`thread/backgroundTerminals/*`、`process/*`）
   要加 `--experimental` 才导出来，用的时候 `initialize` 要带 `capabilities.experimentalApi: true`。Codex 助手的其他坑见 `assistant.md`。
   Codex 的 assistant rollout 开头是几十 KB 的指令（AGENTS.md、快照），第一条用户消息在 70 KB 之后：只扫开头 32 KB 找标题会找不到（`readQuickMeta`）。

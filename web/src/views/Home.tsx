@@ -1,6 +1,6 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo } from "react";
-import { ago, shortDuration, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { ago, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
 import { href, onLinkClick } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { useStore } from "../lib/store";
@@ -157,7 +157,7 @@ function Pill({ tone, children }: { tone: "red" | "green"; children: React.React
 }
 
 function SessionTask({ s, i, machine, pill }: { s: Session; i: number; machine: string; pill: React.ReactNode }) {
-  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={sessionTitle(s)} meta={[machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")} detail={s.last_text} pill={pill} />;
+  return <TaskRow i={i} state={stateOf(s)} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} title={sessionTitle(s)} meta={[sourceSubtitle(s), machine, s.space_name, tabLabel(s)].filter(Boolean).join(" › ")} detail={s.source_kind ? [sourceSubtitle(s), s.last_text].filter(Boolean).join(" · ") : s.last_text} pill={pill} />;
 }
 
 // One Task Rows capsule: status badge, title, the latest words, a pill.

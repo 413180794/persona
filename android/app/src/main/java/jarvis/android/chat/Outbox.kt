@@ -132,7 +132,7 @@ object Outbox {
     /** Sends [text] (with [images]) to [key]; returns its client_msg_id. Offline it waits instead. */
     fun send(hub: Hub, key: SessionKey, text: String, images: List<ImagePayload> = emptyList()): String {
         val id = UUID.randomUUID().toString()
-        val offline = !online(hub) || ConnectionWatch.catchingUp.value
+        val offline = !online(hub) || ConnectionWatch.catchingUp.value || hub.session(key) == null
         val p = PendingMessage(id, text, if (offline) PendingMessage.Phase.WAITING else PendingMessage.Phase.SENDING, images = images)
         edit(key) { it + p }
         save()
@@ -218,7 +218,13 @@ object Outbox {
     }
 
     private suspend fun sendNowAndWait(hub: Hub, key: SessionKey, p: PendingMessage, clearDraft: String?): PendingMessage.Phase {
-        val r = runCatching { hub.api.send(key, p.text, p.clientMsgId, clearDraft, p.images) }
+        // Restored entries wait for metadata; never infer capabilities from their opaque session ID.
+        val s = hub.session(key)
+        val r = runCatching {
+            if (s == null) throw HubException(409, "正在读取会话信息", "session_metadata_pending")
+            if (!s.canSend) throw HubException(403, s.sourceSubtitle ?: "此会话仅可查看", "session_read_only")
+            hub.api.send(key, p.text, p.clientMsgId, clearDraft, p.images)
+        }
         val e = r.exceptionOrNull()
         val phase = if (e == null) PendingMessage.Phase.SENT else phaseOf(e)
         val he = e as? HubException
@@ -238,6 +244,7 @@ object Outbox {
         return when {
             e is CancellationException || e is IOException -> PendingMessage.Phase.WAITING
             he == null -> PendingMessage.Phase.FAILED
+            he.code == "session_metadata_pending" -> PendingMessage.Phase.WAITING
             he.status == 409 && (he.code == "dialog_open" || he.code == "input_draft") -> PendingMessage.Phase.REFUSED
             (he.fields?.get("delivered") as? JsonPrimitive)?.content == "unknown" -> PendingMessage.Phase.UNKNOWN
             else -> PendingMessage.Phase.FAILED

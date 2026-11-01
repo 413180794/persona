@@ -1,7 +1,7 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, the accent action, sections, one gliding highlight.
 import { useLayoutEffect, useRef, useState } from "react";
 import { api, setToken } from "../lib/api";
-import { ago, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { href, navigate, type Route } from "../lib/router";
 import { useCounts, useSpaces } from "../lib/sessions";
 import { reset, useStore } from "../lib/store";
@@ -289,7 +289,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
 
 function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showState = true }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; hint?: string; showState?: boolean }) {
   const st = stateOf(s);
-  const t = hint ?? (tab ? tabLabel(s) : "");
+  const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   return (
     <a
       ref={reg(k)}
@@ -299,7 +299,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      title={`${sessionTitle(s)}${s.last_text ? `\n${s.last_text}` : ""}`}
+      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${s.last_text ? `\n${s.last_text}` : ""}`}
       className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>

@@ -98,6 +98,14 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), wait)
 	defer cancel()
 	id, _ := p["client_msg_id"].(string)
+	external := false
+	if s, ok := m.session(sid); ok {
+		external = s.SourceKind != ""
+	}
+	if external && id == "" {
+		callErr(w, &rpc.Error{Code: "codex_send_guard", Message: "发送到 app-server 必须带消息标识，避免断线后重复发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+		return
+	}
 	if id == "" {
 		status, body := h.deliver(ctx, m, p)
 		writeRaw(w, status, body)
@@ -112,10 +120,24 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		}
 		return
 	}
+	if external && h.store == nil {
+		f.status, f.body = errorBody(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+		close(f.done)
+		h.sends.forget(id, f)
+		writeRaw(w, f.status, f.body)
+		return
+	}
 	state := ""
 	if h.store != nil {
 		var err error
 		if state, err = h.store.ClaimSend(ctx, id, m.cfg.ID, sid); err != nil {
+			if external {
+				f.status, f.body = errorBody(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+				close(f.done)
+				h.sends.forget(id, f)
+				writeRaw(w, f.status, f.body)
+				return
+			}
 			h.logf("send %s: %v", id, err) // no record: the send still goes, without the guard
 		}
 	}

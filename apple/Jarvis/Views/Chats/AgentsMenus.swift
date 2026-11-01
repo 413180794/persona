@@ -124,6 +124,8 @@ struct AgentRowMenu: View, Equatable {
     nonisolated let muted: Bool
     nonisolated let looping: Bool
     nonisolated let live: Bool
+    nonisolated var terminal = true
+    nonisolated var attachable = false
     nonisolated let actions: Actions
 
     @MainActor final class Actions {
@@ -141,7 +143,7 @@ struct AgentRowMenu: View, Equatable {
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.key == b.key && a.pinned == b.pinned && a.muted == b.muted && a.looping == b.looping && a.live == b.live
-            && a.actions === b.actions
+            && a.terminal == b.terminal && a.attachable == b.attachable && a.actions === b.actions
     }
 
     var body: some View {
@@ -157,7 +159,9 @@ struct AgentRowMenu: View, Equatable {
         Button { model.togglePin(key) } label: {
             Label(pinned ? "取消置顶" : "置顶", systemImage: pinned ? Theme.Icon.unpin : Theme.Icon.pin)
         }
-        Button { if let s = now() { actions.rename(s) } } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
+        if terminal {
+            Button { if let s = now() { actions.rename(s) } } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
+        }
         Button { model.toggleMute(key) } label: {
             Label(muted ? "开启通知" : "屏蔽通知", systemImage: muted ? Theme.Icon.unmute : Theme.Icon.mute)
         }
@@ -171,8 +175,16 @@ struct AgentRowMenu: View, Equatable {
             Label("交给 Jarvis", systemImage: Theme.Icon.ai)
         }
         Button { UIPasteboard.general.string = now()?.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
-        Button { UIPasteboard.general.string = "claude --resume \(key.sessionID)" } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal) }
-        if live {
+        if attachable {
+            Button { Task { await model.attach(key) } } label: { Label("实时接入", systemImage: Theme.Icon.link).lineLimit(1) }
+        }
+        if terminal {
+            Button {
+                guard let s = now(), s.canTerminal else { return }
+                UIPasteboard.general.string = "\(s.resumeCommand) \(s.sourceThreadID ?? s.sessionID)"
+            } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal).lineLimit(1) }
+        }
+        if live && terminal {
             Button(role: .destructive) { if let s = now() { actions.close(s) } } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
         }
     }

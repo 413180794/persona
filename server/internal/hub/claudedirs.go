@@ -28,7 +28,7 @@ func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 			}
 		}
 	}
-	_ = peer.Call(ctx, "node.configure", map[string]any{"claude_dirs": dirs, "keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID)}, nil)
+	_ = peer.Call(ctx, "node.configure", map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx), "claude_dirs": dirs, "keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID)}, nil)
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})

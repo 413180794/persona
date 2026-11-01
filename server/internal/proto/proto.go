@@ -277,15 +277,22 @@ const (
 )
 
 type Session struct {
-	MachineID   string `json:"machine_id"`
-	SessionID   string `json:"session_id"`
-	Title       string `json:"title"`
-	Cwd         string `json:"cwd"`
-	Status      string `json:"status"`
-	PaneID      string `json:"pane_id,omitempty"`
-	TabID       string `json:"tab_id,omitempty"`
-	WorkspaceID string `json:"workspace_id,omitempty"`
-	AgentName   string `json:"agent_name,omitempty"`
+	MachineID        string               `json:"machine_id"`
+	SessionID        string               `json:"session_id"`
+	SourceKind       string               `json:"source_kind,omitempty"`
+	SourceThreadID   string               `json:"source_thread_id,omitempty"`
+	SourceInstanceID string               `json:"source_instance_id,omitempty"`
+	ParentThreadID   string               `json:"parent_thread_id,omitempty"`
+	ReadOnlyReason   string               `json:"read_only_reason,omitempty"`
+	Capabilities     *SessionCapabilities `json:"capabilities,omitempty"`
+	Attached         bool                 `json:"attached,omitempty"`
+	Title            string               `json:"title"`
+	Cwd              string               `json:"cwd"`
+	Status           string               `json:"status"`
+	PaneID           string               `json:"pane_id,omitempty"`
+	TabID            string               `json:"tab_id,omitempty"`
+	WorkspaceID      string               `json:"workspace_id,omitempty"`
+	AgentName        string               `json:"agent_name,omitempty"`
 	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex".
 	Agent    string `json:"agent,omitempty"`
 	Launcher string `json:"launcher,omitempty"`

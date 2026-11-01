@@ -87,7 +87,7 @@ fun SessionInfoSheet(hub: Hub, key: SessionKey, session: Session?, machineName: 
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton({ copy(i.sessionId, "已拷贝 session id") }) { Text("拷贝 session id", maxLines = 1) }
-                        OutlinedButton({ copy(resumeCommand(session, i.cwd ?: session?.cwd.orEmpty(), i.sessionId), "已拷贝恢复命令") }) {
+                        if (session?.canTerminal == true) OutlinedButton({ copy(resumeCommand(session, i.cwd ?: session.cwd, session.sourceThreadId ?: i.sessionId), "已拷贝恢复命令") }) {
                             Text("拷贝恢复命令", maxLines = 1)
                         }
                     }
@@ -128,9 +128,9 @@ private fun agentName(s: Session?) = if (s?.agent == "codex" || s?.agent == "tra
 
 /** What brings this conversation back in a terminal on that computer (iOS SessionInfoSheet.resume). */
 internal fun resumeCommand(s: Session?, cwd: String, id: String): String {
-    val cmd = when (s?.agent) {
-        "codex" -> "codex resume $id"
-        "traex" -> "traex resume $id"
+    val cmd = when {
+        s?.isCodex == true -> "codex resume $id"
+        s?.agent == "traex" -> "traex resume $id"
         else -> "claude --resume $id"
     }
     return "cd ${jarvis.android.data.quotedPath(cwd)} && $cmd"

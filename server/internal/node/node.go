@@ -35,42 +35,44 @@ type Node struct {
 	eng     engineState    // which engine, and its change stream (engine.go)
 	// engEpoch counts engine switches (n.mu): a refresh applies its result only when no switch happened meanwhile.
 	engEpoch uint64
-	peer    *rpc.Peer
-	logger  *log.Logger
+	peer     *rpc.Peer
+	logger   *log.Logger
 
-	mu       sync.Mutex
-	state    *stateFile
-	files    map[string]*transcript.File // session id -> parsed transcript
-	paths    map[string]string           // session id -> transcript path
-	pathsAt  map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
-	watches  map[string]*watch
-	agents   map[string]host.Agent     // session id -> live agent
+	mu      sync.Mutex
+	state   *stateFile
+	files   map[string]*transcript.File // session id -> parsed transcript
+	paths   map[string]string           // session id -> transcript path
+	pathsAt map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
+	watches map[string]*watch
+	agents  map[string]host.Agent // session id -> live agent
 	// lastPanes: the pane each session was last seen live in (it is no longer live when its agent exits or is
 	// suspended), to tell the two apart when a send finds it gone on a host that cannot resume it.
 	lastPanes map[string]string
-	panes    map[string]string         // pane id -> session id (learned from hooks)
-	layouts  map[string]layout         // host kind -> space / slot names from its last snapshot
-	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
-	spare    *assistantProc            // warm process waiting for the next new conversation
-	akeys    map[string]*assistantProc // the key a Codex conversation's MCP server reports until its thread exists
-	lastList string                    // serialized last sessions.changed payload
-	lastRevs map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
-	metas    map[string]quickMeta      // transcript path -> cached meta
-	bgScans  map[string]*bgScan        // transcript path -> incremental background-task scan
-	panePIDs map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
-	modes    map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
-	terms    map[string]*termStream    // session id -> its terminal streaming to the hub (terminal.go)
-	suggests map[string]*suggestState  // session id -> Claude's suggested next message (suggestion.go)
-	driving  map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
-	events   *herdrEvents              // herdr's event stream (herdrevents.go)
-	cdirs    *claudeDirs               // Claude Code config directories in use (claudedirs.go)
-	sends    sentLog                   // recent client_msg_ids (sendsafe.go)
-	typing   typingLocks               // one send at a time per session (sendsafe.go)
-	kept     map[string]bool           // sessions always listed (node.configure keep_sessions)
-	starts   startLog                  // sessions starting in the background (starting.go)
-	ups      uploads                   // files arriving from the phone (upload.go)
-	sysOnce  sync.Once                 // system: read once (metrics.go)
-	sys      proto.System
+	panes     map[string]string         // pane id -> session id (learned from hooks)
+	layouts   map[string]layout         // host kind -> space / slot names from its last snapshot
+	procs     map[string]*assistantProc // headless assistant conversations (assistant.go)
+	spare     *assistantProc            // warm process waiting for the next new conversation
+	akeys     map[string]*assistantProc // the key a Codex conversation's MCP server reports until its thread exists
+	lastList  string                    // serialized last sessions.changed payload
+	lastRevs  map[string]int64          // session id -> rev as last pushed (sessions.changed or sessions.revs)
+	metas     map[string]quickMeta      // transcript path -> cached meta
+	bgScans   map[string]*bgScan        // transcript path -> incremental background-task scan
+	panePIDs  map[string]panePID        // pane -> its claude pid (machines without herdr's claude integration)
+	modes     map[string]sessionModes   // session id -> mode / effort set from the app (modes.go)
+	terms     map[string]*termStream    // session id -> its terminal streaming to the hub (terminal.go)
+	suggests  map[string]*suggestState  // session id -> Claude's suggested next message (suggestion.go)
+	driving   map[string]bool           // session id -> Jarvis is working its TUI (a picker it opened is not "blocked")
+	events    *herdrEvents              // herdr's event stream (herdrevents.go)
+	cdirs     *claudeDirs               // Claude Code config directories in use (claudedirs.go)
+	codices   *codexRegistry
+	machineID string
+	sends     sentLog         // recent client_msg_ids (sendsafe.go)
+	typing    typingLocks     // one send at a time per session (sendsafe.go)
+	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
+	starts    startLog        // sessions starting in the background (starting.go)
+	ups       uploads         // files arriving from the phone (upload.go)
+	sysOnce   sync.Once       // system: read once (metrics.go)
+	sys       proto.System
 
 	// ctxSent: assistant conversation → the snapshot sections it has seen; ctxTools: the tools its process last
 	// started with (assistant_context.go).
@@ -135,7 +137,9 @@ func New(version string) (*Node, error) {
 		driving:  map[string]bool{},
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
+		codices:  newCodexRegistry(),
 	}
+	n.configureCodex(proto.CodexConfig{})
 	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
 	n.state = newState()
 	n.ports.kick = make(chan struct{}, 1)
@@ -165,6 +169,8 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		}
 	}
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
+	n.codices.report = func(cfg proto.CodexConfig) { _ = n.peer.Notify("codex.inventory", cfg) }
+	go n.runCodex(ctx)
 	go n.loadState(ctx)
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
@@ -293,7 +299,26 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, fmt.Errorf("bad params: %w", err)
 		}
 	}
+	if n.codexBlocked(p.SessionID) && (strings.HasPrefix(method, "session.") || strings.HasPrefix(method, "terminal.") || method == "assistant.send") {
+		return nil, refusal("identity_conflict", "会话 ID 与另一来源重复，不能判断操作目标；未读取或发送", nil)
+	}
+	if n.codexBlocked(p.ResumeSessionID) && method == "session.start" {
+		return nil, refusal("identity_conflict", "会话 ID 与另一来源重复，不能恢复", nil)
+	}
+	if method == "session.start" && n.externalCodex(p.ResumeSessionID) {
+		return nil, refusal("codex_read_only", "外部 Codex 会话只能接入原 app-server，不能用启动器恢复", nil)
+	}
+	if n.externalCodex(p.SessionID) {
+		switch method {
+		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "session.close", "session.modes", "session.queue.edit", "session.rename", "assistant.send":
+			return nil, refusal("codex_read_only", "这个会话没有终端或启动器控制能力，请在原 app-server 中操作", nil)
+		case "session.interrupt":
+			return ok(n.interruptCodex(ctx, p.SessionID))
+		}
+	}
 	switch method {
+	case "session.attach":
+		return ok(n.attachCodex(ctx, p.SessionID))
 	case "ping": // the hub checking a tailcat connection is alive (its userspace TCP has no keepalive)
 		return map[string]any{}, nil
 	case "node.info":
@@ -312,7 +337,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"engine": n.engine()}, nil
 	case "node.configure":
 		var c struct {
-			ClaudeDirs []string `json:"claude_dirs"`
+			ClaudeDirs []string           `json:"claude_dirs"`
+			Codex      *proto.CodexConfig `json:"codex"`
+			MachineID  string             `json:"machine_id"`
 			// Keep: sessions always listed, however old or crowded out (the assistant's main conversation).
 			Keep *[]string `json:"keep_sessions"`
 		}
@@ -321,6 +348,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.ClaudeDirs != nil || c.Keep == nil { // a call that only changes what is kept leaves the directories
 			n.setKnownClaudeDirs(c.ClaudeDirs)
+		}
+		if c.Codex != nil {
+			n.configureCodex(*c.Codex)
+		}
+		if c.MachineID != "" {
+			n.mu.Lock()
+			n.machineID = c.MachineID
+			n.mu.Unlock()
 		}
 		if c.Keep != nil {
 			n.setKept(*c.Keep)
@@ -588,6 +623,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "session.info":
 		f, err := n.file(p.SessionID)
 		if err != nil {
+			if src, ok := n.codexSource(p.SessionID); ok {
+				return map[string]any{"session_id": p.SessionID, "source_kind": "codex_app_server", "source_thread_id": src.thread, "transcript_path": "", "cwd": "", "model": "", "launcher": "", "git_branch": "", "version": "", "permission_mode": "", "effort": "", "context_tokens": 0, "output_tokens": 0, "compactions": 0, "turns": 0, "history_unavailable": true}, nil
+			}
 			return nil, err
 		}
 		n.refresh(p.SessionID, f)

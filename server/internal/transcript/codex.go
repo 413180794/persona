@@ -325,7 +325,9 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		return codexTool(mk, it.ID, "Read", input, "", false)
 	case "Extension":
 		if it.Kind != "web.search" {
-			return nil // other extensions (image generation…) are not shown yet
+			n := mk(0, it.ID, "system", proto.KindNotice)
+			n.Text = "Codex 扩展事件：" + it.Kind + "（完整记录在原会话中）"
+			return []proto.Item{n}
 		}
 		return codexWebSearch(mk, it)
 	case "ContextCompaction":
@@ -334,7 +336,12 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 		n.Text = "上下文已压缩"
 		return []proto.Item{n}
 	}
-	return nil
+	if it.Type == "" {
+		return nil
+	}
+	n := mk(0, it.ID, "system", proto.KindNotice)
+	n.Text = "Codex 事件：" + it.Type + "（完整记录在原会话中）"
+	return []proto.Item{n}
 }
 
 var (

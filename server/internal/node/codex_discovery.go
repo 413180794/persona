@@ -1,0 +1,119 @@
+package node
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type codexProcess struct {
+	pid            int
+	home, endpoint string
+	pane           string
+}
+
+var codexHomePS = regexp.MustCompile(`(?:^|\s)CODEX_HOME=(.*?)(?:\s+[A-Za-z_][A-Za-z_0-9]*=|$)`)
+
+func codexProcessArgs(pid int, args []string, env string) (codexProcess, bool) {
+	at := -1
+	for i, a := range args {
+		if a == "app-server" {
+			at = i
+			break
+		}
+	}
+	if len(args) == 0 {
+		return codexProcess{}, false
+	}
+	if at < 1 && filepath.Base(args[0]) != "codex" {
+		return codexProcess{}, false
+	}
+	p := codexProcess{pid: pid}
+	if at >= 1 {
+		p.endpoint = "stdio://"
+	}
+	if strings.ContainsRune(env, '\x00') {
+		for _, v := range strings.Split(env, "\x00") {
+			if strings.HasPrefix(v, "HERDR_PANE_ID=") {
+				p.pane = strings.TrimPrefix(v, "HERDR_PANE_ID=")
+			}
+			if strings.HasPrefix(v, "CODEX_HOME=") {
+				p.home = strings.TrimPrefix(v, "CODEX_HOME=")
+			}
+		}
+	} else if m := codexHomePS.FindStringSubmatch(env); m != nil {
+		p.home = m[1]
+	}
+	if p.pane == "" {
+		if m := envVarRe("HERDR_PANE_ID").FindStringSubmatch(env); m != nil {
+			p.pane = m[1]
+		}
+	}
+	for i := at + 1; i < len(args); i++ {
+		if args[i] == "--listen" && i+1 < len(args) {
+			p.endpoint = args[i+1]
+			break
+		}
+		if strings.HasPrefix(args[i], "--listen=") {
+			p.endpoint = strings.TrimPrefix(args[i], "--listen=")
+			break
+		}
+	}
+	return p, true
+}
+
+func scanCodexProcesses() []codexProcess {
+	var out []codexProcess
+	if runtime.GOOS == "linux" {
+		entries, _ := os.ReadDir("/proc")
+		for _, e := range entries {
+			pid, err := strconv.Atoi(e.Name())
+			if err != nil {
+				continue
+			}
+			b, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
+			if err != nil {
+				continue
+			}
+			args := strings.Split(strings.TrimRight(string(b), "\x00"), "\x00")
+			// Read no environments of unrelated processes.
+			if _, ok := codexProcessArgs(pid, args, ""); !ok {
+				continue
+			}
+			env, err := os.ReadFile("/proc/" + e.Name() + "/environ")
+			if err != nil {
+				continue
+			}
+			if p, ok := codexProcessArgs(pid, args, string(env)); ok {
+				out = append(out, p)
+			}
+		}
+		return out
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b, err := exec.CommandContext(ctx, "ps", "-E", "-ww", "-o", "pid=,command=", "-U", strconv.Itoa(os.Getuid())).Output()
+	if err != nil {
+		return nil
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		if p, ok := codexProcessArgs(pid, fields[1:], line); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}

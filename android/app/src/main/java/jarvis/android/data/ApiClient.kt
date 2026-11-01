@@ -24,6 +24,15 @@ class HubException(val status: Int, override val message: String, val code: Stri
 
 /** REST calls to the hub (docs/protocol.md「REST」). One instance per paired hub. */
 class ApiClient(val baseUrl: String, val token: String) {
+    internal var sessionLookup: ((SessionKey) -> Session?)? = null
+    internal var interactionLookup: ((String) -> Interaction?)? = null
+
+    private fun requireSession(k: SessionKey, allowed: (Session) -> Boolean) {
+        val lookup = sessionLookup ?: return
+        val s = lookup(k) ?: throw HubException(409, "正在读取会话信息", "session_metadata_pending")
+        if (!allowed(s)) throw HubException(403, s.sourceSubtitle ?: "此会话不允许此操作", "session_read_only")
+    }
+
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(110, TimeUnit.SECONDS) // starting / resuming a session can take ~90 s on the hub
@@ -144,6 +153,7 @@ class ApiClient(val baseUrl: String, val token: String) {
      * Images go inline as base64 (JPEG, the long side at most 1600 px, as iOS sends them).
      */
     suspend fun send(k: SessionKey, text: String, clientMsgId: String, clearDraft: String? = null, images: List<ImagePayload> = emptyList()) {
+        requireSession(k) { it.canSend }
         post(sp(k) + "/messages", SendBody(text, clientMsgId, clearDraft, images.ifEmpty { null }))
     }
 
@@ -172,11 +182,21 @@ class ApiClient(val baseUrl: String, val token: String) {
         }
     }
 
-    suspend fun interrupt(k: SessionKey) { raw("POST", sp(k) + "/interrupt") }
+    suspend fun interrupt(k: SessionKey) {
+        requireSession(k) { it.canInterrupt }
+        raw("POST", sp(k) + "/interrupt")
+    }
+    suspend fun attach(k: SessionKey) {
+        requireSession(k) { it.canAttach }
+        raw("POST", sp(k) + "/attach")
+    }
     suspend fun seen(k: SessionKey) { raw("POST", sp(k) + "/seen") }
 
     @Serializable private data class Keys(val keys: List<String>, val text: String = "")
-    suspend fun keys(k: SessionKey, keys: List<String>, text: String = "") { post(sp(k) + "/keys", Keys(keys, text)) }
+    suspend fun keys(k: SessionKey, keys: List<String>, text: String = "") {
+        requireSession(k) { it.canTerminal }
+        post(sp(k) + "/keys", Keys(keys, text))
+    }
 
     @Serializable data class Screen(val text: String = "", val status: String? = null)
     suspend fun screen(k: SessionKey, lines: Int = 60, ansi: Boolean = false): Screen =
@@ -184,7 +204,16 @@ class ApiClient(val baseUrl: String, val token: String) {
 
     @Serializable private data class Interactions(val interactions: List<Interaction> = emptyList())
     suspend fun interactions(): List<Interaction> = get<Interactions>("/api/v1/interactions").interactions
-    suspend fun resolve(id: String, r: Resolution) { post("/api/v1/interactions/$id/resolve", r) }
+    suspend fun resolve(id: String, r: Resolution) {
+        // Notification actions may arrive before the socket has restored its session metadata.
+        if (sessionLookup != null) {
+            val ix = interactionLookup?.invoke(id) ?: interactions().firstOrNull { it.id == id }
+                ?: throw HubException(410, "此请求已经处理", "interaction_expired")
+            val s = sessionLookup?.invoke(ix.sessionKey) ?: sessions().firstOrNull { it.key == ix.sessionKey }
+            if (s?.canApprove != true) throw HubException(403, "此会话不允许审批", "session_read_only")
+        }
+        post("/api/v1/interactions/$id/resolve", r)
+    }
 
     @Serializable
     private data class StartBody(
@@ -230,8 +259,10 @@ class ApiClient(val baseUrl: String, val token: String) {
     @Serializable private data class QueueEdit(val keep: List<Int>)
     @Serializable private data class QueueResp(val queue: List<String> = emptyList())
     /** Pulls the queued input back out of claude and re-queues the indexes in `keep`; returns what was queued. */
-    suspend fun editQueue(k: SessionKey, keep: List<Int>): List<String> =
-        JsonCodec.decodeFromString<QueueResp>(post(sp(k) + "/queue", QueueEdit(keep))).queue
+    suspend fun editQueue(k: SessionKey, keep: List<Int>): List<String> {
+        requireSession(k) { it.canSend }
+        return JsonCodec.decodeFromString<QueueResp>(post(sp(k) + "/queue", QueueEdit(keep))).queue
+    }
 
     @Serializable private data class ModesBody(
         @SerialName("permission_mode") val permissionMode: String? = null,
@@ -239,6 +270,7 @@ class ApiClient(val baseUrl: String, val token: String) {
     )
     /** Switch a running session's permission mode or effort (node/modes.go; bypassPermissions only at start). */
     suspend fun setModes(k: SessionKey, permissionMode: String? = null, effort: String? = null) {
+        requireSession(k) { it.canSend }
         post(sp(k) + "/modes", ModesBody(permissionMode, effort))
     }
 
@@ -255,11 +287,17 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun dirs(machine: String, path: String): DirList = get("/api/v1/machines/$machine/dirs", mapOf("path" to path))
 
     /** Quits the agent and closes its herdr tab (or just its pane in a split tab). */
-    suspend fun close(k: SessionKey) { raw("POST", sp(k) + "/close") }
+    suspend fun close(k: SessionKey) {
+        requireSession(k) { it.canTerminal }
+        raw("POST", sp(k) + "/close")
+    }
 
     @Serializable private data class Rename(@SerialName("tab_name") val tabName: String, val title: String)
     /** Renames the herdr tab and the Claude session together, as the iOS app does. */
-    suspend fun rename(k: SessionKey, name: String) { post(sp(k) + "/rename", Rename(name, name)) }
+    suspend fun rename(k: SessionKey, name: String) {
+        requireSession(k) { it.canTerminal }
+        post(sp(k) + "/rename", Rename(name, name))
+    }
 
     @Serializable private data class SpaceName(val name: String)
     suspend fun renameSpace(machine: String, workspaceId: String, name: String) {

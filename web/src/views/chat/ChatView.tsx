@@ -1,9 +1,9 @@
 // One conversation: an agent in herdr on one of your computers, or a Jarvis assistant conversation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, errorText, sessionPath } from "../../lib/api";
-import { ago, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
+import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
+import { ago, resumeCommand, sessionCan, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
-import { markSeenLocally, useStore } from "../../lib/store";
+import { getSession, markSeenLocally, refresh, useStore } from "../../lib/store";
 import { segments, type UserMessage } from "../../lib/turns";
 import type { Session } from "../../lib/types";
 import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
@@ -113,6 +113,10 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
   // ── sending ──
   const deliver = useCallback(
     async (out: Outgoing, id: string, clearDraft?: string): Promise<boolean> => {
+      if (!sessionCan(getSession(mid, sid), "send")) {
+        toast(sourceSubtitle(session) || "正在读取会话信息，稍后再试", "error");
+        return false;
+      }
       const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, text: out.text, images: [], contexts: [] } };
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       atEnd.current = true;
@@ -136,12 +140,13 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
         return false;
       }
     },
-    [mid, sid],
+    [mid, sid, session],
   );
 
   const onSend = (out: Outgoing) => deliver(out, uuid());
 
   const interrupt = async () => {
+    if (!sessionCan(getSession(mid, sid), "interrupt")) return;
     try {
       await api(`${sessionPath(mid, sid)}/interrupt`, { method: "POST" });
       toast("已中断");
@@ -160,7 +165,7 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
     addEventListener("keydown", key);
     return () => removeEventListener("keydown", key);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+  }, [state, session]);
 
   const lastLive = working && !tr.loading;
   const title = session ? sessionTitle(session) : assistant ? "新对话" : "会话";
@@ -236,11 +241,12 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
         )}
         <Composer
           draftKey={`${mid}/${sid}`}
-          placeholder={assistant ? "问 Jarvis…" : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
+          placeholder={!sessionCan(session, "send") && session?.source_kind ? "此会话仅可查看" : assistant ? "问 Jarvis…" : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
           machineId={mid}
           working={state === "working"}
           onSend={onSend}
-          onStop={assistant ? undefined : interrupt}
+          disabled={!sessionCan(session, "send")}
+          onStop={assistant || !sessionCan(session, "interrupt") ? undefined : interrupt}
           commands={assistant ? [] : undefined}
           suggestion={session?.suggestion}
           autoFocus
@@ -280,8 +286,8 @@ export function ChatView({ mid, sid, assistant, starting, onToggleSidebar }: { m
 }
 
 function ComposerFooter({ session, assistant }: { session: Session; assistant?: boolean }) {
-  const parts = [session.launcher, session.model?.split("/").pop(), assistant ? "" : shortPath(session.cwd)].filter(Boolean);
-  return <span title={session.cwd}>{parts.join(" · ")}</span>;
+  const parts = [sourceSubtitle(session), session.launcher, session.model?.split("/").pop(), assistant ? "" : shortPath(session.cwd)].filter(Boolean);
+  return <span title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>;
 }
 
 function Header({
@@ -306,18 +312,28 @@ function Header({
   const [closing, setClosing] = useState(false);
   const state = session ? stateOf(session) : "unknown";
   const sub = assistant
-    ? [session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
-    : [machineName, session?.space_name, session && tabLabel(session)].filter(Boolean).join(" › ");
+    ? [sourceSubtitle(session), session?.launcher, session?.updated_at ? ago(session.updated_at) : ""].filter(Boolean).join(" · ")
+    : [sourceSubtitle(session), machineName, session?.space_name, session && tabLabel(session)].filter(Boolean).join(" › ");
+  const allowed = session ? sessionMenuActions(session) : [];
+  const attach = async () => {
+    if (!session || !sessionCan(getSession(session.machine_id, session.session_id), "attach")) return;
+    try {
+      await attachSession(session.machine_id, session.session_id);
+      await refresh();
+      toast("已实时接入", "ok");
+    } catch (e) { toast(`接入失败：${errorText(e)}`, "error"); }
+  };
   const others = siblings.filter((s) => s.session_id !== session?.session_id);
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
 
   const items: MenuItem[] = session
     ? [
-        ...(state === "working" ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
+        ...(allowed.includes("attach") ? [{ key: "attach", label: "实时接入", icon: "link" as const, onSelect: () => void attach() }] : []),
+        ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
         { key: "sid", label: "拷贝会话 ID", icon: "copy", onSelect: () => copyText(session.session_id) },
         ...(session.cwd ? [{ key: "cwd", label: "拷贝目录", icon: "folder" as const, onSelect: () => copyText(session.cwd) }] : []),
-        { key: "resume", label: "拷贝恢复命令", icon: "terminal", onSelect: () => copyText(`cd ${session.cwd} && claude --resume ${session.session_id}`) },
-        ...(!assistant && state !== "offline" ? [{ key: "close", label: "关闭 Agent…", icon: "x" as const, danger: true, onSelect: () => setClosing(true) }] : []),
+        ...(allowed.includes("resume") ? [{ key: "resume", label: "拷贝恢复命令", icon: "terminal" as const, onSelect: () => copyText(resumeCommand(session)) }] : []),
+        ...(!assistant && allowed.includes("close") ? [{ key: "close", label: "关闭 Agent…", icon: "x" as const, danger: true, onSelect: () => setClosing(true) }] : []),
       ]
     : [];
 
@@ -330,7 +346,7 @@ function Header({
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
           {session && !assistant && state !== "idle" && <StatePill state={state} />}
         </div>
-        <div className="truncate text-[11.5px] text-ink-3">{sub}</div>
+        <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>
       </div>
       {others.length > 0 && (
         <button type="button" onClick={tabs.open} className="relative flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink">
@@ -362,6 +378,7 @@ function Header({
 function CloseAgent({ open, onClose, session, machineName }: { open: boolean; onClose: () => void; session: Session; machineName: string }) {
   const [busy, setBusy] = useState(false);
   const go = async () => {
+    if (!sessionCan(getSession(session.machine_id, session.session_id), "terminal")) return;
     setBusy(true);
     try {
       await api(`${sessionPath(session.machine_id, session.session_id)}/close`, { method: "POST" });

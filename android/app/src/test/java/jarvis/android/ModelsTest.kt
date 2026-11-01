@@ -180,6 +180,73 @@ class SessionInfoTest {
     }
 }
 
+class SessionSourcesTest {
+    @Test fun legacyAndMissingMetadataDoNotInventASource() {
+        val old = JsonCodec.decodeFromString<Session>("""{"session_id":"aabbccdd","status":"working"}""")
+        assertTrue(old.canRead && old.canSend && old.canInterrupt && old.canApprove && old.canTerminal)
+        assertFalse(old.canAttach)
+        assertNull(old.sourceSubtitle)
+        val missing = old.copy(sourceKind = "codex_app_server")
+        assertFalse(missing.canRead || missing.canSend || missing.canInterrupt || missing.canApprove || missing.canTerminal || missing.canAttach)
+    }
+
+    @Test fun historyIsReadOnlyAndMetadataRoundTrips() {
+        val history = JsonCodec.decodeFromString<Session>(
+            """{"session_id":"opaque","source_kind":"codex_history","source_thread_id":"thread","source_instance_id":"instance","parent_thread_id":"parent","read_only_reason":"外部进程正在使用此会话","capabilities":{"read":true}}""",
+        )
+        assertTrue(history.canRead)
+        assertFalse(history.canSend || history.canInterrupt || history.canApprove || history.canTerminal || history.canAttach)
+        assertEquals("Codex 历史 · 仅查看：外部进程正在使用此会话", history.sourceSubtitle)
+        assertEquals("thread", history.sourceThreadId)
+        assertEquals("instance", history.sourceInstanceId)
+        assertEquals("parent", history.parentThreadId)
+        assertEquals(history, JsonCodec.decodeFromString<Session>(JsonCodec.encodeToString(history)))
+        assertEquals("cd /tmp/project && codex resume thread", jarvis.android.ui.resumeCommand(history, "/tmp/project", "thread"))
+    }
+
+    @Test fun liveMenusRequireExplicitCapabilities() {
+        val live = JsonCodec.decodeFromString<Session>(
+            """{"session_id":"opaque","source_kind":"codex_app_server","status":"working","capabilities":{"read":true,"send":true,"attach":true},"attached":false}""",
+        )
+        assertTrue(live.canSend && live.canAttach)
+        assertFalse(live.canTerminal || live.canInterrupt || live.canApprove)
+        assertFalse(live.copy(attached = true).canAttach)
+        assertTrue(live.copy(capabilities = live.capabilities!!.copy(interrupt = true)).canInterrupt)
+    }
+
+    @Test fun apiRejectsReadonlyOperationsWithoutRequesting() = kotlinx.coroutines.runBlocking {
+        val server = okhttp3.mockwebserver.MockWebServer().apply { start() }
+        try {
+            val api = ApiClient(server.url("/").toString(), "device-token")
+            val session = Session(sessionId = "opaque", machineId = "m", sourceKind = "codex_history")
+            api.sessionLookup = { session }
+            api.interactionLookup = { Interaction(id = "ix", machineId = "m", sessionId = "opaque", kind = "permission") }
+            val calls: List<suspend () -> Unit> = listOf(
+                { api.send(session.key, "继续", "message-id") }, { api.interrupt(session.key) },
+                { api.keys(session.key, listOf("enter")) }, { api.close(session.key) }, { api.attach(session.key) },
+                { api.resolve("ix", Resolution(allow = true)) },
+            )
+            for (call in calls) assertEquals("session_read_only", (runCatching { call() }.exceptionOrNull() as jarvis.android.data.HubException).code)
+            assertEquals(0, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun attachPostsToTheSessionRoute() = kotlinx.coroutines.runBlocking {
+        val server = okhttp3.mockwebserver.MockWebServer().apply { start() }
+        try {
+            val api = ApiClient(server.url("/").toString(), "device-token")
+            api.sessionLookup = { Session(sessionId = "opaque", machineId = "m", sourceKind = "codex_app_server",
+                capabilities = jarvis.android.data.SessionCapabilities(attach = true)) }
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setResponseCode(200).setBody("{}"))
+            api.attach(jarvis.android.data.SessionKey("m", "opaque"))
+            val request = server.takeRequest(1, java.util.concurrent.TimeUnit.SECONDS)!!
+            assertEquals("POST", request.method)
+            assertEquals("/api/v1/sessions/m/opaque/attach", request.path)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+}
+
 class DictationTest {
     @Test fun heardTextGoesAtTheEnd() {
         val f = { d: String, h: String -> jarvis.android.ui.chat.withDictation(d, h) }

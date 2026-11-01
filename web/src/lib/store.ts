@@ -38,6 +38,11 @@ export function getState() {
   return state;
 }
 
+export function getSession(mid: string, sid: string): Session | undefined {
+  return (state.sessions[mid] ?? []).find((s) => s.session_id === sid)
+    ?? state.assistant?.conversations.find((s) => s.machine_id === mid && s.session_id === sid);
+}
+
 // Selectors may build new arrays / objects: a result shallow-equal to the last one is the last one, so
 // useSyncExternalStore sees a stable snapshot and only re-renders on a real change.
 function shallowEqual(a: unknown, b: unknown): boolean {

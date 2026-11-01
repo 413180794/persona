@@ -92,6 +92,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/image", h.withMachine(h.sessionImage))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/items/{iid}/full", h.withMachine(h.sessionItemFull))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/messages", h.withMachine(h.sendMessage))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/attach", h.proxyBody("session.attach"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/interrupt", h.proxyBody("session.interrupt"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))

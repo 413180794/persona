@@ -14,6 +14,7 @@ florak/
 # Personal notes for coding agents working in this checkout (machines, accounts); see CLAUDE.md.
 /CLAUDE.local.md
 /build-publish/
+/repos/
 /server/internal/hub/webdist/*
 !/server/internal/hub/webdist/README.md
 # A hub run from deploy/docker (docs/docker.md): its secrets and data stay out of the repo.

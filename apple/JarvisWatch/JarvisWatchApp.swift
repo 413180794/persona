@@ -93,7 +93,7 @@ final class WatchModel {
     }
 
     func resolve(_ ix: Interaction, _ r: Resolution) async {
-        guard let api else { return }
+        guard sessions.first(where: { $0.key == ix.sessionKey })?.canApprove == true, let api else { return }
         do {
             try await api.resolve(ix.id, r)
             interactions.removeAll { $0.id == ix.id }
@@ -105,7 +105,7 @@ final class WatchModel {
     }
 
     func send(_ key: SessionKey, _ text: String) async {
-        guard let api else { return }
+        guard sessions.first(where: { $0.key == key })?.canSend == true, let api else { return }
         do {
             try await api.send(key, text: text)
             WKInterfaceDevice.current().play(.success)
@@ -142,6 +142,7 @@ final class WatchModel {
     }
 
     func interrupt(_ key: SessionKey) async {
+        guard sessions.first(where: { $0.key == key })?.canInterrupt == true else { return }
         try? await api?.interrupt(key)
         WKInterfaceDevice.current().play(.stop)
     }
@@ -393,6 +394,7 @@ struct WatchInteractionView: View {
             }
         }
         .navigationTitle(interaction.kind.watchTitle)
+        .disabled(model.sessions.first(where: { $0.key == interaction.sessionKey })?.canApprove != true)
     }
 
     private func submit() {
@@ -405,6 +407,7 @@ struct WatchInteractionView: View {
     }
 
     private func act(_ r: Resolution) {
+        guard model.sessions.first(where: { $0.key == interaction.sessionKey })?.canApprove == true else { return }
         Task {
             await model.resolve(interaction, r)
             dismiss()
@@ -440,16 +443,21 @@ struct WatchSessionView: View {
                         .padding(it.role == "user" ? .leading : .trailing, 14)
                         .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                 }
+                if let source = session.sourceSubtitle {
+                    Text(source).font(Theme.Font.caption).foregroundStyle(.secondary)
+                }
                 TextField("回复（可听写）", text: $reply)
+                    .disabled(!session.canSend)
                     .onSubmit {
+                        guard session.canSend else { return }
                         let t = reply
                         reply = ""
                         guard !t.isEmpty else { return }
                         Task { await model.send(session.key, t); await load() }
                     }
                 HStack {
-                    Button("继续") { Task { await model.send(session.key, "继续") } }
-                    if session.status.isActive {
+                    Button("继续") { Task { await model.send(session.key, "继续") } }.lineLimit(1).disabled(!session.canSend)
+                    if session.status.isActive && session.canInterrupt {
                         Button { Task { await model.interrupt(session.key) } } label: { Image(systemName: Theme.Icon.interrupt) }
                             .tint(Theme.danger)
                     }

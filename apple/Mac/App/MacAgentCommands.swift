@@ -58,22 +58,24 @@ struct MacAgentMenu: Commands {
         CommandMenu("Agent") {
             let key = MacShellState.shared.focusedChat(model)
             let ix = key.flatMap { model.interactions(for: $0).first }
+            let current = key.flatMap { model.session($0) }
+            let terminalOff = current.map { $0.hasSource && !$0.canTerminal } ?? false
             Button("中断") { if let key { Task { await model.interrupt(key) } } }
                 .keyboardShortcut(".", modifiers: .command)
-                .disabled(key == nil || model.session(key!)?.state != .working)
+                .disabled(current?.state != .working || current?.canInterrupt != true)
             Button("批准当前待处理") {
                 if let ix, let r = MacAgentCommands.approve(ix) { Task { await model.resolve(ix, r) } }
             }
             // ⇧⌘⏎: ⌘⏎ is the composer's send (ComposerParts).
             .keyboardShortcut(.return, modifiers: [.command, .shift])
-            .disabled(ix.flatMap(MacAgentCommands.approve) == nil)
+            .disabled(ix.flatMap(MacAgentCommands.approve) == nil || current?.canApprove != true)
             // ⇧⌘⌫, not the docs' first idea ⌘⌫: that one deletes to the line's start while typing in the composer,
             // and a menu shortcut would take it.
             Button("拒绝") {
                 if let ix, let r = MacAgentCommands.reject(ix) { Task { await model.resolve(ix, r) } }
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
-            .disabled(ix.flatMap(MacAgentCommands.reject) == nil)
+            .disabled(ix.flatMap(MacAgentCommands.reject) == nil || current?.canApprove != true)
             // ⌥⌘1…9 (⌘1…6 are the sections): pick an option of the question or terminal dialog on screen.
             let choices = ix.map(MacAgentCommands.choices) ?? []
             Menu("回答") {
@@ -82,7 +84,7 @@ struct MacAgentMenu: Commands {
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
                 }
             }
-            .disabled(choices.isEmpty)
+            .disabled(choices.isEmpty || current?.canApprove != true)
             Divider()
             Button("下一个需要你的") {
                 if let next = MacAgentCommands.nextNeedsYou(after: key, in: model.allSessions, muted: { model.isMuted($0) }) {
@@ -96,8 +98,13 @@ struct MacAgentMenu: Commands {
             Button("在新窗口打开") { if let key { MacShellState.shared.chatWindow = key } }
                 .disabled(key == nil)
             // Only an Agent in a herdr pane has a terminal (the Jarvis conversation runs headless).
-            Button("在新窗口打开终端") { if let key { MacShellState.shared.terminalWindow = key } }
-                .disabled(key.flatMap { model.session($0) }.map { $0.assistant || $0.paneID == nil } ?? true)
+            if !terminalOff {
+                Button("在新窗口打开终端") { if let key { MacShellState.shared.terminalWindow = key } }
+                    .disabled(current.map { $0.assistant || $0.paneID == nil || !$0.canTerminal } ?? true)
+            }
+            if current?.canAttach == true {
+                Button("实时接入") { if let key { Task { await model.attach(key) } } }.lineLimit(1)
+            }
             // The row menu's 交给 Jarvis: the Agent's state and last answer go to the main conversation (AgentHandoff).
             Button("交给 Jarvis") {
                 if let key, let s = model.session(key) {
@@ -114,11 +121,13 @@ struct MacAgentMenu: Commands {
             // The chat page's own dialogs (ChatView's ⋯ menu, the composer's /clear), so only for an Agent's chat.
             let agent = key.flatMap { model.session($0) }.flatMap { $0.assistant ? nil : $0 }
             Button("重命名…") { ask(.rename) }
-                .disabled(agent == nil)
+                .disabled(agent?.canTerminal != true)
             Button("清空上下文…") { ask(.clear) }
-                .disabled(agent.map { $0.paneID == nil || $0.isCodex || $0.isTraex || $0.state == .working } ?? true)
-            Button("关闭 Agent…") { ask(.close) }
-                .disabled(agent?.status.isLive != true)
+                .disabled(agent.map { !$0.canSend || !$0.canTerminal || $0.paneID == nil || $0.isCodex || $0.isTraex || $0.state == .working } ?? true)
+            if !terminalOff {
+                Button("关闭 Agent…") { ask(.close) }
+                    .disabled(agent?.status.isLive != true || agent?.canTerminal != true)
+            }
             Divider()
             Button("标为已读") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)
@@ -129,12 +138,14 @@ struct MacAgentMenu: Commands {
             Divider()
             Button("拷贝会话 ID") { if let key { copy(key.sessionID, "已拷贝会话 ID") } }
                 .disabled(key == nil)
-            Button("拷贝恢复命令") {
-                if let key, let s = model.session(key) {
-                    copy(MacAgentCommands.resumeLine(cwd: s.cwd, command: s.resumeCommand, id: key.sessionID), "已拷贝恢复命令")
+            if !terminalOff {
+                Button("拷贝恢复命令") {
+                    if let key, let s = model.session(key), s.canTerminal {
+                        copy(MacAgentCommands.resumeLine(cwd: s.cwd, command: s.resumeCommand, id: s.sourceThreadID ?? key.sessionID), "已拷贝恢复命令")
+                    }
                 }
+                .disabled(current?.canTerminal != true)
             }
-            .disabled(key == nil)
         }
     }
 

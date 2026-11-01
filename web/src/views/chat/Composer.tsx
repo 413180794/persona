@@ -125,6 +125,7 @@ export function Composer({
   }, [active, rows.length]);
 
   const addFiles = async (files: FileList | File[]) => {
+    if (disabled) return;
     for (const f of Array.from(files)) {
       if (f.type.startsWith("image/")) {
         if (f.size > MAX_IMAGE) {
@@ -311,6 +312,7 @@ export function Composer({
             aria-label={machineId ? "添加图片或文件" : "添加图片"}
             title={machineId ? "图片作为附件；其他文件传到会话所在的电脑" : "添加图片"}
             onClick={() => fileInput.current?.click()}
+            disabled={disabled}
             className="flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
           >
             {uploading ? <Spinner /> : <Icon name="plus" size={16} stroke={2} />}
@@ -319,6 +321,7 @@ export function Composer({
           <button
             type="button"
             aria-label="命令"
+            disabled={disabled}
             title="命令"
             onClick={() => {
               setDraft("/");

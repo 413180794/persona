@@ -10,9 +10,7 @@ import (
 // ClaimSend records a message about to be sent. A client_msg_id seen before returns that send's state instead
 // ("sending", "delivered", "unknown"); "" means this one is new and now recorded as sending.
 func (d *DB) ClaimSend(ctx context.Context, id, machine, session string) (string, error) {
-	if _, err := d.pool.Exec(ctx, `DELETE FROM sent_messages WHERE created_at < now() - interval '1 day'`); err != nil {
-		return "", err
-	}
+	// A restored outbox can retry much later. Expiring an unacknowledged operation makes an old retry execute again.
 	tag, err := d.pool.Exec(ctx, `INSERT INTO sent_messages (client_msg_id, machine_id, session_id, state)
 		VALUES ($1, $2, $3, 'sending') ON CONFLICT DO NOTHING`, id, machine, session)
 	if err != nil || tag.RowsAffected() == 1 {

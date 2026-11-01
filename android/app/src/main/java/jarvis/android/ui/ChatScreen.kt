@@ -375,7 +375,8 @@ fun ChatScreen(
     // The message leaves the input box at once: the outbox draws it, sends it (or keeps it until connected) with one
     // client_msg_id, and puts a refusal or failure on the bubble (重发 / 删除 there).
     // /clear only for Claude in a herdr pane (iOS canClear): not Jarvis, not Codex / TRAEX.
-    val canClear = !assistant && session?.paneId != null && (session.agent == null || session.agent == "claude")
+    val canClear = !assistant && session?.canSend == true && session.canTerminal && session.paneId != null && !session.isCodex && (session.agent == null || session.agent == "claude")
+    val canSend = session?.canSend == true
     var confirmClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     if (confirmClear) androidx.compose.material3.AlertDialog(
@@ -396,6 +397,7 @@ fun ChatScreen(
     )
 
     fun send() {
+        if (hub.session(key)?.canSend != true) return
         val sentContexts = contexts
         val text = composeMessage(draft, images.isNotEmpty(), sentContexts) ?: return
         Outbox.send(hub, key, text, images)
@@ -430,9 +432,9 @@ fun ChatScreen(
         if (machine == null || assistant) return@LaunchedEffect
         gitCount = runCatching { hub.api.gitStatus(key.machineId, cwd) }.getOrNull()?.takeIf { it.isRepo }?.files?.size
     }
-    val openTerminal: (() -> Unit)? = if (session?.isLive == true && !assistant) ({ terminal = true }) else null
+    val openTerminal: (() -> Unit)? = if (session?.isLive == true && session.canTerminal && !assistant) ({ terminal = true }) else null
 
-    if (terminal) {
+    if (terminal && session?.canTerminal == true) {
         jarvis.android.terminal.TerminalScreen(hub, key, session?.displayTitle ?: key.sessionId.take(8), onClose = { terminal = false })
         return
     }
@@ -456,6 +458,7 @@ fun ChatScreen(
                             val where = if (assistant) listOfNotNull(
                                 "Jarvis", session?.agentState?.takeIf { it == AgentState.Working }?.let { "正在回复" },
                             ).joinToString(" · ") else listOfNotNull(
+                                session?.sourceSubtitle,
                                 machine?.displayName,
                                 session?.spaceName?.takeIf { it.isNotBlank() },
                                 session?.agentState?.label(),
@@ -474,30 +477,41 @@ fun ChatScreen(
                     },
                     actions = {
                         if (openTerminal != null) IconButton(onClick = openTerminal) { Icon(Icons.Default.Terminal, "终端") }
-                        if (working) {
+                        if (working && session?.canInterrupt == true) {
                             IconButton(onClick = { scope.launch { runCatching { hub.api.interrupt(key) }.onFailure { notice = it.message } } }) {
                                 Icon(Icons.Default.Stop, "中断")
                             }
                         }
                         actions()
                         val cwd = env.cwd
-                        if (!assistant && cwd != null && machine != null) Box {
+                        if (!assistant && ((cwd != null && machine != null) || session?.canAttach == true)) Box {
                             IconButton(onClick = { moreMenu = true }) { Icon(Icons.Default.MoreVert, "更多") }
                             DropdownMenu(moreMenu, onDismissRequest = { moreMenu = false }) {
-                                DropdownMenuItem({ Text("文件", maxLines = 1) }, {
-                                    moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.DIR)
-                                })
-                                gitCount?.let { n ->
-                                    DropdownMenuItem({ Text(if (n > 0) "Git（$n）" else "Git", maxLines = 1) }, {
-                                        moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
+                                if (cwd != null && machine != null) {
+                                    DropdownMenuItem({ Text("文件", maxLines = 1) }, {
+                                        moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.DIR)
                                     })
+                                    gitCount?.let { n ->
+                                        DropdownMenuItem({ Text(if (n > 0) "Git（$n）" else "Git", maxLines = 1) }, {
+                                            moreMenu = false; filesTarget = FilesTarget(key.machineId, cwd, cwd, FilesTarget.Mode.GIT)
+                                        })
+                                    }
                                 }
                                 DropdownMenuItem({ Text("会话信息", maxLines = 1) }, { moreMenu = false; showInfo = true })
-                                if (session?.isLive == true) DropdownMenuItem(
+                                if (session?.canAttach == true) DropdownMenuItem(
+                                    { Text("实时接入", maxLines = 1) },
+                                    {
+                                        moreMenu = false
+                                        scope.launch { runCatching { hub.api.attach(key); hub.refresh() }
+                                            .onSuccess { Toasts.show("已实时接入", ToastStyle.SUCCESS) }
+                                            .onFailure { notice = "接入失败：${it.message}" } }
+                                    },
+                                )
+                                if (session?.isLive == true && session.canTerminal) DropdownMenuItem(
                                     { Text("关闭 Agent…", color = MaterialTheme.colorScheme.error, maxLines = 1) },
                                     { moreMenu = false; closing = true },
                                 )
-                                DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
+                                if (cwd != null) DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
                                     moreMenu = false
                                     jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
                                     Toasts.show("已拷贝", ToastStyle.SUCCESS)
@@ -569,9 +583,12 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) { cards.forEach { ix -> androidx.compose.runtime.key(ix.id) { InteractionCard(hub, ix) } } }
                 }
+                if (session?.hasSource == true && !canSend) Text(
+                    session.sourceSubtitle.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
                 session?.takeIf { it.starting == true || it.startError != null }?.let { StartingNote(it.startError, it.agentLabel) }
-                session?.takeIf { it.agent == null || it.agent == "claude" }?.let {
+                session?.takeIf { it.canSend && !it.isCodex && (it.agent == null || it.agent == "claude") }?.let {
                     // Photos and quotes in the box stay for the message: /model goes out on its own.
                     SessionModeBar(hub, it, onPickModel = { id -> Outbox.send(hub, key, "/model $id") })
                 }
@@ -624,7 +641,7 @@ fun ChatScreen(
                 }
                 Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
                     Box {
-                        IconButton({ attachMenu = true }, enabled = uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
+                        IconButton({ attachMenu = true }, enabled = canSend && uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
                         DropdownMenu(attachMenu, onDismissRequest = { attachMenu = false }) {
                             DropdownMenuItem({ Text("照片") }, {
                                 attachMenu = false
@@ -648,10 +665,11 @@ fun ChatScreen(
                         }
                     }
                     OutlinedTextField(
-                        draft, { draft = it },
+                        draft, { draft = it }, enabled = canSend,
                         placeholder = {
                             Text(
                                 when {
+                                    !canSend && session?.hasSource == true -> "此会话仅可查看"
                                     assistant -> "问 Jarvis…"
                                     session?.isLive == false -> "发消息会在电脑上恢复这个会话"
                                     else -> "发给 ${session?.agentLabel ?: "Claude"}"
@@ -662,11 +680,11 @@ fun ChatScreen(
                     )
                     if (canDictate && draft.isBlank() && images.isEmpty()) IconButton(
                         onClick = { runCatching { dictate.launch(dictation) }.onFailure { notice = "这台手机上没有语音输入" } },
-                        enabled = uploading == null,
+                        enabled = canSend && uploading == null,
                     ) { Icon(Icons.Default.Mic, "语音输入") }
                     IconButton(
                         onClick = { send() },
-                        enabled = uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
+                        enabled = canSend && uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),
                     ) { Icon(Icons.AutoMirrored.Filled.Send, "发送") }
                 }
             }

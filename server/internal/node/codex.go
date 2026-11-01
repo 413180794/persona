@@ -52,8 +52,8 @@ var rolloutIDRe = regexp.MustCompile(`([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 func (n *Node) codexHome() string { return filepath.Join(n.home, ".codex") }
 
 func (n *Node) codexRollouts() []codexRollout { return rollouts(n.codexHome()) }
-func (n *Node) codexPath(id string) string    { return rolloutPath(n.codexHome(), id) }
-func (n *Node) codexTitle(id string) string   { return threadTitle(n.codexHome(), id) }
+func (n *Node) codexPath(id string) string { if s,ok:=n.codexSource(id);ok{return rolloutPath(s.home,s.thread)};return rolloutPath(n.codexHome(),id) }
+func (n *Node) codexTitle(id string) string { if s,ok:=n.codexSource(id);ok{return threadTitle(s.home,s.thread)};return threadTitle(n.codexHome(),id) }
 
 func cacheFor(home string) *rolloutCache {
 	c := rolloutCaches.byHome[home]
@@ -87,6 +87,8 @@ func rollouts(home string) []codexRollout {
 	}
 	if now.Sub(c.olderAt) > time.Minute {
 		all, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*.jsonl"))
+		archived, _ := filepath.Glob(filepath.Join(home,"archived_sessions","rollout-*.jsonl"))
+		all = append(all, archived...)
 		c.older = c.older[:0]
 		for _, p := range all {
 			if !recent[filepath.Dir(p)] {
@@ -148,10 +150,11 @@ func rolloutPath(home, id string) string {
 		return ""
 	}
 	matches, _ := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
+	if len(matches) == 0 { matches,_ = filepath.Glob(filepath.Join(home,"archived_sessions","rollout-*-"+id+".jsonl")) }
 	if len(matches) == 0 {
 		return ""
 	}
-	return matches[0]
+	return newestFirst(matches)[0]
 }
 
 // codexSession picks the rollout of a Codex pane herdr could not identify: the newest in its directory not taken.
@@ -160,9 +163,11 @@ func (n *Node) codexSession(a host.Agent, taken map[string]host.Agent) string {
 	if cwd == "" {
 		cwd = a.Cwd
 	}
-	for _, r := range n.codexRollouts() {
-		if _, used := taken[r.id]; !used && r.cwd != "" && (r.cwd == cwd || r.cwd == a.Cwd) {
-			return r.id
+	home := n.codexPaneHome(a.PaneID)
+	for _, r := range rollouts(home) {
+		id := n.codexPublicID(home,r.id)
+		if _, used := taken[id]; !used && r.cwd != "" && (r.cwd == cwd || r.cwd == a.Cwd) {
+			return id
 		}
 	}
 	return ""
@@ -178,11 +183,11 @@ func (n *Node) codexByTitle(a host.Agent, prefer string, taken map[string]host.A
 	}
 	name := strings.TrimSpace(a.Title[:i])
 	cut := strings.TrimSuffix(strings.TrimSuffix(name, "..."), "…")
-	home := n.codexHome()
+	home := n.codexPaneHome(a.PaneID)
 	var best string
 	var bestAt time.Time
 	for _, id := range threadsNamed(home, func(t string) bool { return t == name || (cut != name && strings.HasPrefix(t, cut)) }) {
-		if _, used := taken[id]; used {
+		if _, used := taken[n.codexPublicID(home,id)]; used {
 			continue
 		}
 		if id == prefer {

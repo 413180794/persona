@@ -379,7 +379,7 @@ func TestSentMessages(t *testing.T) {
 		t.Fatalf("after forgetting: %q", st)
 	}
 	_, _ = d.pool.Exec(ctx, `UPDATE sent_messages SET created_at = now() - interval '2 days'`)
-	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "" {
-		t.Fatalf("a day later the id is new again: %q", st)
+	if st, _ := d.ClaimSend(ctx, "m1", "box", "s1"); st != "sending" {
+		t.Fatalf("an old unacknowledged operation must not execute again: %q", st)
 	}
 }

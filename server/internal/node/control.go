@@ -32,6 +32,9 @@ func newUUID() string {
 // tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
 // newID is the id a new session gets (startAsync picked it already); empty: a fresh one.
 func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspaceID, mode, effort, tabName, newID string) (*proto.Session, error) {
+	if resume != "" && n.externalCodex(resume) {
+		return nil, refusal("codex_read_only", "不能用启动器恢复外部 Codex 会话", nil)
+	}
 	cwd, launcher, err := n.checkStart(cwd, launcher, resume, mode, effort)
 	if err != nil {
 		return nil, err
@@ -308,6 +311,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
 	// would see the first still in the box and be refused as a draft: one at a time.
 	defer n.typing.lock(id)()
+	if n.externalCodex(id) {
+		return n.sendCodex(ctx, id, text, images)
+	}
 	// Written while the session still starts (the app opens the chat at once): it goes in once claude is ready.
 	if err := n.starts.wait(ctx, id); err != nil {
 		return err

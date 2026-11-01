@@ -40,6 +40,8 @@ class OutboxTest {
         val unknown = HubException(502, "maybe", null, buildJsonObject { put("delivered", "unknown") })
         assertEquals(PendingMessage.Phase.UNKNOWN, Outbox.phaseOf(unknown))
         assertEquals(PendingMessage.Phase.FAILED, Outbox.phaseOf(HubException(500, "boom")))
+        assertEquals(PendingMessage.Phase.WAITING, Outbox.phaseOf(HubException(409, "metadata", "session_metadata_pending")))
+        assertEquals(PendingMessage.Phase.FAILED, Outbox.phaseOf(HubException(403, "read only", "session_read_only")))
     }
 
     @Test fun onlyWhatIsGoingOutIsSavedAndItComesBackWaiting() {
@@ -50,6 +52,7 @@ class OutboxTest {
                 PendingMessage("b", "two", PendingMessage.Phase.SENT),
                 PendingMessage("c", "three", PendingMessage.Phase.SENDING, createdAt = 7),
                 PendingMessage("d", "four", PendingMessage.Phase.FAILED),
+                PendingMessage("e", "maybe delivered", PendingMessage.Phase.UNKNOWN),
             ),
         )
         val entries = Outbox.entries(all)

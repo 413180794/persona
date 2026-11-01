@@ -263,6 +263,9 @@ func (n *Node) startingSession(id string) bool {
 	if _, live := n.agent(id); live {
 		return true
 	}
+	if _, known := n.codexSource(id); known {
+		return true
+	}
 	_, known := n.state.get(id)
 	return known
 }
@@ -271,6 +274,20 @@ func (n *Node) startingSession(id string) bool {
 // (resumed under another profile: the new writes go to the new copy, the old one stays): the newest is the one.
 // A path a hook reported is Claude's own word; one found here is looked for again after half a minute.
 func (n *Node) transcriptPath(id string) string {
+	if n.codexBlocked(id) {
+		return ""
+	}
+	if src, ok := n.codexSource(id); ok && !n.ownedAssistantSource(id) {
+		if src.path != "" {
+			if _, err := os.Stat(src.path); err == nil {
+				return src.path
+			}
+		}
+		return rolloutPath(src.home, src.thread)
+	}
+	if strings.HasPrefix(id, "c0de-") {
+		return ""
+	}
 	n.mu.Lock()
 	p := n.paths[id]
 	at, guessed := n.pathsAt[id]
@@ -487,6 +504,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				s.Subagents = n.subagents(id)
 			}
 		}
+		if n.codexBlocked(id) {
+			markCodexConflict(&s)
+		}
 		n.decorate(&s)
 		out = append(out, s)
 		seen[id] = true
@@ -502,6 +522,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			out = append(out, s)
 			seen[s.SessionID] = true
 		}
+	}
+	for _, s := range n.codexSessions(seen) {
+		out = append(out, s)
 	}
 	for _, s := range n.offline(seen) {
 		n.decorate(&s)
@@ -837,6 +860,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		if named := n.codexByTitle(a, id, m); named != "" {
 			id = named
 		}
+		if id != "" {
+			id = n.codexPublicID(n.codexPaneHome(a.PaneID), id)
+		}
 		if _, taken := m[id]; id == "" || taken {
 			unnamed = append(unnamed, a)
 			continue
@@ -992,9 +1018,7 @@ func (n *Node) pollAgents(ctx context.Context) {
 		}
 		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
 		if kicked || n.snapshotDue(snapped) {
-			if err := n.refreshHosts(ctx); err != nil {
-				continue
-			}
+			_ = n.refreshHosts(ctx)
 			snapped = time.Now()
 		}
 		list := n.sessionList(ctx, false)
@@ -1043,6 +1067,7 @@ func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
 		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion)
+		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}

@@ -947,8 +947,9 @@ nonisolated enum ChatCache {
     private static let maxBytes = 6 << 20
     /// The caches folder holding the copies. v2: items carry `wake`; older copies would keep the merged turns until
     /// they scrolled out. v3: notices carry `task` (a page's copy of an item never replaces the cached one: old
-    /// notices stayed centered blocks). Bump it whenever the item structure changes.
-    static let folder = "chats-v3"
+    /// notices stayed centered blocks). v4: Codex unknown events are retained and external sources have distinct identities.
+    /// Bump it whenever the item structure changes.
+    static let folder = "chats-v4"
 
     /// Whether a caches folder is one of ChatCache's, this version or an older one ("chats", "chats-v<N>"): what
     /// 设置 › 存储空间 counts under 「Agent 对话」.

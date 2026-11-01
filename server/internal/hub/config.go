@@ -31,7 +31,10 @@ type MachineConfig struct {
 	RemoteBin string `json:"remote_bin,omitempty"`
 	// ClaudeConfigDirs are Claude Code config directories (CLAUDE_CONFIG_DIR of launchers) besides ~/.claude to look
 	// in for sessions; those of running claudes are found by themselves. "~/" is the remote home.
-	ClaudeConfigDirs []string `json:"claude_config_dirs,omitempty"`
+	ClaudeConfigDirs []string            `json:"claude_config_dirs,omitempty"`
+	CodexDiscovery   *bool               `json:"codex_discovery,omitempty"`
+	CodexHomes       []string            `json:"codex_homes,omitempty"`
+	CodexServers     []proto.CodexServer `json:"codex_servers,omitempty"`
 }
 
 // GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy

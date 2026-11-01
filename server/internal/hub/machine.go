@@ -563,6 +563,16 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 				m.hub.logf("[%s] save session state: %v", m.cfg.ID, err)
 			}
 		}
+	case "codex.inventory":
+		m.rememberCodexInventory(params)
+	case "interaction.dismiss":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			m.hub.recordEnd(p.ID, "dismissed", nil)
+			m.hub.finishInteraction(p.ID)
+		}
 	case "claude.dirs":
 		m.rememberClaudeDirs(params)
 	case "usage":

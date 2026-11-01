@@ -1,4 +1,32 @@
-import type { AgentState, Session } from "./types";
+import type { AgentState, Session, SessionCapabilities } from "./types";
+
+// Missing session metadata is not permission to write; legacy sources retain their existing behavior.
+export function sessionCan(s: Session | undefined, operation: keyof SessionCapabilities): boolean {
+  if (!s) return false;
+  if (operation === "attach") return Boolean(s.source_kind && s.capabilities?.attach === true && !s.attached);
+  return !s.source_kind || s.capabilities?.[operation] === true;
+}
+
+export function sourceSubtitle(s?: Session): string {
+  if (!s?.source_kind) return "";
+  const label = s.source_kind === "codex_app_server" ? "Codex 实时" : s.source_kind === "codex_history" ? "Codex 历史" : s.source_kind === "identity_conflict" ? "身份冲突" : s.source_kind;
+  const detail = s.source_kind !== "identity_conflict" && s.agent_name ? ` · ${s.agent_name}` : "";
+  return sessionCan(s, "send") ? label + detail : `${label}${detail} · 仅查看：${s.read_only_reason || "此来源尚未允许发送"}`;
+}
+
+export function resumeCommand(s: Session): string {
+  const codex = s.agent === "codex" || s.source_kind === "codex_app_server" || s.source_kind === "codex_history";
+  const command = codex ? "codex resume" : s.agent === "traex" ? "traex resume" : "claude --resume";
+  return `cd ${s.cwd} && ${command} ${s.source_thread_id || s.session_id}`;
+}
+
+export function sessionMenuActions(s: Session): string[] {
+  return [
+    ...(sessionCan(s, "attach") ? ["attach"] : []),
+    ...(stateOf(s) === "working" && sessionCan(s, "interrupt") ? ["stop"] : []),
+    ...(sessionCan(s, "terminal") ? ["resume", ...(!s.assistant && stateOf(s) !== "offline" ? ["close"] : [])] : []),
+  ];
+}
 
 export const STATE_LABEL: Record<AgentState, string> = {
   needs_you: "需要你",

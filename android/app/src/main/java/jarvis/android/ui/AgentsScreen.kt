@@ -153,7 +153,7 @@ fun AgentsScreen(
             SessionRow(s, names[s.machineId], g.muted(s), showSpace, onClick = { onOpen(s.key) }, onLongClick = { menuFor = s })
         }
         // A running agent swipes left to 关闭 (iOS swipeActions): the row springs back and the confirmation opens.
-        if (s.isLive) SwipeToClose(s.key.path, onClose = { closingFor = s }, content = content) else content()
+        if (s.isLive && s.canTerminal) SwipeToClose(s.key.path, onClose = { closingFor = s }, content = content) else content()
     }
 
     Scaffold(
@@ -563,7 +563,7 @@ private fun SessionRow(
             // Inside a space section the space (and its machine) is already in the header.
             val where = listOfNotNull(
                 machine.takeIf { showSpace }, s.spaceName?.takeIf { showSpace && it.isNotBlank() },
-                s.slotName?.takeIf { !showSpace && it.isNotBlank() && it != s.slotIndex?.toString() }, s.agentLabel.takeIf { it != "Claude" },
+                s.slotName?.takeIf { !showSpace && it.isNotBlank() && it != s.slotIndex?.toString() }, s.sourceSubtitle ?: s.agentLabel.takeIf { it != "Claude" },
             ).joinToString(" · ")
             val sub = buildString {
                 if (s.agentState == AgentState.NeedsYou || s.agentState == AgentState.Working || s.agentState == AgentState.Unread) {

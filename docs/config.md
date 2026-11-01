@@ -118,6 +118,23 @@
 `sim.sh` / `release.sh` 会自动生成。直接跑 `xcodegen` 或打开 Xcode 之前先跑一次 `python3 scripts/jarvis_config.py xcconfig`。
 仓库里提交的 `project.yml` 和 `Info.plist` 只写 `$(JARVIS_BUNDLE_ID)` / `$(PRODUCT_BUNDLE_IDENTIFIER)`，钥匙串的 service 用运行时的 bundle id。
 
+## Codex app-server 多实例
+
+`hub.json` 的每台机器可以配置 `codex_homes`（目录数组）、`codex_servers`（`id`、`name`、`home`、`endpoint`）和可选的 `codex_discovery`（默认自动发现，设 false 只使用登记的来源）。例如：
+
+```json
+{
+  "codex_homes": ["~/.codex-profile"],
+  "codex_servers": [
+    {"id": "desktop", "name": "桌面实例", "home": "~/.codex-profile", "endpoint": "unix://<socket 的绝对路径>"}
+  ]
+}
+```
+
+无需硬编码应用名：node 每 30 秒发现当前用户的 Codex/app-server 进程、`CODEX_HOME` 和已开启的 listen 入口，已知 home 下存在的官方 control socket 也可发现。已发现目录和命名实例由 hub 的 Postgres settings 记忆；进程/连接代际不持久化。私有路径只放运行配置，不提交配置实值。
+
+Unix socket 与直接父目录必须属于当前用户且不对组/其他用户开放；里面走 WebSocket。TCP 入口只允许字面回环 IP，禁止外部主机、用户信息和查询凭据，也不使用系统 HTTP 代理。没有入口的 stdio 只读；不会启动 daemon、替换桌面应用或放宽文件权限。更多限制见 `codex-app-server.md`。
+
 ## hub 运行配置（hub.json）
 
 ```json

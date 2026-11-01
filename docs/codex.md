@@ -44,13 +44,15 @@ UserMessage 里 Codex 自己的 XML（2026-10-26 扫了本机和 hub 机器的�
 `<environment_context>`、`<INSTRUCTIONS>`、`<skill>`、`<turn_aborted>`、`<subagent_notification>`、`<realtime_delegation>`、
 `<codex_internal_context>` 只出现在 response_item（模型输入），不会进对话。
 
-`response_item` 是同样内容的模型线格式，跳过。Extension 里的 `web.search` 显示成 `WebSearch`（搜索，输入是查询词）/ `WebFetch`（`action.type=openPage`，输入是网址），结果每条「标题  网址」；SubAgentActivity、其他 Extension（生图）、CollabAgentToolCall 暂不显示。
+`response_item` 是同样内容的模型线格式，跳过。Extension 里的 `web.search` 显示成 `WebSearch`（搜索，输入是查询词）/ `WebFetch`（`action.type=openPage`，输入是网址），结果每条「标题  网址」；SubAgentActivity、其他 Extension（生图）、CollabAgentToolCall 保留为可识别的事件提示，完整内容仍以原始会话记录为准。
 
 Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `codex app-server`，见 `docs/assistant.md`「Codex」。
 
+一台电脑多个已有 app-server（桌面 App、独立 `CODEX_HOME`、多客户端读写和审批）已接入现有 Agents 列表，源码研究、配置和能力边界见 [`codex-app-server.md`](codex-app-server.md)。发现历史不需要 herdr；只有提供受保护 Unix/回环 WebSocket 入口的实例能实时接入和控制，外部 stdio 明确只读。
+
 ## 还不支持
 
-- 从手机新建 Codex 会话（启动器只认 claude 系列），离线（已退出）的 Codex 会话也不进列表。
+- 从手机新建外部 Codex 会话尚未开放；已知 Codex home 的近期离线/归档历史进入列表，但不能偷偷启动另一个 app-server 续聊。
 - Codex 没有 Claude 那样的 hook 代答：它在终端里等确认时（herdr 状态 blocked）走通用的「终端等你处理」屏幕交互。
 - 排队消息、子 Agent、后台任务这些 Claude transcript 才有的信息，Codex 会话里都是空的。
 

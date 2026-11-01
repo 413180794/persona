@@ -59,6 +59,10 @@ export function sessionPath(mid: string, sid: string) {
   return `/sessions/${enc(mid)}/${enc(sid)}`;
 }
 
+export function attachSession(mid: string, sid: string): Promise<unknown> {
+  return api(`${sessionPath(mid, sid)}/attach`, { method: "POST" });
+}
+
 // An <img> can't send a header: the hub also takes the token as a query parameter (it never logs queries).
 export function imageURL(mid: string, sid: string, itemID: string) {
   return `/api/v1${sessionPath(mid, sid)}/items/${enc(itemID)}/image?token=${enc(getToken())}`;

@@ -120,6 +120,16 @@ data class BackgroundTask(
 data class Subagent(val id: String = "", val running: Boolean = false)
 
 @Serializable
+data class SessionCapabilities(
+    val read: Boolean = false,
+    val send: Boolean = false,
+    val interrupt: Boolean = false,
+    val approve: Boolean = false,
+    val terminal: Boolean = false,
+    val attach: Boolean = false,
+)
+
+@Serializable
 data class Session(
     @SerialName("machine_id") val machineId: String = "",
     @SerialName("session_id") val sessionId: String,
@@ -128,6 +138,14 @@ data class Session(
     val status: String = "unknown",
     @SerialName("pane_id") val paneId: String? = null,
     val agent: String? = null,
+    @SerialName("agent_name") val agentName: String? = null,
+    @SerialName("source_kind") val sourceKind: String? = null,
+    @SerialName("source_thread_id") val sourceThreadId: String? = null,
+    @SerialName("source_instance_id") val sourceInstanceId: String? = null,
+    @SerialName("parent_thread_id") val parentThreadId: String? = null,
+    @SerialName("read_only_reason") val readOnlyReason: String? = null,
+    val capabilities: SessionCapabilities? = null,
+    val attached: Boolean = false,
     val launcher: String? = null,
     val model: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
@@ -160,7 +178,25 @@ data class Session(
     val agentState: AgentState get() = AgentState.of(state, status)
     val folderName: String get() = cwd.trimEnd('/').substringAfterLast('/')
     val displayTitle: String get() = if (title.isEmpty() || title == "Claude Code") folderName.ifEmpty { sessionId.take(8) } else title
-    val agentLabel: String get() = when (agent) { "codex" -> "Codex"; "traex" -> "TRAEX"; else -> "Claude" }
+    val hasSource: Boolean get() = !sourceKind.isNullOrEmpty()
+    val canRead: Boolean get() = !hasSource || capabilities?.read == true
+    val canSend: Boolean get() = !hasSource || capabilities?.send == true
+    val canInterrupt: Boolean get() = !hasSource || capabilities?.interrupt == true
+    val canApprove: Boolean get() = !hasSource || capabilities?.approve == true
+    val canTerminal: Boolean get() = !hasSource || capabilities?.terminal == true
+    val canAttach: Boolean get() = hasSource && capabilities?.attach == true && !attached
+    val isCodex: Boolean get() = agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history"
+    val sourceLabel: String? get() = when (sourceKind) {
+        "codex_app_server" -> "Codex 实时"
+        "identity_conflict" -> "身份冲突"
+        "codex_history" -> "Codex 历史"
+        else -> sourceKind?.takeIf { it.isNotEmpty() }
+    }
+    val sourceSubtitle: String? get() = sourceLabel?.let {
+        val label = if (sourceKind != "identity_conflict" && !agentName.isNullOrEmpty()) "$it · $agentName" else it
+        if (canSend) label else "$label · 仅查看：${readOnlyReason?.takeIf { r -> r.isNotEmpty() } ?: "此来源尚未允许发送"}"
+    }
+    val agentLabel: String get() = if (isCodex) "Codex" else when (agent) { "traex" -> "TRAEX"; else -> "Claude" }
     val isLive: Boolean get() = status != "offline"
     val updated: Instant? get() = parseTime(updatedAt)
 }

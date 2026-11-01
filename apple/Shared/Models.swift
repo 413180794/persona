@@ -173,6 +173,28 @@ nonisolated enum SessionStatus: String, Codable, Sendable {
     var isLive: Bool { self != .offline }
 }
 
+/// New sources opt in to every operation; a partial capability object never grants missing permissions.
+nonisolated struct SessionCapabilities: Codable, Hashable, Sendable {
+    var read = false
+    var send = false
+    var interrupt = false
+    var approve = false
+    var terminal = false
+    var attach = false
+
+    enum CodingKeys: String, CodingKey { case read, send, interrupt, approve, terminal, attach }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        read = try c.decodeIfPresent(Bool.self, forKey: .read) ?? false
+        send = try c.decodeIfPresent(Bool.self, forKey: .send) ?? false
+        interrupt = try c.decodeIfPresent(Bool.self, forKey: .interrupt) ?? false
+        approve = try c.decodeIfPresent(Bool.self, forKey: .approve) ?? false
+        terminal = try c.decodeIfPresent(Bool.self, forKey: .terminal) ?? false
+        attach = try c.decodeIfPresent(Bool.self, forKey: .attach) ?? false
+    }
+}
+
 nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var machineID: String
     var sessionID: String
@@ -185,6 +207,13 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var agentName: String?
     /// The coding agent in the pane: "claude" (or nil, from older hubs), "codex" or "traex" (TRAEX, an in-house Codex fork).
     var agent: String? = nil
+    var sourceKind: String? = nil
+    var sourceThreadID: String? = nil
+    var sourceInstanceID: String? = nil
+    var parentThreadID: String? = nil
+    var readOnlyReason: String? = nil
+    var capabilities: SessionCapabilities? = nil
+    var attached: Bool? = nil
     var launcher: String?
     var model: String?
     /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex.
@@ -233,7 +262,30 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var key: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
     var folderName: String { (cwd as NSString).lastPathComponent }
 
-    var isCodex: Bool { agent == "codex" }
+    var hasSource: Bool { !(sourceKind ?? "").isEmpty }
+    var canRead: Bool { !hasSource || capabilities?.read == true }
+    var canSend: Bool { !hasSource || capabilities?.send == true }
+    var canInterrupt: Bool { !hasSource || capabilities?.interrupt == true }
+    var canApprove: Bool { !hasSource || capabilities?.approve == true }
+    var canTerminal: Bool { !hasSource || capabilities?.terminal == true }
+    var canAttach: Bool { hasSource && capabilities?.attach == true && attached != true }
+    var sourceLabel: String? {
+        switch sourceKind {
+        case "codex_app_server": "Codex 实时"
+        case "identity_conflict": "身份冲突"
+        case "codex_history": "Codex 历史"
+        case .some(let kind) where !kind.isEmpty: kind
+        default: nil
+        }
+    }
+    var sourceSubtitle: String? {
+        guard let sourceLabel else { return nil }
+        let detail = sourceKind == "identity_conflict" ? nil : agentName.flatMap { $0.isEmpty ? nil : $0 }
+        let label = detail.map { sourceLabel + " · " + $0 } ?? sourceLabel
+        return canSend ? label : label + " · 仅查看：" + (readOnlyReason.flatMap { $0.isEmpty ? nil : $0 } ?? "此来源尚未允许发送")
+    }
+
+    var isCodex: Bool { agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history" }
     var isTraex: Bool { agent == "traex" }
     /// Who the user talks to in this session: "Claude", "Codex" or "TRAEX".
     var agentLabel: String { isCodex ? "Codex" : isTraex ? "TRAEX" : "Claude" }
@@ -241,7 +293,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
 
     enum CodingKeys: String, CodingKey {
-        case title, cwd, status, launcher, model, agent, effort
+        case title, cwd, status, launcher, model, agent, effort, capabilities, attached
+        case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
+             parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
@@ -263,6 +317,13 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         workspaceID = try c.decodeIfPresent(String.self, forKey: .workspaceID)
         agentName = try c.decodeIfPresent(String.self, forKey: .agentName)
         agent = try c.decodeIfPresent(String.self, forKey: .agent)
+        sourceKind = try c.decodeIfPresent(String.self, forKey: .sourceKind)
+        sourceThreadID = try c.decodeIfPresent(String.self, forKey: .sourceThreadID)
+        sourceInstanceID = try c.decodeIfPresent(String.self, forKey: .sourceInstanceID)
+        parentThreadID = try c.decodeIfPresent(String.self, forKey: .parentThreadID)
+        readOnlyReason = try c.decodeIfPresent(String.self, forKey: .readOnlyReason)
+        capabilities = try c.decodeIfPresent(SessionCapabilities.self, forKey: .capabilities)
+        attached = try c.decodeIfPresent(Bool.self, forKey: .attached)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
