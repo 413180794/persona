@@ -1,5 +1,10 @@
 package jarvis.android.ui
 
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
@@ -322,26 +327,28 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
             item.agent?.note?.takeIf { it.isNotBlank() && item.agent.draft == draft }?.let {
                 Text("AI 分身的依据：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            OutlinedTextField(draft, { draft = it }, placeholder = { Text("自己写，或者让 AI 草拟") }, modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp), enabled = !busy)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(instruction, { instruction = it }, placeholder = { Text(if (draft.isBlank()) "要怎么回（可以不填）" else "让 AI 改：…") }, singleLine = true, modifier = Modifier.weight(1f), enabled = !busy)
-                TextButton({
+            // Filled fields and capsule buttons, as iOS (InboxActions): outlined boxes were harsh white frames in dark mode.
+            ReplyField(draft, { draft = it }, "自己写，或者让 AI 草拟", enabled = !busy, singleLine = false, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReplyField(
+                    instruction, { instruction = it }, if (draft.isBlank()) "要怎么回（可以不填）" else "让 AI 改：语气、要点…",
+                    enabled = !busy, singleLine = true, modifier = Modifier.weight(1f),
+                )
+                PillButton(if (draft.isBlank()) "AI 草拟" else "AI 改", Icons.Default.AutoAwesome, prominent = false, enabled = !busy) {
                     busy = true; error = null
                     scope.launch {
                         runCatching { hub.api.inboxDraft(item.id, listOfNotNull(instruction.takeIf { it.isNotBlank() }, draft.takeIf { it.isNotBlank() }?.let { "在这版上改：$it" }).joinToString("\n")) }
                             .onSuccess { draft = it; instruction = "" }.onFailure { error = "没草拟出来：${it.message}" }
                         busy = false
                     }
-                }, enabled = !busy) { Text(if (draft.isBlank()) "AI 草拟" else "AI 改", maxLines = 1) }
+                }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
-                OutlinedButton({ handingOff = true }, enabled = !busy) { Text("交给 AI", maxLines = 1) }
-                if (!item.isDone) OutlinedButton(onDone, enabled = !busy) { Text("已处理", maxLines = 1) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)) {
+                PillButton("交给 AI", Icons.AutoMirrored.Filled.Send, prominent = false, enabled = !busy) { handingOff = true }
+                if (!item.isDone) PillButton("已处理", Icons.Default.Check, prominent = false, enabled = !busy, onClick = onDone)
                 Spacer(Modifier.weight(1f))
-                Button({ confirmSend = true }, enabled = !busy && draft.isNotBlank()) {
-                    if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text("发送", maxLines = 1)
-                }
+                PillButton("发送", null, prominent = true, enabled = !busy && draft.isNotBlank(), busy = busy) { confirmSend = true }
             }
         }
     }
@@ -361,6 +368,45 @@ private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDis
             },
             dismissButton = { TextButton({ confirmSend = false }) { Text("取消", maxLines = 1) } },
         )
+    }
+}
+
+/** A reply field: a soft filled box, no outline (iOS: secondary fill, card corners). */
+@Composable
+private fun ReplyField(value: String, onChange: (String) -> Unit, placeholder: String, enabled: Boolean, singleLine: Boolean, modifier: Modifier) {
+    val fill = MaterialTheme.colorScheme.surfaceVariant
+    androidx.compose.material3.TextField(
+        value, onChange, modifier = modifier, enabled = enabled, singleLine = singleLine,
+        placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        shape = RoundedCornerShape(14.dp),
+        colors = androidx.compose.material3.TextFieldDefaults.colors(
+            focusedContainerColor = fill, unfocusedContainerColor = fill, disabledContainerColor = fill,
+            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent,
+        ),
+    )
+}
+
+/** A capsule button (iOS InboxActionBar): the main action filled with the accent, the others a light accent tint. */
+@Composable
+private fun PillButton(
+    title: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, prominent: Boolean, enabled: Boolean,
+    busy: Boolean = false, onClick: () -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    Button(
+        onClick, enabled = enabled, shape = androidx.compose.foundation.shape.CircleShape,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        colors = if (prominent) ButtonDefaults.buttonColors()
+        else ButtonDefaults.buttonColors(
+            containerColor = accent.copy(alpha = 0.14f), contentColor = accent,
+            disabledContainerColor = accent.copy(alpha = 0.06f), disabledContentColor = accent.copy(alpha = 0.4f),
+        ),
+    ) {
+        if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+        else {
+            if (icon != null) { Icon(icon, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)) }
+            Text(title, maxLines = 1)
+        }
     }
 }
 
