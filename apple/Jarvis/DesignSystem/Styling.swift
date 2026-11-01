@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Surfaces and buttons that follow the chosen style (AppStyle): Liquid Glass in 液态玻璃 / Claude, the style's own
-// solid look in 黏土 / Island / 飞书. Use these instead of `glassEffect` / `.themedButton()` directly.
+// Surfaces and buttons that follow the chosen style (AppStyle, through StyleSpec.current): Liquid Glass in 液态玻璃 /
+// BeautifulUI, the style's own solid look in 黏土 / Island / 飞书. Use these instead of `glassEffect` / `.themedButton()` directly.
 
 extension View {
     /// A floating panel (composer, interaction panel, status strips, toasts).
@@ -11,7 +11,7 @@ extension View {
 
     /// A list row on the style's canvas (plain lists paint rows white otherwise).
     @ViewBuilder func themedRow() -> some View {
-        if AppStyle.current.usesGlass { self } else { listRowBackground(Color.clear) }
+        if StyleSpec.current.usesGlass { self } else { listRowBackground(Color.clear) }
     }
 
     /// A scroll page that paints its own background (not a List): the system's grouped gray in the glass styles, the
@@ -20,7 +20,7 @@ extension View {
 
     /// The page behind a list / scroll view: the style's canvas; the glass styles keep the system's.
     @ViewBuilder func themedPage() -> some View {
-        if AppStyle.current.usesGlass {
+        if StyleSpec.current.usesGlass {
             self
         } else {
             scrollContentBackground(.hidden).background(Theme.pageBackground)
@@ -38,14 +38,14 @@ private struct Surface<S: Shape>: ViewModifier {
         case .glass:
             content.glassEffect(glass, in: shape)
         case .puffy:
-            // Clay: a puffy pastel slab — light from the top left, a soft colored shadow below.
+            // Clay: a puffy pastel slab — light from the top left, a soft shadow below in the color's wash.
             content.background {
                 ZStack {
                     shape.fill(Theme.card)
                     if let tint { shape.fill(tint) }
                 }
-                .shadow(color: Color(light: 0xFFFFFF, dark: 0x3A3445).opacity(0.8), radius: 6, x: -4, y: -4)
-                .shadow(color: Color(light: 0x6B54D6, dark: 0x000000).opacity(0.22), radius: 12, x: 5, y: 8)
+                .shadow(color: StyleSpec.current.puffyHighlight.opacity(0.8), radius: 6, x: -4, y: -4)
+                .shadow(color: StyleSpec.current.puffyShadow.opacity(0.22), radius: 12, x: 5, y: 8)
             }
             .overlay(shape.stroke(Color.white.opacity(0.45), lineWidth: 1))
         case .floating:
@@ -146,5 +146,5 @@ extension Theme {
 
     /// The color `themedGroupedPage()` paints: what floats over such a page (a composer) is backed with it, so text
     /// that scrolls under it at large sizes does not show through.
-    static var groupedPage: Color { AppStyle.current.usesGlass ? Color(.systemGroupedBackground) : pageBackground }
+    static var groupedPage: Color { StyleSpec.current.usesGlass ? Color(.systemGroupedBackground) : pageBackground }
 }

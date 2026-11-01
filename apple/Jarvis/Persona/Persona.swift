@@ -5,7 +5,7 @@ import Foundation
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
     static let builtinID = "jarvis"
-    static let builtin = Persona(id: builtinID, name: "Jarvis", subtitle: "默认形象，跟随界面风格的颜色", rev: "", manifest: nil)
+    static let builtin = Persona(id: builtinID, name: "Jarvis", subtitle: "默认形象，颜色随主题色", rev: "", manifest: nil)
 
     var id: String
     var name: String

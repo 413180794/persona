@@ -3,9 +3,9 @@ import Testing
 import UIKit
 @testable import Jarvis
 
-/// Every style's spec against the readability floors in docs/ios.md (设计语言): white words on the accent (solid
-/// buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble ≥ 4.5:1, the accent as a link on the page
-/// ≥ 3:1. In light and in dark.
+/// Every style in every color (界面风格 × 主题色, a persona's included) against the readability floors in docs/ios.md
+/// (设计语言): white words on the accent (solid buttons, selected chips) ≥ 3.5:1, the words on the user's own bubble
+/// ≥ 4.5:1, the accent as a link on the page ≥ 3:1. In light and in dark.
 struct StyleSpecTests {
     private static func rgb(_ c: Color, _ style: UIUserInterfaceStyle) -> (Double, Double, Double) {
         let u = UIColor(c).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
@@ -24,23 +24,40 @@ struct StyleSpecTests {
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
     }
 
+    static func hex(_ c: Color, _ style: UIUserInterfaceStyle = .light) -> UInt32 {
+        let (r, g, b) = rgb(c, style)
+        return UInt32((r * 255).rounded()) << 16 | UInt32((g * 255).rounded()) << 8 | UInt32((b * 255).rounded())
+    }
+
     private static let appearances: [(String, UIUserInterfaceStyle)] = [("light", .light), ("dark", .dark)]
+
+    /// A persona's colors as a package brings them, made to meet the floors (PersonaPalette): yellow, the hardest one
+    /// (white words do not read on it, so it is darkened to honey).
+    static let yellow = PersonaPalette(light: ["primary": "#F2C230", "accent": "#F2C230", "bubble": "#F2C230"],
+                                       dark: ["primary": "#F2C230", "accent": "#F7D154", "bubble": "#E0B020"])!
+
+    /// Every color on offer: the fixed ones and a persona's.
+    private static var colors: [(String, ColorSpec)] {
+        ThemeColor.presets.compactMap { c in c.preset.map { (c.rawValue, $0) } } + [("persona", ColorSpec(persona: yellow, over: .blue))]
+    }
 
     private static func below(_ floor: Double, _ pair: (StyleSpec) -> (Color, Color)) -> [String] {
         AppStyle.allCases.flatMap { style in
-            appearances.compactMap { name, ui in
-                let (a, b) = pair(style.spec)
-                let c = contrast(a, b, ui)
-                return c < floor ? "\(style.rawValue) \(name): \(String(format: "%.2f", c))" : nil
+            colors.flatMap { name, colors in
+                appearances.compactMap { look, ui in
+                    let (a, b) = pair(StyleSpec(style.component, colors))
+                    let c = contrast(a, b, ui)
+                    return c < floor ? "\(style.rawValue)+\(name) \(look): \(String(format: "%.2f", c))" : nil
+                }
             }
         }
     }
 
     /// Below a floor on purpose: 飞书's dark blue is 飞书's own (#4C88FF), 3.35:1 under white.
-    private static let known: Set<String> = ["lark dark"]
+    private static let known = "+lark dark"
 
     @Test func whiteOnTheAccent() {
-        let found = Self.below(3.5) { (.white, $0.accent) }.filter { !Self.known.contains(where: $0.hasPrefix) }
+        let found = Self.below(3.5) { (.white, $0.accent) }.filter { !$0.contains(Self.known) }
         #expect(found.isEmpty, "white on the accent under 3.5:1: \(found)")
     }
 
@@ -54,8 +71,114 @@ struct StyleSpecTests {
         #expect(found.isEmpty, "the accent on the page under 3:1: \(found)")
     }
 
-    /// Titles name the styles in the picker; two alike would be one style twice.
-    @Test func everyStyleIsItsOwn() {
+    /// The colored canvases stay darker than the system's grouped cells in dark (#1C1C1E): 黏土's at #1D1A23 was one
+    /// color with them (1.01:1); Island's own #0A1110 is 1.13:1.
+    @Test func darkWashesSitUnderTheCells() {
+        let cells = Color(light: 0xF2F2F7, dark: 0x1C1C1E)
+        let found = Self.colors.compactMap { name, c in
+            Self.contrast(c.wash.page.color, cells, .dark) < 1.1 ? name : nil
+        }
+        #expect(found.isEmpty, "a dark wash as light as the cells: \(found)")
+    }
+
+    /// Names tell the choices apart in the pickers; two alike would be one twice.
+    @Test func everyChoiceIsItsOwn() {
         #expect(Set(AppStyle.allCases.map(\.title)).count == AppStyle.allCases.count)
+        #expect(Set(ThemeColor.allCases.map(\.title)).count == ThemeColor.allCases.count)
+    }
+
+    /// 跟随界面风格 draws each style exactly as it was when a style carried its colors, and 液态玻璃 + 珊瑚橙 is the old Claude.
+    @Test func eachStyleInItsOwnColorsIsAsBefore() {
+        func spec(_ s: AppStyle, _ c: ThemeColor = .style) -> StyleSpec { .compose(style: s, color: c, persona: nil) }
+        func pair(_ c: Color) -> [UInt32] { [Self.hex(c), Self.hex(c, .dark)] }
+        let glass = spec(.glass)
+        #expect(pair(glass.accent) == [0x007AFF, 0x0A84FF])
+        #expect(pair(glass.userBubble) == [0xDCEAFF, 0x1D3557])
+        #expect(pair(glass.page) == pair(Theme.systemPage))
+        #expect(pair(glass.lark.myBubble) == pair(Color(light: 0x007AFF, dark: 0x0A84FF).opacity(0.16)))
+        #expect(pair(glass.lark.otherBubble) == pair(StyleSpec.larkGrayBubble))
+        #expect(!glass.deepensBubble)
+
+        let claude = spec(.glass, .coral)
+        #expect(pair(claude.accent) == [0xD4683F, 0xCD6E45])
+        #expect(pair(claude.userBubble) == [0xB24C25, 0xAF4C28])
+        #expect(pair(claude.lark.blue) == [0xD4683F, 0xCD6E45])
+        #expect(claude.deepensBubble && claude.surface == .glass)
+
+        let clay = spec(.clay)
+        #expect(pair(clay.accent) == [0x7A5AF8, 0x8979EB])
+        #expect(pair(clay.userBubble) == [0x6759D3, 0x6756D9])
+        #expect(pair(clay.page) == [0xEFEAF7, 0x0A0510])
+        #expect(pair(clay.card) == [0xF8F5FD, 0x2A2533])
+        #expect(pair(clay.puffyShadow) == [0x6B54D6, 0x000000])
+        #expect(pair(clay.puffyHighlight) == [0xFFFFFF, 0x3A3445])
+        #expect(pair(clay.lark.otherBubble) == pair(clay.card))
+
+        let island = spec(.island)
+        #expect(pair(island.accent) == [0x27747F, 0x2A9798])
+        #expect(pair(island.userBubble) == [0x14201E, 0xE8F3F1])
+        #expect(pair(island.userBubbleText) == [0xFFFFFF, 0x0B1211])
+        #expect(pair(island.page) == [0xE6F1EF, 0x0A1110])
+        #expect(pair(island.card) == [0xFFFFFF, 0x16201E])
+        #expect(pair(island.softShadow) == pair(StyleSpec.defaultSoftShadow))
+
+        let lark = spec(.lark)
+        #expect(pair(lark.accent) == [0x3370FF, 0x4C88FF])
+        #expect(pair(lark.userBubble) == [0xD1E3FF, 0x133063])
+        #expect(pair(lark.page) == [0xF5F6F7, 0x141414])
+        #expect(pair(lark.card) == [0xFFFFFF, 0x1F1F1F])
+        #expect(pair(lark.lark.myBubble) == [0xD1E3FF, 0x133063])
+        #expect(pair(lark.lark.cardBackground) == [0xFFFFFF, 0x1E1F23])
+
+        let beautiful = spec(.beautiful)
+        #expect(pair(beautiful.accent) == pair(glass.accent) && beautiful.components == .beautiful)
+    }
+
+    /// A color goes with any style: its accent, bubble and 飞书's links on 黏土, its wash under 黏土 and Island, while
+    /// 液态玻璃 and 飞书 keep their neutral pages.
+    @Test func colorsAndStylesCombine() {
+        let clayCoral = StyleSpec.compose(style: .clay, color: .coral, persona: nil)
+        #expect(Self.hex(clayCoral.accent) == 0xD4683F)
+        #expect(Self.hex(clayCoral.lark.blue) == 0xD4683F)
+        #expect(Self.hex(clayCoral.page) == Self.hex(ColorSpec.coral.wash.page.color))
+        #expect(clayCoral.surface == .puffy && clayCoral.fontDesign == .rounded)
+        let islandCoral = StyleSpec.compose(style: .island, color: .coral, persona: nil)
+        #expect(Self.hex(islandCoral.card) == 0xFFFFFF)
+        let larkLavender = StyleSpec.compose(style: .lark, color: .lavender, persona: nil)
+        #expect(Self.hex(larkLavender.page) == 0xF5F6F7)
+        #expect(Self.hex(larkLavender.lark.blue) == 0x7A5AF8)
+        #expect(larkLavender.surface == .hairline)
+    }
+
+    /// A persona colors the app only under 跟随形象; its own primary (the face's glow) is there whatever the colors.
+    @Test func aPersonaColorsOnlyWhenFollowed() {
+        let p = Self.yellow
+        let followed = StyleSpec.compose(style: .clay, color: .persona, persona: p)
+        #expect(Self.hex(followed.accent) == p.accent?.light)
+        #expect(Self.hex(followed.userBubble) == p.bubble?.light)
+        #expect(Self.hex(followed.page) == Self.hex(ColorSpec.Wash(accent: p.accent!).page.color))
+        let ownColors = StyleSpec.compose(style: .clay, color: .style, persona: p)
+        #expect(Self.hex(ownColors.accent) == 0x7A5AF8)
+        #expect(ownColors.personaPrimary != nil && followed.personaPrimary != nil)
+        // The built-in brings no colors: 跟随形象 is the style's own.
+        #expect(Self.hex(StyleSpec.compose(style: .island, color: .persona, persona: nil).accent) == 0x27747F)
+    }
+
+    /// Settings from before 主题色 was a choice become the choices that look the same.
+    @Test func oldSettingsBecomeTheSameLook() {
+        typealias C = AppearanceChoice
+        #expect(C.resolve(style: nil, color: nil, persona: nil) == C(style: .glass, color: .style))
+        #expect(C.resolve(style: "clay", color: nil, persona: nil) == C(style: .clay, color: .style))
+        #expect(C.resolve(style: "claude", color: nil, persona: nil) == C(style: .glass, color: .coral))
+        #expect(C.resolve(style: "island", color: nil, persona: "jarvis") == C(style: .island, color: .style))
+        // A persona chosen colored the app: it still does.
+        #expect(C.resolve(style: "clay", color: nil, persona: "doudou") == C(style: .clay, color: .persona))
+        #expect(C.resolve(style: "claude", color: nil, persona: "doudou") == C(style: .glass, color: .persona))
+        // Chosen since: kept as chosen.
+        #expect(C.resolve(style: "lark", color: "coral", persona: "doudou") == C(style: .lark, color: .coral))
+        #expect(C.resolve(style: "island", color: "style", persona: "doudou") == C(style: .island, color: .style))
+        // `-ui.style claude` as a launch argument over a saved choice still means coral.
+        #expect(C.resolve(style: "claude", color: "style", persona: nil) == C(style: .glass, color: .coral))
+        #expect(C.resolve(style: "neon", color: "plaid", persona: nil) == C(style: .glass, color: .style))
     }
 }

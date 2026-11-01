@@ -33,12 +33,12 @@ struct RootView: View {
                 WelcomeView()
             }
         }
-        // A new style or a persona's colors rebuild the whole tree (tokens are static); the open tab and chat are remembered.
+        // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
         .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))
-        .buiTheme(.jarvis(model.style))
+        .buiTheme(.jarvis())
         // No scroll bars anywhere (2026-10-31, the user: they look bad); the environment reaches every ScrollView,
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)

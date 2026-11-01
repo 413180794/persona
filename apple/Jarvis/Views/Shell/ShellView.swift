@@ -29,8 +29,11 @@ struct ShellView: View {
                               backdrop: Theme.Shell.drawer, pager: shell.pager, sidebar: { sidebar }, page: pages)
             .environment(\.shell, shell)
             .sheet(isPresented: $model.shellSettings) {
+                // The sheet outlives RootView's rebuild for a new look: it takes the look as its identity too, or 外观's
+                // sample and everything else drawn with the static tokens keeps the old colors.
                 SettingsView()
                     .environment(\.shell, shell)
+                    .id(model.look)
             }
             .onChange(of: model.selectedTab, initial: true) { _, t in route(t) }
             .onAppear {

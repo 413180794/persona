@@ -24,8 +24,9 @@ struct PersonaAvatar: View {
                     .frame(width: size, height: size)
                     .clipShape(.circle)
             } else {
-                // The built-in in the style's own accent, also while another persona's colors are on (设置's card).
-                JarvisAvatar(size: size, state: working ? .working : .idle, tint: p.isBuiltin ? model.style.spec.accent : nil)
+                // The built-in in the accent it would have chosen (it brings no colors: under 跟随形象, the style's own),
+                // also while another persona is on (设置's card).
+                JarvisAvatar(size: size, state: working ? .working : .idle, tint: p.isBuiltin ? model.builtinAccent : nil)
             }
         }
         .frame(width: size, height: size)
@@ -50,7 +51,7 @@ struct PersonaDot: View {
             if !p.isBuiltin, let frames = model.personas.frames(p, state) {
                 PersonaFramesView(frames: frames, animating: !still)
             } else {
-                JarvisAvatar(size: size, state: state, still: still, tint: p.isBuiltin ? model.style.spec.accent : nil)
+                JarvisAvatar(size: size, state: state, still: still, tint: p.isBuiltin ? model.builtinAccent : nil)
             }
         }
         .frame(width: size, height: size)

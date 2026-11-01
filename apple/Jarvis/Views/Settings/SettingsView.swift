@@ -6,7 +6,6 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmUnpair = false
     @State private var showPair = false
-    @State private var debugOpened = false
     @State private var storage: Int64?
     @AppStorage(TranslationPrefs.enabledKey) private var translating = false
     @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
@@ -153,8 +152,11 @@ struct SettingsView: View {
     }
 
     #if DEBUG
+    /// Once per launch: a new look rebuilds the tree (and this view's state), and the route would undo a page opened since.
+    @MainActor private static var debugOpened = false
+
     private func openDebugPage() {
-        guard !debugOpened else { return }
+        guard !Self.debugOpened else { return }
         let d = UserDefaults.standard
         // Appended with their own types: a path of AnyHashable finds no destination.
         var p = NavigationPath()
@@ -170,8 +172,9 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
-        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | style | layout
-            p.append(a == "style" ? SettingsPage.style : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | color | style | layout
+            p.append(a == "color" ? SettingsPage.themeColor : a == "style" ? SettingsPage.style
+                     : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
         }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
         else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
@@ -179,7 +182,7 @@ struct SettingsView: View {
             if let n = d.string(forKey: "openModelLauncher") { p.append(ModelLauncherRoute(name: n)) }
         }
         guard !p.isEmpty else { return }
-        debugOpened = true
+        Self.debugOpened = true
         model.settingsPath = p
     }
     #endif
@@ -204,7 +207,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case persona, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
+    case persona, themeColor, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
 
 }
 
@@ -224,6 +227,7 @@ private struct SettingsDestinations: ViewModifier {
     @ViewBuilder private func page(for page: SettingsPage) -> some View {
         switch page {
         case .persona: PersonaSettingsPage()
+        case .themeColor: ThemeColorSettingsPage()
         case .style: StyleSettingsPage()
         #if os(iOS)
         case .layout: LayoutSettingsPage()
@@ -682,74 +686,6 @@ struct ClaudeSettingsView: View {
             Haptics.error()
             error = failed.joined(separator: "\n")
         }
-    }
-}
-
-/// The five looks in a grid, each drawn as a tiny screen in its own colors; tap to switch the whole app. A grid, not a
-/// row: side by side they were 560 pt wide and the last two were off a 402 pt screen with nothing saying so.
-struct StylePicker: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    /// Three previews a row; two at accessibility sizes, where three cut every name.
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: typeSize.isAccessibilitySize ? 2 : 3)
-    }
-
-    var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-            ForEach(AppStyle.allCases) { s in
-                Button {
-                    guard s != model.style else { return }
-                    Haptics.success()
-                    withAnimation(Theme.Motion.standard) { model.style = s }
-                } label: {
-                    StyleCard(style: s, selected: s == model.style)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(s.title)，\(s.subtitle)")
-                .accessibilityAddTraits(s == model.style ? .isSelected : [])
-            }
-        }
-        .padding(.horizontal, Theme.Space.l)
-    }
-}
-
-private struct StyleCard: View {
-    var style: AppStyle
-    var selected: Bool
-
-    var body: some View {
-        let page = Theme.pageBackground(style), card = Theme.card(style), accent = Theme.accent(style)
-        let bubble = Theme.userBubble(style), corner = style.corner * 0.45
-        VStack(spacing: Theme.Space.s) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(style.usesGlass ? AnyShapeStyle(accent.opacity(0.10)) : AnyShapeStyle(page))
-                VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    RoundedRectangle(cornerRadius: corner, style: .continuous).fill(card)
-                        .scaledFrame(height: Theme.Size.markM)
-                        .shadow(color: [.puffy, .floating].contains(style.spec.surface) ? .black.opacity(0.12) : .clear, radius: 4, y: 2)
-                    HStack { Spacer(); Capsule().fill(bubble).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.markXS) }
-                    Capsule().fill(Color.secondary.opacity(0.25)).scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.dot)
-                    HStack(spacing: Theme.Space.xs) {
-                        Circle().fill(accent).scaledFrame(width: Theme.Size.dotXL, height: Theme.Size.dotXL)
-                        Capsule().fill(accent.opacity(0.35)).scaledFrame(height: Theme.Size.dot)
-                    }
-                }
-                .padding(Theme.Space.m)
-            }
-            .frame(maxWidth: .infinity)
-            .scaledFrame(height: Theme.Size.box120)
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(selected ? accent : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
-            VStack(spacing: Theme.Space.xxs) {
-                HStack(spacing: Theme.Space.xs) {
-                    if selected { Image(systemName: Theme.Icon.successFilled).foregroundStyle(accent) }
-                    Text(style.title).font(Theme.Font.captionStrong).lineLimit(1)
-                }
-                Text(style.subtitle).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

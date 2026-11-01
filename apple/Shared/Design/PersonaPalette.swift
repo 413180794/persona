@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The colors a persona brings (docs/persona.md「色系」), laid over the current style's spec (`StyleSpec.tinted`): the
-/// accent (what can be tapped; BeautifulUI's accent and 飞书's links follow it), the user's bubble and its words, and
-/// the persona's own primary for decoration (`Theme.persona`). What a persona leaves out stays the style's; the
-/// built-in Jarvis brings nothing. Held to the same floors as every style (StyleSpecTests): a color that misses one is
-/// darkened until it passes, so a package can't make a button unreadable.
+/// The colors a persona brings (docs/persona.md「色系」): the accent (what can be tapped; BeautifulUI's accent and
+/// 飞书's links follow it), the user's bubble and its words, and the persona's own primary for decoration
+/// (`Theme.persona`). They color the app only when 主题色 is 跟随形象 (`ColorSpec(persona:over:)`); what a persona leaves
+/// out stays the style's, and the built-in Jarvis brings nothing. Held to the same floors as every color
+/// (StyleSpecTests): a color that misses one is darkened until it passes, so a package can't make a button unreadable.
 nonisolated struct PersonaPalette: Sendable, Hashable {
     /// A light / dark pair of sRGB values (0xRRGGBB).
     struct Pair: Sendable, Hashable {
@@ -20,7 +20,7 @@ nonisolated struct PersonaPalette: Sendable, Hashable {
 
     /// The persona on screen's (AppModel keeps it with the persona; RootView rebuilds on a change, as for a style).
     nonisolated(unsafe) static var current: PersonaPalette? {
-        didSet { StyleSpec.current = AppStyle.current.spec.tinted(current) }
+        didSet { StyleSpec.recompose() }
     }
 
     /// The floors (docs/ios.md 设计语言): white words on the accent, the accent as a link on the page, words on the bubble.
@@ -98,26 +98,5 @@ nonisolated struct PersonaPalette: Sendable, Hashable {
     static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
         let la = luminance(a), lb = luminance(b)
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
-    }
-}
-
-nonisolated extension StyleSpec {
-    /// The spec with a persona's colors over it (the style's own where the persona has none).
-    func tinted(_ p: PersonaPalette?) -> StyleSpec {
-        guard let p else { return self }
-        var s = self
-        if let a = p.accent?.color {
-            s.accent = a
-            if larkFollowsAccent {
-                s.lark.blue = a
-                s.lark.myBubble = a.opacity(0.16)
-            }
-        }
-        if let b = p.bubble?.color {
-            s.userBubble = b
-            s.userBubbleText = p.bubbleText?.color ?? .white
-        }
-        s.personaPrimary = p.primary?.color
-        return s
     }
 }

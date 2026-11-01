@@ -124,14 +124,14 @@ struct MacRootView: View {
 }
 
 extension View {
-    /// What RootView sets on the whole tree on iOS: the style's tint, font design and theme, the text size, and a
-    /// rebuild when the style or persona changes (tokens are static).
+    /// What RootView sets on the whole tree on iOS: the spec's tint, font design and theme, the text size, and a
+    /// rebuild when the style, color or persona changes (tokens are static).
     func macLook(_ model: AppModel) -> some View {
         id(model.look)
             .tint(Theme.accent)
             .fontDesign(model.style.fontDesign)
             .dynamicTypeSize(model.textSize.applied(to: .large))
-            .buiTheme(.jarvis(model.style))
+            .buiTheme(.jarvis())
             .scrollIndicators(.automatic)
             // Every iOS Form grouped (System Settings' look), pages and sheets alike: the Mac's default two-column
             // form put the iPhone's section rows (pickers, editors) in the label column and cut them off.

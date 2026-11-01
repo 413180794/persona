@@ -2,33 +2,33 @@ import BeautifulUI
 import SwiftUI
 
 // BeautifulUI (apple/Packages/BeautifulUI) reads its colors, radii and type size from `BUITheme` in the environment.
-// RootView puts in the one built here from the current style, so its components follow the five styles like the rest
-// of the app. The library's own palette is never used.
+// RootView puts in the one built here from the current spec (style × 主题色), so its components follow them like the
+// rest of the app. The library's own palette is never used.
 
 extension BUITheme {
-    static func jarvis(_ style: AppStyle) -> BUITheme {
+    static func jarvis(_ spec: StyleSpec = .current) -> BUITheme {
         // Secondary text: tertiaryLabel is 1.9:1 on white, under the 3:1 the visual pass brought every word to, so the
         // library's third ink is secondaryLabel too (3.4:1 light, 6.4:1 dark).
         let secondary = Color(uiColor: .secondaryLabel)
         let colors = BUIColors(
-            page: Theme.pageBackground(style),
-            canvas: Theme.pageBackground(style),
-            surface: Theme.card(style),
+            page: spec.page,
+            canvas: spec.page,
+            surface: spec.card,
             inset: Theme.Fill.well,
             hover: Theme.Fill.well,
             hover2: Theme.Fill.pressed,
             ink: Color(uiColor: .label),
             ink2: secondary,
             ink3: secondary,
-            line: Theme.cardStroke,
+            line: spec.cardStroke,
             lineStrong: Color.primary.opacity(0.16),
             lineSoft: Color.primary.opacity(0.05),
             field: Theme.Fill.chip,
-            accent: Theme.accent(style),
+            accent: spec.accent,
             // Keywords in code: a blue with text contrast on the code background in every style (the accents of
             // Claude / Island are under 4.5:1 there).
             accentInk: Theme.Hue.blue,
-            accentTint: Theme.accent(style).opacity(0.12),
+            accentTint: spec.accent.opacity(0.12),
             green: Theme.Diff.add,
             greenTint: Theme.Diff.addFill,
             orange: Theme.cautionText,

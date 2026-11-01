@@ -204,10 +204,10 @@ enum JarvisAvatarGallery {
                     }
                 }
                 HStack(spacing: Theme.Space.m) {
-                    ForEach(AppStyle.allCases) { s in
+                    ForEach(ThemeColor.presets) { c in
                         VStack(spacing: Theme.Space.xs) {
-                            JarvisAvatar(size: 40, tint: Theme.accent(s))
-                            Text(s.title).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            JarvisAvatar(size: 40, tint: c.preset?.accent ?? Theme.accent)
+                            Text(c.title).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                 }

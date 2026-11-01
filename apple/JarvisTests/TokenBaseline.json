@@ -6,8 +6,7 @@
     "padding" : 3
   },
   "Jarvis\/DesignSystem\/Styling.swift" : {
-    "animation" : 1,
-    "hexColor" : 4
+    "animation" : 1
   },
   "Jarvis\/Views\/Assistant\/AssistantProfileView.swift" : {
     "padding" : 1

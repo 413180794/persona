@@ -1,43 +1,36 @@
 import SwiftUI
 
-/// The look of the whole app, picked in 设置 › 界面风格. Every color, surface and button below follows it; changing it
-/// rebuilds the view tree (RootView is keyed by the style), so plain static tokens are enough.
+/// How the whole app is drawn, picked in 设置 › 界面风格: panels, cards and buttons, the page they sit on, the type,
+/// the components. The colors are 主题色 (`ThemeColor`), a choice of its own; `StyleSpec` puts the two together.
+/// Changing either rebuilds the view tree (RootView is keyed by `AppModel.look`), so plain static tokens are enough.
 nonisolated enum AppStyle: String, CaseIterable, Identifiable, Sendable {
-    /// iOS 26 system look: Liquid Glass, system blue.
+    /// iOS 26 system look: Liquid Glass on the system's pages.
     case glass
-    /// Claude's terracotta on Liquid Glass (the original Jarvis look).
-    case claude
-    /// Claymorphism: soft pastel lavender, puffy rounded surfaces with layered shadows, rounded type.
+    /// Claymorphism: puffy rounded surfaces with layered shadows on a pastel wash of the color, rounded type.
     case clay
-    /// Floating white "islands" with deep soft shadows on a misty teal canvas, generous corners.
+    /// Floating white "islands" with deep soft shadows on a misty wash of the color, generous corners.
     case island
-    /// Feishu: its blue, flat white cards on light gray, hairline borders — like the Feishu app.
+    /// Feishu: flat white cards on light gray, hairline borders — like the Feishu app.
     case lark
-    /// 液态玻璃's colors and surfaces with BeautifulUI's components: the thinking trace, tool chips in work cards, and its
-    /// prompt bar as the composer. Only this style uses them (CLAUDE.md: a new look is a new style, never a change to one).
+    /// 液态玻璃's surfaces with BeautifulUI's components: the thinking trace, tool chips in work cards, and its prompt
+    /// bar as the composer. Only this style uses them (CLAUDE.md: a new look is a new style, never a change to one).
     case beautiful
+    // "claude" was a style until 2026-10-31: Liquid Glass in coral, now 液态玻璃 + 主题色 珊瑚橙 (`AppearanceChoice`).
 
-    nonisolated(unsafe) static var current: AppStyle =
-        AppStyle(rawValue: UserDefaults.standard.string(forKey: "ui.style") ?? "") ?? .glass {
-        didSet { StyleSpec.current = current.spec.tinted(PersonaPalette.current) }
+    nonisolated(unsafe) static var current: AppStyle = AppearanceChoice.saved.style {
+        didSet { StyleSpec.recompose() }
     }
 
     var id: String { rawValue }
-    var title: String { spec.title }
-    var subtitle: String { spec.subtitle }
+    var title: String { component.title }
+    var subtitle: String { component.subtitle }
     /// Liquid Glass surfaces and buttons; the other styles draw solid ones of their own.
-    var usesGlass: Bool { spec.surface == .glass }
+    var usesGlass: Bool { component.surface == .glass }
     /// BeautifulUI's components (`.beautiful` only); every other style keeps Jarvis' own.
-    var usesBeautifulUI: Bool { spec.components == .beautiful }
-    var fontDesign: Font.Design { spec.fontDesign }
+    var usesBeautifulUI: Bool { component.components == .beautiful }
+    var fontDesign: Font.Design { component.fontDesign }
     /// Corner radius of the cards in the style picker's preview.
-    var corner: CGFloat { spec.previewCorner }
-}
-
-nonisolated extension StyleSpec {
-    /// The current style's spec with the current persona's colors over it, kept with `AppStyle.current` and
-    /// `PersonaPalette.current` so the tokens read one value.
-    nonisolated(unsafe) static var current: StyleSpec = AppStyle.current.spec.tinted(PersonaPalette.current)
+    var corner: CGFloat { component.previewCorner }
 }
 
 nonisolated enum Theme {
@@ -51,8 +44,6 @@ nonisolated enum Theme {
     #endif
 
     static var accent: Color { spec.accent }
-    /// A style's accent as it would be now (the persona's over it): the style picker's previews.
-    static func accent(_ style: AppStyle) -> Color { style.spec.tinted(PersonaPalette.current).accent }
     /// The persona's own color (主色, docs/persona.md): its face's glow and backdrop, never something to tap (that is
     /// `accent`). The accent when the persona brings none (the built-in Jarvis is drawn in the accent).
     static var persona: Color { spec.personaPrimary ?? spec.accent }
@@ -349,7 +340,6 @@ nonisolated enum Theme {
 
     /// The user's own messages.
     static var userBubble: Color { spec.userBubble }
-    static func userBubble(_ style: AppStyle) -> Color { style.spec.tinted(PersonaPalette.current).userBubble }
     static var userBubbleText: Color { spec.userBubbleText }
     /// Light bubbles (Feishu's) are flat; colored ones get a gentle gradient that only darkens toward the bottom
     /// (`Color.gradient` lightened the top, and the white words on it fell to 3:1).
@@ -387,10 +377,8 @@ nonisolated enum Theme {
 
     /// The page behind lists and chats.
     static var pageBackground: Color { spec.page }
-    static func pageBackground(_ style: AppStyle) -> Color { style.spec.page }
     /// Cards / panels in styles without glass.
     static var card: Color { spec.card }
-    static func card(_ style: AppStyle) -> Color { style.spec.card }
     static var cardStroke: Color { spec.cardStroke }
 
     static let codeBackground = Color(light: 0xF3F1EC, dark: 0x1C1D21)

@@ -1,19 +1,20 @@
 import SwiftUI
 
-nonisolated extension StyleSpec {
-    /// 黏土: soft pastel lavender, puffy rounded surfaces with layered shadows, rounded type.
-    static let clay: StyleSpec = {
-        let accent = Color(light: 0x7A5AF8, dark: 0x8979EB)
-        let card = Color(light: 0xF8F5FD, dark: 0x2A2533)
-        return StyleSpec(
-            title: "黏土", subtitle: "柔和、圆润",
-            accent: accent,
-            userBubble: Color(light: 0x6759D3, dark: 0x6756D9), userBubbleText: .white, deepensBubble: true,
-            // The dark canvas sits under the system's grouped cells (#1C1C1E): at #1D1A23 they were one color (1.01:1).
-            page: Color(light: 0xEFEAF7, dark: 0x0A0510), card: card, cardStroke: defaultStroke,
-            surface: .puffy, buttons: .soft, softShadow: Color(light: 0x6B54D6, dark: 0x000000).opacity(0.25),
-            fontDesign: .rounded, previewCorner: 24,
-            components: .jarvis,
-            lark: larkFollowing(accent: accent, card: card, cardStroke: defaultStroke))
-    }()
+nonisolated extension ComponentSpec {
+    /// 黏土: puffy rounded surfaces with layered shadows on a pastel wash of the color, rounded type, soft buttons.
+    static let clay = ComponentSpec(
+        title: "黏土", subtitle: "柔和、圆润",
+        surface: .puffy, buttons: .soft, fontDesign: .rounded, previewCorner: 24, components: .jarvis, canvas: .wash,
+        tintedShadow: true, colors: .lavender)
+}
+
+nonisolated extension ColorSpec {
+    /// Soft pastel lavender (黏土's own), with the wash chosen by hand.
+    static let lavender = ColorSpec(
+        title: "薰衣草紫", subtitle: "黏土",
+        accent: Pair(light: 0x7A5AF8, dark: 0x8979EB),
+        bubble: Color(light: 0x6759D3, dark: 0x6756D9), bubbleText: .white, deepensBubble: true,
+        // The dark canvas sits under the system's grouped cells (#1C1C1E): at #1D1A23 they were one color (1.01:1).
+        wash: Wash(page: Pair(light: 0xEFEAF7, dark: 0x0A0510), card: Pair(light: 0xF8F5FD, dark: 0x2A2533),
+                   shadow: 0x6B54D6, highlight: 0x3A3445))
 }

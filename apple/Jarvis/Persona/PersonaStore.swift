@@ -35,7 +35,7 @@ final class PersonaStore {
     @ObservationIgnored private let frameCache = NSCache<NSString, PersonaFrames>()
     @ObservationIgnored private let imageCache = NSCache<NSString, UIImage>()
 
-    static let chosenKey = "persona.id"
+    static let chosenKey = AppearanceChoice.personaKey
     static var defaultRoot: URL {
         URL.applicationSupportDirectory.appending(path: "Personas", directoryHint: .isDirectory)
     }

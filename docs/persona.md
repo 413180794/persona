@@ -1,9 +1,13 @@
 # 形象（persona）
 
-一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**、一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
-顶栏的脸和名字、侧边栏的卡片、资料页、输入框的「问 xxx…」，以及整个 App 的主色（按钮、链接、自己的气泡、选中态）。
+一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**，可以再带一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
+顶栏的脸和名字、侧边栏的卡片、资料页、输入框的「问 xxx…」。
 
-- **默认形象 Jarvis**：App 自己画的面罩（`JarvisAvatar`），颜色跟随界面风格，不带配色。仓库里只有它。
+**形象不改 App 的颜色**（2026-10-31 用户要求：「形象、主题色和 UI 组件的选择」分开）。设置里是三个互不影响的选择：
+形象（这一篇）、主题色（`ThemeColor`）、界面风格（`AppStyle`，只管组件的画法），见 `docs/ios.md`「设计语言」。
+形象带的配色只在主题色选「跟随形象」时用上；以前选了形象就会盖掉界面风格的颜色（选了黏土再选奶娃，紫色就没了）。
+
+- **默认形象 Jarvis**：App 自己画的面罩（`JarvisAvatar`），画成当前主题色，不带配色。仓库里只有它。
 - **其他形象**：放在 hub 机器的 `~/.jarvis/personas/<id>/`，手机选中时下载并缓存。
 - 体验模式只有默认形象（`AppModel.persona`）。
 
@@ -114,18 +118,21 @@
 
 ## 色系 → 设计 token
 
-`colors` 不直接拿来用，而是叠在当前界面风格的 spec 上（`StyleSpec.tinted`）。所以各处照常读 token，形象一换，所有读 token 的地方跟着换：
+`colors` 是主题色的一个选项：设置 › 外观 › 主题色选「跟随形象」时（只有当前形象带配色才出现），它就是 App 的颜色
+（`ColorSpec(persona:over:)`），和别的主题色一样跟任何界面风格组合（`StyleSpec.compose`），各处照常读 token。
+包里没给的项用当前界面风格自己的颜色。选别的主题色时，形象只剩 `primary` 还在用（头像的光晕）。
 
 | persona.json | token | 用在哪里 |
 | --- | --- | --- |
 | `accent` | `StyleSpec.accent` → `Theme.accent` | 能点的东西：按钮、链接、选中态、Tab 的 tint |
 |  | BeautifulUI 的 `accent` / `accentTint` |  |
-|  | 飞书页面的链接和「我的气泡」 | 「飞书」风格自己保留飞书蓝 |
-| `bubble` / `bubble_text` | `StyleSpec.userBubble` / `userBubbleText` | 自己发的消息 |
-| `primary` | `StyleSpec.personaPrimary` → `Theme.persona` | 只用来装饰：头像的光晕、设置里卡片的底色。没有时等于 accent |
+|  | 飞书页面的链接和「我的气泡」 | 和别的主题色一样跟着走，「飞书」风格也是（要飞书蓝就选主题色「飞书蓝」） |
+|  | 黏土、Island 的底色和卡片 | 按 accent 算的淡色调（`ColorSpec.Wash(accent:)`） |
+| `bubble` / `bubble_text` | `StyleSpec.userBubble` / `userBubbleText` | 自己发的消息；白字的彩色气泡往下略压暗，和各风格自己的一样 |
+| `primary` | `StyleSpec.personaPrimary` → `Theme.persona` | 只用来装饰：头像的光晕、设置里卡片的底色。不管主题色选什么都在；没有时等于 accent |
 | `secondary` | 无 | 只在生成时用：圆点背景的淡色 |
 
-**对比度底线**：和每个界面风格一样（`StyleSpecTests`）。包里的颜色没达到时，App 把它往黑（或往白）调到达标为止（`PersonaPalette.meeting`），所以包没法让按钮上的字看不清。
+**对比度底线**：和每个主题色一样，在每个界面风格上都要过（`StyleSpecTests` 拿一个最难的黄色形象和所有风格组合着查）。包里的颜色没达到时，App 把它往黑（或往白）调到达标为止（`PersonaPalette.meeting`），所以包没法让按钮上的字看不清。
 
 - 主色上的白字 ≥ 3.5:1；
 - 主色当链接时，对页面背景 ≥ 3:1（浅色对白、深色对黑）；
@@ -138,7 +145,7 @@
 - 黄色这种白字读不了的颜色，会变成蜂蜜色 / 琥珀色。
 - 想要别的颜色就用 `--accent-light` / `--accent-dark` 手动给。
 
-**换形象等于换一次风格**：RootView 按 `AppModel.look`（风格 + 形象配色）重建整棵视图树。打开的 Tab 和对话会记住；设置的导航路径放在 `AppModel.settingsPath`，所以选形象的「设置 › 外观 › 形象」页（`PersonaPicker`）重建后还开着。
+**换形象等于换一次风格**：RootView 按 `AppModel.look`（界面风格 + 主题色 + 形象配色）重建整棵视图树（`Theme.persona` 是静态 token）。打开的 Tab 和对话会记住；设置的导航路径放在 `AppModel.settingsPath`，所以选形象的「设置 › 外观 › 形象」页（`PersonaPicker`）重建后还开着。
 
 ## 手机上（`PersonaStore`）
 
@@ -207,7 +214,7 @@
 | 测试 | 内容 |
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
-| `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；叠在风格上（飞书风格保留飞书蓝）；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
+| `apple/JarvisTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
 | `apple/JarvisUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Jarvis 又变回来 |
 
 截图和录屏用的 DEBUG 启动参数：

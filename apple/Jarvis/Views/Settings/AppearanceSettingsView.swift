@@ -1,8 +1,9 @@
 import SwiftUI
 
-// 设置 › 外观 (2026-11-01): laid out like 连接器, one row per thing that changes how the app looks (形象, 界面风格, and
-// 布局 on an iPhone), each opening its own page. Picking anything there rebuilds the whole tree (`AppModel.look`, the
-// layout switch); the settings path lives in AppModel, so the rebuilt app is back on the same page.
+// 设置 › 外观 (2026-11-01): laid out like 连接器, one row per thing that changes how the app looks (形象, 主题色, 界面风格,
+// and 布局 on an iPhone), each opening its own page; the first three are apart (docs/ios.md「设计语言」). Picking anything
+// there rebuilds the whole tree (`AppModel.look`, the layout switch); the settings path lives in AppModel, so the
+// rebuilt app is back on the same page.
 
 /// The 外观 section of 设置: one row per scene with what it is set to now.
 struct AppearanceSection: View {
@@ -18,6 +19,14 @@ struct AppearanceSection: View {
                 }
             }
             .accessibilityIdentifier("settings-persona")
+            NavigationLink(value: SettingsPage.themeColor) {
+                LabeledContent {
+                    Text(model.themeColor.title).lineLimit(1)
+                } label: {
+                    Label("主题色", systemImage: Theme.Icon.themeColor)
+                }
+            }
+            .accessibilityIdentifier("settings-color")
             NavigationLink(value: SettingsPage.style) {
                 LabeledContent {
                     Text(styleSummary).lineLimit(1)
@@ -49,7 +58,7 @@ struct AppearanceSection: View {
     }
 }
 
-/// 设置 › 外观 › 形象: Jarvis' name, face, status dot and colors.
+/// 设置 › 外观 › 形象: Jarvis' name, face and status dot (its colors are the 主题色 跟随形象).
 struct PersonaSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -61,15 +70,32 @@ struct PersonaSettingsPage: View {
             } footer: {
                 #if os(macOS)
                 Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到这台 Mac。")
+                    "Jarvis 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到这台 Mac。")
                 #else
                 Text(model.isDemo ? "体验模式只有默认形象。" :
-                    "Jarvis 的名字、头像、顶栏的状态圆点和 App 的主色跟着形象一起换。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
+                    "Jarvis 的名字、头像和顶栏的状态圆点跟着形象换，App 的颜色不变；想用形象的配色，在主题色里选「跟随形象」。形象包放在 hub 的 ~/.jarvis/personas 里，选中时下载到手机。")
                 #endif
             }
         }
         .themedGroupedPage()
         .navigationTitle("形象")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 设置 › 外观 › 主题色: the sample of the look and the colors.
+struct ThemeColorSettingsPage: View {
+    var body: some View {
+        List {
+            Section {
+                ThemeColorPicker()
+                    .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+            } footer: {
+                Text("按钮、链接、选中态和你自己的气泡用主题色，黏土和 Island 的底色是它的淡色调。「跟随界面风格」用每种风格原来的颜色。")
+            }
+        }
+        .themedGroupedPage()
+        .navigationTitle("主题色")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -84,7 +110,7 @@ struct StyleSettingsPage: View {
                 StylePicker()
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
             } footer: {
-                Text("整个 App 一起换，包括收件箱里的飞书页面。")
+                Text("浮层和卡片的画法、按钮、字体和对话里的组件，整个 App 一起换，包括收件箱里的飞书页面。")
             }
             Section {
                 LabeledContent("字号") {

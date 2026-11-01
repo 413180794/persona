@@ -12,7 +12,7 @@ final class AppModel {
     static let shared = AppModel()
 
     /// Set by pair / unpair and when the phone gets its own credential (DeviceCredentials.swift).
-    var config: ServerConfig? { didSet { if config?.isDemo != oldValue?.isDemo { applyPersonaColors() } } }
+    var config: ServerConfig? { didSet { if config?.isDemo != oldValue?.isDemo { applyPersonaPalette() } } }
     /// Jarvis's looks (docs/persona.md): the chosen one, what the hub offers, the packages on the phone.
     let personas = PersonaStore()
     /// Which paths conversations mention are there on their machines (only those are linked).
@@ -140,8 +140,8 @@ final class AppModel {
             WatchSync.shared.push(config: Keychain.watchConfig ?? cfg)
             WatchSync.shared.push(summary: self.watchSummary())
         }
-        personas.onChange = { [weak self] in self?.applyPersonaColors() }
-        applyPersonaColors()
+        personas.onChange = { [weak self] in self?.applyPersonaPalette() }
+        applyPersonaPalette()
         live.onConnected = { [weak self] in self?.didConnect() }
         live.onChange = { [weak self] in self?.connection.update() }
         connection.onCaughtUp = { [weak self] in self?.flushOutbox() }
@@ -994,11 +994,19 @@ final class AppModel {
 
     // MARK: Style
 
-    /// The app's look (设置 › 界面风格); RootView rebuilds everything when it changes.
+    /// How the app is drawn (设置 › 界面风格); RootView rebuilds everything when it changes.
     var style: AppStyle = AppStyle.current {
         didSet {
             AppStyle.current = style
-            UserDefaults.standard.set(style.rawValue, forKey: "ui.style")
+            UserDefaults.standard.set(style.rawValue, forKey: AppearanceChoice.styleKey)
+        }
+    }
+
+    /// The app's colors (设置 › 外观 › 主题色): the style's own, the persona's, or a fixed one; rebuilds everything too.
+    var themeColor: ThemeColor = ThemeColor.current {
+        didSet {
+            ThemeColor.current = themeColor
+            UserDefaults.standard.set(themeColor.rawValue, forKey: AppearanceChoice.colorKey)
         }
     }
 
@@ -1009,16 +1017,21 @@ final class AppModel {
     /// The persona on screen: the chosen one, the built-in in 体验模式 (its packages are the user's hub's).
     var persona: Persona { isDemo ? .builtin : personas.current }
 
-    /// What RootView keys the whole tree by: a new style, or a persona with other colors, rebuilds it (tokens are static).
-    var look: Look { Look(style: style, palette: persona.palette) }
+    /// What RootView keys the whole tree by: a new style, 主题色 or persona rebuilds it (tokens are static; a persona's
+    /// palette is its own primary, and the colors under 跟随形象).
+    var look: Look { Look(style: style, color: themeColor, palette: persona.palette) }
 
     nonisolated struct Look: Hashable {
         var style: AppStyle
+        var color: ThemeColor
         var palette: PersonaPalette?
     }
 
-    /// The persona's colors over the style's (`StyleSpec.tinted`), before RootView builds with them.
-    private func applyPersonaColors() {
+    /// The accent the built-in persona is drawn in: the 主题色 as it is with no persona colors.
+    var builtinAccent: Color { themeColor.colors(style: style, persona: nil).accent }
+
+    /// The persona's palette into the spec (`StyleSpec.compose`), before RootView builds with it.
+    private func applyPersonaPalette() {
         let palette = persona.palette
         if PersonaPalette.current != palette { PersonaPalette.current = palette }
     }

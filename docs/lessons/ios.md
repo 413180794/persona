@@ -221,5 +221,8 @@
   会连 `.principal` 的工具栏项一起藏掉：没有标题的页面要显示状态，就去掉它、只放一个平时为空的 principal 项（不会露出 navigationTitle）。
   大标题页面的 principal 项平时也要留空，否则标题出现两遍。弱网判断只认及时回来的 pong（晚到的 pong 也算慢），不然标题每次 ping 都闪一下。
 - 形象（`docs/persona.md`）可能是第三方角色：角色的图和生成物只放 hub 的 `~/.jarvis/personas`，不进仓库、不进 App 包。
-  换形象和换风格一样按 `AppModel.look` 重建整棵视图树，推出来的页面放在 `@State` 的导航路径里会被重建关掉：设置的路径放在 `AppModel.settingsPath`，
-  所以选择界面能放在推出来的「设置 › 外观 › 形象 / 界面风格 / 布局」页（2026-11-01），重建后还停在那一页（`PersonaPickerTests` 检查）。别的页面要放会换 look 的东西也照这样把路径放进 AppModel。
+  换形象、主题色、界面风格都按 `AppModel.look` 重建整棵视图树，推出来的页面放在 `@State` 的导航路径里会被重建关掉：设置的路径放在 `AppModel.settingsPath`，
+  所以选择界面能放在推出来的「设置 › 外观 › 形象 / 主题色 / 界面风格 / 布局」页（2026-11-01），重建后还停在那一页
+  （`PersonaPickerTests`、`LookPickerTests` 检查）；iPhone 新外壳里设置是 sheet（`AppModel.shellSettings`）：RootView 的 `.id(look)` 换了，已经弹出的 sheet 不会跟着重建，没有输入的视图（主题色页的小样）还是旧颜色，所以 sheet 的内容自己也挂 `.id(model.look)`（`LookPickerTests.testShellSheetStaysOnAppearance` 比较选色前后小样气泡的像素）。别处弹出的 sheet 里要是也有会换 look 的东西，照这样做。别的页面要放会换 look 的东西也照这样把路径放进 AppModel。DEBUG 启动参数打开某页（`-openAppearance` 等）的「已经打开过」标记同理不能放 `@State`：重建会清掉它，路由再跑一遍，就把用户后来进的页面换回启动参数那页（`SettingsView.debugOpened` 是 static，一次启动只跑一次）。
+- 外观的三个选择互不影响（2026-10-31 用户要求）：形象不改颜色、主题色不改组件、界面风格不改主色。以前形象的颜色直接叠在风格上（`StyleSpec.tinted`），
+  选了黏土再选形象，紫色就被盖掉。新加的视觉东西先想清楚属于哪一个：画法归界面风格，颜色归主题色（`docs/ios.md`「设计语言」）。

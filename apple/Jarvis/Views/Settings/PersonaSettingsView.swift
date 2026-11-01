@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// 设置 › 形象 (docs/persona.md): the built-in Jarvis and the packages on the hub, in a grid like the styles, and the
-/// chosen one's top-bar dot in each state under it. Choosing one changes Jarvis's name and face, the dot and the
-/// app's colors at once (the tree is rebuilt, as for a style: so this sits in the settings list itself, not on a
-/// pushed page that the rebuild would close). A package is downloaded first and kept on the phone.
+/// 设置 › 外观 › 形象 (docs/persona.md): the built-in Jarvis and the packages on the hub, in a grid like the styles, and
+/// the chosen one's top-bar dot in each state under it. Choosing one changes Jarvis's name, face and dot; the app's
+/// colors only under 主题色「跟随形象」 (`ThemeColorPicker`). The tree is rebuilt, as for a style; 外观 stays open because
+/// the settings path is AppModel's. A package is downloaded first and kept on the phone.
 struct PersonaPicker: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -90,7 +90,7 @@ struct PersonaPicker: View {
                         Text(p.name).font(Theme.Font.captionStrong).lineLimit(1)
                     }
                     if p.isBuiltin {
-                        Text("跟随界面风格").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                        Text("颜色随主题色").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     } else {
                         PersonaSwatches(palette: p.palette).frame(height: Theme.Space.l)
                     }

@@ -32,8 +32,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   消息（进收件箱）、链接在 App 内渲染（文档、removed单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
   别的数据源同理：不要为某个来源做一套浏览页面。
 - **不许直接改已有界面的样子**（2026-10-30 用户要求：BeautifulUI 的工作过程和输入框直接替换了原来的，太丑，已整体 revert）：
-  换一种视觉风格（组件库、设计语言、整套配色）一律做成新的**主题**（设置 › 界面风格，`AppStyle`），只在选了它时生效，
-  默认和其他主题的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
+  换一种视觉风格（组件库、设计语言）一律做成新的**界面风格**（设置 › 外观 › 界面风格，`AppStyle`），换一套配色做成新的**主题色**（`ThemeColor`），
+  只在选了它时生效，默认和其他选项的界面一像素都不变。修 bug、按用户明确要求改某个界面的不算。
 - **界面只用设计系统**（2026-10-31 用户要求：设计系统是仓库的约束）：字号、间距、圆角、尺寸、动画、颜色、图标、品牌标志、风格一律取自设计系统，
   页面里不写死数值、系统字号、SF Symbol 名字、十六进制颜色；缺什么先加 token。见下面「设计系统（iOS）」。
 - **提示词一律放 `server/internal/prompts/`**（2026-11-01 用户要求，含 MCP 工具的描述和参数说明，在 `mcp/`）：一个提示词一个文件（按场景分子目录），同一个 Agent 的几段用模板组合，不在 Go 代码里 fmt / + 提示词；调用方只准备数据。改了提示词要更新 golden 测试并看 diff，见 `docs/prompts.md`。
@@ -52,15 +52,16 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s）、`blink`（默认形象眨眼）；对话里展开的内容 `reveal`（0.28 s）/ `conceal`（0.2 s），用 `.unfolding` |
 | 颜色 | `Theme` 的角色色（`accent`、`danger`、`positive`、`caution`、`ai`、形象的主色 `persona`…）、`Theme.Fill`、`Theme.Diff`、`Theme.Hue`；基础色 `Palette`；Agent 状态色 `AgentState.tone`（`StatusPalette`） |
 | 图标、标志 | `Theme.Icon`（一个意思一个 SF Symbol）、`Theme.Brand`（官方标志，原样用） |
-| 风格 | `StyleSpec.current`；`Shared/Design/Styles/` 每种风格一个文件；形象的配色叠在上面（`StyleSpec.tinted`，`docs/persona.md`） |
+| 风格、主题色 | `StyleSpec.current`：界面风格（`ComponentSpec`）× 主题色（`ColorSpec`）组合成的一个值；`Shared/Design/Styles/` 每种风格一个文件（连同它自己的颜色）；形象的配色是主题色的一个选项「跟随形象」（`docs/persona.md`） |
 
 - **组件和配方**在 `apple/Jarvis/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
   `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
-- **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `StyleSpec` 加一个 `AppStyle` case，别处只读 `StyleSpec.current`、不 `switch AppStyle`。
+- **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `ComponentSpec` 加一个 `AppStyle` case，加主题色就是写一个 `ColorSpec` 加一个 `ThemeColor` case，
+  别处只读 `StyleSpec.current`、不 `switch AppStyle` / `ThemeColor`。
   换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Jarvis 里改。
 - **检查**（JarvisTests 扫源码）：`TypeScaleTests`（字号级别、强调、竖向间距在网格上）、`IconVocabularyTests`（图标登记）、
   `TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；减少后删掉 `TokenBaseline.json` 重跑记下新基线）、
-  `StyleSpecTests`（各风格深浅色的对比度）。不许为了过测试加豁免或调高基线。
+  `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
 - **全局**：滚动条隐藏（RootView 的 `.scrollIndicators(.hidden)`，UIKit 的滚动视图自己关）；字号跟随动态字体和设置里的小 / 标准 / 大（`TextSize`）。
 - **逻辑层**：「加载 → 显示 → 编辑 → 保存」的页面用 MVVM，一个 `@Observable` 的 `XxxModel` 放在页面旁边，依赖从 `Deps` 传入，单元测试用 `FakeHub`；
   事件多的地方（对话页、分页）先把纯计算抽出来（`ChatLines`、`AgentListOrder`）。见 `docs/ios.md`「逻辑层的选型」。

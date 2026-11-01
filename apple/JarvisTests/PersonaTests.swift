@@ -72,27 +72,26 @@ struct PersonaTests {
         #expect(PersonaPalette.contrast(dark, 0xFFFFFF) >= PersonaPalette.onAccent)
     }
 
-    /// Over a style: the accent, the bubble and 飞书's links follow the persona; 飞书's own style keeps its blue there;
-    /// the built-in (no colors) leaves the style as it is.
-    @Test func colorsOverAStyle() {
+    /// As 主题色「跟随形象」: the accent, the bubble and 飞书's links are the persona's, on any style (飞书's own too);
+    /// what it leaves out is the style's; the built-in (no colors) leaves the style as it is.
+    @Test func colorsAsTheThemeColor() {
         let p = PersonaPalette(primary: .init(light: 0xF2C230, dark: 0xF2C230), accent: .init(light: 0x8A5A00, dark: 0xB07A00),
                                bubble: .init(light: 0x7A4E00, dark: 0x7A4E00))
-        func hex(_ c: Color, _ s: UIUserInterfaceStyle = .light) -> UInt32 {
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            UIColor(c).resolvedColor(with: UITraitCollection(userInterfaceStyle: s)).getRed(&r, green: &g, blue: &b, alpha: &a)
-            return UInt32((r * 255).rounded()) << 16 | UInt32((g * 255).rounded()) << 8 | UInt32((b * 255).rounded())
-        }
-        let glass = StyleSpec.glass.tinted(p)
-        #expect(hex(glass.accent) == 0x8A5A00)
+        let hex = StyleSpecTests.hex
+        let glass = StyleSpec.compose(style: .glass, color: .persona, persona: p)
+        #expect(hex(glass.accent, .light) == 0x8A5A00)
         #expect(hex(glass.accent, .dark) == 0xB07A00)
-        #expect(hex(glass.userBubble) == 0x7A4E00)
-        #expect(hex(glass.lark.blue) == 0x8A5A00)
+        #expect(hex(glass.userBubble, .light) == 0x7A4E00)
+        #expect(hex(glass.lark.blue, .light) == 0x8A5A00)
         #expect(glass.personaPrimary != nil)
-        let lark = StyleSpec.lark.tinted(p)
-        #expect(hex(lark.accent) == 0x8A5A00)
-        #expect(hex(lark.lark.blue) == hex(StyleSpec.lark.lark.blue))
-        #expect(hex(StyleSpec.glass.tinted(nil).accent) == hex(StyleSpec.glass.accent))
-        #expect(StyleSpec.glass.tinted(nil).personaPrimary == nil)
+        let lark = StyleSpec.compose(style: .lark, color: .persona, persona: p)
+        #expect(hex(lark.lark.blue, .light) == 0x8A5A00)
+        #expect(hex(lark.page, .light) == 0xF5F6F7)
+        let accentOnly = StyleSpec.compose(style: .clay, color: .persona, persona: PersonaPalette(accent: p.accent))
+        #expect(hex(accentOnly.userBubble, .light) == 0x6759D3)
+        let builtin = StyleSpec.compose(style: .glass, color: .persona, persona: nil)
+        #expect(hex(builtin.accent, .light) == 0x007AFF)
+        #expect(builtin.personaPrimary == nil)
     }
 
     // MARK: The phone's copy

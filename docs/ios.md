@@ -371,34 +371,55 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 
 - 代码结构（2026-10-31，方案见 bui-adopt 的 ARCH-PLAN）：
   - `Shared/Design/`：token，手表也编译。`Theme`（字体级别和强调、间距、圆角、行高、动画、颜色角色）、`Icons`（`Theme.Icon` 和 `Theme.Brand`）、
-    `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec` 和 `Styles/` 下每种风格一个文件。
+    `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec`（组合后的一个值）、`ColorSpec`（主题色、迁移）和 `Styles/` 下每种风格一个文件。
   - `Jarvis/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
     （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`TextSize`。
-  - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `StyleSpec`（主色、气泡、页面、卡片、描边、表面画法、按钮、字体设计、组件套件、飞书的颜色），
-    `AppStyle` 加一个 case，`spec` 里对上。别的代码只读 `StyleSpec.current`，不要 `switch AppStyle`。`StyleSpecTests` 会查新风格深浅色的对比度。
+  - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `ComponentSpec`（表面画法、按钮、字体设计、组件套件、底色怎么来、描边、飞书卡片、
+    它自己的颜色），`AppStyle` 加一个 case，`component` 里对上。**加一种主题色**：写一个 `ColorSpec`（主色、气泡和字、要不要压暗、
+    淡色调可以手调或按主色算），`ThemeColor` 加一个 case。别的代码只读 `StyleSpec.current`，不要 `switch AppStyle` / `ThemeColor`。
+    `StyleSpecTests` 会把每种风格和每种主题色（含一个黄色形象）两两组合，查深浅色的对比度。
   - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
     竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
     减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
-- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组三行「形象」「界面风格」「布局」（布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
-- 界面风格（设置 › 外观 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
+- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组四行「形象」「主题色」「界面风格」「布局」（布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
+- 外观是设置 › 外观里三个互不影响的选择（2026-10-31 用户要求：「形象，主题色和 UI 组件的选择」分开；以前一个界面风格同时管颜色和组件，
+  形象又盖掉主色，选了黏土再选奶娃紫色就没了，想要 Claude 的珊瑚橙配 Island 的卡片也做不到）：
+  - **形象**（`PersonaPicker`，`docs/persona.md`）：名字、头像、顶栏的状态圆点和动画，不改颜色。
+  - **主题色**（`ThemeColorPicker`，`ThemeColor`，存 `ui.color`，默认「跟随界面风格」）：主色（能点的东西、链接、选中态、Tab 的 tint）、
+    自己的气泡和上面的字、飞书页面的链接和「我的气泡」、黏土 / Island 底色的淡色调。选项：跟随界面风格（每种风格原来的颜色，看起来和拆开前一模一样）、
+    跟随形象（形象带配色时才出现）、系统蓝、珊瑚橙（原来的 Claude 风格）、薰衣草紫、青、飞书蓝。
+  - **界面风格**（`StylePicker`，`AppStyle`，存 `ui.style`，默认液态玻璃）：浮层和卡片的画法、按钮、字体、对话里的组件（BeautifulUI）、展开的工作过程画成卡片还是时间线（`workList`），以及底色从哪来。
+  - 三个选择组合成一个 `StyleSpec`（`StyleSpec.compose`，`StyleSpec.current`），Theme 和 Styling 只读它；任何一个变了 RootView 都按 `AppModel.look` 整棵重建。
+  - **底色和卡片色的归属**：玻璃风格（液态玻璃、BeautifulUI）用系统的页面和卡片，飞书用自己的浅灰 + 白卡片，这三种不随主题色变；
+    黏土、Island 的底色本来就是一种颜色的淡色（薰衣草紫、雾青），和组件绑在一起不好看（紫底配蜂蜜色按钮），所以改成**主题色的淡色调**
+    （`ComponentSpec.Canvas.wash` / `.islands`，`ColorSpec.Wash`）：黏土的页面、卡片、软块的彩色阴影都用它，Island 的页面用它、卡片仍是白色（深色下用淡色调的卡片）。
+    薰衣草紫和青的淡色调是原来手调的值，别的颜色按主色算（浅色页面九成白、卡片再浅一档；深色页面压到比系统分组单元格 #1C1C1E 暗）。
+  - **Claude 不再是一种风格**：它和液态玻璃只差颜色，拆开后只是主题色「珊瑚橙」；风格选择里没有重复的两张卡。
+  - **迁移**（`AppearanceChoice`，第一次读到没有 `ui.color` 的设置时）：原来的风格 → 同名风格 + 跟随界面风格；原来的 Claude → 液态玻璃 + 珊瑚橙；
+    选过形象的（原来会被形象染色）→ 跟随形象。迁移后写回两个键。看起来会变的有三处：黏土 / Island 加形象的老用户，底色从紫 / 青变成形象色的淡色调；飞书加形象的老用户，飞书页面的链接和自己的气泡变成形象色；原来的 Claude 风格展开的工作过程跟着液态玻璃变成时间线（原来是灰卡片）。
+  - 主题色页（`ThemeColorSettingsPage`）上面是一块用实时 token 画的小样（自己的气泡、带链接的回复卡片、两个按钮），下面每个颜色一个圆点；
+    界面风格页的预览卡按「这个风格 + 现在的主题色」画（跟随界面风格时就是各风格自己的颜色）。
 
-  | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |
-  | --- | --- | --- | --- | --- |
-  | 液态玻璃 | 系统蓝 `#007AFF` | Liquid Glass | 浅蓝 `#DCEAFF` 黑字（深色 `#1D3557`） | 系统 |
-  | Claude | 珊瑚 `#D4683F`（深色 `#CD6E45`） | Liquid Glass | 深珊瑚 `#B24C25` 白字 | 系统 |
-  | 黏土 | 薰衣草紫 `#7A5AF8`（深色 `#8979EB`） | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24 | 紫 `#6759D3` 白字 | 淡紫 `#EFEAF7`（深色 `#0A0510`） |
-  | Island | 青 `#27747F`（深色 `#2A9798`） | 白色悬浮卡片 + 大而柔的阴影，圆角 26 | 墨黑底白字（深色反过来） | 雾青 `#E6F1EF` |
-  | 飞书 | 飞书蓝 `#3370FF` | 白卡片 + 发丝描边、无阴影，圆角 10，按钮 bordered | 浅蓝 `#D1E3FF` 黑字 | 浅灰 `#F5F6F7` |
+  | 风格 | 表面 / 按钮 | 底色 | 自己的颜色 |
+  | --- | --- | --- | --- |
+  | 液态玻璃 | Liquid Glass | 系统 | 系统蓝 `#007AFF`，浅蓝气泡 `#DCEAFF` 黑字（深色 `#1D3557`） |
+  | 黏土 | 实心软块：左上高光 + 右下彩色阴影、白描边，圆体字，圆角 24，软按钮 | 主题色的淡色调 | 薰衣草紫 `#7A5AF8`（深色 `#8979EB`），紫气泡 `#6759D3` 白字，淡紫底 `#EFEAF7`（深色 `#0A0510`） |
+  | Island | 白色悬浮卡片 + 大而柔的阴影，圆角 26，软按钮 | 主题色的淡色调，白卡片 | 青 `#27747F`（深色 `#2A9798`），墨黑气泡白字（深色反过来），雾青底 `#E6F1EF` |
+  | 飞书 | 白卡片 + 发丝描边、无阴影，圆角 10，按钮 bordered | 浅灰 `#F5F6F7`（不随主题色） | 飞书蓝 `#3370FF`，浅蓝气泡 `#D1E3FF` 黑字 |
+  | BeautifulUI | 同液态玻璃，换 BeautifulUI 的组件 | 系统 | 系统蓝 |
 
-  各风格的可读性底线（2026-10-30 修过一轮，数字见 jarvis-p1 的 themes-fix 报告）：实心按钮和选中胶囊的白字 ≥ 3.5:1（所以深色主色不能太亮），
-  自己气泡的白字 ≥ 4.5:1，主色当链接对页面 ≥ 3:1；彩色气泡的渐变只往下压暗（`Theme.deepening`），不能提亮顶部。黏土 / Island 的实心按钮
+  珊瑚橙（原 Claude）：主色 `#D4683F`（深色 `#CD6E45`），深珊瑚气泡 `#B24C25` 白字。
+
+  可读性底线（2026-10-30 修过一轮，数字见 jarvis-p1 的 themes-fix 报告；拆开后每种风格 × 每种主题色都要过）：实心按钮和选中胶囊的白字 ≥ 3.5:1（所以深色主色不能太亮），
+  自己气泡的白字 ≥ 4.5:1，主色当链接对页面 ≥ 3:1（淡色调页面上最紧的是珊瑚橙配黏土，3.2:1）；彩色气泡的渐变只往下压暗（`Theme.deepening`），不能提亮顶部。黏土 / Island 的实心按钮
   （`SoftButtonStyle`）用当前 tint 填色、至少 44pt 高：调用处 `.tint(Theme.danger)` 的中断、关闭 Agent 在每套风格下都是红色。
   自己画背景的滚动页用 `.themedGroupedPage()`，List / Form 用 `.themedPage()`，否则黏土 / Island / 飞书下切页时底色会跳。
-  `Theme` 的颜色按当前风格取值（`Theme.accent(style)` 可取任意风格，设置里的预览卡用它）；面板用 `.surface(tint:interactive:in:)`、
+  `Theme` 的颜色按当前的组合取值（设置里的预览卡用 `StyleSpec.compose` 算别的组合）；面板用 `.surface(tint:interactive:in:)`、
   按钮用 `.themedButton(prominent:)`、列表页面 `.themedPage()`、plain 列表的行 `.themedRow()`，不要直接写 `glassEffect` / `.glass`。
-  切换风格时 RootView 以风格为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
-  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡、卡片底和描边）跟着风格走，卡片内容的飞书具名色板不变。
-  调试：`-ui.style glass|claude|clay|island|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关）。
+  切换风格或主题色时 RootView 以 `AppModel.look` 为 id 整棵重建（token 是静态的），当前 tab 和打开的会话本来就会记住。飞书页面的框架色
+  （`LarkColor.blue` 链接 / 选中 / 新消息线、自己的气泡）跟着主题色走（主题色「飞书蓝」是 lark-connector 自己的那套），卡片底和描边跟着风格走，卡片内容的飞书具名色板不变。
+  调试：`-ui.style glass|clay|island|lark|beautiful`、`-ui.color style|persona|blue|coral|lavender|teal|lark`（UserDefaults 参数域，Release 也认，不算 DEBUG 开关；
+  `-ui.style claude` 仍当液态玻璃 + 珊瑚橙）。
 - 状态色不随风格变，只有一张表 `Shared/StatusPalette.swift`（App、手表、实时活动都编译它）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰，和 herdr 侧边栏一致（`docs/agent-states.md`）。每种状态三个值：`dot`（圆点、图标、填充）、`text`（同色相加深，小字对白底 ≥ 4.5:1）、`tint`（浅底）；界面用 `AgentState.tone`。提问 / 计划 / 授权 / 终端对话框都算需要你，一律用红；工作中的转圈用琥珀，旁边的字用次要灰。不是 Agent 状态的东西不借状态色，用 `Theme` 里各自的 token：`Theme.Diff`（diff 和 Git 的 ± 符号、计数、浅底，正文保持黑字）、`caution`（连接中、过期、截断、版本不一致这类提醒，配三角图标，不画成圆点）、`ai`（✦ AI 摘要）、`loop`（循环和待唤醒）、`positive`（成功、已连接、在线、做完的待办）、`Hue`（只用来区分类别，比如记忆类型）。权限模式标签是中性的，只有「全部放行」用红。
 - Agents 列表的一行（`SlotRow`）：状态点 + 标题 + 时间；最新一句；元信息一行「需要你 · Claude · 空间 › tab · 机器」，普通字体、次要灰。只有需要你写成字（红），其余状态只看圆点（完成未看另把标题加粗）；以前 tab 名着色胶囊、状态字、描边的 Agent 种类挤在第一行，把状态说了三遍。空间标题的状态计数是彩色圆点 + 次要灰数字。
 - Token（`Theme.swift`，页面只引用）：圆角 `Theme.Radius` 五档（badge 6 / control 10 / card 14 / bubble 20 / panel 22，外加胶囊和圆）；
@@ -436,7 +457,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   着色（某个含义的字 + 它的浅底：状态用 `.tone`、@我 红、「推荐」用 AI 的紫色）、描边（Claude / Codex 这类种类）；`CountBadge` 是计数（白字压在
   `Theme.countBadge` 灰或主色上，或者状态的字压在状态浅底上，过 99 写 99+）。能点的东西（筛选、选项卡、模式选择、子 Agent 条）是控件，不用它们。
 - BeautifulUI（`apple/Packages/BeautifulUI`，BeautifulUI 仓库拷入的副本，来源和更新方法见包里的 `VENDORED.md`，不在这里改库代码）：
-  **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，颜色和表面同液态玻璃），其他风格的思考过程、工具行、工作卡、输入框都是 Jarvis 原来的。
+  **只在「BeautifulUI」风格下用**（`AppStyle.usesBeautifulUI`，表面同液态玻璃，颜色按主题色），其他风格的思考过程、工具行、工作卡、输入框都是 Jarvis 原来的。
   2026-10-30 它曾直接替换原来的界面（#93、#94），用户觉得太丑，整体 revert 后改成这个主题。这个风格下：
   - 对话页的思考过程是它的 `ThinkingState`（✦ + 首行，展开后正文在一条引导线右边）。
   - 展开的工作卡里，连续两个以上的工具调用合成一行 chip（`ChatLine.toolRun`、`ChatView.runLines`、`ToolRunRow`）。
@@ -445,7 +466,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
     转到后台的调用不进组，单独一行，好让它的「后台 · 已完成 / 失败」一直看得见（`ChatView.foldsIntoRun`）。
     从后台任务通知跳到某个调用时，先展开它所在的组。
   - diff、命令和输出、Markdown 代码块仍是 Jarvis 自己的（`DiffView`、`CodeBlock`）。
-  - 颜色、圆角、字号由 `BUITheme.jarvis(style)`（`BeautifulUIBridge.swift`）从 `Theme` 生成，在 RootView 注入：
+  - 颜色、圆角、字号由 `BUITheme.jarvis(spec)`（`BeautifulUIBridge.swift`）从当前的 `StyleSpec` 生成，在 RootView 注入：
     - 库的第三级文字也用 secondaryLabel（tertiaryLabel 在卡片上只有 1.7:1）；
     - 代码关键字用 `Theme.Hue.blue`；
     - 字号 ×1.2（库是桌面字号），代码保持 ×1；
@@ -591,7 +612,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 怎么做的：一个通用循环在 UTF-8 字节上跑，各语言只是表格（关键字、类型、常量、注释、字符串的样子）。YAML、TOML、HTML、CSS、Dockerfile、Makefile、Markdown、diff 各有一小段专门处理。
   - 关键字按字节的哈希查表，不为每个词建 String。
   - 块注释、多行字符串、HTML 注释和标签、Markdown 代码块、Dockerfile 的续行，都通过 `SyntaxState` 带到下一行。
-- **颜色**：用设计系统的 `Theme.Syntax`（GitHub 的配色）。代码背景在所有界面风格下都一样，所以语法色也不跟风格变；每个颜色在浅色、深色下对代码背景都 ≥ 4.5:1（`SyntaxPaletteTests`）。
+- **颜色**：用设计系统的 `Theme.Syntax`（GitHub 的配色）。代码背景在所有界面风格和主题色下都一样，所以语法色也不跟着变；每个颜色在浅色、深色下对代码背景都 ≥ 4.5:1（`SyntaxPaletteTests`）。
 - **踩过的坑**：`emit(s, i, word(…, &i, …))` 里 Swift 先按位置读出参数 `i`，再调用 `word`，宏的 `!` 就没算进 token；先把 `word` 的结果存成变量再用。
 
 **性能**

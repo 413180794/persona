@@ -58,8 +58,10 @@ final class IPadLayoutTests: XCTestCase {
     /// column is closed the strip is the detail's again (2026-10-31: the list looked cut off at the top).
     @MainActor func testSidebarReachesTheTop() throws {
         XCUIDevice.shared.orientation = .portrait
-        for style in ["glass", "claude"] {
-            app.launchArguments += ["-ui.style", style]
+        let base = app.launchArguments
+        for (name, tint) in [("glass", "style"), ("glass", "coral")] {
+            let style = "\(name)-\(tint)"
+            app.launchArguments = base + ["-ui.style", name, "-ui.color", tint]
             app.launchJarvis()
             XCTAssertTrue(app.staticTexts["选一个 Agent"].waitForExistence(timeout: 20))
             sleep(1)
@@ -86,7 +88,6 @@ final class IPadLayoutTests: XCTestCase {
             image = app.screenshot().image
             XCTAssertTrue(near(color(8, 2), color(8, 400)), "\(style): the list's color stayed at the top after closing it (\(color(8, 2)))")
             app.terminate()
-            app.launchArguments.removeLast(2)
         }
     }
 }
