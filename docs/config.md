@@ -19,7 +19,7 @@
 
 | 机器 | 要有 |
 | --- | --- |
-| hub 机器（Linux） | docker（Postgres 容器）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN） |
+| hub 机器（Linux） | docker（Postgres 容器）、systemd 用户服务、herdr；手机能访问它的 18660 端口（同一个网络或 VPN）。放在 NAS 上、或只当 hub 不跑 Agent 时，也可以整个用 Docker 跑（`docs/docker.md`），下面的第 1、2 步只用来往各台电脑装 `jarvisd` |
 | 每台要接入的电脑 | herdr，以及 Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd`（第 2 步部署脚本会拷过去） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
@@ -146,6 +146,8 @@
 - `machines[].tailcat_addr`（可选）：那台电脑 `jarvisd node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
   （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
   只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
+- 环境变量 `JARVIS_DATABASE_URL`、`JARVIS_PUBLIC_URL`、`JARVIS_LISTEN` 覆盖同名的设置（不写回文件），Docker 部署靠它们
+  （`docs/docker.md`「环境变量」）；`JARVIS_LOCAL_NODE=0` 时第一次运行不写本机那台。
 - `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
   `init` 时要带同一个 `--derp-map-url`。
 - `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，

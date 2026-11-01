@@ -50,7 +50,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 | 东西 | 要求 |
 | --- | --- |
-| hub 机器 | 一台常开的 Linux 机器，有 docker 和 systemd；手机能访问它的 18660 端口（同一个网络或 VPN） |
+| hub 机器 | 一台常开的机器，手机能访问它的 18660 端口（同一个网络或 VPN）。两种装法：Linux 上用原生二进制（docker 跑数据库 + systemd），或任何能跑 Docker 的机器（NAS 等）用 compose 跑 hub 和数据库（[docs/docker.md](docs/docker.md)） |
 | 电脑 | 装好 [herdr](https://herdr.dev) 和 Claude Code（或 Codex）的 Mac / Linux；hub 机器要能用 SSH 密钥免密码登录它们 |
 | iPhone | iOS 26；Apple Watch 需要 watchOS 26（可选） |
 | 开发机 | 一台装了 Xcode 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 的 Mac、Go 1.23+，用来编译服务端和 App |
@@ -65,6 +65,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 1. **写配置**：把 `config.example.json` 复制到 `~/.config/jarvis/config.json`，填上你的 bundle id、开发者团队、hub 在哪台机器、
    要接入哪些电脑。仓库里没有写死任何人的机器和账号，所有个人设置都在这份配置和 hub 的 `~/.jarvis/hub.json` 里。
 2. **部署服务端**：`./scripts/deploy.sh`。它会编译 `jarvisd`，装到每台电脑上，在 hub 机器上启动 Postgres 和 hub 服务。
+   hub 想放在 NAS 上的话改用 Docker：`deploy/docker/compose.yaml`（[docs/docker.md](docs/docker.md)），`deploy.sh` 只用来往各台电脑装 `jarvisd`。
 3. **告诉 hub 接入哪些电脑**：在 hub 机器的 `~/.jarvis/hub.json` 里填上各台电脑和手机访问用的地址，然后重启 hub。
 4. **安装 App**：模拟器上跑 `./scripts/sim.sh`；装到真机就用 Xcode 打开生成的工程，或者用 `./scripts/release.sh` 发到你自己的
    TestFlight（[docs/release.md](docs/release.md)）。
@@ -81,7 +82,7 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 
 ## 目前的限制
 
-- hub 只能装在 Linux 上（部署脚本用 systemd 和 docker）。
+- hub 的原生装法只支持 Linux（部署脚本用 systemd 和 docker）；别的系统用 Docker 方式（[docs/docker.md](docs/docker.md)），但那台机器自己不能同时跑 Agent。
 - 界面只有中文。
 - 只能通过自己编译或自己的 TestFlight 安装，没有上架 App Store。
 - Android 版目前只有 Agents 这一块（看、发消息、回答、审批、授权、通知），助手、收件箱、手机数据工具还没做（`docs/android.md`）。
@@ -99,5 +100,6 @@ Claude 还能通过 `phone_*` 工具使用 iPhone 本地的数据：通讯录、
 | [docs/inbox.md](docs/inbox.md) | 收件箱 |
 | [docs/mail.md](docs/mail.md) | 邮箱接入（含 Gmail 登录的准备） |
 | [docs/phone-tools.md](docs/phone-tools.md) | Claude 能用的手机数据工具 |
+| [docs/docker.md](docs/docker.md) | 用 Docker 跑 hub（NAS 等）：compose、镜像、环境变量、从原生方式迁过来 |
 | [docs/protocol.md](docs/protocol.md) | hub 的 API 和协议 |
 | [CLAUDE.md](CLAUDE.md) | 给参与开发的人（和 AI）看的约定 |

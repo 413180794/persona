@@ -77,6 +77,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）和公开的 jarvisd（`publish.sh`、`install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
+| `deploy/docker/` | hub 的 Docker 部署：`compose.yaml`、`.env.example`、镜像的入口脚本（镜像是仓库根的 `Dockerfile`，`.github/workflows/hub-image.yml` 构建推到 ghcr），见 `docs/docker.md` |
 | `site/` | 官网 + 隐私政策 + 服务条款（静态，Cloudflare Workers 托管；Google OAuth 同意屏幕要求有隐私政策）。截图只用体验模式（`-demo.on YES`）拍的演示数据，深浅色各一张放 `site/public/img/` |
 
 ## 文档索引
@@ -87,6 +88,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |
 | `docs/server.md` | jarvisd 各模式、配置、部署、运维 |
+| `docs/docker.md` | hub 的两种部署方式（原生二进制 / Docker）、用 Docker 跑 hub（NAS）：compose、镜像标签、PUID / PGID、环境变量、迁移 |
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |

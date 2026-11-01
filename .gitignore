@@ -16,3 +16,7 @@ florak/
 /build-publish/
 /server/internal/hub/webdist/*
 !/server/internal/hub/webdist/README.md
+# A hub run from deploy/docker (docs/docker.md): its secrets and data stay out of the repo.
+/deploy/docker/.env
+/deploy/docker/data/
+/deploy/docker/postgres/

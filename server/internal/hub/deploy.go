@@ -19,8 +19,12 @@ import (
 // if there is one (launchd starts it again from the new binary; `launchctl kickstart` from an ssh session did not always
 // take, which is how two Macs kept an old node through deploys), and connects again.
 
-// nodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own.
+// nodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own; JARVIS_NODE_BINARIES points
+// elsewhere (the Docker image carries them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
 func nodeBinaryDir() string {
+	if d := os.Getenv("JARVIS_NODE_BINARIES"); d != "" {
+		return d
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".jarvis", "bin", "nodes")
 }
@@ -32,7 +36,7 @@ func nodeBinary(goos, arch string) (string, error) {
 	}
 	p := filepath.Join(nodeBinaryDir(), "jarvisd-"+goos+"-"+arch)
 	if _, err := os.Stat(p); err != nil {
-		return "", fmt.Errorf("hub 上没有 %s/%s 的 jarvisd：在开发机上跑一次 scripts/deploy.sh", goos, arch)
+		return "", fmt.Errorf("hub 上没有 %s/%s 的 jarvisd：在开发机上跑一次 scripts/deploy.sh（Docker 部署的 hub 用镜像里带的）", goos, arch)
 	}
 	return p, nil
 }

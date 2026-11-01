@@ -1,0 +1,131 @@
+# The hub's container image (docs/docker.md, Dockerfile): linux/amd64 + linux/arm64 to ghcr.io/<owner>/<repo>.
+#   a tag v*          -> :<version> (v stripped), and :latest unless it is a pre-release (v1.3.0-rc1)
+#   run by hand       -> :edge and :sha-<commit>
+#   a pull request    -> built and smoke-tested with compose, not pushed
+# Every run smoke-tests the image first (amd64, with compose); nothing is pushed unless that passed.
+name: hub image
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - deploy/docker/**
+      - server/**
+      - web/**
+      - .github/workflows/hub-image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hub-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            v="${GITHUB_REF_NAME#v}"
+          else
+            v="$(git describe --always)-$(date -u +%Y%m%d%H%M)"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # The image's web build skips this (no scripts/ or git in its build context): it runs here, on the checkout.
+      - name: Privacy check
+        run: python3 scripts/privacy_check.py
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: jarvis-hub:ci
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=hub
+          cache-to: type=gha,scope=hub,mode=max
+
+      - name: Smoke test with compose
+        run: |
+          docker run --rm jarvis-hub:ci version | grep -qx '${{ steps.version.outputs.version }}'
+          cd deploy/docker
+          printf 'JARVIS_IMAGE=jarvis-hub:ci\nJARVIS_PUBLIC_URL=http://127.0.0.1:18660\nJARVIS_DB_PASSWORD=%s\nPUID=%s\nPGID=%s\n' \
+            "$(openssl rand -hex 24)" "$(id -u)" "$(id -g)" > .env
+          docker compose up -d
+          ok=
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18660/api/v1/health; then ok=1; break; fi
+            sleep 2
+          done
+          docker compose logs hub | tail -40
+          [ -n "$ok" ] || { echo "the hub never answered /api/v1/health"; exit 1; }
+          docker compose exec -T hub jarvisd hub pair | grep -q 'Token:'
+          docker compose exec -T hub jarvisd hub tailcat-key | grep -q '^nodekey:'
+          curl -fsS http://127.0.0.1:18660/ | grep -qi '<html'
+          [ "$(stat -c %u data/hub.json)" = "$(id -u)" ] || { echo "hub.json is not owned by PUID"; exit 1; }
+          [ "$(stat -c %a data/hub.json)" = 600 ] || { echo "hub.json is not 0600"; exit 1; }
+          docker compose down
+
+  publish:
+    needs: smoke
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.name.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=match,pattern=v(.*),group=1
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: VERSION=${{ needs.smoke.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=hub
+          cache-to: type=gha,scope=hub,mode=max

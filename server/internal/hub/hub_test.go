@@ -52,6 +52,65 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
+// The Docker image's hub (JARVIS_LOCAL_NODE=0) starts with no machine: its own has no herdr or claude.
+func TestDefaultConfigWithoutLocalNode(t *testing.T) {
+	t.Setenv("JARVIS_LOCAL_NODE", "0")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if _, err := LoadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".jarvis", "hub.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if string(raw["machines"]) != "[]" {
+		t.Fatalf("machines written as %s, want [] (not omitted: a missing list would mean the default)", raw["machines"])
+	}
+}
+
+// A compose file gives the database's address and the hub's own: they win over hub.json and are not written into it.
+func TestEnvOverridesConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".jarvis")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := `{"token":"t","database_url":"postgres://file","public_url":"http://file:18660","listen":":1"}`
+	if err := os.WriteFile(filepath.Join(dir, "hub.json"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JARVIS_DATABASE_URL", "postgres://env")
+	t.Setenv("JARVIS_PUBLIC_URL", "https://hub.example.com")
+	t.Setenv("JARVIS_LISTEN", ":18660")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseURL != "postgres://env" || cfg.PublicURL != "https://hub.example.com" || cfg.Listen != ":18660" {
+		t.Fatalf("env not applied: %+v", cfg)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "hub.json")); string(b) != file {
+		t.Fatalf("hub.json was rewritten: %s", b)
+	}
+	t.Setenv("JARVIS_DATABASE_URL", "")
+	if cfg, _ := LoadConfig(); cfg.DatabaseURL != "postgres://file" {
+		t.Fatalf("an empty variable must not override: %q", cfg.DatabaseURL)
+	}
+}
+
+func TestNodeBinaryDirFromEnv(t *testing.T) {
+	t.Setenv("JARVIS_NODE_BINARIES", "/opt/jarvis/nodes")
+	if d := nodeBinaryDir(); d != "/opt/jarvis/nodes" {
+		t.Fatalf("node binaries in %s", d)
+	}
+}
+
 func TestLoadConfigCreatesAndReloads(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

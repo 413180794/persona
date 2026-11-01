@@ -99,16 +99,41 @@ func dataDir() string {
 }
 
 // defaultConfig is what a first run writes to ~/.jarvis/hub.json: this machine only, reachable by its host name.
-// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md).
+// Other machines (ssh), the public URL and the assistant's notes are filled in there (docs/config.md). With
+// JARVIS_LOCAL_NODE=0 (the Docker image, docs/docker.md) there is no machine at all: the hub's own has no herdr or
+// claude to drive, every computer is added to hub.json.
 func defaultConfig() *Config {
 	host, _ := os.Hostname()
 	short := strings.Split(host, ".")[0]
+	machines := []MachineConfig{{ID: short, Name: short, Kind: "local", Icon: "server"}}
+	if os.Getenv("JARVIS_LOCAL_NODE") == "0" {
+		machines = []MachineConfig{}
+	}
 	return &Config{
 		Listen:             ":18660",
 		Token:              randomHex(24),
 		PublicURL:          fmt.Sprintf("http://%s:18660", host),
 		HookTimeoutMinutes: 30,
-		Machines:           []MachineConfig{{ID: short, Name: short, Kind: "local", Icon: "server"}},
+		Machines:           machines,
+	}
+}
+
+// envOverrides are settings the environment gives over hub.json's, e.g. a compose file's (docs/docker.md): the
+// database's address and the hub's own address and port. Never written back to the file.
+var envOverrides = []struct {
+	name string
+	to   func(*Config) *string
+}{
+	{"JARVIS_DATABASE_URL", func(c *Config) *string { return &c.DatabaseURL }},
+	{"JARVIS_PUBLIC_URL", func(c *Config) *string { return &c.PublicURL }},
+	{"JARVIS_LISTEN", func(c *Config) *string { return &c.Listen }},
+}
+
+func (c *Config) applyEnv() {
+	for _, e := range envOverrides {
+		if v := os.Getenv(e.name); v != "" {
+			*e.to(c) = v
+		}
 	}
 }
 
@@ -146,6 +171,7 @@ func LoadConfig() (*Config, error) {
 			}
 		}
 	}
+	cfg.applyEnv()
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("%s: token is empty", path)
 	}

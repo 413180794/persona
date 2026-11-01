@@ -55,6 +55,9 @@ Orca 没开时立刻答「没有终端」，不记日志。映射和第一期不
 
 ## 部署
 
+hub 有两种部署方式，功能一样：**原生二进制**（下面，`systemd --user` 服务 + Postgres 容器）和 **Docker**（hub + Postgres 两个容器，
+适合 NAS 或只当 hub 的机器，`docs/docker.md`）。各台电脑上的 node 不管 hub 怎么部署，都是 `~/.jarvis/bin/jarvisd`。
+
 ```sh
 ./scripts/deploy.sh                    # 编译 linux/amd64 + darwin/arm64，装到所有机器，重启 hub
 ./scripts/deploy.sh <机器 id> <机器 id> # 只装部分机器
@@ -62,6 +65,8 @@ Orca 没开时立刻答「没有终端」，不记日志。映射和第一期不
 
 - 二进制：每台机器 `~/.jarvis/bin/jarvisd`。node 由 hub 经 `ssh <别名> ~/.jarvis/bin/jarvisd node --stdio` 拉起，Mac 上不用常驻服务。
 - hub：hub 机器上的 `systemd --user` 服务 `jarvisd`，监听 `:18660`。`journalctl --user -u jarvisd -f` 看日志。
+  Docker 部署的 hub 不归 `deploy.sh` 管（它的配置里别把 hub 机器写进 `machines`，或只部署各台电脑：`deploy.sh <机器 id>`），
+  升级是拉新镜像；「重新部署」用镜像里带的 node 构建。
 - 换了 node 二进制后 hub 不会自动重连旧连接；`deploy.sh <hub 机器 id>` 会重启 hub，或在 App「机器」页点「重新连接」。
 
 ### 轻量 hub 与部署前检查

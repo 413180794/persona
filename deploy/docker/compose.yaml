@@ -1,0 +1,49 @@
+# The hub and its database on one machine, e.g. a NAS (docs/docker.md). Next to this file: a .env (copy
+# .env.example), and the data folders it creates (data/: hub.json, keys, the knowledge base; postgres/).
+#
+#   docker compose up -d
+#   docker compose exec hub jarvisd hub pair          # pair the app
+#   docker compose exec hub jarvisd hub tailcat-key   # the key computers behind NAT allow in (docs/server.md)
+#   docker compose pull && docker compose up -d       # upgrade
+name: jarvis
+
+services:
+  hub:
+    image: ${JARVIS_IMAGE:-ghcr.io/chyroc/jarvis:latest}
+    restart: unless-stopped
+    # Reaps what jarvisd's children leave behind (ssh's ProxyCommand / ProxyJump processes when ssh is killed).
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      # What the app connects to and pairs with: how phones reach this machine (a LAN address, a VPN, a reverse proxy).
+      JARVIS_PUBLIC_URL: ${JARVIS_PUBLIC_URL:?set JARVIS_PUBLIC_URL in .env}
+      JARVIS_DATABASE_URL: postgres://jarvis:${JARVIS_DB_PASSWORD:?set JARVIS_DB_PASSWORD in .env}@postgres:5432/jarvis?sslmode=disable
+    ports:
+      - "${JARVIS_PORT:-18660}:18660"
+    volumes:
+      - ./data:/home/jarvis/.jarvis
+      # Machines reached over ssh (not needed with tailcat): your keys, ssh config and known_hosts, read only.
+      # - ~/.ssh:/home/jarvis/.ssh:ro
+
+  postgres:
+    # Where Docker Hub is out of reach, the same image through a mirror or a local registry.
+    image: ${JARVIS_POSTGRES_IMAGE:-postgres:18-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_DB: jarvis
+      POSTGRES_PASSWORD: ${JARVIS_DB_PASSWORD:?set JARVIS_DB_PASSWORD in .env}
+      TZ: ${TZ:-UTC}
+    volumes:
+      # postgres 18 keeps its data under /var/lib/postgresql/<major>/docker: mount the parent.
+      - ./postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "jarvis", "-d", "jarvis"]
+      interval: 5s
+      timeout: 5s
+      retries: 30

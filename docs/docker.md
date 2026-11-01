@@ -1,0 +1,124 @@
+# 用 Docker 跑 hub（NAS 等）
+
+hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
+
+| 方式 | 适合 | 怎么装、怎么升级 |
+| --- | --- | --- |
+| **原生二进制**（`docs/server.md`「部署」） | 一台 Linux 服务器；hub 所在的机器自己也要跑 Agent（`kind: local`） | 开发机上 `./scripts/deploy.sh`（`systemd --user` 服务 + Postgres 容器）；或 `install.sh` 装好二进制后自己配服务。升级再跑一次 `deploy.sh` |
+| **Docker**（本文） | NAS（群晖、威联通、Unraid…）或任何只当 hub 的机器 | `docker compose up -d`（hub + Postgres 两个容器）。升级 `docker compose pull && docker compose up -d` |
+
+两种方式的 hub 是同一个 `jarvisd`，`hub.json`、数据库、协议、App 都一样；从一种换到另一种只要搬 `~/.jarvis` 和数据库。
+
+## 容器里的 hub 有什么不同
+
+镜像里没有 herdr 和 Claude Code，所以 **hub 所在的这台机器不能同时当干活的电脑**：
+- 第一次启动写的 `hub.json` 里 `"machines": []`（不是原生方式的「本机一台 `kind: local`」），每台电脑都要加进去。
+- 「Jarvis」助手跑在某台电脑上：`assistant.machine` 填它的 id（不填就用 `machines` 里的第一台）。
+- 飞书用 `lark.token`，不能用 `lark.container`（那要在 hub 里跑 `docker inspect`）。
+- 插件（`docs/plugins.md`）是 hub 机器上的外部程序，镜像里没有，暂不支持。
+
+电脑怎么接进来：
+- **tailcat（推荐）**：NAS 不用 ssh 到任何电脑，电脑在哪个内网都行（`docs/server.md`「tailcat 打洞」）。
+- **ssh**：把 NAS 上用户的 `~/.ssh` 只读挂进容器（compose 里有注释掉的一行），里面要有私钥、`config` 里的别名和 `known_hosts`
+  （hub 用 `BatchMode=yes`，不认识的主机直接失败，不会问）。
+
+## 镜像
+
+`ghcr.io/chyroc/jarvis`，linux/amd64 和 linux/arm64，由 `.github/workflows/hub-image.yml` 构建：
+
+| 标签 | 什么时候有 |
+| --- | --- |
+| `<版本>` | 推一个 `v*` tag（`v1.2.0` → `1.2.0`），见 `docs/release.md`「发布 hub 镜像」 |
+| `latest` | 同上，但预发布 tag（带 `-`，如 `v1.3.0-rc1`）不动它 |
+| `edge`、`sha-<提交>` | 在 Actions 里手动运行这个 workflow（当前分支） |
+
+每次运行都先构建 amd64 镜像、用 compose 起一遍冒烟（健康检查、配对、tailcat key、网页版、`hub.json` 的属主和权限），过了才推。
+
+仓库是私有的，ghcr 上的镜像默认也是私有：NAS 上先 `docker login ghcr.io`（用户名是 GitHub 账号，密码是一个有
+`read:packages` 权限的 Personal Access Token；NAS 的 Docker 配置不在默认位置时用 `docker --config <目录> login`）。也可以在仓库的
+Packages 设置里把它改成公开。Postgres 用的是 Docker Hub 上的 `postgres:18-alpine`：拉不到 Docker Hub 的网络（国内常见）在 `.env`
+里用 `JARVIS_POSTGRES_IMAGE` 换成镜像代理或本地仓库里的同一个镜像（如 `<仓库>/library/postgres:18-alpine`）。
+
+镜像里有：
+- `jarvisd`（hub 用 `linux/<架构>` 那个）和四个平台的 node 构建（`/opt/jarvis/nodes`，`JARVIS_NODE_BINARIES`）：App 里「重新部署」
+  直接从这里取，hub 和 node 永远是同一个版本；
+- 嵌进二进制的网页版（`docs/web.md`），打开 hub 的地址就是；
+- `openssh-client`、证书、时区数据。
+
+构建用 `-tags public`，和公开发布的二进制一样不带复制来的助手 skill（`server/internal/assistantskills`）：经它「重新部署」的电脑上，
+助手少了这些 skill。只自己用的镜像可以带上：`docker build --build-arg BUILD_TAGS= -t jarvis-hub .`，再在 `.env` 里写
+`JARVIS_IMAGE=jarvis-hub`。
+
+## 装
+
+在 NAS 上找一个目录（例如 `/volume1/docker/jarvis`），放进 `deploy/docker/compose.yaml` 和 `deploy/docker/.env.example`：
+
+```sh
+cp .env.example .env    # 填 JARVIS_PUBLIC_URL、JARVIS_DB_PASSWORD（openssl rand -hex 24）、PUID / PGID
+docker compose up -d
+docker compose logs -f hub
+docker compose exec hub jarvisd hub pair    # App 扫码配对
+```
+
+- `JARVIS_PUBLIC_URL`：手机怎么访问这台 NAS 的 18660 端口（局域网地址、VPN 地址，或 NAS 自带的反向代理给的 HTTPS 地址）。
+  反向代理要转发 WebSocket 的 Upgrade / Connection、关闭响应缓冲、加长读取超时（`docs/server.md`「轻量 hub 与部署前检查」）。
+- `PUID` / `PGID`：数据目录归谁（NAS 上 `id -u` / `id -g`）。容器以 root 启动，把 `jarvis` 用户改成这个 uid / gid（镜像里别的同 uid
+  用户先删掉，否则 ssh 找到的是它的家目录）、把 `data/` 里不归它的文件都交给它（例如用 sudo 拷进来的旧 `~/.jarvis`），再降权运行；
+  `docker compose exec hub jarvisd …` 也以这个用户运行，建出来的文件不会归 root。不能是 0。不要用 compose 的 `user:` 指定用户：
+  那样入口脚本改不了用户，PUID / PGID 不生效，ssh 也跑不起来（日志里会有一行警告）。
+- `JARVIS_DB_PASSWORD`：只用字母和数字（它原样拼进数据库地址），`openssl rand -hex 24` 即可。Postgres 只在第一次建数据目录时用它，
+  之后改 `.env` 会连不上库，要改得同时在库里 `ALTER USER jarvis PASSWORD '…'`。
+- hub 容器带 `init: true`：jarvisd 起的 ssh 被杀掉后，它的 ProxyCommand / ProxyJump 子进程由 init 回收，不留僵尸进程。
+- 目录：`data/` 是 hub 的 `~/.jarvis`（`hub.json`、密钥、tailcat key、知识库 `data/data`），`postgres/` 是数据库；都在 compose 旁边，
+  NAS 的文件管理器里看得到，备份这两个目录即可。`hub.json` 和密钥文件是 0600。
+
+接一台电脑（tailcat）：
+
+```sh
+docker compose exec hub jarvisd hub tailcat-key          # NAS 上：hub 的公钥
+~/.jarvis/bin/jarvisd node tailcat init --hub <公钥>     # 那台电脑上：打印它的地址
+./scripts/node-launchd.sh install                        # 那台电脑上：常驻 node
+```
+
+把地址写进 `data/hub.json` 的 `machines`（`{"id":"laptop","name":"笔记本","kind":"tailcat","tailcat_addr":"tc…"}`），
+`docker compose restart hub`。
+
+## 环境变量（覆盖 hub.json，不写回文件）
+
+| 变量 | 作用 |
+| --- | --- |
+| `JARVIS_DATABASE_URL` | 数据库地址（compose 里拼好了，指向 `postgres` 服务） |
+| `JARVIS_PUBLIC_URL` | 手机访问 hub 的地址，配对二维码里的就是它 |
+| `JARVIS_LISTEN` | hub 监听的地址（默认 `:18660`；改它要同时改 compose 的端口映射和镜像的健康检查） |
+| `JARVIS_LOCAL_NODE=0` | 第一次启动不写「本机」那台机器（镜像里已设） |
+| `JARVIS_NODE_BINARIES` | 「重新部署」用的 node 构建在哪（镜像里是 `/opt/jarvis/nodes`；原生方式是 `~/.jarvis/bin/nodes`） |
+| `PUID` / `PGID`、`TZ` | 见上 |
+| `JARVIS_IMAGE`、`JARVIS_POSTGRES_IMAGE`、`JARVIS_PORT` | compose 用：两个镜像从哪拉、hub 映射到宿主的哪个端口 |
+
+原生方式也认这些变量（例如 systemd 的 `Environment=`），只是平时用不着。
+
+## 网络
+
+- 容器默认在 Docker 的桥接网络里：tailcat 打洞多隔了一层 NAT，大多数情况仍能直连，不行就走中继。想更容易直连可以给 hub 用
+  `network_mode: host`（同时去掉 `ports`）。
+- hub 默认是 HTTP，只该在内网、VPN 或 HTTPS 反向代理后面访问，不要把 18660 直接暴露到公网。
+
+## 从原生方式迁过来
+
+1. 原来的机器上停 hub（`systemctl --user stop jarvisd`），导出数据库：
+   `docker exec jarvis-postgres pg_dump -U jarvis -Fc jarvis > jarvis.dump`。
+2. 把原来的 `~/.jarvis` 拷成 NAS 上的 `data/`（`bin/` 可以不要），`hub.json` 里删掉 `kind: local` 那台（那台机器要继续跑 Agent
+   的话改成 `ssh` 或 `tailcat`），`database_url` 不用管（环境变量覆盖）。
+3. `docker compose up -d postgres`，导入：`docker compose exec -T postgres pg_restore -U jarvis -d jarvis --clean --if-exists < jarvis.dump`，
+   再 `docker compose up -d`。token 不变，已配对的手机只要把地址改成新的（或重新扫码）。
+
+## 验证
+
+`.github/workflows/hub-image.yml` 在每个改到服务端、网页或镜像的 PR 上构建镜像并用 compose 起一遍：健康检查、配对、tailcat key、
+网页版、`hub.json` 的属主。本机（OrbStack / Docker Desktop）同样可以：
+
+```sh
+docker build --build-arg VERSION=dev-local -t jarvis-hub .
+cd deploy/docker && cp .env.example .env    # 填好，JARVIS_IMAGE=jarvis-hub
+docker compose up -d
+```

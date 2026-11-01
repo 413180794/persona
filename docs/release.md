@@ -143,3 +143,19 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
   推送中继的部署（代码已有：`jarvisd relay` + App 的通知服务扩展，见 `docs/push-relay.md`「部署」；要发布方跑起来、构建配置填上 `app.push_relay` 再发一版）、macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
 
+## 发布 hub 镜像（`.github/workflows/hub-image.yml`，2026-11-01）
+
+Docker 部署的 hub（`docs/docker.md`）用 ghcr 上的镜像，linux/amd64 + linux/arm64：
+
+```sh
+git tag v1.2.0 && git push origin v1.2.0   # -> ghcr.io/<owner>/<repo>:1.2.0 和 :latest
+```
+
+- 先冒烟（amd64 + compose），过了才构建两个架构并推；带 `-` 的预发布 tag（`v1.3.0-rc1`）只推版本号，不动 `latest`。
+
+- 不打 tag 想要一个当前分支的镜像：Actions 里手动运行 hub image（`edge`、`sha-<提交>`）。
+- PR 上只冒烟，不推（推送那一步才有 `packages: write`）。
+- 镜像里的 jarvisd 用 tag 去掉 `v` 当版本（`jarvisd version`）；node 跟它不一样时 App 提示「重新部署」，用的是镜像里带的 node 构建。
+- 构建用 `-tags public`（不带复制来的助手 skill），和 `publish.sh` 一样。
+- 仓库私有时包也私有，NAS 要 `docker login ghcr.io`（`docs/docker.md`「镜像」）。
+
