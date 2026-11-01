@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import jarvis.android.data.AgentState
+import jarvis.android.data.Engines
 import jarvis.android.data.Hub
 import jarvis.android.data.Launcher
 import jarvis.android.data.Session
@@ -51,7 +53,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * One machine (iOS `MachineDetailView`): its card, the Claude sessions running there (a tap opens the chat), 系统与监控,
- * its launchers, and 重新连接 (waits up to 15 s for it to come online and says so if it does not).
+ * its engine (EngineScreen), its launchers, and 重新连接 (waits up to 15 s for it to come online and says so if it does not).
  */
 @Composable
 fun MachineDetailScreen(
@@ -60,6 +62,7 @@ fun MachineDetailScreen(
     onBack: () -> Unit,
     onOpenSession: (jarvis.android.data.SessionKey) -> Unit,
     onOpenMonitor: () -> Unit,
+    onOpenEngine: () -> Unit,
 ) {
     val c = kitColors
     val ctx = LocalContext.current
@@ -127,8 +130,9 @@ fun MachineDetailScreen(
             }
         }
         item(key = "monitor") {
-            KitGroup(Modifier.padding(top = 20.dp)) {
+            KitGroup(Modifier.padding(top = 20.dp), footer = "只显示所选引擎里的会话。") {
                 row { KitRow("系统与监控", icon = Icons.Default.Speed, onClick = onOpenMonitor) }
+                row { KitRow("引擎", icon = Icons.Default.Terminal, value = Engines.currentName(machine), onClick = onOpenEngine) }
             }
         }
         item(key = "launchers") {

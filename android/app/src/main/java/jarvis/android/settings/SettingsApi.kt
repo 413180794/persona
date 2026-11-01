@@ -40,3 +40,10 @@ suspend fun ApiClient.machineMetrics(machineId: String, range: MetricRange): Mac
     JsonCodec.decodeFromString<MachineMetricsBody>(
         raw("GET", "/api/v1/machines/$machineId/metrics", query = mapOf("range" to range.wire)),
     ).metrics
+
+@Serializable
+private data class EngineUpdate(val engine: String)
+
+/** Chooses the terminal engine of [machineId] (docs/protocol.md「引擎」); allowed offline, applied when it connects. */
+suspend fun ApiClient.setEngine(machineId: String, engine: String): jarvis.android.data.Machine =
+    JsonCodec.decodeFromString(raw("PUT", "/api/v1/machines/$machineId/engine", JsonCodec.encodeToString(EngineUpdate(engine))))

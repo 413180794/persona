@@ -25,6 +25,8 @@ import jarvis.android.MainActivity
 import jarvis.android.data.AgentState
 import jarvis.android.data.ConnState
 import jarvis.android.data.Hub
+import jarvis.android.data.PairingEngine
+import jarvis.android.ui.machines.EngineScreen
 import jarvis.android.data.SessionKey
 import jarvis.android.ui.web.AppLink
 import jarvis.android.ui.web.LinkHost
@@ -46,6 +48,13 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
             reason = if (hub != null && conn == ConnState.Unauthorized)
                 "hub 不认这台手机的 token 了（在别的设备上撤销了，或者换了 hub），重新配对一下" else null,
         )
+        return
+    }
+    // Right after pairing: which engine the hub's own machine uses (docs/engines.md); skipping keeps the current one.
+    PairingEngine.pending.value?.let { m ->
+        val done = { PairingEngine.pending.value = null }
+        BackHandler(onBack = done)
+        EngineScreen(hub, m.id, onDone = done, pairing = true, fallback = m)
         return
     }
     var tab by rememberSaveable { mutableStateOf(Tab.Agents) }

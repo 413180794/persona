@@ -3,13 +3,14 @@ package jarvis.android.ui.settings
 import androidx.compose.runtime.Composable
 import jarvis.android.data.Hub
 import jarvis.android.data.SessionKey
+import jarvis.android.ui.machines.EngineScreen
 import jarvis.android.ui.machines.MachineDetailScreen
 import jarvis.android.ui.machines.MachineMonitorScreen
 import jarvis.android.ui.machines.MachinesScreen
 
 /**
  * The pages pushed over 设置, as plain strings so the stack survives in a saved state: "machines", "machine/<id>",
- * "monitor/<id>", "claude", "devices", "notifications", "storage", "style".
+ * "monitor/<id>", "engine/<id>", "claude", "devices", "notifications", "storage", "style".
  */
 sealed interface SettingsRoute {
     val path: String
@@ -17,6 +18,7 @@ sealed interface SettingsRoute {
     data object Machines : SettingsRoute { override val path = "machines" }
     data class Machine(val id: String) : SettingsRoute { override val path = "machine/$id" }
     data class Monitor(val id: String) : SettingsRoute { override val path = "monitor/$id" }
+    data class Engine(val id: String) : SettingsRoute { override val path = "engine/$id" }
     data object Claude : SettingsRoute { override val path = "claude" }
     data object Devices : SettingsRoute { override val path = "devices" }
     data object Notifications : SettingsRoute { override val path = "notifications" }
@@ -30,6 +32,7 @@ sealed interface SettingsRoute {
                 "machines" -> Machines
                 "machine" -> rest.takeIf { it.isNotEmpty() }?.let(::Machine)
                 "monitor" -> rest.takeIf { it.isNotEmpty() }?.let(::Monitor)
+                "engine" -> rest.takeIf { it.isNotEmpty() }?.let(::Engine)
                 "claude" -> Claude
                 "devices" -> Devices
                 "notifications" -> Notifications
@@ -54,8 +57,10 @@ fun SettingsPage(
         SettingsRoute.Machines -> MachinesScreen(hub, pop, onOpenMachine = { push(SettingsRoute.Machine(it)) })
         is SettingsRoute.Machine -> MachineDetailScreen(
             hub, route.id, pop, onOpenSession = onOpenSession, onOpenMonitor = { push(SettingsRoute.Monitor(route.id)) },
+            onOpenEngine = { push(SettingsRoute.Engine(route.id)) },
         )
         is SettingsRoute.Monitor -> MachineMonitorScreen(hub, route.id, pop)
+        is SettingsRoute.Engine -> EngineScreen(hub, route.id, onDone = pop)
         SettingsRoute.Claude -> ClaudeSettingsScreen(hub, pop)
         SettingsRoute.Devices -> DevicesScreen(hub, pop)
         SettingsRoute.Notifications -> NotificationSettingsScreen(hub, pop)

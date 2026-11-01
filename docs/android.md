@@ -3,14 +3,14 @@
 `android/`：Kotlin + Jetpack Compose 的 Android 客户端，连同一个 hub，接口和 iOS 一样（`docs/protocol.md`），服务端不用改。
 minSdk 26（Android 8），targetSdk 34。界面中文。
 
-一句话描述：在 Android 手机上看各台电脑 herdr 里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
+一句话描述：在 Android 手机上看各台电脑终端引擎（herdr、Herdr App 或 Orca，每台电脑选一个，`docs/engines.md`）里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
 不需要任何推送账号。
 
 ## 现在有什么
 
 | 页面 | 内容 |
 | --- | --- |
-| 配对 | 扫 `jarvisd hub pair` 的二维码（`jarvis://pair?url=…&token=…`，也能从链接打开），或手动填地址和 token；配对后立刻 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有这个接口时继续用配对 token |
+| 配对 | 扫 `jarvisd hub pair` 的二维码（`jarvis://pair?url=…&token=…`，也能从链接打开），或手动填地址和 token；配对后立刻 `POST /api/v1/auth/tokens`（`kind: phone`）换这台手机自己的 token，旧 hub 没有这个接口时继续用配对 token；接着问一步「这台电脑用哪个引擎」（下面「引擎」） |
 | Agents | 顶部切换「按项目 / 按状态 / 按机器」（记住选择），排序规则和 iOS `ChatsView` 一样，写在 `data/Grouping.kt` 里并有单测。上面固定是「需要你处理」卡片和置顶的 Agent（只出现一次），下面是分组，最后是最近 7 天的 offline 会话；不含助手的对话；下拉刷新。<br>按项目：置顶的空间 → 其他忙的空间 → 屏蔽但在跑的空间（弱化）→「空闲的空间」（默认折叠）；空间里忙的、置顶的、待唤醒的在上，空闲的收成一行，点开展开。<br>按状态：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看（「已看」默认折叠）。<br>按机器：按 hub 配置的顺序，标题带在线状态和状态计数。<br>每一段都能点标题折叠，折叠状态存在手机上 |
 | 空间操作 | 空间标题右边的 ⋯：打开空间、置顶空间、屏蔽这个空间（其中的 Agent 可以单独开启通知）、重命名空间（改 herdr workspace 名，hub 把置顶 / 屏蔽一起改到新名字上） |
 | 空间页 | 一个 herdr workspace 里在跑的 Agent，两列卡片按标签页顺序排；最后一张「在这个空间开新标签」，在同一个 workspace、同一个目录里起 claude（`POST /api/v1/sessions` 带 `workspace_id`）。右上角菜单多一个「全部标为已读」。从空间页打开的对话，返回时回到空间页 |
@@ -38,7 +38,8 @@ minSdk 26（Android 8），targetSdk 34。界面中文。
 | 手机数据工具 | 设置 › 手机数据：设备信息、剪贴板、通知、通讯录、日历、位置、照片，默认都关着，打开时要对应的安卓权限。打开的才通过 `register_phone` 声明给 hub，Claude 调 `phone_*` 时 hub 发 `tool_call`，手机在本地查、`tool_result` 返回（`jarvis/android/phone/`）。工具名、说明和参数和 iOS（`apple/Jarvis/PhoneTools`）完全一样（`PhoneToolsTest` 拿 iOS 源码里的定义逐个比），因为 hub 只存一份工具列表，哪台手机最后连上就用哪台的，两台不一样的话一换手机 Claude 看到的工具就变了。会改数据的（新建日程）先在手机上问：App 里一张卡片，同时一条带「允许 / 拒绝」的通知，90 秒不答算拒绝；拒绝时 Claude 拿到 `The user declined on the phone.`。照片：`phone_photos_recent` 列系统相册（MediaStore）里最近的照片和视频，`phone_photo_get` 把一张缩到长边最多 2048、JPEG 0.7 交给 Claude 看；id 是 `image:<行号>` / `video:<行号>`，截图按 Screenshots 目录认；安卓不给照片的拍摄位置（要 `ACCESS_MEDIA_LOCATION`，没申请），所以没有 `location` 字段。还没有：提醒事项、健康（iOS 有） |
 | 界面风格 | 设置 › 外观 › 界面风格：液态玻璃（默认）、Claude、黏土、Island、飞书，和 iOS 拆分前的同一组（iOS 2026-10-31 起拆成界面风格 × 主题色，Claude 只是一种主题色，Android 还没跟，`docs/ios.md`「设计语言」），浅色 / 深色跟系统。选择页上面是当前风格的一段对话示例，下面五张预览卡，点一下整个 App 立刻换；存在手机上（SharedPreferences `ui`，键 `ui.style`），断开 hub 也保留。见下面「界面风格」 |
 | 设置 | 外观（界面风格）；hub 地址和连接状态；「电脑」：机器（在线数，有 `node_mismatch` 的机器名）、Claude Code 设置、设备；手机数据；后台通知（通知、电池优化、自启动）；存储空间；断开 hub。子页面是 `SettingsRoute` 的一个栈（Root 保存），从机器页打开的对话返回时回到机器页 |
-| 机器 | 设置 › 机器，和 iOS `MachinesView` 对应：每台一张卡片（系统图标、在线、运行中 / 工作中 / 需要你、系统名和 herdr / claude 版本、`node_mismatch` 提示，离线时显示错误）。点开是机器页：卡片、运行中的 Claude（不含助手的对话，点开进对话）、系统与监控、启动器（名字和模型）、重新连接（最多等 15 秒看连没连上） |
+| 机器 | 设置 › 机器，和 iOS `MachinesView` 对应：每台一张卡片（系统图标、在线、运行中 / 工作中 / 需要你、系统名和 herdr / claude 版本、`node_mismatch` 提示，离线时显示错误）。点开是机器页：卡片、运行中的 Claude（不含助手的对话，点开进对话）、系统与监控、启动器（名字和模型）、引擎（见「引擎」）、重新连接（最多等 15 秒看连没连上） |
+| 引擎 | 和 iOS「引擎选择」一样（`docs/ios.md`，给用户的说明见 `docs/engines.md`），逻辑在 `data/Engines.kt`（`EnginesTest`），页面是 `ui/machines/EngineScreen.kt`。配对成功（扫码、手动、配对链接）后先为 hub 所在的机器（`kind: local`，没有就第一台）选引擎：选项按 hub 回报的 `engines` 原样列出（名字、`note`），每项写「检测到可用 · 版本」/「没检测到」，离线或没有检测信息时写「离线，暂无检测信息」/「暂无检测信息」，不说成没装；只有一个可用时预选它，否则预选现在的引擎；「确认并继续」`PUT /api/v1/machines/{id}/engine`，「暂时跳过」保留现在的，保存失败显示原因、可以「先继续」。机器页的「引擎」行显示现在的引擎，点开是同一个选择页，保存后用 PUT 返回的机器立刻更新，之后跟着 `machines` 推送；离线也能存（「机器离线，选择会在连接后生效」）。hub 没回报 `engines`（旧 hub / node）时列出已知的三个；已知引擎随时能选，不认识的只有 hub 说可用才能选。页面说明「只显示所选引擎里的会话」 |
 | 系统与监控 | 机器页里点开，`docs/machines.md`「机器详情」的安卓版：系统名、在线时长；现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换（偏高、过高标出来）；1 / 6 / 24 小时的 CPU、内存、网络、负载（虚线是核数）、磁盘曲线，hub 给的 `gap` 处断开不连线（`segments`），单调三次曲线不过冲；按住或横拖读某一刻，所有图一起跟；每个核心（Linux）；系统信息（内核、架构、机型、处理器、开机时间、herdr / Claude Code / node 版本）。页面在前台时 1 小时每 10 秒、其余每分钟刷新 |
 | Claude Code 设置 | 选一台在线的机器（默认 hub 所在的那台），列出 node 白名单里的 `~/.claude/settings.json` 项（开关、枚举、文本，没设过的标「默认」，文本清空就是回到默认）；「同时改所有在线机器」默认开，每台各写一次，失败的逐台列出来并重新读 |
 | 设备 | `GET /api/v1/auth/tokens`：每台设备的凭据（本机、手表「只能回答」），最近使用 / 撤销时间，已撤销的单独一组；撤销先确认，撤销的是这台手机自己就回到配对页 |
@@ -152,6 +153,7 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏�
 | --- | --- |
 | `data/Models.kt` | 线上类型（字段全可选，未知字段忽略，Go 的零时间当空） |
 | `data/ApiClient.kt` | REST；错误统一成 `HubException(status, message, code, fields)` |
+| `data/Engines.kt` | 引擎选择：选项、预选、能不能选、检测说明（`Engines`），选择页的状态和保存（`EngineSelection`），配对后那一步要问的机器（`PairingEngine`） |
 | `data/Hub.kt` | WebSocket、重连、machines / sessions / interactions 的状态和事件流 |
 | `data/ChatStore.kt` | 一个会话的 items：`covered`、`history`、补洞（`after_seq`）、往前翻页 |
 | `service/HubService.kt`、`Notifier.kt`、`ActionReceiver.kt` | 前台服务、通知、通知上的按钮 |

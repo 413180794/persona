@@ -44,9 +44,23 @@ data class Machine(
     @SerialName("node_version") val nodeVersion: String? = null,
     /** What the machine runs (docs/machines.md); null from hubs without monitoring. */
     val system: MachineSystem? = null,
+    /** The terminal engine chosen for this machine (docs/engines.md); the hub always sends it, herdr when never chosen. */
+    val engine: String = "herdr",
+    /** What the node found there, as the hub reports it; empty from older hubs / nodes and before the first connect. */
+    val engines: List<DetectedEngine> = emptyList(),
 ) {
     val displayName: String get() = name.ifEmpty { id }
 }
+
+/** One engine the node looked for on its machine (docs/protocol.md「引擎」); [name] and [note] are shown as given. */
+@Serializable
+data class DetectedEngine(
+    val id: String,
+    val name: String = "",
+    val available: Boolean = false,
+    val version: String? = null,
+    val note: String? = null,
+)
 
 /** A machine's OS and hardware as its node reports them (docs/machines.md「系统」). */
 @Serializable

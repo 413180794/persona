@@ -375,6 +375,13 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
         synchronized(chats) { chats.remove(k) }?.close()
     }
 
+    /** A machine the hub just returned (PUT …/engine): shown at once, before the `machines` push arrives. */
+    fun applyMachine(m: Machine) {
+        _machines.value = _machines.value.let { list ->
+            if (list.any { it.id == m.id }) list.map { if (it.id == m.id) m else it } else list + m
+        }
+    }
+
     /** Pulls everything once (after pairing, or when the socket is down and the user pulls to refresh). */
     suspend fun refresh() {
         runCatching { _machines.value = api.machines() }

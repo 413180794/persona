@@ -39,7 +39,9 @@ import jarvis.android.JarvisApp
 import jarvis.android.MainActivity
 import jarvis.android.data.ApiClient
 import jarvis.android.data.HubException
+import jarvis.android.data.Engines
 import jarvis.android.data.Pairing
+import jarvis.android.data.PairingEngine
 import jarvis.android.data.PairingStore
 import kotlinx.coroutines.launch
 
@@ -57,13 +59,15 @@ fun PairScreen(reason: String? = null) {
         scope.launch {
             error = try {
                 val api = ApiClient(p.url, p.token)
-                api.machines() // checks address and token together
+                val machines = api.machines() // checks address and token together
                 // Trade the pairing token for this phone's own, revocable in 设置 › 设备 (an older hub has no such call).
                 val own = try { api.createToken(JarvisApp.instance.deviceName).token } catch (e: HubException) {
                     if (e.status == 404) p.token else throw e
                 }
                 val paired = Pairing(p.url.trimEnd('/'), own)
                 JarvisApp.instance.pairings.save(paired)
+                // Next: which engine the hub's own machine uses (docs/engines.md), asked once right after pairing.
+                PairingEngine.pending.value = Engines.pairingMachine(machines)
                 JarvisApp.instance.connect(paired)
                 null
             } catch (e: HubException) {
