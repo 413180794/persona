@@ -86,6 +86,8 @@ type Mail interface {
 	ListMessages(ctx context.Context, opts mail.ListOptions) (*mail.ListResult, error)
 	GetMessage(ctx context.Context, accountID string, uid uint32, mailbox string) (*mail.MailMessage, error)
 	Send(ctx context.Context, req mail.SendRequest) error
+	// AddAccount connects with the settings and saves the account when IMAP and SMTP work (mail_account_add).
+	AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error)
 }
 
 // NewMail is set by the mail integration (see mail_glue.go).
@@ -684,7 +686,7 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 		tools = append(tools, h.mail.Tools()...)
 	}
 	if assistant {
-		tools = append(tools, assistantTools(h.lark != nil)...)
+		tools = append(tools, assistantTools(h.lark != nil, h.mail != nil)...)
 	}
 	return tools
 }

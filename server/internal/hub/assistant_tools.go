@@ -22,10 +22,13 @@ import (
 
 // assistantTools are the tools only assistant conversations get; their descriptions and schemas are in
 // prompts/mcp (docs/prompts.md).
-func assistantTools(withLark bool) []proto.Tool {
+func assistantTools(withLark, withMail bool) []proto.Tool {
 	names := []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
 		"kb_search", "kb_list", "kb_get", "kb_update"}
+	if withMail {
+		names = append(names, "mail_account_add") // Jarvis adds a mail account for the user (assistant_mail.go)
+	}
 	if withLark {
 		names = append(names, "lark_chats", "lark_messages", "lark_search")
 	}
@@ -45,7 +48,7 @@ func mcpTool(name string) proto.Tool {
 func isAssistantTool(name string) bool {
 	switch name {
 	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup", "schedule_routine", "delete_routine",
-		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply":
+		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "mail_account_add":
 		return true
 	}
 	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_")
@@ -67,6 +70,8 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 	switch name {
 	case "ask_user":
 		return h.toolAskUser(ctx, m, sessionID, args)
+	case "mail_account_add":
+		return h.toolMailAccountAdd(ctx, m, sessionID, args)
 	case "notify_user":
 		var a struct{ Title, Body string }
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {

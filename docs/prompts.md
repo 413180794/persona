@@ -37,7 +37,6 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
 | `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |
 | `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
-| `tools/mail_account.md` | 从粘贴的文字里认邮箱配置 | `hub/ai.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |

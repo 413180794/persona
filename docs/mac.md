@@ -468,7 +468,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Mail detail (HTML via WKWebView, attachments, mark seen, translation banner/显示原文, reply, 让 Claude 处理) — Views/Mail/MailViews.swift (MailDetailView, HTMLView)
 - [x] Compose / reply (account, to, cc, subject, body) — MailViews.swift (ComposeView)
 - [x] Accounts management (list, status, provider marks) — MailViews.swift (MailAccountsView, MailProviderMark)
-- [x] Add account: manual IMAP/SMTP form, 「AI 一键添加」 paste recognition (clipboard), Sign in with Google (web auth session) — MailViews.swift (AddMailAccountView, GoogleSignInLabel), Views/Mail/MailAccountForm.swift
+- [x] Add account: manual IMAP/SMTP form, Sign in with Google (web auth session) — MailViews.swift (AddMailAccountView, GoogleSignInLabel), Views/Mail/MailAccountForm.swift
 
 ## 16. Model launchers
 - [ ] Launcher list (Jarvis-managed + ~/.zshrc, sources, hidden) with search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)

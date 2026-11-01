@@ -10,7 +10,6 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -496,19 +495,4 @@ func TestGoldenTranslateMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldenCall(t, "translate_mail", onlyCall(t, calls()))
-}
-
-func TestGoldenMailAccount(t *testing.T) {
-	h := newTestHub(t)
-	model, calls := captureModel(t, `{"email":"me@example.com","provider":"imap"}`)
-	h.ai = model
-	mux := http.NewServeMux()
-	h.aiRoutes(mux)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/ai/mail-account", strings.NewReader(`{"text":"邮箱 me@example.com，IMAP imap.example.com:993"}`)))
-	if rec.Code != 200 {
-		b, _ := io.ReadAll(rec.Body)
-		t.Fatalf("%d %s", rec.Code, b)
-	}
-	goldenCall(t, "mail_account", onlyCall(t, calls()))
 }

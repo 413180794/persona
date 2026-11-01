@@ -93,6 +93,12 @@ client ID 只写在 hub 的 `hub.json`（`google.client_id`），不进仓库和
 
 没配 `google.client_id` 时，点按钮会提示「Google sign-in is not configured」。
 
+## 让 Jarvis 添加（2026-11-01）
+
+App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字让模型认，`POST /api/v1/ai/mail-account` 也删了）。现在直接在 Jarvis 里说
+「帮我添加邮箱」：助手用 `mail_account_add`（`hub/assistant_mail.go`，只给助手）加，手机上确认后 hub 用 `AddAccount` 连一遍再保存，
+和 App 表单走同一条路。确认卡片不显示密码；但密码经过模型、留在对话记录里，能用授权码 / 应用专用密码就用。Gmail 仍然只能在 App 里登录。
+
 ## 飞书邮箱
 
 App 里选「飞书」，只填邮箱和密码（`provider: "feishu"`）。邮箱在公司自己的域名上，按域名猜不出服务器，所以服务器固定：

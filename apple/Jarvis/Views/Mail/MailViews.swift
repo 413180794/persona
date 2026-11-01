@@ -76,16 +76,6 @@ extension APIClient {
     }
     func deleteMailAccount(_ id: String) async throws { try await delete("/api/v1/mail/accounts/\(id)") }
 
-    struct MailGuess: Decodable {
-        var account: AddAccount
-        var missing: [String]
-        var note: String?
-    }
-    struct GuessBody: Encodable { var text: String }
-    /// AI reads pasted setup text (an IT email, a provider's help page…) into account settings.
-    func guessMailAccount(_ text: String) async throws -> MailGuess {
-        try await post("/api/v1/ai/mail-account", body: GuessBody(text: text), timeout: 60, as: MailGuess.self)
-    }
 }
 
 struct MailDetailView: View {
@@ -488,45 +478,10 @@ struct AddMailAccountView: View {
     @State private var form = MailAccountForm()
     @State private var saving = false
     @State private var error: String?
-    @State private var pasted = ""
-    @State private var guessing = false
-    @State private var aiNote: String?
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    #if os(macOS)
-                    // A grouped Mac form shows a titled field as label + trailing value: the paste box took the right half.
-                    TextField("把邮箱信息整段粘贴进来：账号、密码、服务器…", text: $pasted,
-                              prompt: Text("把邮箱信息整段粘贴进来：账号、密码、服务器…"), axis: .vertical)
-                        .labelsHidden()
-                        .lineLimit(3...8)
-                    #else
-                    TextField("把邮箱信息整段粘贴进来：账号、密码、服务器…", text: $pasted, axis: .vertical)
-                        .lineLimit(3...8)
-                    #endif
-                    HStack {
-                        Button {
-                            if let s = UIPasteboard.general.string { pasted = s }
-                            Task { await guess() }
-                        } label: { Label("从剪贴板识别", systemImage: Theme.Icon.paste) }
-                            .themedButton()
-                        Spacer()
-                        Button { Task { await guess() } } label: {
-                            HStack(spacing: Theme.Space.sm) {
-                                if guessing { ProgressView().controlSize(.small) }
-                                Text("识别并添加")
-                            }
-                        }
-                        .themedButton(prominent: true)
-                        .disabled(guessing || pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                } header: {
-                    Label("AI 一键添加", systemImage: Theme.Icon.ai)
-                } footer: {
-                    if let aiNote { Text(aiNote) } else { Text("信息齐全会直接连接并添加；缺什么会填进下面的表单让你补。") }
-                }
                 Picker("类型", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
@@ -563,6 +518,11 @@ struct AddMailAccountView: View {
                     }
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
+                Section {
+                } footer: {
+                    // 2026-11-01: 「AI 一键添加」 (paste and recognize) is gone; Jarvis adds accounts itself (mail_account_add).
+                    Label("也可以直接在 Jarvis 里说「帮我添加邮箱」，把邮箱和密码告诉它，在手机上确认后就加好了。", systemImage: Theme.Icon.ai)
+                }
             }
             .themedPage()
             .navigationTitle("添加邮箱")
@@ -576,31 +536,6 @@ struct AddMailAccountView: View {
                     }
                 }
             }
-        }
-    }
-
-    /// Recognize pasted text; add right away when nothing is missing, otherwise prefill the form.
-    private func guess() async {
-        guard let api = model.api, !pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guessing = true
-        defer { guessing = false }
-        error = nil
-        do {
-            let g = try await api.guessMailAccount(pasted)
-            aiNote = g.note
-            switch form.fill(from: g) {
-            case .signIn(let note):
-                Haptics.attention()
-                aiNote = note
-            case .save:
-                await save()
-            case .ask(let note):
-                Haptics.attention()
-                aiNote = note
-            }
-        } catch {
-            if !error.isCancellation { self.error = "识别失败：\(error.localizedDescription)" }
-            Haptics.error()
         }
     }
 

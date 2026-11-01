@@ -6,9 +6,6 @@ func RenderJSONOnly(system string) string { return render("tools/json_only", sys
 // RenderTabName names a new agent's herdr tab after its first message (tools/tab_name).
 func RenderTabName() string { return render("tools/tab_name", nil) }
 
-// RenderMailAccount reads mail account settings out of pasted text (tools/mail_account).
-func RenderMailAccount() string { return render("tools/mail_account", nil) }
-
 // RenderTranslateTexts and RenderTranslateMail translate into lang, the language's own name ("简体中文"): a JSON list of short
 // texts (tools/translate_texts) or one mail (tools/translate_mail).
 func RenderTranslateTexts(lang string) string { return render("tools/translate_texts", lang) }

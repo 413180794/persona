@@ -187,7 +187,6 @@ func (h *Hub) routes() http.Handler {
 	})
 	h.assistantRoutes(api)
 	h.pinRoutes(api)
-	h.aiRoutes(api)
 	h.kbRoutes(api)
 	h.personaRoutes(api)
 	h.larkRoutes(api)
