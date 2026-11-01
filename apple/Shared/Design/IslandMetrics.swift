@@ -42,6 +42,9 @@ nonisolated enum IslandMetrics {
     static let smallGap: CGFloat = 1
     /// A compact side's inset from the island's rounded end.
     static let edge: CGFloat = 2
+    /// The persona on the compact island's left side (docs/live-activity.md「形象」), and the gap to its count.
+    static let face: CGFloat = 22
+    static let faceGap: CGFloat = 4
     /// The ring around a count that has no room for its symbol.
     static let ring: CGFloat = 1.5
 

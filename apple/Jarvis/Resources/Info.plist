@@ -33,6 +33,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>JarvisLookKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look</string>
 	<key>JarvisPushKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
 	<key>JarvisPushRelay</key>

@@ -62,7 +62,8 @@ targets:
         com.apple.developer.healthkit.access: []
         # The app's own group first (stays the default, where the existing items are), then the one the notification
         # service extension shares for the push key (docs/push-relay.md).
-        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+        # Last, the one the widget extension reads the Live Activity's persona from (docs/live-activity.md「形象」).
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
@@ -113,6 +114,8 @@ targets:
         # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
         JarvisPushRelay: $(JARVIS_PUSH_RELAY)
         JarvisPushKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push
+        # Where the app leaves the persona the Live Activity draws for the widget extension (FleetLook).
+        JarvisLookKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
@@ -217,9 +220,16 @@ targets:
       - path: Shared/StatusPalette.swift
       - path: Shared/Design/Palette.swift
       - path: Shared/Design/IslandMetrics.swift
+      # The persona's face (the app's JarvisAvatar draws it too), on the activity's leading side.
+      - path: Shared/Design/PersonaFace.swift
+    entitlements:
+      path: JarvisWidgets/JarvisWidgets.entitlements
+      properties:
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look"]
     info:
       path: JarvisWidgets/Info.plist
       properties:
+        JarvisLookKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look
         CFBundleDisplayName: Jarvis
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

@@ -112,6 +112,13 @@ final class LiveActivityController {
         Self.update(activity, ActivityContent(state: state, staleDate: activity.content.staleDate))
     }
 
+    /// The persona and its color changed (or the app started): saved for the widget extension, and the running
+    /// activity is redrawn with it now rather than at the hub's next push.
+    func look(_ look: FleetLook) {
+        guard FleetLook.save(look), let activity else { return }
+        Self.update(activity, activity.content)
+    }
+
     func endAll() {
         endTask?.cancel()
         endTask = nil
@@ -177,9 +184,11 @@ final class LiveActivityController {
 
 #if DEBUG
 extension LiveActivityController {
-    /// `-showFleetSample needsYou|working|done` (`-fleetDetails YES` for names on the lock screen, `-fleetIsland b`,
-    /// `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in each kind there is):
-    /// starts the activity with made-up agents, no hub needed, for screenshots.
+    /// `-showFleetSample needsYou|working|done|thinking|offline` (`-fleetDetails YES` for names on the lock screen,
+    /// `-fleetIsland b`, `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in
+    /// each kind there is; `-openPersona jarvis-circuit` for the persona): starts the activity with made-up agents, no
+    /// hub needed, for screenshots. `thinking` is only the assistant answering; `offline` is the working sample made
+    /// stale once it shows.
     func showSample(_ phase: String, details: Bool, island spec: String?, count: Int = 0) {
         UserDefaults.standard.set(details, forKey: Self.detailsKey)
         var island = IslandPrefs()
@@ -202,7 +211,7 @@ extension LiveActivityController {
         let done = FleetState.Item(id: "macbook/s4", title: "升级依赖", place: "MacBook · api", kind: .unread, detail: "全部测试通过，已提交", since: now - 60)
         var state: FleetState = switch phase {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
-        case "done": FleetState(phase: .done, unread: 1, items: [done])
+        case "done", "thinking": FleetState(phase: .done, unread: 1, items: [done])
         default: FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1, items: [ask, plan, work], workingSince: now - 754)
         }
         if count > 0 {
@@ -211,15 +220,43 @@ extension LiveActivityController {
             state.unread = state.unread > 0 ? count : 0
         }
         state.assistant = phase != "done"
+        if phase == "offline" { state = FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754) }
         state.stats = .init(tpm: 12000, tokens: 42_000_000, requests: 1200,
                             loads: [.init(id: "studio", name: "Studio", percent: 35), .init(id: "macbook", name: "MacBook", percent: 70)])
         Task {
             try? await Task.sleep(for: .seconds(1)) // the scene must be active to start one
+            // `apply` starts no activity for finished agents alone (the hub does not either) and keeps it fresh: these
+            // start one directly, and `offline` is then marked stale.
+            if ["done", "thinking", "offline"].contains(phase) {
+                endAll()
+                try? await Task.sleep(for: .seconds(1))
+                let content = ActivityContent(state: state.tailored(island: island, details: details), staleDate: .now.addingTimeInterval(15 * 60))
+                request(content)
+                if phase == "offline", let activity {
+                    // A request already stale is refused, and the simulator does not redraw when a stale date passes:
+                    // an update dated in the past draws it stale at once.
+                    try? await Task.sleep(for: .seconds(1))
+                    Self.update(activity, ActivityContent(state: content.state, staleDate: .now.addingTimeInterval(-1)))
+                }
+                return
+            }
             apply(state)
         }
     }
 }
 #endif
+
+extension AppModel {
+    /// What the Live Activity draws (docs/live-activity.md「形象」): a built-in in the accent it has in the app; a
+    /// package (its frames are bitmaps, which the activity does not play) as the default face in its own color.
+    var fleetLook: FleetLook {
+        let p = persona
+        if p.isBuiltin {
+            return FleetLook(design: p.avatarDesign == .circuit ? .circuit : .visor, tint: builtinAccent)
+        }
+        return FleetLook(design: .visor, tint: Theme.persona)
+    }
+}
 
 extension Data {
     nonisolated var hex: String { map { String(format: "%02x", $0) }.joined() }

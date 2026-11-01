@@ -12,6 +12,7 @@
 	<array>
 		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)</string>
 		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
+		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).look</string>
 	</array>
 </dict>
 </plist>

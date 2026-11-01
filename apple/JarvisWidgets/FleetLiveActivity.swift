@@ -3,13 +3,18 @@ import SwiftUI
 import WidgetKit
 
 /// Draws the Fleet activity: lock screen (and the Watch Smart Stack's small family), Dynamic Island compact / minimal /
-/// expanded. The compact island is two counts or numbers the device chose (IslandCell, 设置 › 通知 › 灵动岛); beside
-/// another app's activity it is one glyph, the most urgent count (`IslandGlyph`); the expanded island and the lock
-/// screen lead with the same counts, then the agents. Status colors are Jarvis' agent colors
+/// expanded. The compact island's left side is the persona chosen in 设置 › 外观 › 形象 in its state for the fleet
+/// (FleetFace) with the most urgent count; the right side is the next count or a number the device chose (IslandCell,
+/// 设置 › 通知 › 灵动岛). Beside another app's activity it is one glyph, the most urgent count (`IslandGlyph`): no room
+/// for a face there. The expanded island and the lock screen lead with the persona and the counts, then the agents.
+/// Status colors are Jarvis' agent colors
 /// (docs/agent-states.md), fixed rather than following the app's style: the extension cannot read it.
 struct FleetLiveActivity: Widget {
     /// Agent rows that fit: the expanded island and the lock screen are both capped at about 160 pt.
     static let rows = 2
+    /// The persona's side: the expanded island's corner, the lock screen's header.
+    static let expandedFace: CGFloat = 26
+    static let lockFace: CGFloat = 26
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JarvisActivityAttributes.self) { context in
@@ -21,16 +26,22 @@ struct FleetLiveActivity: Widget {
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
+                // The persona in the corner, like the compact island's left side; the counts move to the right (beside
+                // the face they lost their numbers: the corner is about 125 pt).
                 DynamicIslandExpandedRegion(.leading) {
-                    HStack(spacing: 10) {
-                        if state.needsYou > 0 { IslandCellView(cell: .needsYou(state.needsYou)) }
-                        if state.working > 0 { IslandCellView(cell: .working(state.working)) }
-                        if state.unread > 0 { IslandCellView(cell: .unread(state.unread)) }
-                    }
-                    .padding(.leading, 6)
+                    FleetFace(size: FleetLiveActivity.expandedFace, state: FleetPersona.state(state, stale: context.isStale))
+                        .padding(.leading, 6)
                 }
-                DynamicIslandExpandedRegion(.trailing) {
-                    FleetStatsLine(state: state, onDark: true).padding(.trailing, 6)
+                DynamicIslandExpandedRegion(.trailing, priority: 1) {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        HStack(spacing: 10) {
+                            if state.needsYou > 0 { IslandCellView(cell: .needsYou(state.needsYou)) }
+                            if state.working > 0 { IslandCellView(cell: .working(state.working)) }
+                            if state.unread > 0 { IslandCellView(cell: .unread(state.unread)) }
+                        }
+                        FleetStatsLine(state: state, onDark: true)
+                    }
+                    .padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -56,7 +67,7 @@ struct FleetLiveActivity: Widget {
                     .padding(.top, 4)
                 }
             } compactLeading: {
-                IslandSide(state: state, leading: true)
+                IslandSide(state: state, leading: true, stale: context.isStale)
             } compactTrailing: {
                 IslandSide(state: state, leading: false)
             } minimal: {
@@ -78,15 +89,19 @@ struct FleetLiveActivity: Widget {
 struct IslandSide: View {
     var state: FleetState
     var leading: Bool
+    var stale = false
 
     var body: some View {
         IslandWidth { limited in
             if limited {
                 if leading { IslandGlyph(cell: IslandCell.minimal(state), limited: true) }
             } else {
-                let sides = IslandCell.sides(state)
-                IslandCellView(cell: leading ? sides.left : sides.right)
-                    .padding(leading ? .leading : .trailing, IslandMetrics.edge)
+                if leading {
+                    // The persona, then the most urgent count (docs/live-activity.md「形象」).
+                    IslandLeading(state: state, stale: stale).padding(.leading, IslandMetrics.edge)
+                } else {
+                    IslandCellView(cell: IslandCell.sides(state).right).padding(.trailing, IslandMetrics.edge)
+                }
             }
         }
     }
@@ -119,19 +134,6 @@ struct IslandWidth<Content: View>: View {
         var body: some View { content(limited) }
     }
     #endif
-}
-
-/// The coral four-point star on a dark disc, like the app icon.
-struct FleetMark: View {
-    var size: CGFloat
-    var body: some View {
-        Image(systemName: FleetSymbol.assistant)
-            .font(.system(size: size * 0.6, weight: .bold))
-            .foregroundStyle(FleetPalette.coral)
-            .frame(width: size, height: size)
-            .background(Circle().fill(Color(red: 0.12, green: 0.09, blue: 0.08)))
-            .overlay(Circle().strokeBorder(FleetPalette.coral.opacity(0.45), lineWidth: 0.75))
-    }
 }
 
 struct FleetTimer: View {
@@ -294,7 +296,7 @@ struct FleetLockScreen: View {
     private var full: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                FleetMark(size: 22)
+                FleetFace(size: FleetLiveActivity.lockFace, state: FleetPersona.state(state, stale: stale))
                 FleetCounts(state: state, short: FleetStatsLine.count(state) > 1)
                 Spacer(minLength: 0)
                 FleetStatsLine(state: state)

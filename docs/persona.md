@@ -119,6 +119,7 @@
 - 空闲每 3.6 秒眨一次眼：用 periodic 的 TimelineView 加一个短的 phase 动画，两次眨眼之间不重画。
 - 思考、工作、等你处理三个状态以 15 fps 动。
 - 离线是灰色、不动。
+- 绘制在 `Shared/Design/PersonaFace.swift`（给定时刻的一帧），`JarvisAvatar` 只负责时钟；锁屏 / 灵动岛的实时活动用同一份画静止帧（`docs/live-activity.md`「形象」）。
 
 ## 色系 → 设计 token
 

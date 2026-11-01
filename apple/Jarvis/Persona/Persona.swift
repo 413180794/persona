@@ -47,24 +47,6 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     }
 }
 
-/// What the dot shows (docs/persona.md「状态」). Raw values are persona.json's.
-nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
-    case idle, thinking, working
-    case needsYou = "needs_you"
-    case offline
-
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .idle: "空闲"
-        case .thinking: "思考中"
-        case .working: "工作中"
-        case .needsYou: "等你处理"
-        case .offline: "离线"
-        }
-    }
-}
-
 /// persona.json, format 1 (docs/persona.md「格式」).
 nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     static let format = 1

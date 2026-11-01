@@ -89,7 +89,7 @@ struct IslandSettingsView: View {
 
     private func preview(_ title: String, _ state: FleetState, _ island: IslandPrefs) -> some View {
         VStack(spacing: Theme.Space.sm) {
-            IslandPreview(state: state.tailored(island: island, details: false))
+            IslandPreview(state: state.tailored(island: island, details: false), look: model.fleetLook)
             Text(title).font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }

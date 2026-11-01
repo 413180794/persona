@@ -8,8 +8,10 @@ enum FleetPalette {
     static var unread: Color { StatusPalette.unread.dot }
     /// Small working text (the timer) on the lock screen, which follows the system appearance.
     static var workingText: Color { StatusPalette.working.text }
-    /// The app icon's coral (the app's `Theme.brand`): the mark and the island's number symbols, nothing to tap.
+    /// The app icon's coral (the app's `Theme.brand`): the island's number symbols, nothing to tap.
     static let coral = Palette.coral
+    /// The brand's four-point star (`Theme.Icon.jarvis`, which the extension does not build): the 面罩 persona's glint.
+    static let mark = "sparkle"
     /// System blue, the app's accent: the keyline and the system's action buttons.
     static let accent = Palette.systemBlue
     /// A system blue dark enough for white button labels (4.7:1).
@@ -82,13 +84,33 @@ struct IslandPair {
     }
 }
 
-/// One side of the compact Dynamic Island: a symbol and a short number. `small` is the minimal island's size.
+/// The compact Dynamic Island's left side: the persona in the fleet's state, then the left cell. Beside the face a
+/// 需要你 / 在工作 count is just its number in its color (the face already says which: red ring, working eyes).
+struct IslandLeading: View {
+    var state: FleetState
+    var stale: Bool
+    var look: FleetLook = .saved
+
+    var body: some View {
+        HStack(spacing: IslandMetrics.faceGap) {
+            FleetFace(size: IslandMetrics.face, state: FleetPersona.state(state, stale: stale), look: look)
+            IslandCellView(cell: IslandCell.sides(state).left, bare: true)
+        }
+        .fixedSize()
+    }
+}
+
+/// One side of the compact Dynamic Island: a symbol and a short number. `small` is the minimal island's size; `bare`
+/// drops the 需要你 / 在工作 symbol (next to the persona, which shows it).
 struct IslandCellView: View {
     var cell: IslandCell
     var small = false
+    var bare = false
 
     var body: some View {
-        if let pair = IslandPair(cell) {
+        if bare, let pair = IslandPair(cell), Self.saysItsState(cell) {
+            IslandNumber(pair: pair, small: small)
+        } else if let pair = IslandPair(cell) {
             IslandPairView(pair: pair, small: small)
         } else {
             switch cell {
@@ -107,6 +129,14 @@ struct IslandCellView: View {
             default:
                 EmptyView()
             }
+        }
+    }
+
+    /// 需要你 / 在工作: the counts the persona's face shows too (red ring, working eyes).
+    static func saysItsState(_ cell: IslandCell) -> Bool {
+        switch cell {
+        case .needsYou, .working: true
+        default: false
         }
     }
 }
@@ -184,11 +214,12 @@ struct IslandRing: View {
 /// The compact island as a picture, for 设置 › 通知 › 灵动岛: the two sides around a camera on a black pill.
 struct IslandPreview: View {
     var state: FleetState
+    var look: FleetLook = .saved
 
     var body: some View {
         let sides = IslandCell.sides(state)
         HStack(spacing: 0) {
-            IslandCellView(cell: sides.left).frame(maxWidth: .infinity, alignment: .leading)
+            IslandLeading(state: state, stale: false, look: look).frame(maxWidth: .infinity, alignment: .leading)
             IslandCamera()
             IslandCellView(cell: sides.right).frame(maxWidth: .infinity, alignment: .trailing)
         }

@@ -5,13 +5,17 @@ import XCTest
 final class LiveActivityShots: XCTestCase {
     @MainActor func testShots() throws {
         let env = ProcessInfo.processInfo.environment
-        guard let phase = env["JARVIS_FLEET_SAMPLE"] else { throw XCTSkip("set JARVIS_FLEET_SAMPLE=needsYou|working|done|current") }
+        guard let phase = env["JARVIS_FLEET_SAMPLE"] else {
+            throw XCTSkip("set JARVIS_FLEET_SAMPLE=needsYou|working|done|thinking|offline|current")
+        }
         if let id = env["JARVIS_ISLAND_PEER"] { endPeer(id) } // one left over from an earlier run
         if phase != "current" { // "current": photograph whatever the activity shows now (after a real push)
             let app = XCUIApplication()
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings",
                                    "-showFleetCount", env["JARVIS_FLEET_COUNT"] ?? "0"]
+            // The persona on the activity's leading side (`jarvis`, the default, or `jarvis-circuit`).
+            if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             app.launchPinned()
             sleep(4)
         }
@@ -20,6 +24,8 @@ final class LiveActivityShots: XCTestCase {
         shot("\(phase)-compact")
         usleep(400_000)
         shot("\(phase)-compact2") // compared with the first: does the working gear turn?
+        sleep(3)
+        shot("\(phase)-compact3") // settled
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         if let id = env["JARVIS_ISLAND_PEER"] { shared(with: id, phase) }
 
@@ -47,6 +53,12 @@ final class LiveActivityShots: XCTestCase {
         let ours = springboard.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拒绝")).firstMatch
         if !ours.exists, allow.exists {
             allow.tap()
+            sleep(2)
+        }
+        // Later the system asks again whether to keep allowing them; 始终允许 is never one of the activity's buttons.
+        let always = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Always Allow", "始终允许"])).firstMatch
+        if always.exists {
+            always.tap()
             sleep(2)
         }
         shot("\(phase)-lock")
