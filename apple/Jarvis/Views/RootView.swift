@@ -74,6 +74,19 @@ struct RootView: View {
     }
 }
 
+/// A tab's page, drawn again only by what it reads itself. Each tab's badge (the agents waiting, the inbox's 需要你) is read
+/// by its `Tab`, and the hub changes them with nearly every push: without this the `Tab` built its page again each time,
+/// the page ran its body (the Agents list's toolbar handed to UIKit again: the open ⋯ menu went back to its top while
+/// choosing a machine; the open chat laid out again under the finger), TestFlight 70, docs/lessons/ios.md. The pages
+/// take nothing from here, so nothing is lost.
+private struct TabPage<Page: View>: View, Equatable {
+    @ViewBuilder var page: () -> Page
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { true }
+
+    var body: some View { page() }
+}
+
 @MainActor private struct AssistantRootTab: TabContent {
     @Environment(AppModel.self) private var model
 
@@ -82,10 +95,13 @@ struct RootView: View {
         let _ = PerfTrace.body("AssistantRootTab")
         #endif
         Tab("Jarvis", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
-            AssistantView()
-            #if PERF_SIGNPOST
-                .modifier(PerfTabMount("assistant"))
-            #endif
+            TabPage {
+                AssistantView()
+                #if PERF_SIGNPOST
+                    .modifier(PerfTabMount("assistant"))
+                #endif
+            }
+            .equatable()
         }
         .badge(model.pendingInteractions.filter { model.session($0.sessionKey)?.assistant == true }.count)
     }
@@ -99,10 +115,13 @@ struct RootView: View {
         let _ = PerfTrace.body("AgentsRootTab")
         #endif
         Tab("Agents", systemImage: Theme.Icon.agents, value: AppTab.chats) {
-            ChatsView()
-            #if PERF_SIGNPOST
-                .modifier(PerfTabMount("agents"))
-            #endif
+            TabPage {
+                ChatsView()
+                #if PERF_SIGNPOST
+                    .modifier(PerfTabMount("agents"))
+                #endif
+            }
+            .equatable()
         }
         .badge(model.pendingInteractions.filter {
             model.session($0.sessionKey)?.assistant != true && !model.isMuted($0.sessionKey)
@@ -116,10 +135,13 @@ struct RootView: View {
         let _ = PerfTrace.body("InboxRootTab")
         #endif
         Tab("收件箱", systemImage: Theme.Icon.inbox, value: AppTab.mail) {
-            InboxView()
-            #if PERF_SIGNPOST
-                .modifier(PerfTabMount("inbox"))
-            #endif
+            TabPage {
+                InboxView()
+                #if PERF_SIGNPOST
+                    .modifier(PerfTabMount("inbox"))
+                #endif
+            }
+            .equatable()
         }
         .badge(InboxStore.shared.actionCount)
     }
@@ -133,10 +155,13 @@ struct RootView: View {
         let _ = PerfTrace.body("SettingsRootTab")
         #endif
         Tab("设置", systemImage: Theme.Icon.settings, value: AppTab.settings) {
-            SettingsView()
-            #if PERF_SIGNPOST
-                .modifier(PerfTabMount("settings"))
-            #endif
+            TabPage {
+                SettingsView()
+                #if PERF_SIGNPOST
+                    .modifier(PerfTabMount("settings"))
+                #endif
+            }
+            .equatable()
         }
         .badge(model.isDemo ? Text("体验") : nil) // 体验模式 is left from 设置
     }

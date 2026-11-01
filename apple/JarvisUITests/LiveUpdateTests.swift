@@ -54,8 +54,8 @@ final class LiveUpdateTests: XCTestCase {
 
     /// Pushes `rounds` rounds of updates, 400 ms apart, and waits for the last. `steps`: new steps per round in each
     /// open conversation.
-    private func churn(steps: Int = 1, final: Bool = false) {
-        mock("churn?n=\(Self.rounds)&ms=400&steps=\(steps)&final=\(final ? 1 : 0)")
+    private func churn(steps: Int = 1, final: Bool = false, waiting: Bool = false) {
+        mock("churn?n=\(Self.rounds)&ms=400&steps=\(steps)&final=\(final ? 1 : 0)&inbox=1&waiting=\(waiting ? 1 : 0)")
         let deadline = Date.now.addingTimeInterval(30)
         while (mock("churned")["rounds"] as? Int ?? 0) < Self.rounds + (final ? 1 : 0), Date.now < deadline { usleep(300_000) }
         sleep(1) // the last round applied
@@ -97,8 +97,12 @@ final class LiveUpdateTests: XCTestCase {
     // (the machine list, the sections it folds) and jumped, or scrolled itself, under the finger choosing a machine.
     func testListMenuHoldsStillThroughUpdates() {
         launch()
-        let menuButton = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch
-        XCTAssertTrue(menuButton.waitForExistence(timeout: 15))
+        // The tab bar's ⋯, or in the shell the selected Agents of the top switch (docs/ios.md「新外壳」).
+        let classic = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组：")).firstMatch
+        // Both pages carry the switch (the other one out of sight): the one that can be tapped.
+        XCTAssertTrue(classic.waitForExistence(timeout: 15) || app.buttons["shell-agents"].firstMatch.exists, "the list's options")
+        let shells = app.buttons.matching(identifier: "shell-agents").allElementsBoundByIndex
+        let menuButton = classic.exists ? classic : (shells.first(where: { $0.isHittable }) ?? shells[0])
         sleep(2)
         menuButton.tap()
         let machines = app.buttons["全部机器"]
@@ -111,12 +115,15 @@ final class LiveUpdateTests: XCTestCase {
         let lastY = last.frame.minY
         let machinesY = machines.frame.minY
         let before = counts()
-        churn()
-        XCTAssertTrue(last.exists, "the menu is still open")
-        XCTAssertEqual(last.frame.minY, lastY, accuracy: 1, "the menu did not scroll or jump")
-        XCTAssertEqual(machines.frame.minY, machinesY, accuracy: 1, "the menu did not scroll or jump")
+        churn(waiting: true)
+        // Where the menu is, before the counts: reading the probe while the menu is open moves the menu itself.
+        let open = last.exists
+        let (lastAfter, machinesAfter) = (last.frame.minY, machines.frame.minY)
         let after = counts()
         report("Agents list, ⋯ menu open", from: before, to: after)
+        XCTAssertTrue(open, "the menu is still open")
+        XCTAssertEqual(lastAfter, lastY, accuracy: 1, "the menu did not scroll or jump")
+        XCTAssertEqual(machinesAfter, machinesY, accuracy: 1, "the menu did not scroll or jump")
         XCTAssertLessThanOrEqual((after.bodies["ListMenu.content"] ?? 0) - (before.bodies["ListMenu.content"] ?? 0), 1,
                                  "the open menu's content is not rebuilt for each push")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.95)).tap() // close it

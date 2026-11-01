@@ -179,8 +179,11 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 每个用例报每轮推送的 body 次数和主线程耗时（附件和日志里的 `PERF` 行，改前改后的对比见 `docs/lanes/live-updates.md`）。
 
 - mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
-  两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）。
+  两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）；`&inbox=1` 每轮再改一条收件箱、重推等你处理的事，`&waiting=1` 每轮多一个等你的 Agent、
+  下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/lanes/live-updates.md`「又回来了」）。
 - `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/LiveUpdateTests`。
+- 新外壳和旧布局都要跑：UI 测试默认用旧布局（`launchJarvis` 加 `-ui.oldLayout YES`），设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 改用新外壳（iPhone 的默认），
+  `LiveUpdateTests`、`ChatFollowTests` 两种都过才算。
 
 ### 体验模式（`DemoModeTests`、`DemoHubTests`）
 

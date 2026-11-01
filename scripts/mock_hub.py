@@ -8,7 +8,7 @@ It serves machines, agents, conversations, interactions and the inbox, enough fo
 does not know are logged to stderr as MISSING. Timestamps are relative to when it starts. See docs/testing.md.
 """
 import base64, unicodedata
-import hashlib, json, os, struct, sys, threading, time, uuid
+import copy, hashlib, json, os, struct, sys, threading, time, uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -1538,10 +1538,15 @@ def net_control(path, q):
 # machine list (a new last_seen), and `steps` new steps in the turn of each conversation a connection has open. GET
 # /mock/churned tells how many rounds have gone out. &final=1: then the turn ends (a last reply, the working agents
 # done; counted as one more round). For checking that what the user is doing survives the updates.
+# &inbox=1: each round also changes an inbox item (a new Feishu message: the inbox's 需要你 count changes every other
+# round) and pushes `inbox`, and pushes the pending interactions again; &waiting=1: one more interaction comes and goes
+# (the waiting count changes every round, its card shows and goes on the Agents list). The real hub does both all day;
+# the tab bar's and the shell's badges read them, the mock's other pushes never touched them.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
 CHURN = {"rounds": 0}
 CHURN_ITEMS = {}  # each conversation's items before churn added to them (/mock/reset puts them back)
+CHURN_INBOX = []  # the inbox before churn changed it (/mock/reset puts it back)
 
 
 def png(w, h, rgb):
@@ -1553,11 +1558,16 @@ def png(w, h, rgb):
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
-def churn(rounds, ms, steps=1, final=False):
+def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False):
     import time
     for k in range(rounds):
         time.sleep(ms / 1000)
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        if inbox and INBOX:
+            if not CHURN_INBOX: CHURN_INBOX.extend(copy.deepcopy(INBOX))
+            first = INBOX[0]
+            first.update(preview="第 %d 条新消息：下午的会改到四点了" % (k + 1), updated_at=now, count=first.get("count", 1) + 1,
+                         tier="action" if k % 2 else "fyi")
         working = [s for s in SESSIONS if s["state"] == "working"]
         for s in working:
             s.update(updated_at=now, last_text="第 %d 轮更新：还在跑，刚看完一处。" % (k + 1))
@@ -1571,6 +1581,14 @@ def churn(rounds, ms, steps=1, final=False):
             try:
                 send({"type": "machines", "machines": MACHINES})
                 for m, ss in by.items(): send({"type": "sessions", "machine_id": m, "sessions": ss})
+                if inbox:
+                    send({"type": "inbox"})
+                    for ix in INTERACTIONS: send({"type": "interaction", "interaction": ix})
+                if waiting and INTERACTIONS:  # another agent starts waiting, then is answered elsewhere
+                    if k % 2 == 0:
+                        send({"type": "interaction", "interaction": dict(INTERACTIONS[0], id="ix_churn", created_at=now)})
+                    else:
+                        send({"type": "interaction_resolved", "id": "ix_churn"})
                 for sid in list(subscribed):
                     items = ITEMS.get(sid)
                     if not items: continue
@@ -1690,9 +1708,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/churn":
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
-                                                 int(q.get("steps", ["1"])[0]), q.get("final", ["0"])[0] == "1"), daemon=True).start()
+                                                 int(q.get("steps", ["1"])[0]), q.get("final", ["0"])[0] == "1",
+                                                 q.get("inbox", ["0"])[0] == "1", q.get("waiting", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)
         if p == "/mock/say":  # ChatFollowTests: a reply arrives in every open conversation (?text=…, ?user=… a message before it)
             # &steps=50&ms=80: the hub's own pace (a delta every 80 ms, node/assistant.go).
             args = (q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
@@ -1725,6 +1745,7 @@ class H(BaseHTTPRequestHandler):
             SESSIONS[:] = [x for x in SESSIONS if not x["session_id"].startswith("d4e6f8a0-")]
             del RECONNECTS[:], STARTED[:], SEEN[:]
             for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
+            if CHURN_INBOX: INBOX[:] = copy.deepcopy(CHURN_INBOX)
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:
                     x["state"], x["status"] = ORIG_STATE[x["session_id"]]

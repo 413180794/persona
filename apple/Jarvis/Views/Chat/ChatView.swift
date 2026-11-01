@@ -904,7 +904,7 @@ struct ChatView: View {
             let newest = lines.last?.id ?? ""
             let shown = Set(scratch.visibleLines)
             let lastShown = lines.lastIndex { shown.contains($0.id) }.map { lines.count - 1 - $0 } ?? -1
-            Text("bottom=\(atBottom ? 1 : 0) follows=\(followsEnd ? 1 : 0) frozen=\(frozen == nil ? 0 : 1) arrow=\(!atBottom && settled ? 1 : 0) newestShown=\(shown.contains(newest) ? 1 : 0) behind=\(lastShown) items=\(store.items.count) withheld=\(store.items.count - (frozen.map { f in Self.prefixCount(store.items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? store.items.count))")
+            Text("bottom=\(atBottom ? 1 : 0) follows=\(followsEnd ? 1 : 0) frozen=\(frozen == nil ? 0 : 1) arrow=\(!atBottom && settled ? 1 : 0) newestShown=\(shown.contains(newest) ? 1 : 0) behind=\(lastShown) items=\(store.items.count) withheld=\(store.items.count - (frozen.map { f in Self.prefixCount(store.items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? store.items.count)) key=\(key.machineID)/\(key.sessionID)")
                 .font(Theme.Font.label).opacity(Self.scrollProbeVisible ? 1 : 0.01).allowsHitTesting(false)
                 .accessibilityIdentifier("chat.scrollState")
         }

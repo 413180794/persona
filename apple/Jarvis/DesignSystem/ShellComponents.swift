@@ -7,14 +7,20 @@ import SwiftUI
 /// the count of agents waiting on the user. Tapping 助手 while it is selected opens `chatMenu` (the conversation's
 /// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT; tapping Agents while it is selected opens
 /// the list's options (分组, 显示, 机器…).
+///
+/// The switch reads nothing that the hub's pushes change: an open menu is laid out again whenever its button is, and
+/// went back to its top under the finger choosing a machine (TestFlight 70, docs/lessons/ios.md). The count is
+/// `WaitingBadge`, beside the menu rather than in its label, and reads the agents itself.
 struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     @Binding var tab: AppTab
-    var waiting: Int
     @ViewBuilder var chatMenu: () -> ChatMenu
     @ViewBuilder var workMenu: () -> WorkMenu
     @Namespace private var pill
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ShellSwitch")
+        #endif
         HStack(spacing: .zero) {
             if tab == .assistant {
                 Menu { chatMenu() } label: { segment("助手", selected: true) }
@@ -25,14 +31,17 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             } else {
                 button("助手", .assistant, id: "shell-assistant")
             }
-            if tab == .chats {
-                Menu { workMenu() } label: { segment("Agents", selected: true, badge: waiting) }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("shell-agents")
-                    .accessibilityHint("列表的选项")
-            } else {
-                button("Agents", .chats, id: "shell-agents", badge: waiting)
+            ZStack(alignment: .topTrailing) {
+                if tab == .chats {
+                    Menu { workMenu() } label: { segment("Agents", selected: true) }
+                        .menuStyle(.button)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("shell-agents")
+                        .accessibilityHint("列表的选项")
+                } else {
+                    button("Agents", .chats, id: "shell-agents")
+                }
+                WaitingBadge()
             }
         }
         .padding(Theme.Space.xs)
@@ -40,21 +49,20 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
         .animation(Theme.Motion.state, value: tab)
     }
 
-    private func button(_ title: String, _ value: AppTab, id: String, badge: Int = 0) -> some View {
+    private func button(_ title: String, _ value: AppTab, id: String) -> some View {
         Button {
             guard tab != value else { return }
             Haptics.tap()
             tab = value
         } label: {
-            segment(title, selected: tab == value, badge: badge)
+            segment(title, selected: tab == value)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
         .accessibilityAddTraits(tab == value ? .isSelected : [])
-        .accessibilityValue(badge > 0 ? "\(badge) 个在等你" : "")
     }
 
-    private func segment(_ title: String, selected: Bool, badge: Int = 0) -> some View {
+    private func segment(_ title: String, selected: Bool) -> some View {
         Text(title)
             .font(selected ? Theme.Font.bodyStrong : Theme.Font.body)
             .foregroundStyle(selected ? Color.primary : Color.secondary)
@@ -66,27 +74,38 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                     Capsule().fill(Theme.Shell.segment).matchedGeometryEffect(id: "pill", in: pill)
                 }
             }
-            .overlay(alignment: .topTrailing) {
-                if badge > 0 {
-                    CountBadge(count: badge, look: .solid(Theme.needsYou))
-                        .offset(x: Theme.Space.s, y: -Theme.Space.sm)
-                        .allowsHitTesting(false)
-                }
-            }
             .contentShape(.capsule)
     }
 }
 
+/// How many agents wait on the user, over the switch's Agents. Its own view: the count changes with nearly every push
+/// (an agent asks, another is answered), and only this badge is drawn again.
+private struct WaitingBadge: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let waiting = model.agentsWaiting
+        if waiting > 0 {
+            CountBadge(count: waiting, look: .solid(Theme.needsYou))
+                .offset(x: Theme.Space.s, y: -Theme.Space.sm)
+                .allowsHitTesting(false)
+                .accessibilityLabel("\(waiting) 个在等你")
+        }
+    }
+}
+
 /// A round glass button of the shell's top bar (☰, 新对话): the same size as the system toolbar's, so the 助手 page's
-/// floating bar and the Agents page's navigation bar line up. `dot` marks something waiting behind it (☰: the inbox).
+/// floating bar and the Agents page's navigation bar line up. `inboxDot` marks the inbox having something for the user
+/// (☰); the button reads it itself, so the bar around it is not drawn again with each inbox update.
 struct ShellCircleButton: View {
     var symbol: String
     var label: String
     var id: String
-    var dot = false
+    var inboxDot = false
     var action: () -> Void
 
     var body: some View {
+        let dot = inboxDot && InboxStore.shared.actionCount > 0
         Button {
             Haptics.tap()
             action()
@@ -134,7 +153,7 @@ private struct ShellScaled: ViewModifier {
 }
 
 extension ShellSwitch where WorkMenu == EmptyView {
-    init(tab: Binding<AppTab>, waiting: Int, @ViewBuilder chatMenu: @escaping () -> ChatMenu) {
-        self.init(tab: tab, waiting: waiting, chatMenu: chatMenu, workMenu: { EmptyView() })
+    init(tab: Binding<AppTab>, @ViewBuilder chatMenu: @escaping () -> ChatMenu) {
+        self.init(tab: tab, chatMenu: chatMenu, workMenu: { EmptyView() })
     }
 }

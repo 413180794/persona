@@ -20,7 +20,12 @@ final class ChatFollowTests: XCTestCase {
         _ = try? Data(contentsOf: URL(string: hub + "/mock/reset")!)
     }
 
+    /// The chat the test opened ("<machine>/<session>"): in the shell both pages are alive, the other one's chat
+    /// (the Jarvis conversation behind the Agents page) has a probe too.
+    private var opened: String?
+
     @MainActor private func launch(_ open: [String]) -> XCUIApplication {
+        if let i = open.firstIndex(where: { $0 == "-openSession" || $0 == "-openAssistant" }), i + 1 < open.count { opened = open[i + 1] }
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-showScrollState", "YES", "-dev.openChat", ""] + open
@@ -42,7 +47,8 @@ final class ChatFollowTests: XCTestCase {
     /// The probe's numbers: bottom, follows, frozen, arrow, newestShown, behind (lines below the lowest one on screen),
     /// withheld (items not shown because the list holds still).
     @MainActor private func state(_ app: XCUIApplication) -> [String: Int] {
-        let probe = app.staticTexts["chat.scrollState"]
+        let probes = app.staticTexts.matching(identifier: "chat.scrollState")
+        let probe = opened.map { probes.matching(NSPredicate(format: "label ENDSWITH %@", "key=" + $0)).firstMatch } ?? probes.firstMatch
         guard probe.exists else { return [:] }
         var out: [String: Int] = [:]
         for pair in probe.label.split(separator: " ") {
@@ -118,22 +124,22 @@ final class ChatFollowTests: XCTestCase {
         shot(app, "\(name)-reading")
 
         // 4. ↓ brings the newest back, the reply that came while reading included.
-        let arrow = app.buttons["回到最新"]
-        XCTAssertTrue(arrow.waitForExistence(timeout: 5), "\(name): no 回到最新 button")
-        arrow.tap()
+        XCTAssertTrue(app.buttons["回到最新"].firstMatch.waitForExistence(timeout: 5), "\(name): no 回到最新 button")
+        let arrows = app.buttons.matching(identifier: "回到最新").allElementsBoundByIndex // the shell's other page may have one
+        (arrows.first { $0.isHittable } ?? arrows[0]).tap()
         // After a jump the list's report of the lines on screen can lag (it once kept the lines read before): the
         // sentinel, nothing held back and the reply's text are what count.
         expect(app, "\(name): ↓ did not go back to the newest") {
             $0["bottom"] == 1 && $0["withheld"] == 0 && $0["arrow"] == 0
         }
-        XCTAssertTrue(app.staticTexts[second].waitForExistence(timeout: 5), "\(name): the reply that came while reading is missing")
+        XCTAssertTrue(app.staticTexts[second].firstMatch.waitForExistence(timeout: 5), "\(name): the reply that came while reading is missing")
         shot(app, "\(name)-back")
 
         // 5. Following again: the next reply shows too.
         let third = "第三条新回复 \(name)"
         say(third)
         expect(app, "\(name): not following after ↓") { $0["withheld"] == 0 && $0["bottom"] == 1 }
-        XCTAssertTrue(app.staticTexts[third].waitForExistence(timeout: 5), "\(name): the reply after ↓ is missing")
+        XCTAssertTrue(app.staticTexts[third].firstMatch.waitForExistence(timeout: 5), "\(name): the reply after ↓ is missing")
     }
 
     @MainActor func testAgentChatFollows() throws {

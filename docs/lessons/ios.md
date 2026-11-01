@@ -39,6 +39,11 @@
   body 里写的闭包环境值（`.environment(\.openFile) { … }`）每次都是新值，读它的行全部重算（每次推送重算所有可见的过程步骤），用一次建好的 `ChatActions`；
   `model.session(key)` 按会话单独观察（`SessionCell`），别让一个会话的页面跟着所有机器的列表重算；全屏查看器、行的展开状态放在页面上，别放在懒加载的行里。
   量法：`LiveUpdateTests`（mock 的 `/mock/churn` 连续推，`-perfCounts YES` 报每轮的 body 次数和主线程耗时）。
+- 角标（等你处理的数字、收件箱的「需要你」）几乎每次推送都变，读它的视图别装着页面或菜单（2026-11-01，TestFlight 70「又回来了」，`docs/lanes/live-updates.md`）：
+  `Tab` 的 `.badge` 一变，`Tab` 就把里面的页面重建一遍（页面没有参数也一样，body 再跑），开着的 ⋯ 菜单回到顶部、开着的对话整页重算：
+  `Tab` 里的页面一律包 `TabPage { … }.equatable()`。`Menu` 的 label 一变，开着的菜单就重新布局、回到顶部：数字、红点别放在菜单的 label 上，
+  做成自己读数据的小视图放在旁边（`WaitingBadge`），装菜单的视图不读每次推送都变的东西。mock 要推 `inbox` 和 `interaction`
+  （`/mock/churn?inbox=1&waiting=1`）才测得出来；新外壳是 iPhone 的默认布局，这类测试两种布局都跑（`TEST_RUNNER_JARVIS_LAYOUT=shell`）。
 - 行视图的参数里有闭包或带字符串、数组的结构体（`Item`），SwiftUI 就认为它每次都变了：对话页每次推送重算一次，屏幕上加懒加载缓冲里的每一行
   （长的 Jarvis 主对话约 45 行）都跟着重跑 body（2026-11-01）。对话行（气泡、回复、工作行、输入框）一律 `Equatable` + `.equatable()`，只比消息本身；
   一直建着、平时看不见的东西（关着的侧边栏）别读 `allSessions` 这类每次推送都换的数据，看不见时用上次的值。

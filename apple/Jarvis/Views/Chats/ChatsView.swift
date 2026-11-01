@@ -205,6 +205,7 @@ struct ChatsView: View {
             ZStack {
                 if let shell, path.isEmpty, !searching, searchedBeforePush == nil {
                     AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
+                        .equatable()
                         .transition(.opacity)
                 }
             }
@@ -1337,22 +1338,29 @@ private struct SearchCloseProbe: UIViewRepresentable {
 /// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 助手's, in the same places,
 /// over the navigation bar (kept for its search field), 新建会话 on the right; tapping the selected Agents opens the list's
 /// options (分组, 显示, 机器…).
-struct AgentsTopBar: View {
+struct AgentsTopBar: View, Equatable {
     @Environment(AppModel.self) private var model
     let shell: ShellState
     var menuActions: AgentsListMenu.Actions
-    var newSession: () -> Void
+    var newSession: () -> Void // sets the page's state: the same each time
+
+    /// The bar holds the list's options menu: built again with the page (a new `newSession` each time), an open menu
+    /// went back to its top (see `ShellSwitch`).
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.shell === b.shell && a.menuActions === b.menuActions }
 
     var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("AgentsTopBar")
+        #endif
         @Bindable var model = model
         HStack(alignment: .top, spacing: Theme.Space.s) {
             ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "work-sidebar-button",
-                              dot: InboxStore.shared.actionCount > 0) { shell.drawer.open() }
+                              inboxDot: true) { shell.drawer.open() }
             Spacer(minLength: 0)
             ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "agents-new", action: newSession)
         }
         .overlay(alignment: .top) {
-            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { EmptyView() } workMenu: {
+            ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: {
                 AgentsListMenu(actions: menuActions, inline: true)
             }
         }

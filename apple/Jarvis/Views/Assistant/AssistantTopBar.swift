@@ -75,9 +75,9 @@ struct AssistantTopBar: View {
         let link = model.connection.shown
         return HStack(alignment: .top) {
             ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "assistant-sidebar-button",
-                              dot: InboxStore.shared.actionCount > 0, action: openSidebar)
+                              inboxDot: true, action: openSidebar)
             Spacer(minLength: Theme.Space.s)
-            ShellSwitch(tab: $model.selectedTab, waiting: model.agentsWaiting) { menuItems(link) }
+            ShellSwitch(tab: $model.selectedTab) { menuItems(link) }
             Spacer(minLength: Theme.Space.s)
             ShellCircleButton(symbol: Theme.Icon.compose, label: "新对话", id: "assistant-new", action: newConversation)
                 .disabled(key == nil)
