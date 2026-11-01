@@ -125,25 +125,40 @@ fun AgentActionsSheet(
         )
     }
 
-    if (closing) {
-        AlertDialog(
-            onDismissRequest = { closing = false },
-            title = { Text("关闭这个 Agent？") },
-            text = {
-                Text(
-                    "会退出 ${machine ?: "电脑"} 上的 ${s.agentLabel}，并关掉它在 herdr 里的标签页" +
-                        (s.slotName?.takeIf { it.isNotBlank() }?.let { "「$it」" } ?: "") +
-                        "（分屏的标签页只关它这一格）。正在做的事会中断。\n对话记录还在，之后可以在「最近 7 天」里发消息恢复。",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { closing = false; act("关闭") { hub.api.close(s.key) } }) {
-                    Text("关闭 Agent", color = MaterialTheme.colorScheme.error, maxLines = 1)
-                }
-            },
-            dismissButton = { TextButton(onClick = { closing = false }) { Text("取消", maxLines = 1) } },
-        )
-    }
+    if (closing) CloseAgentDialog(hub, s, machine, onDismiss = { closing = false }, onError = onError, onConfirmed = onDismiss)
+}
+
+/**
+ * 关闭 Agent's confirmation (iOS: the same from the row's swipe, its long-press menu and the chat's ⋯ menu): quits the
+ * agent and closes its herdr tab; the transcript stays, so it can be resumed from 最近 7 天.
+ */
+@Composable
+fun CloseAgentDialog(
+    hub: Hub, s: Session, machine: String?, onDismiss: () -> Unit, onError: (String) -> Unit,
+    /** After 关闭 Agent is tapped (the long-press sheet closes too). */
+    onConfirmed: () -> Unit = {},
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("关闭这个 Agent？") },
+        text = {
+            Text(
+                "会退出 ${machine ?: "电脑"} 上的 ${s.agentLabel}，并关掉它在 herdr 里的标签页" +
+                    (s.slotName?.takeIf { it.isNotBlank() }?.let { "「$it」" } ?: "") +
+                    "（分屏的标签页只关它这一格）。正在做的事会中断。\n对话记录还在，之后可以在「最近 7 天」里发消息恢复。",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss(); onConfirmed()
+                // The app scope: the dialog's own would be cancelled as it closes.
+                JarvisApp.instance.scope.launch { runCatching { hub.api.close(s.key) }.onFailure { onError("关闭 没成功：${it.message}") } }
+            }) {
+                Text("关闭 Agent", color = MaterialTheme.colorScheme.error, maxLines = 1)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", maxLines = 1) } },
+    )
 }
 
 /**

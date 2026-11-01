@@ -1,5 +1,8 @@
 package jarvis.android.ui
 
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -109,6 +112,7 @@ fun AgentsScreen(
     val mutes by hub.mutes.collectAsState()
     var refreshing by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<Session?>(null) }
+    var closingFor by remember { mutableStateOf<Session?>(null) }
     var renamingSpace by remember { mutableStateOf<SpaceGroup?>(null) }
     var newSession by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -145,7 +149,11 @@ fun AgentsScreen(
     val rest = all.filterNot { g.pinned(it) }
     val (live, offline) = rest.partition { it.isLive }
     val row: @Composable (Session, Boolean) -> Unit = { s, showSpace ->
-        SessionRow(s, names[s.machineId], g.muted(s), showSpace, onClick = { onOpen(s.key) }, onLongClick = { menuFor = s })
+        val content: @Composable () -> Unit = {
+            SessionRow(s, names[s.machineId], g.muted(s), showSpace, onClick = { onOpen(s.key) }, onLongClick = { menuFor = s })
+        }
+        // A running agent swipes left to 关闭 (iOS swipeActions): the row springs back and the confirmation opens.
+        if (s.isLive) SwipeToClose(s.key.path, onClose = { closingFor = s }, content = content) else content()
     }
 
     Scaffold(
@@ -293,6 +301,9 @@ fun AgentsScreen(
       }
     }
 
+    closingFor?.let { s ->
+        CloseAgentDialog(hub, s, names[s.machineId], onDismiss = { closingFor = null }, onError = { notice = it })
+    }
     menuFor?.let { s ->
         AgentActionsSheet(
             hub, s, pinned = g.pinned(s), muted = g.muted(s), machine = names[s.machineId],
@@ -495,6 +506,34 @@ private fun PendingRow(ix: Interaction, names: Map<String, String>, onClick: () 
 @Composable
 fun StateDot(state: AgentState, size: Int = 10) {
     Box(Modifier.size(size.dp).clip(CircleShape).background(state.color()))
+}
+
+/** Swipe left reveals a red 关闭; letting go past the threshold asks [onClose] and the row springs back. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToClose(id: String, onClose: () -> Unit, content: @Composable () -> Unit) {
+    val state = androidx.compose.runtime.key(id) {
+        rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+            if (v == SwipeToDismissBoxValue.EndToStart) onClose()
+            false
+        })
+    }
+    SwipeToDismissBox(
+        state, enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Row(
+                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.error).padding(end = 24.dp),
+                horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onError)
+                Spacer(Modifier.width(6.dp))
+                Text("关闭", color = MaterialTheme.colorScheme.onError, maxLines = 1)
+            }
+        },
+    ) {
+        // Opaque, so the red only shows where the row has moved away.
+        Box(Modifier.background(MaterialTheme.colorScheme.background)) { content() }
+    }
 }
 
 @Composable

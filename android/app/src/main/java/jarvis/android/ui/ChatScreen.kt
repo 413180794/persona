@@ -420,6 +420,11 @@ fun ChatScreen(
 
     // Files and Git: whether the session's folder is a repository (and how many changes, for the menu).
     var gitCount by remember(key) { mutableStateOf<Int?>(null) }
+    var closing by remember(key) { mutableStateOf(false) } // 关闭 Agent… from the ⋯ menu (iOS ChatView)
+    if (closing && session != null) CloseAgentDialog(
+        hub, session, machine?.displayName, onDismiss = { closing = false },
+        onError = { Toasts.show(it, ToastStyle.ERROR) },
+    )
     LaunchedEffect(env.cwd, machine != null) {
         val cwd = env.cwd ?: return@LaunchedEffect
         if (machine == null || assistant) return@LaunchedEffect
@@ -488,6 +493,10 @@ fun ChatScreen(
                                     })
                                 }
                                 DropdownMenuItem({ Text("会话信息", maxLines = 1) }, { moreMenu = false; showInfo = true })
+                                if (session?.isLive == true) DropdownMenuItem(
+                                    { Text("关闭 Agent…", color = MaterialTheme.colorScheme.error, maxLines = 1) },
+                                    { moreMenu = false; closing = true },
+                                )
                                 DropdownMenuItem({ Text("拷贝目录", maxLines = 1) }, {
                                     moreMenu = false
                                     jarvis.android.ui.media.MediaShare.copyText(context, cwd, "目录")
