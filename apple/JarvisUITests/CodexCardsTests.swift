@@ -133,4 +133,30 @@ final class CodexCardsTests: XCTestCase {
         XCTAssertTrue(anything(app, "Codex 在问你").exists)
         shot("beautiful")
     }
+
+    /// 会话信息 says how Jarvis reaches this Codex: its app-server, or the terminal and why (TEST_RUNNER_JARVIS_CODEX_ROUTE
+    /// says which the mock was started with: MOCK_CODEX_ROUTE).
+    @MainActor func testSessionInfoShowsTheRoute() throws {
+        let hub = try hub()
+        let terminal = ProcessInfo.processInfo.environment["JARVIS_CODEX_ROUTE"] == "terminal"
+        addUIInterruptionMonitor(withDescription: "system alert") { alert in
+            for label in ["Allow", "允许", "OK", "好"] where alert.buttons[label].exists {
+                alert.buttons[label].tap()
+                return true
+            }
+            return false
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", orders, "-showInfo", "YES"]
+        app.launchJarvis()
+        let row = anything(app, "连接")
+        XCTAssertTrue(row.waitForExistence(timeout: 20), app.debugDescription)
+        nudge(app)
+        XCTAssertTrue(anything(app, terminal ? "终端（读屏幕）" : "app-server（结构化）").exists, app.debugDescription)
+        if terminal {
+            XCTAssertTrue(anything(app, "不在共享的 app-server 上").exists, "why it is the terminal")
+        }
+        shot(terminal ? "route-terminal" : "route-app-server")
+    }
 }

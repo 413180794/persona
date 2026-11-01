@@ -460,9 +460,11 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		}
 		switch a.Agent {
 		case "codex":
-			s.Title = n.codexTitle(id) // the terminal title is "dots | codex | Ready"
+			s.Title = n.codexTitle(id)                        // the terminal title is "dots | codex | Ready"
+			s.CodexRoute, s.CodexRouteNote = n.codexRoute(id) // codex_daemon.go
 		case traexAgent:
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
+			s.CodexRoute, s.CodexRouteNote = codexRouteTerminal, "TRAEX 没有共享的 app-server"
 		}
 		n.placeIn(&s, a)
 		s.Ports = n.portsOf(a.PaneID)
@@ -1067,7 +1069,7 @@ func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
 		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion)
-		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached)
+		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
 		}

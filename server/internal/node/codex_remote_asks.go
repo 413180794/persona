@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -30,21 +31,22 @@ func (c *codexRemote) request(m codexMessage) {
 	c.n.mu.Lock()
 	machineID := c.n.machineID
 	c.n.mu.Unlock()
-	ix := proto.Interaction{ID: remoteInteractionID(machineID, c.spec.ID, c.generation, r.ThreadID, m.ID), SessionID: t.publicID, Cwd: firstNonEmpty(r.Cwd, t.cwd), SessionTitle: t.title, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolUseID: r.ItemID}
+	ix := proto.Interaction{ID: remoteInteractionID(machineID, c.spec.ID, c.generation, r.ThreadID, m.ID), SessionID: t.publicID, Cwd: firstNonEmpty(r.Cwd, t.cwd), SessionTitle: t.title, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(), ToolUseID: r.ItemID,
+		Agent: "codex", Reason: strings.TrimSpace(r.Reason)}
 	var response func(proto.Resolution) (any, bool)
 	switch m.Method {
 	case "item/commandExecution/requestApproval", "item/fileChange/requestApproval":
 		ix.Kind = proto.IxPermission
 		if m.Method == "item/commandExecution/requestApproval" {
-			ix.ToolName = "Bash"
-			ix.Summary = withReason(unwrapShell(r.Command), r.Reason)
+			ix.ToolName, ix.AlwaysLabel = "Bash", "本会话不再问这个命令"
+			ix.Summary = unwrapShell(r.Command)
 			ix.ToolInput, _ = json.Marshal(map[string]any{"command": unwrapShell(r.Command)})
 		} else {
-			ix.ToolName = "Edit"
-			ix.Summary = withReason(strings.Join(paths, "\n"), r.Reason)
+			ix.ToolName, ix.AlwaysLabel = "Edit", "本会话不再问这些文件"
+			ix.Summary = strings.Join(paths, "\n")
 			ix.ToolInput, _ = json.Marshal(map[string]any{"file_path": firstNonEmpty(append(paths, r.GrantRoot)...)})
 			if ix.Summary == "" {
-				ix.Summary = "修改文件"
+				ix.Summary = firstNonEmpty(r.GrantRoot, "修改文件")
 			}
 		}
 		response = func(res proto.Resolution) (any, bool) {
@@ -61,7 +63,8 @@ func (c *codexRemote) request(m codexMessage) {
 			return map[string]any{"decision": d}, true
 		}
 	case "item/permissions/requestApproval":
-		ix.Kind, ix.ToolName, ix.Summary, ix.ToolInput = proto.IxPermission, "权限", withReason("Codex 要更多权限", r.Reason), r.Permissions
+		ix.Kind, ix.ToolName, ix.Summary, ix.ToolInput = proto.IxPermission, "权限", "Codex 要更多权限："+compactJSON(r.Permissions), r.Permissions
+		ix.AlwaysLabel = "本会话都给这些权限"
 		response = func(res proto.Resolution) (any, bool) {
 			if res.Allow == nil {
 				return nil, false
@@ -164,5 +167,26 @@ func (c *codexRemote) request(m codexMessage) {
 		c.finished[key] = true
 		c.mu.Unlock()
 		c.wire.reply(m.ID, result)
+		// A refusal with the user's words: Codex's decline carries none, so they go into the turn after it (as the
+		// assistant's tellModel does).
+		if ix.Kind == proto.IxPermission && res.Allow != nil && !*res.Allow && strings.TrimSpace(res.Message) != "" {
+			go func() {
+				sctx, scancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer scancel()
+				if err := c.n.sendCodex(sctx, t.publicID, prompts.RenderRefused(strings.TrimSpace(res.Message)), nil); err != nil {
+					c.n.logf("codex %s: pass the refusal on: %v", t.publicID, err)
+				}
+			}()
+		}
 	}()
+}
+
+// compactJSON is a raw JSON value on one line ("" for none).
+func compactJSON(raw json.RawMessage) string {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
 }

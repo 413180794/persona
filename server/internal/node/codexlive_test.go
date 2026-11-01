@@ -38,7 +38,7 @@ func TestLiveCodexCards(t *testing.T) {
 	if bin == "" || work == "" {
 		t.Skip("JARVIS_CODEX_BIN / JARVIS_CODEX_WORK not set")
 	}
-	lc := startLiveCodex(t, bin, work)
+	lc := startLiveCodex(t, bin, work, liveOptions{})
 	rounds, _ := strconv.Atoi(os.Getenv("JARVIS_CODEX_ROUNDS"))
 	rounds = max(rounds, 1)
 	only := map[string]bool{}
@@ -71,6 +71,12 @@ func TestLiveCodexCards(t *testing.T) {
 			}
 			start := time.Now()
 			err := c.run(lc, r*100+i)
+			if why := serviceError(lc.plain()); err != nil && err != errSkip && why != "" {
+				// Codex's model service failed the turn (not Jarvis): logged, and the case runs once more.
+				t.Logf("LIVE %s round %d %s: SERVICE-RETRY: Codex's model service failed the turn (%s)", lc.version, r, c.name, why)
+				lc.recover()
+				start, err = time.Now(), c.run(lc, r*100+i+50)
+			}
 			if err == errSkip {
 				t.Logf("LIVE %s round %d %s: skipped", lc.version, r, c.name)
 				continue
@@ -105,18 +111,35 @@ var bg = context.Background()
 // errSkip: the case does not apply to this version.
 var errSkip = fmt.Errorf("skipped")
 
-func startLiveCodex(t *testing.T, bin, work string) *liveCodex {
+// liveOptions vary how a live Codex starts.
+type liveOptions struct {
+	name string   // its scratch directory (default codex-<version>)
+	args []string // more arguments ({dir} becomes the directory): --remote unix://… -C {dir}, -s read-only
+	node *Node    // the node answering it (default: a fresh one that knows no app-server)
+}
+
+// liveNode is a node on the isolated herdr that knows no app-server.
+func liveNode(c *herdr.Client) *Node {
 	home, _ := os.UserHomeDir()
-	lc := &liveCodex{t: t, c: herdr.New()}
-	lc.n = &Node{home: home, hosts: herdrHosts(lc.c), agents: map[string]host.Agent{}, paths: map[string]string{},
+	return &Node{home: home, hosts: herdrHosts(c), agents: map[string]host.Agent{}, paths: map[string]string{},
 		files: map[string]*transcript.File{}, procs: map[string]*assistantProc{}, watches: map[string]*watch{},
 		state: &stateFile{Sessions: map[string]sessionState{}}}
+}
+
+func startLiveCodex(t *testing.T, bin, work string, o liveOptions) *liveCodex {
+	lc := &liveCodex{t: t, c: herdr.New(), n: o.node}
+	if lc.n == nil {
+		lc.n = liveNode(lc.c)
+	}
 	out, err := liveRun(bin, "--version")
 	if err != nil {
 		t.Fatalf("%s --version: %v", bin, err)
 	}
 	lc.version = strings.TrimSpace(strings.TrimPrefix(out, "codex-cli"))
-	lc.dir = filepath.Join(work, "codex-"+strings.ReplaceAll(lc.version, ".", "_")+os.Getenv("JARVIS_CODEX_COLS"))
+	if o.name == "" {
+		o.name = "codex-" + strings.ReplaceAll(lc.version, ".", "_")
+	}
+	lc.dir = filepath.Join(work, o.name+os.Getenv("JARVIS_CODEX_COLS"))
 	if err := os.MkdirAll(lc.dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -132,8 +155,8 @@ func startLiveCodex(t *testing.T, bin, work string) *liveCodex {
 	}
 	lc.ws, lc.pane = created.Workspace.ID, created.RootPane.ID
 	cmd := []string{shellQuote(bin), "-c", "'notify=[]'", "-c", "check_for_update_on_startup=false"}
-	for _, a := range strings.Fields(os.Getenv("JARVIS_CODEX_ARGS")) {
-		cmd = append(cmd, shellQuote(a))
+	for _, a := range append(strings.Fields(os.Getenv("JARVIS_CODEX_ARGS")), o.args...) {
+		cmd = append(cmd, shellQuote(strings.ReplaceAll(a, "{dir}", lc.dir)))
 	}
 	line := "exec " + strings.Join(cmd, " ")
 	if cols := os.Getenv("JARVIS_CODEX_COLS"); cols != "" {
@@ -157,12 +180,17 @@ func startLiveCodex(t *testing.T, bin, work string) *liveCodex {
 	}
 	// The thread: its rollout starts with the first message (typed again if it did not take).
 	for try := 0; lc.id == "" && try < 3; try++ {
+		if s, _ := lc.n.codexScreen(bg, lc.pane); try > 0 && s.View == screen.CodexComposer && s.Draft != "" {
+			_ = lc.keys("ctrl+c") // the last try's text still in the box: not twice in one message
+			time.Sleep(500 * time.Millisecond)
+		}
+		typed := time.Now().Add(-time.Second)
 		if err := lc.type_("Reply with the single word: ready"); err != nil {
 			t.Fatal(err)
 		}
 		_ = lc.until(30*time.Second, "its rollout", func() bool {
 			for _, r := range rollouts(lc.n.codexHome()) {
-				if r.cwd == lc.dir {
+				if r.cwd == lc.dir && r.mtime.After(typed) { // not an earlier run's thread in the same directory
 					lc.id = r.id
 					return true
 				}
@@ -336,6 +364,19 @@ func (lc *liveCodex) recover() {
 		time.Sleep(time.Second)
 	}
 	_ = lc.idle(60 * time.Second)
+}
+
+// serviceError is the error Codex shows when its model service failed a turn ("" when none is on screen).
+func serviceError(plain string) string {
+	for _, l := range strings.Split(plain, "\n") {
+		low := strings.ToLower(l)
+		for _, m := range []string{"at capacity", "high demand", "stream disconnected", "rate limit", "service unavailable"} {
+			if strings.Contains(low, m) {
+				return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "■"))
+			}
+		}
+	}
+	return ""
 }
 
 func ask(q string, opts ...string) string {

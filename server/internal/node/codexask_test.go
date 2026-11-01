@@ -24,11 +24,14 @@ const (
 	cxID   = "01a19756-bcef-7f23-91dd-a562c8d078e4"
 	cxPane = "w1:p1"
 
-	cxMeta      = `{"timestamp":"2026-11-01T13:40:00.000Z","type":"session_meta","payload":{"id":"` + cxID + `","cwd":"/private/tmp/project","cli_version":"0.163.0"}}`
-	cxAsyncCall = `{"timestamp":"2026-11-01T13:40:29.600Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input_async","arguments":"{\"questions\":[{\"title\":\"Which color should the banner be?\",\"options\":[\"Red\",\"Green\",\"Blue\"]}]}","call_id":"call_a1"}}`
-	cxAsyncOut  = `{"timestamp":"2026-11-01T13:40:29.700Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_a1","output":"{\"accepted\":true}"}}`
-	cxSyncCall  = `{"timestamp":"2026-11-01T13:49:35.000Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input","arguments":"{\"questions\":[{\"header\":\"Color\",\"id\":\"color\",\"question\":\"Which color should the banner be?\",\"options\":[{\"label\":\"Red\",\"description\":\"warm\"},{\"label\":\"Blue\",\"description\":\"calm\"}]},{\"header\":\"Size\",\"id\":\"size\",\"question\":\"How tall should it be?\",\"options\":[{\"label\":\"Small\",\"description\":\"one line\"},{\"label\":\"Large\",\"description\":\"two lines\"}]}]}","call_id":"call_s1"}}`
-	cxSyncOut   = `{"timestamp":"2026-11-01T13:49:55.788Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_s1","output":"{\"answers\":{}}"}}`
+	cxMeta          = `{"timestamp":"2026-11-01T13:40:00.000Z","type":"session_meta","payload":{"id":"` + cxID + `","cwd":"/private/tmp/project","cli_version":"0.163.0"}}`
+	cxAsyncCallLine = `{"timestamp":"2026-11-01T13:40:29.600Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input_async","arguments":"{\"questions\":[{\"title\":\"Which color should the banner be?\",\"options\":[\"Red\",\"Green\",\"Blue\"]}]}","call_id":"call_a1"}}`
+	// the async item Codex writes once it accepted the call: it carries the questions (cxAsyncCall is both lines)
+	cxAsyncItemLine = `{"timestamp":"2026-11-01T13:40:29.650Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"call_a1","content":[{"type":"Text","text":"Which color should the banner be?\n- Red\n- Green\n- Blue"}],"phase":"final_answer","delivery":"async","questions":[{"title":"Which color should the banner be?","options":["Red","Green","Blue"]}]}}}`
+	cxAsyncCall     = cxAsyncCallLine + "\n" + cxAsyncItemLine
+	cxAsyncOut      = `{"timestamp":"2026-11-01T13:40:29.700Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_a1","output":"{\"accepted\":true}"}}`
+	cxSyncCall      = `{"timestamp":"2026-11-01T13:49:35.000Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input","arguments":"{\"questions\":[{\"header\":\"Color\",\"id\":\"color\",\"question\":\"Which color should the banner be?\",\"options\":[{\"label\":\"Red\",\"description\":\"warm\"},{\"label\":\"Blue\",\"description\":\"calm\"}]},{\"header\":\"Size\",\"id\":\"size\",\"question\":\"How tall should it be?\",\"options\":[{\"label\":\"Small\",\"description\":\"one line\"},{\"label\":\"Large\",\"description\":\"two lines\"}]}]}","call_id":"call_s1"}}`
+	cxSyncOut       = `{"timestamp":"2026-11-01T13:49:55.788Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_s1","output":"{\"answers\":{}}"}}`
 
 	cxEmpty = "• Done.\n\n› Ask Codex to do anything\n\n  gpt-6 low · /private/tmp/project\n"
 )
@@ -379,11 +382,13 @@ func TestCodexAnswerOverlayFromLaterQuestion(t *testing.T) {
 	})
 }
 
-// A thread Jarvis joined on its app-server gets its cards from there (codex_remote.go): the TUI is not read for it.
-func TestCodexCardsSkipJoinedThreads(t *testing.T) {
-	n, _, _ := codexNode(t, proto.StatusIdle, cxAsyncCall)
-	if len(n.codexCardsNow(context.Background(), "")) != 1 {
-		t.Fatal("no card to begin with")
+// A thread Jarvis joined on its app-server gets its approvals and overlay questions from there (codex_remote_asks.go):
+// the TUI is not read for those. Its async questions are messages, not requests, and stay cards of the rollout.
+func TestCodexCardsOfJoinedThreads(t *testing.T) {
+	n, f, _ := codexNode(t, proto.StatusBlocked, cxAsyncCall, cxSyncCall)
+	f.setScreen(cxPane, screenFixture(t, "codex-0.163.0-exec-approval-120.txt"))
+	if cards := n.codexCardsNow(context.Background(), ""); len(cards) != 2 {
+		t.Fatalf("to begin with: %+v", cards) // the async and the overlay question (an overlay hides any approval)
 	}
 	n.codices = newCodexRegistry()
 	home := canonicalCodexHome(filepath.Join(n.home, ".codex"), n.home)
@@ -391,14 +396,25 @@ func TestCodexCardsSkipJoinedThreads(t *testing.T) {
 	if id := n.registerCodex(home, cxID, ""); id != cxID {
 		t.Fatalf("registered as %q", id)
 	}
-	remote := &codexRemote{n: n, spec: proto.CodexServer{ID: "desktop", Home: home}, ready: true,
+	remote := &codexRemote{n: n, spec: proto.CodexServer{ID: "daemon", Home: home}, ready: true,
 		threads: map[string]remoteThread{cxID: {id: cxID, publicID: cxID, joined: true}}}
-	n.codices.remotes = map[string]*codexRemote{"desktop": remote}
-	if cards := n.codexCardsNow(context.Background(), ""); len(cards) != 0 {
-		t.Errorf("a joined thread's TUI was read too: %+v", cards)
+	n.codices.remotes = map[string]*codexRemote{"daemon": remote}
+	f.reset()
+	cards := n.codexCardsNow(context.Background(), "")
+	if len(cards) != 1 || cards[0].ask == nil || !cards[0].ask.Async {
+		t.Errorf("joined: %+v", cards)
+	}
+	if len(f.trace("pane.read")) != 0 {
+		t.Errorf("a joined thread's screen was read: %v", f.trace("pane.read"))
+	}
+	if route, _ := n.codexRoute(cxID); route != codexRouteAppServer {
+		t.Errorf("route %q", route)
 	}
 	remote.threads[cxID] = remoteThread{id: cxID, publicID: cxID}
-	if len(n.codexCardsNow(context.Background(), "")) != 1 {
-		t.Error("a thread only seen on an app-server, not joined, lost its card")
+	if cards := n.codexCardsNow(context.Background(), ""); len(cards) != 2 {
+		t.Errorf("seen on an app-server but not joined: %+v", cards)
+	}
+	if route, note := n.codexRoute(cxID); route != codexRouteTerminal || note == "" {
+		t.Errorf("route %q %q", route, note)
 	}
 }

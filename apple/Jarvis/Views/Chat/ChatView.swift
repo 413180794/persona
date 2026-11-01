@@ -2557,6 +2557,7 @@ struct SessionInfoSheet: View {
                         row(Theme.Icon.model, "模型", Fmt.model(info.model) ?? info.model)
                         if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", "启动器", l) }
                         row("shippingbox", agent, info.version)
+                        if let route = session?.codexRoute { routeRow(route, note: session?.codexRouteNote) }
                         row("lock.open", "权限", SessionModes.modeLabel(info.permissionMode))
                         row("gauge.with.dots.needle.50percent", "思考强度", SessionModes.effortLabel(info.effort))
                     }
@@ -2650,6 +2651,17 @@ struct SessionInfoSheet: View {
         } label: {
             Label(label, systemImage: symbol).lineLimit(1)
         }
+    }
+
+    /// How Jarvis reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
+    private func routeRow(_ route: String, note: String?) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            row(Theme.Icon.link, "连接", route == "app_server" ? "app-server（结构化）" : "终端（读屏幕）")
+            if route != "app_server", let note, !note.isEmpty {
+                Text(note).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityIdentifier("session-codex-route")
     }
 
     private func copyButton(_ title: String, symbol: String, text: String, toast: String) -> some View {

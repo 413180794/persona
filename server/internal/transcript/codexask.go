@@ -14,7 +14,7 @@ import (
 //
 //   - request_user_input_async (Default mode, models whose catalog lists it): the call returns {"accepted":true} at
 //     once and the turn goes on or ends; the item_completed AgentMessage with delivery "async" carries the questions
-//     (title, options as strings). A user message with a <send_user_message_question_reply> answers them by
+//     (title, options as strings) — written only for a call Codex accepted. A user message with a <send_user_message_question_reply> answers them by
 //     questionItemId ["request_user_input_async", <call id>, <index>]; any other user message is the user moving on.
 //   - request_user_input (Plan mode): the turn waits on the TUI's overlay; the questions are the call's arguments
 //     (id, header, question, options with descriptions) and its function_call_output is the answer.
@@ -69,7 +69,7 @@ func (a *CodexAsks) Feed(line []byte) {
 	}
 	if !interesting {
 		for _, o := range a.open {
-			if !o.Async && bytes.Contains(line, []byte(o.CallID)) { // its function_call_output
+			if bytes.Contains(line, []byte(o.CallID)) { // its function_call_output
 				interesting = true
 				break
 			}
@@ -95,10 +95,13 @@ func (a *CodexAsks) Feed(line []byte) {
 	}
 	p := l.Payload
 	switch {
-	case l.Type == "response_item" && p.Type == "function_call" && (p.Name == "request_user_input" || p.Name == "request_user_input_async"):
-		a.add(p.CallID, p.Name == "request_user_input_async", []byte(p.Arguments), l.Timestamp)
+	case l.Type == "response_item" && p.Type == "function_call" && p.Name == "request_user_input":
+		a.add(p.CallID, false, []byte(p.Arguments), l.Timestamp)
+	// request_user_input_async's own function_call is not enough: a call Codex rejects (arguments it cannot parse, which
+	// the model then retries) is followed by an error, not by the async item that carries the questions.
 	case l.Type == "response_item" && (p.Type == "function_call_output" || p.Type == "custom_tool_call_output"):
-		a.close(func(o CodexAsk) bool { return !o.Async && o.CallID == p.CallID })
+		accepted := bytes.Contains(line, []byte(`\"accepted\":true`))
+		a.close(func(o CodexAsk) bool { return o.CallID == p.CallID && (!o.Async || !accepted) })
 	case l.Type == "event_msg" && p.Type == "turn_aborted":
 		a.open = nil
 	case l.Type == "event_msg" && p.Type == "item_completed" && p.Item != nil:

@@ -70,8 +70,8 @@ func TestCodexAsksItemOnly(t *testing.T) {
 
 // Two questions in one call: the TUI answers each with its own message; the call stays open for the other.
 func TestCodexAsksPartialReply(t *testing.T) {
-	two := strings.Replace(askAsyncCall, `\"options\":[\"Red\",\"Green\",\"Blue\"]}]`, `\"options\":[\"Red\",\"Green\",\"Blue\"]},{\"title\":\"How tall?\"}]`, 1)
-	a := feed(two)
+	two := strings.Replace(askAsyncItem, `"options":["Red","Green","Blue"]}]`, `"options":["Red","Green","Blue"]},{"title":"How tall?"}]`, 1)
+	a := feed(askAsyncCall, two)
 	if open := a.Open(); len(open) != 1 || len(open[0].Questions) != 2 {
 		t.Fatalf("%+v", open)
 	}
@@ -145,5 +145,20 @@ func TestCodexReplyMessage(t *testing.T) {
 	}
 	if call, i := ParseQuestionItemID(QuestionItemID("call_a1", 2)); call != "call_a1" || i != 2 {
 		t.Errorf("%s %d", call, i)
+	}
+}
+
+// A call Codex rejects (the model wrote arguments it cannot parse, then retries) asks nothing: only the retry is open.
+func TestCodexAsksRejectedCall(t *testing.T) {
+	bad := `{"timestamp":"2026-11-02T11:34:07.199Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input_async","arguments":"{\"questions\":[{\"question\":\"Which fruit?\"}]}","call_id":"call_bad"}}`
+	badOut := `{"timestamp":"2026-11-02T11:34:07.249Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_bad","output":"failed to parse function arguments: unknown field ` + "`question`" + `"}}`
+	open := feed(bad, badOut, askAsyncCall, askAsyncItem, askAsyncOut).Open()
+	if len(open) != 1 || open[0].CallID != "call_a1" {
+		t.Fatalf("%+v", open)
+	}
+	// Even if a rejected call's item showed up, its error output closes it.
+	item := strings.Replace(askAsyncItem, "call_a1", "call_bad", 1)
+	if open := feed(item, badOut).Open(); len(open) != 0 {
+		t.Errorf("rejected yet open: %+v", open)
 	}
 }

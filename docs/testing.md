@@ -250,7 +250,14 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
   `JARVIS_CODEX_COLS=64` 每个版本再在 64 列的小窗口里跑一遍（`stty cols`：无头 herdr 的窗格分屏不会变窄）；`JARVIS_CODEX_CASES=a,b` 只跑这几个。
 - 用你自己的 `~/.codex` 登录，会发真实的（很小的）模型请求。信任临时目录会写进 `~/.codex/config.toml`，每个测试线程在 `~/.codex/sessions`
   留一个 rollout：退出时两样都删掉。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
+- `JARVIS_CODEX_DAEMON_BINS="<0.163 的 codex>"`：守护进程路线（`docs/codex.md`「守护进程上的会话」）。测试自己起一个
+  `codex app-server --listen unix://<临时目录>/app.sock`（子进程，能杀掉重启；不碰正在用的守护进程），TUI 用 `--remote … -C <目录> -s read-only`
+  挂上去，node 关掉发现、只认这个 app-server，用一个假 hub 答卡片、看撤卡。用例：async / 阻塞提问、命令 / 改文件 / 权限审批、拒绝并写理由、
+  电脑先答、手机先答、同时答、守护进程重启、输入框有草稿时发消息，再加 `JARVIS_CODEX_BINS` 的第一个（比如 0.153）在旁边确认它走终端路线。
+  权限审批要 `features.request_permissions_tool`，测试的 app-server 会打开它。
 - 每轮每个用例打一行 `LIVE <版本> round <n> <用例>: ok in <秒>`，失败时附上当时的屏幕；最后一行 `RESULT all: passed|FAILED`。
+  失败时屏幕上是 Codex 自己的模型服务错误（「Selected model is at capacity」之类，不是 Jarvis 的问题）就记一行 `SERVICE-RETRY` 再跑一次这个用例，
+  每个 RESULT 行报重试了几次——报告稳定性时要一起报，不能当成没发生。
 
 ## 隐私扫描
 

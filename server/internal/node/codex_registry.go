@@ -267,7 +267,10 @@ func (n *Node) discoverCodex() {
 	// Existing official control sockets are discoverable without starting a daemon.
 	for _, home := range cfg.Homes {
 		socket := filepath.Join(home, "app-server-control", "app-server-control.sock")
-		if st, err := os.Lstat(socket); err == nil && st.Mode()&os.ModeSocket != 0 {
+		// 0.163's socket is an alias to one in a shared private directory (codexSocketPath).
+		if p, err := codexSocketPath(socket); err != nil {
+			continue
+		} else if st, err := os.Lstat(p); err == nil && st.Mode()&os.ModeSocket != 0 {
 			endpoint := "unix://" + socket
 			r.mu.Lock()
 			if !slices.ContainsFunc(r.config.Servers, func(s proto.CodexServer) bool { return s.Endpoint == endpoint }) {

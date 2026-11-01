@@ -293,6 +293,11 @@ type Session struct {
 	TabID            string               `json:"tab_id,omitempty"`
 	WorkspaceID      string               `json:"workspace_id,omitempty"`
 	AgentName        string               `json:"agent_name,omitempty"`
+	// CodexRoute: how Jarvis reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」) — "app_server" (joined on
+	// the shared app-server: questions, approvals and messages go through its protocol) or "terminal" (its rollout and
+	// screen, keys and typing); CodexRouteNote says why when it is the terminal.
+	CodexRoute     string `json:"codex_route,omitempty"`
+	CodexRouteNote string `json:"codex_route_note,omitempty"`
 	// Agent is the coding agent in the pane: "claude" (also when empty, from older nodes) or "codex".
 	Agent    string `json:"agent,omitempty"`
 	Launcher string `json:"launcher,omitempty"`

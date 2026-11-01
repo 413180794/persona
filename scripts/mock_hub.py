@@ -184,7 +184,11 @@ SESSIONS = [
     sess("studio", PHOTOS, "照片同步脚本支持 HEIC", "/Users/me/code/photo-sync", "blocked", "needs_you", "photo-sync", 3, "1", 1, 6,
          "计划写好了，等你批准后开始改。", pending=1, permission_mode="plan", effort="xhigh"),
     sess("server", ORDERS, "排查 /orders 接口变慢", "/home/me/code/shop-api", "working", "working", "shop-api", 1, "perf", 1, 1,
-         "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。", agent="codex"),
+         "慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。", agent="codex",
+         # how Jarvis reaches it (docs/codex.md「守护进程上的会话」); MOCK_CODEX_ROUTE=terminal: the terminal, with why
+         codex_route=os.environ.get("MOCK_CODEX_ROUTE", "app_server"),
+         codex_route_note="不在共享的 app-server 上（带 -c 的启动器、在自己进程里跑的会话、没有守护进程的 0.153）"
+         if os.environ.get("MOCK_CODEX_ROUTE") == "terminal" else None),
     sess("macbook", RECIPE, "菜谱网站加搜索", "/Users/me/code/recipes", "offline", "offline", "", 0, "", 0, 60 * 26,
          "搜索做好了，支持按食材和用时筛选。", space_kind=None, space_id=None, space_name=None, slot_id=None, slot_name=None),
 ]

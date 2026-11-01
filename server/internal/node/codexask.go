@@ -67,11 +67,12 @@ type codexCard struct {
 
 type codexCards struct {
 	mu        sync.Mutex
-	tails     map[string]*codexTail // session id → its rollout
-	sent      string                // the card ids last listed to the hub
-	held      map[string]time.Time  // card id → answered from the phone: not listed again until then
-	dismissed map[string]bool       // card id → dismissed on the phone
-	pagerAt   map[string]time.Time  // pane → when its transcript pager was last closed to show a dialog
+	tails     map[string]*codexTail     // session id → its rollout
+	sent      string                    // the card ids last listed to the hub
+	held      map[string]time.Time      // card id → answered from the phone: not listed again until then
+	dismissed map[string]bool           // card id → dismissed on the phone
+	pagerAt   map[string]time.Time      // pane → when its transcript pager was last closed to show a dialog
+	joins     map[string]codexJoinState // session id → joining it on its app-server (codex_daemon.go)
 }
 
 // watchCodexCards lists the open Codex questions and approvals to the hub whenever they change.
@@ -84,6 +85,7 @@ func (n *Node) watchCodexCards(ctx context.Context) {
 			return
 		case <-t.C:
 		}
+		n.joinCodexPanes(ctx)
 		n.syncCodexCards(ctx)
 	}
 }
@@ -124,10 +126,11 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 		}
 	}
 	n.mu.Unlock()
-	for id := range agents {
-		if n.codexJoined(id) {
-			delete(agents, id) // its app-server hands Jarvis the questions and approvals itself
-		}
+	for id, a := range agents {
+		// A joined thread's app-server hands Jarvis its approvals and overlay questions itself (codex_remote_asks.go):
+		// only its async questions, which are messages rather than requests, are read here.
+		a.joined = n.codexJoined(id)
+		agents[id] = a
 	}
 	if only == "" {
 		n.cx.forget(agents)
@@ -146,10 +149,13 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 			if ask.Async && !ask.At.IsZero() && time.Since(ask.At) > codexAskMaxAge {
 				continue
 			}
+			if a.joined && !ask.Async {
+				continue
+			}
 			waiting = waiting || !ask.Async
 			out = append(out, codexCard{ix: askCard(id, a, title, ask), pane: a.pane, ask: &ask})
 		}
-		if waiting || a.status != proto.StatusBlocked {
+		if waiting || a.joined || a.status != proto.StatusBlocked {
 			continue
 		}
 		if d := n.codexApprovalOn(ctx, a.pane); d != nil {
@@ -160,10 +166,14 @@ func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 	return out
 }
 
-type codexAgent struct{ kind, pane, cwd, status string }
+type codexAgent struct {
+	kind, pane, cwd, status string
+	joined                  bool // on its app-server (codex_daemon.go)
+}
 
-// codexJoined: Jarvis has joined the session's thread on the app-server that runs it (codex_remote.go), which sends
-// its questions and approvals as cards of their own; reading the TUI too would ask twice.
+// codexJoined: Jarvis has joined the session's thread on the app-server that runs it (codex_remote.go,
+// codex_daemon.go), which sends its approvals and overlay questions as cards of their own; reading the TUI for those too
+// would ask twice.
 func (n *Node) codexJoined(id string) bool {
 	_, t, err := n.codexOwner(id)
 	return err == nil && t.joined
@@ -411,6 +421,8 @@ func (n *Node) codexAnswer(ctx context.Context, session, id string, r proto.Reso
 	switch {
 	case card.approval != nil:
 		err = n.codexApprove(ctx, card, r)
+	case card.ask.Async && n.codexJoined(session):
+		err = n.codexReplyRemote(ctx, session, card, r)
 	case card.ask.Async:
 		err = n.codexReply(ctx, session, card, r)
 	default:

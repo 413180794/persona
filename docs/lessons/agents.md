@@ -83,3 +83,10 @@
   按键不受滚动影响。0.153 的 Ctrl+T pager 会盖住之后来的审批（pager 里 `esc` 是编辑上一条消息，关它用 `q`）；0.163 的 Ctrl+T 只是展开细节。
   无头 herdr 分屏不会让窗格变窄，测小窗口用 `stty cols <n>` 再起 Codex。`pane.send_text` 原样转发，括号粘贴（`\x1b[200~…\x1b[201~`）在 Codex 里有效。
 - 在本机测 Codex 时信任一个目录会写进 `~/.codex/config.toml`（`codex exec` 也会写），`-c projects.…trust_level` 压不住信任对话框；测完删掉自己加的。
+- 0.163 的 app-server control socket（守护进程的 `<CODEX_HOME>/app-server-control/app-server-control.sock`，`--listen unix://<路径>` 也一样）
+  是个符号链接，真正的 socket 在 `<规范化的 /tmp>/codex-daemon-<uid>/<别名规范路径的 SHA-256>`。按「Lstat 是 socket、不是符号链接」去认，
+  守护进程永远发现不了也连不上（2026-11-02 之前就是这样）；只跟随 Codex 自己算得出的那个目标（`codexSocketPath`）。0.153 是普通 socket 文件。
+  守护进程挂了，挂在上面的 TUI 显示「Reconnecting to server…」，新的起来后自己重连并重新加载 thread。npm 装的 `codex` 是个 node 包装脚本，
+  会再起一个原生进程：测试里停 app-server 要杀整个进程组。
+- `request_user_input_async` 的 `function_call` 不等于问了：参数解析失败（模型把 `title` 写成 `question`）时 output 是错误、模型马上重试，
+  只有被接受的调用才写 `delivery: "async"` 的 AgentMessage。#214 按 `function_call` 开卡，留下过一张永远答不掉的卡，3 轮实测第 1 轮才暴露（2026-11-02）。

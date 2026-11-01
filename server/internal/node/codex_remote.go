@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -86,6 +87,10 @@ func validateCodexEndpoint(endpoint string) (string, *http.Client, error) {
 		if !filepath.IsAbs(path) {
 			return "", nil, errors.New("Unix 入口必须是绝对路径")
 		}
+		path, err := codexSocketPath(path)
+		if err != nil {
+			return "", nil, err
+		}
 		for _, p := range []string{filepath.Dir(path), path} {
 			st, err := os.Lstat(p)
 			if err != nil {
@@ -113,6 +118,37 @@ func validateCodexEndpoint(endpoint string) (string, *http.Client, error) {
 	}
 	// Never use HTTP_PROXY for a private local endpoint.
 	return endpoint, &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: rejectCodexRedirect}, nil
+}
+
+// codexSocketPath is the socket a Unix control endpoint names: the path itself (0.153), or — from 0.163, where every
+// control socket is an alias — the one target Codex itself recognises as its own: a socket named after the SHA-256 of
+// the alias's canonical path in <canonical /tmp>/codex-daemon-<uid> (codex-rs uds/src/daemon_directory.rs,
+// app-server-transport unix_socket.rs). Any other symlink is refused; the alias's directory must be the user's and not
+// writable by others. The caller checks the target's own directory and mode.
+func codexSocketPath(path string) (string, error) {
+	st, err := os.Lstat(path)
+	if err != nil || st.Mode()&os.ModeSymlink == 0 {
+		return path, nil // a missing path fails the caller's checks
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		return "", errors.New("Unix 入口不可访问")
+	}
+	if pst, err := os.Stat(parent); err != nil {
+		return "", errors.New("Unix 入口不可访问")
+	} else if stat, ok := pst.Sys().(*syscall.Stat_t); !ok || stat.Uid != uint32(os.Getuid()) || pst.Mode().Perm()&0o022 != 0 {
+		return "", errors.New("Unix 入口所在目录不属于当前用户，或别人能改")
+	}
+	tmp, err := filepath.EvalSymlinks("/tmp")
+	if err != nil {
+		return "", errors.New("Unix 入口不可访问")
+	}
+	sum := sha256.Sum256([]byte(filepath.Join(parent, filepath.Base(path))))
+	want := filepath.Join(tmp, "codex-daemon-"+strconv.Itoa(os.Geteuid()), hex.EncodeToString(sum[:]))
+	if target, err := os.Readlink(path); err != nil || target != want {
+		return "", errors.New("Unix 入口是指向别处的符号链接")
+	}
+	return want, nil
 }
 
 func (c *codexRemote) run() {
@@ -505,6 +541,9 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	method := "turn/start"
 	if t.status == proto.StatusWorking || t.status == proto.StatusBlocked {
 		if t.turn == "" {
+			t.turn = c.activeTurn(ctx, t.id) // a turn already running when Jarvis joined (codex_daemon.go)
+		}
+		if t.turn == "" {
 			return refusal("codex_busy", "这个轮次仍在运行，但尚未收到轮次标识：稍后再发", nil)
 		}
 		method = "turn/steer"
@@ -537,6 +576,33 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	}
 	n.notifyCodex()
 	return nil
+}
+
+// activeTurn reads the thread's running turn once (it began before this connection joined, so no turn/started told
+// it), and keeps it; "" when none runs or it cannot be read.
+func (c *codexRemote) activeTurn(ctx context.Context, thread string) string {
+	var reply struct {
+		Thread remoteThreadData `json:"thread"`
+	}
+	if c.wire.call(ctx, "thread/read", map[string]any{"threadId": thread, "includeTurns": true}, &reply) != nil {
+		return ""
+	}
+	turn := ""
+	for _, t := range reply.Thread.Turns {
+		if t.Status == "inProgress" {
+			turn = t.ID
+		}
+	}
+	if turn != "" {
+		c.mu.Lock()
+		if t, ok := c.threads[thread]; ok && t.turn == "" {
+			t.turn = turn
+			t.revision++
+			c.threads[thread] = t
+		}
+		c.mu.Unlock()
+	}
+	return turn
 }
 
 func (n *Node) interruptCodex(ctx context.Context, id string) error {

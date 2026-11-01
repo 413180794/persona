@@ -50,6 +50,43 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
 
 一台电脑多个已有 app-server（桌面 App、独立 `CODEX_HOME`、多客户端读写和审批）已接入现有 Agents 列表，源码研究、配置和能力边界见 [`codex-app-server.md`](codex-app-server.md)。发现历史不需要 herdr；只有提供受保护 Unix/回环 WebSocket 入口的实例能实时接入和控制，外部 stdio 明确只读。
 
+## 守护进程上的会话（app-server 路线）
+
+2026-11-02 起，跑在共享 app-server 守护进程上的 Codex 窗格，Jarvis 作为第二个客户端接进它的 thread，提问、审批、发消息都走协议，
+不再读屏幕、不再往终端里打字。接不上的照旧走下面「提问和审批」的终端路线（#214）。
+
+- **为什么能接**：0.163 起裸 `codex` 默认自动启动或加入共享守护进程（`<CODEX_HOME>/app-server-control/app-server-control.sock`），
+  TUI 只是它的一个客户端；同一个 thread 的服务端请求（审批、`request_user_input`）发给每个订阅者，先答的算数，答完所有人收到
+  `serverRequest/resolved`，各自撤掉提示（`docs/codex-app-server.md`）。
+- **找到守护进程**：node 本来就会发现每个 home 的官方 control socket 和带 `--listen` 的 app-server 进程，并各连一条 WebSocket
+  （`codex_remote.go`）。0.163 的 control socket 是个别名：一个符号链接，指向 `<规范化的 /tmp>/codex-daemon-<uid>/<别名规范路径的 SHA-256>`
+  （Codex 自己的 `uds/src/daemon_directory.rs`、`unix_socket.rs`）。以前按「不是 socket / 是符号链接」一律不认，所以从来没连上过；
+  现在只跟随 Codex 自己会算出来的那一个目标（别名所在目录要属于当前用户、别人不能写；目标目录 0700、socket 0600），别的符号链接照旧拒绝（`codexSocketPath`）。
+- **哪些窗格走它**：herdr 里活着的 Codex 窗格，node 认出的 thread id（`agent_session` / 线程名 / rollout，见「识别」）出现在某个已连上的
+  app-server 的 `thread/loaded/list` 里，就说明这个 thread 由那个 app-server 运行（同一个 thread 只能有一个写者），窗格里的 TUI 是它的客户端。
+  node 每秒检查一次，没接的在后台 `thread/resume`（只带 `threadId` 和 `excludeTurns`，不带模型、目录、沙箱、指令，不改会话的任何设置；
+  已经有订阅者时 app-server 也会忽略覆盖），失败的 30 秒后再试，原因记在会话上（`codex_daemon.go`）。
+- **接上以后**：
+  - 审批（命令、改文件、权限、MCP 工具）和 Plan 模式的 `request_user_input` 是 app-server 的服务端请求，转成和助手同一套的卡片
+    （带 `agent: "codex"`、Codex 的理由、「总是同意」= 本会话：`acceptForSession` / 权限 `scope: session`），答案按协议回传；
+    拒绝时写了理由，回 `decline` 之后把理由作为一条消息插进这一轮（`turn/steer`，和助手的 `tellModel` 一样）。
+  - async 提问（`request_user_input_async`）不是请求而是一条消息，照旧从 rollout 认（「提问和审批」），回答的回复信封作为消息经 app-server 发（`turn/start` / `turn/steer`）。
+  - 手机发消息走 `turn/start`（空闲时）或带当前轮次的 `turn/steer`（工作中；接入前就在跑的轮次读一次 `thread/read` 拿到它），
+    不往终端打字：电脑输入框里的草稿原样留着，不会被吞掉也不会混进去。
+  - 电脑先答：卡片随 `serverRequest/resolved` 撤掉（`interaction.dismiss`），手机再答不会有任何动作；手机先答：TUI 的提示随之关掉；
+    两边同时答：app-server 只认第一个，命令只跑一次。观察者从不自动回答（`codex_remote_asks.go`）。
+  - 终端路线对它关掉：不读它的屏幕找审批、不认它 rollout 里的阻塞提问，同一个问题不会出两张卡、答两次。
+- **接不上的**：带 `-c` / `--profile` 等参数起的（0.163 这时不用守护进程，在自己进程里跑）、已经在跑但不在守护进程上的、0.153（只在
+  socket 已经在时才自动连）、TRAEX：照旧终端路线。
+- **守护进程重启、断开、换版本**：连接断了，接入状态跟着没了，这些窗格立刻退回终端路线（屏幕卡片、打字），卡片撤掉；TUI 自己显示
+  「Reconnecting to server…」并在新的守护进程起来后重连、重新加载 thread，node 隔 2–5 秒重连新的守护进程，重新接入，挂着的请求会重放（新的卡）。
+  Jarvis 不会让 TUI 卡住：请求同时发给 TUI，电脑上随时可以答。
+- **看得出走哪条路**：会话带 `codex_route`（`app_server` / `terminal`）和 `codex_route_note`（为什么是终端），App 的「会话信息」显示「连接：app-server（结构化）」
+  或「终端（读屏幕）」加原因；node 日志有每次接入成功 / 失败。
+- **测试**：`node/codex_daemon_test.go`（合成 app-server 上的自动接入、发消息、async 回答、审批卡、拒绝理由、接入失败重试、socket 别名）；
+  真实 Codex：`scripts/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
+  （不碰正在用的守护进程，node 关掉发现、只认它），TUI 用 `--remote` 挂上去。
+
 ## 提问和审批（结构化卡片）
 
 2026-11-02 起，Agents 里的 Codex / TRAEX 提问和审批是和 Claude 一样的提问卡片、授权卡片，不再是通用的「终端在问你」。
@@ -61,6 +98,8 @@ Codex 在终端里没有能代答的 hook（见下面「调研」），node 自�
 | `request_user_input`（Plan 模式；或 `features.default_mode_request_user_input`） | rollout 里 `function_call` name `request_user_input`，参数 `{questions:[{id, header, question, options:[{label, description}]}]}`；回合停在 TUI 的覆盖层上（「Question 1/2」） | 提问卡片（多题、标题、选项说明） | 按键：选项按数字（选中并进下一题，最后一题提交）；自己写的回答是光标移到「None of the above」、Tab 打开备注、粘贴、回车，Codex 记成 `["None of the above", "user_note: …"]` | 这个 call 的 `function_call_output` |
 | 审批（命令、补丁、权限、MCP） | 不进 rollout：herdr 报 blocked 时读屏幕，认「Would you like to …?」、编号选项和「Press enter to confirm or esc to cancel」（选项文案在 `tui/src/bottom_pane/approval_overlay.rs`，0.153 / 0.163 一样） | 授权卡片：命令全文或改动、Codex 的理由，同意 / 总是同意（写明会放行什么；Codex 没给这个选项就没有）/ 拒绝（可写理由） | 选项按数字：同意 = Yes, proceed；总是同意 = 本会话那项（don't ask again … in this session / for these files）优先，没有就用前缀那项（commands that start with …）；拒绝 = No, continue without running it，没有这一项或写了理由时 = No, and tell Codex what to do differently（停下这一轮），理由随后作为下一条消息发进去 | 屏幕上这个审批（按 `rev`）消失 |
 
+- async 提问只认 item，不认 `request_user_input_async` 的 `function_call`：模型偶尔给的参数 Codex 解析不了（比如把 `title` 写成了 `question`），
+  调用被拒（output 是错误）、模型随即重试；被拒的那次没有 item。以前按 `function_call` 开卡，会留下一张永远答不掉的卡（2026-11-02 实测抓到）。
 - 题目在电脑上答了（回复信封，或者任何别的用户消息：0.153 没有提问面板，用户就是直接打字回答）、回合被中断（`turn_aborted`）、Agent 退出，
   卡片都会消失。12 小时前的 async 提问不再拿出来（node 重启会重读 rollout）。
 - TRAEX 共用 rollout 解析（`history_mutation` 里的 AgentMessage / UserMessage 也认）和屏幕解析，状态是 node 自己判断的；还没在真的 TRAEX 上测过。
@@ -70,7 +109,8 @@ Codex 在终端里没有能代答的 hook（见下面「调研」），node 自�
   没能输入（草稿、界面不对）时卡片留着，node 说 Codex 已经不问了（`prompt_changed`）时卡片消失。node 重连后重新列出的卡不再响铃。
   hub 给 Codex 会话建通用屏幕卡前多等 3 秒，让 node 的卡先到。推送标题是「Codex 在问你」「Codex 需要你授权」。
   async 提问的卡不代替终端上的对话框：它开着时 herdr 也报 blocked，这时 hub 只在屏幕上真读出别的对话框时才另建通用屏幕卡（光是输入框就不建）。
-- 已经经 app-server 实时接入的 thread（`codex-app-server.md`，`codex_remote.go` 里 `joined`）不读 TUI：它的提问和审批由 app-server 直接发成卡片，再读一遍就问两次。
+- 已经接入 app-server 的 thread（上面「守护进程上的会话」，`codex_remote.go` 里 `joined`）：审批和阻塞提问不读 TUI，由 app-server 直接发成卡片；
+  async 提问照旧从 rollout 认，回答经 app-server 发出去。
 
 ### 电脑上处在各种界面时
 
@@ -152,7 +192,7 @@ TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，�
 - **顺带「从手机新建 Codex 会话」可行**：守护进程上 `thread/start`，再在 herdr 窗格里跑 `codex resume <id>`（0.163 自动连守护进程；否则
   `--remote unix:// -C <cwd>`），之后电脑和手机都能看到、都能答。推断：rollout 在第一条用户消息之后才写，空 thread 可能 resume 不了，
   要先发第一条 `turn/start` 再开窗格；更简单的是直接在窗格里 `codex "<第一条消息>"`，从 `thread/started` 认出 thread。
-- **结论**：值得做，但只做 0.163、只管守护进程上的窗格，屏幕卡片留作其余情况的后备。
+- **结论**：值得做，但只做 0.163、只管守护进程上的窗格，屏幕卡片留作其余情况的后备。**已做第一步**，见「守护进程上的会话」。
 - **和已有实现的关系**：`codex-app-server.md`（dd83e7b0）已经接入了提供 Unix / 回环 WebSocket 入口的外部实例，0.163 的共享守护进程就是这种入口；
   但 herdr 里活着的 Codex 窗格优先按终端会话处理（`externalCodex` 为假），不会去 join 它在守护进程上的 thread。下一步可以是：herdr 窗格里的
   0.163 Codex 先找守护进程上的 owner（`codexOwner`），有就 join，提问和审批走 app-server（两边谁先答都行，`serverRequest/resolved` 撤卡），

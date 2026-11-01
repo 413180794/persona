@@ -214,6 +214,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var readOnlyReason: String? = nil
     var capabilities: SessionCapabilities? = nil
     var attached: Bool? = nil
+    /// How Jarvis reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
+    /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
+    var codexRoute: String? = nil
+    var codexRouteNote: String? = nil
     var launcher: String?
     var model: String?
     /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex.
@@ -296,6 +300,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case title, cwd, status, launcher, model, agent, effort, capabilities, attached
         case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
              parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
+        case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
@@ -324,6 +329,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         readOnlyReason = try c.decodeIfPresent(String.self, forKey: .readOnlyReason)
         capabilities = try c.decodeIfPresent(SessionCapabilities.self, forKey: .capabilities)
         attached = try c.decodeIfPresent(Bool.self, forKey: .attached)
+        codexRoute = try c.decodeIfPresent(String.self, forKey: .codexRoute)
+        codexRouteNote = try c.decodeIfPresent(String.self, forKey: .codexRouteNote)
         launcher = try c.decodeIfPresent(String.self, forKey: .launcher)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
