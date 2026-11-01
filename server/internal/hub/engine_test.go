@@ -288,3 +288,19 @@ func TestEngineConnectOrder(t *testing.T) {
 		}
 	}
 }
+
+// Orca is an engine the PUT takes like the others.
+func TestEnginePutOrca(t *testing.T) {
+	h, st, _, mux := engineHub(t)
+	code, out := put(t, mux, "/api/v1/machines/m1/engine", `{"engine":"orca"}`)
+	if code != 200 || out["engine"] != "orca" {
+		t.Fatalf("PUT = %d %v", code, out)
+	}
+	var stored map[string]string
+	if ok, _ := st.Setting(context.Background(), enginesKey, &stored); !ok || stored["m1"] != "orca" {
+		t.Errorf("stored %v", stored)
+	}
+	if got := h.engineOf("m1"); got != "orca" {
+		t.Errorf("engine %s", got)
+	}
+}

@@ -13,7 +13,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
-// Each machine's node drives one terminal engine (herdr or herdr-core), picked by the user in the app and kept here:
+// Each machine's node drives one terminal engine (herdr, herdr-core or orca), picked by the user in the app and kept here:
 // one settings key holding machine id → engine, herdr for a machine never set. The hub tells the node with
 // engine.use when it connects (before the first session list) and when the user changes it (docs/protocol.md「引擎」).
 
@@ -79,7 +79,7 @@ var errUnknownEngine = errors.New("unknown engine")
 // setEngine stores the machine's engine.
 func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
 	if _, ok := proto.EngineNames[engine]; !ok {
-		return fmt.Errorf("%w %q (herdr, herdr-core)", errUnknownEngine, engine)
+		return fmt.Errorf("%w %q (herdr, herdr-core, orca)", errUnknownEngine, engine)
 	}
 	e := &h.engines
 	e.mu.Lock()

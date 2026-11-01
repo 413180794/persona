@@ -112,7 +112,7 @@
 | --- | --- | --- |
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
-| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
@@ -333,8 +333,8 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 
 ## 引擎
 
-每台机器的 node 只驱动一个终端宿主，叫这台机器的「引擎」：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）或
-`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）。两个不同时用：同时跑会互相拖慢刷新（见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
+每台机器的 node 只驱动一个终端宿主，叫这台机器的「引擎」：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）、
+`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）或 `orca`（Orca 桌面版的 runtime，显示名「Orca」，`docs/plan-orca-support.md`「Orca 来源」）。几个不同时用：同时跑会互相拖慢刷新（见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
 
 - 用户在 App 里按机器选（配对时、设置 › 机器），`PUT /api/v1/machines/{mid}/engine`。hub 存在 Postgres 的 settings 里
   （一个键 `machine_engines`：机器 id → 引擎），不写 hub.json。
@@ -343,8 +343,10 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 - node 连上后先不轮询、不订阅任何引擎的事件，等到引擎定下来：收到 `engine.use`，或者 hub 不发它而直接 `sessions.list`（没选过 / 旧 hub），
   最多等 3 秒，之后按 herdr 开始。所以选了 herdr-core 的机器连接时不会闪出 herdr 的会话，也不会去问 herdr。
 - `engine` 是存下的选择。node 拒绝 `engine.use`（太旧）时 hub 记一行日志，PUT 照样回 200，选择照样存着，等 node 更新后生效。
-- `engines` 来自 `node.info`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
-  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）。`version` 是各自报的版本，没有就不带。
+- `engines` 来自 `node.info`，每项 `{id, name, available, version?, note?}`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
+  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）；Orca 能用 = `orca-runtime.json` 在、它的 socket 答 `status.get`
+  且协议版本兼容（不兼容时 `available` 为 false，`note` 是给用户看的一句中文原因，`version` 照样带；同样只在 `node.info` 时问一次）。
+  `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
 
 ## hub ↔ node RPC
 

@@ -36,11 +36,19 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 
 ## 和 herdr-core 的连接
 
-每台机器的 node 只用一个引擎（`node/engine.go`）：herdr（默认）或 herdr-core（`node/hostherdrcore.go`），用户在 App 里按机器选，
+每台机器的 node 只用一个引擎（`node/engine.go`）：herdr（默认）、herdr-core（`node/hostherdrcore.go`）或 Orca（`node/hostorca.go`，下面「和 Orca 的连接」），用户在 App 里按机器选，
 hub 连上时用 `engine.use` 告诉 node（`docs/protocol.md`「引擎」）。用 herdr 时 node 和原来完全一样，不碰 herdr-core（只有 `node.info`
 问一次它在不在）。选了 herdr-core 而它没开时，立刻答「没有终端」，不拨号、不记日志。socket 位置、方法、映射和第一期不支持的部分见
 `docs/plan-orca-support.md`「herdr-core 宿主」。
 联调：`go test -tags hclive -run HerdrCoreLive ./internal/node/ -v`（自己起一个独立的 herdr-core，再只读地列一遍默认实例）。
+
+## 和 Orca 的连接
+
+选了 Orca 的机器，node 经 Orca 桌面版 runtime 的 unix socket 驱动它的终端（客户端 `internal/orcart`，宿主 `node/hostorca.go`）：
+读 `orca-runtime.json` 拿 socket 和 token（Orca 每次启动换 token，连不上或 `unauthorized` 时重读），先 `status.get` 查协议版本。
+socket 上没有推送，node 每秒轮询一次 `terminal.list` + `worktree.ps`；窗格对应会话靠 claude 进程环境里的 `ORCA_PANE_KEY`。
+Orca 没开时立刻答「没有终端」，不记日志。映射和第一期不支持的部分见 `docs/plan-orca-support.md`「Orca 来源」。
+联调（只读）：`go test -tags orcalive -run OrcaLive ./internal/node/ -v`。
 
 ## 部署
 

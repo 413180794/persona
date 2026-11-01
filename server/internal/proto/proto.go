@@ -53,17 +53,20 @@ type Machine struct {
 const (
 	EngineHerdr     = "herdr"      // the classic herdr CLI
 	EngineHerdrCore = "herdr-core" // the runtime of the Herdr desktop app
+	EngineOrca      = "orca"       // the Orca desktop app's runtime
 )
 
 // EngineNames are the engines a machine may use, with the names the app shows.
-var EngineNames = map[string]string{EngineHerdr: "herdr", EngineHerdrCore: "Herdr App"}
+var EngineNames = map[string]string{EngineHerdr: "herdr", EngineHerdrCore: "Herdr App", EngineOrca: "Orca"}
 
 // Engine is one engine as found on a machine: Available when its socket is reachable (herdr: or its binary is there).
+// Note says why one that is there cannot be used (Orca too old or too new), in Chinese for the app.
 type Engine struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Available bool   `json:"available"`
 	Version   string `json:"version,omitempty"`
+	Note      string `json:"note,omitempty"`
 }
 
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for

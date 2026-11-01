@@ -14,7 +14,8 @@ import (
 // Host kinds. Herdr panes are stored and sent without a prefix (see PaneRef).
 const (
 	Herdr = "herdr"
-	Orca  = "orca" // not implemented yet (docs/plan-orca-support.md)
+	// Orca is the Orca desktop app's runtime; its pane ids are Orca's pane keys "<tabId>:<leafId>".
+	Orca = "orca"
 	// HerdrCore is herdr-core (hc), the runtime behind the Herdr desktop app: not classic herdr, a host of its own.
 	HerdrCore = "herdr-core"
 )

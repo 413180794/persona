@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,11 +13,12 @@ import (
 	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/herdrcore"
 	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/chyroc/jarvis/server/internal/orcart"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// A machine's node drives exactly one terminal host, its engine: herdr (the default, as every node did before) or
-// herdr-core (the Herdr desktop app). The user picks it per machine in the app; the hub stores it and tells the node
+// A machine's node drives exactly one terminal host, its engine: herdr (the default, as every node did before),
+// herdr-core (the Herdr desktop app) or orca (the Orca desktop app). The user picks it per machine in the app; the hub stores it and tells the node
 // with engine.use when it connects and when it changes (docs/protocol.md「引擎」). Running both side by side made each
 // slow the other down, so they never are.
 
@@ -64,13 +66,18 @@ func (n *Node) startWhenConfigured(ctx context.Context) {
 	n.watchEngine(ctx)
 }
 
-// engineHosts are the hosts of an engine: herdr at its default socket (what every node had before engines), or
-// herdr-core at the socket hc would use. Each logs when it becomes unreachable and reachable again.
+// engineHosts are the hosts of an engine: herdr at its default socket (what every node had before engines),
+// herdr-core at the socket hc would use, or Orca's runtime. Each logs when it becomes unreachable and reachable again.
 func engineHosts(engine string, logf func(format string, args ...any)) []host.Host {
-	if engine == proto.EngineHerdrCore {
+	switch engine {
+	case proto.EngineHerdrCore:
 		c := herdrcore.New()
 		c.Log = logf
 		return []host.Host{&herdrCoreHost{c: c}}
+	case proto.EngineOrca:
+		c := orcart.New()
+		c.Log = logf
+		return []host.Host{newOrcaHost(c)}
 	}
 	c := herdr.New()
 	c.Log = logf
@@ -192,7 +199,9 @@ func (n *Node) logf(format string, args ...any) {
 // engines is what node.info reports of each engine on this machine. herdr is available when it answers, its socket
 // file is there or its binary is on PATH — when herdr is not the engine it is not asked: its version comes from
 // `herdr --version`. herdr-core when its socket answers hello (the one herdr-core call a node on herdr makes, once per
-// connection). herdrVersion is what the herdr host already said ("" when not asked).
+// connection). Orca when its runtime metadata is there and its socket answers status.get with a protocol Jarvis speaks
+// (Note says why not when it answers with another). herdrVersion is what the herdr host already said ("" when not
+// asked).
 func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -207,5 +216,25 @@ func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine 
 		{ID: proto.EngineHerdr, Name: proto.EngineNames[proto.EngineHerdr], Available: hv != "" || statErr == nil || pathErr == nil,
 			Version: hv},
 		{ID: proto.EngineHerdrCore, Name: proto.EngineNames[proto.EngineHerdrCore], Available: hcv != "", Version: hcv},
+		orcaEngine(ctx, orcaClient()),
 	}
+}
+
+// orcaClient is the Orca runtime node.info asks; tests point it at a fake one.
+var orcaClient = orcart.New
+
+// orcaEngine is Orca as found on this machine: available when its runtime answers with a protocol Jarvis speaks.
+func orcaEngine(ctx context.Context, c *orcart.Client) proto.Engine {
+	e := proto.Engine{ID: proto.EngineOrca, Name: proto.EngineNames[proto.EngineOrca]}
+	st, err := c.Probe(ctx)
+	if st != nil {
+		e.Version = st.AppVersion
+	}
+	switch {
+	case err == nil:
+		e.Available = true
+	case errors.Is(err, orcart.ErrIncompatible):
+		e.Note = "这个版本的 Orca 和 Jarvis 不兼容，请把两边都更新到最新版"
+	}
+	return e
 }

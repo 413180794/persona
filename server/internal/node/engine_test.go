@@ -163,7 +163,7 @@ func TestEngineUseSwitches(t *testing.T) {
 	}
 }
 
-// node.info reports both engines: available, with their versions, when they answer.
+// node.info reports every engine: available, with their versions, when they answer.
 func TestEngineDetection(t *testing.T) {
 	n, f, _ := herdrNode(t)
 	hc := newFakeHC(t)
@@ -177,8 +177,9 @@ func TestEngineDetection(t *testing.T) {
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	n.hosts.Set(engineHosts(proto.EngineHerdrCore, nil)...) // herdr not the engine: its CLI says the version
 	got := n.engines(context.Background(), "")
-	if len(got) != 2 || got[0] != (proto.Engine{ID: "herdr", Name: "herdr", Available: true, Version: "0.9.3"}) ||
-		got[1] != (proto.Engine{ID: "herdr-core", Name: "Herdr App", Available: true, Version: "0.1.16"}) {
+	if len(got) != 3 || got[0] != (proto.Engine{ID: "herdr", Name: "herdr", Available: true, Version: "0.9.3"}) ||
+		got[1] != (proto.Engine{ID: "herdr-core", Name: "Herdr App", Available: true, Version: "0.1.16"}) ||
+		got[2] != (proto.Engine{ID: "orca", Name: "Orca"}) { // no Orca here (TestMain): listed, not available
 		t.Errorf("engines %+v", got)
 	}
 	if tr := f.trace(); len(tr) != 0 {

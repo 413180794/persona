@@ -378,13 +378,19 @@ func toolSummary(name string, input json.RawMessage) string {
 }
 
 // HookPane is the pane a hook runs in, from its environment, as a stored PaneRef: herdr's HERDR_PANE_ID as it always
-// was, else herdr-core's HC_TERMINAL_ID ("herdr-core:t7"); "" in neither.
+// was, else herdr-core's HC_TERMINAL_ID ("herdr-core:t7"), else Orca's ORCA_PANE_KEY (or its older ORCA_AGENT_PANE:
+// "orca:<tabId>:<leafId>"); "" in none.
 func HookPane(getenv func(string) string) string {
 	if p := getenv(herdrPaneEnv); p != "" {
 		return p
 	}
 	if t := getenv(herdrCorePaneEnv); t != "" {
 		return host.PaneRef{Kind: host.HerdrCore, ID: t}.String()
+	}
+	for _, v := range []string{orcaPaneEnv, orcaLegacyPaneEnv} {
+		if k := getenv(v); k != "" {
+			return host.PaneRef{Kind: host.Orca, ID: k}.String()
+		}
 	}
 	return ""
 }
