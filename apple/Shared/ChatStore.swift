@@ -945,13 +945,24 @@ nonisolated enum ChatCache {
         var covered: Int?
     }
     private static let maxBytes = 6 << 20
+    /// The caches folder holding the copies. v2: items carry `wake`; older copies would keep the merged turns until
+    /// they scrolled out. v3: notices carry `task` (a page's copy of an item never replaces the cached one: old
+    /// notices stayed centered blocks). Bump it whenever the item structure changes.
+    static let folder = "chats-v3"
+
+    /// Whether a caches folder is one of ChatCache's, this version or an older one ("chats", "chats-v<N>"): what
+    /// 设置 › 存储空间 counts under 「Agent 对话」.
+    static func isFolder(_ name: String) -> Bool {
+        guard name != "chats" else { return true }
+        guard name.hasPrefix("chats-v") else { return false }
+        let version = name.dropFirst("chats-v".count)
+        return !version.isEmpty && version.allSatisfy { $0.isASCII && $0.isNumber }
+    }
 
     private static func url(_ key: SessionKey) -> URL? {
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         let safe = "\(key.machineID)_\(key.sessionID)".map { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" ? $0 : "_" }
-        // v2: items carry `wake`; older copies would keep the merged turns until they scrolled out. v3: notices carry
-        // `task` (a page's copy of an item never replaces the cached one: old notices stayed centered blocks).
-        return base.appending(path: "chats-v3").appending(path: String(safe) + ".json")
+        return base.appending(path: folder).appending(path: String(safe) + ".json")
     }
 
     static func load(_ key: SessionKey) -> (items: [Item], hasMore: Bool, history: String?, covered: Int?)? {
@@ -962,7 +973,7 @@ nonisolated enum ChatCache {
 
     static func removeAll() {
         guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
-        try? FileManager.default.removeItem(at: base.appending(path: "chats-v3"))
+        try? FileManager.default.removeItem(at: base.appending(path: folder))
     }
 
     static func remove(_ key: SessionKey) {

@@ -392,10 +392,10 @@ func withSuggestReads(t *testing.T, at ...time.Duration) {
 }
 
 // withSubmitGrace shortens how long a prompt may sit in the box before Enter is pressed for it.
-func withSubmitGrace(t *testing.T, grace, poll time.Duration) {
-	g, p := submitGrace, submitPoll
-	submitGrace, submitPoll = grace, poll
-	t.Cleanup(func() { submitGrace, submitPoll = g, p })
+func withSubmitGrace(t *testing.T, grace time.Duration) {
+	g := submitGrace
+	submitGrace = grace
+	t.Cleanup(func() { submitGrace = g })
 }
 
 // hubPush is one notification the node sent the hub.

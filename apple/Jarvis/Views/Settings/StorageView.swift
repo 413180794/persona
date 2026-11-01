@@ -96,9 +96,8 @@ nonisolated enum StorageUsage {
     /// the folder is the app's own; a Mac build without one (an ad-hoc debug build) shares ~/Library/Caches with
     /// every other app, so only the folders Jarvis writes count there.
     static func owned(cachesEntry name: String, sandboxed: Bool, bundleID: String) -> Bool {
-        // chats-v<N>: ChatCache's folder goes up a version whenever its items change.
-        sandboxed || name == bundleID || name.hasPrefix("chats-v")
-            || ["chats", "chat-images", "lark-media", "state"].contains(name)
+        sandboxed || name == bundleID || ChatCache.isFolder(name)
+            || ["chat-images", "lark-media", "state"].contains(name)
     }
 
     /// Whether an entry of the temp folder is Jarvis's: all of it in a sandbox; outside one $TMPDIR is the user's
@@ -124,9 +123,9 @@ nonisolated enum StorageUsage {
         children(URL.temporaryDirectory).filter { owned(tempEntry: $0.lastPathComponent, sandboxed: sandboxed) }
     }
 
-    private static func kind(cachesEntry name: String) -> StorageKind {
-        switch name {
-        case "chats-v2", "chats": .agentChats
+    static func kind(cachesEntry name: String) -> StorageKind {
+        if ChatCache.isFolder(name) { return .agentChats }
+        return switch name {
         case "chat-images": .chatImages
         case "lark-media": .feishuMedia
         case "state": .pageState

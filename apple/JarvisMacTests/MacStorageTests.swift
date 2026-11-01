@@ -20,6 +20,18 @@ struct MacStorageTests {
         #expect(StorageUsage.owned(tempEntry: "lark-abc", sandboxed: true))
     }
 
+    /// ChatCache's folder (whatever version it is at) counts under 「Agent 对话」, not 「其他缓存」.
+    @Test func chatCacheFolderIsAgentChats() {
+        #expect(StorageUsage.owned(cachesEntry: ChatCache.folder, sandboxed: false, bundleID: "me.example.jarvis"))
+        for name in [ChatCache.folder, "chats-v2", "chats-v3", "chats-v9", "chats"] {
+            #expect(StorageUsage.kind(cachesEntry: name) == .agentChats, "\(name)")
+        }
+        // Lookalikes stay another program's outside a sandbox.
+        for name in ["chats-v", "chats-vx", "chats-v3.bak"] {
+            #expect(!StorageUsage.owned(cachesEntry: name, sandboxed: false, bundleID: "me.example.jarvis"), "\(name)")
+        }
+    }
+
     @Test func inASandboxEverythingIsTheApps() {
         #expect(StorageUsage.owned(cachesEntry: "Homebrew", sandboxed: true, bundleID: "me.example.jarvis"))
         #expect(StorageUsage.owned(cachesEntry: "com.apple.WebKit.Networking", sandboxed: true, bundleID: "me.example.jarvis"))

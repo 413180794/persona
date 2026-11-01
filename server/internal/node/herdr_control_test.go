@@ -309,7 +309,7 @@ func TestHerdrSendFallsBackToTyping(t *testing.T) {
 // session.send to a claude: the box is checked first (a draft refuses the send, nothing typed); after the prompt a
 // box still showing it after the grace period gets one Enter.
 func TestHerdrSendChecksThePaneAndPressesEnterForAStuckPrompt(t *testing.T) {
-	withSubmitGrace(t, 200*time.Millisecond, 20*time.Millisecond)
+	withSubmitGrace(t, 200*time.Millisecond)
 	n, f, _ := herdrNode(t)
 	seedAgents(t, n, f,
 		claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", ""),
@@ -335,7 +335,7 @@ func TestHerdrSendChecksThePaneAndPressesEnterForAStuckPrompt(t *testing.T) {
 	assertTrace(t, squeeze(f.trace()), []string{
 		readANSI("w1:p2"),
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "fix the flaky test"}),
-		readANSI("w1:p2"), // polled until the grace is over
+		readANSI("w1:p2"), // read once, when the grace is over
 		sendKeys("w1:p2", "enter"),
 	})
 }

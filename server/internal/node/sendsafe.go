@@ -186,40 +186,33 @@ func (t *typingLocks) ours(pane, box string) bool {
 
 var pastePlaceholder = regexp.MustCompile(`^\s*\[Pasted text #\d+`)
 
-// How long a prompt may sit in Claude's input box before ensureSubmitted presses Enter for it, and how often it looks.
-var (
-	submitGrace = 1500 * time.Millisecond
-	submitPoll  = 150 * time.Millisecond
-)
+// How long a prompt may sit in Claude's input box before ensureSubmitted presses Enter for it.
+var submitGrace = 2 * time.Second
 
 // ensureSubmitted presses Enter once when what was just prompted is still in Claude's input box after submitGrace.
-// Seen once with an image (2026-10-31, Claude Code 2.1.206): the text and its `[Image #1]` chip sat in the box, the
-// agent `done`, until Enter was pressed on the computer; 42 tries in an isolated herdr never repeated it, so the
-// cause is unknown. A box that empties (Claude took it, or queued it while working) or shows anything else is left alone.
+// Seen with images (2026-10-31 and 11-01, Claude Code 2.1.206, a photo from the phone): the text and its
+// `[Image #n]` chip sat in the box, the agent `done`, until Enter was pressed on the computer; 42 tries in an
+// isolated herdr did not repeat it, so the cause is unknown. Only the box after the grace counts: right after the
+// paste it can show something else for a moment (the first version gave up on that and missed one). A box that
+// emptied by then (Claude took it, or queued it while working) or shows anything else is left alone.
 func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) {
-	deadline := time.Now().Add(submitGrace)
-	for {
-		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
-		if err != nil {
-			return
-		}
-		in := screen.ClaudeInput(s)
-		if !in.Box || !in.Draft || !stillPrompted(in.Text, text) {
-			return
-		}
-		if time.Now().After(deadline) {
-			if n.logger != nil {
-				n.logger.Printf("prompt still in the input box after %s, pressing enter", submitGrace)
-			}
-			_ = n.sendKeys(ctx, pane, "enter")
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(submitPoll):
-		}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(submitGrace):
 	}
+	s, err := n.readPaneANSI(ctx, pane, "visible", 60)
+	if err != nil {
+		return
+	}
+	in := screen.ClaudeInput(s)
+	if !in.Box || !in.Draft || !stillPrompted(in.Text, text) {
+		return
+	}
+	if n.logger != nil {
+		n.logger.Printf("prompt still in the input box after %s, pressing enter", submitGrace)
+	}
+	_ = n.sendKeys(ctx, pane, "enter")
 }
 
 var boxChips = regexp.MustCompile(`\[(Image|Pasted text) #\d+[^\]]*\]`)

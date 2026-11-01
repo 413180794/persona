@@ -118,6 +118,9 @@ struct AssistantView: View {
             }
             // No system bar: the top bar floats over the conversation with a fog under it (it scrolls beneath).
             .toolbarVisibility(.hidden, for: .navigationBar)
+            #if os(iOS)
+            .background { RootBarHidden(atRoot: atRoot) }
+            #endif
             .overlay(alignment: .top) {
                 AssistantTopBar(key: pending == nil ? current : nil,
                                 sidebarIsColumn: widthClass == .regular,
@@ -707,3 +710,33 @@ struct StarterModesMenu: View {
         .pickerStyle(.menu)
     }
 }
+
+#if os(iOS)
+/// Hides the stack's navigation bar again once the page is back at its root. Swiped back from a pushed page with its
+/// search still open (知识库), UIKit left the bar showing over the root, with the root's title and ~106 pt tall: the top
+/// bar was pushed down under it, and a tap where the switch belongs hit the empty bar (2026-11-01). SwiftUI still has
+/// the bar hidden, so it never hides it again.
+private struct RootBarHidden: UIViewRepresentable {
+    var atRoot: Bool
+
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        return v
+    }
+
+    func updateUIView(_ v: UIView, context: Context) {
+        guard atRoot else { return }
+        // Now, and once the pop and the search's own dismissal have finished.
+        for delay in [0.0, 0.4, 0.9] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak v] in
+                var r: UIResponder? = v
+                while let next = r?.next, !(next is UIViewController) { r = next }
+                guard let nav = (r?.next as? UIViewController)?.navigationController,
+                      nav.viewControllers.count == 1, !nav.isNavigationBarHidden else { return }
+                nav.setNavigationBarHidden(true, animated: false)
+            }
+        }
+    }
+}
+#endif

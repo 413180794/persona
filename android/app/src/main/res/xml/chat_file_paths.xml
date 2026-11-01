@@ -2,4 +2,6 @@
 <!-- What ui/media/ChatFileProvider may hand to other apps: pictures shared or copied from the image viewer. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <!-- 拍照 in the composer: the system camera writes the photo here, it is read back and sent like a picked one. -->
+    <cache-path name="camera" path="camera/" />
 </paths>

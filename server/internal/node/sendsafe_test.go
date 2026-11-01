@@ -260,8 +260,7 @@ func screenDialogRev(t *testing.T, s string) string {
 // A prompt left in the input box (seen once with an image: `[Image #1]` and the text, the agent done) gets one Enter;
 // a box that empties, or shows someone else's text, gets none.
 func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
-	defer func(g, p time.Duration) { submitGrace, submitPoll = g, p }(submitGrace, submitPoll)
-	submitGrace, submitPoll = 200*time.Millisecond, 20*time.Millisecond
+	withSubmitGrace(t, 100*time.Millisecond)
 	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi") // the box shows "fix the flaky test"
 	empty := screenFixture(t, "claude-2.1.312-empty-162.ansi")
 	ctx := context.Background()
@@ -273,7 +272,16 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 		t.Fatalf("stuck prompt: keys %v", stuck.keys)
 	}
 
-	taken := &fakePane{screens: []string{typed, empty}, clearAfter: 2} // Claude takes it a moment later
+	// The paste lands late: right after the prompt the box still looks empty, then holds the prompt (the 11-01 miss).
+	late := &fakePane{screens: []string{empty, typed}}
+	late.state = 1
+	l := &Node{hosts: herdrHosts(late.serve(t))}
+	l.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
+	if len(late.keys) != 1 || late.keys[0][0] != "enter" {
+		t.Fatalf("late paste: keys %v", late.keys)
+	}
+
+	taken := &fakePane{screens: []string{empty}} // Claude took it by the time the grace ends
 	m := &Node{hosts: herdrHosts(taken.serve(t))}
 	m.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
 	if len(taken.keys) != 0 {

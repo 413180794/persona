@@ -308,6 +308,33 @@ fun ChatScreen(
             images = images + picked.filterNotNull()
         }
     }
+    // 拍照 (iOS CameraPicker): the system camera writes into cache/camera through our FileProvider; the photo then
+    // goes in like a picked one (scaled, JPEG). The app declares CAMERA (pairing scans a QR code), so Android wants it
+    // granted before another app's camera may be started for us.
+    var shot by remember { mutableStateOf<android.net.Uri?>(null) }
+    val takePhoto = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.TakePicture(),
+    ) { ok ->
+        val uri = shot ?: return@rememberLauncherForActivityResult
+        shot = null
+        if (!ok) return@rememberLauncherForActivityResult
+        scope.launch {
+            val p = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { jarvis.android.data.imagePayload(context, uri) }
+            if (p == null) notice = "这张照片读不出来" else images = images + p
+            runCatching { context.contentResolver.delete(uri, null, null) }
+        }
+    }
+    fun openCamera() {
+        val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() } // one shot at a time; what is left is from a cancelled one
+        val f = java.io.File(dir, "photo-${System.currentTimeMillis()}.jpg")
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".chatfiles", f)
+        shot = uri
+        runCatching { takePhoto.launch(uri) }.onFailure { shot = null; notice = "这台手机上没有能拍照的应用" }
+    }
+    val askCamera = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) openCamera() else notice = "没有相机权限，可以到系统设置 › 应用 › Jarvis 打开" }
     val pickFiles = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -572,6 +599,12 @@ fun ChatScreen(
                             DropdownMenuItem({ Text("照片") }, {
                                 attachMenu = false
                                 pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
+                            DropdownMenuItem({ Text("拍照") }, {
+                                attachMenu = false
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) openCamera() else askCamera.launch(android.Manifest.permission.CAMERA)
                             }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
                             DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
                             HorizontalDivider()
