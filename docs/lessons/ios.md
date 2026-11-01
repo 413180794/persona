@@ -76,6 +76,10 @@
 - 两页横着滑（新外壳的 `ShellPager`）时，各页自己画在页里的顶栏会被另一页盖住一截：两页是 ZStack 的兄弟，前面那页整页盖在后面那页的顶栏上，
   反向偏移让顶栏「不动」也没用（2026-11-01 截图：滑到七成时 Agents 的 ☰ 不见了）。拖动时把两页的顶栏藏起来，在两页之上画一条只给看的顶栏（`ShellMovingBar`），静止时再换回各页自己的。
   截图要拖到一半停住才看得出来：`-showShellPagerAt 0.3`。
+- 动画结束后才换的东西，用 `withAnimation(…, completionCriteria: .removed)` 等弹簧真的停下，别用默认的 `.logicallyComplete`（2026-11-02 新外壳「切换顶部 tabs，动画完毕后页面抖一下」）：
+  默认的完成回调在弹簧「看起来差不多到了」时就来，`ShellPager` 的 0.32 秒弹簧这时还差约 5pt；`moving` 一变 false，各页自己的顶栏接回来，骑在还在走的页面偏移上，
+  顶栏横着跳 3–5pt 再慢慢回去（两种风格都有）。XCUITest 看不出来：元素的 frame 是布局值，不含偏移，截一张图也比这 170ms 慢；
+  录屏逐帧量（`simctl io recordVideo` + ffmpeg 抽帧比对顶栏那一条），单测在宿主 App 的 scene 里挂一个窗口、`drawHierarchy` 读像素（`ShellPagerSettleTests`；不挂 scene 的 `UIWindow` 不绘制，读出来是空的）。
 - 新外壳的两页一直建着、静止时只用 opacity 藏另一页，藏起来的那一页仍在无障碍树里（玻璃按钮、列表都是 UIKit），而且两页的切换器 id 相同：
   `exists` / `isHittable` / `firstMatch` 分不出哪一页在显示，要按像素判断（`ShellSwitchTests.agentsDrawn`），点切换器要挑可点的那个。
 - 列表的 `.searchable` 处于搜索状态时推出的页面，系统导航栏会被强制显示（隐藏导航栏的对话页出现两行标题）；推出之后再关搜索也没用。

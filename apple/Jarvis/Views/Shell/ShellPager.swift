@@ -101,7 +101,10 @@ import SwiftUI
         let motion = Theme.Motion.drawer(velocity: share)
         let mine = serial
         moving = true
-        withAnimation(motion) {
+        // Ends with the spring itself, not when it is "logically" complete: that comes while ~5 pt of the way are left,
+        // and `moving` going false then puts each page's own top bar back on a page still sliding, so the bar jumped
+        // that far sideways and crept back after the switch looked done.
+        withAnimation(motion, completionCriteria: .removed) {
             position = target
         } completion: { [weak self] in
             guard let self, serial == mine else { return }
