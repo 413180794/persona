@@ -30,7 +30,7 @@ func TestMailAccountAddArgs(t *testing.T) {
 	}
 	for in, want := range map[string]string{
 		`{"email":"a@gmail.com","password":"p"}`: "Google sign-in",
-		`{"email":"person@example.com","provider":"gmail"}`: "Google sign-in",
+		`{"email":"a@example.org","provider":"gmail"}`: "Google sign-in",
 		`{"email":"a@example.com"}`:              "password is required",
 		`{"email":"nope"}`:                       "email is required",
 	} {
