@@ -63,6 +63,10 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 func (m *Machine) snapshot() proto.Machine {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	engines := []proto.Engine{} // what the node found: none while offline
+	if m.online {
+		engines = append(engines, m.info.Engines...)
+	}
 	icon := m.cfg.Icon
 	if icon == "" {
 		icon = "laptop"
@@ -75,6 +79,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Deploying: m.deploying, DeployError: m.deployErr,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
+		Engine: m.hub.engineOf(m.cfg.ID), Engines: engines,
 	}
 }
 

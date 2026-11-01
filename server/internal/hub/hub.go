@@ -46,6 +46,8 @@ type Hub struct {
 
 	tailcat tailcatDialer // reaching machines the hub cannot ssh to (tailcat.go)
 
+	engines engineChoices // each machine's terminal engine (engine.go)
+
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
