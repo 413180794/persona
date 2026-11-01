@@ -482,7 +482,6 @@ private struct AgentsList: View {
         // (toolbar(removing: .title) would hide that too).
         .navigationBarTitleDisplayMode(.inline)
         .background { SearchCloseProbe(watcher: searchClose) }
-        .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
         // The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user request: the
         // always-shown field crowded the top). Safe only because the filter bar is no longer pinned in the safe area
         // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
@@ -1320,60 +1319,6 @@ private struct TopBar<Bar: View>: ViewModifier {
             }
         }
         DispatchQueue.main.async(execute: check)
-    }
-
-    private var folded = false
-
-    /// Starts the page with the search field folded away (2026-11-01 user request: it shows on a pull, like Mail).
-    /// SwiftUI has no switch for that; the drawer (`.automatic`) folds once the list is scrolled by its height, so
-    /// the list is moved down by the search bar's height once, while it still sits at its very top. Tried again
-    /// for a moment until the list and the bar have been laid out; never again after (coming back from a chat
-    /// keeps where the list was).
-    func foldOnce() {
-        guard !folded else { return }
-        var tries = 0
-        func attempt() {
-            tries += 1
-            guard !folded else { return }
-            if let sc = searchController, !sc.isActive, let list = listScrollView,
-               list.contentSize.height > 0, sc.searchBar.bounds.height > 0 {
-                let top = -list.adjustedContentInset.top
-                if abs(list.contentOffset.y - top) < 1 {
-                    // x kept as it is: the list's side margins live in its content offset.
-                    list.setContentOffset(CGPoint(x: list.contentOffset.x, y: top + sc.searchBar.bounds.height), animated: false)
-                }
-                folded = true
-                return
-            }
-            if tries < 20 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50), execute: attempt)
-            }
-        }
-        DispatchQueue.main.async(execute: attempt)
-    }
-
-    /// The list's scroll view: the largest collection view in the page the probe is in (List is one).
-    private var listScrollView: UIScrollView? {
-        var r: UIResponder? = view
-        while let next = r?.next {
-            if let vc = next as? UIViewController {
-                return Self.largestScrollView(in: vc.view)
-            }
-            r = next
-        }
-        return nil
-    }
-
-    private static func largestScrollView(in root: UIView?) -> UIScrollView? {
-        guard let root else { return nil }
-        var best: UIScrollView?
-        var stack = [root]
-        while let v = stack.popLast() {
-            if let c = v as? UICollectionView, !c.isHidden,
-               c.bounds.height > (best?.bounds.height ?? 0) { best = c }
-            stack.append(contentsOf: v.subviews)
-        }
-        return best
     }
 
     /// The search controller SwiftUI put on the navigation item of the page the list is in.
