@@ -12,27 +12,30 @@ struct AppearanceSection: View {
 
     var body: some View {
         Section {
-            NavigationLink(value: SettingsPage.persona) {
-                SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.name, look: .oneLine)
-            }
-            .accessibilityIdentifier("settings-persona")
-            NavigationLink(value: SettingsPage.themeColor) {
-                SettingsRow(title: "主题色", symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
-            }
-            .accessibilityIdentifier("settings-color")
-            NavigationLink(value: SettingsPage.style) {
-                SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
-            }
-            .accessibilityIdentifier("settings-style")
-            #if os(iOS)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                NavigationLink(value: SettingsPage.layout) {
-                    SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
-                                value: model.oldLayout ? "旧布局" : "新布局", look: .oneLine)
+            Group {
+                NavigationLink(value: SettingsPage.persona) {
+                    SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.name, look: .oneLine)
                 }
-                .accessibilityIdentifier("settings-layout")
+                .accessibilityIdentifier("settings-persona")
+                NavigationLink(value: SettingsPage.themeColor) {
+                    SettingsRow(title: "主题色", symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
+                }
+                .accessibilityIdentifier("settings-color")
+                NavigationLink(value: SettingsPage.style) {
+                    SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
+                }
+                .accessibilityIdentifier("settings-style")
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    NavigationLink(value: SettingsPage.layout) {
+                        SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
+                                    value: model.oldLayout ? "旧布局" : "新布局", look: .oneLine)
+                    }
+                    .accessibilityIdentifier("settings-layout")
+                }
+                #endif
             }
-            #endif
+            .bareListRow()
         } header: {
             SettingsHeading("外观")
         }

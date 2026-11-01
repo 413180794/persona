@@ -122,6 +122,10 @@
 - 每行自己画卡片 / 胶囊的列表别放在 `insetGrouped` 里：分组卡的内缩、行的 `listRowInsets`、分组标题的边距叠在一起，搜索框、chip、标题、胶囊四种左边距；
   没有标题的第一个分组上面还多约 35pt 空白，`DisclosureGroup` 展开后标题画在分组卡上、子行另成一排缩进的胶囊（2026-10-31 用户在手机上报）。
   BeautifulUI 风格的 Agents 列表是 plain 列表，每一行都落在 `Theme.Space.page` 上，分组标题是一行，空闲的空间用 `TaskRow` 的 `.list` 拼成一张卡。
+- `BUIListRow` 放进原生 `List` 的行里会双倍留白：行自己有 8pt 上下 padding 和最小高度，`List` 还再加一圈行内边距，设置页的行量出来 77.7pt，
+  而同一页没换成 BUI 行的连接器那组、液态玻璃的行都是 52.3pt（2026-11-01 用户在手机上报「上下两组行高不一样」）。BeautifulUI 风格下给 List 的行用
+  `bareListRow()`（`SettingsView.swift`）：`listRowInsets(.vertical, 0)`；它要加在行的 `Group` 上，不能加在 `Section`（会把分组标题的上边距也吃掉），
+  也不能加在 `NavigationLink` 的 label 里（到不了 List）。同一页的每一组都要用同一种行（`SettingsRow`），别留一组系统行。
 - `.safeAreaBar(edge: .top)`（Agents 列表的快速筛选条）别和会随滚动收起的 `.searchable`（导航栏抽屉默认 `.automatic`）一起用：
   真机（TestFlight 35）上滚动收起搜索框后，筛选条还停在搜索框展开时的位置，中间空出约 120pt 雾化的列表（「顶部一大坨」）；
   当时改成搜索框 `.navigationBarDrawer(displayMode: .always)` 常显；2026-11-01 用户嫌顶部太挤，改回 `.automatic`（滚动收起、下拉出现），

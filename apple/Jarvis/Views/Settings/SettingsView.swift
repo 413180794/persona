@@ -47,36 +47,42 @@ struct SettingsView: View {
                 AppearanceSection()
 
                 Section {
-                    NavigationLink(value: ModelLaunchersRoute()) {
-                        SettingsRow(title: "模型", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
+                    Group {
+                        NavigationLink(value: ModelLaunchersRoute()) {
+                            SettingsRow(title: "模型", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
+                        }
+                        NavigationLink(value: SettingsPage.assistant) {
+                            SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai, value: model.assistantConfig?.launcher ?? "", look: .code)
+                        }
+                        NavigationLink(value: SettingsPage.claude) {
+                            SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
+                        }
                     }
-                    NavigationLink(value: SettingsPage.assistant) {
-                        SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai, value: model.assistantConfig?.launcher ?? "", look: .code)
-                    }
-                    NavigationLink(value: SettingsPage.claude) {
-                        SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
-                    }
+                    .bareListRow()
                 }
 
                 ConnectorsSection()
 
                 Section {
-                    NavigationLink(value: MachineListRoute()) {
-                        SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
-                                    value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
+                    Group {
+                        NavigationLink(value: MachineListRoute()) {
+                            SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
+                                        value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
+                        }
+                        NavigationLink(value: SettingsPage.devices) {
+                            SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
+                        }
+                        NavigationLink(value: SettingsPage.notifications) {
+                            SettingsRow(title: "通知", symbol: Theme.Icon.notifications, tint: Theme.danger)
+                        }
+                        NavigationLink(value: SettingsPage.translation) {
+                            SettingsRow(title: "翻译", symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
+                        }
+                        NavigationLink(value: SettingsPage.storage) {
+                            SettingsRow(title: "存储空间", symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
+                        }
                     }
-                    NavigationLink(value: SettingsPage.devices) {
-                        SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
-                    }
-                    NavigationLink(value: SettingsPage.notifications) {
-                        SettingsRow(title: "通知", symbol: Theme.Icon.notifications, tint: Theme.danger)
-                    }
-                    NavigationLink(value: SettingsPage.translation) {
-                        SettingsRow(title: "翻译", symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
-                    }
-                    NavigationLink(value: SettingsPage.storage) {
-                        SettingsRow(title: "存储空间", symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
-                    }
+                    .bareListRow()
                 }
 
                 #if os(iOS)
@@ -86,34 +92,40 @@ struct SettingsView: View {
 
                 if !model.isDemo {
                     Section {
-                        Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
+                        Group {
+                            Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
+                                .modifier(SettingsButtonLook())
+                            Button(role: .destructive) { confirmUnpair = true } label: {
+                                SettingsRow(title: "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                            }
                             .modifier(SettingsButtonLook())
-                        Button(role: .destructive) { confirmUnpair = true } label: {
-                            SettingsRow(title: "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
                         }
-                        .modifier(SettingsButtonLook())
+                        .bareListRow()
                     } header: {
                         SettingsHeading("服务器")
                     }
                 }
 
                 Section {
-                    let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
-                    // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
-                    let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"
-                    if AppStyle.current.usesBeautifulUI {
-                        BUIListRow("版本", value: version)
-                        BUIListRow("构建") { EmptyView() } trailing: {
-                            Text(commit).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
-                        }
-                    } else {
-                        LabeledContent("版本", value: version)
-                        LabeledContent("构建") {
-                            Text(commit)
-                                .font(Theme.Font.code)
-                                .textSelection(.enabled)
+                    Group {
+                        let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
+                        // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
+                        let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"
+                        if AppStyle.current.usesBeautifulUI {
+                            BUIListRow("版本", value: version)
+                            BUIListRow("构建") { EmptyView() } trailing: {
+                                Text(commit).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
+                            }
+                        } else {
+                            LabeledContent("版本", value: version)
+                            LabeledContent("构建") {
+                                Text(commit)
+                                    .font(Theme.Font.code)
+                                    .textSelection(.enabled)
+                            }
                         }
                     }
+                    .bareListRow()
                 } header: {
                     SettingsHeading("关于")
                 }
@@ -192,16 +204,24 @@ struct SettingsView: View {
 
     private var watchSection: some View {
         Section {
-            Button {
-                if let cfg = model.config {
-                    WatchSync.shared.push(config: cfg)
-                    WatchSync.shared.push(summary: model.watchSummary())
-                    Haptics.success()
-                    model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
+            Group {
+                Button {
+                    if let cfg = model.config {
+                        WatchSync.shared.push(config: cfg)
+                        WatchSync.shared.push(summary: model.watchSummary())
+                        Haptics.success()
+                        model.toast = Toast("已发送到 Apple Watch，打开手表上的 Jarvis 即可", style: .success)
+                    }
+                } label: {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "同步到 Apple Watch", symbol: Theme.Icon.watch, tint: Theme.accent)
+                    } else {
+                        Label("同步到 Apple Watch", systemImage: Theme.Icon.watch).lineLimit(1)
+                    }
                 }
-            } label: {
-                Label("同步到 Apple Watch", systemImage: Theme.Icon.watch).lineLimit(1)
+                .modifier(SettingsButtonLook())
             }
+            .bareListRow()
         } footer: {
             Text("手表上的 Jarvis 用 iPhone 的配对信息直接连 hub；手表显示「未配对」时点这里，或在手表上点「从 iPhone 同步」。")
         }
@@ -258,13 +278,28 @@ private struct DemoSection: View {
 
     var body: some View {
         Section {
-            Button(action: pair) { Label("连接我的 hub", systemImage: "qrcode.viewfinder").lineLimit(1) }
-            Button(role: .destructive) { model.unpair() } label: {
-                Label("退出体验模式", systemImage: "rectangle.portrait.and.arrow.right").lineLimit(1)
+            Group {
+                Button(action: pair) {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "连接我的 hub", symbol: "qrcode.viewfinder", tint: Theme.accent)
+                    } else {
+                        Label("连接我的 hub", systemImage: "qrcode.viewfinder").lineLimit(1)
+                    }
+                }
+                .modifier(SettingsButtonLook())
+                Button(role: .destructive) { model.unpair() } label: {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "退出体验模式", symbol: "rectangle.portrait.and.arrow.right", tint: Theme.danger)
+                    } else {
+                        Label("退出体验模式", systemImage: "rectangle.portrait.and.arrow.right").lineLimit(1)
+                    }
+                }
+                .modifier(SettingsButtonLook())
+                .accessibilityIdentifier("settings.leaveDemo")
             }
-            .accessibilityIdentifier("settings.leaveDemo")
+            .bareListRow()
         } header: {
-            Text("体验模式")
+            SettingsHeading("体验模式")
         } footer: {
             Text("现在看到的机器、Agent、对话和收件箱都是演示数据，不连接任何服务器，发消息、审批等操作也不会真的发出去。连接自己的 hub 后自动退出体验模式。")
         }
@@ -693,7 +728,7 @@ struct ClaudeSettingsView: View {
 }
 
 /// A row of 设置's list: the system's label, with what it is set to on the right; in the BeautifulUI style its list
-/// row (a tinted tile, the name, the value).
+/// row (a tinted tile, the name, the value) at the height the other styles' rows have.
 struct SettingsRow: View {
     enum ValueLook { case plain, code, oneLine, digits }
     var title: String
@@ -701,10 +736,14 @@ struct SettingsRow: View {
     var tint: Color
     var value: String? = nil
     var look: ValueLook = .plain
+    /// A brand's own mark (an asset of `Theme.Brand`) in place of the tinted tile, in the BeautifulUI style.
+    var brand: String? = nil
 
     var body: some View {
         if AppStyle.current.usesBeautifulUI {
-            BUIListRow(title, value: value.flatMap { $0.isEmpty ? nil : $0 }) { BUIIconTile(symbol, tint: tint) }
+            BUIListRow(title, value: value.flatMap { $0.isEmpty ? nil : $0 }) {
+                if let brand { SettingsBrandMark(asset: brand) } else { BUIIconTile(symbol, tint: tint) }
+            }
         } else if let value {
             LabeledContent {
                 switch look {
@@ -720,6 +759,25 @@ struct SettingsRow: View {
             Label(title, systemImage: symbol)
         }
     }
+}
+
+/// A brand's mark as a row's leading view: the size of `BUIIconTile`, so the names line up with the other rows'.
+private struct SettingsBrandMark: View {
+    var asset: String
+    @Environment(\.buiTheme) private var theme
+
+    var body: some View {
+        let side = Theme.Size.iconL * max(1, theme.typeScale * 0.9)
+        Image(asset).resizable().scaledToFit().frame(width: side, height: side).accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// The rows of a `List` section in the BeautifulUI style: a `BUIListRow` has its own height (its padding and minimum),
+    /// so the list adds no inset above and below it on top (77.7 pt rows instead of the 52.3 pt the other styles have).
+    /// Apply it to the rows (a `Group` of them), not the `Section`: on the section it takes the header's padding too, and
+    /// not on a row inside a `NavigationLink`'s label (it does not reach the list there). Other styles keep the list's insets.
+    func bareListRow() -> some View { listRowInsets(.vertical, AppStyle.current.usesBeautifulUI ? 0 : nil) }
 }
 
 /// A section's title in 设置: the list's own; in the BeautifulUI style its heading.

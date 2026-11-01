@@ -59,32 +59,47 @@ struct ConnectorsSection: View {
 
     var body: some View {
         Section {
-            #if os(iOS)
-            // A Mac is a desktop, not the phone: the hub never calls its tools (AppModel.registration).
-            NavigationLink(value: SettingsPage.phoneData) {
-                LabeledContent {
-                    Text(ConnectorText.deviceSummary()).lineLimit(1)
-                } label: {
-                    Label(ConnectorText.device, systemImage: Theme.Icon.thisDevice)
+            Group {
+                #if os(iOS)
+                // A Mac is a desktop, not the phone: the hub never calls its tools (AppModel.registration).
+                NavigationLink(value: SettingsPage.phoneData) {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, tint: Theme.accent, value: ConnectorText.deviceSummary())
+                    } else {
+                        LabeledContent {
+                            Text(ConnectorText.deviceSummary()).lineLimit(1)
+                        } label: {
+                            Label(ConnectorText.device, systemImage: Theme.Icon.thisDevice)
+                        }
+                    }
+                }
+                #endif
+                NavigationLink(value: SettingsPage.mail) {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "邮箱", symbol: Theme.Icon.mailAccounts, tint: Theme.accent, value: ConnectorText.mailSummary(accounts))
+                    } else {
+                        LabeledContent {
+                            Text(ConnectorText.mailSummary(accounts)).lineLimit(1)
+                        } label: {
+                            Label("邮箱", systemImage: Theme.Icon.mailAccounts)
+                        }
+                    }
+                }
+                NavigationLink(value: SettingsPage.feishu) {
+                    if AppStyle.current.usesBeautifulUI {
+                        SettingsRow(title: "飞书", symbol: Theme.Icon.mailAccounts, tint: Theme.accent, value: ConnectorText.larkSummary(lark), brand: Theme.Brand.lark)
+                    } else {
+                        LabeledContent {
+                            Text(ConnectorText.larkSummary(lark)).lineLimit(1)
+                        } label: {
+                            Label { Text("飞书") } icon: { Image(Theme.Brand.lark).resizable().scaledToFit() }
+                        }
+                    }
                 }
             }
-            #endif
-            NavigationLink(value: SettingsPage.mail) {
-                LabeledContent {
-                    Text(ConnectorText.mailSummary(accounts)).lineLimit(1)
-                } label: {
-                    Label("邮箱", systemImage: Theme.Icon.mailAccounts)
-                }
-            }
-            NavigationLink(value: SettingsPage.feishu) {
-                LabeledContent {
-                    Text(ConnectorText.larkSummary(lark)).lineLimit(1)
-                } label: {
-                    Label { Text("飞书") } icon: { Image(Theme.Brand.lark).resizable().scaledToFit() }
-                }
-            }
+            .bareListRow()
         } header: {
-            Text("连接器")
+            SettingsHeading("连接器")
         } footer: {
             Text("Jarvis 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。")
         }
