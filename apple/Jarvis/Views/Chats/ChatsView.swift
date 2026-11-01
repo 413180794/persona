@@ -1337,6 +1337,10 @@ private struct TopBar<Bar: View>: ViewModifier {
             guard !folded else { return }
             if let sc = searchController, !sc.isActive, let list = listScrollView,
                list.contentSize.height > 0, sc.searchBar.bounds.height > 0 {
+                // The field sat right under the shell's floating bar (2026-11-01 user screenshot): the bar is taller
+                // than the navigation bar row the drawer hangs from, and that row cannot grow. Lower the field inside
+                // its own bar instead, by less than the bar's bottom margin so it stays clear of the filter row.
+                sc.searchBar.searchFieldBackgroundPositionAdjustment = UIOffset(horizontal: 0, vertical: Theme.Space.sm)
                 let top = -list.adjustedContentInset.top
                 if abs(list.contentOffset.y - top) < 1 {
                     // x kept as it is: the list's side margins live in its content offset.
