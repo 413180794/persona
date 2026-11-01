@@ -156,7 +156,8 @@ machines = m.MACHINES + [MINI]
 # Demonstrate a machine already using the desktop runtime as well as the default CLI.
 MINI["engine"] = "herdr-core"
 MINI["engines"] = [{"id": "herdr", "name": "herdr", "available": False},
-                   {"id": "herdr-core", "name": "Herdr App", "available": True}]
+                   {"id": "herdr-core", "name": "Herdr App", "available": True},
+                   {"id": "orca", "name": "Orca", "available": True}]
 
 data = {
     "machines": machines,
