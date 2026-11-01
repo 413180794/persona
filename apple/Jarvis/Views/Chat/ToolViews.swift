@@ -290,8 +290,16 @@ struct ToolCallRow: View {
     @Environment(\.openTools) private var openTools
 
     private var isOpen: Bool {
-        openTools?.isOpen(call.id) ?? expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil))
+        openTools?.isOpen(call.id) ?? expanded ?? (autoExpand || (ResultBlock.debugFull && call.result?.fullSize != nil)
+            || Self.debugDetails)
     }
+
+    /// Mac screenshots (docs/mac.md): `-showToolDetails YES` opens every tool row (diffs, Bash output) without a click.
+    #if DEBUG && os(macOS)
+    static let debugDetails = UserDefaults.standard.bool(forKey: "showToolDetails")
+    #else
+    static let debugDetails = false
+    #endif
 
     private func setOpen(_ open: Bool) {
         if let openTools { openTools.set(call.id, open) } else { expanded = open }

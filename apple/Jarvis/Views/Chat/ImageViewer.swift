@@ -66,7 +66,12 @@ struct ImageViewer: View {
                         ProgressView().tint(.white)
                     }
                 }
-                .task(id: i) { await decode(i) }
+                .task(id: i) {
+                    await decode(i)
+                    #if DEBUG // `-openEditor YES`, as on iOS: straight into the editor (screenshots)
+                    if i == index, attach != nil, UserDefaults.standard.bool(forKey: "openEditor") { editing = decoded[i] }
+                    #endif
+                }
             }
             #endif
 
