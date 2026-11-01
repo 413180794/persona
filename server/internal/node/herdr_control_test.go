@@ -1,20 +1,18 @@
 package node
 
 import (
-	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // Characterization tests of what the node does to herdr to start, prompt, key, close and rename sessions: the exact
-// herdr calls, in order.
+// herdr calls, in order, driven through the node's requests.
 
 const startID = "0e000000-0000-4000-8000-0000000000aa"
 
@@ -25,26 +23,53 @@ func startHerdr(f *fakeHerdr, pane, status string) {
 	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
 }
 
-func startCmd(n *Node, launcher, args string) string {
-	return launcher + " " + args + " --settings " + shellQuote(filepath.Join(n.dir, "claude-settings.json")) +
-		" --mcp-config " + shellQuote(filepath.Join(n.dir, "mcp.json"))
+func startCmd(launcher, args, dir string) string {
+	return launcher + " " + args + " --settings " + shellQuote(filepath.Join(dir, "claude-settings.json")) +
+		" --mcp-config " + shellQuote(filepath.Join(dir, "mcp.json"))
 }
 
 func readVisible(pane string) string {
 	return call("pane.read", map[string]any{"pane_id": pane, "source": "visible", "lines": 60})
 }
 
+func readANSI(pane string) string {
+	return call("pane.read", map[string]any{"pane_id": pane, "source": "visible", "lines": 60, "format": "ansi", "strip_ansi": false})
+}
+
 func agentGet(pane string) string { return call("agent.get", map[string]any{"target": pane}) }
 
-// The workspace named after the directory is reused: a new tab in it (named agent-<n> past the taken ones), the
-// launcher typed with the session id, mode and effort flags, the trust dialog accepted, then the agent renamed and
-// the first message prompted.
-func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
-	n, f, home := herdrNode(t)
-	cwd := filepath.Join(home, "proj")
-	if err := os.MkdirAll(cwd, 0o700); err != nil {
+func sendKeys(pane string, keys ...string) string {
+	return call("pane.send_keys", map[string]any{"pane_id": pane, "keys": keys})
+}
+
+// waitCalls waits until the fake has recorded at least n calls of method.
+func waitCalls(t *testing.T, f *fakeHerdr, method string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for len(f.trace(method)) < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("waited for %d %s calls; got:\n  %s", n, method, strings.Join(f.trace(), "\n  "))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func jarvisDir(home string) string { return filepath.Join(home, ".jarvis") }
+
+func mkdir(t *testing.T, p string) string {
+	t.Helper()
+	if err := os.MkdirAll(p, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	return p
+}
+
+// session.start (async, the app's path): the workspace named after the directory is reused, a new tab in it (named
+// agent-<n> past the taken ones), the launcher typed with the session id, mode and effort flags, the trust dialog
+// accepted, then the agent renamed and the first message prompted. The pane is bound to the session from then on.
+func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, filepath.Join(home, "proj"))
 	f.reply("workspace.list", map[string]any{"workspaces": []any{
 		map[string]any{"workspace_id": "w0", "label": "other"}, map[string]any{"workspace_id": "w1", "label": "proj"}}})
 	startHerdr(f, "w1:p2", proto.StatusIdle)
@@ -55,59 +80,69 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
 	f.screenSteps("w1:p2", isKeys(), screenFixture(t, "claude-2.1.312-trust-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.txt"))
 
-	s, err := n.start(context.Background(), "~/proj", "", "fix the build", "", "", "plan", "high", "", startID)
+	res, err := request(t, n, "session.start", map[string]any{"session_id": startID, "cwd": "~/proj", "prompt": "fix the build",
+		"permission_mode": "plan", "effort": "high", "async": true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.SessionID != startID || s.PaneID != "w1:p2" || !s.StartedByJarvis || s.Launcher != "claude" || s.SpaceKind != "herdr" ||
+	s := decodeSessions(t, []any{res["session"]})[0]
+	if s.SessionID != startID || !s.Starting || s.Status != proto.StatusIdle || s.Cwd != cwd || s.Launcher != "claude" ||
 		s.PermissionMode != "plan" || s.Effort != "high" {
-		t.Errorf("session %+v", s)
+		t.Errorf("answered %+v", s)
 	}
-	if st, _ := n.state.get(startID); st.Pane != "w1:p2" || st.Cwd != cwd || st.Launcher != "claude" {
-		t.Errorf("state %+v", st)
-	}
-	if n.panes["w1:p2"] != startID {
-		t.Errorf("pane binding %v", n.panes)
-	}
+	waitCalls(t, f, "session.snapshot", 2) // tab labels, then sessionFor at the end
 	assertTrace(t, f.trace(), []string{
 		call("workspace.list", nil),
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w1", "cwd": cwd, "label": "agent-2", "focus": false}),
 		call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"},
-			"text": startCmd(n, "claude", "--session-id "+startID+" --permission-mode plan --effort high")}),
+			"text": startCmd("claude", "--session-id "+startID+" --permission-mode plan --effort high", jarvisDir(home))}),
 		readVisible("w1:p2"), // the trust dialog, cursor on "No, exit"
-		call("pane.send_keys", map[string]any{"pane_id": "w1:p2", "keys": []string{"down", "enter"}}),
+		sendKeys("w1:p2", "down", "enter"),
 		readVisible("w1:p2"), agentGet("w1:p2"), // ready once…
 		readVisible("w1:p2"), agentGet("w1:p2"), // …and twice
 		call("agent.rename", map[string]any{"target": "w1:p2", "name": "j-0e0000"}),
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "fix the build"}),
 		call("session.snapshot", nil), // sessionFor
 	})
+
+	// herdr now shows a claude in the pane without naming its session: the pane's binding from the start names it.
+	f.reset()
+	f.reply("pane.process_info", processInfo(1<<30))
+	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent("", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "")}, nil))
+	list := listSessions(t, n)
+	if len(list) != 1 || list[0].SessionID != startID || list[0].PaneID != "w1:p2" || !list[0].StartedByJarvis ||
+		list[0].Launcher != "claude" || list[0].Starting {
+		t.Fatalf("listed %+v", list)
+	}
 }
 
 // No workspace for the directory: one is made (labelled with the directory's name, not focused) and its first tab
-// renamed; a resume types --resume and no first message.
+// renamed; a resume (session.start with resume_session_id, answered when ready) types --resume and no first message.
 func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 	n, f, home := herdrNode(t)
-	cwd := filepath.Join(home, "fresh")
-	if err := os.MkdirAll(cwd, 0o700); err != nil {
-		t.Fatal(err)
-	}
+	cwd := mkdir(t, filepath.Join(home, "fresh"))
 	f.reply("workspace.list", map[string]any{"workspaces": []any{}})
 	f.reply("workspace.create", map[string]any{"workspace": map[string]any{"workspace_id": "w7"},
 		"tab": map[string]any{"tab_id": "w7:t1"}, "root_pane": map[string]any{"pane_id": "w7:p1"}})
 	startHerdr(f, "w7:p1", proto.StatusDone)
 	f.setScreen("w7:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"))
 
-	if _, err := n.start(context.Background(), cwd, "work_claude", "", startID, "", "", "", "  fix\nthe   build ", ""); err != nil {
+	res, err := request(t, n, "session.start", map[string]any{"cwd": cwd, "launcher": "work_claude",
+		"resume_session_id": startID, "tab_name": "  fix\nthe   build "})
+	if err != nil {
 		t.Fatal(err)
+	}
+	if s := decodeSessions(t, []any{res["session"]})[0]; s.SessionID != startID || s.PaneID != "w7:p1" || s.Status != proto.StatusDone ||
+		s.SpaceKind != "herdr" || !s.StartedByJarvis || s.Launcher != "work_claude" {
+		t.Errorf("session %+v", s)
 	}
 	assertTrace(t, f.trace(), []string{
 		call("workspace.list", nil),
 		call("workspace.create", map[string]any{"cwd": cwd, "label": "fresh", "focus": false}),
 		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "fix the build"}),
 		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
-			"text": startCmd(n, "work_claude", "--resume "+startID)}),
+			"text": startCmd("work_claude", "--resume "+startID, jarvisDir(home))}),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0e0000"}),
@@ -115,25 +150,27 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 	})
 }
 
-// A workspace given (a tab next to another agent): no workspace lookup. A claude that comes up blocked (a dialog
-// of its own) counts as ready at once.
+// A workspace given (a tab next to another agent): no workspace lookup. A claude that comes up blocked (a dialog of
+// its own) counts as ready at once. A managed launcher (kept by the hub) runs as `jarvisd launch <name>`.
 func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	n, f, home := herdrNode(t)
+	if _, err := request(t, n, "launchers.managed", map[string]any{"launchers": []any{
+		map[string]any{"name": "work_gw", "base_url": "https://gateway.example.com", "model": "m"}}}); err != nil {
+		t.Fatal(err)
+	}
 	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w2:t5"}, "root_pane": map[string]any{"pane_id": "w2:p5"}})
 	startHerdr(f, "w2:p5", proto.StatusBlocked)
 	f.setScreen("w2:p5", screenFixture(t, "claude-2.1.312-model-picker-162.txt"))
-	s, err := n.start(context.Background(), "", "claude", "hello", "", "w2", "", "", "a very long tab name that goes past thirty-two runes", startID)
-	if err != nil {
+	if _, err := request(t, n, "session.start", map[string]any{"session_id": startID, "launcher": "work_gw", "prompt": "hello",
+		"workspace_id": "w2", "tab_name": "a very long tab name that goes past thirty-two runes", "async": true}); err != nil {
 		t.Fatal(err)
 	}
-	if s.Status != proto.StatusBlocked {
-		t.Errorf("status %s", s.Status)
-	}
+	waitCalls(t, f, "session.snapshot", 2)
 	assertTrace(t, f.trace(), []string{
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "a very long tab name that goes p", "focus": false}),
 		call("pane.send_input", map[string]any{"pane_id": "w2:p5", "keys": []string{"Enter"},
-			"text": startCmd(n, "claude", "--session-id "+startID)}),
+			"text": startCmd("/tmp/jarvis-test/jarvisd launch work_gw", "--session-id "+startID, jarvisDir(home))}),
 		readVisible("w2:p5"), agentGet("w2:p5"),
 		call("agent.rename", map[string]any{"target": "w2:p5", "name": "j-0e0000"}),
 		call("agent.prompt", map[string]any{"target": "w2:p5", "text": "hello"}),
@@ -141,129 +178,275 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	})
 }
 
+// A tab name given (session.rename) while the tab is still being made is kept and given to the tab once it exists.
+func TestHerdrStartNamesTheTabOnceItExists(t *testing.T) {
+	n, f, home := herdrNode(t)
+	startHerdr(f, "w2:p6", proto.StatusIdle)
+	f.setScreen("w2:p6", screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	entered, release := make(chan struct{}), make(chan struct{})
+	f.handle("tab.create", func(map[string]any) any {
+		close(entered)
+		<-release
+		return map[string]any{"tab": map[string]any{"tab_id": "w2:t6"}, "root_pane": map[string]any{"pane_id": "w2:p6"}}
+	})
+	if _, err := request(t, n, "session.start", map[string]any{"session_id": startID, "workspace_id": "w2", "async": true}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no tab.create")
+	}
+	if _, err := request(t, n, "session.rename", map[string]any{"session_id": startID, "tab_name": "named early"}); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	waitCalls(t, f, "session.snapshot", 2)
+	assertTrace(t, f.trace(), []string{
+		call("session.snapshot", nil),
+		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "agent-1", "focus": false}),
+		call("tab.rename", map[string]any{"tab_id": "w2:t6", "label": "named early"}),
+		call("pane.send_input", map[string]any{"pane_id": "w2:p6", "keys": []string{"Enter"},
+			"text": startCmd("claude", "--session-id "+startID, jarvisDir(home))}),
+		readVisible("w2:p6"), agentGet("w2:p6"),
+		readVisible("w2:p6"), agentGet("w2:p6"),
+		call("agent.rename", map[string]any{"target": "w2:p6", "name": "j-0e0000"}),
+		call("session.snapshot", nil),
+	})
+}
+
+// tab.create failing: nothing is typed, and the session stays listed, offline, with the error.
+func TestHerdrStartFailsWhenTheTabCannotBeMade(t *testing.T) {
+	n, f, home := herdrNode(t)
+	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
+	f.reply("tab.create", herdrFail{Code: "workspace_not_found", Message: "no such workspace"})
+	if _, err := request(t, n, "session.start", map[string]any{"session_id": startID, "cwd": home, "workspace_id": "w9", "async": true}); err != nil {
+		t.Fatal(err)
+	}
+	waitCalls(t, f, "tab.create", 1)
+	assertTrace(t, f.trace(), []string{call("session.snapshot", nil), call("tab.create", map[string]any{"workspace_id": "w9", "cwd": home, "label": "agent-1", "focus": false})})
+	var s proto.Session
+	deadline := time.Now().Add(10 * time.Second)
+	for s.StartError == "" {
+		if time.Now().After(deadline) {
+			t.Fatalf("start did not fail: %+v", s)
+		}
+		time.Sleep(20 * time.Millisecond)
+		if l := listSessions(t, n); len(l) == 1 {
+			s = l[0]
+		}
+	}
+	if s.SessionID != startID || s.Status != proto.StatusOffline || s.Starting || !strings.Contains(s.StartError, "create herdr tab") {
+		t.Errorf("listed %+v", s)
+	}
+	trace := slices.DeleteFunc(f.trace(), func(c string) bool { return c == call("session.snapshot", nil) })
+	assertTrace(t, trace, []string{call("tab.create", map[string]any{"workspace_id": "w9", "cwd": home, "label": "agent-1", "focus": false})})
+}
+
 // Resuming a session that is already live does nothing in herdr but refresh the layout; herdr not running fails
 // before anything is created.
 func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {
 	n, f, home := herdrNode(t)
-	startHerdr(f, "w1:p1", proto.StatusIdle)
-	n.agents[startID] = herdr.Agent{Agent: "claude", PaneID: "w1:p1", WorkspaceID: "w1", TabID: "w1:t1", AgentStatus: proto.StatusIdle}
-	s, err := n.start(context.Background(), home, "", "", startID, "", "", "", "", "")
-	if err != nil || s.PaneID != "w1:p1" {
+	seedAgents(t, n, f, claudeAgent(startID, proto.StatusIdle, "w1:p1", "w1:t1", "w1", home, ""))
+	res, err := request(t, n, "session.start", map[string]any{"cwd": home, "resume_session_id": startID})
+	if s := decodeSessions(t, []any{res["session"]}); err != nil || s[0].PaneID != "w1:p1" {
 		t.Fatalf("%+v %v", s, err)
 	}
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
 
 	f.reset()
 	f.reply("workspace.list", herdrFail{Code: "internal", Message: "down"})
-	if _, err := n.start(context.Background(), home, "", "", "", "", "", "", "", ""); err == nil ||
-		!strings.Contains(err.Error(), "herdr is not running") {
+	if _, err := request(t, n, "session.start", map[string]any{"cwd": home}); err == nil || !strings.Contains(err.Error(), "herdr is not running") {
 		t.Fatalf("err %v", err)
 	}
 	assertTrace(t, f.trace(), []string{call("workspace.list", nil)})
 }
 
-// prompt: agent.prompt; an agent herdr does not detect (not_found) gets the text typed and enter pressed; other
-// errors are returned as they are.
-func TestHerdrPromptFallsBackToTyping(t *testing.T) {
+// session.send to an agent herdr does not prompt (agent.prompt: *_not_found, as for TRAEX): the text is typed and
+// enter pressed; other errors are returned as they are. A non-claude pane is checked with one plain read.
+func TestHerdrSendFallsBackToTyping(t *testing.T) {
 	n, f, _ := herdrNode(t)
-	ctx := context.Background()
-	if err := n.prompt(ctx, "w1:p1", "hi"); err != nil {
+	seedAgents(t, n, f,
+		agentOf("codex", sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/c", ""),
+		agentOf("codex", sidB, proto.StatusIdle, "w1:p2", "w1:t2", "w1", "/tmp/c", ""),
+		agentOf("codex", sidC, proto.StatusIdle, "w1:p3", "w1:t3", "w1", "/tmp/c", ""))
+	f.handle("agent.prompt", func(p map[string]any) any {
+		switch p["target"] {
+		case "w1:p1":
+			return herdrFail{Code: "agent_not_found", Message: "no agent in pane"}
+		case "w1:p2":
+			return herdrFail{Code: "pane_not_found", Message: "no pane"}
+		}
+		return herdrFail{Code: "internal", Message: "boom"}
+	})
+	send := func(id, text string) error {
+		_, err := request(t, n, "session.send", map[string]any{"session_id": id, "text": text})
+		return err
+	}
+	if err := send(sidA, "line one\nline two"); err != nil {
 		t.Fatal(err)
 	}
-	assertTrace(t, f.trace(), []string{call("agent.prompt", map[string]any{"target": "w1:p1", "text": "hi"})})
+	if err := send(sidB, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := send(sidC, "y"); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("err %v", err)
+	}
+	assertTrace(t, f.trace(), []string{
+		readVisible("w1:p1"),
+		call("agent.prompt", map[string]any{"target": "w1:p1", "text": "line one\nline two"}),
+		call("pane.send_text", map[string]any{"pane_id": "w1:p1", "text": "line one\nline two"}),
+		sendKeys("w1:p1", "enter"),
+		readVisible("w1:p2"),
+		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "x"}),
+		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": "x"}),
+		sendKeys("w1:p2", "enter"),
+		readVisible("w1:p3"),
+		call("agent.prompt", map[string]any{"target": "w1:p3", "text": "y"}),
+	})
+}
+
+// session.send to a claude: the box is checked first (a draft refuses the send, nothing typed); after the prompt a
+// box still showing it after the grace period gets one Enter.
+func TestHerdrSendChecksThePaneAndPressesEnterForAStuckPrompt(t *testing.T) {
+	withSubmitGrace(t, 200*time.Millisecond, 20*time.Millisecond)
+	n, f, _ := herdrNode(t)
+	seedAgents(t, n, f,
+		claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", ""),
+		claudeAgent(sidB, proto.StatusIdle, "w1:p2", "w1:t2", "w1", "/tmp/s", ""))
+	typedTxt, typedANSI := screenFixture(t, "claude-2.1.312-typed-162.txt"), screenFixture(t, "claude-2.1.312-typed-162.ansi")
+	f.setScreens("w1:p1", typedTxt, typedANSI)
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, _ := refusalOf(t, err); code != "input_draft" {
+		t.Fatalf("send over a draft: %v", err)
+	}
+	assertTrace(t, f.trace(), []string{readANSI("w1:p1")})
 
 	f.reset()
-	f.reply("agent.prompt", herdrFail{Code: "agent_not_found", Message: "no agent in pane"})
-	if err := n.prompt(ctx, "w1:p2", "line one\nline two"); err != nil {
+	f.setScreens("w1:p2", screenFixture(t, "claude-2.1.312-empty-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.ansi"))
+	f.after(func(c herdrCall) {
+		if c.Method == "agent.prompt" { // the box keeps showing what was prompted ("fix the flaky test")
+			f.setScreens("w1:p2", typedTxt, typedANSI)
+		}
+	})
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidB, "text": "fix the flaky test"}); err != nil {
+		t.Fatal(err)
+	}
+	assertTrace(t, squeeze(f.trace()), []string{
+		readANSI("w1:p2"),
+		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "fix the flaky test"}),
+		readANSI("w1:p2"), // polled until the grace is over
+		sendKeys("w1:p2", "enter"),
+	})
+}
+
+// session.send to a session that is not running: it is resumed (launcher and directory from what is known of it),
+// its pane checked again, then prompted.
+func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, filepath.Join(home, "proj"))
+	writeTranscript(t, home, cwd, sidA, time.Now(),
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"`+cwd+`","message":{"role":"user","content":"hello"}}`)
+	f.reply("workspace.list", map[string]any{"workspaces": []any{}})
+	f.reply("workspace.create", map[string]any{"workspace": map[string]any{"workspace_id": "w7"},
+		"tab": map[string]any{"tab_id": "w7:t1"}, "root_pane": map[string]any{"pane_id": "w7:p1"}})
+	startHerdr(f, "w7:p1", proto.StatusIdle)
+	f.setScreens("w7:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.ansi"))
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "go on"}); err != nil {
 		t.Fatal(err)
 	}
 	assertTrace(t, f.trace(), []string{
-		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "line one\nline two"}),
-		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": "line one\nline two"}),
-		call("pane.send_keys", map[string]any{"pane_id": "w1:p2", "keys": []string{"enter"}}),
+		call("session.snapshot", nil), // is it running?
+		call("workspace.list", nil),
+		call("workspace.create", map[string]any{"cwd": cwd, "label": "proj", "focus": false}),
+		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "agent-1"}),
+		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
+			"text": startCmd("claude", "--resume "+sidA, jarvisDir(home))}),
+		readVisible("w7:p1"), agentGet("w7:p1"),
+		readVisible("w7:p1"), agentGet("w7:p1"),
+		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0d0000"}),
+		call("session.snapshot", nil),
+		readANSI("w7:p1"), // the pane checked again
+		call("agent.prompt", map[string]any{"target": "w7:p1", "text": "go on"}),
+		readANSI("w7:p1"), // the box emptied: no enter
 	})
-
-	f.reset()
-	f.reply("agent.prompt", herdrFail{Code: "internal", Message: "boom"})
-	if err := n.prompt(ctx, "w1:p3", "x"); err == nil || !strings.Contains(err.Error(), "boom") {
-		t.Fatalf("err %v", err)
-	}
-	assertTrace(t, f.trace(), []string{call("agent.prompt", map[string]any{"target": "w1:p3", "text": "x"})})
 }
 
 // session.keys: pre_keys first (their own send_keys), then the text, then the keys; session.interrupt is esc.
 // A session herdr does not have is looked for in one snapshot and refused.
 func TestHerdrKeysWithPreKeys(t *testing.T) {
 	n, f, _ := herdrNode(t)
-	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
-	n.agents[sidA] = herdr.Agent{Agent: "claude", PaneID: "w1:p1"}
-	ctx := context.Background()
-	params, _ := json.Marshal(map[string]any{"session_id": sidA, "pre_keys": []string{"down", "down"}, "text": "other answer",
-		"keys": []string{"enter"}})
-	if _, err := n.handle(ctx, "session.keys", params); err != nil {
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/k", ""))
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "pre_keys": []string{"down", "down"},
+		"text": "other answer", "keys": []string{"enter"}}); err != nil {
 		t.Fatal(err)
 	}
-	params, _ = json.Marshal(map[string]any{"session_id": sidA})
-	if _, err := n.handle(ctx, "session.interrupt", params); err != nil {
+	if _, err := request(t, n, "session.interrupt", map[string]any{"session_id": sidA}); err != nil {
 		t.Fatal(err)
 	}
-	if err := n.keys(ctx, sidA, nil, ""); err != nil { // nothing to send: no call
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA}); err != nil { // nothing to send
 		t.Fatal(err)
 	}
 	assertTrace(t, f.trace(), []string{
-		call("pane.send_keys", map[string]any{"pane_id": "w1:p1", "keys": []string{"down", "down"}}),
+		sendKeys("w1:p1", "down", "down"),
 		call("pane.send_text", map[string]any{"pane_id": "w1:p1", "text": "other answer"}),
-		call("pane.send_keys", map[string]any{"pane_id": "w1:p1", "keys": []string{"enter"}}),
-		call("pane.send_keys", map[string]any{"pane_id": "w1:p1", "keys": []string{"esc"}}),
+		sendKeys("w1:p1", "enter"),
+		sendKeys("w1:p1", "esc"),
 	})
 
 	f.reset()
-	if err := n.keys(ctx, sidB, []string{"enter"}, ""); err == nil {
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidB, "keys": []string{"enter"}}); err == nil {
 		t.Fatal("keys to a session that is not running")
 	}
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
 }
 
-// close: ctrl+c twice, then the pane alone in a split tab, else the whole tab. A session Jarvis started that is gone
-// is already closed; one herdr never had cannot be closed.
+// session.close: ctrl+c twice, then the pane alone in a split tab, else the whole tab — also when the panes cannot be
+// counted. A session Jarvis started that is gone is already closed; one herdr never had cannot be closed.
 func TestHerdrClose(t *testing.T) {
 	n, f, _ := herdrNode(t)
-	ctx := context.Background()
-	n.agents[sidA] = herdr.Agent{Agent: "claude", PaneID: "w1:p1", TabID: "w1:t1", WorkspaceID: "w1"}
-	n.agents[sidB] = herdr.Agent{Agent: "claude", PaneID: "w1:p2", TabID: "w1:t2", WorkspaceID: "w1"}
-	f.reply("pane.list", map[string]any{"panes": []any{
-		map[string]any{"tab_id": "w1:t1"}, map[string]any{"tab_id": "w1:t1"}, map[string]any{"tab_id": "w1:t2"}}})
-	ctrlC := func(pane string) string {
-		return call("pane.send_keys", map[string]any{"pane_id": pane, "keys": []string{"ctrl+c"}})
-	}
-	if err := n.close(ctx, sidA); err != nil {
-		t.Fatal(err)
-	}
-	if err := n.close(ctx, sidB); err != nil {
-		t.Fatal(err)
+	seedAgents(t, n, f,
+		claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/c", ""),
+		claudeAgent(sidB, proto.StatusIdle, "w1:p2", "w1:t2", "w1", "/tmp/c", ""),
+		claudeAgent(sidC, proto.StatusIdle, "w2:p1", "w2:t1", "w2", "/tmp/c", ""))
+	f.handle("pane.list", func(p map[string]any) any {
+		if p["workspace_id"] == "w2" {
+			return herdrFail{Code: "internal", Message: "boom"}
+		}
+		return map[string]any{"panes": []any{
+			map[string]any{"tab_id": "w1:t1"}, map[string]any{"tab_id": "w1:t1"}, map[string]any{"tab_id": "w1:t2"}}}
+	})
+	for _, id := range []string{sidA, sidB, sidC} {
+		if _, err := request(t, n, "session.close", map[string]any{"session_id": id}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	assertTrace(t, f.trace(), []string{
-		ctrlC("w1:p1"), ctrlC("w1:p1"),
+		sendKeys("w1:p1", "ctrl+c"), sendKeys("w1:p1", "ctrl+c"),
 		call("pane.list", map[string]any{"workspace_id": "w1"}),
 		call("pane.close", map[string]any{"pane_id": "w1:p1"}),
-		ctrlC("w1:p2"), ctrlC("w1:p2"),
+		sendKeys("w1:p2", "ctrl+c"), sendKeys("w1:p2", "ctrl+c"),
 		call("pane.list", map[string]any{"workspace_id": "w1"}),
 		call("tab.close", map[string]any{"tab_id": "w1:t2"}),
+		sendKeys("w2:p1", "ctrl+c"), sendKeys("w2:p1", "ctrl+c"),
+		call("pane.list", map[string]any{"workspace_id": "w2"}),
+		call("tab.close", map[string]any{"tab_id": "w2:t1"}), // pane count unknown: the whole tab
 	})
 
 	f.reset()
-	n.state.put(sidC, sessionState{Launcher: "claude"})
-	if err := n.close(ctx, sidC); err != nil {
+	const gone = "0d000000-0000-4000-8000-0000000000ee"
+	rememberStarted(n, gone)
+	if _, err := request(t, n, "session.close", map[string]any{"session_id": gone}); err != nil {
 		t.Fatalf("gone already: %v", err)
 	}
-	if err := n.close(ctx, "0d000000-0000-4000-8000-0000000000ff"); err == nil {
+	if _, err := request(t, n, "session.close", map[string]any{"session_id": "0d000000-0000-4000-8000-0000000000ff"}); err == nil {
 		t.Fatal("closed a session herdr never had")
 	}
 	assertTrace(t, f.trace(), nil)
 }
 
-// editQueue: up pulls the queue into the box, ctrl+u + backspace once per line clears it, a last ctrl+u, then the
-// kept messages are prompted again in the order given.
+// session.queue.edit: up pulls the queue into the box, ctrl+u + backspace once per line clears it, a last ctrl+u,
+// then the kept messages are prompted again in the order given (an index out of range is skipped).
 func TestHerdrEditQueue(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := "/tmp/queue"
@@ -271,44 +454,54 @@ func TestHerdrEditQueue(t *testing.T) {
 		`{"type":"queue-operation","operation":"enqueue","content":"first"}`,
 		`{"type":"queue-operation","operation":"enqueue","content":"second\nhas two lines"}`,
 		`{"type":"queue-operation","operation":"enqueue","content":"third"}`)
-	n.agents[sidA] = herdr.Agent{Agent: "claude", PaneID: "w1:p1", Cwd: cwd}
-	queue, err := n.editQueue(context.Background(), sidA, []int{2, 0, 7})
-	if err != nil || strings.Join(queue, "|") != "first|second\nhas two lines|third" {
-		t.Fatalf("queue %q %v", queue, err)
+	writeTranscript(t, home, cwd, sidB, time.Now(), `{"type":"custom-title","customTitle":"x"}`)
+	seedAgents(t, n, f,
+		claudeAgent(sidA, proto.StatusWorking, "w1:p1", "w1:t1", "w1", cwd, ""),
+		claudeAgent(sidB, proto.StatusWorking, "w1:p2", "w1:t2", "w1", cwd, ""))
+	res, err := request(t, n, "session.queue.edit", map[string]any{"session_id": sidA, "keep": []int{2, 0, 7}})
+	if err != nil || strings.Join(strs(res["queue"]), "|") != "first|second\nhas two lines|third" {
+		t.Fatalf("queue %v %v", res, err)
 	}
-	keys := func(k ...string) string { return call("pane.send_keys", map[string]any{"pane_id": "w1:p1", "keys": k}) }
 	assertTrace(t, f.trace(), []string{
-		keys("up"),
-		keys("ctrl+u", "backspace"), keys("ctrl+u", "backspace"), keys("ctrl+u", "backspace"), keys("ctrl+u", "backspace"),
-		keys("ctrl+u"),
+		sendKeys("w1:p1", "up"),
+		sendKeys("w1:p1", "ctrl+u", "backspace"), sendKeys("w1:p1", "ctrl+u", "backspace"),
+		sendKeys("w1:p1", "ctrl+u", "backspace"), sendKeys("w1:p1", "ctrl+u", "backspace"),
+		sendKeys("w1:p1", "ctrl+u"),
 		call("agent.prompt", map[string]any{"target": "w1:p1", "text": "third"}),
 		call("agent.prompt", map[string]any{"target": "w1:p1", "text": "first"}),
 	})
 
 	// Nothing queued: no keys.
 	f.reset()
-	writeTranscript(t, home, cwd, sidB, time.Now(), `{"type":"custom-title","customTitle":"x"}`)
-	n.agents[sidB] = herdr.Agent{Agent: "claude", PaneID: "w1:p2", Cwd: cwd}
-	if _, err := n.editQueue(context.Background(), sidB, nil); err == nil {
+	if _, err := request(t, n, "session.queue.edit", map[string]any{"session_id": sidB}); err == nil {
 		t.Fatal("nothing queued")
 	}
 	assertTrace(t, f.trace(), nil)
 }
 
-// renameSpace renames the workspace; renameSession renames the tab of a live session and sends /rename for the title,
-// and writes the title into the transcript of a session that is not running.
+func strs(v any) []string {
+	var out []string
+	if l, ok := v.([]any); ok {
+		for _, s := range l {
+			out = append(out, str(s))
+		}
+	}
+	return out
+}
+
+// space.rename renames the workspace; session.rename renames the tab of a live session and sends /rename for the
+// title, and writes the title into the transcript of a session that is not running.
 func TestHerdrRenames(t *testing.T) {
 	n, f, home := herdrNode(t)
-	ctx := context.Background()
-	if err := n.renameSpace(ctx, "w1", "  backend "); err != nil {
+	seedAgents(t, n, f, claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/r", ""))
+	if _, err := request(t, n, "space.rename", map[string]any{"workspace_id": "w1", "name": "  backend "}); err != nil {
 		t.Fatal(err)
 	}
-	if err := n.renameSpace(ctx, "w1", " "); err == nil {
+	if _, err := request(t, n, "space.rename", map[string]any{"workspace_id": "w1", "name": " "}); err == nil {
 		t.Fatal("empty name")
 	}
-	n.agents[sidA] = herdr.Agent{Agent: "claude", PaneID: "w1:p1", TabID: "w1:t1"}
-	tab, title := " review ", "  fix   the\nbuild "
-	if err := n.renameSession(ctx, sidA, &tab, &title); err != nil {
+	if _, err := request(t, n, "session.rename", map[string]any{"session_id": sidA, "tab_name": " review ",
+		"title": "  fix   the\nbuild "}); err != nil {
 		t.Fatal(err)
 	}
 	assertTrace(t, f.trace(), []string{
@@ -320,11 +513,10 @@ func TestHerdrRenames(t *testing.T) {
 	// Not running: the tab cannot be renamed; the title goes into the transcript, no herdr call.
 	f.reset()
 	p := writeTranscript(t, home, "/tmp/r", sidB, time.Now(), `{"type":"custom-title","customTitle":"old"}`)
-	if err := n.renameSession(ctx, sidB, &tab, nil); err == nil {
+	if _, err := request(t, n, "session.rename", map[string]any{"session_id": sidB, "tab_name": "review"}); err == nil {
 		t.Fatal("renamed the tab of a session that is not running")
 	}
-	newTitle := "new title"
-	if err := n.renameSession(ctx, sidB, nil, &newTitle); err != nil {
+	if _, err := request(t, n, "session.rename", map[string]any{"session_id": sidB, "title": "new title"}); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p)

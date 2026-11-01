@@ -2,7 +2,9 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,6 +15,8 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
 
@@ -22,12 +26,12 @@ import (
 //
 // The recorder is what the characterization tests pin: the exact herdr calls (method + params) the node makes.
 type fakeHerdr struct {
-	t      *testing.T
 	sock   string
 	mu     sync.Mutex
 	log    []herdrCall
 	on     map[string]func(p map[string]any) any
 	screen map[string]string // pane id -> what pane.read returns
+	ansi   map[string]string // pane id -> what pane.read with format ansi returns (else screen)
 	hooks  []func(c herdrCall)
 }
 
@@ -46,14 +50,19 @@ func (c herdrCall) String() string {
 // herdrFail makes a handler answer with a herdr error instead of a result.
 type herdrFail struct{ Code, Message string }
 
+// connDeadline bounds one connection: a client that never writes its line cannot hold up the calls behind it.
+const connDeadline = 5 * time.Second
+
 func newFakeHerdr(t *testing.T) *fakeHerdr {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "hf") // short: unix socket paths are limited to ~100 bytes
+	// Under /tmp, not $TMPDIR: macOS limits unix socket paths to 104 bytes.
+	dir, err := os.MkdirTemp("/tmp", "hf")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	f := &fakeHerdr{t: t, sock: filepath.Join(dir, "h.sock"), on: map[string]func(map[string]any) any{}, screen: map[string]string{}}
+	f := &fakeHerdr{sock: filepath.Join(dir, "h.sock"), on: map[string]func(map[string]any) any{},
+		screen: map[string]string{}, ansi: map[string]string{}}
 	ln, err := net.Listen("unix", f.sock)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +82,7 @@ func newFakeHerdr(t *testing.T) *fakeHerdr {
 
 func (f *fakeHerdr) serveConn(c net.Conn) {
 	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(connDeadline))
 	line, err := bufio.NewReader(c).ReadBytes('\n')
 	if err != nil && len(line) == 0 {
 		return
@@ -91,7 +101,12 @@ func (f *fakeHerdr) serveConn(c net.Conn) {
 	h := f.on[req.Method]
 	var result any = map[string]any{}
 	if h == nil && req.Method == "pane.read" {
-		result = map[string]any{"read": map[string]any{"text": f.screen[str(req.Params["pane_id"])]}}
+		pane := str(req.Params["pane_id"])
+		text, ok := f.ansi[pane]
+		if !ok || req.Params["format"] != "ansi" {
+			text = f.screen[pane]
+		}
+		result = map[string]any{"read": map[string]any{"text": text}}
 	}
 	f.log = append(f.log, call)
 	hooks := slices.Clone(f.hooks)
@@ -115,9 +130,6 @@ func (f *fakeHerdr) serveConn(c net.Conn) {
 
 func str(v any) string { s, _ := v.(string); return s }
 
-// client is a herdr.Client talking only to this socket (no CLI fallback: Bin is empty).
-func (f *fakeHerdr) client() *herdr.Client { return &herdr.Client{Socket: f.sock} }
-
 // handle answers method with fn (a herdrFail result is sent as a herdr error).
 func (f *fakeHerdr) handle(method string, fn func(p map[string]any) any) {
 	f.mu.Lock()
@@ -135,6 +147,13 @@ func (f *fakeHerdr) setScreen(pane, text string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.screen[pane] = text
+}
+
+// setScreens gives pane a plain and a colored (format ansi) screen.
+func (f *fakeHerdr) setScreens(pane, plain, ansi string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.screen[pane], f.ansi[pane] = plain, ansi
 }
 
 // after runs fn after every call (outside the fake's lock, so fn may call setScreen).
@@ -219,6 +238,17 @@ func call(method string, params map[string]any) string {
 	return herdrCall{Method: method, Params: m}.String()
 }
 
+// squeeze collapses runs of the same call into one (polls whose count depends on timing).
+func squeeze(trace []string) []string {
+	var out []string
+	for _, c := range trace {
+		if len(out) == 0 || out[len(out)-1] != c {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func assertTrace(t *testing.T, got, want []string) {
 	t.Helper()
 	if slices.Equal(got, want) {
@@ -227,14 +257,46 @@ func assertTrace(t *testing.T, got, want []string) {
 	t.Fatalf("herdr calls differ\n got:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 }
 
+// snapshot is a session.snapshot result.
+func snapshot(workspaces, tabs, agents, panes []any) map[string]any {
+	nonNil := func(v []any) []any {
+		if v == nil {
+			return []any{}
+		}
+		return v
+	}
+	return map[string]any{"snapshot": map[string]any{"workspaces": nonNil(workspaces), "tabs": nonNil(tabs),
+		"agents": nonNil(agents), "panes": nonNil(panes)}}
+}
+
+// claudeAgent is a herdr agent entry for a claude whose session herdr knows ("" leaves agent_session out).
+func claudeAgent(session, status, pane, tab, ws, cwd, title string) map[string]any {
+	return agentOf("claude", session, status, pane, tab, ws, cwd, title)
+}
+
+func agentOf(kind, session, status, pane, tab, ws, cwd, title string) map[string]any {
+	a := map[string]any{"agent": kind, "agent_status": status, "pane_id": pane, "tab_id": tab, "workspace_id": ws,
+		"cwd": cwd, "terminal_title_stripped": title, "terminal_title": title}
+	if session != "" {
+		a["agent_session"] = map[string]any{"kind": "id", "value": session}
+	}
+	return a
+}
+
+// ---- Node adapters ----------------------------------------------------------------------------------------------
+//
+// The tests drive the node through its request handler (what the hub calls) and see herdr only through the fake.
+// Everything below touches node internals; when herdr moves behind a host interface, this block is what changes.
+
 // herdrNode is a Node wired to a fresh fake herdr, with a temp home (~/.claude/projects exists, empty) and every map
-// the herdr paths touch. Global caches that outlive a test (offline list, TRAEX panes / status) are cleared.
+// the herdr paths touch. The two package-level caches that outlive a test (the offline list and TRAEX's panes and
+// statuses) are cleared before and after it; the other caches are keyed by the test's own temp paths.
 func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	t.Helper()
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	f := newFakeHerdr(t)
 	n, home := testNode(t)
-	n.herdr, n.dir = f.client(), filepath.Join(home, ".jarvis")
+	n.herdr, n.dir, n.bin = &herdr.Client{Socket: f.sock}, filepath.Join(home, ".jarvis"), "/tmp/jarvis-test/jarvisd"
 	n.panes, n.panePIDs, n.modes, n.driving = map[string]string{}, map[string]panePID{}, map[string]sessionModes{}, map[string]bool{}
 	n.files, n.metas, n.bgScans = map[string]*transcript.File{}, map[string]quickMeta{}, map[string]*bgScan{}
 	for _, d := range []string{n.dir, filepath.Join(home, ".claude", "projects")} {
@@ -255,24 +317,124 @@ func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	return n, f, home
 }
 
-// snapshot is a session.snapshot result.
-func snapshot(workspaces, tabs, agents, panes []any) map[string]any {
-	nonNil := func(v []any) []any {
-		if v == nil {
-			return []any{}
-		}
-		return v
+// request runs one hub request through the node's handler; the result comes back as decoded JSON.
+func request(t *testing.T, n *Node, method string, params map[string]any) (map[string]any, error) {
+	t.Helper()
+	b, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return map[string]any{"snapshot": map[string]any{"workspaces": nonNil(workspaces), "tabs": nonNil(tabs),
-		"agents": nonNil(agents), "panes": nonNil(panes)}}
+	res, err := n.handle(context.Background(), method, b)
+	out := map[string]any{}
+	if res != nil {
+		rb, _ := json.Marshal(res)
+		_ = json.Unmarshal(rb, &out)
+	}
+	return out, err
 }
 
-// claudeAgent is a herdr agent entry for a claude whose session herdr knows ("" leaves agent_session out).
-func claudeAgent(session, status, pane, tab, ws, cwd, title string) map[string]any {
-	a := map[string]any{"agent": "claude", "agent_status": status, "pane_id": pane, "tab_id": tab, "workspace_id": ws,
-		"cwd": cwd, "terminal_title_stripped": title, "terminal_title": title}
-	if session != "" {
-		a["agent_session"] = map[string]any{"kind": "id", "value": session}
+// listSessions is sessions.list: a fresh look at herdr and the sessions it gives.
+func listSessions(t *testing.T, n *Node) []proto.Session {
+	t.Helper()
+	res, err := request(t, n, "sessions.list", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	return a
+	return decodeSessions(t, res["sessions"])
 }
+
+func decodeSessions(t *testing.T, v any) []proto.Session {
+	t.Helper()
+	b, _ := json.Marshal(v)
+	var list []proto.Session
+	if err := json.Unmarshal(b, &list); err != nil {
+		t.Fatal(err)
+	}
+	return list
+}
+
+// cachedSessions is the list built from the last look at herdr (what pushes carry), asking herdr nothing.
+func cachedSessions(n *Node) []proto.Session { return n.sessionList(context.Background(), false) }
+
+// seedAgents makes herdr report agents (and nothing else) and lets the node see them, then forgets those calls.
+func seedAgents(t *testing.T, n *Node, f *fakeHerdr, agents ...any) {
+	t.Helper()
+	f.reply("session.snapshot", snapshot(nil, nil, agents, nil))
+	listSessions(t, n)
+	f.reset()
+}
+
+// bindPane is what a hook event (or a start) tells the node: this pane runs this session.
+func bindPane(n *Node, pane, id string) { n.bindPane(pane, id) }
+
+// seedTraexPane stands for HERDR_PANE_ID in a live process's environment (read with ps / /proc otherwise).
+func seedTraexPane(pid int, pane string) {
+	traexCache.Lock()
+	traexCache.panes[pid] = pane
+	traexCache.Unlock()
+}
+
+// ageTraexStatus makes every remembered TRAEX status older than its 2 s cache.
+func ageTraexStatus() {
+	traexCache.Lock()
+	for p, s := range traexCache.status {
+		s.at = s.at.Add(-time.Minute)
+		traexCache.status[p] = s
+	}
+	traexCache.Unlock()
+}
+
+// withSuggestReads shortens when the screen is read for a suggestion after a turn.
+func withSuggestReads(t *testing.T, at ...time.Duration) {
+	old := suggestReads
+	suggestReads = at
+	t.Cleanup(func() { suggestReads = old })
+}
+
+// withSubmitGrace shortens how long a prompt may sit in the box before Enter is pressed for it.
+func withSubmitGrace(t *testing.T, grace, poll time.Duration) {
+	g, p := submitGrace, submitPoll
+	submitGrace, submitPoll = grace, poll
+	t.Cleanup(func() { submitGrace, submitPoll = g, p })
+}
+
+// hubPush is one notification the node sent the hub.
+type hubPush struct {
+	Event  string          `json:"event"`
+	Params json.RawMessage `json:"params"`
+}
+
+// pollNode runs the node's herdr poll loop (no event stream: a snapshot every tick) with a hub connection, and
+// returns what it pushes; stop ends the loop and waits until it has returned.
+func pollNode(t *testing.T, n *Node) (pushes <-chan hubPush, stop func()) {
+	t.Helper()
+	pr, pw := io.Pipe()
+	n.peer, n.events = rpc.New("n", pw), newHerdrEvents()
+	out := make(chan hubPush, 64)
+	go func() {
+		sc := bufio.NewScanner(pr)
+		sc.Buffer(make([]byte, 1<<20), 1<<24)
+		for sc.Scan() {
+			var m hubPush
+			if json.Unmarshal(sc.Bytes(), &m) == nil {
+				out <- m
+			}
+		}
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { n.pollAgents(ctx); close(done) }()
+	var once sync.Once
+	stop = func() {
+		once.Do(func() {
+			cancel()
+			<-done
+			pw.Close()
+		})
+	}
+	t.Cleanup(stop)
+	return out, stop
+}
+
+// rememberStarted is what the hub's state store says after a node restart: Jarvis started this session.
+func rememberStarted(n *Node, id string) { n.state.put(id, sessionState{Launcher: "claude"}) }

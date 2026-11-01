@@ -20,10 +20,10 @@ func TestTraexOwners(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("01a181ac-9df1-7171-824c-cf63a7531555", os.Getpid())
-	write("01a181ce-c31c-75b1-a332-5f26bd26bb6a", 1<<30) // no such process
+	write("0f000000-0000-4000-8000-0000000000a1", os.Getpid())
+	write("0f000000-0000-4000-8000-0000000000a2", 1<<30) // no such process
 	got := n.traexOwners()
-	if len(got) != 1 || got[os.Getpid()] != "01a181ac-9df1-7171-824c-cf63a7531555" {
+	if len(got) != 1 || got[os.Getpid()] != "0f000000-0000-4000-8000-0000000000a1" {
 		t.Fatalf("owners = %v", got)
 	}
 }
