@@ -54,7 +54,7 @@
 | 链接在 App 内打开（底部卡片） | 详情栏右侧滑出网页面板（可拖宽，⌘W 关闭，「在浏览器打开」），也可以拖成单独窗口 |
 | 灵动岛 / 锁屏实时活动 | 菜单栏图标（`MenuBarExtra`）：需要你 / 工作中的数量，点开列出待处理，直接批准 / 拒绝 / 回答 |
 | 推送通知 | 系统通知（同样的批准 / 拒绝 / 打回按钮），点开跳到对话 |
-| 手机数据（phone_*） | 同一套工具，用 Mac 的通讯录、日历、提醒、照片、位置、剪贴板；健康数据 Mac 上没有 |
+| 手机数据（phone_*） | 不提供：Mac 登记成桌面端，phone_* 只认 iPhone（2026-11-01，见「Mac 是桌面端，不是手机」） |
 | 拍照、扫码配对 | 拖入 / 粘贴图片；配对用粘贴 `jarvis://pair` 链接或在浏览器里点链接 |
 | 终端键栏（Ctrl、Esc、方向键） | 真键盘直接打字；终端获焦时所有键（含 ⌃ 组合）交给终端，⌘ 组合留给 App。键栏暂时还在（⚡ 快捷命令只从那里进），第一次打开时讲触屏手势的提示 Mac 上不显示 |
 | Siri / 快捷指令 | App Intents 同样提供（Mac 的快捷指令 App、Spotlight） |
@@ -129,11 +129,12 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
   - 扫码配对（VisionKit `DataScannerViewController`）：换成「粘贴配对链接」按钮（`Mac/Settings/PairingPaste+Mac.swift`），或直接打开 `jarvis://pair?…` 链接。
   - 远程推送：target 还没有 APNs entitlement，`PushRegistrar` 不注册；App 开着时靠 WebSocket，本地通知照常。
   - 健康数据：macOS 有 HealthKit 的接口但没有数据，`phone_health_summary` 在 Mac 上不注册（`PhoneToolRegistry.healthTools`）；设置 › 连接器 › 这台 Mac 里也没有健康开关（`PhoneDataSource.onThisDevice`，有测试），「N 项已打开」同样不算它。页脚的说明改成了 Mac 的说法（问你的是这台 Mac）。待查：截图里设置页的长页脚（这里、通知页）只显示一行带省略号，加 `fixedSize` 也一样，分不清是 `-macSnapshot` 重画 List 行的问题还是真的被截，要解锁后用真截图看。
-  - **待定（2026-11-01 查到，没改）**：Mac 版连上真 hub 后也发 `register_phone`（`AppModel.registerPhone`，`simulator: false`，设备名是 Mac 的）。hub 只有一个「手机」
-    （`hub.phoneClient`：真机优先于模拟器，再取最近注册的），于是 Mac 一直在线时 phone_* 全落到 Mac 上；iPhone 进后台断开时 hub 看见有「手机」在线，
-    不再静默推送唤醒 iPhone（`callPhone` → `wakePhone` 只在一个都没有时才走）；而且 `setPhoneTools` 用 Mac 报的工具表整个替换，Mac 不注册健康，
-    `phone_health_summary` 就从 Claude 那里消失了。要不要让 Mac 提供 phone_*、两台都在时听谁的（比如 Mac 只在没有 iPhone 时兜底、或工具按设备分开注册）是产品决定，
-    得 hub 一起改；在那之前别让 Mac 版常驻连真 hub。
+  - **Mac 是桌面端，不是手机**（2026-11-01 用户定：照微信「Mac 微信已登录」的做法）：以前 Mac 版也发 `register_phone`，hub 只有一个「手机」
+    （`hub.phoneClient`），Mac 一直在线时 phone_* 全落到 Mac 上、hub 不再推送唤醒进了后台的 iPhone、Mac 的工具表还把 `phone_health_summary` 冲掉了。
+    现在 Mac 发 `register_desktop`（`AppModel.registration`，有测试），phone_* 只认 iPhone；Mac 开着而 iPhone 不在时，Claude 拿不到手机数据，属预期。
+    设置 › 连接器 里「这台 Mac」那一行在 Mac 上去掉了（hub 不会再调它的工具），欢迎页的说法改成数据来自 iPhone 上的 Jarvis。
+    iPhone 那边：Agents 列表最上面一行「Mac 上的 Jarvis 已登录」，点开能开「手机静音」（Mac 在线时手机不推「需要你处理」「Agent 做完」，
+    由 Mac 提醒；助手按你的要求发的提醒照推）、看登录时间、退出那台 Mac（吊销它的设备凭据，要重新配对）。协议见 `docs/protocol.md` 的 `desktops` / `register_desktop`。
 - 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（应做成真正的三栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；终端的 option 键不当 meta；代码行只有整行选择、没有 ⌘F；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
@@ -514,6 +515,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   「打开会话」在 Mac 上清掉 知识库 / 机器 的侧栏覆盖再打开对话。还没在 Mac 的「快捷指令」App 里实际跑过。
 
 ## 21. Phone tools (phone_* MCP)
+- Mac（2026-11-01）：这一节在 Mac 上不再适用——Mac 登记成桌面端，hub 不调它的 phone_* 工具（见上面「Mac 是桌面端，不是手机」）。
 - [ ] Register enabled tools on connect, tool_call → tool_result, write confirmations — PhoneTools/PhoneToolRegistry.swift, PhoneTool.swift, PhoneToolSupport.swift, AppModel.registerPhone
 - [ ] Contacts search — PhoneTools/ContactsTool.swift
 - [ ] Calendar events list/create — PhoneTools/CalendarTool.swift

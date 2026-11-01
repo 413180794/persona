@@ -36,6 +36,8 @@ nonisolated enum ServerEvent: Sendable {
     case inbox
     /// The Fleet Live Activity's content changed (hub/liveactivity.go).
     case fleet(FleetState)
+    /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
+    case desktops([DesktopDevice])
     case terminal(SessionKey, TerminalEvent)
     case error(SessionKey?, String)
 
@@ -66,6 +68,7 @@ nonisolated enum ServerEvent: Sendable {
         var revs: [String: Int64]?
         var feedIDs: [String]?
         var fleet: FleetState?
+        var desktops: [DesktopDevice]?
         var features: [String]?
         var epoch: String?
         var seq: Int?
@@ -78,7 +81,7 @@ nonisolated enum ServerEvent: Sendable {
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids"
@@ -119,6 +122,7 @@ nonisolated enum ServerEvent: Sendable {
         case "lark": return .lark(feedIDs: e.feedIDs ?? [])
         case "inbox": return .inbox
         case "fleet": return e.fleet.map { .fleet($0) }
+        case "desktops": return .desktops(e.desktops ?? [])
         case "terminal":
             guard let key else { return nil }
             if let error = e.error { return .terminal(key, .ended(error, unsupported: e.unsupported ?? false)) }

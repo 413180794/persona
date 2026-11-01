@@ -346,6 +346,11 @@ private struct AgentsList: View {
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         List {
+            #if os(iOS)
+            if !model.desktops.isEmpty && query.isEmpty {
+                Section { DesktopPresenceRow() } // 「Mac 上的 Jarvis 已登录」, WeChat's line over its chats
+            }
+            #endif
             if !interactions.isEmpty && query.isEmpty {
                 Section {
                     ForEach(interactions) { ix in

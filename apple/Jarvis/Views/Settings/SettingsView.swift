@@ -405,7 +405,8 @@ struct WelcomeView: View {
                 #if os(macOS)
                 // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
                 feature("hand.tap", "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
-                feature(Theme.Icon.laptop, "带上这台 Mac 和邮箱", "日历、提醒、通讯录、照片、Gmail")
+                // The phone's data comes from the iPhone's Jarvis; the Mac is a desktop (AppModel.registration).
+                feature(Theme.Icon.mailAccounts, "带上邮箱和你的 iPhone", "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Jarvis")
                 #else
                 feature("hand.tap", "在手机上拍板", "回答提问、审批计划、授权工具，手表也行")
                 feature("iphone.gen3", "带上你的手机和邮箱", "日历、提醒、通讯录、健康、照片、Gmail")

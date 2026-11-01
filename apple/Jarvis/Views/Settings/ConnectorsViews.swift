@@ -59,6 +59,8 @@ struct ConnectorsSection: View {
 
     var body: some View {
         Section {
+            #if os(iOS)
+            // A Mac is a desktop, not the phone: the hub never calls its tools (AppModel.registration).
             NavigationLink(value: SettingsPage.phoneData) {
                 LabeledContent {
                     Text(ConnectorText.deviceSummary()).lineLimit(1)
@@ -66,6 +68,7 @@ struct ConnectorsSection: View {
                     Label(ConnectorText.device, systemImage: Theme.Icon.thisDevice)
                 }
             }
+            #endif
             NavigationLink(value: SettingsPage.mail) {
                 LabeledContent {
                     Text(ConnectorText.mailSummary(accounts)).lineLimit(1)

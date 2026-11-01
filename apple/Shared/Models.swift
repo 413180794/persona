@@ -566,9 +566,32 @@ nonisolated struct TranslatePrefsBody: Codable, Equatable, Sendable {
     var mail: Bool
 }
 
+/// A desktop app (the Mac app) connected to the hub, like WeChat's 「Mac 微信已登录」 (docs/protocol.md「桌面端」).
+nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
+    /// Its device token's id (what 退出 revokes); empty when it connected with the pairing token.
+    var device: String
+    var name: String
+    var since: Date?
+
+    var id: String { device.isEmpty ? "name:" + name : device }
+
+    /// The banner's line: 「Mac 上的 Jarvis 已登录」, or how many when there are several.
+    static func bannerTitle(_ list: [DesktopDevice]) -> String {
+        list.count > 1 ? "\(list.count) 台 Mac 上的 Jarvis 已登录" : "Mac 上的 Jarvis 已登录"
+    }
+}
+
+/// The body that sets 手机静音 and nothing else (APIClient.setMuteWhileDesktop).
+nonisolated struct MuteWhileDesktopPut: Encodable, Sendable {
+    var on: Bool
+    enum CodingKeys: String, CodingKey { case on = "mute_while_desktop" }
+}
+
 nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum Done: String, Codable, CaseIterable, Sendable { case off, long, always }
     var input: Bool = true
+    /// 手机静音 (WeChat's): no pushes to this phone while a desktop app is connected (hub/desktops.go).
+    var muteWhileDesktop = false
     var done: Done = .long
     /// The Fleet Live Activity on the lock screen / Dynamic Island (docs/live-activity.md).
     var liveActivity: Bool = true
@@ -584,6 +607,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case input, done
         case liveActivity = "live_activity", lockDetails = "lock_details", island, translate
+        case muteWhileDesktop = "mute_while_desktop"
         case longTurnSeconds = "long_turn_seconds", doneDelaySeconds = "done_delay_seconds"
     }
 
@@ -604,6 +628,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         island = (try? c.decodeIfPresent(IslandPrefs.self, forKey: .island)) ?? IslandPrefs()
         longTurnSeconds = try c.decodeIfPresent(Int.self, forKey: .longTurnSeconds)
         doneDelaySeconds = try c.decodeIfPresent(Int.self, forKey: .doneDelaySeconds)
+        muteWhileDesktop = try c.decodeIfPresent(Bool.self, forKey: .muteWhileDesktop) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -613,6 +638,7 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
         try c.encode(liveActivity, forKey: .liveActivity)
         try c.encode(lockDetails, forKey: .lockDetails)
         try c.encode(island, forKey: .island)
+        // muteWhileDesktop is not sent back: the banner writes it alone (MuteWhileDesktopPut).
     }
 
     /// "1 分钟" / "90 秒": how the page words a duration from the hub.

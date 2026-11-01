@@ -714,6 +714,10 @@ nonisolated struct APIClient: Sendable {
 
     /// Which pushes this device wants (hub: notify.go).
     func notifyPrefs(device: String) async throws -> NotifyPrefs { try await get("/api/v1/devices/\(device)/prefs") }
+    /// 手机静音 alone (the PUT merges): nothing else this device chose is written back with it.
+    func setMuteWhileDesktop(device: String, _ on: Bool) async throws -> NotifyPrefs {
+        try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: MuteWhileDesktopPut(on: on)))
+    }
     func setNotifyPrefs(device: String, _ prefs: NotifyPrefs) async throws -> NotifyPrefs {
         try JSON.decoder.decode(NotifyPrefs.self, from: try await request("PUT", "/api/v1/devices/\(device)/prefs", body: prefs))
     }

@@ -172,6 +172,8 @@ final class AppModel {
         machines = []
         sessionsByMachine = [:]
         interactions = [:]
+        desktops = []
+        muteWhileDesktop = false
         live.disconnect()
         live.connect(new)
         WatchSync.shared.push(config: new)
@@ -192,6 +194,8 @@ final class AppModel {
         machines = []
         sessionsByMachine = [:]
         interactions = [:]
+        desktops = []
+        muteWhileDesktop = false
         selectedTab = .chats
         live.connect(.demo)
         toast = Toast("已进入体验模式，数据都是编造的")
@@ -227,6 +231,8 @@ final class AppModel {
         machines = []
         sessionsByMachine = [:]
         interactions = [:]
+        desktops = []
+        muteWhileDesktop = false
         chats = [:]
         subscribers = [:]
         shown = []
@@ -413,6 +419,11 @@ final class AppModel {
 
     /// What the hub listed in its hello: `terminal_stream` means the terminal tab can subscribe to live frames.
     private(set) var hubFeatures: Set<String> = []
+    /// The desktop apps (the Mac app) connected to the hub: the iPhone's 「Mac 上的 Jarvis 已登录」 (DesktopPresence.swift).
+    private(set) var desktops: [DesktopDevice] = []
+    /// 手机静音: this device's NotifyPrefs.muteWhileDesktop, shown on that banner.
+    private(set) var muteWhileDesktop = false
+    @ObservationIgnored private var muteWrites = 0
     /// The terminal views streaming each session (one at a time; a newer one replaces the handler).
     @ObservationIgnored private var terminalHandlers: [SessionKey: (TerminalEvent) -> Void] = [:]
 
@@ -607,7 +618,48 @@ final class AppModel {
         #else
         let simulator = false
         #endif
-        live.send(["type": "register_phone", "device_name": UIDevice.current.name, "tools": arr, "simulator": simulator])
+        live.send(Self.registration(deviceName: UIDevice.current.name, tools: arr, simulator: simulator))
+    }
+
+    /// Turns 手机静音 on or off: optimistic, only this one setting is written (the PUT merges), and only the latest
+    /// switch's answer counts (a quick on → off must not end on whichever reply came last).
+    func setMuteWhileDesktop(_ on: Bool) async {
+        guard let api else { return }
+        muteWrites += 1
+        let mine = muteWrites
+        muteWhileDesktop = on
+        do {
+            let saved = try await api.setMuteWhileDesktop(device: PushRegistrar.deviceID, on).muteWhileDesktop
+            guard mine == muteWrites else { return }
+            muteWhileDesktop = saved
+            Haptics.success()
+        } catch {
+            guard mine == muteWrites else { return }
+            muteWhileDesktop = !on
+            show(error)
+        }
+    }
+
+    /// 退出 a desktop: revokes its device token; the hub closes its connection and says it is gone (desktops event).
+    func signOutDesktop(_ d: DesktopDevice) async {
+        guard let api, !d.device.isEmpty else { return }
+        do {
+            try await api.revokeToken(d.device)
+            Haptics.success()
+        } catch {
+            show(error)
+        }
+    }
+
+    /// How this device introduces itself to the hub. The iPhone is the phone (its phone_* tools, the wake pushes when
+    /// it is away); a Mac is a desktop, like WeChat's 「Mac 微信已登录」 (hub/desktops.go, docs/mac.md「Mac 是桌面端，不是手机」):
+    /// registered as the phone it took every phone_* call and kept the hub from waking the iPhone.
+    nonisolated static func registration(deviceName: String, tools: Any, simulator: Bool) -> [String: Any] {
+        #if os(macOS)
+        ["type": "register_desktop", "device_name": deviceName]
+        #else
+        ["type": "register_phone", "device_name": deviceName, "tools": tools, "simulator": simulator]
+        #endif
     }
 
     private func handle(_ ev: ServerEvent) {
@@ -617,6 +669,13 @@ final class AppModel {
         switch ev {
         case .hello(let features):
             hubFeatures = Set(features)
+            #if DEBUG
+            // `-showDesktopSample YES`: a Mac signed in (and 手机静音 on), for screenshots of the banner (the demo hub sends no desktops).
+            if UserDefaults.standard.bool(forKey: "showDesktopSample") {
+                desktops = [DesktopDevice(device: "dev_sample", name: "MacBook Pro", since: Date().addingTimeInterval(-3600))]
+                muteWhileDesktop = true
+            }
+            #endif
             for handler in terminalHandlers.values { handler(.reconnected) }
         case .terminal(let key, let event):
             terminalHandlers[key]?(event)
@@ -645,6 +704,8 @@ final class AppModel {
             InboxStore.shared.reload()
         case .fleet(let state):
             LiveActivityController.shared.apply(state)
+        case .desktops(let list):
+            desktops = list
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
@@ -1089,7 +1150,12 @@ final class AppModel {
         guard let api else { return }
         Task { await loadPins() }
         Task {
+            let writes = muteWrites
             if let p = try? await api.notifyPrefs(device: PushRegistrar.deviceID) {
+                if writes == muteWrites { muteWhileDesktop = p.muteWhileDesktop } // not over a switch made meanwhile
+                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "showDesktopSample") { muteWhileDesktop = true } // the demo hub's prefs say off
+                #endif
                 Translator.shared.syncPrefs(hubHas: p.translate)
                 LiveActivityController.shared.settings(p)
             }

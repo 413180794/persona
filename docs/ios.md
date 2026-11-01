@@ -504,6 +504,17 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - 体验模式下不申请通知权限、不注册 APNs、不 `register_phone`、不推配对信息给手表、不换设备凭据。
 - 审核备注（`app_store.external.review.notes`）写了从配对页进体验模式。
 
+## Mac 已登录（2026-11-01）
+
+照微信「Mac 微信已登录」：Mac 上的 Jarvis 连着 hub 时，Agents 列表最上面一行「Mac 上的 Jarvis 已登录」（几台就写几台），开了手机静音时右边带「手机静音」；
+搜索时不显示。点开是一张卡片（`Views/Settings/DesktopPresence.swift`）：
+
+- 手机静音：Mac 在线时这台 iPhone 不再收到「需要你处理」「Agent 做完」的推送，由 Mac 提醒；助手按你的要求发的提醒照推。存在这台设备的推送设置里（`mute_while_desktop`），默认关。
+- 每台 Mac 的名字和登录时间，「退出这台 Mac 上的 Jarvis」：吊销它的设备凭据，hub 立刻断开它，要重新配对才能再用。用配对凭据直接连的 Mac 不能单独退出。
+
+放在 Agents 列表顶上而不是顶栏：顶栏是两页共用的，常驻一条会盖住内容；列表顶上这一行跟着滚走，和微信一样。Mac 自己登记成桌面端，不当手机（`docs/mac.md`「Mac 是桌面端，不是手机」）。
+截图：`-showDesktopSample YES`（假装有一台 Mac、手机静音开着），`-openDesktopSheet YES` 打开卡片。
+
 ## 连接状态（弱网 / 断网）
 
 参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的
