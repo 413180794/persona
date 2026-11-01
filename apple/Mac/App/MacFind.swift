@@ -63,4 +63,36 @@ import AppKit
 /// A view with its own find (the code viewer's find bar): 查找… ⌘F opens it.
 @MainActor protocol MacFindable: AnyObject {
     func showFind()
+    func findNext(forward: Bool)
+}
+
+extension MacFind {
+    /// 编辑 › 查找下一个 ⌘G / 查找上一个 ⇧⌘G: to whatever 查找… opened. A text view with its own find bar (diffs, output)
+    /// steps through its matches; the code viewer (`MacFindable`) with the keyboard or in the window steps through
+    /// its own. A window with only a search field has nothing to step through.
+    static func findNext(forward: Bool) {
+        guard let w = NSApp.keyWindow else { return }
+        findNext(in: w, forward: forward)
+    }
+
+    static func findNext(in w: NSWindow, forward: Bool) {
+        if let tv = w.firstResponder as? NSTextView, tv.usesFindBar {
+            // The find field's own editor is a text view too, but not one with a find bar: it falls through to the
+            // code viewer below.
+            let item = NSMenuItem()
+            item.tag = (forward ? NSTextFinder.Action.nextMatch : .previousMatch).rawValue
+            tv.performFindPanelAction(item)
+            return
+        }
+        var r = w.firstResponder
+        while let x = r {
+            if let f = x as? MacFindable {
+                f.findNext(forward: forward)
+                return
+            }
+            r = x.nextResponder
+        }
+        let roots = [w.contentView?.superview ?? w.contentView].compactMap { $0 }
+        if let f = roots.flatMap(findables).first(where: { visible($0) }) { (f as? MacFindable)?.findNext(forward: forward) }
+    }
 }

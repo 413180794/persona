@@ -125,6 +125,10 @@ struct MacCommands: Commands {
         CommandGroup(after: .textEditing) {
             Button("查找…") { MacFind.find() }
                 .keyboardShortcut("f", modifiers: .command)
+            Button("查找下一个") { MacFind.findNext(forward: true) }
+                .keyboardShortcut("g", modifiers: .command)
+            Button("查找上一个") { MacFind.findNext(forward: false) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
         }
         CommandMenu("前往") {
             Button("快速打开…") { MacShellState.shared.quickOpen.toggle() }

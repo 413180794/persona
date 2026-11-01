@@ -32,18 +32,23 @@ struct GitPane: View {
         .listStyle(.insetGrouped)
         .themedPage()
         .refreshable { await load() }
+        #if os(macOS)
+        .toolbar { MacRefreshItem { await load() } } // no pull to refresh on the Mac
+        #endif
         .task(id: cwd) { await load() }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, cwd: cwd, target: t) }
         .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, cwd: cwd, commit: c) }
         #if os(macOS) && DEBUG
         .onAppear {
             // `-macGitSheet diff|commit`: a made-up change / commit's sheet, to see its size on the Mac (demo mode has
-            // no repositories, so it shows its error state).
+            // no repositories, so it shows its error state). The change and the commit are the ones scripts/mock_hub.py
+            // (MOCK_FILES=1) answers for, so paired with it the sheets show a real diff.
             switch UserDefaults.standard.string(forKey: "macGitSheet") {
             case "diff":
-                diff = GitDiffTarget(file: GitFile(path: "Sources/App.swift", index: "M", worktree: "M", added: 3, deleted: 1), staged: false)
+                diff = GitDiffTarget(file: GitFile(path: "Sources/App/main.swift", index: "M", worktree: "M", added: 2, deleted: 1), staged: false)
             case "commit":
-                commit = GitCommit(hash: String(repeating: "0", count: 40), short: "0000000", subject: "Add the widget", author: "me")
+                commit = GitCommit(hash: String(repeating: "0", count: 32) + "a1b2c3d0", short: "a1b2c3d", subject: "Show the city name",
+                                   author: "Sample Dev")
             default: break
             }
         }

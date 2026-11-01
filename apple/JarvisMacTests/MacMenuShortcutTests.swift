@@ -41,7 +41,7 @@ struct MacMenuShortcutTests {
         let all = await items()
         let titles = Dictionary(all.map { ($0.title, $0.shortcut.description) }, uniquingKeysWith: { a, _ in a })
         let promised: [String: String] = [
-            "快速打开…": "⌘k", "查找…": "⌘f", "交给 Jarvis": "⌘j", "显示会话信息": "⌥⌘i", "中断": "⌘.",
+            "快速打开…": "⌘k", "查找…": "⌘f", "查找下一个": "⌘g", "查找上一个": "⇧⌘g","交给 Jarvis": "⌘j", "显示会话信息": "⌥⌘i", "中断": "⌘.",
             "上一个 Agent": "⌘[", "下一个 Agent": "⌘]", "下一个需要你的": "⌃⌘n",
             "放大字号": "⌘+", "缩小字号": "⌘-", "标准字号": "⌘0",
             "隐藏侧边栏": "⌃⌘s", "刷新": "⌘r",

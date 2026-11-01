@@ -41,6 +41,9 @@ struct FilesPane: View {
         }
         .task(id: path) { await load() }
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
+        #if os(macOS)
+        .toolbar { MacRefreshItem { await load() } } // no pull to refresh on the Mac
+        #endif
     }
 
     private var breadcrumb: some View {

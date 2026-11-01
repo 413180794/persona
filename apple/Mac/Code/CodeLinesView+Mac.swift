@@ -73,6 +73,8 @@ final class CodeLinesView: NSView, MacFindable {
 
     func showFind() { find?.show() }
 
+    func findNext(forward: Bool) { find?.next(forward: forward) }
+
     /// The first line at the top of what is visible (where a new query starts looking).
     var topLine: Int { max(0, Int((visibleRect.minY - pad.top) / lineHeight)) }
 

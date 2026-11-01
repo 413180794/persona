@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import Jarvis
 
@@ -72,4 +72,77 @@ struct CodeFindTests {
         #expect(CodeFind.first(in: m, atOrAfter: 3) == 0)
         #expect(CodeFind.first(in: [], atOrAfter: 0) == nil)
     }
+}
+
+/// 查找下一个 ⌘G / 查找上一个 ⇧⌘G over an open file: the bar's model steps through the matches, going round; with the
+/// bar closed ⌘G opens it again on the last query, at the first match from the top of what is shown.
+@MainActor
+struct CodeFindNextTests {
+    private func viewer(_ lines: [String]) -> (CodeLinesView, CodeFindModel, LinesSource) {
+        let source = LinesSource(lines)
+        // In a scroll view, as `CodeLines` puts it (its top line comes from what the scroll view shows).
+        let view = CodeLinesView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        scroll.documentView = view
+        let find = CodeFindModel()
+        view.find = find
+        find.view = view
+        view.source = source
+        source.scroll = scroll
+        return (view, find, source) // the view holds its source weakly: the caller keeps it (and the scroll view)
+    }
+
+    @Test func commandGStepsForwardAndBackGoingRound() {
+        let (view, find, source) = viewer(["foo", "bar", "foo foo"])
+        find.show()
+        find.query = "foo"
+        #expect(find.current == 0)
+        view.findNext(forward: true)
+        #expect(find.current == 1)
+        view.findNext(forward: true)
+        #expect(find.current == 2)
+        view.findNext(forward: true)
+        #expect(find.current == 0)
+        view.findNext(forward: false)
+        #expect(find.current == 2)
+        withExtendedLifetime(source) {}
+    }
+
+    @Test func commandGWithTheBarClosedOpensItOnTheLastQuery() {
+        let (view, find, source) = viewer(["foo", "bar", "foo"])
+        find.show()
+        find.query = "foo"
+        find.close()
+        #expect(!find.visible)
+        #expect(find.matches.isEmpty)
+        view.findNext(forward: true)
+        #expect(find.visible)
+        #expect(find.matches.count == 2)
+        #expect(find.current == 0)
+        withExtendedLifetime(source) {}
+    }
+
+    @Test func commandGWithNoQueryOpensTheBar() {
+        let (view, find, source) = viewer(["foo"])
+        view.findNext(forward: true)
+        #expect(find.visible)
+        #expect(find.current == nil)
+        withExtendedLifetime(source) {}
+    }
+}
+
+/// A file's lines for the code view, plain.
+@MainActor
+final class LinesSource: CodeLineSource {
+    let lines: [String]
+    var scroll: NSScrollView?
+    init(_ lines: [String]) { self.lines = lines }
+    var lineCount: Int { lines.count }
+    var columns: Int { lines.map(\.count).max() ?? 0 }
+    var gutterColumns: Int { 2 }
+    func line(_ i: Int) -> NSAttributedString { NSAttributedString(string: lines[i]) }
+    func gutter(_ i: Int) -> NSAttributedString { NSAttributedString(string: "\(i + 1)") }
+    func tap(_ i: Int) -> Bool { false }
+    func menu(_ i: Int) -> UIMenu? { nil }
+    var changed: ((Range<Int>?) -> Void)?
 }

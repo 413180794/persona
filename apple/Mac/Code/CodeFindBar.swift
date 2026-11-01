@@ -33,6 +33,13 @@ import SwiftUI
         if let view { view.window?.makeFirstResponder(view) }
     }
 
+    /// 查找下一个 ⌘G / 查找上一个 ⇧⌘G: the match after (before) the current one; with the bar closed it opens again on
+    /// the last query, at the first match from the top of what is shown (as Xcode does).
+    func next(forward: Bool) {
+        guard visible else { return show() }
+        step(forward: forward)
+    }
+
     /// ⏎ / ⇧⏎ and the bar's arrows.
     func step(forward: Bool) {
         guard let i = CodeFind.step(from: current, count: matches.count, forward: forward) else { return }
@@ -101,13 +108,13 @@ struct CodeFindBar: View {
             Button { find.step(forward: false) } label: {
                 Image(systemName: Theme.Icon.findPrevious)
             }
-            .help("上一个（⇧⏎）")
+            .help("上一个（⇧⏎ 或 ⇧⌘G）")
             .disabled(find.matches.isEmpty)
             .accessibilityLabel("上一个")
             Button { find.step(forward: true) } label: {
                 Image(systemName: Theme.Icon.findNext)
             }
-            .help("下一个（⏎）")
+            .help("下一个（⏎ 或 ⌘G）")
             .disabled(find.matches.isEmpty)
             .accessibilityLabel("下一个")
             // An icon, not 完成: the file viewer's own 完成 is just below.
