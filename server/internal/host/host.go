@@ -69,6 +69,13 @@ type PlainScreen interface {
 	PlainScreen() bool
 }
 
+// TextTyper is a host that may not type text without submitting it: when CanTypeText is false, SendText fails
+// (ErrUnsupported) and the node submits text followed by enter with Prompt instead, and refuses other typing before
+// pressing anything. A host without it can type.
+type TextTyper interface {
+	CanTypeText() bool
+}
+
 // Launcher opens new panes running a command.
 type Launcher interface {
 	// Spaces lists the spaces (herdr: workspaces) new panes can go into.
@@ -132,6 +139,11 @@ var (
 	// ErrNotRunning: the host is not running on this machine (no socket): it has no panes, as opposed to panes it
 	// cannot be asked about right now.
 	ErrNotRunning = errors.New("not running")
+	// ErrNotDelivered: the host refused the input, nothing was typed (safe to send again).
+	ErrNotDelivered = errors.New("not delivered")
+	// ErrDialogOpen: the host refused the input because the program says a dialog has the keyboard (with
+	// ErrNotDelivered).
+	ErrDialogOpen = errors.New("dialog open")
 	// ErrUnsupported: the host cannot do this (a capability it lacks). Errors carrying it start with "unsupported",
 	// the prefix the hub falls back on.
 	ErrUnsupported = errors.New("unsupported")

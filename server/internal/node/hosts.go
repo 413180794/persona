@@ -58,6 +58,13 @@ func (n *Node) plainScreen(pane string) bool {
 	return ok && p.PlainScreen()
 }
 
+// canTypeText: the pane's host can type text without submitting it (host.TextTyper).
+func (n *Node) canTypeText(pane string) bool {
+	h, _ := n.hosts.Pane(pane)
+	t, ok := h.(host.TextTyper)
+	return !ok || t.CanTypeText()
+}
+
 func (n *Node) sendText(ctx context.Context, pane, text string) error {
 	h, ref, err := n.paneHost(pane)
 	if err != nil {

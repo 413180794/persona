@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -72,19 +71,23 @@ func TestHerdrCoreListsClaudeTerminals(t *testing.T) {
 
 func TestHerdrCoreStatusAndAgent(t *testing.T) {
 	cases := []struct {
-		app, state, argv0 string
-		agent, status     string
+		app, state, fg string // fg: the foreground's argv[0], "" for none
+		agent, status  string
 	}{
-		{"claude-code", "working", "", "claude", proto.StatusWorking},
-		{"claude-code", "blocked", "", "claude", proto.StatusBlocked},
-		{"claude-code", "done", "", "claude", proto.StatusDone},
-		{"claude-code", "idle", "", "claude", proto.StatusIdle},
-		{"claude-code", "error", "", "claude", proto.StatusUnknown},
-		{"codex", "working", "", "codex", proto.StatusWorking},
-		{"grok-build", "idle", "", "grok-build", proto.StatusIdle},
-		{"", "", "claude", "claude", proto.StatusUnknown},
+		{"claude-code", "working", "claude", "claude", proto.StatusWorking},
+		{"claude-code", "blocked", "claude", "claude", proto.StatusBlocked},
+		{"claude-code", "done", "claude", "claude", proto.StatusDone},
+		{"claude-code", "idle", "claude", "claude", proto.StatusIdle},
+		{"claude-code", "error", "claude", "claude", proto.StatusUnknown},
+		{"codex", "working", "codex", "codex", proto.StatusWorking},
+		{"grok-build", "idle", "grok", "", ""},            // not a program the node drives: left for TRAEX
+		{"", "", "claude", "claude", proto.StatusUnknown}, // has not reported yet
 		{"", "", "/opt/bin/codex", "codex", proto.StatusUnknown},
 		{"", "", "zsh", "", ""},
+		{"claude-code", "done", "zsh", "", ""},      // claude exited: its last state stays on the terminal
+		{"claude-code", "done", "-zsh", "", ""},     // a login shell
+		{"claude-code", "working", "", "", ""},      // nothing in the foreground
+		{"claude-code", "working", "herdr", "", ""}, // classic herdr inside
 	}
 	for _, c := range cases {
 		var tm herdrcore.Terminal
@@ -92,12 +95,12 @@ func TestHerdrCoreStatusAndAgent(t *testing.T) {
 		if c.app != "" {
 			tm.Status = &herdrcore.Status{App: c.app, State: c.state}
 		}
-		if c.argv0 != "" {
-			tm.Foreground = &herdrcore.Foreground{Pid: 1, Argv: []string{c.argv0}}
+		if c.fg != "" {
+			tm.Foreground = &herdrcore.Foreground{Pid: 1, Name: "2.1.0", Argv: []string{c.fg}}
 		}
 		a := fromTerminal(tm)
 		if a.Agent != c.agent || a.AgentStatus != c.status || a.PaneID != "herdr-core:t1" {
-			t.Errorf("%s/%s/%s: agent %q status %q pane %q", c.app, c.state, c.argv0, a.Agent, a.AgentStatus, a.PaneID)
+			t.Errorf("%s/%s/%s: agent %q status %q pane %q", c.app, c.state, c.fg, a.Agent, a.AgentStatus, a.PaneID)
 		}
 	}
 	if got := stripSpinner("✳ fix the build"); got != "fix the build" {
@@ -123,7 +126,8 @@ func hcSession(t *testing.T) (*Node, *fakeHC) {
 }
 
 // A send reads the plain screen once (no colors: only a dialog refuses it, a draft cannot be told from the
-// placeholder) and pastes and submits in one terminal.send; nothing is pressed after it.
+// placeholder), looks that the agent still runs there, and pastes and submits in one terminal.send; nothing is pressed
+// after it.
 func TestHerdrCoreSendChecksForADialogThenSends(t *testing.T) {
 	withSubmitGrace(t, 50*time.Millisecond)
 	n, hc := hcSession(t)
@@ -134,6 +138,7 @@ func TestHerdrCoreSendChecksForADialogThenSends(t *testing.T) {
 	time.Sleep(150 * time.Millisecond) // past the grace: ensureSubmitted has nothing colored to read
 	assertTrace(t, hc.trace(), []string{
 		call("terminal.read", map[string]any{"terminal": "t1", "lines": 0}),
+		call("terminal.get", map[string]any{"terminal": "t1"}),
 		call("terminal.send", map[string]any{"terminal": "t1", "text": "hello"}),
 	})
 
@@ -146,17 +151,40 @@ func TestHerdrCoreSendChecksForADialogThenSends(t *testing.T) {
 	assertTrace(t, hc.trace(), []string{call("terminal.read", map[string]any{"terminal": "t1", "lines": 0})})
 }
 
-// herdr-core refusing a blocked program reaches the caller as an error, after which nothing more is sent.
-func TestHerdrCoreSendBlocked(t *testing.T) {
+// herdr-core refusing the text (nothing typed) is a refusal the app can retry: a dialog for blocked, else not_delivered.
+func TestHerdrCoreSendRefusedByHerdrCore(t *testing.T) {
 	n, hc := hcSession(t)
-	hc.handle("terminal.send", func(map[string]any) any { return hcFail{"blocked"} })
-	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
-	if err == nil || !strings.Contains(err.Error(), "blocked") {
-		t.Fatalf("send = %v", err)
+	for kind, code := range map[string]string{"blocked": "dialog_open", "unavailable": "not_delivered",
+		"status_mismatch": "not_delivered", "finished": "not_delivered"} {
+		hc.handle("terminal.send", func(map[string]any) any { return hcFail{kind} })
+		_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+		if got, data := refusalOf(t, err); got != code || data["delivered"] != "none" {
+			t.Errorf("%s: %v %v", kind, got, data)
+		}
 	}
 }
 
-// Keys go through as named; text without a submit is not something herdr-core can type.
+// The claude exited and the terminal is back at its shell, its last state still on it: the shell does not get the
+// message as a command — refused before anything is typed.
+func TestHerdrCoreSendAfterTheAgentExited(t *testing.T) {
+	n, hc := hcSession(t)
+	exited := hcTerminal("t1", "claude-code", "done", 4242, "claude", hcCwd, "", "", "")
+	exited["foreground"] = map[string]any{"pid": 4241, "name": "zsh", "argv": []string{"-zsh"}, "cwd": hcCwd}
+	hc.setTerminals(exited)
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "rm -rf build"})
+	if code, _ := refusalOf(t, err); code != "not_delivered" {
+		t.Fatalf("send to an exited agent: %v", err)
+	}
+	if tr := hc.trace("terminal.send"); len(tr) != 0 {
+		t.Errorf("typed: %v", tr)
+	}
+	if m := byID(listSessions(t, n)); m[sidA].PaneID != "" {
+		t.Errorf("an exited agent still listed live: %+v", m[sidA])
+	}
+}
+
+// Keys go through as named; text and enter go as a prompt; any other text is refused before a key is pressed —
+// including a free-text dialog answer, whose keys would open the field first.
 func TestHerdrCoreKeysAndText(t *testing.T) {
 	n, hc := hcSession(t)
 	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "keys": []string{"esc", "shift+tab"}}); err != nil {
@@ -164,16 +192,30 @@ func TestHerdrCoreKeysAndText(t *testing.T) {
 	}
 	assertTrace(t, hc.trace(), []string{call("terminal.keys", map[string]any{"terminal": "t1", "keys": []any{"esc", "shift+tab"}})})
 	hc.reset()
-	_, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "text": "/effort"})
-	if err == nil || !strings.HasPrefix(err.Error(), "unsupported") || !errors.Is(err, host.ErrUnsupported) {
-		t.Fatalf("typing text: %v", err)
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "text": "yes please", "keys": []string{"enter"}}); err != nil {
+		t.Fatal(err)
 	}
-	if tr := hc.trace(); len(tr) != 0 {
-		t.Errorf("typing text called %v", tr)
+	assertTrace(t, hc.trace(), []string{
+		call("terminal.get", map[string]any{"terminal": "t1"}),
+		call("terminal.send", map[string]any{"terminal": "t1", "text": "yes please"}),
+	})
+	for _, params := range []map[string]any{
+		{"session_id": sidA, "text": "/effort"},
+		{"session_id": sidA, "text": "use the other one", "keys": []string{"enter"}, "pre_keys": []string{"3"}},
+	} {
+		hc.reset()
+		_, err := request(t, n, "session.keys", params)
+		if code, _ := refusalOf(t, err); code != "cannot_type" {
+			t.Errorf("%v: %v", params, err)
+		}
+		if tr := hc.trace(); len(tr) != 0 {
+			t.Errorf("%v pressed %v", params, tr)
+		}
 	}
 }
 
-// A colored screen read gets the plain rows (CRLF-ended like colored ones); "recent" asks for history.
+// A colored screen read gets the plain rows (CRLF-ended like colored ones); "recent" reads the screen too (asking for
+// history would scroll a full-screen program).
 func TestHerdrCoreScreenIsPlain(t *testing.T) {
 	n, hc := hcSession(t)
 	hc.setScreen("t1", "line one\nline two\n")
@@ -189,7 +231,7 @@ func TestHerdrCoreScreenIsPlain(t *testing.T) {
 	}
 	assertTrace(t, hc.trace(), []string{
 		call("terminal.read", map[string]any{"terminal": "t1", "lines": 0}),
-		call("terminal.read", map[string]any{"terminal": "t1", "lines": 500}),
+		call("terminal.read", map[string]any{"terminal": "t1", "lines": 0}),
 	})
 }
 

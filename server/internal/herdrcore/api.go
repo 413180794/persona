@@ -84,7 +84,7 @@ func (c *Client) Send(ctx context.Context, terminal, text string) error {
 // Keys is terminal.keys: named keys ("enter", "esc", "shift+tab", "ctrl+u", "up", "a"…), encoded for the program's
 // keyboard modes.
 func (c *Client) Keys(ctx context.Context, terminal string, keys ...string) error {
-	return c.Call(ctx, SendTimeout, "terminal.keys", map[string]any{"terminal": terminal, "keys": keys}, nil)
+	return c.Call(ctx, keysTimeout, "terminal.keys", map[string]any{"terminal": terminal, "keys": keys}, nil)
 }
 
 // Version is the core's version from hello, "" when it does not answer.

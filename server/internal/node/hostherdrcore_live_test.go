@@ -11,7 +11,10 @@ package node
 //     only (terminal.list, doc.get, terminal.get), printing session ids, panes and states — no screen text.
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,9 +44,44 @@ func hcBin(t *testing.T) string {
 	return ""
 }
 
-// A program that says it works, waits for a line, says it is done and echoes the line.
-const osc7501Program = `printf '\033]7501;state=working:app=claude-code\033\\'; printf 'ready\n'; read line; ` +
-	`printf '\033]7501;state=done:app=claude-code\033\\'; printf 'got:%s\n' "$line"; sleep 60`
+// fakeClaude says it works (OSC 7501, as Claude Code does), waits for a line, says it is done and echoes the line.
+const fakeClaude = `package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"time"
+)
+
+func main() {
+	fmt.Print("\x1b]7501;state=working:app=claude-code\x1b\\")
+	fmt.Println("ready")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Print("\x1b]7501;state=done:app=claude-code\x1b\\")
+	fmt.Printf("got:%s", line)
+	time.Sleep(time.Minute)
+}
+`
+
+func buildFakeClaude(t *testing.T, dir string) string {
+	t.Helper()
+	src := filepath.Join(dir, "src")
+	if err := os.MkdirAll(src, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.go"), []byte(fakeClaude), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "claude")
+	cmd := exec.Command("go", "build", "-o", bin, "main.go")
+	cmd.Dir = src
+	cmd.Env = append(os.Environ(), "GO111MODULE=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	return bin
+}
 
 func TestHerdrCoreLiveIsolated(t *testing.T) {
 	bin := hcBin(t)
@@ -75,10 +113,15 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	defer cancel()
 	t.Logf("herdr-core %s", h.Version(ctx))
 
+	// The program is a small Go build named "claude": a terminal whose foreground is a shell is not an agent.
+	claude := buildFakeClaude(t, dir)
+	// The core's own records, as sent: the fields its schema requires (the structs and fixtures were written from it).
+	events := rawEvents(t, ctx, sock)
+
 	var run struct {
 		Address string `json:"address"`
 	}
-	if err := c.Call(ctx, 20*time.Second, "terminal.run", map[string]any{"argv": []string{"sh", "-c", osc7501Program},
+	if err := c.Call(ctx, 20*time.Second, "terminal.run", map[string]any{"argv": []string{claude},
 		"cwd": dir, "labels": map[string]string{"jarvis": "live"}}, &run); err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +144,10 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 					return a
 				}
 			}
+		}
+		tm, _ := c.Get(ctx, ref.ID)
+		if tm != nil {
+			t.Fatalf("%s never %s: status %+v foreground %+v", ref, status, tm.Status, tm.Foreground)
 		}
 		t.Fatalf("%s never %s", ref, status)
 		return host.Agent{}
@@ -125,6 +172,33 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	if text, err := h.Read(ctx, ref, host.ReadOpts{Source: "recent", Lines: 50}); err != nil || !strings.Contains(text, "got:hello") {
 		t.Errorf("after the prompt: %q, %v", text, err)
 	}
+	var raw struct {
+		Terminals []map[string]any `json:"terminals"`
+	}
+	if err := c.Call(ctx, 5*time.Second, "terminal.list", nil, &raw); err != nil || len(raw.Terminals) == 0 {
+		t.Fatalf("raw list: %v %v", raw, err)
+	}
+	for _, f := range []string{"address", "labels", "argv", "cwd", "state", "created_ms", "screen", "cols", "rows",
+		"status", "foreground", "pid", "title", "turn"} {
+		if _, ok := raw.Terminals[0][f]; !ok {
+			t.Errorf("terminal.list: no %s in %v", f, raw.Terminals[0])
+		}
+	}
+	fg, _ := raw.Terminals[0]["foreground"].(map[string]any)
+	st, _ := raw.Terminals[0]["status"].(map[string]any)
+	if fg["pid"] == nil || fg["argv"] == nil || st["app"] != "claude-code" || st["state"] == nil {
+		t.Errorf("foreground %v status %v", fg, st)
+	}
+	select {
+	case ev := <-events:
+		for _, f := range []string{"type", "terminal", "seq"} {
+			if _, ok := ev[f]; !ok {
+				t.Errorf("event without %s: %v", f, ev)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("no raw event")
+	}
 	select {
 	case <-changes:
 	case <-time.After(5 * time.Second):
@@ -133,6 +207,37 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	if err := h.SendKeys(ctx, ref, "ctrl+c"); err != nil {
 		t.Error(err)
 	}
+}
+
+// rawEvents subscribes on its own connection and passes on the params of each event notification, undecoded.
+func rawEvents(t *testing.T, ctx context.Context, sock string) <-chan map[string]any {
+	t.Helper()
+	conn, err := net.Dial("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { <-ctx.Done(); conn.Close() }()
+	if _, err := conn.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan map[string]any, 64)
+	go func() {
+		sc := bufio.NewScanner(conn)
+		sc.Buffer(make([]byte, 1<<20), 1<<24)
+		for sc.Scan() {
+			var m struct {
+				Method string         `json:"method"`
+				Params map[string]any `json:"params"`
+			}
+			if json.Unmarshal(sc.Bytes(), &m) == nil && m.Method == "event" {
+				select {
+				case out <- m.Params:
+				default:
+				}
+			}
+		}
+	}()
+	return out
 }
 
 func TestHerdrCoreLiveReadOnly(t *testing.T) {

@@ -360,6 +360,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
 	err = n.prompt(ctx, pane, text)
+	if r := deliveryRefusal(err); r != nil { // the host refused it with nothing typed (herdr-core)
+		return r
+	}
 	if err == nil {
 		n.typing.typed(pane, text)
 		if kind == "claude" {
@@ -421,6 +424,18 @@ func (n *Node) keys(ctx context.Context, id string, keys []string, text string) 
 	n.dropSuggestion(id) // whatever goes in replaces or sends it
 	pane, err := n.paneFor(ctx, id)
 	if err != nil {
+		return err
+	}
+	if text != "" && !n.canTypeText(pane) {
+		// A host that cannot type without submitting: text and then enter is a prompt; anything else was refused
+		// before any key was pressed (typingRefusal).
+		if len(keys) != 1 || keys[0] != "enter" {
+			return refusal(cannotType, cannotTypeMessage, nil)
+		}
+		err := n.hostPrompt(ctx, pane, text)
+		if r := deliveryRefusal(err); r != nil {
+			return r
+		}
 		return err
 	}
 	if text != "" {

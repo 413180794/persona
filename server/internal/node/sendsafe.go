@@ -3,12 +3,14 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/screen"
 )
@@ -119,6 +121,44 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 		return refusal(code, draftMessage(in.Text), data)
 	}
 	return nil
+}
+
+// Refusals of a host that takes input on its own terms (herdr-core): it refused the text with nothing typed, or it
+// cannot type text without submitting it.
+const (
+	notDelivered        = "not_delivered"
+	notDeliveredMessage = "电脑上的终端这次没有收下这条消息，什么都没输入：稍后再发。"
+	cannotType          = "cannot_type"
+	cannotTypeMessage   = "电脑上的这个终端只能整条发送（粘贴后回车），不能只输入文字，这次什么都没按：在电脑上回答，或者直接发消息。"
+)
+
+// deliveryRefusal is the refusal for a host's error that typed nothing (host.ErrNotDelivered), nil for any other.
+func deliveryRefusal(err error) error {
+	if !errors.Is(err, host.ErrNotDelivered) {
+		return nil
+	}
+	if errors.Is(err, host.ErrDialogOpen) {
+		return refusal(screen.DialogOpen, dialogMessage, nil)
+	}
+	return refusal(notDelivered, notDeliveredMessage, nil)
+}
+
+// typingRefusal refuses, before anything is pressed, keys that type text into a host that cannot type without
+// submitting (host.TextTyper) — unless it is only text and enter, which goes as a prompt. Dialog answers with keys to
+// press first (a free-text option) are refused here, not after the field was opened. Only a session the node already
+// knows is checked: herdr's path makes no extra call.
+func (n *Node) typingRefusal(id, text string, keys, pre []string) error {
+	if text == "" {
+		return nil
+	}
+	a, ok := n.agent(id)
+	if !ok || n.canTypeText(a.PaneID) {
+		return nil
+	}
+	if len(pre) == 0 && len(keys) == 1 && keys[0] == "enter" {
+		return nil
+	}
+	return refusal(cannotType, cannotTypeMessage, nil)
 }
 
 const dialogMessage = "电脑上的终端正开着一个对话框（确认、选择列表等），这条消息没有发出去：先回答或关掉它再发。"

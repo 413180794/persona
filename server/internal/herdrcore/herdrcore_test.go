@@ -302,3 +302,22 @@ func TestSubscribe(t *testing.T) {
 		t.Fatal("Subscribe did not end with its context")
 	}
 }
+
+// A socket file nobody listens on is not running (refused); only that and a missing file are.
+func TestRefusedIsNotRunning(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "hcr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "c.sock")
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: sock, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln.SetUnlinkOnClose(false)
+	ln.Close()
+	if _, err := (&Client{Socket: sock}).List(context.Background()); !errors.Is(err, ErrNoSocket) {
+		t.Errorf("refused: %v", err)
+	}
+}

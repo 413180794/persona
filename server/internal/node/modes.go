@@ -243,12 +243,18 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	if !tuiPromptEmpty(screen) {
 		return fmt.Errorf("终端的输入框里有还没发出的文字，先在电脑上处理掉再改思考强度")
 	}
-	if err := n.sendText(ctx, pane, "/effort"); err != nil {
-		return err
-	}
-	time.Sleep(300 * time.Millisecond)
-	if err := n.sendKeys(ctx, pane, "enter"); err != nil {
-		return err
+	if !n.canTypeText(pane) { // a host that types only whole submissions (herdr-core): the command is one
+		if err := n.hostPrompt(ctx, pane, "/effort"); err != nil {
+			return err
+		}
+	} else {
+		if err := n.sendText(ctx, pane, "/effort"); err != nil {
+			return err
+		}
+		time.Sleep(300 * time.Millisecond)
+		if err := n.sendKeys(ctx, pane, "enter"); err != nil {
+			return err
+		}
 	}
 	picker := ""
 	for range 15 {

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -28,8 +29,8 @@ import (
 type Client struct {
 	// Socket is herdr-core's API socket (SocketPath); empty: herdr-core is not there.
 	Socket string
-	// Log gets one line when calls start failing (at most every 30 s while they do) and one when they work again;
-	// a socket that is simply not there is not logged. nil: silent.
+	// Log gets one line when calls start failing and one when they work again; a socket that was never there is not
+	// logged. nil: silent.
 	Log func(format string, args ...any)
 
 	seq   atomic.Int64
@@ -154,6 +155,9 @@ const (
 	// SendTimeout bounds terminal.send: it waits for ~3 s without typing at the computer, then a few seconds to see
 	// the program start working.
 	SendTimeout = 20 * time.Second
+	// keysTimeout bounds terminal.keys (the same wait for quiet). Keys herdr-core still holds when it ends are pressed
+	// later anyway (it does not drop a call whose caller left): kept short so that window is small.
+	keysTimeout = 8 * time.Second
 	maxLine     = 64 << 20
 	// heartbeatGap: events.subscribe sends a heartbeat every 15 s; a stream silent for this long is dead.
 	heartbeatGap = 45 * time.Second
@@ -164,7 +168,6 @@ type episode struct {
 	mu       sync.Mutex
 	failing  bool
 	since    time.Time
-	logged   time.Time
 	failures int
 	seen     bool // it answered once: from then on, its socket going away is worth a line
 }
@@ -188,12 +191,9 @@ func (c *Client) note(method string, err error) {
 		return // never seen running: herdr-core is just not used on this machine
 	}
 	e.failures++
-	if !e.failing {
+	if !e.failing { // one line when an episode starts, one when it ends
 		e.failing, e.since = true, time.Now()
-	}
-	if time.Since(e.logged) >= 30*time.Second {
-		c.Log("herdr-core: %s failed: %v (%d failed calls since %s)", method, err, e.failures, e.since.Format("15:04:05"))
-		e.logged = time.Now()
+		c.Log("herdr-core: %s failed: %v", method, err)
 	}
 }
 
@@ -209,7 +209,11 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(dctx, "unix", c.Socket)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrNoSocket, err)
+		// Only a socket nobody listens on means not running; a core too busy to accept in time still runs.
+		if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT) {
+			return nil, fmt.Errorf("%w: %v", ErrNoSocket, err)
+		}
+		return nil, fmt.Errorf("herdr-core: %w", err)
 	}
 	return conn, nil
 }

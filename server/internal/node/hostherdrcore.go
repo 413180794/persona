@@ -33,6 +33,7 @@ var (
 	_ host.Host        = (*herdrCoreHost)(nil)
 	_ host.Watcher     = (*herdrCoreHost)(nil)
 	_ host.PlainScreen = (*herdrCoreHost)(nil)
+	_ host.TextTyper   = (*herdrCoreHost)(nil)
 )
 
 // herdrCorePaneEnv is the variable herdr-core sets in every terminal: its address.
@@ -54,6 +55,7 @@ const dirSpace = "dir:"
 func (h *herdrCoreHost) Kind() string      { return host.HerdrCore }
 func (h *herdrCoreHost) PaneEnv() string   { return herdrCorePaneEnv }
 func (h *herdrCoreHost) PlainScreen() bool { return true }
+func (h *herdrCoreHost) CanTypeText() bool { return false }
 
 func (h *herdrCoreHost) Version(ctx context.Context) string { return h.c.Version(ctx) }
 
@@ -182,17 +184,14 @@ func (h *herdrCoreHost) Agent(ctx context.Context, pane host.PaneRef) (*host.Age
 	return &a, nil
 }
 
-// Read is terminal.read: plain text only, soft-wrapped rows joined. "visible" is the screen; "recent" adds Lines of
-// history above it, and the read is cut to its last Lines rows (Lines counts the whole read, as herdr's does).
+// Read is terminal.read of the screen only (lines 0), as plain text with soft-wrapped rows joined: asking for history
+// makes herdr-core scroll a full-screen program with wheel events to stitch it, holding the user's keys meanwhile, so
+// "recent" reads the screen too. Lines cuts it to its last rows.
 func (h *herdrCoreHost) Read(ctx context.Context, pane host.PaneRef, o host.ReadOpts) (string, error) {
 	if o.ANSI {
 		return "", fmt.Errorf("%w: herdr-core reads screens as plain text only", host.ErrUnsupported)
 	}
-	history := 0
-	if o.Source != "visible" {
-		history = max(o.Lines, 0)
-	}
-	text, err := h.c.Read(ctx, pane.ID, history)
+	text, err := h.c.Read(ctx, pane.ID, 0)
 	if err != nil {
 		return "", hcErr(err)
 	}
@@ -213,12 +212,36 @@ func (h *herdrCoreHost) SendText(context.Context, host.PaneRef, string) error {
 // SendKeys passes Jarvis's key names through: herdr-core takes the same spelling ("enter", "esc", "shift+tab",
 // "ctrl+u", "up", "backspace"…).
 func (h *herdrCoreHost) SendKeys(ctx context.Context, pane host.PaneRef, keys ...string) error {
-	return hcErr(h.c.Keys(ctx, pane.ID, keys...))
+	return inputErr(h.c.Keys(ctx, pane.ID, keys...))
 }
 
-// Prompt is terminal.send: a paste and a submit for any program (it needs no agent detection, so never ErrNoAgent).
+// Prompt is terminal.send: a paste and a submit. The terminal is looked at first: once the agent has exited, its last
+// state stays on the terminal and the shell under it would run the text as a command, so that is refused with nothing
+// typed.
 func (h *herdrCoreHost) Prompt(ctx context.Context, pane host.PaneRef, text string) error {
-	return hcErr(h.c.Send(ctx, pane.ID, text))
+	t, err := h.c.Get(ctx, pane.ID)
+	if err != nil {
+		return inputErr(err)
+	}
+	if fromTerminal(*t).Agent == "" {
+		return host.Mark(fmt.Errorf("herdr-core: no agent runs in %s any more", pane.ID), host.ErrNotDelivered)
+	}
+	return inputErr(h.c.Send(ctx, pane.ID, text))
+}
+
+// inputErr marks the herdr-core refusals that typed nothing (host.ErrNotDelivered): a program reporting a dialog
+// (blocked, also host.ErrDialogOpen), a status that changed, a terminal not ready, finished or gone.
+func inputErr(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case herdrcore.IsKind(err, "blocked"):
+		return host.Mark(host.Mark(err, host.ErrNotDelivered), host.ErrDialogOpen)
+	case herdrcore.IsKind(err, "status_mismatch"), herdrcore.IsKind(err, "unavailable"), herdrcore.IsKind(err, "finished"),
+		herdrcore.IsKind(err, "not_found"), errors.Is(err, herdrcore.ErrNoSocket):
+		return host.Mark(hcErr(err), host.ErrNotDelivered)
+	}
+	return err
 }
 
 // PaneProcesses: the terminal's foreground process (claude's own pid, which names its sessions/<pid>.json), then its
@@ -258,8 +281,9 @@ var hcStatus = map[string]string{
 	"idle": proto.StatusIdle, "working": proto.StatusWorking, "blocked": proto.StatusBlocked, "done": proto.StatusDone,
 }
 
-// fromTerminal is a terminal as an agent pane. Its agent is what its status names, else what runs in it (a claude
-// that has not reported yet); its space and slot are the Herdr app's when the app opened it, else its directory.
+// fromTerminal is a terminal as an agent pane. Its agent is what its status names (claude or codex), else what runs in
+// it (a claude that has not reported yet) — none when a shell, classic herdr or nothing is in the foreground; its
+// space and slot are the Herdr app's when the app opened it, else its directory.
 func fromTerminal(t herdrcore.Terminal) host.Agent {
 	a := host.Agent{
 		Name: t.Name, Cwd: t.Cwd, PaneID: host.PaneRef{Kind: host.HerdrCore, ID: t.Address}.String(),
@@ -269,29 +293,45 @@ func fromTerminal(t herdrcore.Terminal) host.Agent {
 	if a.WorkspaceID == "" {
 		a.WorkspaceID, a.TabID = dirSpace+t.Cwd, ""
 	}
-	if t.Foreground != nil {
-		a.ForegroundCwd = t.Foreground.Cwd
-		if nestedHerdr(t.Foreground) {
-			return a // classic herdr's client: whatever runs inside belongs to herdr, not to this terminal
-		}
+	if t.Foreground == nil {
+		return a // nothing runs (finished): a status left behind is not an agent
+	}
+	a.ForegroundCwd = t.Foreground.Cwd
+	if nestedHerdr(t.Foreground) || isShell(t.Foreground) {
+		// Classic herdr's client: whatever runs inside belongs to herdr. A shell: the agent that reported the status
+		// has exited (herdr-core keeps a program's last status until the terminal's own program ends).
+		return a
 	}
 	if t.Status != nil && t.Status.App != "" {
-		a.Agent = t.Status.App
-		if k, ok := hcAgents[t.Status.App]; ok {
-			a.Agent = k
+		k, ok := hcAgents[t.Status.App]
+		if !ok {
+			return a // a program the node does not drive: left to the panes TRAEX may claim
 		}
+		a.Agent = k
 		a.AgentStatus = hcStatus[t.Status.State]
 		if a.AgentStatus == "" {
 			a.AgentStatus = proto.StatusUnknown
 		}
 		return a
 	}
-	if t.Foreground != nil && len(t.Foreground.Argv) > 0 {
+	if len(t.Foreground.Argv) > 0 {
 		if k := filepath.Base(t.Foreground.Argv[0]); k == "claude" || k == "codex" {
 			a.Agent, a.AgentStatus = k, proto.StatusUnknown
 		}
 	}
 	return a
+}
+
+// shells are the programs a terminal returns to when its agent exits.
+var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "fish": true, "dash": true, "ksh": true, "tcsh": true,
+	"csh": true, "nu": true, "pwsh": true, "elvish": true, "xonsh": true}
+
+// isShell: the foreground program is a shell (a login shell's name starts with "-").
+func isShell(fg *herdrcore.Foreground) bool {
+	if shells[strings.TrimPrefix(fg.Name, "-")] {
+		return true
+	}
+	return len(fg.Argv) > 0 && shells[strings.TrimPrefix(filepath.Base(fg.Argv[0]), "-")]
 }
 
 // nestedHerdr: the terminal's foreground program is classic herdr's client. The claude in one of herdr's panes may

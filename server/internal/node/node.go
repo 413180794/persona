@@ -386,6 +386,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				p.Keys, p.PreKeys = keys, pre
 			}
 		}
+		if err := n.typingRefusal(p.SessionID, p.Text, p.Keys, p.PreKeys); err != nil {
+			return nil, err
+		}
 		if len(p.PreKeys) > 0 {
 			if err := n.keys(ctx, p.SessionID, p.PreKeys, ""); err != nil {
 				return nil, err
