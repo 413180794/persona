@@ -138,7 +138,7 @@
 - 黄色这种白字读不了的颜色，会变成蜂蜜色 / 琥珀色。
 - 想要别的颜色就用 `--accent-light` / `--accent-dark` 手动给。
 
-**换形象等于换一次风格**：RootView 按 `AppModel.look`（风格 + 形象配色）重建整棵视图树。打开的 Tab 和对话会记住；设置的导航路径放在 `AppModel.settingsPath`，所以选形象的「设置 › 外观」页（`PersonaPicker` 和界面风格、字号在一起）重建后还开着。
+**换形象等于换一次风格**：RootView 按 `AppModel.look`（风格 + 形象配色）重建整棵视图树。打开的 Tab 和对话会记住；设置的导航路径放在 `AppModel.settingsPath`，所以选形象的「设置 › 外观 › 形象」页（`PersonaPicker`）重建后还开着。
 
 ## 手机上（`PersonaStore`）
 

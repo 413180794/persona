@@ -44,18 +44,12 @@ struct SettingsView: View {
                     DemoSection(pair: { showPair = true })
                 }
 
-                Section {
-                    NavigationLink(value: SettingsPage.appearance) {
-                        LabeledContent {
-                            Text("\(model.persona.name) · \(model.style.title)").lineLimit(1)
-                        } label: {
-                            Label("外观", systemImage: Theme.Icon.appearance)
-                        }
-                    }
-                    .accessibilityIdentifier("settings-appearance")
-                }
+                AppearanceSection()
 
                 Section {
+                    NavigationLink(value: ModelLaunchersRoute()) {
+                        Label("模型", systemImage: Theme.Icon.cpu)
+                    }
                     NavigationLink(value: SettingsPage.assistant) {
                         LabeledContent {
                             Text(model.assistantConfig?.launcher ?? "").font(Theme.Font.body.monospaced())
@@ -63,12 +57,14 @@ struct SettingsView: View {
                             Label("助手", systemImage: Theme.Icon.ai)
                         }
                     }
-                    NavigationLink(value: ModelLaunchersRoute()) {
-                        Label("模型", systemImage: Theme.Icon.cpu)
-                    }
                     NavigationLink(value: SettingsPage.claude) {
                         Label("Claude Code 设置", systemImage: Theme.Icon.options)
                     }
+                }
+
+                ConnectorsSection()
+
+                Section {
                     NavigationLink(value: MachineListRoute()) {
                         LabeledContent {
                             Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
@@ -79,19 +75,9 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsPage.devices) {
                         Label("设备", systemImage: Theme.Icon.credentials)
                     }
-                }
-
-                ConnectorsSection()
-
-                Section {
                     NavigationLink(value: SettingsPage.notifications) {
                         Label("通知", systemImage: Theme.Icon.notifications)
                     }
-                }
-
-                if !model.isDemo { watchSection }
-
-                Section {
                     NavigationLink(value: SettingsPage.translation) {
                         LabeledContent {
                             Text(translationSummary).lineLimit(1)
@@ -99,9 +85,6 @@ struct SettingsView: View {
                             Label("翻译", systemImage: Theme.Icon.translate)
                         }
                     }
-                }
-
-                Section {
                     NavigationLink(value: SettingsPage.storage) {
                         LabeledContent {
                             Text(storage?.storageText ?? "").monospacedDigit()
@@ -110,6 +93,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                if !model.isDemo { watchSection }
 
                 if !model.isDemo {
                     Section("服务器") {
@@ -182,7 +167,9 @@ struct SettingsView: View {
         else if d.bool(forKey: "openConnectorFeishu") { p.append(SettingsPage.feishu) }
         else if d.bool(forKey: "openConnectorDevice") { p.append(SettingsPage.phoneData) }
         else if d.bool(forKey: "openTranslationSettings") { p.append(SettingsPage.translation) }
-        else if d.bool(forKey: "openAppearance") { p.append(SettingsPage.appearance) }
+        else if let a = d.string(forKey: "openAppearance") { // persona (or YES) | style | layout
+            p.append(a == "style" ? SettingsPage.style : a == "layout" ? SettingsPage.layout : SettingsPage.persona)
+        }
         else if let n = d.string(forKey: "openLauncherPage") { p.append(ModelLaunchersRoute()); p.append(ModelLauncherRoute(name: n)) }
         else if d.bool(forKey: "openModelLaunchers") || d.string(forKey: "openModelLauncher") != nil { // 设置 › 模型 (› one)
             p.append(ModelLaunchersRoute())
@@ -214,7 +201,7 @@ struct SettingsView: View {
 
 /// The pages of 设置 that are not routes of their own elsewhere.
 enum SettingsPage: Hashable {
-    case appearance, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
+    case persona, style, layout, assistant, claude, devices, phoneData, mail, feishu, notifications, storage, translation
 
 }
 
@@ -233,7 +220,13 @@ private struct SettingsDestinations: ViewModifier {
 
     @ViewBuilder private func page(for page: SettingsPage) -> some View {
         switch page {
-        case .appearance: AppearanceSettingsView()
+        case .persona: PersonaSettingsPage()
+        case .style: StyleSettingsPage()
+        #if os(iOS)
+        case .layout: LayoutSettingsPage()
+        #else
+        case .layout: EmptyView()
+        #endif
         case .assistant: AssistantProfileView()
         case .claude: ClaudeSettingsView()
         case .devices: DevicesView()

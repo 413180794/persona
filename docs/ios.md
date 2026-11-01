@@ -378,6 +378,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 检查（JarvisTests，扫源码）：`TypeScaleTests`（不写系统字号、不写死字号、强调用 `labelStrong` 这类 token 而不是在级别上 `.weight(`、
     竖向间距在网格上）、`IconVocabularyTests`、`TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；
     减少后删掉 `TokenBaseline.json` 重跑一次记下新的基线）、`StyleSpecTests`。Debug 编译对超过 150ms 的类型检查报警告（发版机器会超时）。
+- 设置 › 外观（2026-11-01 用户要求，照「连接器」的样子）：设置首页一组三行「形象」「界面风格」「布局」（布局只在 iPhone），右边是当前值，每行点进去是自己的配置页（`AppearanceSettingsView.swift`）。
 - 界面风格（设置 › 外观 › 界面风格，`AppStyle`，存 UserDefaults `ui.style`，默认液态玻璃）：
 
   | 风格 | 主色 | 表面 / 按钮 | 自己的气泡 | 页面 |

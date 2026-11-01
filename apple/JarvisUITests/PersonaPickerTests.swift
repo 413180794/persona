@@ -55,12 +55,12 @@ final class PersonaPickerTests: XCTestCase {
         return face.label
     }
 
-    /// 设置 › 外观: the settings tab remembers its page, so the second time it is already open.
+    /// 设置 › 外观 › 形象: the settings tab remembers its page, so the second time it is already open.
     @MainActor private func openAppearance(_ app: XCUIApplication) {
         app.tabBars.buttons["设置"].tap()
         if app.buttons["persona-jarvis"].waitForExistence(timeout: 2) { return }
-        let row = app.buttons["settings-appearance"]
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "no 外观 row:\n\(app.debugDescription)")
+        let row = app.buttons["settings-persona"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "no 形象 row:\n\(app.debugDescription)")
         row.tap()
     }
 
@@ -77,8 +77,8 @@ final class PersonaPickerTests: XCTestCase {
 
         demo.tap()
         waitSelected(app.buttons["persona-demo"], "choosing the hub's persona did not take")
-        // The whole app was rebuilt with the new colors and is still on 外观.
-        XCTAssertTrue(app.navigationBars["外观"].exists, "the rebuild left 设置 › 外观:\n\(app.debugDescription)")
+        // The whole app was rebuilt with the new colors and is still on 形象.
+        XCTAssertTrue(app.navigationBars["形象"].exists, "the rebuild left 设置 › 外观 › 形象:\n\(app.debugDescription)")
         shot(app, "settings-demo")
         XCTAssertTrue(topBarName(app).hasPrefix("小薄荷"), "the top bar does not use the persona's name")
         shot(app, "topbar-demo")

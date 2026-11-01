@@ -80,8 +80,12 @@ extension Theme {
         static let openExternal = "arrow.up.forward.app"
         /// Translate, and what was translated.
         static let translate = "translate"
-        /// 设置 › 外观: persona, style, text size.
-        static let appearance = "paintpalette"
+        /// 设置 › 外观 › 形象.
+        static let persona = "person.crop.artframe"
+        /// 设置 › 外观 › 界面风格.
+        static let style = "paintpalette"
+        /// 设置 › 外观 › 布局 (the shell or the old tabs).
+        static let layout = "rectangle.topthird.inset.filled"
         /// Open the thing the row points at (a sub-Agent, a card's link).
         static let open = "arrow.up.right"
         /// Open a file or a document in its viewer.

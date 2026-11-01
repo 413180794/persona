@@ -194,4 +194,4 @@
   大标题页面的 principal 项平时也要留空，否则标题出现两遍。弱网判断只认及时回来的 pong（晚到的 pong 也算慢），不然标题每次 ping 都闪一下。
 - 形象（`docs/persona.md`）可能是第三方角色：角色的图和生成物只放 hub 的 `~/.jarvis/personas`，不进仓库、不进 App 包。
   换形象和换风格一样按 `AppModel.look` 重建整棵视图树，推出来的页面放在 `@State` 的导航路径里会被重建关掉：设置的路径放在 `AppModel.settingsPath`，
-  所以选择界面能放在推出来的「设置 › 外观」页（2026-11-01），重建后还停在那一页（`PersonaPickerTests` 检查）。别的页面要放会换 look 的东西也照这样把路径放进 AppModel。
+  所以选择界面能放在推出来的「设置 › 外观 › 形象 / 界面风格 / 布局」页（2026-11-01），重建后还停在那一页（`PersonaPickerTests` 检查）。别的页面要放会换 look 的东西也照这样把路径放进 AppModel。

@@ -482,7 +482,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Persona dot states idle/thinking/working/needs_you/offline, reduce-motion = frame 0 — PersonaViews.swift, AssistantTopBar.swift
   - 外观页「空闲 / 思考中 / 工作中 / 等你处理 / 离线」5 个状态 Mac 截图看过；减弱动态效果时停在第 0 帧没在 Mac 上试。
 - [x] UI styles 液态玻璃 / Claude / 黏土 / Island / 飞书 / BeautifulUI with preview cards — Views/Settings/SettingsView.swift (StylePicker, StyleCard), Shared/Design/StyleSpec.swift, Shared/Design/Styles/*.swift
-  - Mac 截图看过（`-tab settings -openAppearance YES`）：6 张风格卡片都画出来，选中的带勾；液态玻璃的说明在 Mac 上是「系统原生，简洁」（`Styles/Glass.swift`）。各风格整套界面在 Mac 上没逐个截。
+  - Mac 截图看过（`-tab settings -openAppearance style`）：6 张风格卡片都画出来，选中的带勾；液态玻璃的说明在 Mac 上是「系统原生，简洁」（`Styles/Glass.swift`）。各风格整套界面在 Mac 上没逐个截。
 - [x] Text size 小/标准/大 over Dynamic Type — DesignSystem/TextSize.swift
   - 外观页的 小 / 标准 / 大 截图看过；显示 › 放大 / 缩小 / 标准字号 ⌘+ ⌘- ⌘0 改的是同一个值（有测试）。
 - [ ] Theme tokens, icons, palettes, status palette — Shared/Design/Theme.swift, Icons.swift, Palette.swift, PersonaPalette.swift, Shared/StatusPalette.swift
