@@ -1,16 +1,18 @@
 import SwiftUI
 
-/// The built-in persona's face (docs/persona.md「默认形象」): drawn from shapes in the current style's accent, so it
-/// follows 设置 › 界面风格 and stays sharp at any size; no bitmap assets. As the top bar's dot it moves for the state:
-/// a blink now and then (空闲), eyes looking up under a thought bubble (思考中), eyes scanning (工作中), a pulsing ring
-/// in 需要你's red (等你处理), dimmed and gray (离线).
+/// The built-in personas' faces (docs/persona.md「内置形象」): drawn from shapes in the current style's accent, so they
+/// follow 设置 › 界面风格 and stay sharp at any size; no bitmap assets. As the top bar's dot each moves for the state:
+/// a blink now and then (空闲), eyes looking up under a thought bubble (思考中), eyes scanning (面罩) or signals
+/// running down the traces into the core (汇流) (工作中), a pulsing ring in 需要你's red (等你处理), dimmed and gray (离线).
 struct JarvisAvatar: View {
-    /// The three designs that were tried (docs/assistant.md「头像」); `.visor` is the one in use.
+    /// The designs that were tried (docs/assistant.md「头像」): `.visor` is the default persona's, `.circuit` the
+    /// built-in 汇流's (`Persona.circuit`).
     enum Design: String, CaseIterable, Identifiable {
-        case visor, spark, halo
+        case visor, circuit, spark, halo
         var id: String { rawValue }
         var title: String {
             switch self {
+            case .circuit: "汇流"
             case .visor: "面罩"
             case .spark: "火花"
             case .halo: "光环"
@@ -44,6 +46,7 @@ struct JarvisAvatar: View {
         #endif
         Group {
             switch design {
+            case .circuit: circuit
             case .visor: visor
             case .spark: spark
             case .halo: halo
@@ -51,6 +54,80 @@ struct JarvisAvatar: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    // MARK: 汇流: three pads on the left whose traces run into a core with two eyes (your computers' agents coming
+    // together in Jarvis), in the accent on a dark disc of it.
+
+    private var circuit: some View {
+        let ground = accent.mix(with: .black, by: 0.82)
+        let mark = accent.mix(with: .white, by: 0.15)
+        return TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            ZStack {
+                Circle().fill(LinearGradient(colors: [accent.mix(with: .black, by: 0.76), accent.mix(with: .black, by: 0.88)],
+                                             startPoint: .top, endPoint: .bottom))
+                Canvas { ctx, box in
+                    let w = box.width
+                    let traces = Circuit.rows.map { Circuit.points($0) }
+                    var lines = Path()
+                    for pts in traces { lines.addLines(pts.map { CGPoint(x: $0.x * w, y: $0.y * w) }) }
+                    ctx.stroke(lines, with: .color(mark), style: StrokeStyle(lineWidth: w * Circuit.trace, lineCap: .round, lineJoin: .round))
+                    if state == .working {
+                        // One signal per trace, a third of a lap apart, sinking into the core.
+                        for (i, pts) in traces.enumerated() {
+                            let f = (t / Circuit.lap + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                            let p = Circuit.point(on: pts, at: f)
+                            let r = w * Circuit.trace * 0.6
+                            ctx.fill(Path(ellipseIn: CGRect(x: p.x * w - r, y: p.y * w - r, width: r * 2, height: r * 2)),
+                                     with: .color(accent.mix(with: .white, by: 0.75)))
+                        }
+                    }
+                    var solid = Path()
+                    for row in Circuit.rows {
+                        solid.addEllipse(in: Circuit.circle(CGPoint(x: Circuit.padX, y: row), Circuit.padRadius, w))
+                    }
+                    solid.addEllipse(in: Circuit.circle(Circuit.core, Circuit.coreRadius, w))
+                    ctx.fill(solid, with: .color(mark))
+                }
+                circuitEyes(t, color: ground)
+                    .offset(x: size * (Circuit.core.x - 0.5), y: size * (Circuit.core.y - 0.5))
+                if state == .thinking {
+                    bubble(t).offset(x: size * 0.25, y: -size * 0.3)
+                }
+            }
+            .overlay(Circle().strokeBorder(accent.opacity(0.35), lineWidth: max(0.5, size * 0.02)))
+            .overlay {
+                if state == .needsYou {
+                    let pulse = moving ? 0.55 + 0.45 * cos(t * 3) : 1
+                    Circle().strokeBorder(Theme.needsYou.opacity(pulse), lineWidth: max(1.5, size * 0.07))
+                }
+            }
+        }
+    }
+
+    /// The core's two eyes, cut out in the disc's color: they blink when idle, look up while thinking, watch the
+    /// traces while working, and close when offline.
+    private func circuitEyes(_ t: TimeInterval, color: Color) -> some View {
+        HStack(spacing: size * 0.064) {
+            ForEach(0..<2, id: \.self) { _ in
+                Capsule()
+                    .fill(color)
+                    .frame(width: size * 0.044, height: state == .offline ? size * 0.025 : size * 0.125)
+            }
+        }
+        .offset(circuitLook(t))
+        .modifier(Blink(on: state == .idle && !still))
+    }
+
+    /// Where 汇流's eyes look at time t: toward the traces while working, up and right while thinking.
+    private func circuitLook(_ t: TimeInterval) -> CGSize {
+        let sway: CGFloat = moving ? sin(t * (state == .working ? 1.6 : 0.9)) : 0
+        switch state {
+        case .working: return CGSize(width: size * (sway * 0.012 - 0.025), height: 0)
+        case .thinking: return CGSize(width: size * (sway * 0.008 + 0.02), height: -size * 0.035)
+        default: return .zero
+        }
     }
 
     // MARK: 面罩: an accent disc with a dark visor and two bright eyes, a glint on top.
@@ -180,8 +257,47 @@ struct JarvisAvatar: View {
     }
 }
 
+/// 汇流's geometry in fractions of the avatar's side, 0…1 from the top left: pads on the left at three rows, the
+/// outer traces turning at exactly 45° into the core's center.
+nonisolated private enum Circuit {
+    static let rows: [CGFloat] = [0.31, 0.5, 0.69]
+    static let padX: CGFloat = 0.22
+    static let padRadius: CGFloat = 0.065
+    static let core = CGPoint(x: 0.64, y: 0.5)
+    static let coreRadius: CGFloat = 0.19
+    static let trace: CGFloat = 0.056
+    /// Seconds for a signal to run from its pad into the core.
+    static let lap: Double = 1.4
+
+    /// A trace from its pad into the core: straight, or level and then down (or up) at 45°.
+    static func points(_ row: CGFloat) -> [CGPoint] {
+        let turn = core.x - abs(core.y - row)
+        let pad = CGPoint(x: padX, y: row)
+        return turn < core.x ? [pad, CGPoint(x: turn, y: row), core] : [pad, core]
+    }
+
+    /// The point a fraction f of the way along a trace, by length.
+    static func point(on pts: [CGPoint], at f: Double) -> CGPoint {
+        let legs = zip(pts, pts.dropFirst()).map { a, b in (a, b, hypot(b.x - a.x, b.y - a.y)) }
+        var left = CGFloat(f) * legs.reduce(0) { $0 + $1.2 }
+        for (a, b, len) in legs {
+            if left <= len {
+                let k = len > 0 ? left / len : 0
+                return CGPoint(x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k)
+            }
+            left -= len
+        }
+        return pts.last ?? core
+    }
+
+    /// A circle around a unit point, in a box of side w.
+    static func circle(_ c: CGPoint, _ r: CGFloat, _ w: CGFloat) -> CGRect {
+        CGRect(x: (c.x - r) * w, y: (c.y - r) * w, width: r * 2 * w, height: r * 2 * w)
+    }
+}
+
 #if DEBUG
-/// The three designs that were tried, at the sizes they are used, light and dark, and the chosen one in every
+/// The designs that were tried, at the sizes they are used, light and dark, and the chosen one in every
 /// style's accent (under PersonaGallery, `-openAssistantPage avatars`).
 enum JarvisAvatarGallery {
     struct Panels: View {

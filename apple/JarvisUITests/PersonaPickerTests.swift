@@ -2,7 +2,7 @@ import XCTest
 
 /// 设置 › 外观 › 形象 (docs/persona.md), against scripts/mock_hub.py started with MOCK_PERSONAS=demo (JARVIS_MOCK_HUB): the
 /// hub's persona is offered next to the built-in Jarvis; choosing it downloads it, and the Jarvis tab's top bar takes
-/// its name and face; choosing Jarvis again brings the name back.
+/// its name and face; choosing Jarvis again brings the name back. The built-in 汇流 is offered too and keeps the name.
 final class PersonaPickerTests: XCTestCase {
     private var hub: String!
     /// mock_hub's main conversation: its name pill shows the persona's name (a side conversation's shows its title).
@@ -89,5 +89,19 @@ final class PersonaPickerTests: XCTestCase {
         back.tap()
         waitSelected(app.buttons["persona-jarvis"], "choosing Jarvis again did not take")
         XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "the top bar did not go back to Jarvis")
+    }
+
+    /// 汇流 is a built-in next to the default (no download): choosing it keeps the name Jarvis.
+    @MainActor func testChoosingCircuitKeepsTheName() throws {
+        let app = launch()
+        openAppearance(app)
+        let circuit = app.buttons["persona-jarvis-circuit"]
+        XCTAssertTrue(circuit.waitForExistence(timeout: 10), "汇流 is not offered:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["persona-jarvis"].isSelected, "the default should still be 面罩")
+        circuit.tap()
+        waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
+        shot(app, "settings-circuit")
+        XCTAssertTrue(topBarName(app).hasPrefix("Jarvis"), "汇流 should keep the name Jarvis")
+        shot(app, "topbar-circuit")
     }
 }

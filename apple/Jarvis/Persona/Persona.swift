@@ -1,31 +1,45 @@
 import Foundation
 
 /// A look for Jarvis (docs/persona.md): its name, its face, the animated dot in the Jarvis tab's top bar and its
-/// colors. The built-in one is the app's own drawing (JarvisAvatar, in the style's accent); every other one is a
+/// colors. The built-in ones are the app's own drawings (JarvisAvatar, in the style's accent); every other one is a
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
     static let builtinID = "jarvis"
+    /// The default: 面罩.
     static let builtin = Persona(id: builtinID, name: "Jarvis", subtitle: "默认形象，颜色随主题色", rev: "", manifest: nil)
+    /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Jarvis.
+    static let circuit = Persona(id: "jarvis-circuit", name: "Jarvis", subtitle: "汇流，颜色随主题色", rev: "", manifest: nil,
+                                 design: "circuit", title: "汇流")
+    /// What 设置 › 外观 › 形象 offers before the hub's packages, the default first.
+    static let builtins = [builtin, circuit]
 
     var id: String
     var name: String
     var subtitle: String?
-    /// The package's rev on the hub (any byte changes it); "" for the built-in.
+    /// The package's rev on the hub (any byte changes it); "" for a built-in.
     var rev: String
-    /// Nil for the built-in.
+    /// Nil for a built-in.
     var manifest: PersonaManifest?
+    /// A built-in's JarvisAvatar.Design (raw value); nil: the default's.
+    var design: String?
+    /// The card's name in 设置 when it is not `name` (the built-ins are all called Jarvis).
+    var title: String?
 
     var isBuiltin: Bool { manifest == nil }
+    var cardTitle: String { title ?? name }
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }
 
-    init(id: String, name: String, subtitle: String?, rev: String, manifest: PersonaManifest?) {
+    init(id: String, name: String, subtitle: String?, rev: String, manifest: PersonaManifest?, design: String? = nil,
+         title: String? = nil) {
         self.id = id
         self.name = name
         self.subtitle = subtitle
         self.rev = rev
         self.manifest = manifest
+        self.design = design
+        self.title = title
     }
 
     init(info: PersonaInfo) {
@@ -107,7 +121,7 @@ nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     /// What the hub checks too (server/internal/hub/persona.go), so a package it would leave out is refused here.
     var problem: String? {
         if format != Self.format { return "format \(format)" }
-        if id == Persona.builtinID || id.range(of: "^[a-z0-9][a-z0-9-]{0,31}$", options: .regularExpression) == nil { return "id \(id)" }
+        if Persona.builtins.contains(where: { $0.id == id }) || id.range(of: "^[a-z0-9][a-z0-9-]{0,31}$", options: .regularExpression) == nil { return "id \(id)" }
         if name.trimmingCharacters(in: .whitespaces).isEmpty { return "no name" }
         if avatar.sizes.isEmpty { return "no avatar" }
         if dot.states[PersonaState.idle.rawValue] == nil { return "no idle dot" }

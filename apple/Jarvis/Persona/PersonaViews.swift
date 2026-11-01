@@ -3,8 +3,8 @@ import SwiftUI
 import UIKit
 #endif
 
-/// The persona's face, still (the sidebar's card, the profile, 设置): a package's avatar in a circle, or the
-/// built-in JarvisAvatar. `persona` defaults to the one on screen.
+/// The persona's face, still (the sidebar's card, the profile, 设置): a package's avatar in a circle, or a
+/// built-in's JarvisAvatar. `persona` defaults to the one on screen.
 struct PersonaAvatar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.displayScale) private var scale
@@ -26,7 +26,8 @@ struct PersonaAvatar: View {
             } else {
                 // The built-in in the accent it would have chosen (it brings no colors: under 跟随形象, the style's own),
                 // also while another persona is on (设置's card).
-                JarvisAvatar(size: size, state: working ? .working : .idle, tint: p.isBuiltin ? model.builtinAccent : nil)
+                JarvisAvatar(size: size, design: p.avatarDesign, state: working ? .working : .idle,
+                             tint: p.isBuiltin ? model.builtinAccent : nil)
             }
         }
         .frame(width: size, height: size)
@@ -35,8 +36,8 @@ struct PersonaAvatar: View {
 }
 
 /// The animated dot in the Jarvis tab's top bar: the persona in a state (docs/persona.md「状态」). A package plays
-/// the state's frames in a UIImageView (Core Animation swaps them; nothing in the app runs per frame); the built-in
-/// is JarvisAvatar moving for the state. Both hold still with Reduce Motion and in Low Power Mode.
+/// the state's frames in a UIImageView (Core Animation swaps them; nothing in the app runs per frame); a built-in
+/// is its JarvisAvatar moving for the state. Both hold still with Reduce Motion and in Low Power Mode.
 struct PersonaDot: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -51,12 +52,18 @@ struct PersonaDot: View {
             if !p.isBuiltin, let frames = model.personas.frames(p, state) {
                 PersonaFramesView(frames: frames, animating: !still)
             } else {
-                JarvisAvatar(size: size, state: state, still: still, tint: p.isBuiltin ? model.builtinAccent : nil)
+                JarvisAvatar(size: size, design: p.avatarDesign, state: state, still: still,
+                             tint: p.isBuiltin ? model.builtinAccent : nil)
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
+}
+
+extension Persona {
+    /// A built-in's drawing; the default's (面罩) for a package, whose face falls back to it while it is not on the phone.
+    var avatarDesign: JarvisAvatar.Design { design.flatMap(JarvisAvatar.Design.init(rawValue:)) ?? .visor }
 }
 
 #if os(iOS)
@@ -126,7 +133,7 @@ struct PersonaSwatches: View {
 
 #if DEBUG
 /// `-openAssistantPage avatars` (with `-tab assistant`): every persona on the phone, its avatar at the sizes it is
-/// used and its dot in each state, in light and dark (for screenshots; the old visor / spark / halo comparison below).
+/// used and its dot in each state, in light and dark (for screenshots; the visor / circuit / spark / halo comparison below).
 struct PersonaGallery: View {
     @Environment(AppModel.self) private var model
 

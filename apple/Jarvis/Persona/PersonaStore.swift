@@ -12,8 +12,8 @@ import AppKit
 /// the hub answers or without it.
 @MainActor @Observable
 final class PersonaStore {
-    /// The built-in first, then what the hub listed last (kept across launches).
-    private(set) var offered: [Persona] = [.builtin]
+    /// The built-ins first (the default, then 汇流), then what the hub listed last (kept across launches).
+    private(set) var offered: [Persona] = Persona.builtins
     /// The chosen one as it can be shown now: the built-in until its package is on the phone.
     private(set) var current: Persona = .builtin {
         didSet { if current != oldValue { onChange?() } }
@@ -48,7 +48,7 @@ final class PersonaStore {
         self.defaults = defaults
         frameCache.countLimit = 6
         if let data = try? Data(contentsOf: indexURL), let list = try? JSONDecoder().decode([PersonaInfo].self, from: data) {
-            offered = [.builtin] + list.map(Persona.init(info:))
+            offered = Persona.builtins + list.map(Persona.init(info:))
         }
         #if DEBUG
         // `-openPersona <id>`: start with that one (on the phone already, or downloaded when the list comes).
@@ -89,7 +89,7 @@ final class PersonaStore {
             return
         }
         self.error = nil
-        offered = [.builtin] + list.map(Persona.init(info:))
+        offered = Persona.builtins + list.map(Persona.init(info:))
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try? JSONEncoder().encode(list).write(to: indexURL, options: .atomic)
         if let chosen = offered.first(where: { $0.id == chosenID }) {

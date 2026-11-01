@@ -41,7 +41,8 @@ struct PersonaTests {
         func problem(_ from: String, _ to: String) throws -> String? {
             try Self.decode(Self.manifest.replacingOccurrences(of: from, with: to)).problem
         }
-        #expect(try problem(#""id":"doudou""#, #""id":"jarvis""#) != nil) // the built-in's id
+        #expect(try problem(#""id":"doudou""#, #""id":"jarvis""#) != nil) // the built-ins' ids
+        #expect(try problem(#""id":"doudou""#, #""id":"jarvis-circuit""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"Dou Dou""#) != nil)
         #expect(try problem(#""format":1"#, #""format":2"#) != nil)
         #expect(try problem(#""idle":"#, #""thinking":"#) != nil)
@@ -112,7 +113,7 @@ struct PersonaTests {
         for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/doudou/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
-        #expect(s.offered.map(\.id) == [Persona.builtinID, "doudou"])
+        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.circuit.id, "doudou"])
         #expect(s.current.isBuiltin) // offered, not chosen
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
@@ -143,6 +144,29 @@ struct PersonaTests {
         await s.refresh(hub.client)
         #expect(s.current.isBuiltin)
         #expect(s.chosenID == "doudou")
+    }
+
+    /// 汇流 is offered next to the default before the hub answers (or with no hub at all), is chosen without a
+    /// download, and stays chosen across launches; it is still called Jarvis, with its own card title.
+    @Test func circuitIsABuiltInChoice() async throws {
+        let (s, _, defaults) = store()
+        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.circuit.id])
+        #expect(s.current.id == Persona.builtinID) // the default stays 面罩
+        let circuit = try #require(s.offered.last)
+        #expect(circuit.isBuiltin && s.isOnPhone(circuit))
+        #expect(circuit.name == "Jarvis" && circuit.cardTitle == "汇流")
+        #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .visor)
+
+        await s.choose(circuit, api: nil)
+        #expect(s.current.id == Persona.circuit.id)
+        #expect(defaults.string(forKey: PersonaStore.chosenKey) == Persona.circuit.id)
+        #expect(PersonaStore(root: s.root, defaults: defaults).current.id == Persona.circuit.id)
+
+        // A hub that lists no packages keeps it.
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
+        await s.refresh(hub.client)
+        #expect(s.current.id == Persona.circuit.id)
     }
 
     /// Two refreshes at once (connecting to the hub and 设置 opening, 2026-10-31): the second must not clean away the
