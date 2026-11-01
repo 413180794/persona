@@ -17,6 +17,25 @@ import Testing
         AgentListOrder(isPinned: { pinned.contains($0.sessionID) }, isMuted: { muted.contains($0.sessionID) }, byRank: byRank)
     }
 
+    @Test func rowMenuForwardsEachActionOnceAndUsesUpdatedCallbacks() {
+        let actions = AgentRowMenu.Actions()
+        let first = session("first", "working")
+        let second = session("second", "working")
+        actions.close(first)
+        actions.rename(first)
+        var events: [String] = []
+        actions.update(rename: { events.append("rename:" + $0.sessionID) },
+                       close: { events.append("close:" + $0.sessionID) })
+        actions.rename(first)
+        actions.close(second)
+        #expect(events == ["rename:first", "close:second"])
+        actions.update(rename: { events.append("new-rename:" + $0.sessionID) },
+                       close: { events.append("new-close:" + $0.sessionID) })
+        actions.close(first)
+        actions.rename(second)
+        #expect(events == ["rename:first", "close:second", "new-close:first", "new-rename:second"])
+    }
+
     @Test func statesComeInOneOrder() {
         let list = [session("idle", "idle", updated: 50), session("work", "working", updated: 10),
                     session("unread", "unread", updated: 20), session("needs", "needs_you", updated: 1)]

@@ -127,16 +127,16 @@ struct AgentRowMenu: View, Equatable {
     nonisolated let actions: Actions
 
     @MainActor final class Actions {
-        private var rename: (Session) -> Void = { _ in }
-        private var close: (Session) -> Void = { _ in }
+        private var renameHandler: (Session) -> Void = { _ in }
+        private var closeHandler: (Session) -> Void = { _ in }
 
         func update(rename: @escaping (Session) -> Void, close: @escaping (Session) -> Void) {
-            self.rename = rename
-            self.close = close
+            renameHandler = rename
+            closeHandler = close
         }
 
-        func rename(_ s: Session) { rename(s) }
-        func close(_ s: Session) { close(s) }
+        func rename(_ s: Session) { renameHandler(s) }
+        func close(_ s: Session) { closeHandler(s) }
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool {

@@ -173,6 +173,8 @@
 
 ## Swift 与编译
 
+- 闭包属性别和调用它的方法同名：`func close(_ s: Session) { close(s) }` 会解析成递归调用方法，点「关闭 Agent」后栈溢出；重命名同理。
+  回调字段使用 `closeHandler` / `renameHandler`，保留对外方法，并检查编译器的 `function call causes an infinite recursion` 警告。
 - 被取消的请求 / 任务（离开页面、切换）会抛 URLError.cancelled（「已取消」）或 CancellationError，展示错误前先过滤（`Error.shown`）。
 - Swift 的 `dict[k, default: X].method()`：值是 class（`CGMutablePath`）时只是读，默认值不会存进字典，改动全丢（终端框线整条消失过）。
 - Swift 的尾随闭包按位置匹配第一个闭包参数：一个类型有两个可选闭包属性（`SpaceMenuItems` 的 `rename`、`open`），
