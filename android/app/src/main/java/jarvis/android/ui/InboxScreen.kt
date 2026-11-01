@@ -213,7 +213,7 @@ fun InboxDetailPane(hub: Hub, id: String, onClose: () -> Unit, onHandOff: (HandO
     }
     androidx.compose.runtime.key(item.id) {
         // A Surface, not a background: it sets the content colour (unstyled text was black on the dark page).
-        androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
             Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.TopCenter) {
                 InboxDetailBody(
                     hub, item, Modifier.widthIn(max = SplitLayout.READABLE_DP.dp).padding(top = 16.dp),
