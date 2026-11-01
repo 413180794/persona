@@ -108,13 +108,14 @@ func TestRelayInteractionIsSealed(t *testing.T) {
 	if !h.push.ready() {
 		t.Fatal("not ready with a relayed phone")
 	}
-	ix := proto.Interaction{ID: "ix_secret", Kind: proto.IxPermission, MachineID: "m1", SessionID: "s1", SessionTitle: "重构支付", Summary: "Bash: rm -rf build"}
+	ix := proto.Interaction{ID: "ix_secret", Kind: proto.IxPermission, MachineID: "m1", SessionID: "sess_secret", SessionTitle: "重构支付", Summary: "Bash: rm -rf build"}
 	h.push.notifyInteraction(ix, "笔记本")
 	r := f.wait(t, 1)[0]
 	if r.PushType != "alert" || r.Token != "a1b2c3d4e5f60718a1b2c3d4e5f60718" || r.Env != "sandbox" {
 		t.Fatalf("request %+v", r)
 	}
-	for _, leak := range []string{"重构支付", "rm -rf", "笔记本", "ix_secret", "授权", "INTERACTION", "s1"} {
+	// Ids with "_", which base64 never has: "s1" turned up by chance in the ciphertext about one run in five.
+	for _, leak := range []string{"重构支付", "rm -rf", "笔记本", "ix_secret", "授权", "INTERACTION", "sess_secret"} {
 		if bytes.Contains(r.Body, []byte(leak)) || strings.Contains(r.CollapseID, leak) {
 			t.Fatalf("relay saw %q: %s", leak, r.Body)
 		}
@@ -125,7 +126,7 @@ func TestRelayInteractionIsSealed(t *testing.T) {
 	p := opened(t, priv, r)
 	aps := p["aps"].(map[string]any)
 	alert := aps["alert"].(map[string]any)
-	if alert["body"] != "Bash: rm -rf build" || aps["category"] != "INTERACTION_PERMISSION" || p["interaction_id"] != "ix_secret" || p["session_id"] != "s1" {
+	if alert["body"] != "Bash: rm -rf build" || aps["category"] != "INTERACTION_PERMISSION" || p["interaction_id"] != "ix_secret" || p["session_id"] != "sess_secret" {
 		t.Fatalf("opened %v", p)
 	}
 	if iat, _ := p["iat"].(float64); time.Since(time.Unix(int64(iat), 0)) > time.Minute {
