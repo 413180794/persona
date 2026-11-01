@@ -45,6 +45,27 @@ final class EngineChoiceTests: XCTestCase {
         return (root?["machines"] as? [[String: Any]])?.first { $0["id"] as? String == machine }?["engine"] as? String
     }
 
+    /// The short Duo cover can put the last Form row below the viewport; reach it before tapping.
+    @MainActor private func skipEngine() {
+        let skip = app.buttons["engine.skip"]
+        for _ in 0..<4 {
+            if skip.waitForExistence(timeout: 1) { break }
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(skip.waitForExistence(timeout: 5), "no reachable way to skip engine selection")
+        // A Form cell can exist just below the viewport; native tap finishes scrolling it into view.
+        skip.tap()
+    }
+
+    /// UIKit renders the four tabs in a side rail on Duo's cover, without a TabBar accessibility parent.
+    @MainActor private func pairedRoot() {
+        for title in ["Jarvis", "Agents", "收件箱", "设置"] {
+            XCTAssertTrue(app.buttons[title].firstMatch.waitForExistence(timeout: 10), "no paired root control: \(title)")
+        }
+        XCTAssertFalse(app.buttons["engine.save"].exists, "the engine step did not finish")
+        XCTAssertFalse(app.buttons["engine.skip"].exists, "the engine step is still open")
+    }
+
     @MainActor func testPairingCanChooseAndSkip() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-pairURL", ""]
@@ -56,12 +77,12 @@ final class EngineChoiceTests: XCTestCase {
         try shot("pairing")
         app.buttons["engine.option.herdr-core"].tap()
         app.buttons["engine.save"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        pairedRoot()
         XCTAssertEqual(try current("server"), "herdr-core")
         app.open(URL(string: pair)!)
-        XCTAssertTrue(app.buttons["engine.skip"].waitForExistence(timeout: 10))
-        app.buttons["engine.skip"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 10))
+        skipEngine()
+        pairedRoot()
         XCTAssertEqual(try current("server"), "herdr-core", "skipping must preserve the configured engine")
     }
 
@@ -118,8 +139,8 @@ final class EngineChoiceTests: XCTestCase {
         app.secureTextFields["Token"].typeText("mock")
         app.navigationBars.buttons["连接"].tap()
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 15))
-        app.buttons["engine.skip"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        skipEngine()
+        pairedRoot()
         XCTAssertEqual(try current("server"), "herdr")
     }
 
@@ -137,8 +158,8 @@ final class EngineChoiceTests: XCTestCase {
         app.buttons["engine.save"].tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "保存失败")).firstMatch.waitForExistence(timeout: 10))
         try shot("pairing-error")
-        app.buttons["engine.skip"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        skipEngine()
+        pairedRoot()
         XCTAssertEqual(try current("server"), "herdr")
     }
 
