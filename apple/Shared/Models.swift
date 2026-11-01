@@ -27,9 +27,11 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var deployError: String?
     /// OS and hardware (docs/machines.md); nil from hubs before machine monitoring, or a machine never connected.
     var system: MachineSystem?
+    var engine: MachineEngine = .herdr
+    var engines: [DetectedEngine] = []
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home, system
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
         case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
     }
@@ -41,6 +43,51 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
         default: Theme.Icon.laptop
         }
     }
+}
+
+// Keep memberwise construction while decoding older hubs and future engines safely.
+extension Machine {
+    nonisolated init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        kind = try c.decode(String.self, forKey: .kind)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        sshHost = try c.decodeIfPresent(String.self, forKey: .sshHost)
+        online = try c.decode(Bool.self, forKey: .online)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        hostname = try c.decodeIfPresent(String.self, forKey: .hostname)
+        os = try c.decodeIfPresent(String.self, forKey: .os)
+        arch = try c.decodeIfPresent(String.self, forKey: .arch)
+        home = try c.decodeIfPresent(String.self, forKey: .home)
+        herdrVersion = try c.decodeIfPresent(String.self, forKey: .herdrVersion)
+        claudeVersion = try c.decodeIfPresent(String.self, forKey: .claudeVersion)
+        lastSeen = try c.decodeIfPresent(Date.self, forKey: .lastSeen)
+        nodeMismatch = try c.decodeIfPresent(Bool.self, forKey: .nodeMismatch)
+        nodeVersion = try c.decodeIfPresent(String.self, forKey: .nodeVersion)
+        deploying = try c.decodeIfPresent(Bool.self, forKey: .deploying)
+        deployError = try c.decodeIfPresent(String.self, forKey: .deployError)
+        system = try c.decodeIfPresent(MachineSystem.self, forKey: .system)
+        let raw = try c.decodeIfPresent(String.self, forKey: .engine)
+        engine = raw.flatMap(MachineEngine.init(rawValue:)) ?? .herdr
+        engines = raw.flatMap(MachineEngine.init(rawValue:)) == nil ? [] :
+            (try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? [])
+    }
+}
+
+nonisolated enum MachineEngine: String, Codable, CaseIterable, Identifiable, Sendable {
+    case herdr
+    case herdrApp = "herdr-core"
+    var id: String { rawValue }
+    var name: String { self == .herdr ? "herdr" : "Herdr App" }
+    var detail: String { self == .herdr ? "终端里的 herdr" : "桌面 App 里开的终端" }
+}
+
+nonisolated struct DetectedEngine: Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var available: Bool
+    var version: String?
 }
 
 nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {

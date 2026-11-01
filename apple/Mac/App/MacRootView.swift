@@ -83,7 +83,9 @@ struct MacRootView: View {
         let _ = PerfTrace.body("MacRootView")
         #endif
         Group {
-            if model.isPaired {
+            if let id = model.pairingEngineMachineID {
+                PairingEngineView(machineID: id)
+            } else if model.isPaired {
                 MacShell()
             } else {
                 WelcomeView()

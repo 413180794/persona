@@ -669,3 +669,11 @@ Markdown 的情况再说两点：
 - 卡片里 `plain_text` 在 markdown 上下文要解 `&nbsp;` 等实体和 `<br>` / `<a href>` / `<font color>`（飞书网关留下的标记）。
 - 卡片回调按钮只在 `actionMethod == 2` 时可按（走 lark-connector 的 card-actions 接口）；select / input 等表单控件只显示当前值。
 - 自定义 `Layout` 拿到的 `proposal.width` 可能是 `.infinity`（ScrollView / 测量 ideal size 时），换算整数前必须判 `isFinite`，否则直接崩。
+
+## 引擎选择
+
+每台机器只用一个终端引擎：herdr（终端里的 herdr）或 Herdr App（桌面 App 里开的终端），默认 herdr。只显示所选引擎里的会话。
+
+扫码或手动配对成功后，先为 hub 所在的机器选择引擎；没有本地机器时用列表中的第一台。只有一个引擎可用时预选可用引擎，否则预选当前引擎。确认调用 `PUT /api/v1/machines/{id}/engine`；跳过保留当前选择，保存失败也能先继续。设置 › 机器 › 机器详情 › 引擎可随时修改，离线保存后在连接时生效。检测信息缺失时显示「暂无检测信息」，不把未知状态说成未安装。
+
+mock hub 和体验模式都支持选择与机器推送。截图可先用 `-openWelcome YES` 打开配对页，再打开指向 mock hub 的 `jarvis://pair` 链接进入真实的配对后步骤；设置详情沿用 `-tab settings -openMachines YES -openMachineDetail server`。不增加新的 DEBUG 参数。

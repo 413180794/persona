@@ -1679,6 +1679,13 @@ if os.environ.get("MOCK_CHURN") == "1":
         _x["seq"] = _w[0]["seq"] + _n
 
 
+# Every fixture, including machines added by optional modes, follows the engine contract.
+for _m in MACHINES:
+    _m["engine"] = "herdr"
+    _m["engines"] = ([{"id": "herdr", "name": "herdr", "available": True, "version": "0.9.5"},
+                       {"id": "herdr-core", "name": "Herdr App", "available": _m["id"] == "macbook"}]
+                      if _m.get("online") else [])
+
 # ---------- HTTP ----------
 class H(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -1746,6 +1753,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/hits": return self.send_json({"hits": HITS})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
             for m in MACHINES:
+                m["engine"] = "herdr"
                 if m["id"] == "lab":
                     for k in ("hostname", "os", "arch", "home", "herdr_version", "claude_version"): m.pop(k, None)
                     m.update(online=False, error="ssh: connect to host lab port 22: Connection refused")
@@ -1967,6 +1975,19 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if self.bad_network(): return
+        if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
+            mid = p.split("/")[4]
+            machine = next((m for m in MACHINES if m["id"] == mid), None)
+            if machine is None: return self.send_json({"error": "找不到机器"}, 404)
+            body = json.loads(self.last_body or b"{}")
+            engine = body.get("engine")
+            if engine not in ("herdr", "herdr-core"): return self.send_json({"error": "未知引擎"}, 400)
+            if os.environ.get("MOCK_ENGINE_ERROR"): return self.send_json({"error": "暂时无法保存"}, 503)
+            machine["engine"] = engine
+            for send, _ in list(LIVE):
+                try: send({"type": "machines", "machines": MACHINES})
+                except Exception: pass
+            return self.send_json(machine)
         if self.command == "PUT" and p.startswith("/api/v1/kb/"):  # 打标: kept over the automatic tagging
             kind, eid = p.split("/")[4:6]
             body = json.loads(self.last_body or b"{}")

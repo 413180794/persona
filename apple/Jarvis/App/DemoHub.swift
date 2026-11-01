@@ -348,6 +348,15 @@ final class DemoHub {
                 return .object(o)
             }
             return ["ok": true]
+        case ("machines", 3) where p[2] == "engine" && method == "PUT":
+            guard let i = machines.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var machine) = machines[i] else { throw notFound() }
+            guard let raw = body["engine"]?.string, MachineEngine(rawValue: raw) != nil else {
+                throw APIError(status: 400, message: "未知引擎")
+            }
+            machine["engine"] = .string(raw)
+            machines[i] = .object(machine)
+            broadcast(["type": "machines", "machines": .array(machines)])
+            return machines[i]
         case ("machines", 3) where p[2] == "reconnect": return ["ok": true]
         case ("kb", _): return ["ok": true]
         default: throw refuse()

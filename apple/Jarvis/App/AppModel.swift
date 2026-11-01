@@ -51,6 +51,7 @@ final class AppModel {
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot() } }
+    var pairingEngineMachineID: String?
     var toast: Toast?
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
@@ -164,12 +165,13 @@ final class AppModel {
 
     func pair(_ new: ServerConfig) async throws {
         let client = APIClient(config: new)
-        _ = try await client.machines()
+        let pairedMachines = try await client.machines()
         if isDemo { leaveDemo() } // a real hub ends 体验模式
         config = new
         Keychain.serverConfig = new
         forgetDeviceCredentials()
-        machines = []
+        machines = pairedMachines
+        pairingEngineMachineID = EngineSelectionModel.pairingMachine(pairedMachines)?.id
         sessionsByMachine = [:]
         interactions = [:]
         desktops = []
@@ -222,6 +224,7 @@ final class AppModel {
     }
 
     func unpair() {
+        pairingEngineMachineID = nil
         if isDemo { leaveDemo() }
         live.disconnect()
         LiveActivityController.shared.endAll() // its buttons would talk to a hub we no longer know
@@ -237,6 +240,12 @@ final class AppModel {
         subscribers = [:]
         shown = []
         saveOutbox()
+    }
+
+    /// The PUT response updates immediately; subsequent machines pushes remain authoritative.
+    func applyMachine(_ machine: Machine) {
+        guard let index = machines.firstIndex(where: { $0.id == machine.id }) else { return }
+        machines[index] = machine
     }
 
     // MARK: Derived

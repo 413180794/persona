@@ -153,6 +153,10 @@ MINI = dict(next(x for x in m.MACHINES if x["id"] == "studio"), id="mini", name=
             icon="desktop")
 MINI["system"] = dict(MINI["system"], model="Mac mini", cpu="Apple M4", cores=10, memory=32 * m.GB)
 machines = m.MACHINES + [MINI]
+# Demonstrate a machine already using the desktop runtime as well as the default CLI.
+MINI["engine"] = "herdr-core"
+MINI["engines"] = [{"id": "herdr", "name": "herdr", "available": False},
+                   {"id": "herdr-core", "name": "Herdr App", "available": True}]
 
 data = {
     "machines": machines,

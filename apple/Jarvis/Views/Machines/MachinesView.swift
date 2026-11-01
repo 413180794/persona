@@ -170,6 +170,20 @@ struct MachineDetailView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
                 Section {
+                    NavigationLink {
+                        EngineSelectionView(machineID: machineID)
+                    } label: {
+                        HStack {
+                            Text("引擎").lineLimit(1)
+                            Spacer()
+                            Text(machine.engine.name).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    .accessibilityIdentifier("machine.engine")
+                } footer: {
+                    Text("只显示所选引擎里的会话。")
+                }
+                Section {
                     NavigationLink { MachineMonitorView(machineID: machineID) } label: {
                         Label("系统与监控", systemImage: Theme.Icon.context)
                     }

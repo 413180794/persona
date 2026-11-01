@@ -212,6 +212,10 @@ nonisolated struct APIClient: Sendable {
     }
 
     func machines() async throws -> [Machine] { try await get("/api/v1/machines", as: MachinesResponse.self).machines }
+    func setEngine(machine: String, engine: MachineEngine) async throws -> Machine {
+        struct Body: Encodable { var engine: String }
+        return try JSON.decoder.decode(Machine.self, from: await request("PUT", "/api/v1/machines/\(machine)/engine", body: Body(engine: engine.rawValue)))
+    }
     func launchers(machine: String) async throws -> [Launcher] {
         try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self).launchers
     }
