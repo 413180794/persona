@@ -118,6 +118,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/engines.md` | 终端引擎（herdr / Herdr App / Orca）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |
 | `docs/plan-orca-support.md` | 计划：支持 Orca（进行中）：先把宿主（herdr、Orca）和 Agent 分开、抽出宿主接口，再接 Orca 来源；每一步的范围、Orca 能提供什么、风险 |
+| `docs/plan-connectors.md` | 计划：连接器（先接 GitHub 和 iMessage）：能力可选的 Connector 接口、内置 / 外部进程 / node 本地三种形态、飞书邮件的迁移步骤、隐私和拍板项 |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、macOS、测试，索引 `docs/lessons/README.md` |
 
 ## 构建与验证

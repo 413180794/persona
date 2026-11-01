@@ -8,8 +8,9 @@ struct ChatLines {
     /// Work lines the user opened; `openAll` flips them all (DEBUG `-openWork`).
     var openWork: Set<String>
     var openAll = false
-    /// Runs of tool calls the user opened (BeautifulUI).
+    /// Runs of tool calls the user opened; `openAllRuns` flips them all (DEBUG `-showRunsOpen`).
     var openRuns: Set<String> = []
+    var openAllRuns = false
     /// BeautifulUI folds two or more tool calls in a row into a line of chips.
     var chipRuns = false
     /// Whether a call can join a run: a call that went to the background stays on its own line.
@@ -143,13 +144,32 @@ struct ChatLines {
                     : items.enumerated().map { .workStep(group: id, item: $0.element, first: $0.offset == 0) }
                 out.append(.workEnd(group: id, count: items.reduce(0) { n, item in
                     if case .step(.folded(let f)) = item { n + (f.fold.map { $0.tools + $0.thoughts } ?? 1) } else { n + 1 }
-                }))
+                }, files: chipRuns ? Self.changedFiles(items) : [])) // the BeautifulUI style shows them
             }
         }
         return out
     }
 
     func isOpen(_ work: String) -> Bool { openWork.contains(work) != openAll }
+
+    /// The files a work line's edits and writes changed, in the order first touched, with the lines added and removed
+    /// (the counts its diffs show, `ToolDiffMemo`). Failed edits changed nothing and are left out.
+    static func changedFiles(_ items: [WorkItem]) -> [ChangedFile] {
+        var out: [ChangedFile] = []
+        for item in items {
+            guard case .step(.call(let c)) = item, !c.isError,
+                  ["Edit", "MultiEdit", "Write", "NotebookEdit"].contains(ToolPresentation.baseName(c.name)),
+                  let path = c.input["file_path"]?.string ?? c.input["notebook_path"]?.string, !path.isEmpty else { continue }
+            let d = ToolRunSummary.diff(c)
+            if let n = out.firstIndex(where: { $0.path == path }) {
+                out[n].adds += d.adds
+                out[n].dels += d.dels
+            } else {
+                out.append(ChangedFile(path: path, adds: d.adds, dels: d.dels))
+            }
+        }
+        return out
+    }
 
     /// An open work line's steps: two or more tool calls in a row fold into one line of chips (`ToolRunRow`); opened,
     /// their rows follow it, one lazy line per call as before. Thoughts, notices and words stay lines of their own, and
@@ -182,7 +202,7 @@ struct ChatLines {
         return out
     }
 
-    func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
+    func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) != openAllRuns }
 
     /// The run line (`runLines`) a call is folded into, if it is.
     func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
@@ -238,4 +258,11 @@ struct ChatLines {
         if started { out.append((user, rows)) }
         return out
     }
+}
+
+/// A file a work line changed: its path and the lines added and removed.
+nonisolated struct ChangedFile: Hashable, Sendable {
+    var path: String
+    var adds: Int
+    var dels: Int
 }

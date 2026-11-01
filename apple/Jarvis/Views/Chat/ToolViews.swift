@@ -259,7 +259,7 @@ enum ToolRunSummary {
     }
 
     /// The same counts the open call's diff shows (`ToolDiffMemo`, warmed off the main thread with the rows).
-    private static func diff(_ c: ToolCall) -> (adds: Int, dels: Int) {
+    static func diff(_ c: ToolCall) -> (adds: Int, dels: Int) {
         let i = c.input
         switch ToolPresentation.baseName(c.name) {
         case "Edit":
@@ -316,7 +316,11 @@ struct ToolCallRow: View {
                 .chatPinned(pinKey)
 
             if base == "TodoWrite" {
-                TodoList(todos: call.input["todos"]?.array ?? []).padding(.leading, detailLeading).padding(.trailing, pad).padding(.bottom, Theme.Space.s)
+                if AppStyle.current.usesBeautifulUI {
+                    TodoList(todos: call.input["todos"]?.array ?? []).padding(.horizontal, pad).padding(.bottom, Theme.Space.m)
+                } else {
+                    TodoList(todos: call.input["todos"]?.array ?? []).padding(.leading, detailLeading).padding(.trailing, pad).padding(.bottom, Theme.Space.s)
+                }
             } else if isOpen {
                 ToolDetail(call: call)
                     .padding(.leading, detailLeading)
@@ -333,6 +337,12 @@ struct ToolCallRow: View {
     /// On the work timeline what a tool shows keeps right of the rail, under its words.
     private var detailLeading: CGFloat { grouped && WorkCardSlice.timeline ? WorkCardSlice.textColumn : pad }
     private var onTimeline: Bool { grouped && WorkCardSlice.timeline }
+
+    /// Around a chip row (`ToolChipRow`): in a work card it lines up with the card's other rows; alone, a little
+    /// tighter. Thoughts and background notices in a card use the same (`ThinkingRow`, `TaskNoteRow`).
+    static func chipInsets(grouped: Bool) -> EdgeInsets {
+        grouped ? EdgeInsets(top: 5, leading: 9, bottom: 5, trailing: 9) : EdgeInsets(top: 2, leading: 7, bottom: 2, trailing: 7)
+    }
 
     private var tint: Color { call.isError ? Theme.danger : call.isRunning ? Theme.busy : .secondary }
 
@@ -376,7 +386,7 @@ struct ToolCallRow: View {
         .buttonStyle(.plain)
     }
 
-    /// The BeautifulUI style's head: its tool row — kind icon (a chevron once open), the verb, the subject in a chip.
+    /// The row's head: BeautifulUI's tool row — kind icon (a chevron once open), the verb, the subject in a chip.
     private var chipHeader: some View {
         ToolChipRow(chip, isOpen: isOpen, isRunning: call.isRunning) {
             Haptics.tap()
@@ -385,18 +395,21 @@ struct ToolCallRow: View {
             taskBadge
             if call.isError { Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.danger).font(Theme.Font.label) }
         }
-        .padding(.vertical, grouped ? 5 : 2)
-        .padding(.horizontal, pad - 3)
+        .padding(Self.chipInsets(grouped: grouped))
     }
 
     /// A call that went to the background says how its task went (后台 · 已完成).
     @ViewBuilder private var taskBadge: some View {
         if let id = call.use.toolUseID, tasks.started.contains(id) || tasks.notes[id] != nil {
             let b = TaskNoteText.badge(tasks.notes[id] ?? [])
-            Text(b.text).font(Theme.Font.label).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
-                .lineLimit(1).fixedSize()
-                .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
-                .background(Theme.Fill.well, in: .capsule)
+            if AppStyle.current.usesBeautifulUI {
+                BUIPill(b.text, tone: b.failed ? .red : .neutral)
+            } else {
+                Text(b.text).font(Theme.Font.label).foregroundStyle(b.failed ? Theme.danger : Color.secondary)
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
+                    .background(Theme.Fill.well, in: .capsule)
+            }
         }
     }
 
@@ -786,10 +799,21 @@ struct DiffView: View {
     }
 }
 
+/// TodoWrite's list as BeautifulUI's task rows in one card: a numbered ring for what is left, the ring turning on the
+/// one in progress (its activeForm), a green check for what is done.
 struct TodoList: View {
     var todos: [JSONValue]
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            TaskRows(Self.items(todos), style: .list, showsPills: false, maxWidth: nil)
+        } else {
+            checklist
+        }
+    }
+
+    /// Jarvis' own: a check, a dotted ring or an empty one, the finished ones struck through.
+    private var checklist: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array(todos.enumerated()), id: \.offset) { _, t in
                 let status = t["status"]?.string ?? "pending"
@@ -801,6 +825,18 @@ struct TodoList: View {
                         .strikethrough(status == "completed", color: .secondary)
                         .foregroundStyle(status == "completed" ? .secondary : .primary)
                 }
+            }
+        }
+    }
+
+    static func items(_ todos: [JSONValue]) -> [TaskItem] {
+        todos.enumerated().map { n, t in
+            let status = t["status"]?.string ?? "pending"
+            let content = t["content"]?.string ?? ""
+            return switch status {
+            case "completed": TaskItem(id: "\(n)", title: content, status: .completed)
+            case "in_progress": TaskItem(id: "\(n)", title: t["activeForm"]?.string ?? content, status: .running(step: n + 1))
+            default: TaskItem(id: "\(n)", title: content, status: .pending(step: n + 1))
             }
         }
     }

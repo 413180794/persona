@@ -469,8 +469,8 @@ struct CopyButton: View {
     }
 }
 
-/// A thought, folded to its first line; open, the whole text under a guide line. In the BeautifulUI style it is that
-/// library's thinking trace.
+/// A thought. In a work card (`compact`) it is a row like the tools' around it — "✦ 思考 [its first line]", open the
+/// whole text under a guide rule (the reference's Thinking row); elsewhere BeautifulUI's thinking trace.
 struct ThinkingRow: View {
     var item: Item
     var compact = false
@@ -484,9 +484,10 @@ struct ThinkingRow: View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ThinkingRow")
         #endif
-        if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
+        if !AppStyle.current.usesBeautifulUI { plain } else if compact { chipRow } else { trace }
     }
 
+    /// Jarvis' own: the memory mark, the first line, a chevron; opened, the text beside a rule.
     private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Button {
@@ -520,7 +521,32 @@ struct ThinkingRow: View {
         }
     }
 
-    private var beautiful: some View {
+    private var chipRow: some View {
+        let text = item.text ?? ""
+        return VStack(alignment: .leading, spacing: 0) {
+            ToolChipRow(BeautifulUI.ToolCall(id: item.id, .think, label: "思考", chip: ToolPresentation.firstLine(text), monospacedChip: false),
+                        isOpen: open) {
+                Haptics.tap()
+                toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+            }
+            .padding(ToolCallRow.chipInsets(grouped: true))
+            .chatPinned(pinKey)
+            if open {
+                Text(text)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(.leading, Theme.Space.m)
+                    .overlay(alignment: .leading) { Rectangle().fill(Theme.cardStroke).frame(width: Theme.Size.line) }
+                    .padding(.horizontal, WorkCardSlice.inset)
+                    .padding(.bottom, Theme.Space.m)
+                    .unfolding(unfold)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private var trace: some View {
         let text = item.text ?? ""
         return ThinkingState(
             .reasoning,
@@ -532,7 +558,6 @@ struct ThinkingRow: View {
         )
         .chatPinned(pinKey) // the trace's header is its top
         .textSelection(.enabled)
-        .padding(.horizontal, compact ? 10 : 0)
     }
 }
 

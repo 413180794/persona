@@ -73,6 +73,8 @@ struct ChatView: View {
     /// the tap); and ones folding away before they close (`Unfolding`).
     @State private var revealUntil: [String: Date] = [:]
     @State private var concealing: Set<String> = []
+    /// The calls of a run of chips folding away before it closes (the rest of its work line stays).
+    @State private var concealingCalls: Set<String> = []
 
     private enum Entry: Equatable { case latestAnswer, line(String) }
     /// The line being landed on, measured while landing (only that one row watches its frame).
@@ -298,12 +300,12 @@ struct ChatView: View {
 
     /// What builds the lines from the blocks, with what is open now.
     private var lineBuilder: ChatLines {
-        ChatLines(openWork: openWork, openAll: Self.debugOpenAll, openRuns: openRuns, chipRuns: AppStyle.current.usesBeautifulUI,
+        ChatLines(openWork: openWork, openAll: Self.debugOpenAll, openRuns: openRuns, openAllRuns: Self.debugOpenRuns, chipRuns: AppStyle.current.usesBeautifulUI,
                   foldsIntoRun: foldsIntoRun)
     }
     private func unfoldWork(_ lines: [ChatLine]) -> [ChatLine] { lineBuilder.unfold(lines) }
     private func isOpen(_ work: String) -> Bool { lineBuilder.isOpen(work) }
-    private func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) }
+    private func isRunOpen(_ id: String) -> Bool { openRuns.contains(id) != Self.debugOpenRuns }
     private func runID(holding call: String, group: String, items: [WorkItem]) -> String? {
         lineBuilder.runID(holding: call, group: group, items: items)
     }
@@ -465,6 +467,24 @@ struct ChatView: View {
     /// How long after opening a work line its steps may still arrive (and reveal themselves): the pin's hold.
     private static let stepsArrive: TimeInterval = 1.5
 
+    /// Opens or closes a run of chips like a work line: its calls reveal themselves under it, or fold away first.
+    /// They are already loaded, so only the ones appearing in this pass reveal (`revealUntil` of the work line, briefly).
+    private func toggleRun(_ id: String, calls: [ToolCall]) {
+        let line = id.components(separatedBy: "/run-")[0] // a run's id is "<work line>/run-<first call>"
+        guard isRunOpen(id) else {
+            Haptics.tap()
+            revealUntil[line] = max(revealUntil[line] ?? .distantPast, .now.addingTimeInterval(Theme.Motion.revealTime))
+            return changeWork(id, fromHeader: true, run: true, wasOpen: false)
+        }
+        Haptics.tap()
+        concealingCalls.formUnion(calls.map(\.id))
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Theme.Motion.concealTime))
+            concealingCalls.subtract(calls.map(\.id))
+            changeWork(id, fromHeader: true, run: true, wasOpen: true)
+        }
+    }
+
     /// Closing a work line: its steps fold away first, then go.
     private func concealWork(_ id: String, fromHeader: Bool) {
         concealing.insert(id)
@@ -491,8 +511,10 @@ struct ChatView: View {
     }
 
     /// A step of the work line `group`, as it opens and closes: steps appearing just after it opened reveal themselves.
-    private func stepUnfolding(_ group: String) -> Unfolding {
-        Unfolding(revealing: (revealUntil[group] ?? .distantPast) > .now, concealing: concealing.contains(group))
+    private func stepUnfolding(_ group: String, item: WorkItem? = nil) -> Unfolding {
+        var closing = concealing.contains(group)
+        if !closing, !concealingCalls.isEmpty, case .step(.call(let c))? = item { closing = concealingCalls.contains(c.id) }
+        return Unfolding(revealing: (revealUntil[group] ?? .distantPast) > .now, concealing: closing)
     }
 
     /// A work line's header moved (its top on screen): kept for the fold probe, and told to the pin. The wake
@@ -547,33 +569,40 @@ struct ChatView: View {
             .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
         case .workStep(let group, let item, let first):
             WorkStepView(item: item, first: first).equatable()
-                .unfolding(stepUnfolding(group))
+                .unfolding(stepUnfolding(group, item: item))
         case .toolRun(let id, let calls, let open, let first):
-            ToolRunRow(calls: calls, open: open, first: first) { toggleWork(id, fromHeader: true, run: true) }
+            ToolRunRow(calls: calls, open: open, first: first) { toggleRun(id, calls: calls) }
                 .equatable()
                 .unfolding(stepUnfolding(id.components(separatedBy: "/run-")[0])) // a run's id is "<work line>/run-<first call>"
                 .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id, $0) }
-        case .workEnd(let group, let count):
-            // The foot of the open work line's card.
-            Button { toggleWork(group, fromHeader: false) } label: {
-                HStack(spacing: Theme.Space.sm) {
-                    Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
-                    Text("收起 \(count) 步").lineLimit(1).fixedSize()
+        case .workEnd(let group, let count, let files):
+            if AppStyle.current.usesBeautifulUI {
+                // The foot of the open work line's card: the files it changed, then 收起.
+                WorkEndView(count: count, files: files) { toggleWork(group, fromHeader: false) }
+                    .equatable()
+                    .unfolding(stepUnfolding(group))
+            } else {
+                // The foot of the open work line's card.
+                Button { toggleWork(group, fromHeader: false) } label: {
+                    HStack(spacing: Theme.Space.sm) {
+                        Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
+                        Text("收起 \(count) 步").lineLimit(1).fixedSize()
+                    }
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, WorkCardSlice.contentLeading)
+                    .padding(.trailing, WorkCardSlice.inset)
+                    .padding(.vertical, Theme.Space.m)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background { WorkCardSlice(top: false, bottom: true) }
+                    .overlay(alignment: .top) { WorkCardSlice.separator }
+                    .contentShape(.rect)
                 }
-                .font(Theme.Font.caption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, WorkCardSlice.contentLeading)
-                .padding(.trailing, WorkCardSlice.inset)
-                .padding(.vertical, Theme.Space.m)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background { WorkCardSlice(top: false, bottom: true) }
-                .overlay(alignment: .top) { WorkCardSlice.separator }
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityLabel("收起过程")
+                .accessibilityIdentifier("work-fold-bottom")
+                .unfolding(stepUnfolding(group))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("收起过程")
-            .accessibilityIdentifier("work-fold-bottom")
-            .unfolding(stepUnfolding(group))
         case .wakes(let t, let live):
             WakeChip(notices: t.wakes, live: live) {
                 Haptics.tap()
@@ -1805,6 +1834,15 @@ struct ChatView: View {
         #endif
     }
 
+    /// `-showRunsOpen YES`: every run of tool chips starts open, for screenshots of the steps in it.
+    private static var debugOpenRuns: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "showRunsOpen")
+        #else
+        false
+        #endif
+    }
+
     /// Simulator automation: `-fromSeq N` renders from the turn holding the user message with that seq
     /// (scrolling a long lazy history to a turn drifts while rows above size themselves).
     private static func debugTrim(_ blocks: [ChatBlock]) -> [ChatBlock] {
@@ -2608,7 +2646,8 @@ struct ChatLine: Identifiable {
         case workStep(group: String, item: WorkItem, first: Bool)
         /// Two or more tool calls in a row of an open work line, as one line of chips.
         case toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool)
-        case workEnd(group: String, count: Int)
+        /// The foot of an open work card: 收起, and the files the work changed (`ChatLines.changedFiles`).
+        case workEnd(group: String, count: Int, files: [ChangedFile])
         /// A model API error (`APIErrorInfo`), repeated `count` times in a row.
         case apiError(item: Item, info: APIErrorInfo, count: Int)
 
@@ -2617,7 +2656,7 @@ struct ChatLine: Identifiable {
             case .row(let r): r.id
             case .work(let id, _, _, _, _): id
             case .workStep(let group, let item, _): group + "/" + item.id
-            case .workEnd(let group, _): group + "-end"
+            case .workEnd(let group, _, _): group + "-end"
             case .toolRun(let id, _, _, _): id
             case .userImages(let id, _): id
             case .mergedUsers(let id, _): id
@@ -2646,7 +2685,9 @@ struct ChatLine: Identifiable {
     static func workStep(group: String, item: WorkItem, first: Bool) -> Self {
         Self(.workStep(group: group, item: item, first: first))
     }
-    static func workEnd(group: String, count: Int) -> Self { Self(.workEnd(group: group, count: count)) }
+    static func workEnd(group: String, count: Int, files: [ChangedFile] = []) -> Self {
+        Self(.workEnd(group: group, count: count, files: files))
+    }
     static func apiError(item: Item, info: APIErrorInfo, count: Int) -> Self { Self(.apiError(item: item, info: info, count: count)) }
     static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
         Self(.toolRun(id: id, calls: calls, open: open, first: first))
@@ -2716,6 +2757,8 @@ struct WorkStepView: View, Equatable {
                 }
             case .step(.thought(let t)) where t.task != nil && t.wake != true:
                 TaskNoteRow(item: t, grouped: true) // a Monitor event between two commands: one line like theirs
+            case .step(.thought(let t)) where t.kind != .notice && AppStyle.current.usesBeautifulUI:
+                ThinkingRow(item: t, compact: true) // a row like the tools', with their insets
             case .step(.thought(let t)):
                 Group { if t.kind == .notice { NoticeRow(item: t) } else { ThinkingRow(item: t, compact: !WorkCardSlice.timeline) } }
                     .padding(.leading, WorkCardSlice.contentLeading)
@@ -2741,9 +2784,6 @@ struct WorkStepView: View, Equatable {
     }
 }
 
-/// A slice of an open work line's card. The steps are lines of their own in the lazy chat list (a turn can hold
-/// hundreds; one view holding them all stalled the page), so each draws its part: rounded on top for the first, at
-/// the bottom for the 收起 foot, reaching halfway into the list's gaps to meet its neighbours.
 /// The chat's actions handed down through the environment (open a file, a link, an image, a subagent…), as closures
 /// made once per page that call whatever the page's last render set. A closure written in `body` is a new value on
 /// every render and SwiftUI cannot tell it is the same one: every row that reads one (each visible work step reads
@@ -2799,6 +2839,9 @@ struct WorkStepView: View, Equatable {
     }
 }
 
+/// A slice of an open work line's card (in the BeautifulUI style its card: the style's card color, a 1 pt ring). The steps are lines of their own in the lazy chat list (a turn can hold hundreds; one view holding them
+/// all stalled the page), so each draws its part: rounded on top for the first, at the bottom for the 收起 foot,
+/// reaching halfway into the list's gaps to meet its neighbours.
 struct WorkCardSlice: View {
     var top: Bool
     var bottom: Bool
@@ -2837,23 +2880,75 @@ struct WorkCardSlice: View {
         let r = Self.radius
         let fill = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
                                           bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0,
-                                          style: .continuous).fill(Theme.Fill.well)
+                                          style: .continuous).fill(Self.beautiful ? Theme.card : Theme.Fill.well)
         return StrokeShapeView(shape: WorkCardEdges(top: top, bottom: bottom, radius: r),
-                        style: Theme.cardStroke, strokeStyle: StrokeStyle(lineWidth: 0.5),
+                        style: Theme.cardStroke, strokeStyle: StrokeStyle(lineWidth: Self.beautiful ? Theme.Size.line : 0.5),
                         isAntialiased: true, background: fill)
             .padding(.top, top ? 0 : -Self.bridge)
             .padding(.bottom, bottom ? 0 : -Self.bridge)
     }
 
+    /// BeautifulUI's card (the style's card color, a 1 pt ring); Jarvis' own is the gray well with a hairline.
+    private static var beautiful: Bool { AppStyle.current.usesBeautifulUI }
+
     /// The hairline between two steps, in the gap above a row, from the words' column (none on the timeline: the rail
     /// joins the steps).
     @ViewBuilder static var separator: some View {
         if !timeline {
-            Rectangle().fill(Color(uiColor: .separator)).frame(height: Theme.Size.hairline)
+            Rectangle().fill(beautiful ? Theme.cardStroke : Color(uiColor: .separator)).frame(height: beautiful ? Theme.Size.line : Theme.Size.hairline)
                 .padding(.leading, textColumn)
                 .offset(y: -bridge)
                 .allowsHitTesting(false)
         }
+    }
+}
+
+/// The foot of an open work card: in the BeautifulUI style the files this work changed as its diff chips (a tap opens
+/// the file, like the diff's header), the first six and "+N 个文件" for the rest; then 收起 N 步.
+struct WorkEndView: View, Equatable {
+    @Environment(\.openFile) private var openFile
+    nonisolated let count: Int
+    nonisolated let files: [ChangedFile]
+    var collapse: () -> Void
+    @State private var all = false
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.count == rhs.count && lhs.files == rhs.files }
+
+    private static let shown = 6
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !files.isEmpty {
+                let list = all ? files : Array(files.prefix(Self.shown))
+                FileDiffChips(list.map { FileDiff(file: ($0.path as NSString).lastPathComponent, additions: $0.adds, deletions: $0.dels) },
+                              moreLabel: files.count > list.count ? "+\(files.count - list.count) 个文件" : nil,
+                              onMore: { all = true },
+                              onSelect: openFile.map { open in { diff in
+                                  if let f = files.first(where: { ($0.path as NSString).lastPathComponent == diff.file }) { open(f.path) }
+                              } })
+                    .padding(.horizontal, WorkCardSlice.inset)
+                    .padding(.top, Theme.Space.m)
+                    .accessibilityIdentifier("work-files")
+            }
+            Button(action: collapse) {
+                HStack(spacing: Theme.Space.sm) {
+                    Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
+                    Text("收起 \(count) 步").lineLimit(1).fixedSize()
+                }
+                .font(Theme.Font.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, WorkCardSlice.contentLeading)
+                .padding(.trailing, WorkCardSlice.inset)
+                .padding(.vertical, Theme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("收起过程")
+            .accessibilityIdentifier("work-fold-bottom")
+        }
+        .background { WorkCardSlice(top: false, bottom: true) }
+        .overlay(alignment: .top) { WorkCardSlice.separator }
     }
 }
 
@@ -2887,9 +2982,10 @@ private nonisolated struct WorkCardEdges: Shape {
     }
 }
 
-/// The quiet line under a message: what the agent did for it. Finished: "工具 3 · 思考 1 · 1 分 20 秒 ›";
-/// running: a spinner and "正在工作 39 秒 · 工具 2" (ticking) with the terminal at the end. Tap to list every
-/// step right here (tools, thoughts, notices, earlier replies); tap the same line again to fold.
+/// The quiet line under a message: what the agent did for it, as BeautifulUI's tool run header. Finished:
+/// "⌄ 3 次工具调用，2 条消息 · 1 分 20 秒"; running: a spinner and "正在工作 39 秒 · 2 次工具调用" (ticking, shimmering)
+/// with the terminal at the end. Tap to list every step right here (tools, thoughts, notices, earlier replies); tap
+/// the same line again to fold.
 nonisolated struct WorkSummary: Equatable {
     let full: [String]
     let short: [String]
@@ -2911,11 +3007,20 @@ nonisolated struct WorkSummary: Equatable {
         }
         var full: [String] = []
         var short: [String] = []
-        if calls > 0 { full.append("工具 \(calls)"); short.append("工具 \(calls)") }
-        if thoughts > 0 { full.append("思考 \(thoughts)") }
-        if texts > 0 { full.append("回复 \(texts)") }
-        if full.isEmpty && notices > 0 { full.append("后台通知 \(notices)") }
-        if short.isEmpty && notices > 0 { short.append("后台通知 \(notices)") }
+        if AppStyle.current.usesBeautifulUI {
+            // BeautifulUI's header words: "5 次工具调用，2 条消息".
+            if calls > 0 { full.append("\(calls) 次工具调用"); short.append("\(calls) 次工具调用") }
+            if thoughts > 0 { full.append("\(thoughts) 次思考") }
+            if texts > 0 { full.append("\(texts) 条消息") }
+            if full.isEmpty && notices > 0 { full.append("\(notices) 条后台通知") }
+            if short.isEmpty && notices > 0 { short.append("\(notices) 条后台通知") }
+        } else {
+            if calls > 0 { full.append("工具 \(calls)"); short.append("工具 \(calls)") }
+            if thoughts > 0 { full.append("思考 \(thoughts)") }
+            if texts > 0 { full.append("回复 \(texts)") }
+            if full.isEmpty && notices > 0 { full.append("后台通知 \(notices)") }
+            if short.isEmpty && notices > 0 { short.append("后台通知 \(notices)") }
+        }
         self.full = full
         self.short = short
     }
@@ -2953,6 +3058,40 @@ struct WorkLine: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("WorkLine")
         #endif
+        if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
+    }
+
+    /// BeautifulUI's tool run header: ⌄, the counts and the time; working, a spinner and a shimmer.
+    private var beautiful: some View {
+        HStack(spacing: Theme.Space.m) {
+            Button(action: toggle) {
+                ToolRunTitle(isOpen: open, isRunning: live) {
+                    // Whole words, never cut: the full summary, or a shorter one when the row is narrow.
+                    if live {
+                        TimelineView(.periodic(from: .now, by: 1)) { ctx in summary(now: ctx.date) }
+                    } else {
+                        summary(now: end ?? .now)
+                    }
+                }
+                .opacity(isEmpty && !live ? 0.6 : 1)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(isEmpty)
+            .accessibilityLabel(open ? "收起过程" : "展开过程")
+            .accessibilityValue(label(now: end ?? .now, short: false))
+            .accessibilityIdentifier("work-head")
+            Spacer(minLength: 0)
+            if let openTerminal {
+                Button(action: openTerminal) { Image(systemName: Theme.Icon.terminal).font(Theme.Font.caption).foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("打开终端")
+            }
+        }
+    }
+
+    /// Jarvis' own: the counts and the time in secondary words, the chevron after them.
+    private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.m) {
                 Button(action: toggle) {
@@ -2999,10 +3138,18 @@ struct WorkLine: View, Equatable {
     }
 
     private func label(now: Date, short: Bool) -> String {
-        var parts = short ? counts.short : counts.full
+        let parts = short ? counts.short : counts.full
         let took = Self.duration(from: start, to: now)
-        if live { parts.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { parts.append(took) }
-        return parts.isEmpty ? "已完成" : parts.joined(separator: " · ")
+        guard AppStyle.current.usesBeautifulUI else {
+            // Jarvis' own: "工具 3 · 思考 1 · 1 分 20 秒", "正在工作 39 秒 · 工具 2".
+            var p = parts
+            if live { p.insert("正在工作 \(took)", at: 0) } else if !took.isEmpty { p.append(took) }
+            return p.isEmpty ? "已完成" : p.joined(separator: " · ")
+        }
+        let what = parts.joined(separator: "，")
+        if live { return what.isEmpty ? "正在工作 \(took)" : "正在工作 \(took) · " + what }
+        if what.isEmpty { return took.isEmpty ? "已完成" : "已完成 · " + took }
+        return took.isEmpty ? what : what + " · " + took
     }
 
     static func duration(from start: Date?, to end: Date) -> String {

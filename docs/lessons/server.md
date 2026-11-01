@@ -24,6 +24,8 @@
 - macOS 的「桌面」「文稿」「下载」受隐私保护（TCC）：jarvisd 经 ssh 在 Mac 上运行，没授权时读这些文件夹报 `operation not permitted`，
   手机上打不开那里的文件。node 把这个错误换成说明（`explainDenied`）：在「完全磁盘访问权限」里打开 sshd-keygen-wrapper，或换个文件夹。
   要给用户看的文件（截图等）别放桌面，放 `~/` 下的普通目录。
+  TCC 的权限算在负责进程头上：经 ssh 起的进程（node 和它的子进程）一律算 `sshd-keygen-wrapper`，给 jarvisd 二进制本身授权没用（而且每次部署换二进制、授权就掉）。
+  给了它 = 任何 ssh 登录都有完全磁盘访问权限（能读 `~/Library/Messages/chat.db` 等）。只想给一个程序，就让 launchd 起它（LaunchAgent），见 `docs/plan-connectors.md`。
 - 机器的 node 不是 hub 这一版（`node_mismatch`）时，App 的「重新部署」让 hub 自己装：`deploy.sh` 部署 hub 时把各平台的 node 二进制留在 hub 机器的
   `~/.jarvis/bin/nodes/`，hub 经 ssh 装进去、杀掉常驻 node 让 launchd 重启、重新连接（`hub/deploy.go`）。只部署了某一台、没部署 hub 时那里还是旧版，按钮会装回旧版本。
 - hub 关掉 RPC peer 不等于连接结束：ssh 子进程还活着，连接循环要同时等 `peer.Done()`，否则「重连」之后机器一直显示在线、每个调用都回 `rpc: connection closed`（`TestReconnectGivesAWorkingConnection`）。

@@ -11,6 +11,8 @@ nonisolated extension ComponentSpec {
         s.subtitle = "BeautifulUI 的卡片、工具卡片和输入框"
         s.canvas = .neutral(page: Theme.systemPage, card: Theme.groupedCard)
         s.components = .beautiful
+        // BeautifulUI's work card (its card color and ring), not 液态玻璃's timeline.
+        s.workList = .card
         return s
     }()
 }

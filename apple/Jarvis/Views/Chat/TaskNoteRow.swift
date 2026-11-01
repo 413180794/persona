@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 extension EnvironmentValues {
@@ -44,6 +45,22 @@ enum TaskNoteText {
         if s < 60 { return "\(s) 秒" }
         if s < 3600 { return "\(s / 60) 分" }
         return s % 3600 / 60 == 0 ? "\(s / 3600) 小时" : "\(s / 3600) 小时 \(s % 3600 / 60) 分"
+    }
+
+    /// The outcome as a status pill: done in green, failed in red, stopped plain, waiting in amber; with how long it ran.
+    static func pill(_ n: TaskNote, startedAt: Date?, at: Date?) -> (text: String, tone: BUIPill.Tone)? {
+        var ran: String?
+        if n.status != "event", let s = startedAt, let e = at, e > s { ran = took(Int(e.timeIntervalSince(s))) }
+        func with(_ word: String) -> String { ran.map { word + " · " + $0 } ?? word }
+        switch n.status {
+        case "completed", "ended": return (with("已完成"), .green)
+        case "failed": return (with(n.exitCode.map { "退出码 \($0)" } ?? "失败"), .red)
+        case "killed", "stopped": return (with("已停止"), .neutral)
+        case "waiting": return ("等待中", .orange)
+        default:
+            if let c = n.exitCode, c != 0 { return (with("退出码 \(c)"), .red) }
+            return nil
+        }
     }
 
     static func symbol(_ n: TaskNote) -> String {
@@ -99,39 +116,57 @@ struct TaskNoteRow: View {
         if let n = item.task {
             let call = index.calls[item.id]
             VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    Haptics.tap()
-                    toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
-                } label: {
-                    HStack(spacing: Theme.Space.m) {
-                        ZStack {
-                            Circle().fill(tint(n).opacity(0.14)).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
-                            Image(systemName: TaskNoteText.symbol(n))
-                                .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xLarge)
-                                .foregroundStyle(tint(n))
+                Group {
+                    if AppStyle.current.usesBeautifulUI {
+                        let subject = TaskNoteText.subject(n, description: call.flatMap { index.descriptions[$0] })
+                        // The tools' row: the task's icon, what it is, its description in a chip, how it went as a pill.
+                        ToolChipRow(BeautifulUI.ToolCall(id: item.id, .symbol(TaskNoteText.symbol(n)), label: TaskNoteText.label(n), chip: subject,
+                                                         monospacedChip: subject.unicodeScalars.allSatisfy(\.isASCII)),
+                                    isOpen: open) {
+                            Haptics.tap()
+                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+                        } accessory: {
+                            if let p = TaskNoteText.pill(n, startedAt: call.flatMap { index.startedAt[$0] }, at: item.ts) {
+                                BUIPill(p.text, tone: p.tone)
+                            }
                         }
-                        Text(TaskNoteText.label(n)).font(Theme.Font.secondaryStrong).lineLimit(1).fixedSize()
-                        Text(TaskNoteText.subject(n, description: call.flatMap { index.descriptions[$0] }))
-                            .font(Theme.Font.secondary)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Spacer(minLength: 4)
-                        if let o = TaskNoteText.outcome(n, startedAt: call.flatMap { index.startedAt[$0] }, at: item.ts) {
-                            Text(o).font(Theme.Font.label.monospacedDigit())
-                                .foregroundStyle(n.failed ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.tertiary))
-                                .lineLimit(1).fixedSize()
+                        .padding(ToolCallRow.chipInsets(grouped: grouped))
+                    } else {
+                        Button {
+                            Haptics.tap()
+                            toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+                        } label: {
+                            HStack(spacing: Theme.Space.m) {
+                                ZStack {
+                                    Circle().fill(tint(n).opacity(0.14)).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                                    Image(systemName: TaskNoteText.symbol(n))
+                                        .font(Theme.Font.labelStrong).dynamicTypeSize(...DynamicTypeSize.xLarge)
+                                        .foregroundStyle(tint(n))
+                                }
+                                Text(TaskNoteText.label(n)).font(Theme.Font.secondaryStrong).lineLimit(1).fixedSize()
+                                Text(TaskNoteText.subject(n, description: call.flatMap { index.descriptions[$0] }))
+                                    .font(Theme.Font.secondary)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Spacer(minLength: 4)
+                                if let o = TaskNoteText.outcome(n, startedAt: call.flatMap { index.startedAt[$0] }, at: item.ts) {
+                                    Text(o).font(Theme.Font.label.monospacedDigit())
+                                        .foregroundStyle(n.failed ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.tertiary))
+                                        .lineLimit(1).fixedSize()
+                                }
+                                Image(systemName: Theme.Icon.disclosure)
+                                    .font(Theme.Font.labelStrong)
+                                    .foregroundStyle(.tertiary)
+                                    .rotationEffect(.degrees(open ? 90 : 0))
+                            }
+                            .padding(.vertical, grouped ? 10 : 7)
+                            .padding(.horizontal, pad)
+                            .contentShape(.rect)
                         }
-                        Image(systemName: Theme.Icon.disclosure)
-                            .font(Theme.Font.labelStrong)
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(open ? 90 : 0))
+                        .buttonStyle(.plain)
                     }
-                    .padding(.vertical, grouped ? 10 : 7)
-                    .padding(.horizontal, pad)
-                    .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
                 .accessibilityIdentifier("task-note")
                 if open {
                     detail(n, call: call)
@@ -172,6 +207,6 @@ struct TaskNoteRow: View {
     }
 
     private var pad: CGFloat { grouped ? WorkCardSlice.inset : 10 }
-
     private func tint(_ n: TaskNote) -> Color { n.failed ? Theme.danger : .secondary }
+
 }
