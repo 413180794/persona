@@ -383,10 +383,15 @@ struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showPair = false
     @State private var appear = false
+    // The iPhone scans the QR code `jarvisd hub pair` prints; the Mac has no camera and pastes the link it prints.
     #if os(macOS)
     private static let tagline = "把每台电脑上的 Claude 收进一个窗口"
+    private static let pairIcon = Theme.Icon.link
+    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `jarvisd hub pair`，拷贝它打印的链接"
     #else
     private static let tagline = "把每台电脑上的 Claude 装进口袋"
+    private static let pairIcon = "qrcode.viewfinder"
+    private static let pairHint: LocalizedStringKey = "在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码"
     #endif
 
     var body: some View {
@@ -407,7 +412,7 @@ struct WelcomeView: View {
                 feature("bolt.horizontal", "实时看它在做什么", "思考、工具调用、终端画面，流式更新")
                 #if os(macOS)
                 // A Mac decides in its own window and has no health data (PhoneDataSource.onThisDevice).
-                feature("hand.tap", "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
+                feature(Theme.Icon.click, "在一个窗口里拍板", "回答提问、审批计划、授权工具，不用切到终端")
                 // The phone's data comes from the iPhone's Jarvis; the Mac is a desktop (AppModel.registration).
                 feature(Theme.Icon.mailAccounts, "带上邮箱和你的 iPhone", "Gmail 等邮箱；日历、通讯录、照片来自 iPhone 上的 Jarvis")
                 #else
@@ -419,13 +424,13 @@ struct WelcomeView: View {
             .padding(.horizontal, Theme.Space.xxl)
             Spacer()
             Button { showPair = true } label: {
-                Label("连接 hub", systemImage: "qrcode.viewfinder").font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+                Label("连接 hub", systemImage: Self.pairIcon).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
             .padding(.horizontal, Theme.Space.xl)
             .accessibilityIdentifier("welcome.pair")
-            Text("在 hub 所在的机器上运行 `jarvisd hub pair` 显示二维码")
+            Text(Self.pairHint)
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

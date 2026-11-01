@@ -440,7 +440,13 @@ struct DiffText: View {
             out.append(NSAttributedString(string: gutter, attributes: [.font: font, .foregroundColor: UIColor.tertiaryLabel, .backgroundColor: bg]))
             let body = l.text.padding(toLength: max(width, l.text.count), withPad: " ", startingAt: 0)
             let color: UIColor = l.kind == .add || l.kind == .del || l.kind == .context ? .label : fg
-            out.append(NSAttributedString(string: body + (i < lines.count - 1 ? "\n" : ""), attributes: [.font: font, .foregroundColor: color, .backgroundColor: bg]))
+            #if os(macOS)
+            // An NSTextView fills a background to the view's edge from the line break: the last line needs one too.
+            let end = "\n"
+            #else
+            let end = i < lines.count - 1 ? "\n" : ""
+            #endif
+            out.append(NSAttributedString(string: body + end, attributes: [.font: font, .foregroundColor: color, .backgroundColor: bg]))
         }
         return out
     }
