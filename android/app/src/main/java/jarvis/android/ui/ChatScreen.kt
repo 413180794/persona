@@ -544,7 +544,10 @@ fun ChatScreen(
                 }
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
                 session?.takeIf { it.starting == true || it.startError != null }?.let { StartingNote(it.startError, it.agentLabel) }
-                session?.takeIf { it.agent == null || it.agent == "claude" }?.let { SessionModeBar(hub, it) }
+                session?.takeIf { it.agent == null || it.agent == "claude" }?.let {
+                    // Photos and quotes in the box stay for the message: /model goes out on its own.
+                    SessionModeBar(hub, it, onPickModel = { id -> Outbox.send(hub, key, "/model $id") })
+                }
                 session?.suggestion?.takeIf { it.isNotBlank() && draft.isEmpty() }?.let { sug ->
                     AssistChip(onClick = { draft = sug }, label = { Text(sug, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.padding(horizontal = 12.dp))
                 }

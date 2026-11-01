@@ -60,6 +60,20 @@ object SessionModes {
         return list + (permissionModes.firstOrNull { it.id == current } ?: Option(current, current, ""))
     }
 
+    /** Claude Code's `/model` aliases (iOS PromptItems.claudeModels): picking one sends `/model <alias>`. */
+    val claudeModels = listOf(
+        Option("default", "默认", "账号默认"),
+        Option("opus", "Opus", "最强"),
+        Option("sonnet", "Sonnet", "均衡"),
+        Option("haiku", "Haiku", "最快"),
+    )
+
+    /** The alias a session's model reads as ("claude-opus-…" → opus); unknown or none is default. */
+    fun claudeModelId(model: String?): String {
+        val m = model.orEmpty().lowercase()
+        return listOf("opus", "sonnet", "haiku").firstOrNull { it in m } ?: "default"
+    }
+
     fun modeLabel(id: String?): String? = id?.let { m -> permissionModes.firstOrNull { it.id == m }?.title ?: m }
     fun effortLabel(id: String?): String? = id?.let { e -> effortLevels.firstOrNull { it.id == e }?.title ?: e }
 }
@@ -69,7 +83,7 @@ object SessionModes {
  * Code's TUI. Picking one changes it on the running session. Claude only: Codex / TRAEX have their own policies.
  */
 @Composable
-fun SessionModeBar(hub: Hub, session: Session) {
+fun SessionModeBar(hub: Hub, session: Session, onPickModel: ((String) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     var changing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -92,6 +106,14 @@ fun SessionModeBar(hub: Hub, session: Session) {
                 text = session.effort?.let { "思考" + SessionModes.effortLabel(it) } ?: "思考强度", known = session.effort != null,
                 warn = false, enabled = !changing, options = SessionModes.effortLevels, current = session.effort,
             ) { change(effort = it) }
+            // /model for Claude in a herdr pane (iOS canPickModel): Codex / TRAEX pick in a menu the phone can't drive.
+            if (onPickModel != null && session.paneId != null && !session.assistant) {
+                val id = SessionModes.claudeModelId(session.model)
+                ModeMenu(
+                    text = SessionModes.claudeModels.first { it.id == id }.title, known = session.model != null,
+                    warn = false, enabled = !changing, options = SessionModes.claudeModels, current = id,
+                ) { if (it != id) onPickModel(it) }
+            }
             if (changing) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
         }
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }

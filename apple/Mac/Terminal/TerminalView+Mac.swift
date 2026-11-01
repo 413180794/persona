@@ -650,33 +650,15 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
             return
         }
         // While composing, every key belongs to the input method.
-        if host.marked.isEmpty, let name = Self.keyName(event) {
+        // Function keys, ctrl combinations and (终端设置 › Option 当作 Meta) Option combinations go out as herdr keys.
+        if host.marked.isEmpty,
+           let name = MacTerminalKeys.name(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers,
+                                           flags: event.modifierFlags,
+                                           optionAsMeta: UserDefaults.standard.bool(forKey: TerminalPrefs.optionAsMeta)) {
             host.onInput?(.key(name))
             return
         }
         interpretKeyEvents([event])
-    }
-
-    /// Function keys and ctrl combinations by herdr's names ("up", "shift+tab", "ctrl+c"); nil for typed text.
-    private static func keyName(_ event: NSEvent) -> String? {
-        let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let special: [UInt16: String] = [
-            126: "up", 125: "down", 123: "left", 124: "right", 53: "esc", 48: "tab", 36: "enter", 76: "enter",
-            51: "backspace", 117: "delete", 115: "home", 119: "end", 116: "pageup", 121: "pagedown",
-            122: "f1", 120: "f2", 99: "f3", 118: "f4", 96: "f5", 97: "f6", 98: "f7", 100: "f8", 101: "f9", 109: "f10",
-            103: "f11", 111: "f12",
-        ]
-        var base = special[event.keyCode]
-        let isSpecial = base != nil
-        if base == nil, f.contains(.control), let ch = event.charactersIgnoringModifiers?.lowercased(), ch.count == 1 {
-            base = ch == " " ? "space" : ch
-        }
-        guard let base else { return nil }
-        var mods: [String] = []
-        if f.contains(.control) { mods.append("ctrl") }
-        if f.contains(.option), isSpecial { mods.append("alt") }
-        if f.contains(.shift), isSpecial { mods.append("shift") }
-        return (mods + [base]).joined(separator: "+")
     }
 
     /// What the key bindings turn a key into when it was not caught above (no composition left to finish).

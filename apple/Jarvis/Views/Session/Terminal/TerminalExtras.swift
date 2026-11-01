@@ -15,6 +15,8 @@ enum TerminalPrefs {
     /// "direct": the keyboard types into the terminal; "field": a text field under it sends what is written.
     static let inputMode = "terminalInputMode"
     static let tipsSeen = "terminalTipsSeen"
+    /// Mac: Option+key sends ESC+key (Meta), like Terminal.app's setting of that name; off by default, as there.
+    static let optionAsMeta = "terminalOptionAsMeta"
     /// "phone": the phone drives the terminal at its own size while the tab is open; "mirror": it shows the pane at the
     /// computer's size and folds long rows.
     static let size = "terminalSize"
@@ -95,6 +97,9 @@ struct TerminalSettingsView: View {
     @AppStorage(TerminalPrefs.theme) private var themeID = TerminalTheme.defaultID
     @AppStorage(TerminalPrefs.inputMode) private var inputMode = "direct"
     @AppStorage(TerminalPrefs.size) private var size = "phone"
+    #if os(macOS)
+    @AppStorage(TerminalPrefs.optionAsMeta) private var optionAsMeta = false
+    #endif
     @State private var newShortcut = ""
 
     private var shortcuts: Binding<[String]> {
@@ -154,6 +159,16 @@ struct TerminalSettingsView: View {
                     Text(inputMode == "field" ? "在终端下方的输入框里写好，按回车一次发出去；键栏的 ctrl / alt / ⇧ 对输入框里打的下一个字也生效。"
                          : "点键栏右边的键盘按钮弹出键盘，每个键直接发到终端（像在电脑上一样，输入法、听写都能用）；双击键盘按钮是回车。点终端是点在终端里（比如 Claude 的「Jump to bottom」），不会弹键盘。")
                 }
+                #if os(macOS)
+                Section {
+                    Toggle("将 Option 键用作 Meta 键", isOn: $optionAsMeta)
+                } header: {
+                    Text("键盘")
+                } footer: {
+                    Text(optionAsMeta ? "Option+字母发出 Esc+字母，shell 里 Option+B / Option+F 按词移动；Option 打不出 ™、é 这类特殊字符了。输入法照常用。"
+                         : "Option 照常打出特殊字符（Option+2 是 ™）；打开后 Option+键 发出 Esc+键，和「终端」App 的同名设置一样。")
+                }
+                #endif
                 Section {
                     ForEach(Array(shortcuts.wrappedValue.enumerated()), id: \.offset) { _, s in
                         Text(s).font(Theme.Font.body.monospaced()).lineLimit(1)

@@ -149,3 +149,15 @@ class SlashCommandsTest {
         org.junit.Assert.assertEquals(listOf("/继续", "/compact", "/context", "/提交", "/汇报"), words("/", clear = false)) // Jarvis, Codex
     }
 }
+
+class ModelPickerTest {
+    @Test fun modelIdsAsIos() {
+        val f = jarvis.android.ui.SessionModes::claudeModelId
+        org.junit.Assert.assertEquals("opus", f("claude-opus-5-5[1m]"))
+        org.junit.Assert.assertEquals("sonnet", f("us.anthropic.claude-sonnet-5-5"))
+        org.junit.Assert.assertEquals("haiku", f("claude-haiku-5-5"))
+        org.junit.Assert.assertEquals("default", f(null))
+        org.junit.Assert.assertEquals("default", f("deepseek/v4.1"))
+        org.junit.Assert.assertEquals(listOf("default", "opus", "sonnet", "haiku"), jarvis.android.ui.SessionModes.claudeModels.map { it.id })
+    }
+}
