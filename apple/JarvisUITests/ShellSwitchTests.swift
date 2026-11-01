@@ -53,37 +53,11 @@ final class ShellSwitchTests: XCTestCase {
         XCTAssertTrue(met, "\(what) is not on screen")
     }
 
-    /// Whether Agents is what is drawn: its selected 全部 chip (an accent-tinted capsule) is on screen where it is laid
-    /// out. Both pages stay built and the hidden one stays in the accessibility tree (its glass and lists are UIKit), so
-    /// `exists` / `isHittable` say nothing about which page shows; only the pixels do (as `AgentsListTests.drawn`).
-    @MainActor private func agentsDrawn() -> Bool {
-        let chip = app.buttons["agents.filter.all"].firstMatch
-        guard chip.waitForExistence(timeout: 3) else { return false }
-        let frame = chip.frame
-        guard let cg = app.screenshot().image.cgImage else { return false }
-        let scale = CGFloat(cg.width) / app.windows.firstMatch.frame.width
-        let r = frame.insetBy(dx: 4, dy: 4)
-        let w = Int(r.width * scale), h = Int(r.height * scale)
-        guard w > 0, h > 0 else { return false }
-        var px = [UInt8](repeating: 0, count: w * h * 4)
-        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return false }
-        ctx.draw(cg, in: CGRect(x: -r.minX * scale, y: -(CGFloat(cg.height) - r.maxY * scale), width: CGFloat(cg.width), height: CGFloat(cg.height)))
-        var tinted = 0
-        for i in stride(from: 0, to: px.count, by: 4) where Int(px[i + 2]) - Int(px[i]) > 20 { tinted += 1 }
-        return tinted * 2 > w * h
-    }
-
-    /// Waits (the switch fades the pages) until Agents is drawn, or is not.
+    /// Waits (the switch slides the pages) until Agents is drawn, or is not.
     @MainActor private func expectAgents(_ shown: Bool, _ what: String) {
-        var now = agentsDrawn()
-        for _ in 0..<10 where now != shown {
-            usleep(300_000)
-            now = agentsDrawn()
-        }
-        if now != shown { attachScreen(what) }
-        XCTAssertEqual(now, shown, shown ? "Agents is not drawn: \(what)" : "Agents still drawn: \(what)")
+        let now = app.waitAgentsDrawn(shown)
+        if !now { attachScreen(what) }
+        XCTAssertTrue(now, shown ? "Agents is not drawn: \(what)" : "Agents still drawn: \(what)")
     }
 
     /// 助手's empty chat: its composer (新对话 is disabled there, and a disabled button is not hittable).

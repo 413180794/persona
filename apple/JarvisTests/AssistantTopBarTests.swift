@@ -83,9 +83,45 @@ struct AssistantTopBarTests {
         list.contentSize = CGSize(width: 400, height: 4000)
         root.addSubview(list)
         let here = CGPoint(x: 200, y: 150)
-        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: here, in: root)) // at its left edge: the sidebar may open
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: false)) // at its left edge: the sidebar may open
         code.contentOffset.x = 300
-        #expect(DrawerPan.Coordinator.sidewaysScroller(at: here, in: root))
-        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: CGPoint(x: 200, y: 500), in: root))
+        #expect(DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: false))
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: CGPoint(x: 200, y: 500), in: root, towardsRight: false))
+        // A drag to the left (the shell's page to Agents) scrolls it on while it has more to the right, and pages at its end.
+        #expect(DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: true))
+        code.contentOffset.x = 800
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: here, in: root, towardsRight: true))
+        #expect(!DrawerPan.Coordinator.sidewaysScroller(at: CGPoint(x: 200, y: 500), in: root, towardsRight: true))
+    }
+
+    /// The shell's strip: on 助手 a drag to the left pages (to the right is the drawer's), on Agents a drag to the right.
+    @Test @MainActor func stripDirection() {
+        let pager = ShellPager()
+        #expect(DrawerPan.Coordinator.pages(pager: pager, dx: -20))
+        #expect(!DrawerPan.Coordinator.pages(pager: pager, dx: 20))
+        pager.slide(to: 1, animated: false)
+        #expect(DrawerPan.Coordinator.pages(pager: pager, dx: 20))
+        #expect(!DrawerPan.Coordinator.pages(pager: pager, dx: -20))
+    }
+
+    /// The pager lets go like the drawer: a flick goes its way, otherwise past half way.
+    @Test @MainActor func pagerSettles() {
+        let pager = ShellPager()
+        pager.width = 400
+        var landed: [Int] = []
+        pager.settled = { landed.append($0) }
+        pager.dragBegan()
+        pager.drag(-120) // 30% towards Agents, slowly: back
+        pager.letGo(velocity: -50)
+        #expect(landed.isEmpty)
+        pager.dragBegan()
+        pager.drag(-120) // the same, flicked: over
+        pager.letGo(velocity: -800)
+        #expect(landed == [1])
+        pager.slide(to: 1, animated: false)
+        pager.dragBegan()
+        pager.drag(240) // 60% back towards 助手
+        pager.letGo(velocity: 0)
+        #expect(landed == [1, 0])
     }
 }

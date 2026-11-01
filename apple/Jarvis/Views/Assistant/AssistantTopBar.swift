@@ -96,6 +96,7 @@ struct AssistantTopBar: View {
             }
         }
         .connectionDetails($showLink)
+        .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
     }
 
     private var classicBar: some View {

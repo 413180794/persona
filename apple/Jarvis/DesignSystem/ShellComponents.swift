@@ -16,6 +16,8 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     @ViewBuilder var chatMenu: () -> ChatMenu
     @ViewBuilder var workMenu: () -> WorkMenu
     @Namespace private var pill
+    /// The strip under the switch: its pill follows the pages while they slide (`ShellPager`).
+    @Environment(\.shell) private var shell
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -44,6 +46,9 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 WaitingBadge()
             }
         }
+        .background(alignment: .leading) {
+            if let pager = shell?.pager { PagerPill(pager: pager) }
+        }
         .padding(Theme.Space.xs)
         .surface(interactive: true, in: .capsule)
         .animation(Theme.Motion.state, value: tab)
@@ -70,11 +75,26 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             .minimumScaleFactor(0.8)
             .scaledFrame(width: Theme.Shell.segmentWidth, height: Theme.Shell.switchHeight - Theme.Space.s)
             .background {
-                if selected {
+                if selected, shell == nil {
                     Capsule().fill(Theme.Shell.segment).matchedGeometryEffect(id: "pill", in: pill)
                 }
             }
             .contentShape(.capsule)
+    }
+}
+
+/// The switch's pill in the shell: under 助手 or Agents as the strip's position says, gliding with the finger. Its own
+/// view: only it reads the position, the switch (and its menus) are not drawn again on every frame of a drag.
+private struct PagerPill: View {
+    let pager: ShellPager
+
+    var body: some View {
+        GeometryReader { g in
+            let half = g.size.width / 2
+            Capsule().fill(Theme.Shell.segment)
+                .frame(width: half, height: g.size.height)
+                .offset(x: min(1, max(0, pager.position)) * half)
+        }
     }
 }
 

@@ -116,8 +116,7 @@ import UIKit
     /// Where a drag lets go, like the system's back swipe: a flick goes its way, otherwise past half way (counting a
     /// little of where it is heading) opens. `velocity` in points per second.
     nonisolated static func settlesOpen(progress: CGFloat, velocity: CGFloat, width: CGFloat) -> Bool {
-        if abs(velocity) > 300 { return velocity > 0 }
-        return progress + velocity * 0.2 / max(width, 1) > 0.5
+        SwipeRelease.goes(progress: progress, velocity: velocity, width: width)
     }
 
     /// Whether a touch that has moved `dx`, `dy` from where it went down is the drawer's: within 45° of horizontal
@@ -141,8 +140,8 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
     var enabled: Bool
     /// Behind the sidebar: the system's grouped gray, or the shell's near-white (docs/ios.md「新外壳」).
     var backdrop: Color = Color(.secondarySystemBackground)
-    /// The drag opens only from the screen's left edge: the page's rows swipe to the right themselves (the Agents page's 置顶 / 中断).
-    var edgeOnly = false
+    /// The shell's 助手 | Agents strip: a drag sideways may page between them instead (`DrawerPan`).
+    var pager: ShellPager? = nil
     @ViewBuilder var sidebar: Sidebar
     var page: Page
 
@@ -159,7 +158,7 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
             .background { backdrop.ignoresSafeArea() }
-            .gesture(DrawerPan(drawer: drawer, enabled: enabled, edgeOnly: edgeOnly))
+            .gesture(DrawerPan(drawer: drawer, enabled: enabled, pager: pager))
             .background { DrawerTabBarProbe(drawer: drawer) }
             .onAppear { drawer.width = width }
             .onChange(of: width) { drawer.width = width }
@@ -332,15 +331,22 @@ private struct DrawerPageMotion: ViewModifier {
 struct DrawerPan: UIGestureRecognizerRepresentable {
     let drawer: AssistantDrawer
     var enabled: Bool
-    var edgeOnly = false
+    /// In the shell: the 助手 | Agents strip. On 助手 a drag to the left pages to Agents (to the right is still the
+    /// drawer); on Agents a drag to the right pages back to 助手 (the drawer opens from ☰ there).
+    var pager: ShellPager? = nil
 
-    /// How far from the left edge a drag may start when `edgeOnly`: the system's back swipe takes about as much.
-    static let edge: CGFloat = Theme.Space.xl
+    /// On Agents a drag to the right that starts on a row is the row's (置顶, 中断, 标为已看 under it), unless it starts
+    /// this close to the screen's left edge, where the system's back swipe would start.
+    static let edge: CGFloat = Theme.Space.xxl
+
+    /// What a drag moves, decided when it starts.
+    enum Mode { case drawer, pager }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var drawer: AssistantDrawer
         var enabled = true
-        var edgeOnly = false
+        var pager: ShellPager?
+        var mode: Mode = .drawer
         init(drawer: AssistantDrawer) { self.drawer = drawer }
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
@@ -356,29 +362,73 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             #else
             func refused(_ why: String) -> Bool { false }
             #endif
-            guard AssistantDrawer.takes(dx: dx, dy: dy, isOpen: drawer.isOpen) else { return refused("direction") }
-            if drawer.isOpen { return true }
-            if edgeOnly, start.x > DrawerPan.edge { return refused("not from the edge") }
-            return Self.sidewaysScroller(at: start, in: view) ? refused("sideways scroller") : true
+            if drawer.isOpen {
+                mode = .drawer
+                return AssistantDrawer.takes(dx: dx, dy: dy, isOpen: true) ? true : refused("direction")
+            }
+            // Within 45° of horizontal: steeper is the page's own scrolling.
+            guard abs(dx) > abs(dy) else { return refused("direction") }
+            if let pager, Self.pages(pager: pager, dx: dx) {
+                if Self.sidewaysScroller(at: start, in: view, towardsRight: dx < 0) { return refused("sideways scroller") }
+                if Self.typing(at: start, in: view) { return refused("typing") }
+                if dx > 0, start.x > DrawerPan.edge, Self.onRow(at: start, in: view) { return refused("a row's swipe") }
+                mode = .pager
+                return true
+            }
+            // The drawer: only to the right while closed, and not where the strip has a page to the left.
+            guard dx > 0, pager.map({ $0.page == 0 }) ?? true else { return refused("direction") }
+            mode = .drawer
+            return Self.sidewaysScroller(at: start, in: view, towardsRight: false) ? refused("sideways scroller") : true
+        }
+
+        /// Whether a drag `dx` points to the other page of the strip: to the left on 助手, to the right on Agents.
+        static func pages(pager: ShellPager, dx: CGFloat) -> Bool {
+            pager.page == 0 ? dx < 0 : dx > 0
         }
 
         /// Scroll views under the page wait for the drawer to decide, which it does within the same few points they
         /// would start in (so scrolling starts no later). Without this the conversation's pan won the race on a
         /// thumb's 40° swipe (its vertical part passed the list's threshold first) and the drawer was never asked:
         /// the swipe did nothing. A code block at its left edge likewise took a drag to the right to bounce.
+        /// In the shell the list's own swipe (a row's 置顶 / 关闭) waits too: from the edge band a drag to the right is
+        /// the strip's, elsewhere on a row it is refused at once and the row's swipe goes ahead.
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard let s = other.view as? UIScrollView else { return false }
-            return other === s.panGestureRecognizer
+            if other === s.panGestureRecognizer { return true }
+            return pager != nil && other is UIPanGestureRecognizer && (s is UICollectionView || s is UITableView)
         }
 
-        /// Something under the finger scrolls sideways and has room to go back (it is not at its left edge).
-        static func sidewaysScroller(at point: CGPoint, in view: UIView) -> Bool {
+        /// Something under the finger scrolls sideways and has room to go the way the finger pulls it: back towards its
+        /// left edge for a drag to the right, on towards its right edge (`towardsRight`) for a drag to the left.
+        static func sidewaysScroller(at point: CGPoint, in view: UIView, towardsRight: Bool) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
-                if let s = v as? UIScrollView, s.isScrollEnabled, s.contentSize.width > s.bounds.width + 1,
-                   s.contentOffset.x > -s.adjustedContentInset.left + 1 {
-                    return true
+                if let s = v as? UIScrollView, s.isScrollEnabled, s.contentSize.width > s.bounds.width + 1 {
+                    let room = towardsRight
+                        ? s.contentOffset.x < s.contentSize.width - s.bounds.width + s.adjustedContentInset.right - 1
+                        : s.contentOffset.x > -s.adjustedContentInset.left + 1
+                    if room { return true }
                 }
+                hit = v.superview
+            }
+            return false
+        }
+
+        /// The finger is on the text being typed (moving the cursor, selecting): not a page turn.
+        static func typing(at point: CGPoint, in view: UIView) -> Bool {
+            var hit = view.hitTest(point, with: nil)
+            while let v = hit, v !== view {
+                if v.isFirstResponder, v is UITextInput { return true }
+                hit = v.superview
+            }
+            return false
+        }
+
+        /// The finger is on a list row (the Agents list's rows swipe to the right to 置顶 / 中断 / 标为已看).
+        static func onRow(at point: CGPoint, in view: UIView) -> Bool {
+            var hit = view.hitTest(point, with: nil)
+            while let v = hit, v !== view {
+                if v is UICollectionViewCell || v is UITableViewCell { return true }
                 hit = v.superview
             }
             return false
@@ -430,10 +480,14 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: Recognizer, context: Context) {
         context.coordinator.enabled = enabled
-        context.coordinator.edgeOnly = edgeOnly
+        context.coordinator.pager = pager
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
+        if context.coordinator.mode == .pager, let pager = context.coordinator.pager {
+            page(recognizer, pager)
+            return
+        }
         switch recognizer.state {
         case .began:
             #if DEBUG
@@ -457,6 +511,30 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             #if DEBUG
             DrawerProbe.shared.dragEnded("cancelled")
             #endif
+        default: break
+        }
+    }
+
+    /// A drag along the strip: the pages follow the finger, and settle on one of them when it lets go.
+    private func page(_ recognizer: Recognizer, _ pager: ShellPager) {
+        switch recognizer.state {
+        case .began:
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            #if DEBUG
+            DrawerProbe.note("page began", ["from": Double(pager.position)])
+            #endif
+            pager.dragBegan()
+            pager.drag(recognizer.translation(in: recognizer.view).x)
+        case .changed:
+            pager.drag(recognizer.translation(in: recognizer.view).x)
+        case .ended:
+            let v = recognizer.velocity(in: recognizer.view).x
+            #if DEBUG
+            DrawerProbe.note("page ended", ["at": Double(pager.position), "velocity": Int(v)])
+            #endif
+            pager.letGo(velocity: v)
+        case .cancelled, .failed:
+            pager.cancel()
         default: break
         }
     }

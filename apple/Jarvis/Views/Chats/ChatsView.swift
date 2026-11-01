@@ -1372,5 +1372,6 @@ struct AgentsTopBar: View, Equatable {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
         .shellScaled()
+        .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
     }
 }

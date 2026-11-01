@@ -134,6 +134,35 @@ import SwiftUI
         blended.forEach { $0.compositingFilter = nil; $0.filters = nil }
         defer { zip(blended, saved).forEach { $0.compositingFilter = $1.0; $0.filters = $1.1 } }
         window.effectiveAppearance.performAsCurrentDrawingAppearance { frameView.cacheDisplay(in: bounds, to: rep) }
+        // A split's sidebar column floats in a glass container whose content holder is a bare layer: drawn as part of
+        // the window it comes out as an empty white card (the Jarvis sidebar, 2026-11-01). Each view held in one is
+        // drawn again on its own, over the window background, and laid over its place.
+        let glass = descendants(of: frameView).filter { String(describing: type(of: $0)).contains("ConcentricGlassEffectView") && isShown($0) }
+        var heldRects: [CGRect] = []
+        for g in glass {
+            for held in g.subviews.flatMap({ $0.subviews }) where isShown(held) {
+                guard let sub = held.bitmapImageRepForCachingDisplay(in: held.bounds) else { continue }
+                paint(sub, appearance: held.effectiveAppearance) { NSColor.windowBackgroundColor.setFill(); held.bounds.fill() }
+                held.effectiveAppearance.performAsCurrentDrawingAppearance { held.cacheDisplay(in: held.bounds, to: sub) }
+                let full = held.convert(held.bounds, to: frameView)
+                guard let cg = sub.cgImage, let ctx = NSGraphicsContext(bitmapImageRep: rep) else { continue }
+                ctx.cgContext.draw(cg, in: full)
+                heldRects.append(full)
+                ctx.flushGraphics()
+            }
+        }
+        // The held view reaches up under the toolbar: the toolbar's items go back on top, there only.
+        if !heldRects.isEmpty, let bar = descendants(of: frameView).first(where: { String(describing: type(of: $0)) == "NSToolbarView" }),
+           let sub = bar.bitmapImageRepForCachingDisplay(in: bar.bounds) {
+            bar.effectiveAppearance.performAsCurrentDrawingAppearance { bar.cacheDisplay(in: bar.bounds, to: sub) }
+            if let cg = sub.cgImage, let ctx = NSGraphicsContext(bitmapImageRep: rep) {
+                ctx.cgContext.saveGState()
+                ctx.cgContext.clip(to: heldRects)
+                ctx.cgContext.draw(cg, in: bar.convert(bar.bounds, to: frameView))
+                ctx.cgContext.restoreGState()
+                ctx.flushGraphics()
+            }
+        }
         let rows = descendants(of: frameView).compactMap { $0 as? NSTableRowView }
         for row in rows where isShown(row) {
             guard let sub = row.bitmapImageRepForCachingDisplay(in: row.bounds) else { continue }

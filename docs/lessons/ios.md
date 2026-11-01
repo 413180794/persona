@@ -58,7 +58,10 @@
   SwiftUI 以为它还藏着，不会再藏一次（2026-11-01 新外壳：从知识库搜索中右滑回助手页，外壳顶栏被挤下去约 106pt，点切换器原来的位置点在空导航栏上）。
   推出去的页面自己关搜索（`isPresented` 变 false 时）来不及。回到根时在 UIKit 里补一次 `setNavigationBarHidden(true)`（`AssistantView.RootBarHidden`）。
   这种测试要看顶栏的 frame，`exists` 看不出来（`ShellSwitchTests`）。
-- 新外壳的两页一直建着、只用 opacity 切换，藏起来的那一页仍在无障碍树里（玻璃按钮、列表都是 UIKit），而且两页的切换器 id 相同：
+- 两页横着滑（新外壳的 `ShellPager`）时，各页自己画在页里的顶栏会被另一页盖住一截：两页是 ZStack 的兄弟，前面那页整页盖在后面那页的顶栏上，
+  反向偏移让顶栏「不动」也没用（2026-11-01 截图：滑到七成时 Agents 的 ☰ 不见了）。拖动时把两页的顶栏藏起来，在两页之上画一条只给看的顶栏（`ShellMovingBar`），静止时再换回各页自己的。
+  截图要拖到一半停住才看得出来：`-showShellPagerAt 0.3`。
+- 新外壳的两页一直建着、静止时只用 opacity 藏另一页，藏起来的那一页仍在无障碍树里（玻璃按钮、列表都是 UIKit），而且两页的切换器 id 相同：
   `exists` / `isHittable` / `firstMatch` 分不出哪一页在显示，要按像素判断（`ShellSwitchTests.agentsDrawn`），点切换器要挑可点的那个。
 - 列表的 `.searchable` 处于搜索状态时推出的页面，系统导航栏会被强制显示（隐藏导航栏的对话页出现两行标题）；推出之后再关搜索也没用。
   要先关搜索（`searchable(isPresented:)` 置 false）、下一轮 run loop 再推（`ChatsView.pushing`），搜索词和结果保留。关搜索会清空系统搜索框里显示的字（`query` 不变，没人写回去），

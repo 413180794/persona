@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor @Observable final class ShellState {
     /// The drawer is the shell's (it used to be the Jarvis tab's own): it slides both pages aside.
     let drawer = AssistantDrawer()
+    /// 助手 and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
+    let pager = ShellPager()
     /// What the drawer or the home page asked the 助手 page to show; `serial` makes the same request count twice.
     private(set) var request: (page: ShellPage, serial: Int)?
     /// Each page says whether it is at its root: the drawer's drag only opens there (pushed pages swipe back).
