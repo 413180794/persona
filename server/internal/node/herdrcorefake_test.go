@@ -225,4 +225,3 @@ func writeClaudePID(t *testing.T, home string, pid int, id string) {
 		t.Fatal(err)
 	}
 }
-

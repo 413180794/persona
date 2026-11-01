@@ -172,7 +172,7 @@ func TestCalls(t *testing.T) {
 		switch method {
 		case "terminal.list":
 			return map[string]any{"terminals": []any{map[string]any{"address": "t1", "state": "live", "pid": nil,
-				"status": map[string]any{"app": "claude-code", "state": "blocked", "kind": "permission"},
+				"status":     map[string]any{"app": "claude-code", "state": "blocked", "kind": "permission"},
 				"foreground": map[string]any{"pid": 42, "name": "2.1.0", "argv": []string{"claude"}, "cwd": "/x"}},
 				map[string]any{"address": "m/t2", "state": "live"}}}
 		case "terminal.read":
