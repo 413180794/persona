@@ -125,6 +125,11 @@
   手机上筛选条不再放 safeAreaBar，而是列表的第一行、跟着列表滚（`ChatsView` 的 `filterBar`），宽屏分栏里照旧在列表上方。
   打开时就收起（用户要的，和「邮件」一样）：SwiftUI 没有开关，第一次出现时把列表往下滚一个搜索框的高度（`SearchCloseWatcher.foldOnce`，
   UIKit 直接设 contentOffset、保留 x），只做一次，从对话返回不再动；列表比屏幕矮时滚不动、会弹回展开，要在底部补刚好够滚一个搜索框高度的 contentInset。
+  程序折叠后 UIKit 会收短导航栏的 top inset，并可能把同一个差值再加到 contentOffset（iOS 27 实测：inset 168→116，代码设 offset -116，系统又变成 -64），
+  首行因此压到导航按钮后面。初次折叠等完整 inset 变化后，只在 offset 正好等于「请求值 + inset 差值」时归齐新的顶部；用户滚动或激活搜索就停止。
+  不用加 padding 补，`AgentsListTests` 同时按 frame 和截图像素查重叠与空档。
+  搜索激活时还有另一种空档：`insetGrouped` 的首行 content y 从 0 变成 35，offset 仍等于 -topInset，是原生首段间距。
+  手机的列表首行是筛选控件，显式用 `Theme.Space.xs` 的顶部 content margin；常规宽度分栏仍用系统默认值，测试不放宽空档上限。
   系统搜索框里的输入框贴在这一条的上沿（52pt 的条、42pt 的框），离自画顶栏只有几 pt；`searchFieldBackgroundPositionAdjustment`、给整条或输入框设
   transform 都没用（真机上量过：值设上了，展开时系统重新摆放、屏幕位置不变，2026-11-01）。要改这个间距只能自己画搜索栏。
   再改这里要在真机上来回滚动、下拉看顶部有没有空白。同样的「一大坨」还有一个来源，见下面横向 `ScrollView` 那条。
@@ -226,3 +231,6 @@
   （`PersonaPickerTests`、`LookPickerTests` 检查）；iPhone 新外壳里设置是 sheet（`AppModel.shellSettings`）：RootView 的 `.id(look)` 换了，已经弹出的 sheet 不会跟着重建，没有输入的视图（主题色页的小样）还是旧颜色，所以 sheet 的内容自己也挂 `.id(model.look)`（`LookPickerTests.testShellSheetStaysOnAppearance` 比较选色前后小样气泡的像素）。别处弹出的 sheet 里要是也有会换 look 的东西，照这样做。别的页面要放会换 look 的东西也照这样把路径放进 AppModel。DEBUG 启动参数打开某页（`-openAppearance` 等）的「已经打开过」标记同理不能放 `@State`：重建会清掉它，路由再跑一遍，就把用户后来进的页面换回启动参数那页（`SettingsView.debugOpened` 是 static，一次启动只跑一次）。
 - 外观的三个选择互不影响（2026-10-31 用户要求）：形象不改颜色、主题色不改组件、界面风格不改主色。以前形象的颜色直接叠在风格上（`StyleSpec.tinted`），
   选了黏土再选形象，紫色就被盖掉。新加的视觉东西先想清楚属于哪一个：画法归界面风格，颜色归主题色（`docs/ios.md`「设计语言」）。
+
+- 手动配对成功会替换 RootView 中承载配对 sheet 的根页面；旧 sheet 不能再调用 dismiss，否则新引擎页可能可见却点不动（XCUITest 的 hit point 为 -1）。
+  只有原本已配对、没有进入引擎步骤、外观根标识也没变化时，原来的 sheet 宿主仍在，才需要显式 dismiss。
