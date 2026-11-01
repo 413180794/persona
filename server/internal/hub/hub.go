@@ -143,6 +143,9 @@ type pending struct {
 	// orphaned is set while no hook waits on a resumable interaction (its node went away, or the hub restarted): it
 	// ends the interaction unless the hook claims it again in time.
 	orphaned *time.Timer
+	// checkedAt / checking bound transcript reads for a plan answered outside Jarvis.
+	checkedAt time.Time
+	checking  bool
 }
 
 // resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
@@ -283,6 +286,7 @@ func (h *Hub) sessionsChanged(m *Machine) {
 	list := h.decorated(m)
 	h.broadcast(map[string]any{"type": "sessions", "machine_id": m.cfg.ID, "sessions": list})
 	h.syncScreenInteractions(m, list)
+	h.syncPlanInteractions(m)
 }
 
 // syncScreenInteractions turns blocked agents without a hook-driven interaction into "screen" interactions
@@ -648,6 +652,21 @@ func (h *Hub) expireLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		}
+		h.mu.Lock()
+		var plans []*Machine
+		seen := map[string]bool{}
+		for _, p := range h.interactions {
+			if p.ix.Kind == proto.IxPlan && !seen[p.ix.MachineID] {
+				if m := h.byID[p.ix.MachineID]; m != nil {
+					plans = append(plans, m)
+					seen[p.ix.MachineID] = true
+				}
+			}
+		}
+		h.mu.Unlock()
+		for _, m := range plans {
+			h.syncPlanInteractions(m) // also converge after a lost rev/status event
 		}
 		h.mu.Lock()
 		var ids []string

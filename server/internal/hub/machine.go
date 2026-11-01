@@ -492,6 +492,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.mu.Unlock()
 		// Every app, not only those watching: this is what lets them pull a session before it is opened.
 		m.hub.broadcast(map[string]any{"type": "revs", "machine_id": m.cfg.ID, "revs": p.Revs})
+		m.hub.syncPlanInteractions(m)
 	case "session.items":
 		var p struct {
 			SessionID string       `json:"session_id"`
