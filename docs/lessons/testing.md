@@ -19,6 +19,19 @@
   （新对话上次的机器），会在界面上改的（Agents 的分组、筛选）要在测试开头用界面恢复。`-dev.openChat ""` 让 App 不打开上次的对话。
   反过来用 `-dev.openChat <会话>` 打开对话时要连 `-app.tab chats` 一起给：冷启动只在存着的 tab 是 Agents 时恢复对话，`-tab dev` 切 tab 时已经晚了，
   上一个测试停在别的 tab 时对话就打不开（2026-10-31 `LiveUpdateTests` 的看图用例在别的车道「第一步就找不到过程卡」）。只想打开某个对话用 `-openSession`。
+- `-pairURL` 配的 hub 和这台模拟器上次配的不同时，App 从头开始、停在助手页：`-app.tab`、`-dev.openChat`、`-tab dev` 都不起作用（2026-11-01）。
+  老测试一直连同一个 mock 地址，碰不到；换了端口、换了 hub 就碰到。要可靠：先只带 `-pairURL` 启动一次、退出，再带页面参数启动（`ScrollUnderPushTests`）。
+- 「推送时不打断」要在手指还在、惯性还在的时候推。停下后再推，测不出滚动中整屏跳：`LiveUpdateTests` 的「滚到中间行不动」一直是绿的，
+  真实 hub 上 Agents 列表滚动中跳到 900 pt 以上。逐帧量用 `PerfScroll`（`docs/testing.md`「滚动中推送」）。
+- 要在真实数据上量又不能改用户的状态时，在 hub 前面挡一个只读代理：GET 照转；别的方法回 `{}` 不发出去；WebSocket 只往上转 subscribe、unsubscribe、pong
+  （不转 `register_phone`，模拟器就不会接 `phone_*` 调用）。同一份数据开着推送、扣住推送各跑一遍（A/B），差出来的才是推送造成的。
+  代理、录下来的推送、截图只放 `/tmp`，不进仓库（里面是真实的会话）。
+- 查「这个 body 为什么又跑了」：body 里临时加 `let _ = Self._logChanges()`，再
+  `xcrun simctl spawn <udid> log show --info --debug --predicate 'eventMessage CONTAINS "AgentsList:"'`，
+  看到的是「哪个属性变了」（`\AppModel.allSessions changed`、`_xxx changed` 是 `@AppStorage`）。
+  2026-11-01 靠它找到了 UserDefaults 写入、`onChange` 里读模型这两处漏。查完删掉。
+- 逐帧量滚动时，异常按「前 0.6 秒内到的推送」归因只是时间上的巧合：mock 每轮几条推送一起到，几乎每个异常都能对上一条。
+  确认是谁造成的，要逐类关掉推送重跑（mock 加临时开关），再看 App 里的时间线（`PerfScroll.mark`）。
 - 看不到截图（Read 打开 PNG 什么都没有、模型说「工具没有输出」）不是目录的问题（2026-10-31 试过 `$TMPDIR`、`/tmp`、仓库里的图都一样）：
   是模型网关把工具结果里的图片丢了，只留文字。先用一张已知内容的图分别放在用户消息和 tool_result 里直接请求网关，对比两边能不能读出来；
   界面改动必须真的看到截图再交付，看不到就先修这条链路。具体网关和修法见 `CLAUDE.local.md`。

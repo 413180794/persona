@@ -48,6 +48,21 @@
   （长的 Jarvis 主对话约 45 行）都跟着重跑 body（2026-11-01）。对话行（气泡、回复、工作行、输入框）一律 `Equatable` + `.equatable()`，只比消息本身；
   一直建着、平时看不见的东西（关着的侧边栏）别读 `allSessions` 这类每次推送都换的数据，看不见时用上次的值。
   流式回复每 80 ms 来一次全文：写完的块切开各自缓存（`StreamChunks`），只重画最后一块。量法见 `docs/testing.md`「Jarvis 页（长主对话）」。
+- 列表别按「最近一次更新」排，滚动中也别让推送碰到它（2026-11-01，TestFlight 77，`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
+  真实 hub 每 2 秒推一次某台机器的会话，每次都带新的 `updated_at`；Agents 列表按状态加最近更新排空间，36% 的推送让空间换位置，滚动中整屏跳。
+  - 排序键用不随每句输出变的时间：工作中的按开始工作的时间（`Session.sortDate`、`SpaceGroup.sortDate`）。
+  - 手指在、惯性在、被页面盖住、在另一页的时候扣住推送，停下 1.5 秒后一次落地。列表只读一个中转对象（`AgentsFeed`，
+    `withObservationTracking` 跟着模型），扣住是它上面一个没人观察的开关：用列表自己的 `@State` 存快照，开始滚动那一下就让列表重画。
+  - 扣住要真的挡住推送。这几处漏了，列表照样每次推送都重算：
+    - 在 `onChange` / `onScrollPhaseChange` 里读模型，算作 body 读过：之后每次推送都让 body 重跑。
+    - 往 UserDefaults 写东西，App 里每个 `@AppStorage` 视图都当作变了、body 重跑。`AgentSync` 每拉一次对话就写一次，忙的 hub 上几秒一次：
+      常变的状态别放 UserDefaults，放 `StateCache`。
+    - `List` 的每一行单独记着自己上次读过什么：body 换成读快照了，没重画的行还记着上次读的 `model.machine`、`model.session`，
+      推送一来自己重画。行里不直接读模型：body 每次把要用的值填进一个不被观察的查找表（`AgentsList.Lookup`），行从表里取；
+      子视图要的值由列表传进去（`InteractionPreviewCard(machine:agentLabel:)`，`model.isMuted(session)` 而不是经 `model.session(key)` 的 `isMuted(key)`）。
+  - 就算数据一模一样，`List` 只要被更新一次，就会按估算高度重新量行（估算和实际差 70 pt 一行），屏幕外的行一变高矮，内容就跳几百 pt。
+    在两次滑动之间落地也一样：下一次手指落下时才跳。所以等停稳（1.5 秒）再落地，连着甩的几下算一次滚动。
+  - `onScrollPhaseChange` 在 `List` 上也有效（iOS 27 模拟器实测）。滚动阶段这种只在回调里用的状态放不被观察的对象里，放 `@State` 每个阶段重算一次列表。
 
 ## 导航
 

@@ -24,7 +24,7 @@ nonisolated enum PerfTrace {
     /// A hub push is being applied (`AppModel.handle`).
     @MainActor static func push(_ kind: String) {
         os_signpost(.event, log: log, name: "Push", "%{public}@", kind as NSString)
-        PerfCount.pushArrived()
+        PerfCount.pushArrived(kind)
     }
 }
 
@@ -40,11 +40,20 @@ nonisolated enum PerfTrace {
     private(set) static var maxMS = 0.0
     private static var started: CFTimeInterval?
 
-    static func body(_ name: String) { if enabled { bodies[name, default: 0] += 1 } }
+    static func body(_ name: String) {
+        guard enabled else { return }
+        bodies[name, default: 0] += 1
+        #if os(iOS)
+        if PerfScroll.shared.scrolling { PerfScroll.shared.bodies[name, default: 0] += 1 }
+        #endif
+    }
 
-    static func pushArrived() {
+    static func pushArrived(_ kind: String) {
         guard enabled else { return }
         events += 1
+        #if os(iOS)
+        PerfScroll.shared.pushed(kind)
+        #endif
         guard started == nil else { return }
         started = CACurrentMediaTime()
         // After Core Animation's commit (order 2,000,000), when the main run loop has nothing left to do.
@@ -65,7 +74,12 @@ nonisolated enum PerfTrace {
 
     static var summary: String {
         let b = bodies.sorted { $0.key < $1.key }.map { "\"\($0.key)\":\($0.value)" }.joined(separator: ",")
-        return "{\"bodies\":{\(b)},\"events\":\(events),\"passes\":\(passes),\"ms\":\(String(format: "%.1f", totalMS)),\"max\":\(String(format: "%.1f", maxMS))}"
+        #if os(iOS)
+        let scroll = ",\"scroll\":" + PerfScroll.shared.summary
+        #else
+        let scroll = ""
+        #endif
+        return "{\"bodies\":{\(b)},\"events\":\(events),\"passes\":\(passes),\"ms\":\(String(format: "%.1f", totalMS)),\"max\":\(String(format: "%.1f", maxMS))\(scroll)}"
     }
 }
 
@@ -79,9 +93,242 @@ struct PerfCountProbe: View {
             }
             .frame(width: Theme.Size.dotXS, height: Theme.Size.dotXS)
             .clipped()
+            #if os(iOS)
+            .onAppear { PerfScroll.shared.start() }
+            #endif
         }
     }
 }
+
+#if os(iOS)
+/// Scrolling under the hub's pushes (`-perfCounts YES`; `ScrollUnderPushTests`, docs/lanes/live-updates.md). Every frame
+/// a scroll view is dragged or gliding, where what is on it sits on screen: its cells (a `List`), or the layers SwiftUI
+/// draws a `ScrollView`'s rows in. Under the finger and in a glide everything on screen moves together and smoothly;
+/// the counts are the frames where it did not:
+/// - `jumps`: the content as a whole left the finger, or a glide sped up or turned (inserted above, back to the top);
+///   `big` of them by 100 pt or more. The small ones happen with no push at all (the lazy rows sizing themselves, the
+///   synthesized drags of a UI test): measured on the real hub with its pushes held back, none reached 100 pt;
+/// - `moved`: rows moved against each other (reordered, resized, a row put in between); read it on lists: on a page of
+///   glass cards (机器) the effects' own layers move against the content with no push at all;
+/// - `replaced`: something on screen was taken away and drawn anew while it was still in view (a flash);
+/// - `stopped`: a glide cut short;
+/// - `resized`: the content's height changed;
+/// - `defaults`: UserDefaults changed (every `@AppStorage` view in the app is drawn again: the list re-laid itself out).
+/// Each is put down to the kind of push that came in the 0.6 s before it (`causes`, "kind:push"), or "none".
+/// One in the 0.3 s after a page let go of what it held (`released()`: the Agents list, at rest) is that landing, the
+/// update arriving as designed, laid out by UIKit under the next touch: counted apart (`landed`), not as the above.
+@MainActor final class PerfScroll {
+    static let shared = PerfScroll()
+    private(set) var scrolling = false
+    var bodies: [String: Int] = [:]
+    private var pushes: [String: Int] = [:]
+    private var causes: [String: Int] = [:]
+    private var frames = 0, jumps = 0, big = 0, moved = 0, replaced = 0, stopped = 0, resized = 0, defaults = 0, landed = 0
+    private var releasedAt: CFTimeInterval = 0
+    private var maxJump: CGFloat = 0, maxMoved: CGFloat = 0
+    private var lastPush: (kind: String, at: CFTimeInterval)?
+    private var link: CADisplayLink?
+    private var candidates: [Weak] = []
+    private var lastScan: CFTimeInterval = 0
+    private var prev: Frame?
+    private static let log = OSLog(subsystem: "Jarvis.Performance", category: "Scroll")
+
+    private struct Weak { weak var view: UIScrollView? }
+
+    private struct Frame {
+        weak var view: UIScrollView?
+        var id: ObjectIdentifier
+        var t: CFTimeInterval
+        var finger: CGFloat
+        var tracking: Bool
+        var trackedFrames = 0 // under the finger for this many frames (its first moves include the touch slop)
+        var decelerating: Bool
+        var inBounds: Bool
+        var height: CGFloat
+        var offset: CGFloat = 0
+        var inset: CGFloat = 0
+        var viewport: CGRect
+        var marks: [ObjectIdentifier: CGRect]
+        var names: [ObjectIdentifier: String] // what each mark is, for the log
+        var step: CGFloat? // how far it all moved on screen since the frame before, per second
+    }
+
+    func start() {
+        guard link == nil, PerfCount.enabled else { return }
+        let l = CADisplayLink(target: self, selector: #selector(tick))
+        l.add(to: .main, forMode: .common)
+        link = l
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard PerfScroll.shared.scrolling else { return }
+                PerfScroll.shared.defaults += 1
+                PerfScroll.shared.note("defaults", CACurrentMediaTime(), "")
+            }
+        }
+    }
+
+    func pushed(_ kind: String) {
+        lastPush = (kind, CACurrentMediaTime())
+        if scrolling { pushes[kind, default: 0] += 1 }
+    }
+
+    var summary: String {
+        func dict(_ d: [String: Int]) -> String { "{" + d.sorted { $0.key < $1.key }.map { "\"\($0.key)\":\($0.value)" }.joined(separator: ",") + "}" }
+        return "{\"frames\":\(frames),\"jumps\":\(jumps),\"big\":\(big),\"maxJump\":\(Int(maxJump)),\"moved\":\(moved),\"maxMoved\":\(Int(maxMoved)),"
+            + "\"replaced\":\(replaced),\"stopped\":\(stopped),\"resized\":\(resized),\"defaults\":\(defaults),\"landed\":\(landed),\"pushes\":\(dict(pushes)),\"bodies\":\(dict(bodies)),\"causes\":\(dict(causes))}"
+    }
+
+    @objc private func tick(_ l: CADisplayLink) {
+        let now = CACurrentMediaTime()
+        var active = candidates.lazy.compactMap(\.view).first { $0.window != nil && ($0.isTracking || $0.isDecelerating) }
+        if active == nil, now - lastScan > 0.5 {
+            rescan(now)
+            active = candidates.lazy.compactMap(\.view).first { $0.window != nil && ($0.isTracking || $0.isDecelerating) }
+        }
+        guard let sv = active else {
+            if let p = prev, p.decelerating, let v = p.step, abs(v) > 300, p.inBounds, let view = p.view, !view.isTracking {
+                note("stopped", now, String(format: "at %.0f pt/s", v))
+                stopped += 1
+            }
+            prev = nil
+            scrolling = false
+            return
+        }
+        scrolling = true
+        frames += 1
+        var f = capture(sv, now)
+        f.offset = sv.contentOffset.y
+        f.inset = sv.adjustedContentInset.top
+        if let p = prev, p.id == f.id {
+            if f.tracking { f.trackedFrames = p.trackedFrames + 1 }
+            compare(p, &f, now)
+        }
+        prev = f
+    }
+
+    private func rescan(_ now: CFTimeInterval) {
+        lastScan = now
+        var found: [Weak] = []
+        func walk(_ v: UIView) {
+            if let s = v as? UIScrollView, s.bounds.height > 200, s.contentSize.height > s.bounds.height { found.append(Weak(view: s)) }
+            for c in v.subviews where !c.isHidden { walk(c) }
+        }
+        for scene in UIApplication.shared.connectedScenes {
+            for w in (scene as? UIWindowScene)?.windows ?? [] where !w.isHidden { walk(w) }
+        }
+        candidates = found
+    }
+
+    private func capture(_ sv: UIScrollView, _ now: CFTimeInterval) -> Frame {
+        let viewport = sv.convert(sv.bounds, to: nil)
+        var marks: [ObjectIdentifier: CGRect] = [:]
+        var names: [ObjectIdentifier: String] = [:]
+        func keep(_ r: CGRect) -> Bool { r.width >= 40 && r.height >= 12 && r.height <= viewport.height * 1.2 && r.intersects(viewport) }
+        if let cv = sv as? UICollectionView {
+            for c in cv.visibleCells {
+                let r = c.convert(c.bounds, to: nil)
+                if keep(r) {
+                    marks[ObjectIdentifier(c)] = r
+                    names[ObjectIdentifier(c)] = c.accessibilityLabel ?? String(describing: type(of: c))
+                }
+            }
+        } else if let window = sv.window {
+            var n = 0
+            func walk(_ layer: CALayer, _ depth: Int) {
+                guard n < 400 else { return }
+                for sub in layer.sublayers ?? [] where !sub.isHidden && sub.opacity > 0 {
+                    if sub.delegate is UIImageView, sub.superlayer === sv.layer { continue } // the scroll indicators
+                    let r = sub.convert(sub.bounds, to: window.layer)
+                    if keep(r) {
+                        marks[ObjectIdentifier(sub)] = r
+                        names[ObjectIdentifier(sub)] = sub.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: sub))
+                        n += 1
+                    }
+                    if depth < 6 { walk(sub, depth + 1) }
+                }
+            }
+            walk(sv.layer, 0)
+        }
+        let top = -sv.adjustedContentInset.top, bottom = max(top, sv.contentSize.height + sv.adjustedContentInset.bottom - sv.bounds.height)
+        return Frame(view: sv, id: ObjectIdentifier(sv), t: now, finger: sv.panGestureRecognizer.translation(in: nil).y,
+                     tracking: sv.isTracking, decelerating: sv.isDecelerating && !sv.isTracking,
+                     inBounds: sv.contentOffset.y >= top + 1 && sv.contentOffset.y <= bottom - 1,
+                     height: sv.contentSize.height, viewport: viewport, marks: marks, names: names)
+    }
+
+    private func compare(_ p: Frame, _ f: inout Frame, _ now: CFTimeInterval) {
+        if p.height != f.height {
+            resized += 1
+            note("resized", now, String(format: "%.0f -> %.0f", p.height, f.height))
+        }
+        let common = f.marks.keys.filter { p.marks[$0] != nil }
+        guard !common.isEmpty else { return }
+        let steps = common.map { f.marks[$0]!.minY - p.marks[$0]!.minY }.sorted()
+        let step = steps[steps.count / 2]
+        let dt = max(f.t - p.t, 1.0 / 240)
+        f.step = step / dt
+        // Rows that moved against the rest.
+        let off = steps.map { abs($0 - step) }.max() ?? 0
+        if off > 1.5, !landing(now, "moved") {
+            moved += 1
+            maxMoved = max(maxMoved, off)
+            note("moved", now, String(format: "%.0f pt", off))
+        }
+        // The whole: under the finger it follows the finger; in a glide it only slows down.
+        if p.inBounds && f.inBounds {
+            var jump: CGFloat = 0
+            if p.tracking && f.tracking && p.trackedFrames >= 3 {
+                jump = abs(step - (f.finger - p.finger))
+                if jump <= 3 { jump = 0 }
+            } else if p.decelerating && f.decelerating, let v0 = p.step, let v1 = f.step {
+                let turned = v0 != 0 && v1 != 0 && (v0 > 0) != (v1 > 0)
+                if turned || abs(v1) > abs(v0) * 1.15 + 150 { jump = abs(v1 - v0) * dt }
+            }
+            if jump > 0, !(jump >= 100 && landing(now, "big")) {
+                jumps += 1
+                if jump >= 100 { big += 1 }
+                maxJump = max(maxJump, jump)
+                note(jump >= 100 ? "big" : "jump", now, String(format: "%.0f pt (offset %.0f -> %.0f, inset %.0f -> %.0f, height %.0f -> %.0f, %@)",
+                                                               jump, p.offset, f.offset, p.inset, f.inset, p.height, f.height, f.tracking ? "finger" : "glide"))
+            }
+        }
+        // Taken away while still in view.
+        let shift = abs(step) + 2
+        let inner = p.viewport.insetBy(dx: 0, dy: shift)
+        // A list's cells; in a ScrollView whole rows only (a line of text drawn anew, like a running timer, is no flash).
+        let rows = p.names.values.contains { $0.contains("Cell") }
+        let gone = p.marks.filter { f.marks[$0.key] == nil && inner.contains($0.value) && (rows || $0.value.height >= 40) }
+        if !gone.isEmpty, !landing(now, "replaced") {
+            replaced += 1
+            let what = gone.map { "\(p.names[$0.key] ?? "?") at \(Int($0.value.minY))" }.sorted().prefix(3).joined(separator: "; ")
+            note("replaced", now, "\(gone.count) of \(p.marks.count): \(what)")
+        }
+    }
+
+    /// A page let what it held land (at rest).
+    func released() { releasedAt = CACurrentMediaTime() }
+
+    /// Something the page did about the scrolling (the Agents list held its data, let it go), on the same timeline.
+    static func mark(_ what: String) {
+        guard PerfCount.enabled else { return }
+        os_log(.default, log: log, "PERFSCROLL mark %{public}@", what)
+    }
+
+    /// Within 0.3 s of a page letting go: the landing, counted apart.
+    private func landing(_ now: CFTimeInterval, _ what: String) -> Bool {
+        guard now - releasedAt < 0.3 else { return false }
+        landed += 1
+        causes["landed:" + what, default: 0] += 1
+        return true
+    }
+
+    private func note(_ what: String, _ now: CFTimeInterval, _ detail: String) {
+        let cause = lastPush.flatMap { now - $0.at < 0.6 ? $0.kind : nil } ?? "none"
+        causes[what + ":" + cause, default: 0] += 1
+        os_log(.default, log: Self.log, "PERFSCROLL %{public}@ %{public}@ cause=%{public}@", what, detail, cause)
+    }
+}
+#endif
 
 @MainActor private final class PerfTabLifetime: ObservableObject {
     nonisolated let name: String

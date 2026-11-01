@@ -4,10 +4,12 @@ import Testing
 
 /// The Agents list's quick filters and what a space header says when folded (AgentsListTests drives the screens).
 @MainActor struct AgentFilterTests {
-    private func session(_ id: String, state: String, updated: TimeInterval = 0) -> Session {
+    private func session(_ id: String, state: String, updated: TimeInterval = 0, since: TimeInterval = 0) -> Session {
+        let f = ISO8601DateFormatter()
         let json = """
         {"machine_id":"m","session_id":"\(id)","title":"\(id)","cwd":"/tmp/p","status":"idle","state":"\(state)",
-         "space_id":"w1","space_name":"app","updated_at":"\(ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: updated)))"}
+         "space_id":"w1","space_name":"app","updated_at":"\(f.string(from: Date(timeIntervalSince1970: updated)))",
+         "state_since":"\(f.string(from: Date(timeIntervalSince1970: since)))"}
         """
         do { return try JSON.decoder.decode(Session.self, from: Data(json.utf8)) }
         catch { fatalError("bad fixture: \(error)") }
@@ -47,5 +49,25 @@ import Testing
         b.spaceName = "web"
         let ids = SpaceGroup.build([a, b]).map(\.id)
         for _ in 0..<20 { #expect(SpaceGroup.build([b, a]).map(\.id) == ids) }
+    }
+
+    /// Working spaces keep their order while their agents work: by when they started, not their latest line. The real
+    /// hub pushes every two seconds; ordered by the latest update the spaces traded places under the finger (2026-11-01).
+    @Test func workingSpacesKeepTheirOrderAsTheyWork() {
+        func space(_ id: String, _ name: String, updated: TimeInterval, since: TimeInterval) -> Session {
+            var s = session(id, state: "working", updated: updated, since: since)
+            s.spaceID = name
+            s.spaceName = name
+            return s
+        }
+        let started = SpaceGroup.build([space("a", "api", updated: 500, since: 100), space("b", "web", updated: 300, since: 200)]).map(\.spaceID)
+        #expect(started == ["web", "api"]) // the later start leads, whoever wrote last
+        let later = SpaceGroup.build([space("a", "api", updated: 300, since: 100), space("b", "web", updated: 700, since: 200)]).map(\.spaceID)
+        #expect(later == started)
+        // Finished: by when they changed, as before.
+        var docs = session("c", state: "unread", updated: 900, since: 400), site = session("d", state: "unread", updated: 800, since: 600)
+        docs.spaceID = "docs"
+        site.spaceID = "site"
+        #expect(SpaceGroup.build([site, docs]).map(\.spaceID) == ["docs", "site"])
     }
 }

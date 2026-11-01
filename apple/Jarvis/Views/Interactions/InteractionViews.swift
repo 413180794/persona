@@ -52,6 +52,11 @@ extension Interaction {
 struct InteractionPreviewCard: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
+    /// Its machine's name and its agent's label ("Claude", "Codex"): given, not read here. The Agents list holds what
+    /// it shows still while it is scrolled (`AgentsFeed`); a card reading them itself was drawn again with every
+    /// push, measured itself anew, and the list moved under the finger.
+    var machine: String?
+    var agentLabel = "Claude"
     /// The list's cell is the card (same width and corners as the agents' rows): no chrome of its own.
     var inCell = false
     var open: () -> Void
@@ -65,7 +70,7 @@ struct InteractionPreviewCard: View {
                     .scaledFrame(width: Theme.Size.icon) // one column: the titles line up card to card
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(title).font(Theme.Font.heading).lineLimit(1)
-                    Text([interaction.sessionTitle, model.machine(interaction.machineID)?.name].compactMap { $0 }.joined(separator: " · "))
+                    Text([interaction.sessionTitle, machine].compactMap { $0 }.joined(separator: " · "))
                         .font(Theme.Font.label)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -105,7 +110,7 @@ struct InteractionPreviewCard: View {
     /// A terminal dialog that reads as a question is titled like one (as in the chat's panel).
     private var title: String {
         if interaction.kind == .screen, interaction.screenDialog != nil {
-            return "\(model.session(interaction.sessionKey)?.agentLabel ?? "Claude") 在问你"
+            return "\(agentLabel) 在问你"
         }
         return interaction.title
     }

@@ -1636,6 +1636,9 @@ def net_control(path, q):
 # round) and pushes `inbox`, and pushes the pending interactions again; &waiting=1: one more interaction comes and goes
 # (the waiting count changes every round, its card shows and goes on the Agents list). The real hub does both all day;
 # the tab bar's and the shell's badges read them, the mock's other pushes never touched them.
+# &real=1: what else the real hub's pushes change (recorded 2026-11-01: a push of some machine's agents every 2 s, nearly
+# half of them in a new order): the working agents' last line alternates between one line and two (the row's height),
+# and one of them finishes and starts again every three rounds (its space changes rank). ScrollUnderPushTests.
 # MOCK_CHURN=1 also puts a screenshot (a tool result image) in the middle of the first conversation's work.
 LIVE = []  # (send, subscribed session ids) of each open WebSocket
 CHURN = {"rounds": 0}
@@ -1652,8 +1655,9 @@ def png(w, h, rgb):
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
-def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False):
+def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=False):
     import time
+    flips = [s for s in SESSIONS if s["state"] == "working"][-1:] if real else []
     for k in range(rounds):
         time.sleep(ms / 1000)
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1662,9 +1666,16 @@ def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False):
             first = INBOX[0]
             first.update(preview="第 %d 条新消息：下午的会改到四点了" % (k + 1), updated_at=now, count=first.get("count", 1) + 1,
                          tier="action" if k % 2 else "fyi")
+        if real:  # the agent that finishes and starts again: its space changes rank, now and then, as on the real hub
+            for s in flips:
+                if k % 3 == 1: s.update(state="unread", status="done", state_since=now)
+                elif k % 3 == 2: s.update(state="working", status="working", state_since=now)
         working = [s for s in SESSIONS if s["state"] == "working"]
         for s in working:
-            s.update(updated_at=now, last_text="第 %d 轮更新：还在跑，刚看完一处。" % (k + 1))
+            text = "第 %d 轮更新：还在跑，刚看完一处。" % (k + 1)
+            if real and k % 2:  # a longer last line: the row grows to its two lines, then shrinks back
+                text += "接下来把剩下的几个模块的测试都跑一遍，看看还有没有别的地方用到了这个旧接口，顺手把文档也改了。"
+            s.update(updated_at=now, last_text=text)
         if len(working) >= 2 and k % 2 == 1:  # the busiest space is now a different one
             working[0]["updated_at"] = ago(minutes=30)
         for m in MACHINES:
@@ -1812,7 +1823,8 @@ class H(BaseHTTPRequestHandler):
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
                                                  int(q.get("steps", ["1"])[0]), q.get("final", ["0"])[0] == "1",
-                                                 q.get("inbox", ["0"])[0] == "1", q.get("waiting", ["0"])[0] == "1"), daemon=True).start()
+                                                 q.get("inbox", ["0"])[0] == "1", q.get("waiting", ["0"])[0] == "1",
+                                                 q.get("real", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
         if p == "/mock/mark": return self.send_json({"ok": True})  # a test's marker in the request log (explore)

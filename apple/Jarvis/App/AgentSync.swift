@@ -15,16 +15,21 @@ final class AgentSync {
     static let concurrency = 3
 
     private var known: [SessionKey: Int64] = [:]
-    /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches.
+    /// What has been pulled, by rev ("<machine>/<session>" → rev); kept across launches, beside the chats' disk cache it
+    /// describes (`StateCache`). Not in UserDefaults: it changes with nearly every push, and each write to UserDefaults
+    /// draws every `@AppStorage` view in the app again; the Agents list re-laid itself out under the finger
+    /// (docs/lanes/live-updates.md「滚动时被迫刷新」).
     private var synced: [String: Int64]
     private var queue: [SessionKey] = []
     private var running = Set<SessionKey>()
     private var scheduled = false
     private let saver = Debouncer(.seconds(2))
-    private static let defaultsKey = "agentSync.revs"
+    private static let stateName = "agent-sync"
 
     private init() {
-        synced = (UserDefaults.standard.dictionary(forKey: Self.defaultsKey) as? [String: Int64]) ?? [:]
+        synced = StateCache.load(Self.stateName) ?? [:]
+        // Where it was kept before 2026-11-01: the recent chats are pulled once more.
+        UserDefaults.standard.removeObject(forKey: "agentSync.revs")
     }
 
     /// The disk cache was cleared: pull everything recent again.
@@ -95,7 +100,7 @@ final class AgentSync {
 
     private func save() {
         let snapshot = synced
-        saver.run { UserDefaults.standard.set(snapshot, forKey: Self.defaultsKey) }
+        saver.run { StateCache.save(Self.stateName, snapshot) }
     }
 
     /// Brings one session up to date; false when the hub could not be reached (it is tried again on the next change).

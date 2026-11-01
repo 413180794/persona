@@ -12,6 +12,9 @@ struct SpaceGroup: Identifiable {
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
+    /// Where it sorts among spaces in the same state: its agents' `sortDate`, so a working agent's every line does not
+    /// move the space (a busy hub pushes every two seconds: the spaces changed places under the finger, 2026-11-01).
+    var sortDate: Date { sessions.map(\.sortDate).max() ?? .distantPast }
     /// Nothing going on: every agent quiet and none waiting on a /loop or background work.
     var isQuiet: Bool { sessions.allSatisfy { $0.isQuiet && !$0.isWaiting } }
 
@@ -28,15 +31,15 @@ struct SpaceGroup: Identifiable {
             }
             groups[key]!.sessions.append(s)
         }
-        return groups.values.map { g -> (group: SpaceGroup, priority: Int, updatedAt: Date) in
+        return groups.values.map { g -> (group: SpaceGroup, priority: Int, sortDate: Date) in
             var g = g
             // Tab order, as in herdr: an agent keeps its place whatever its state (the state shows on the row).
             g.sessions.sort { ($0.slotIndex ?? 0, $0.sessionID) < ($1.slotIndex ?? 0, $1.sessionID) }
-            return (group: g, priority: g.state.priority, updatedAt: g.updatedAt)
+            return (group: g, priority: g.state.priority, sortDate: g.sortDate)
         }
         .sorted { a, b in
             if a.priority != b.priority { return a.priority < b.priority }
-            return a.updatedAt != b.updatedAt ? a.updatedAt > b.updatedAt : a.group.id < b.group.id // one order on every render
+            return a.sortDate != b.sortDate ? a.sortDate > b.sortDate : a.group.id < b.group.id // one order on every render
         }
         .map(\.group)
     }
@@ -239,6 +242,7 @@ private struct AgentsList: View {
     static let emptyMessage = "在任意一台电脑的 herdr 里启动 Claude，手机上实时看、随时接手。"
     #endif
     @Environment(AppModel.self) private var model
+    @Environment(\.shell) private var shell
     /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
     @Environment(\.horizontalSizeClass) private var widthClass
     @Binding var path: NavigationPath
@@ -268,10 +272,56 @@ private struct AgentsList: View {
     @State private var closingSession: Session?
     /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
     @State private var rowActions = AgentRowMenu.Actions()
+    /// The agents, the questions and the machines the list shows (`AgentsFeed`): held still while it is scrolled or
+    /// out of sight.
+    @State private var feed = AgentsFeed()
+    /// Where the scrolling is (not observed: starting or stopping a scroll does not draw the list again).
+    @State private var scroll = ScrollState()
+    /// How long the list rests before what the hub sent meanwhile lands: flicks in a row (about a second apart) are one
+    /// scroll. Let go between them, the list took the news at rest and laid itself out anew under the next touch
+    /// (rows above the screen grown or moved: the content jumped by hundreds of points as the finger came down).
+    private static let settle = Duration.milliseconds(1500)
+
+    private final class ScrollState {
+        var phase = ScrollPhase.idle
+        var scrolling = false
+    }
+
+    /// The machines and agents the rows name, as the body last saw them (`Lookup`).
+    @State private var lookup = Lookup()
+
+    /// A page pushed over it (beside it in the split it is in sight), the other page of the shell or another tab (the
+    /// shell's slide between the pages shows it again).
+    private var covered: Bool {
+        if widthClass != .regular && !path.isEmpty { return true }
+        #if os(iOS)
+        if model.selectedTab != .chats && shell?.pager.moving != true { return true }
+        #endif
+        return false
+    }
+
+    private var sessions: [Session] { feed.following ? feed.sessions : model.allSessions }
+    private var machines: [Machine] { feed.following ? feed.machines : model.machines }
+    /// What the rows read (a machine's name, an agent's label), filled by each run of the body and not observed. SwiftUI
+    /// tracks what each row of a `List` read when it was last drawn: a row that asked the model for its machine went on
+    /// following the machines while the list was held, was drawn again by the next push, and the `List` measured its
+    /// rows anew mid-glide (the content jumped by the difference from its estimate).
+    private final class Lookup {
+        var machines: [String: Machine] = [:]
+        var sessions: [SessionKey: Session] = [:]
+
+        func update(machines: [Machine], sessions: [Session]) {
+            self.machines = Dictionary(machines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            self.sessions = Dictionary(sessions.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+    }
+
+    private func machine(_ id: String) -> Machine? { lookup.machines[id] }
+    private func session(_ key: SessionKey) -> Session? { lookup.sessions[key] }
 
     /// The agents the machine menu and the search leave.
     private var base: [Session] {
-        model.allSessions.filter { s in
+        sessions.filter { s in
             !s.assistant && (machineFilter.isEmpty || s.machineID == machineFilter) &&
             (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
                 .contains { $0.localizedCaseInsensitiveContains(query) })
@@ -313,6 +363,7 @@ private struct AgentsList: View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("AgentsList")
         #endif
+        let _ = lookup.update(machines: machines, sessions: sessions)
         let base = base
         let matching = Set(base.filter { quick != .all && quick.matches($0, muted: model.isMuted($0)) }.map(\.key))
         let filtered = quick == .all ? base : base.filter { matching.contains($0.key) || kept.contains($0.key) }
@@ -325,7 +376,7 @@ private struct AgentsList: View {
         let pinnedSpaces = groups.filter { model.isPinned($0) && !model.isMuted($0) }
         let active = quick != .all
             ? pinnedSpaces + groups.filter { !(model.isPinned($0) && !model.isMuted($0)) }
-                .sorted { $0.updatedAt != $1.updatedAt ? $0.updatedAt > $1.updatedAt : $0.id < $1.id }
+                .sorted { $0.sortDate != $1.sortDate ? $0.sortDate > $1.sortDate : $0.id < $1.id }
             : pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) && !model.isMuted($0) }
                 + groups.filter { !$0.isQuiet && model.isMuted($0) }
         let quiet = quick != .all ? [] : groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
@@ -333,8 +384,8 @@ private struct AgentsList: View {
             .map { (session: $0, order: model.pins.sessions.firstIndex(of: AppModel.pinKey(session: $0.key)) ?? 0) }
             .sorted { $0.order < $1.order }
             .map(\.session)
-        let interactions = model.pendingInteractions.filter { ix in
-            guard let s = model.session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineID == machineFilter else { return false }
+        let interactions = (feed.following ? feed.interactions : model.pendingInteractions).filter { ix in
+            guard let s = session(ix.sessionKey), !s.assistant, machineFilter.isEmpty || s.machineID == machineFilter else { return false }
             return quick == .all || quick == .needsYou
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
@@ -367,7 +418,7 @@ private struct AgentsList: View {
                         if compact {
                             // 细列表: one row like an agent's; the chat answers it.
                             NavigationLink(value: ix.sessionKey) {
-                                CompactInteractionRow(interaction: ix, machine: model.machine(ix.machineID)?.name)
+                                CompactInteractionRow(interaction: ix, machine: machine(ix.machineID)?.name)
                             }
                             .listRowInsets(CompactList.rowInsets)
                             .accessibilityIdentifier("agents.interaction")
@@ -378,7 +429,8 @@ private struct AgentsList: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         } else {
-                            InteractionPreviewCard(interaction: ix, inCell: true) { openFromList(ix.sessionKey) }
+                            InteractionPreviewCard(interaction: ix, machine: machine(ix.machineID)?.name,
+                                                   agentLabel: session(ix.sessionKey)?.agentLabel ?? "Claude", inCell: true) { openFromList(ix.sessionKey) }
                                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
                         }
                     }
@@ -450,7 +502,7 @@ private struct AgentsList: View {
                             )) {
                                 ForEach(g.sessions) { s in slotRow(s) }
                             } label: {
-                                QuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty)
+                                QuietSpaceRow(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty)
                             }
                             }
                         }
@@ -520,6 +572,25 @@ private struct AgentsList: View {
         .confirmClose($closingSession)
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: machineFilter) { _, _ in kept = [] }
+        .onAppear { feed.follow(model) }
+        .onScrollPhaseChange { _, phase in
+            #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+            PerfScroll.mark("Agents list \(phase)")
+            #endif
+            scroll.phase = phase
+            if phase != .idle {
+                scroll.scrolling = true
+                feed.hold(true)
+                return
+            }
+            Task {
+                try? await Task.sleep(for: Self.settle)
+                guard scroll.phase == .idle else { return }
+                scroll.scrolling = false
+                feed.hold(covered)
+            }
+        }
+        .onChange(of: covered, initial: true) { _, covered in feed.hold(covered || scroll.scrolling) }
     }
 
     /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
@@ -562,11 +633,11 @@ private struct AgentsList: View {
 
     @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
         if compact {
-            CompactSlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil)
+            CompactSlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil)
                 .equatable()
         } else {
-            SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
-                    machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
+            SlotRow(session: s, muted: model.isMuted(s), space: context ? (s.spaceName ?? s.folderName) : nil,
+                    machine: context && grouping != .machine && machineFilter.isEmpty ? machine(s.machineID)?.name : nil,
                     hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule)
                 .equatable()
         }
@@ -613,7 +684,7 @@ private struct AgentsList: View {
     private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool) -> some View {
         HStack(spacing: Theme.Space.xs) {
             Button { toggleFold(g.id) } label: {
-                SpaceHeader(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty,
+                SpaceHeader(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty,
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
@@ -678,7 +749,7 @@ private struct AgentsList: View {
 
     /// One section per machine, its agents by state; idle ones fold like in a space.
     @ViewBuilder private func machineSections(_ live: [Session]) -> some View {
-        let machines = model.machines.filter { m in live.contains { $0.machineID == m.id } }
+        let machines = self.machines.filter { m in live.contains { $0.machineID == m.id } }
         ForEach(machines) { m in
             let rows = ordered(live.filter { $0.machineID == m.id })
             let id = "machine/" + m.id
@@ -751,7 +822,7 @@ private struct AgentsList: View {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            CompactQuietSpaceRow(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty, expanded: open)
+            CompactQuietSpaceRow(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty, expanded: open)
         }
         .buttonStyle(.plain)
         .listRowInsets(CompactList.rowInsets)
@@ -794,7 +865,7 @@ private struct AgentsList: View {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            QuietSpaceCardHead(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty, open: open)
+            QuietSpaceCardHead(group: g, machine: machine(g.machineID), showMachine: machineFilter.isEmpty, open: open)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: open ? 0 : Theme.Space.xs, trailing: Theme.Space.page))
@@ -856,10 +927,64 @@ private struct AgentsList: View {
                 }
             }
             .contextMenu {
-                AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s.key), looping: s.loop != nil,
+                AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s), looping: s.loop != nil,
                              live: s.state.isLive, terminal: s.canTerminal, attachable: s.canAttach, actions: rowActions)
                     .equatable()
             }
+    }
+}
+
+/// What the Agents list shows of the hub (docs/lanes/live-updates.md「滚动时被迫刷新」): the agents, the questions and the
+/// machines, passed on from the model as they change, except while the list holds them (scrolled, or out of sight);
+/// then what came meanwhile lands at once when it lets go.
+///
+/// Its own object: the list reads only this, so holding is a flag nobody observes. A busy hub pushes the agents every
+/// two seconds, and any update of a `List` mid-glide (the same rows or not) has it measure its rows anew: the content
+/// jumped by their difference from its estimate. Holding by the list's own state drew it again at every scroll's start.
+@MainActor @Observable final class AgentsFeed {
+    private(set) var sessions: [Session] = []
+    private(set) var interactions: [Interaction] = []
+    private(set) var machines: [Machine] = []
+    /// Following a model: until then the list reads the model itself.
+    private(set) var following = false
+    @ObservationIgnored private weak var model: AppModel?
+    @ObservationIgnored private var held = false
+    @ObservationIgnored private var missed = false
+
+    func follow(_ model: AppModel) {
+        guard self.model == nil else { return }
+        self.model = model
+        pull()
+        following = true
+    }
+
+    /// Holds what the list shows (true), or lets what came meanwhile land (false).
+    func hold(_ on: Bool) {
+        guard on != held else { return }
+        held = on
+        #if os(iOS) && (DEBUG || PERF_SIGNPOST)
+        PerfScroll.mark("Agents list \(on ? "holds" : "lets go")")
+        if !on { PerfScroll.shared.released() }
+        #endif
+        if !on, missed { pull() }
+    }
+
+    /// Copies what changed and watches for the next change (`withObservationTracking` tells once).
+    private func pull() {
+        guard let model else { return }
+        missed = false
+        let (s, i, m) = withObservationTracking {
+            (model.allSessions, model.pendingInteractions, model.machines)
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.changed() } // told before the change: read it after
+        }
+        if s != sessions { sessions = s }
+        if i != interactions { interactions = i }
+        if m != machines { machines = m }
+    }
+
+    private func changed() {
+        if held { missed = true } else { pull() }
     }
 }
 

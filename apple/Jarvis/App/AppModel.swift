@@ -763,10 +763,23 @@ final class AppModel {
     #if DEBUG || PERF_SIGNPOST
     private static func perfName(_ ev: ServerEvent) -> String {
         switch ev {
+        case .hello: "hello"
         case .machines: "machines"
-        case .sessions(let m, _): "sessions " + m
-        case .items(let key, _, _, _, _, _): "items " + key.sessionID
-        default: "other"
+        case .sessions: "sessions"
+        case .items: "items"
+        case .screen: "screen"
+        case .delta: "delta"
+        case .interaction: "interaction"
+        case .interactionResolved: "interaction_resolved"
+        case .toolCall: "tool_call"
+        case .hookEvent: "hook"
+        case .revs: "revs"
+        case .lark: "lark"
+        case .inbox: "inbox"
+        case .fleet: "fleet"
+        case .desktops: "desktops"
+        case .terminal: "terminal"
+        case .error: "error"
         }
     }
     #endif

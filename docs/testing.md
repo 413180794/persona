@@ -193,7 +193,28 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
   下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/lanes/live-updates.md`「又回来了」）。
 - `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:JarvisUITests/LiveUpdateTests`。
 - 新外壳和旧布局都要跑：UI 测试默认用旧布局（`launchJarvis` 加 `-ui.oldLayout YES`），设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 改用新外壳（iPhone 的默认），
-  `LiveUpdateTests`、`ChatFollowTests` 两种都过才算。
+  `LiveUpdateTests`、`ChatFollowTests`、`ScrollUnderPushTests` 两种都过才算。
+
+### 滚动中推送（`ScrollUnderPushTests`）
+
+手指拖着、惯性滑着的时候 hub 照推，屏幕上的东西只跟着手指和惯性走（`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
+Agents 列表、Agent 对话、Jarvis 对话各拖、甩约 20 秒，同时 mock 按真实 hub 的节奏推：`/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`，
+每 2 秒一轮。`&real=1` 让工作中的 Agent 最后一句在一行、两行之间换（行变高变矮），并让一个 Agent 每三轮完成一次、再开工（空间换名次）。
+
+- App 以 `-perfCounts YES` 启动时，`PerfScroll` 逐帧看正在拖、正在滑的滚动视图。
+  - `List` 看它的 cell，`ScrollView` 看 SwiftUI 画行用的 layer。
+  - 记下几类异常：整体跳开（`jumps`，≥ 100 pt 的另记 `big`）、行之间相对挪动（`moved`）、还在屏幕里的东西被拿掉重画（`replaced`）、
+    惯性被打断（`stopped`）、内容高度变了（`resized`）。
+  - 每次异常记到它前 0.6 秒内到达的那类推送上（`causes`）。
+  - 页面刚放开扣住的更新（停下 1.5 秒后一次落地）的 0.3 秒内出的异常另记 `landed`：那是更新按设计在静止时落地，
+    UIKit 在下一次手指落下时才排版，不算滚动中被打断。
+  - 滚动中算了哪些 body 记在 `bodies`。都在 `perf.counts` 的 `scroll` 里。
+- 断言：`big`、`replaced`、`stopped`、`defaults` 都是 0，Agents 列表的 `moved` 也是 0。两种布局、两种风格（`TEST_RUNNER_JARVIS_UI_STYLE=beautiful`）都跑。
+  - 小于 100 pt 的跳动不推送也有（懒加载的行自己定高、UI 测试合成的拖动），不算。
+  - 机器页那种玻璃卡片的页面，`moved` 没有推送也一直在涨（效果层自己相对内容动），只在列表上看它。
+- mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 MOCK_LONG_HISTORY=1 python3 scripts/mock_hub.py &`（两个对话要比屏幕长才滚得动），
+  `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797`。
+- 测试先配对一次、退出，再带要打开的页面启动：配对的 hub 和上次不同时，App 从头开始、停在助手页，`-app.tab`、`-dev.openChat` 都不起作用。
 
 ### 体验模式（`DemoModeTests`、`DemoHubTests`）
 
