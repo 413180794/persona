@@ -569,8 +569,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 上设置页截图看到「自动翻译」开关和说明；翻译本身（NLLanguageRecognizer）没在 Mac 上跑过。
 - [ ] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
   - Mac（2026-11-01）：本机 ad-hoc 签名的调试版没有沙盒，`URL.cachesDirectory` 是所有 App 共用的 `~/Library/Caches`、`libraryDirectory` 是整个 `~/Library`：页面一直「计算中…」（在遍历整个 ~/Library），而「清除全部缓存」会把别的 App 的缓存当「其他缓存」删掉。改成没沙盒时只认 Jarvis 自己写的文件夹（`StorageUsage.owned`，有测试）、临时目录只认 `lark-`、不数 Library 和 Documents；有沙盒（iOS、签了名的 Mac 版）时和原来一样。修后截图算出 127 KB；清除没在 Mac 上点过。
-    review（2026-11-01 07:20）后又改两处：缓存目录认 `chats-v*`（对话缓存现在是 `chats-v3`，原来的名单漏了它）；没沙盒时临时目录一个也不碰（`$TMPDIR` 是整个用户共用的，别的程序也可能写 `lark-` 开头的文件夹）。
-    待定（没改，会改 iOS 的分类）：`kind(cachesEntry:)` 只把 `chats-v2` / `chats` 算成「Agent 对话」，`chats-v3` 落进「其他缓存」，iOS 上也一样；改成按 `chats-v` 前缀、并让 `ChatCache` 的目录名成为一个共用的常量，要在 iOS 一起改、一起验。
+    review（2026-11-01 07:20）后又改两处：缓存目录认 `chats` / `chats-v<数字>`（`ChatCache.isFolder`）（对话缓存现在是 `chats-v3`，原来的名单漏了它）；没沙盒时临时目录一个也不碰（`$TMPDIR` 是整个用户共用的，别的程序也可能写 `lark-` 开头的文件夹）。
+    已改（2026-11-01，iOS 一起）：对话缓存的目录名只在 `ChatCache.folder` 一处定义，`StorageUsage` 判断归属和分类都用 `ChatCache.isFolder`，`chats-v3` 和以后的版本都算「Agent 对话」（以前落进「其他缓存」，iOS 也一样）；`chats-vx`、`chats-v3.bak` 这类不算。有 Mac 和 iOS 两边的测试。
 - [ ] 通知 / 灵动岛 — see §18, §19
 
 
