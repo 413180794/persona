@@ -45,4 +45,13 @@ extension Theme.Fill {
     static let macScrim = Color.black.opacity(0.12)
     /// Floating panels over the page (⌘K): the window background, opaque like Xcode's Open Quickly.
     static let macPanel = Color(nsColor: .windowBackgroundColor)
+    /// Find in the code viewer (⌘F): every match, and the current one, as AppKit's own find highlights them.
+    static let macFindMatch = Color(nsColor: .findHighlightColor).opacity(0.35)
+    static let macFindCurrent = Color(nsColor: .findHighlightColor)
+}
+
+extension Theme.Icon {
+    /// The code viewer's find bar: previous / next match.
+    static let findPrevious = collapse
+    static let findNext = expand
 }

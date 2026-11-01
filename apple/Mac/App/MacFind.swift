@@ -2,18 +2,35 @@ import AppKit
 
 /// 编辑 › 查找… ⌘F: the key window's search field takes the keyboard (Agents, 收件箱, 知识库, 模型… each have a
 /// `.searchable`, which AppKit draws as an `NSSearchField` in the toolbar or the page). A window without one is left
-/// alone and the item does nothing, as in Finder windows that have no search.
+/// alone and the item does nothing, as in Finder windows that have no search. A view with its own find (`MacFindable`:
+/// the code viewer) opens it instead when it has the keyboard, or when the window has no search field.
 @MainActor enum MacFind {
     /// The menu item: a text view with its own find bar (diffs, output, MonoTextView) keeps ⌘F for that bar.
     static func find() {
         guard let w = NSApp.keyWindow else { return }
+        find(in: w)
+    }
+
+    static func find(in w: NSWindow) {
         if let tv = w.firstResponder as? NSTextView, tv.usesFindBar {
             let item = NSMenuItem()
             item.tag = NSTextFinder.Action.showFindInterface.rawValue
             tv.performFindPanelAction(item)
             return
         }
-        focusSearch(in: w)
+        // A view with its own find (the code viewer) that has the keyboard, or is in its responder chain.
+        var r = w.firstResponder
+        while let x = r {
+            if let f = x as? MacFindable {
+                f.showFind()
+                return
+            }
+            r = x.nextResponder
+        }
+        if focusSearch(in: w) { return }
+        // No search field: a file open in a sheet, nothing clicked yet.
+        let roots = [w.contentView?.superview ?? w.contentView].compactMap { $0 }
+        if let f = roots.flatMap(findables).first(where: { visible($0) }) { (f as? MacFindable)?.showFind() }
     }
 
     @discardableResult static func focusSearch(in window: NSWindow) -> Bool {
@@ -34,7 +51,16 @@ import AppKit
         (v as? NSSearchField).map { [$0] } ?? v.subviews.flatMap(searchFields)
     }
 
+    private static func findables(_ v: NSView) -> [NSView] {
+        (v is MacFindable ? [v] : []) + v.subviews.flatMap(findables)
+    }
+
     private static func visible(_ v: NSView) -> Bool {
         !v.isHiddenOrHasHiddenAncestor && v.window != nil
     }
+}
+
+/// A view with its own find (the code viewer's find bar): 查找… ⌘F opens it.
+@MainActor protocol MacFindable: AnyObject {
+    func showFind()
 }

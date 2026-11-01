@@ -8,10 +8,14 @@ import SwiftUI
 /// visible left edge, so it stays put while the code scrolls sideways under it. A click goes to the source (JSON
 /// opens or closes a node) and selects the line (⇧-click extends, ⌘A selects all, ⌘C copies); a right click
 /// offers the line's menu (拷贝这一行…).
-final class CodeLinesView: NSView {
+/// ⌘F (编辑 › 查找…, `MacFind`) opens a find bar over the lines (`CodeFindBar`): matches are filled behind the text,
+/// the current one stronger, and scrolled to.
+final class CodeLinesView: NSView, MacFindable {
     weak var source: CodeLineSource? {
         didSet { reload() }
     }
+    /// The find bar's state (set by `CodeLines`); nil draws no matches.
+    var find: CodeFindModel?
     var onNearEnd: (() -> Void)?
     /// Once, when the first lines are on screen.
     var onFirstLines: (() -> Void)?
@@ -39,6 +43,8 @@ final class CodeLinesView: NSView {
     private let background = NSColor(Theme.codeBackground)
     private let rule = NSColor.separatorColor
     private let selectionFill = NSColor.selectedTextBackgroundColor
+    private let matchFill = NSColor(Theme.Fill.macFindMatch)
+    private let currentFill = NSColor(Theme.Fill.macFindCurrent)
 
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { true }
@@ -60,6 +66,35 @@ final class CodeLinesView: NSView {
         }
         resize()
         needsDisplay = true
+        find?.sourceChanged()
+    }
+
+    // MARK: Find
+
+    func showFind() { find?.show() }
+
+    /// The first line at the top of what is visible (where a new query starts looking).
+    var topLine: Int { max(0, Int((visibleRect.minY - pad.top) / lineHeight)) }
+
+    /// The matches changed: draw them again, and bring the current one into view.
+    func findChanged(scroll: Bool) {
+        needsDisplay = true
+        guard scroll, let source, let m = find?.currentMatch, m.line < source.lineCount else { return }
+        let r = matchRect(m.range, line: m.line, source)
+        // Clear of the pinned gutter on the left, a few lines of context above and below.
+        let left = pad.left + gutterWidth + gutterGap
+        scrollToVisible(CGRect(x: r.minX - left, y: r.minY - lineHeight * 3, width: r.width + left + pad.right,
+                               height: lineHeight * 7))
+    }
+
+    /// Where `range` of line `i` is drawn.
+    private func matchRect(_ range: NSRange, line i: Int, _ source: CodeLineSource) -> CGRect {
+        let a = line(i, source)
+        let lo = min(range.location, a.length), hi = min(NSMaxRange(range), a.length)
+        func x(_ n: Int) -> CGFloat { n == 0 ? 0 : a.attributedSubstring(from: NSRange(location: 0, length: n)).size().width }
+        let codeX = pad.left + gutterWidth + gutterGap
+        return CGRect(x: codeX + x(lo), y: pad.top + CGFloat(i) * lineHeight, width: max(x(hi) - x(lo), charWidth / 2),
+                      height: lineHeight)
     }
 
     /// The lines in `range` again (their colors came in).
@@ -124,6 +159,17 @@ final class CodeLinesView: NSView {
                 selectionFill.setFill()
                 CGRect(x: dirtyRect.minX, y: pad.top + CGFloat(lo) * lineHeight, width: dirtyRect.width,
                        height: CGFloat(hi - lo + 1) * lineHeight).fill()
+            }
+        }
+        if let find, !find.byLine.isEmpty {
+            let current = find.currentMatch
+            for i in first..<last {
+                guard let ranges = find.byLine[i] else { continue }
+                for r in ranges {
+                    let isCurrent = current?.line == i && current?.range == r
+                    (isCurrent ? currentFill : matchFill).setFill()
+                    matchRect(r, line: i, source).fill()
+                }
             }
         }
         for i in first..<last {
@@ -220,8 +266,8 @@ final class CodeLinesView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.charactersIgnoringModifiers == "\u{1b}" { // Esc clears the selection
-            select(nil)
+        if event.charactersIgnoringModifiers == "\u{1b}" { // Esc closes the find bar, then clears the selection
+            if let find, find.visible { find.close() } else { select(nil) }
         } else {
             super.keyDown(with: event)
         }
@@ -267,12 +313,46 @@ final class CodeLinesScrollView: NSScrollView {
     }
 }
 
-/// `CodeLinesView` in SwiftUI. `version` changes when the source is a new one.
-struct CodeLines: NSViewRepresentable {
+/// `CodeLinesView` in SwiftUI, with its find bar on top while finding (⌘F). `version` changes when the source is
+/// a new one.
+struct CodeLines: View {
     var source: CodeLineSource
     var version: Int = 0
     var onNearEnd: (() -> Void)? = nil
     var onFirstLines: (() -> Void)? = nil
+    @State private var find = CodeFindModel()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if find.visible {
+                CodeFindBar(find: find)
+                Divider()
+            }
+            CodeLinesHost(source: source, version: version, find: find, onNearEnd: onNearEnd, onFirstLines: onFirstLines)
+        }
+        // The scroll view has no size of its own: a sheet sized to its content (the file viewer) left the code a
+        // sliver. Only the ideal size: inside a bigger container it fills what it is given, as before.
+        .frame(idealWidth: Theme.Size.macSheetMinWidth, idealHeight: Theme.Size.macSheetMinHeight)
+        #if DEBUG
+        .onAppear {
+            // `-macFileFind <query>` (with `-openFile`): the bar open with that typed in, for offscreen screenshots.
+            if let q = UserDefaults.standard.string(forKey: "macFileFind") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    find.show()
+                    find.query = q
+                }
+            }
+        }
+        #endif
+    }
+}
+
+private struct CodeLinesHost: NSViewRepresentable {
+    var source: CodeLineSource
+    var version: Int
+    var find: CodeFindModel
+    var onNearEnd: (() -> Void)?
+    var onFirstLines: (() -> Void)?
 
     final class Coordinator {
         var version = -1
@@ -284,6 +364,8 @@ struct CodeLines: NSViewRepresentable {
     func makeNSView(context: Context) -> CodeLinesScrollView {
         let v = CodeLinesScrollView()
         v.lines.onFirstLines = onFirstLines
+        v.lines.find = find
+        find.view = v.lines
         return v
     }
 

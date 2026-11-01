@@ -35,4 +35,60 @@ struct MacFindTests {
         w.contentView!.addSubview(hidden)
         #expect(!MacFind.focusSearch(in: w))
     }
+
+    // A view with its own find (the code viewer, `MacFindable`) is wired into the same 查找… ⌘F.
+
+    @Test func aFindableWithTheKeyboardOpensItsFind() {
+        let w = window()
+        let field = NSSearchField(frame: NSRect(x: 10, y: 10, width: 200, height: 24))
+        let code = FindableView(frame: NSRect(x: 10, y: 40, width: 200, height: 200))
+        w.contentView!.addSubview(field)
+        w.contentView!.addSubview(code)
+        w.makeFirstResponder(code)
+        MacFind.find(in: w)
+        #expect(code.shown == 1)
+        #expect(!MacFind.isEditing(field, in: w))
+    }
+
+    @Test func aSearchFieldComesBeforeAFindableWithoutTheKeyboard() {
+        let w = window()
+        let field = NSSearchField(frame: NSRect(x: 10, y: 10, width: 200, height: 24))
+        let code = FindableView(frame: NSRect(x: 10, y: 40, width: 200, height: 200))
+        w.contentView!.addSubview(field)
+        w.contentView!.addSubview(code)
+        MacFind.find(in: w)
+        #expect(code.shown == 0)
+        #expect(MacFind.isEditing(field, in: w))
+    }
+
+    @Test func aWindowWithOnlyAFindableOpensItsFind() {
+        // A file open in a sheet: nothing has the keyboard yet, and there is no search field.
+        let w = window()
+        let hidden = FindableView(frame: NSRect(x: 10, y: 40, width: 200, height: 200))
+        hidden.isHidden = true
+        let code = FindableView(frame: NSRect(x: 10, y: 40, width: 200, height: 200))
+        w.contentView!.addSubview(hidden)
+        w.contentView!.addSubview(code)
+        MacFind.find(in: w)
+        #expect(code.shown == 1)
+        #expect(hidden.shown == 0)
+    }
+
+    @Test func aTextViewWithAFindBarKeepsIt() {
+        let w = window()
+        let code = FindableView(frame: NSRect(x: 10, y: 40, width: 200, height: 200))
+        let text = NSTextView(frame: NSRect(x: 10, y: 10, width: 200, height: 24))
+        text.usesFindBar = true
+        w.contentView!.addSubview(code)
+        w.contentView!.addSubview(text)
+        w.makeFirstResponder(text)
+        MacFind.find(in: w)
+        #expect(code.shown == 0)
+    }
+}
+
+private final class FindableView: NSView, MacFindable {
+    var shown = 0
+    override var acceptsFirstResponder: Bool { true }
+    func showFind() { shown += 1 }
 }

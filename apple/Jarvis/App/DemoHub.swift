@@ -183,6 +183,13 @@ final class DemoHub {
                 guard online(id) else { throw APIError(status: 503, message: "\(id): machine is offline") }
                 return data["dirs"] ?? .object([:])
             case "claude-settings": return ["settings": .array([])]
+            #if os(macOS)
+            case "file": // the Mac's file viewer (and its ⌘F find): one made-up source file, whatever is asked for
+                let path = q["path"] ?? "Sources/Forecast.swift"
+                let text = Self.demoFile
+                return ["path": .string(path), "name": .string((path as NSString).lastPathComponent), "size": .number(Double(text.utf8.count)),
+                        "mime": "text/plain; charset=utf-8", "text": .string(text), "truncated": false, "is_dir": false, "offset": 0, "next": 0]
+            #endif
             default: throw notFound()
             }
         case ("machines", 4) where p[2] == "git" && p[3] == "status": // no repositories in the demo: the chat shows no git card
@@ -556,6 +563,51 @@ final class DemoHub {
         }
         return out
     }
+
+    #if os(macOS)
+    /// The one file the Mac's demo file viewer shows (made up, like the rest of the demo).
+    private static let demoFile = """
+        import Foundation
+
+        /// Tomorrow's forecast for a city, from the weather service.
+        struct Forecast: Codable, Equatable {
+            var city: String
+            var high: Double
+            var low: Double
+            var summary: String
+        }
+
+        enum ForecastError: Error {
+            case badCity(String)
+            case offline
+        }
+
+        final class ForecastClient {
+            private let session: URLSession
+            private var cache: [String: Forecast] = [:]
+
+            init(session: URLSession = .shared) {
+                self.session = session
+            }
+
+            /// The forecast for `city`, from the cache when it is there.
+            func forecast(for city: String) async throws -> Forecast {
+                if let cached = cache[city] { return cached }
+                guard !city.isEmpty else { throw ForecastError.badCity(city) }
+                let url = URL(string: "https://weather.example.com/v1/forecast?city=\\(city)")!
+                let (data, _) = try await session.data(from: url)
+                let forecast = try JSONDecoder().decode(Forecast.self, from: data)
+                cache[city] = forecast
+                return forecast
+            }
+
+            func clearCache() {
+                cache = [:]
+            }
+        }
+
+        """
+    #endif
 
     // MARK: Metrics (mock_hub.metric_at: made-up but smooth curves)
 
