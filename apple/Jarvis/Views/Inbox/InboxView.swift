@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 @MainActor final class InboxAccountState: ObservableObject {
@@ -203,9 +204,7 @@ struct InboxPage: View {
             InboxAgentRow(interaction: ix, machine: model.machine(ix.machineID), machineName: model.machine(ix.machineID)?.name ?? ix.machineID)
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
-        .themedRow()
-        .alignmentGuide(.listRowSeparatorLeading) { _ in InboxRow.textColumn }
+        .modifier(InboxRowLook())
     }
 
     /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.
@@ -230,15 +229,40 @@ struct InboxPage: View {
                     Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }.tint(Theme.positive)
                 }
             }
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
-            .themedRow()
-            .alignmentGuide(.listRowSeparatorLeading) { _ in InboxRow.textColumn }
+            .modifier(InboxRowLook())
     }
 
     // MARK: Filters
 
-    /// Sources (all, 飞书, each mail account) then kinds, as one row of chips.
-    private var filters: some View {
+    /// Sources (all, 飞书, each mail account) then kinds, as one row of chips; in the BeautifulUI style its filter chips,
+    /// wrapping to a second row (no sideways scrolling at the top of a page, like the Agents list).
+    @ViewBuilder private var filters: some View {
+        if AppStyle.current.usesBeautifulUI {
+            LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) {
+                filterChip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
+                filterChip("飞书", on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                ForEach(accounts) { a in
+                    filterChip(Self.short(a.email), on: source == a.id) { source = source == a.id ? "" : a.id }
+                }
+                ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
+                    filterChip(title, on: kind == k) { kind = kind == k ? "" : k }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.l)
+        } else {
+            plainFilters
+        }
+    }
+
+    private func filterChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        BUIFilterChip(title, isActive: on) {
+            withAnimation(Theme.Motion.standard) { action() }
+            Haptics.tap()
+        }
+    }
+
+    private var plainFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.s) {
                 chip("全部", on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
@@ -351,7 +375,7 @@ struct InboxRow: View {
                             .padding(.top, Theme.Space.sm)
                     } else if item.agentWorking {
                         HStack(spacing: Theme.Space.sm) {
-                            ProgressView().controlSize(.mini)
+                            if AppStyle.current.usesBeautifulUI { BUISpinner(size: Theme.Size.dotXL) } else { ProgressView().controlSize(.mini) }
                             Text(item.agent?.state == "queued" ? "AI 分身排队中" : "AI 分身正在处理" + (item.agent?.task.map { "：" + $0 } ?? ""))
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -434,35 +458,70 @@ struct InboxDraftCard: View {
                 Label(c, systemImage: Theme.Icon.inProgress)
                     .font(Theme.Font.captionMedium).foregroundStyle(.secondary).lineLimit(1)
             }
-            HStack(spacing: Theme.Space.s) {
-                Spacer(minLength: 0)
-                if let edit {
-                    Button(action: edit) {
-                        Text("修改").font(Theme.Font.secondaryMedium).lineLimit(1)
-                            .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
-                            .foregroundStyle(Theme.accent)
-                            .background(Theme.accent.opacity(0.12), in: .capsule)
-                    }
-                    .buttonStyle(.borderless)
-                }
-                Button(action: send) {
-                    HStack(spacing: Theme.Space.xs) {
-                        if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: Theme.Icon.sendMail).font(Theme.Font.label) }
-                        Text("发送")
-                    }
-                    .font(Theme.Font.secondaryStrong).lineLimit(1)
-                    .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
-                    .foregroundStyle(.white)
-                    .background(Theme.accent, in: .capsule)
-                }
-                .buttonStyle(.borderless)
-                .disabled(sending)
-                .accessibilityLabel("发送 AI 分身草拟的回复")
-            }
+            if AppStyle.current.usesBeautifulUI { beautifulActions } else { plainActions }
         }
         .padding(Theme.Space.m)
-        .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: Theme.Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).stroke(Theme.accent.opacity(0.18), lineWidth: 0.5))
+        .modifier(DraftSurface())
+    }
+
+    /// BeautifulUI's RecommendationCard actions: 修改 secondary, 发送 the accent.
+    private var beautifulActions: some View {
+        HStack(spacing: Theme.Space.s) {
+            Spacer(minLength: 0)
+            if let edit {
+                Button("修改", action: edit).buttonStyle(.bui(.secondary)).lineLimit(1)
+            }
+            Button(action: send) {
+                HStack(spacing: Theme.Space.xs) {
+                    if sending { BUISpinner(size: Theme.Size.dotXL) }
+                    Text("发送").lineLimit(1)
+                }
+            }
+            .buttonStyle(.bui(.accent))
+            .disabled(sending)
+            .accessibilityLabel("发送 AI 分身草拟的回复")
+        }
+    }
+
+    private var plainActions: some View {
+        HStack(spacing: Theme.Space.s) {
+            Spacer(minLength: 0)
+            if let edit {
+                Button(action: edit) {
+                    Text("修改").font(Theme.Font.secondaryMedium).lineLimit(1)
+                        .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
+                        .foregroundStyle(Theme.accent)
+                        .background(Theme.accent.opacity(0.12), in: .capsule)
+                }
+                .buttonStyle(.borderless)
+            }
+            Button(action: send) {
+                HStack(spacing: Theme.Space.xs) {
+                    if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: Theme.Icon.sendMail).font(Theme.Font.label) }
+                    Text("发送")
+                }
+                .font(Theme.Font.secondaryStrong).lineLimit(1)
+                .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
+                .foregroundStyle(.white)
+                .background(Theme.accent, in: .capsule)
+            }
+            .buttonStyle(.borderless)
+            .disabled(sending)
+            .accessibilityLabel("发送 AI 分身草拟的回复")
+        }
+    }
+}
+
+/// The draft's card: the accent's tint with a hairline; in the BeautifulUI style the field gray (RecommendationCard).
+private struct DraftSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content.background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        } else {
+            content
+                .background(Theme.accent.opacity(0.07), in: .rect(cornerRadius: Theme.Radius.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card).stroke(Theme.accent.opacity(0.18), lineWidth: 0.5))
+        }
     }
 }
 
@@ -569,5 +628,26 @@ struct InboxDestinations: ViewModifier {
         content
             .navigationDestination(for: InboxItem.self) { InboxDetailView(item: $0, accounts: accounts).splitDetailPage() }
             .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage() }
+    }
+}
+
+/// An inbox row on the list: in the BeautifulUI style a card of its own on the page (its surface), like the Agents
+/// list's capsules, no list background or line; otherwise the plain row with its line from the text's column. The
+/// swipe actions stay the list row's either way.
+private struct InboxRowLook: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content
+                .padding(.horizontal, Theme.Space.m)
+                .card(padding: 0)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.l, bottom: Theme.Space.xs, trailing: Theme.Space.l))
+        } else {
+            content
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 12))
+                .themedRow()
+                .alignmentGuide(.listRowSeparatorLeading) { _ in InboxRow.textColumn }
+        }
     }
 }

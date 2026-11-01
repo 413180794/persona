@@ -1,3 +1,4 @@
+import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -250,6 +251,24 @@ struct KBKindBar: View {
     var counts: [KBKind: Int]
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { filterChips } else { plain }
+    }
+
+    /// The BeautifulUI style: its filter chips, each kind with its count, wrapping to a second row instead of scrolling
+    /// sideways.
+    private var filterChips: some View {
+        LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) {
+            ForEach(KBKind.allCases) { k in
+                BUIFilterChip(k.title, count: counts[k], isActive: k == kind) {
+                    Haptics.tap()
+                    withAnimation(Theme.Motion.standard) { kind = k }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var plain: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Theme.Space.s) { chips(icons: true, padding: Theme.Space.m) }
             HStack(spacing: Theme.Space.sm) { chips(icons: false, padding: Theme.Space.m) }

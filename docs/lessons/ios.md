@@ -119,6 +119,9 @@
   要和别处一样的颜色就写 `Color.primary` / `Color.secondary`（`MachineCard`）。
 - List 里空的 Section（折叠后只剩标题）照样占一个标题的上下边距加段间距，「全部折叠」一屏只放得下五六个：折叠的空间改成一行
   （标题当普通行，`listRowBackground(.clear)`，`listSectionSpacing(.custom(0))`，`ChatsView.spaceSection`）。
+- 每行自己画卡片 / 胶囊的列表别放在 `insetGrouped` 里：分组卡的内缩、行的 `listRowInsets`、分组标题的边距叠在一起，搜索框、chip、标题、胶囊四种左边距；
+  没有标题的第一个分组上面还多约 35pt 空白，`DisclosureGroup` 展开后标题画在分组卡上、子行另成一排缩进的胶囊（2026-10-31 用户在手机上报）。
+  BeautifulUI 风格的 Agents 列表是 plain 列表，每一行都落在 `Theme.Space.page` 上，分组标题是一行，空闲的空间用 `TaskRow` 的 `.list` 拼成一张卡。
 - `.safeAreaBar(edge: .top)`（Agents 列表的快速筛选条）别和会随滚动收起的 `.searchable`（导航栏抽屉默认 `.automatic`）一起用：
   真机（TestFlight 35）上滚动收起搜索框后，筛选条还停在搜索框展开时的位置，中间空出约 120pt 雾化的列表（「顶部一大坨」）；
   当时改成搜索框 `.navigationBarDrawer(displayMode: .always)` 常显；2026-11-01 用户嫌顶部太挤，改回 `.automatic`（滚动收起、下拉出现），

@@ -69,6 +69,31 @@ struct SessionAvatar: View {
     }
 }
 
+/// The BeautifulUI style's mark for an agent's state, its task badge (docs/agent-states.md): 需要你 a red badge with "!", working the
+/// turning ring, 完成未看 the green check, seen an empty ring; offline and unknown a gray dot. Still, apart from the
+/// working ring: the red badge says 需要你 without the breathing dot's 30 fps redraw.
+struct AgentStateBadge: View {
+    var state: AgentState
+    private static let attention = BUIGlyph("M12 6v8M12 18.5v.01")
+
+    var body: some View {
+        switch state {
+        case .needsYou: badge(Theme.needsYou, Self.attention)
+        case .working: BUISpinner(size: Theme.Size.badge, lineWidth: Theme.Size.rule)
+        case .unread: badge(Theme.positive, .check)
+        case .idle: Circle().strokeBorder(Theme.cardStroke, lineWidth: Theme.Size.rule).frame(width: Theme.Size.badge, height: Theme.Size.badge)
+        case .offline, .unknown: StatusDot(state: state, size: 9)
+        }
+    }
+
+    private func badge(_ fill: Color, _ glyph: BUIGlyph) -> some View {
+        Circle().fill(fill)
+            .overlay { BUIIcon(glyph, size: 13, lineWidth: 3.5).foregroundStyle(.white) }
+            .frame(width: Theme.Size.badge, height: Theme.Size.badge)
+            .accessibilityHidden(true)
+    }
+}
+
 /// The app's one small label (not a control): a fact beside other text. Three looks —
 /// `.neutral`: secondary words on a soft gray (a model, a version, a tab, 私聊);
 /// `.tint`: a meaning's words on its soft fill (a state's tone, @我, 推荐 in the AI's color);

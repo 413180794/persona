@@ -319,9 +319,10 @@ final class AgentsListTests: XCTestCase {
         app.revealAgentsSearch()
     }
 
-    /// Whether the selected chip (全部: an accent-tinted capsule) is on screen at `frame`. Element frames come from
-    /// layout: behind a chat restored at launch the bar was laid out under the search field but drawn ~170 pt lower
-    /// (the whole top inset again), the TestFlight 35 / 38 screenshots; only the pixels show it.
+    /// Whether the selected chip (全部: an accent-tinted capsule; in the BeautifulUI style its raised capsule, the surface
+    /// with its word in ink) is on screen at `frame`. Element frames come from layout: behind a chat restored at launch
+    /// the bar was laid out under the search field but drawn ~170 pt lower (the whole top inset again), the TestFlight
+    /// 35 / 38 screenshots; only the pixels show it.
     private func drawn(_ frame: CGRect) -> Bool {
         let image = app.screenshot().image
         guard let cg = image.cgImage else { return false }
@@ -334,6 +335,17 @@ final class AgentsListTests: XCTestCase {
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return false }
         ctx.draw(cg, in: CGRect(x: -r.minX * scale, y: -(CGFloat(cg.height) - r.maxY * scale), width: CGFloat(cg.width), height: CGFloat(cg.height)))
+        if UITestStyle.isBeautiful {
+            // Drawn there, the frame is mostly the chip's surface with its word in it at the other end of light and
+            // dark; the fogged list that showed through in those screenshots has no crisp text at that spot.
+            var light = 0, dark = 0
+            for i in stride(from: 0, to: px.count, by: 4) {
+                let m = max(px[i], px[i + 1], px[i + 2])
+                if m > 225 { light += 1 } else if m < 110 { dark += 1 }
+            }
+            print("filters chip light \(light) dark \(dark) of \(w * h)")
+            return (light * 2 > w * h && dark * 40 > w * h) || (dark * 2 > w * h && light * 40 > w * h)
+        }
         var tinted = 0
         for i in stride(from: 0, to: px.count, by: 4) where Int(px[i + 2]) - Int(px[i]) > 20 { tinted += 1 }
         print("filters chip tinted \(tinted) of \(w * h)")

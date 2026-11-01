@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// Agents that share a space (a herdr workspace, or whatever groups agents in another host) on one machine.
@@ -361,7 +362,7 @@ private struct AgentsList: View {
             }
             #endif
             if !interactions.isEmpty && query.isEmpty {
-                Section {
+                listSection {
                     ForEach(interactions) { ix in
                         if compact {
                             // 细列表: one row like an agent's; the chat answers it.
@@ -370,6 +371,12 @@ private struct AgentsList: View {
                             }
                             .listRowInsets(CompactList.rowInsets)
                             .accessibilityIdentifier("agents.interaction")
+                        } else if capsules {
+                            // A card of its own on the page, as the agents' capsules.
+                            InteractionPreviewCard(interaction: ix, inCell: false) { openFromList(ix.sessionKey) }
+                                .listRowInsets(Self.capsuleInsets)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                         } else {
                             InteractionPreviewCard(interaction: ix, inCell: true) { openFromList(ix.sessionKey) }
                                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 } // rows of different shapes: one line
@@ -390,6 +397,13 @@ private struct AgentsList: View {
                                 Spacer()
                                 Text("\(unreadShown.count) 个完成未看").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
                             }
+                        } else if capsules {
+                            HStack {
+                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
+                                Spacer()
+                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .card(padding: Theme.Space.m)
                         } else {
                             HStack {
                                 Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
@@ -398,7 +412,9 @@ private struct AgentsList: View {
                             }
                         }
                     }
-                    .listRowInsets(compact ? CompactList.rowInsets : nil)
+                    .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
+                    .listRowBackground(capsules ? Color.clear : nil)
+                    .listRowSeparator(capsules ? .hidden : .automatic)
                     .confirmationDialog("把 \(unreadShown.count) 个完成未看的会话标为已读？", isPresented: $confirmReadAll, titleVisibility: .visible) {
                         Button("全部标为已读（\(unreadShown.count)）") {
                             model.markSeen(unreadShown)
@@ -409,7 +425,7 @@ private struct AgentsList: View {
             }
 
             if !pinnedAgents.isEmpty {
-                Section {
+                listSection {
                     // No state word: the dot and the name's color already say it.
                     ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
                 } header: {
@@ -425,9 +441,9 @@ private struct AgentsList: View {
                 ForEach(active) { g in spaceSection(g) }
 
                 if !quiet.isEmpty {
-                    Section {
+                    listSection {
                         ForEach(quiet) { g in
-                            if compact { compactQuietSpace(g) } else {
+                            if compact { compactQuietSpace(g) } else if capsules { quietSpaceCard(g) } else {
                             DisclosureGroup(isExpanded: Binding(
                                 get: { expandedQuiet.contains(g.id) || !query.isEmpty },
                                 set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
@@ -459,6 +475,7 @@ private struct AgentsList: View {
                                    action: ("新建会话", { showNew = true }))
                 }
                 .listRowBackground(Color.clear)
+                .listRowSeparator(capsules ? .hidden : .automatic)
             } else if filtered.isEmpty, let st = quick.state {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.success, title: "没有\(st.label)的会话",
@@ -466,16 +483,17 @@ private struct AgentsList: View {
                                    action: ("看全部", { choose(.all, base) }))
                 }
                 .listRowBackground(Color.clear)
+                .listRowSeparator(capsules ? .hidden : .automatic)
             }
         }
-        .listStyle(.insetGrouped)
+        .modifier(AgentsListStyle(capsules: capsules))
         // Keep the phone's first-row controls close to the bar: active search otherwise adds the grouped list's
         // default first-section margin. The split's sidebar keeps its native content margins.
         .contentMargins(.top, widthClass == .regular ? nil : Theme.Space.xs, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
         .environment(\.compactList, compact)
         .listSectionSpacing(compact ? .compact : .default)
-        .themedPage()
+        .modifier(AgentsListPage(capsules: capsules))
         // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone it is the list's
         // first row (above).
         .modifier(TopBar(abovePage: widthClass == .regular) { filterBar })
@@ -493,6 +511,10 @@ private struct AgentsList: View {
         .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
                     prompt: "搜索空间、标签、会话、内容")
         .refreshable { await model.refresh() }
+        #if DEBUG
+        // `-openQuietSpaces YES` (with `-tab dev`): every quiet space opened, for screenshots (`-dev.folded` folds spaces).
+        .task(id: quiet.map(\.id)) { if UserDefaults.standard.bool(forKey: "openQuietSpaces") { expandedQuiet.formUnion(quiet.map(\.id)) } }
+        #endif
         .renameSpaceAlert($renamingSpace)
         .renameSessionAlert($renamingSession)
         .confirmClose($closingSession)
@@ -538,14 +560,14 @@ private struct AgentsList: View {
         searchClose.whenClosed { path.append(key) }
     }
 
-    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool) -> some View {
+    @ViewBuilder private func slotRowContent(_ s: Session, context: Bool, inStateSection: Bool, cardLast: Bool? = nil) -> some View {
         if compact {
             CompactSlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil)
                 .equatable()
         } else {
             SlotRow(session: s, muted: model.isMuted(s.key), space: context ? (s.spaceName ?? s.folderName) : nil,
                     machine: context && grouping != .machine && machineFilter.isEmpty ? model.machine(s.machineID)?.name : nil,
-                    hideState: inStateSection)
+                    hideState: inStateSection, surface: cardLast.map { .cardRow(last: $0) } ?? .capsule)
                 .equatable()
         }
     }
@@ -560,13 +582,15 @@ private struct AgentsList: View {
             // padding (全部折叠 showed six a screen).
             Section {
                 spaceHeader(g, folded: true)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)) // where a header sits
+                    // Where a header sits; the capsules: the page's edge, where an open space's title is too.
+                    .listRowInsets(capsules ? EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page)
+                                   : EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
             .listSectionSpacing(.custom(0))
         } else {
-            Section {
+            listSection {
                 let sessions = ordered(g.sessions)
                 let idle = quick == .all ? sessions.filter { !stays($0) } : []
                 let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
@@ -634,7 +658,7 @@ private struct AgentsList: View {
             let rows = ordered(b.rows)
             let id = "state/" + b.key
             if !rows.isEmpty {
-                Section {
+                listSection {
                     if isFolded(id) {
                     } else if b.key == "idle" {
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: true) }
@@ -659,7 +683,7 @@ private struct AgentsList: View {
             let rows = ordered(live.filter { $0.machineID == m.id })
             let id = "machine/" + m.id
             let group = SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: rows)
-            Section {
+            listSection {
                 if !isFolded(id) {
                     if quick == .all {
                         ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
@@ -698,7 +722,9 @@ private struct AgentsList: View {
             if compact { CompactFoldRow(sessions: rows) } else { IdleFoldRow(sessions: rows) }
         }
         .buttonStyle(.plain)
-        .listRowInsets(compact ? CompactList.rowInsets : nil)
+        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
     private func collapseRow(_ title: String, key: String) -> some View {
@@ -711,7 +737,9 @@ private struct AgentsList: View {
                 Label(title, systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
             }
         }
-        .listRowInsets(compact ? CompactList.rowInsets : nil)
+        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
     /// 细列表: a quiet space as one row like an agent's, its agents under it when opened (a DisclosureGroup's own row
@@ -731,26 +759,83 @@ private struct AgentsList: View {
         if open { ForEach(g.sessions) { s in slotRow(s) } }
     }
 
+    /// The agents as BeautifulUI's capsules: its style, cards (not 细列表).
+    private var capsules: Bool { !compact && AppStyle.current.usesBeautifulUI }
+
+    /// A capsule's room: the page's edges, a little air above and below.
+    private static let capsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page)
+
+    /// A section. The capsules are a plain list (every row sets its own edges, all on `Theme.Space.page`): its title is
+    /// its first row on the page's edge (a plain list's headers stick to the top, and a grouped list pads its first
+    /// section about 35 pt). Elsewhere the grouped list's header.
+    @ViewBuilder private func listSection<Content: View, Header: View>(@ViewBuilder content: () -> Content,
+                                                                      @ViewBuilder header: () -> Header) -> some View {
+        if capsules {
+            Section {
+                header()
+                    .font(Theme.Font.sectionHeader)
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
+                    .listRowInsets(EdgeInsets(top: Theme.Space.l, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                content()
+            }
+        } else {
+            Section { content() } header: { header() }
+        }
+    }
+
+    /// The capsules: a quiet space is one card, its title on top and, opened, its agents under it, set in a level.
+    @ViewBuilder private func quietSpaceCard(_ g: SpaceGroup) -> some View {
+        let open = expandedQuiet.contains(g.id) || !query.isEmpty
+        Button {
+            withAnimation(Theme.Motion.standard) {
+                if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
+            }
+        } label: {
+            QuietSpaceCardHead(group: g, machine: model.machine(g.machineID), showMachine: machineFilter.isEmpty, open: open)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: open ? 0 : Theme.Space.xs, trailing: Theme.Space.page))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .accessibilityIdentifier("agents.quietSpace")
+        if open {
+            ForEach(g.sessions) { s in slotRow(s, cardLast: s.id == g.sessions.last?.id) }
+        }
+    }
+
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
-    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false) -> some View {
+    /// `cardLast`: a row of a quiet space's card (`quietSpaceCard`), and whether it ends the card.
+    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil) -> some View {
         Group {
             if searching {
                 // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
                 // to close first) and slid back, and the push made after it was lost (2026-10-31).
                 Button { openFromSearch(s.key) } label: {
                     HStack(spacing: Theme.Space.s) {
-                        slotRowContent(s, context: context, inStateSection: inStateSection)
-                        Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
+                        slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast)
+                        // 胶囊 draws its own chevron; 列表 and Jarvis' own rows get the one a link would show.
+                        if !capsules { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary) }
                     }
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection) }
+                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast) }
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
-            .listRowInsets(compact ? CompactList.rowInsets : nil)
+            // BeautifulUI's 胶囊: each agent its own capsule on the page (no list card, line or system chevron); 列表 and
+            // Jarvis' own rows: the list's card.
+            .navigationLinkIndicatorVisibility(capsules ? .hidden : .automatic)
+            .listRowBackground(capsules ? Color.clear : nil)
+            .listRowSeparator(capsules ? .hidden : .automatic)
+            .listRowInsets(compact ? CompactList.rowInsets
+                           : capsules ? cardLast.map { EdgeInsets(top: 0, leading: Theme.Space.page, bottom: $0 ? Theme.Space.xs : 0, trailing: Theme.Space.page) }
+                               ?? Self.capsuleInsets
+                           : nil) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
                 if s.state.isLive {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
@@ -796,12 +881,17 @@ struct QuickFilterBar: View, Equatable {
         let _ = PerfTrace.body("QuickFilterBar")
         #endif
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: Theme.Space.s) { chips(padding: 12) }
-            HStack(spacing: Theme.Space.sm) { chips(padding: 8) }
-            LarkFlowLayout(spacing: 6, lineSpacing: 8) { chips(padding: 8) }
+            if AppStyle.current.usesBeautifulUI {
+                HStack(spacing: Theme.Space.xs) { chips }
+                LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) { chips }
+            } else {
+                HStack(spacing: Theme.Space.s) { plainChips(padding: 12) }
+                HStack(spacing: Theme.Space.sm) { plainChips(padding: 8) }
+                LarkFlowLayout(spacing: 6, lineSpacing: 8) { plainChips(padding: 8) }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Space.l)
+        .padding(.horizontal, Theme.Space.page)
         .padding(.vertical, Theme.Space.sm)
     }
 
@@ -810,7 +900,8 @@ struct QuickFilterBar: View, Equatable {
         AgentFilter.allCases.filter { $0 == .all || $0 == selection || (counts[$0] ?? 0) > 0 }
     }
 
-    @ViewBuilder private func chips(padding: CGFloat) -> some View {
+    /// Jarvis' own chips: the state's dot, the name and the count on a tinted capsule.
+    @ViewBuilder private func plainChips(padding: CGFloat) -> some View {
         ForEach(shown) { f in
             let on = f == selection
             let tone = f.state?.tone
@@ -838,6 +929,16 @@ struct QuickFilterBar: View, Equatable {
             .accessibilityIdentifier("agents.filter." + f.rawValue)
             .accessibilityLabel(counts[f].map { "\(f.title) \($0)" } ?? f.title)
             .accessibilityAddTraits(on ? .isSelected : [])
+        }
+    }
+
+    /// BeautifulUI's filter chips: the state's dot, the name and the count; the chosen one is the raised capsule.
+    @ViewBuilder private var chips: some View {
+        ForEach(shown) { f in
+            let on = f == selection
+            BUIFilterChip(f.title, dot: f.state?.tone.dot, count: counts[f], isActive: on) { if !on { choose(f) } }
+                .accessibilityIdentifier("agents.filter." + f.rawValue)
+                .accessibilityLabel(counts[f].map { "\(f.title) \($0)" } ?? f.title)
         }
     }
 }
@@ -1000,46 +1101,93 @@ nonisolated struct SlotRow: View, Equatable {
     var hideState = false
     /// The state dot; off where something beside the row already shows the state in its color (SessionRow's avatar).
     var dot = true
+    /// What the BeautifulUI style's row is drawn on.
+    var surface: Surface = .none
 
+    enum Surface: Equatable {
+        /// Bare: a List's row that has its own background and chevron.
+        case none
+        /// The Agents list's own capsule with its chevron.
+        case capsule
+        /// A row of a quiet space's card, set in a level under the card's title; `last` ends the card.
+        case cardRow(last: Bool)
+    }
+
+    private func taskShape<L: View, T: View, D: View>() -> TaskRow<L, T, D>.Shape {
+        switch surface {
+        case .none: .plain
+        case .capsule: .capsule
+        case .cardRow(let last): .list(first: false, last: last)
+        }
+    }
+
+    private var indented: Bool { if case .cardRow = surface { true } else { false } }
+
+    /// BeautifulUI's task row: the state's badge, the title over the latest line, where it runs under that; when, and
+    /// 需要你 as a pill, on the right.
     @MainActor
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("SlotRow")
         #endif
-        HStack(alignment: .top, spacing: Theme.Space.m) {
-            if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
-                    Text(session.displayTitle)
-                        .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+        Group {
+            if AppStyle.current.usesBeautifulUI {
+                TaskRow(TaskItem(id: session.key.sessionID, title: session.displayTitle,
+                                 subtitle: session.lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }, footnote: meta,
+                                 status: .pending(step: 0)),
+                        shape: taskShape(), accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
+                    if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
+                } trailing: {
+                    VStack(alignment: .trailing, spacing: Theme.Space.xs) {
+                        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                            Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .fixedSize()
+                        if session.state == .needsYou && !muted && !hideState { BUIPill(session.state.label, tone: .red) }
+                        if muted {
+                            Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知")
+                        }
                     }
-                    .fixedSize()
+                } detail: {
+                    EmptyView()
                 }
-                if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
-                    Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
-                }
-                HStack(spacing: Theme.Space.xs) {
-                    meta.lineLimit(1)
-                    if muted {
-                        Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
+            } else {
+                HStack(alignment: .top, spacing: Theme.Space.m) {
+                    if dot { StatusDot(state: session.state, size: 9).padding(.top, Theme.Space.sm) }
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {
+                            Text(session.displayTitle)
+                                .font(session.state == .unread ? Theme.Font.bodyHeavy : Theme.Font.bodyStrong)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                                Text(Fmt.relative(session.updatedAt, now: ctx.date)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .fixedSize()
+                        }
+                        if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
+                            Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        HStack(spacing: Theme.Space.xs) {
+                            metaText.lineLimit(1)
+                            if muted {
+                                Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
+                            }
+                        }
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 1)
                     }
                 }
-                .font(Theme.Font.caption)
-                .foregroundStyle(.secondary)
-                .padding(.top, 1)
+                .padding(.vertical, Theme.Space.xs)
             }
         }
-        .padding(.vertical, Theme.Space.xs)
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 
-    /// "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
-    @MainActor private var meta: Text {
+    /// Jarvis' own row's line: "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
+    @MainActor private var metaText: Text {
         var parts: [Text] = []
         if session.state == .needsYou && !muted && !hideState {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
@@ -1053,6 +1201,19 @@ nonisolated struct SlotRow: View, Equatable {
         }
         if let machine { parts.append(Text(machine)) }
         return parts.dropFirst().reduce(parts[0]) { $0 + Text(" · ") + $1 }
+    }
+
+    /// "Claude · app › tests · MacBook": the end gives way when the line is short.
+    @MainActor private var meta: String {
+        var parts = [session.agentLabel]
+        let slot = session.slotLabel
+        if let space, !space.isEmpty {
+            parts.append(slot.map { space + " › " + $0 } ?? space)
+        } else if let slot {
+            parts.append(slot)
+        }
+        if let machine { parts.append(machine) }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -1069,7 +1230,10 @@ nonisolated struct CompactSlotRow: View, Equatable {
         let _ = PerfTrace.body("CompactSlotRow")
         #endif
         HStack(spacing: CompactList.gap) {
-            StatusDot(state: session.state, size: Theme.Size.dot).scaledFrame(width: CompactList.mark)
+            Group {
+                if AppStyle.current.usesBeautifulUI { AgentStateBadge(state: session.state).scaleEffect(0.8) } else { StatusDot(state: session.state, size: Theme.Size.dot) }
+            }
+            .scaledFrame(width: CompactList.mark)
             HStack(alignment: .firstTextBaseline, spacing: CompactList.gap) {
                 Text(session.displayTitle)
                     .font(session.state == .unread ? CompactList.titleUnread : CompactList.title)
@@ -1143,6 +1307,56 @@ struct QuietSpaceRow: View {
             Spacer()
             Text(Fmt.relative(group.updatedAt)).font(Theme.Font.label).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// The capsules (the BeautifulUI style): a plain list, every row on the page's edges (the grouped list's own top
+/// padding left about 100 pt under the filter chips); otherwise the grouped list.
+private struct AgentsListStyle: ViewModifier {
+    let capsules: Bool
+
+    func body(content: Content) -> some View {
+        if capsules { content.listStyle(.plain) } else { content.listStyle(.insetGrouped) }
+    }
+}
+
+/// The capsules' plain list over the grouped page's color (the color the grouped list had); otherwise the style's page.
+private struct AgentsListPage: ViewModifier {
+    let capsules: Bool
+
+    func body(content: Content) -> some View {
+        if capsules { content.scrollContentBackground(.hidden).background(Theme.groupedPage) } else { content.themedPage() }
+    }
+}
+
+/// A quiet space's card title (`quietSpaceCard`, the BeautifulUI style): the space, where and how many, when, and the
+/// chevron that turns as it opens; the card's top when open, the whole card when closed.
+struct QuietSpaceCardHead: View {
+    var group: SpaceGroup
+    var machine: Machine?
+    var showMachine: Bool
+    var open: Bool
+
+    var body: some View {
+        TaskRow(TaskItem(id: group.id, title: group.name,
+                         subtitle: [showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签",
+                                    group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
+                         status: .pending(step: 0)),
+                shape: .list(first: true, last: !open), accessory: .none, titleLines: 1, subtitleLines: 1) {
+            Image(systemName: Theme.Icon.space).font(Theme.Font.body).foregroundStyle(.secondary)
+                .scaledFrame(width: Theme.Size.icon)
+        } trailing: {
+            HStack(spacing: Theme.Space.s) {
+                Text(Fmt.relative(group.updatedAt)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+        } detail: {
+            EmptyView()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }
 
