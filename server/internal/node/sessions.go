@@ -666,27 +666,51 @@ type layout struct {
 }
 
 // refreshHosts takes one snapshot of every host: agents plus the space / slot names shown as space / slot. It fails
-// only when no host answered; a host that did not answer keeps the agents it gave last.
+// only when no host answered; a host that did not answer keeps the agents it gave last, except one that is not
+// running (host.ErrNotRunning), which has none. Hosts are asked at once, so a slow one does not hold the others.
 func (n *Node) refreshHosts(ctx context.Context) error {
-	if len(n.hosts.All()) == 0 {
+	hosts := n.hosts.All()
+	if len(hosts) == 0 {
 		return errNoHost
+	}
+	type look struct {
+		agents []host.Agent
+		full   bool
+		err    error
+	}
+	looks := make([]look, len(hosts))
+	if len(hosts) == 1 {
+		looks[0].agents, looks[0].full, looks[0].err = n.lookAt(ctx, hosts[0])
+	} else {
+		var wg sync.WaitGroup
+		for i, h := range hosts {
+			wg.Go(func() { looks[i].agents, looks[i].full, looks[i].err = n.lookAt(ctx, h) })
+		}
+		wg.Wait()
 	}
 	var all []host.Agent
 	var firstErr error
 	answered, snapped := false, false
-	for _, h := range n.hosts.All() {
-		agents, full, err := n.lookAt(ctx, h)
+	for i, h := range hosts {
+		agents, err := looks[i].agents, looks[i].err
 		n.mu.Lock()
 		if n.hostAgents == nil {
 			n.hostAgents = map[string][]host.Agent{}
 		}
-		if err != nil {
+		switch {
+		case err != nil && errors.Is(err, host.ErrNotRunning):
+			if firstErr == nil {
+				firstErr = err
+			}
+			agents = nil
+			delete(n.hostAgents, h.Kind())
+		case err != nil:
 			if firstErr == nil {
 				firstErr = err
 			}
 			agents = n.hostAgents[h.Kind()]
-		} else {
-			answered, snapped = true, snapped || full
+		default:
+			answered, snapped = true, snapped || looks[i].full
 			n.hostAgents[h.Kind()] = agents
 		}
 		n.mu.Unlock()

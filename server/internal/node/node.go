@@ -156,6 +156,11 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	}
 	go n.pollAgents(ctx)
 	go n.watchHerdr(ctx)
+	for _, h := range n.hosts.All() {
+		if w, ok := h.(host.Watcher); ok && h.Kind() != host.Herdr {
+			go n.watchHost(ctx, w)
+		}
+	}
 	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)

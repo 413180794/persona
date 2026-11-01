@@ -51,6 +51,13 @@ func (n *Node) readPaneANSI(ctx context.Context, pane, source string, lines int)
 	return h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines, ANSI: true})
 }
 
+// plainScreen: the pane's host reads screens as plain text only (host.PlainScreen), so colored reads fail there.
+func (n *Node) plainScreen(pane string) bool {
+	h, _ := n.hosts.Pane(pane)
+	p, ok := h.(host.PlainScreen)
+	return ok && p.PlainScreen()
+}
+
 func (n *Node) sendText(ctx context.Context, pane, text string) error {
 	h, ref, err := n.paneHost(pane)
 	if err != nil {

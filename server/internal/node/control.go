@@ -454,6 +454,14 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string, 
 		}
 		a, _ = n.agent(id)
 	}
+	if ansi && n.plainScreen(a.PaneID) {
+		// No colors in this host: the plain rows, ended as colored ones are.
+		text, err := n.readPane(ctx, a.PaneID, source, lines)
+		if err == nil && text != "" {
+			text = strings.ReplaceAll(strings.TrimRight(text, "\n"), "\n", "\r\n") + "\r\n"
+		}
+		return text, a.AgentStatus, err
+	}
 	if ansi {
 		text, err := n.readPaneANSI(ctx, a.PaneID, source, lines)
 		return text, a.AgentStatus, err

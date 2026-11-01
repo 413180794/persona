@@ -131,3 +131,26 @@ func (n *Node) snapshotDue(last time.Time) bool {
 	}
 	return false
 }
+
+// watchHost keeps the change stream of a host other than herdr open (host.Watcher: herdr-core), reopening it with a
+// backoff when it ends: each change takes a snapshot at once. Such a stream covers every pane of its host, so it is
+// not reopened when the panes change; it does not count as herdr's stream being live (snapshotDue still polls herdr).
+// A host that is not running fails at once and is tried again after the backoff, without logging (its client logs).
+func (n *Node) watchHost(ctx context.Context, w host.Watcher) {
+	backoff := time.Second
+	for ctx.Err() == nil {
+		started := time.Now()
+		_ = w.Watch(ctx, nil, n.events.poke)
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Since(started) > time.Minute {
+			backoff = time.Second
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, 30*time.Second)
+	}
+}

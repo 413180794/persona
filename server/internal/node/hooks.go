@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
@@ -374,6 +375,18 @@ func toolSummary(name string, input json.RawMessage) string {
 	}
 	b, _ := json.Marshal(m)
 	return snippet(string(b))
+}
+
+// HookPane is the pane a hook runs in, from its environment, as a stored PaneRef: herdr's HERDR_PANE_ID as it always
+// was, else herdr-core's HC_TERMINAL_ID ("herdr-core:t7"); "" in neither.
+func HookPane(getenv func(string) string) string {
+	if p := getenv(herdrPaneEnv); p != "" {
+		return p
+	}
+	if t := getenv(herdrCorePaneEnv); t != "" {
+		return host.PaneRef{Kind: host.HerdrCore, ID: t}.String()
+	}
+	return ""
 }
 
 // Hook hands a Claude Code hook's input to the node and returns what the hook should print (nil: let the TUI decide).

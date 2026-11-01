@@ -186,7 +186,7 @@ func runHook(ctx context.Context) {
 	if err != nil || !json.Valid(input) {
 		return
 	}
-	out := node.Hook(ctx, input, os.Getenv("HERDR_PANE_ID"))
+	out := node.Hook(ctx, input, node.HookPane(os.Getenv))
 	if len(out) == 0 {
 		return
 	}

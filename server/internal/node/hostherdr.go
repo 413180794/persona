@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/herdrcore"
 	"github.com/chyroc/jarvis/server/internal/host"
 )
 
 // herdrHost is the herdr host: every method is one herdr client call (Close: the tab's pane count, then a close).
-// This file is the only place in the node that knows the herdr client.
+// This file is the only place in the node that knows the herdr client (and, for machineHosts, herdr-core's).
 type herdrHost struct{ c *herdr.Client }
 
 // herdrHosts is a registry holding only the herdr host on c.
@@ -252,10 +253,17 @@ func fromHerdrAgent(a herdr.Agent) host.Agent {
 	return out
 }
 
-// machineHosts are the hosts a node drives on its machine: herdr (at its default socket), logging when it becomes
-// unreachable and reachable again.
+// machineHosts are the hosts a node drives on its machine: herdr (at its default socket) and herdr-core (at the
+// socket hc would use), each logging when it becomes unreachable and reachable again. herdr-core is registered even
+// when it is not running: it then answers at once that it has no terminals (no socket file, no dial), and a Herdr app
+// started later is picked up without restarting the node.
 func machineHosts(logf func(format string, args ...any)) *host.Registry {
 	c := herdr.New()
 	c.Log = logf
-	return herdrHosts(c)
+	hosts := []host.Host{&herdrHost{c: c}}
+	if hc := herdrcore.New(); hc.Socket != "" {
+		hc.Log = logf
+		hosts = append(hosts, &herdrCoreHost{c: hc})
+	}
+	return host.NewRegistry(hosts...)
 }
