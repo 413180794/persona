@@ -24,6 +24,9 @@ nonisolated enum Keychain {
         // Screenshots (`-macSnapshot`, Mac/App/MacSnapshot.swift) run while the Mac is locked, and reading an item another
         // (unsigned) build wrote then blocks in securityd for good, prompt skipped or not: they use demo data, no keychain.
         if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return nil }
+        // The same for the app hosting JarvisMacTests: on a locked Mac its launch otherwise never gets past this read
+        // ("The test runner hung before establishing connection"); no unit test needs the keychain.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return nil }
         #endif
         guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess else { return nil }
         return out as? Data
