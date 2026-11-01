@@ -14,13 +14,18 @@ struct MacViewCommandsTests {
 
     /// 显示 › 刷新 ⌘R: the iPhone pulls to refresh the list it is on; the Mac refreshes what the section shows.
     @Test func refreshFollowsTheSection() {
-        #expect(MacViewCommands.refreshTarget(.inbox, page: false) == .inbox)
-        #expect(MacViewCommands.refreshTarget(.assistant, page: false) == .assistant)
-        #expect(MacViewCommands.refreshTarget(.agents, page: false) == .hub)
-        #expect(MacViewCommands.refreshTarget(.settings, page: false) == .hub)
+        #expect(MacViewCommands.refreshTarget(.inbox, page: false, mainWindow: true) == .inbox)
+        #expect(MacViewCommands.refreshTarget(.assistant, page: false, mainWindow: true) == .assistant)
+        #expect(MacViewCommands.refreshTarget(.agents, page: false, mainWindow: true) == .hub)
+        #expect(MacViewCommands.refreshTarget(.settings, page: false, mainWindow: true) == .hub)
         // A page that loads its own data (知识库, 机器, a chat's 文件 / Git pane) refreshes itself, as its pull does on iOS.
         for s in [MacSection.knowledge, .machines, .agents, .inbox, .assistant] {
-            #expect(MacViewCommands.refreshTarget(s, page: true) == .page)
+            #expect(MacViewCommands.refreshTarget(s, page: true, mainWindow: true) == .page)
+            #expect(MacViewCommands.refreshTarget(s, page: true, mainWindow: false) == .page)
+        }
+        // Another window in front (a chat window, a sheet, 设置): the main window's section is not what is on screen.
+        for s in [MacSection.inbox, .assistant, .knowledge] {
+            #expect(MacViewCommands.refreshTarget(s, page: false, mainWindow: false) == .hub)
         }
     }
 

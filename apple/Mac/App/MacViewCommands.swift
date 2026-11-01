@@ -22,8 +22,10 @@ enum MacViewCommands {
     /// data (`macRefreshes`: 知识库, 机器, a chat's 文件 / Git pane), else what the section shows from the hub.
     enum RefreshTarget: Equatable { case page, hub, assistant, inbox }
 
-    static func refreshTarget(_ section: MacSection, page: Bool) -> RefreshTarget {
+    static func refreshTarget(_ section: MacSection, page: Bool, mainWindow: Bool) -> RefreshTarget {
         if page { return .page }
+        // The section is the main window's: with a chat window, a sheet or 设置 in front, only the hub's lists.
+        guard mainWindow else { return .hub }
         return switch section {
         case .inbox: .inbox
         case .assistant: .assistant
@@ -88,9 +90,11 @@ struct MacViewMenu: Commands {
 
     private func refresh() {
         let section = MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab)
-        let page = MacPageRefreshRegistry.shared.action(window: NSApp.keyWindow?.windowNumber)
+        let key = NSApp.keyWindow
+        let page = MacPageRefreshRegistry.shared.action(window: key?.windowNumber)
+        let main = key?.identifier?.rawValue.hasPrefix("main") == true
         Task {
-            switch MacViewCommands.refreshTarget(section, page: page != nil) {
+            switch MacViewCommands.refreshTarget(section, page: page != nil, mainWindow: main) {
             case .page: await page?()
             case .inbox: await InboxStore.shared.refresh()
             case .assistant: await model.refreshAssistant(); await model.refresh()

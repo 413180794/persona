@@ -5,10 +5,12 @@ import SwiftUI
 /// session's 文件 and Git panes. ⌘R is 显示 › 刷新's (one shortcut for the whole app); the pane registers its load with
 /// it (`macRefreshes`), so ⌘R and this button do the same.
 struct MacRefreshItem: ToolbarContent {
+    /// What the action reads that is not state (`macRefreshes`).
+    var id: AnyHashable = 0
     let action: () async -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) { MacRefreshButton(action: action).macRefreshes(action) }
+        ToolbarItem(placement: .primaryAction) { MacRefreshButton(action: action).macRefreshes(id: id, action) }
     }
 }
 

@@ -42,7 +42,7 @@ struct FilesPane: View {
         .task(id: path) { await load() }
         .sheet(item: $file) { ref in FileViewer(ref: ref) }
         #if os(macOS)
-        .toolbar { MacRefreshItem { await load() } } // no pull to refresh on the Mac
+        .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
     }
 

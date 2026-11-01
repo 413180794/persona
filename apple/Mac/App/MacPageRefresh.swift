@@ -45,12 +45,15 @@ struct MacPageRefreshes {
 
 extension View {
     /// This page refreshes itself on ⌘R (显示 › 刷新) while it is on screen in the key window: the Mac's pull to refresh.
-    func macRefreshes(_ action: @escaping () async -> Void) -> some View {
-        modifier(MacRefreshesModifier(action: action))
+    /// `id`: what the action reads that is not state (a pane's `cwd`, a machine's id); when it changes, the action
+    /// registered with the old value is replaced.
+    func macRefreshes(id: AnyHashable = 0, _ action: @escaping () async -> Void) -> some View {
+        modifier(MacRefreshesModifier(key: id, action: action))
     }
 }
 
 private struct MacRefreshesModifier: ViewModifier {
+    let key: AnyHashable
     let action: () async -> Void
     @State private var id = UUID()
     @State private var window: Int?
@@ -63,6 +66,9 @@ private struct MacRefreshesModifier: ViewModifier {
             }
             .onAppear {
                 // Back on screen in the same window (a pushed page popped): on top again.
+                if let window { MacPageRefreshRegistry.shared.set(id, window: window, action: action) }
+            }
+            .onChange(of: key) {
                 if let window { MacPageRefreshRegistry.shared.set(id, window: window, action: action) }
             }
             .onDisappear { MacPageRefreshRegistry.shared.remove(id) }

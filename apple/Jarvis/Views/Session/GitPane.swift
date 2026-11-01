@@ -33,7 +33,7 @@ struct GitPane: View {
         .themedPage()
         .refreshable { await load() }
         #if os(macOS)
-        .toolbar { MacRefreshItem { await load() } } // no pull to refresh on the Mac
+        .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
         .task(id: cwd) { await load() }
         .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, cwd: cwd, target: t) }
