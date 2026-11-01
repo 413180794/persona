@@ -171,20 +171,6 @@ extension Theme {
         static let safari = "safari"
         /// Something opened in a window of its own (Mac).
         static let newWindow = "macwindow.badge.plus"
-        #if os(macOS)
-        // The Mac's versions of touch words (终端设置 › 操作, 快捷命令, 接管).
-        /// A click with the mouse or trackpad (the Mac's version of a tap, 终端设置 › 操作).
-        static let click = "cursorarrow.click"
-        /// The right-click menu.
-        static let contextMenu = "contextualmenu.and.cursorarrow"
-        /// A trackpad swipe sideways.
-        static let swipe = "arrow.left.arrow.right"
-        /// This window takes the terminal over (iOS: `handoff`, the phone does).
-        static let takeOverWindow = "macwindow.and.cursorarrow"
-        /// Moving an item one place up / down in a list without an edit mode (终端设置 › 快捷命令).
-        static let moveUp = "arrow.up"
-        static let moveDown = "arrow.down"
-        #endif
         /// The Mac code viewer's find bar: the previous / next match.
         static let findPrevious = collapse
         static let findNext = expand
