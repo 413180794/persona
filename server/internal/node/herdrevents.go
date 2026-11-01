@@ -19,8 +19,9 @@ import (
 const slowSnapshot = 10 * time.Second
 
 type herdrEvents struct {
-	live atomic.Bool   // a subscription is streaming
-	kick chan struct{} // something changed: snapshot now (buffered 1)
+	live   atomic.Int64 // the watcher whose subscription is streaming (watcherID), 0: none
+	nextID atomic.Int64
+	kick   chan struct{} // something changed: snapshot now (buffered 1)
 
 	mu       sync.Mutex
 	panes    string             // the pane set subscribed to, sorted and joined
@@ -29,6 +30,14 @@ type herdrEvents struct {
 }
 
 func newHerdrEvents() *herdrEvents { return &herdrEvents{kick: make(chan struct{}, 1)} }
+
+// watcherID is a new watcher's own id: a watcher that stops clears only its own live state, never the one of the
+// watcher that replaced it (an engine switch).
+func (e *herdrEvents) watcherID() int64 { return e.nextID.Add(1) }
+
+func (e *herdrEvents) setLive(id int64)   { e.live.Store(id) }
+func (e *herdrEvents) clearLive(id int64) { e.live.CompareAndSwap(id, 0) }
+func (e *herdrEvents) isLive() bool       { return e.live.Load() != 0 }
 
 func (e *herdrEvents) poke() {
 	select {
@@ -47,6 +56,7 @@ func (n *Node) watchHerdr(ctx context.Context) {
 		return
 	}
 	e := n.events
+	me := e.watcherID()
 	backoff := time.Second
 	for ctx.Err() == nil {
 		panes := n.livePanes()
@@ -60,10 +70,10 @@ func (n *Node) watchHerdr(ctx context.Context) {
 			refs[i] = n.hosts.Ref(p)
 		}
 		err := w.Watch(sctx, refs, func() {
-			e.live.Store(true) // the first one is SubscriptionStarted: snapshot to cover the gap before it
+			e.setLive(me) // the first one is SubscriptionStarted: snapshot to cover the gap before it
 			e.poke()
 		})
-		e.live.Store(false)
+		e.clearLive(me)
 		cancel()
 		e.mu.Lock()
 		resubbed := e.resubbed
@@ -119,7 +129,7 @@ func (n *Node) panesChanged() {
 
 // snapshotDue: whether pollAgents should ask herdr for a snapshot on this tick.
 func (n *Node) snapshotDue(last time.Time) bool {
-	if n.events == nil || !n.events.live.Load() || time.Since(last) >= slowSnapshot {
+	if n.events == nil || !n.events.isLive() || time.Since(last) >= slowSnapshot {
 		return true
 	}
 	n.mu.Lock()
@@ -139,14 +149,15 @@ func (n *Node) snapshotDue(last time.Time) bool {
 // logs).
 func (n *Node) watchHost(ctx context.Context, w host.Watcher) {
 	e := n.events
+	me := e.watcherID()
 	backoff := time.Second
 	for ctx.Err() == nil {
 		started := time.Now()
 		_ = w.Watch(ctx, nil, func() {
-			e.live.Store(true) // the first one is the stream starting: snapshot to cover the gap before it
+			e.setLive(me) // the first one is the stream starting: snapshot to cover the gap before it
 			e.poke()
 		})
-		e.live.Store(false)
+		e.clearLive(me)
 		if ctx.Err() != nil {
 			return
 		}

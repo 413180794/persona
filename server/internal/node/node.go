@@ -32,6 +32,8 @@ type Node struct {
 	managed managedLaunchers
 	hosts   *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
 	eng     engineState    // which engine, and its change stream (engine.go)
+	// engEpoch counts engine switches (n.mu): a refresh applies its result only when no switch happened meanwhile.
+	engEpoch uint64
 	peer    *rpc.Peer
 	logger  *log.Logger
 
@@ -155,8 +157,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	} else {
 		defer ln.Close()
 	}
-	go n.pollAgents(ctx)
-	n.watchEngine(ctx) // herdr's event stream until the hub picks another engine (engine.go)
+	go n.startWhenConfigured(ctx) // polling and the engine's events, once the hub said which engine (engine.go)
 	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
@@ -291,6 +292,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if err := n.useEngine(ctx, e.Engine); err != nil {
 			return nil, err
 		}
+		n.configured()
 		return map[string]any{"engine": n.engine()}, nil
 	case "node.configure":
 		var c struct {
@@ -333,6 +335,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":
+		n.configured() // a hub that lists without engine.use keeps herdr (engine.go)
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
 		tab := ""

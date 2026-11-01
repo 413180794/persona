@@ -656,6 +656,9 @@ func snippet(s string) string {
 	return s
 }
 
+// errEngineChanged: the engine was switched while a refresh ran; its result is the old engine's and is dropped.
+var errEngineChanged = errors.New("the engine changed during the refresh")
+
 // errNoHost: the node has no terminal host to look at.
 var errNoHost = errors.New("no terminal host")
 
@@ -670,6 +673,9 @@ type layout struct {
 // (host.ErrNotRunning: herdr-core without its socket) answered: it has no agents. A node registers one host, its engine
 // (engine.go), so hosts are asked in turn.
 func (n *Node) refreshHosts(ctx context.Context) error {
+	n.mu.Lock()
+	epoch := n.engEpoch // a refresh that outlives an engine switch must not bring the old engine's agents back
+	n.mu.Unlock()
 	if len(n.hosts.All()) == 0 {
 		return errNoHost
 	}
@@ -677,8 +683,12 @@ func (n *Node) refreshHosts(ctx context.Context) error {
 	var firstErr error
 	answered, snapped := false, false
 	for _, h := range n.hosts.All() {
-		agents, full, err := n.lookAt(ctx, h)
+		agents, full, err := n.lookAt(ctx, h, epoch)
 		n.mu.Lock()
+		if n.engEpoch != epoch {
+			n.mu.Unlock()
+			return errEngineChanged
+		}
 		if n.hostAgents == nil {
 			n.hostAgents = map[string][]host.Agent{}
 		}
@@ -700,7 +710,9 @@ func (n *Node) refreshHosts(ctx context.Context) error {
 	if !answered {
 		return firstErr
 	}
-	n.setAgents(all)
+	if !n.setAgentsAt(all, epoch) {
+		return errEngineChanged
+	}
 	if snapped {
 		n.panesChanged()
 	}
@@ -709,7 +721,7 @@ func (n *Node) refreshHosts(ctx context.Context) error {
 
 // lookAt is one host's agents: from a snapshot (full), which also gives the space / slot names; a host that cannot
 // snapshot (older herdr without `api snapshot`) gives its agent list instead.
-func (n *Node) lookAt(ctx context.Context, h host.Host) (agents []host.Agent, full bool, err error) {
+func (n *Node) lookAt(ctx context.Context, h host.Host, epoch uint64) (agents []host.Agent, full bool, err error) {
 	snap, err := h.Snapshot(ctx)
 	if err != nil {
 		agents, aerr := h.Agents(ctx)
@@ -726,6 +738,10 @@ func (n *Node) lookAt(ctx context.Context, h host.Host) (agents []host.Agent, fu
 		l.slots[t.ID] = t
 	}
 	n.mu.Lock()
+	if n.engEpoch != epoch {
+		n.mu.Unlock()
+		return nil, false, errEngineChanged
+	}
 	if n.layouts == nil {
 		n.layouts = map[string]layout{}
 	}
@@ -755,6 +771,14 @@ func (n *Node) placeIn(s *proto.Session, a host.Agent) {
 // setAgents maps live claude agents to session ids: the host's own report when it knows (herdr's claude integration),
 // else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
 func (n *Node) setAgents(agents []host.Agent) {
+	n.mu.Lock()
+	epoch := n.engEpoch
+	n.mu.Unlock()
+	n.setAgentsAt(agents, epoch)
+}
+
+// setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
+func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m := map[string]host.Agent{}
 	var unknown, codex []host.Agent
 	n.mu.Lock()
@@ -824,8 +848,12 @@ func (n *Node) setAgents(agents []host.Agent) {
 		}
 	}
 	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.engEpoch != epoch {
+		return false
+	}
 	n.agents = m
-	n.mu.Unlock()
+	return true
 }
 
 // sessionFromProcess reads the session a pane's claude runs from ~/.claude/sessions/<pid>.json, which Claude Code

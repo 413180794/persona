@@ -1,14 +1,20 @@
 package node
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
 // The herdr engine's hosts are what every node had before engines: one herdr host, nothing of herdr-core.
@@ -116,10 +122,6 @@ func TestEngineUseSwitches(t *testing.T) {
 			}
 		}
 	}
-	live := func(m map[string]proto.Session, id string) bool {
-		s, ok := m[id]
-		return ok && s.Status != proto.StatusOffline && s.PaneID != ""
-	}
 
 	res, err := request(t, n, "engine.use", map[string]any{"engine": "herdr-core"})
 	if err != nil || res["engine"] != "herdr-core" {
@@ -168,15 +170,192 @@ func TestEngineDetection(t *testing.T) {
 	t.Setenv("HC_SOCKET", hc.sock)
 	t.Setenv("HERDR_SOCKET_PATH", f.sock)
 	hc.handle("hello", func(map[string]any) any { return map[string]any{"version": "0.1.16", "generation": 1} })
-	f.reply("ping", map[string]any{"version": "0.9.3"})
-	n.hosts.Set(engineHosts(proto.EngineHerdrCore, nil)...) // herdr not the engine: asked here
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "herdr"), []byte("#!/bin/sh\necho herdr 0.9.3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	n.hosts.Set(engineHosts(proto.EngineHerdrCore, nil)...) // herdr not the engine: its CLI says the version
 	got := n.engines(context.Background(), "")
 	if len(got) != 2 || got[0] != (proto.Engine{ID: "herdr", Name: "herdr", Available: true, Version: "0.9.3"}) ||
 		got[1] != (proto.Engine{ID: "herdr-core", Name: "Herdr App", Available: true, Version: "0.1.16"}) {
 		t.Errorf("engines %+v", got)
 	}
+	if tr := f.trace(); len(tr) != 0 {
+		t.Errorf("herdr asked while not the engine: %v", tr)
+	}
 	t.Setenv("HC_SOCKET", "/tmp/jarvis-no-such-dir/c.sock")
 	if got := n.engines(context.Background(), "0.9.3"); got[1].Available || got[0].Version != "0.9.3" {
 		t.Errorf("without herdr-core: %+v", got)
+	}
+}
+
+// hubPipe gives n a hub connection without starting anything: what n pushes comes out of the channel.
+func hubPipe(t *testing.T, n *Node) <-chan hubPush {
+	t.Helper()
+	pr, pw := io.Pipe()
+	n.peer, n.events = rpc.New("n", pw), newHerdrEvents()
+	out := make(chan hubPush, 64)
+	go func() {
+		sc := bufio.NewScanner(pr)
+		sc.Buffer(make([]byte, 1<<20), 1<<24)
+		for sc.Scan() {
+			var m hubPush
+			if json.Unmarshal(sc.Bytes(), &m) == nil {
+				out <- m
+			}
+		}
+	}()
+	t.Cleanup(func() { pw.Close() })
+	return out
+}
+
+// pushedSessions are the session lists in what was pushed within d.
+func pushedSessions(pushes <-chan hubPush, d time.Duration) [][]proto.Session {
+	var out [][]proto.Session
+	deadline := time.After(d)
+	for {
+		select {
+		case p := <-pushes:
+			if p.Event == "sessions.changed" {
+				var v struct {
+					Sessions []proto.Session `json:"sessions"`
+				}
+				_ = json.Unmarshal(p.Params, &v)
+				out = append(out, v.Sessions)
+			}
+		case <-deadline:
+			return out
+		}
+	}
+}
+
+// A machine on herdr-core: the hub's engine.use comes first, and the node neither asks herdr nor pushes a herdr
+// session while it connects — polling and watching start on herdr-core.
+func TestEngineConnectOnHerdrCoreNeverTouchesHerdr(t *testing.T) {
+	n, f, home := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	writeClaudePID(t, home, 4242, sidB)
+	writeTranscript(t, home, hcCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"b"}`)
+	hc.setTerminals(hcTerminal("t1", "claude-code", "idle", 4242, "claude", hcCwd, "", "", ""))
+	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", "")}, nil))
+	pushes := hubPipe(t, n)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go n.startWhenConfigured(ctx) // what Serve does
+	time.Sleep(100 * time.Millisecond)
+	if _, err := request(t, n, "engine.use", map[string]any{"engine": "herdr-core"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := request(t, n, "sessions.list", map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	lists := pushedSessions(pushes, 2500*time.Millisecond)
+	if len(lists) == 0 {
+		t.Fatal("nothing pushed")
+	}
+	for _, l := range lists {
+		if m := byID(l); m[sidA].PaneID != "" {
+			t.Errorf("a herdr session was pushed: %+v", m[sidA])
+		}
+	}
+	if !live(byID(lists[0]), sidB) {
+		t.Errorf("first push without herdr-core's session: %v", lists[0])
+	}
+	if tr := f.trace(); len(tr) != 0 {
+		t.Errorf("herdr called: %v", tr)
+	}
+	select {
+	case <-hc.subbed:
+	case <-time.After(2 * time.Second):
+		t.Error("herdr-core's events not watched")
+	}
+}
+
+// Without engine.use (no choice stored, an old hub) the node starts on herdr: when the hub lists sessions, or after
+// configWait.
+func TestEngineFallsBackToHerdr(t *testing.T) {
+	old := configWait
+	configWait = 200 * time.Millisecond
+	t.Cleanup(func() { configWait = old })
+	n, f, _ := herdrNode(t)
+	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", "")}, nil))
+	pushes := hubPipe(t, n)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go n.startWhenConfigured(ctx)
+	lists := pushedSessions(pushes, 1500*time.Millisecond)
+	if len(lists) == 0 || !live(byID(lists[0]), sidA) {
+		t.Fatalf("not polling herdr after the wait: %v", lists)
+	}
+}
+
+func live(m map[string]proto.Session, id string) bool {
+	s, ok := m[id]
+	return ok && s.Status != proto.StatusOffline && s.PaneID != ""
+}
+
+// A refresh that started on herdr and finishes after a switch to herdr-core does not bring herdr's agents back.
+func TestEngineSwitchDropsAnOldRefresh(t *testing.T) {
+	n, f, home := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	writeClaudePID(t, home, 4242, sidB)
+	hc.setTerminals(hcTerminal("t1", "claude-code", "idle", 4242, "claude", hcCwd, "", "", ""))
+	entered, release := make(chan struct{}), make(chan struct{})
+	f.handle("session.snapshot", func(map[string]any) any {
+		close(entered)
+		<-release
+		return snapshot(nil, nil, []any{claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", "")}, nil)
+	})
+	done := make(chan error, 1)
+	go func() { done <- n.refreshHosts(context.Background()) }()
+	<-entered
+	if err := n.useEngine(context.Background(), proto.EngineHerdrCore); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	if err := <-done; !errors.Is(err, errEngineChanged) {
+		t.Errorf("old refresh = %v", err)
+	}
+	if _, ok := n.agent(sidA); ok {
+		t.Error("herdr's agent came back")
+	}
+	if _, ok := n.agent(sidB); !ok {
+		t.Error("herdr-core's agent lost")
+	}
+}
+
+// A switch ends every terminal stream of the old engine, telling the hub.
+func TestEngineSwitchEndsTerminalStreams(t *testing.T) {
+	n, _, _ := herdrNode(t)
+	hc := newFakeHC(t)
+	t.Setenv("HC_SOCKET", hc.sock)
+	pushes := hubPipe(t, n)
+	sctx, cancel := context.WithCancel(context.Background())
+	n.setTermStream(sidA, &termStream{cancel: cancel})
+	if err := n.useEngine(context.Background(), proto.EngineHerdrCore); err != nil {
+		t.Fatal(err)
+	}
+	if sctx.Err() == nil {
+		t.Error("the stream still runs")
+	}
+	if n.termStreamOf(sidA) != nil {
+		t.Error("the stream is still listed")
+	}
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case p := <-pushes:
+			if p.Event == "terminal.end" {
+				if !strings.Contains(string(p.Params), sidA) || !strings.Contains(string(p.Params), "engine changed") {
+					t.Errorf("terminal.end %s", p.Params)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("no terminal.end")
+		}
 	}
 }

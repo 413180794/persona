@@ -43,7 +43,7 @@ func TestSnapshotDue(t *testing.T) {
 	if !n.snapshotDue(now) {
 		t.Fatal("without an event stream herdr is polled every tick")
 	}
-	n.events.live.Store(true)
+	n.events.setLive(n.events.watcherID())
 	if n.snapshotDue(now) {
 		t.Fatal("with events, a fresh snapshot is enough")
 	}
