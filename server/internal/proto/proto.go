@@ -17,7 +17,7 @@ import (
 type Machine struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
-	Kind          string    `json:"kind"` // local | ssh
+	Kind          string    `json:"kind"` // local | ssh | tailcat
 	Icon          string    `json:"icon"` // server | laptop | desktop
 	SSHHost       string    `json:"ssh_host,omitempty"`
 	Online        bool      `json:"online"`
@@ -38,6 +38,11 @@ type Machine struct {
 	DeployError string `json:"deploy_error,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
+	// Transport is how the hub reaches it now: local | ssh | tailcat (empty while offline); Tailcat: it can be
+	// reached over tailcat (an address is set); TailcatPath, over tailcat: direct (NAT traversal worked) | relay.
+	Transport   string `json:"transport,omitempty"`
+	Tailcat     bool   `json:"tailcat,omitempty"`
+	TailcatPath string `json:"tailcat_path,omitempty"`
 }
 
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for

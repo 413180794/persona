@@ -267,6 +267,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 	}
 	switch method {
+	case "ping": // the hub checking a tailcat connection is alive (its userspace TCP has no keepalive)
+		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
 	case "node.configure":

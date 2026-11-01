@@ -94,6 +94,21 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 func (m *Machine) deploy(ctx context.Context, bin string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute) // a slow link: about 8 MB gzipped
 	defer cancel()
+	m.mu.Lock()
+	via := m.via
+	m.mu.Unlock()
+	if via == "tailcat" { // no ssh to it now: the node takes the binary over tailcat itself
+		if err := m.deployTailcat(ctx, bin); err != nil {
+			return fmt.Errorf("装不上：%v", err)
+		}
+		// The node exits about a second after answering: reconnecting before that would land on the old one.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+		return m.waitDeployed(ctx)
+	}
 	remote := m.cfg.RemoteBin
 	if remote == "" {
 		remote = "~/.jarvis/bin/jarvisd"
@@ -125,9 +140,14 @@ func (m *Machine) deploy(ctx context.Context, bin string) error {
 		}
 		return fmt.Errorf("装不上：%s", msg)
 	}
+	return m.waitDeployed(ctx)
+}
+
+// waitDeployed reconnects and waits for the machine to come back on the hub's build.
+func (m *Machine) waitDeployed(ctx context.Context) error {
 	m.reconnect()
 	// The new node answers within a few seconds; a resident one waits for launchd's restart (ThrottleInterval 10 s).
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(2 * time.Minute) // over tailcat the new node first brings its endpoint up again
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():

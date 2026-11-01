@@ -60,8 +60,8 @@ install_bin() { # machine-id binary
   fi
 }
 
-# A Mac running a resident node (scripts/node-launchd.sh) keeps the old binary until it restarts.
-restart_resident() { [ "$(uname -s)" = Darwin ] && ../scripts/node-launchd.sh restart || true; }
+# A resident node (scripts/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts.
+restart_resident() { ../scripts/node-launchd.sh restart || true; }
 
 for t in "${TARGETS[@]}"; do
   case "$t" in

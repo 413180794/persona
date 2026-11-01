@@ -77,7 +77,7 @@ func TestAttachIsSingle(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = Attach(ctx, func() (*Node, error) { t.Fatal("served a connection"); return nil, nil })
+	err = Attach(ctx, func() (*Node, error) { t.Fatal("served a connection"); return nil, nil }, nil)
 	if err == nil || !strings.Contains(err.Error(), "already listening") {
 		t.Fatalf("want 'already listening', got %v", err)
 	}
@@ -94,7 +94,7 @@ func TestAttachReplacesStaleSocket(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Attach(ctx, func() (*Node, error) { return nil, io.EOF }) }()
+	go func() { done <- Attach(ctx, func() (*Node, error) { return nil, io.EOF }, nil) }()
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		if c, err := net.Dial("unix", AttachSocketPath()); err == nil {
@@ -106,6 +106,57 @@ func TestAttachReplacesStaleSocket(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+}
+
+// A resident node set up for tailcat serves the hub's connections from there too, alongside relays over ssh.
+func TestAttachServesExtraConnections(t *testing.T) {
+	home := shortHome(t)
+	if err := os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	served := make(chan struct{}, 4)
+	extra := make(chan net.Conn)
+	done := make(chan error, 1)
+	go func() {
+		done <- Attach(ctx, func() (*Node, error) { served <- struct{}{}; return nil, io.EOF }, extra)
+	}()
+	wait := func(what string) {
+		t.Helper()
+		select {
+		case <-served:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s was not served", what)
+		}
+	}
+	a, b := net.Pipe()
+	defer a.Close()
+	extra <- b
+	wait("a tailcat connection")
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if c, err := net.Dial("unix", AttachSocketPath()); err == nil {
+			defer c.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("resident node did not start listening")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	wait("a relayed connection")
+	close(extra) // tailcat gone: relays go on
+	c, err := net.Dial("unix", AttachSocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	wait("a relay after tailcat stopped")
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("Attach: %v", err)

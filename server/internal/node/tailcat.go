@@ -1,0 +1,111 @@
+package node
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"time"
+
+	"github.com/tailscale/tailcat"
+
+	"github.com/chyroc/jarvis/server/internal/tunnel"
+)
+
+// ServeTailcat brings up this machine's tailcat endpoint for a resident node, when it was set up for it
+// (`jarvisd node tailcat init`, ~/.jarvis/tailcat.json): the hub's connections on tunnel.NodePort go to the returned
+// channel (Attach's extra), a new binary on tunnel.UploadPort replaces this one and calls upgraded. Not set up: a nil
+// channel. Starting needs the network (the DERP map, the relay), so it retries in the background until it works:
+// relays over ssh are served meanwhile. stopped closes once ctx ended and the endpoint is down.
+func ServeTailcat(ctx context.Context, logger *log.Logger, upgraded func()) (conns <-chan net.Conn, stopped <-chan struct{}, err error) {
+	done := make(chan struct{})
+	k, err := tunnel.LoadNodeKey(tunnel.NodeKeyPath())
+	if err == nil {
+		var exe string
+		if exe, err = tunnel.Executable(); err == nil {
+			c := make(chan net.Conn)
+			go retryTailcat(ctx, k, logger, exe, c, upgraded, done)
+			return c, done, nil
+		}
+	}
+	close(done)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, done, nil
+	}
+	return nil, done, err
+}
+
+func retryTailcat(ctx context.Context, k *tunnel.NodeKey, logger *log.Logger, exe string, conns chan<- net.Conn, upgraded func(), done chan<- struct{}) {
+	defer close(done)
+	backoff := 5 * time.Second
+	for ctx.Err() == nil {
+		start := time.Now()
+		err := serveTailcatOnce(ctx, k, logger, exe, conns, upgraded)
+		if ctx.Err() != nil {
+			return
+		}
+		if time.Since(start) > 10*time.Minute { // it was working: a new failure starts the backoff over
+			backoff = 5 * time.Second
+		}
+		logger.Printf("tailcat: %v; again in %s", err, backoff)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, 5*time.Minute)
+	}
+}
+
+// serveTailcatOnce runs one tailcat server until ctx ends or it fails to start.
+func serveTailcatOnce(ctx context.Context, k *tunnel.NodeKey, logger *log.Logger, exe string, conns chan<- net.Conn, upgraded func()) error {
+	s := k.Server(tunnel.Logf(logger.Printf))
+	defer s.Close()
+	defer func() { // let the closes of the connections handed out leave before the endpoint goes
+		dctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = s.DrainTCP(dctx)
+		cancel()
+	}()
+	sctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ln, err := s.Listen(sctx, "tcp", fmt.Sprintf(":%d", tunnel.NodePort))
+	cancel()
+	if err != nil {
+		return fmt.Errorf("start: %w", err)
+	}
+	up, err := s.Listen(ctx, "tcp", fmt.Sprintf(":%d", tunnel.UploadPort))
+	if err != nil {
+		return fmt.Errorf("listen for uploads: %w", err)
+	}
+	// Never log the address: it is the secret that lets a client in (with the hub's key).
+	logger.Printf("tailcat: serving %d hub key(s), DERP region %d", len(k.Hubs), k.RegionID)
+	go tunnel.ServeUpload(up, exe, upgraded)
+	stop := context.AfterFunc(ctx, func() { ln.Close(); up.Close() })
+	defer stop()
+	defer up.Close()
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("accept: %w", err)
+		}
+		select {
+		case conns <- c:
+		case <-ctx.Done():
+			c.Close()
+			return nil
+		}
+	}
+}
+
+// TailcatAddr is this machine's address for hub.json (machines[].tailcat_addr).
+func TailcatAddr() (tailcat.Addr, error) {
+	k, err := tunnel.LoadNodeKey(tunnel.NodeKeyPath())
+	if err != nil {
+		return "", err
+	}
+	return k.Addr(), nil
+}

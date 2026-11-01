@@ -54,6 +54,7 @@
 - **hooks 只注入 jarvis 启动的会话**（`--settings ~/.jarvis/claude-settings.json`），不改全局 settings，不影响用户自己开的 claude。
   不是 jarvis 启动的 herdr claude 也能在 App 里看（按 herdr 报告的 session id 找 transcript）、发消息、按键回答。
 - **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh <机器>` 这类别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
+  ssh 进不去的电脑（NAT 后面、别的内网）退到 tailcat 打洞（`docs/server.md`「tailcat 打洞」），先 ssh、不行再 tailcat。
 - **hub 在一台常开的机器上**：它常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
 ## 关键流程

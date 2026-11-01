@@ -20,9 +20,12 @@ import (
 type MachineConfig struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
-	Kind    string `json:"kind"` // local | ssh
+	Kind    string `json:"kind"` // local | ssh | tailcat (tailcat only, no ssh)
 	SSHHost string `json:"ssh_host,omitempty"`
-	Icon    string `json:"icon,omitempty"`
+	// TailcatAddr is the machine's tailcat address (`jarvisd node tailcat init` there): the way in when ssh does not
+	// work, e.g. a computer behind NAT (tailcat.go, docs/server.md「tailcat 打洞」). A secret, like the token.
+	TailcatAddr string `json:"tailcat_addr,omitempty"`
+	Icon        string `json:"icon,omitempty"`
 	// RemoteBin is the jarvisd path on the remote machine (default ~/.jarvis/bin/jarvisd).
 	RemoteBin string `json:"remote_bin,omitempty"`
 	// ClaudeConfigDirs are Claude Code config directories (CLAUDE_CONFIG_DIR of launchers) besides ~/.claude to look
@@ -36,6 +39,12 @@ type GoogleConfig struct {
 	ClientID string `json:"client_id"`
 	// Proxy is an http:// proxy for Gmail IMAP / SMTP and Google's OAuth / Gmail API, e.g. a local proxy on the hub's machine.
 	Proxy string `json:"proxy,omitempty"`
+}
+
+// TailcatConfig: DERPMapURL is a DERP map of your own relays (a derper) instead of Tailscale's public ones; the nodes
+// were set up with the same (`jarvisd node tailcat init --derp-map-url`).
+type TailcatConfig struct {
+	DERPMapURL string `json:"derp_map_url,omitempty"`
 }
 
 type AssistantProfile struct {
@@ -77,6 +86,8 @@ type Config struct {
 	// LarkAgent: a message of the user's starting with /agent anywhere in Feishu starts an agent with the context of
 	// where it was asked, and its answer is posted as the reply (lark_agent.go, docs/lark-agent.md).
 	LarkAgent LarkAgentConfig `json:"lark_agent,omitempty"`
+	// Tailcat tunes reaching machines over tailcat (tailcat.go).
+	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 
 	dir string
 }

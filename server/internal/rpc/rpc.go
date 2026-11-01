@@ -191,3 +191,13 @@ func (p *Peer) Close(err error) {
 }
 
 func (p *Peer) Done() <-chan struct{} { return p.closed }
+
+// Err is why the peer was closed (what Close was given); nil while it is open.
+func (p *Peer) Err() error {
+	select {
+	case <-p.closed:
+		return p.err
+	default:
+		return nil
+	}
+}

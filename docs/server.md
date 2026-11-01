@@ -15,6 +15,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |
 | `internal/mcpserver` | `jarvisd mcp`：给 claude 的 stdio MCP server |
+| `internal/tunnel` | tailcat：node 的 key 文件和端点、hub 的拨号、经 tailcat 收发新二进制（下面「tailcat 打洞」） |
 
 ## 和 herdr 的连接
 
@@ -76,6 +77,47 @@ claude（`apiKeyHelper` 用 `security find-generic-password` 取）在助手里�
 - 一次只服务一条连接：新连接进来（hub 重连）时旧的那条的 node 退出，等着的 hook 会去问新的（同 ssh 起的 node 被替换时）。同时只能有一个常驻 node。
 - `deploy.sh` 换了二进制后会 `node-launchd.sh restart`（ssh 进来也能操作登录会话的 launchd）；hub 要重连一次才会用上新的 node（重启 hub，或 App 里「重新连接」）。
 - `scripts/node-launchd.sh uninstall` 回到 ssh 起 node。日志：`~/.jarvis/node-attach.log`。
+
+## tailcat 打洞（`internal/tunnel`，`hub/tailcat.go`）
+
+hub ssh 不进去的电脑（NAT 后面、另一个内网、没有公网 IP）经 [tailcat](https://github.com/tailscale/tailcat) 接入：Tailscale 的数据面
+（WireGuard + DERP 中继 + 打洞），不用它的控制面，不需要 Tailscale 账号、root、TUN 或开端口，全在 jarvisd 进程里（用户态 netstack）。
+
+- **退避顺序**：配了 `ssh_host` 又配了 `tailcat_addr` 的机器每次连接先试 ssh（`ConnectTimeout=15`），失败立刻试 tailcat；
+  ssh 失败后 5 分钟内的重连先试 tailcat，不再干等 ssh 超时。走 tailcat 期间每 5 分钟 `ssh <host> true` 检查一次，ssh 恢复就断开
+  重连回 ssh（有提问 / 计划 / 授权在等手机时不切，重连会取消它们）；切回去又马上失败（ssh 能登录但 node 不回话，比如慢链路上
+  40 秒内等不到 `node.info`）时，下一次检查的间隔翻倍，最多 32 倍，ssh 稳定 10 分钟后复原，不会每 5 分钟断一次。`kind: "tailcat"` 只走 tailcat。机器列表的 `transport`
+  是当前走哪条，`tailcat_path` 是 tailcat 走的路径（`direct` 打洞成功 / `relay` 经中继，每分钟问一次，同时促使它重新找直连）。
+- **断线检测**：tailcat 的用户态 TCP 没有 keepalive（ssh 有 `ServerAliveInterval`），对面睡眠 / 断网时连接不会自己断。hub 每分钟给
+  node 发一次 `ping`，连续两次不回就断开重连（旧 node 回「unknown method」也算回了）。这一分钟里有数据进出（读到数据，或大的写
+  每 32 KB 发出去一段）就算活着、不 ping：慢中继上一个大页面要传很久，ping 排在它后面会误判。ping 在单独的 goroutine 里等，
+  卡在死连接的写上也不耽误判断；判定断线时直接关掉底层连接，卡住的写随之失败。
+- **node 侧**：只有常驻 node（`scripts/node-launchd.sh install`，Mac 是 launchd，Linux 是 systemd 用户服务）会开 tailcat：
+  有 `~/.jarvis/tailcat.json` 时，在自己的 tailcat 地址上听 `18662`（node 协议，和 ssh 转过来的连接共用「一次服务一条，新的替换旧的」）
+  和 `18663`（接收新二进制）。起不来（没网、DERP 连不上）就在后台退避重试，ssh 转发照常服务。
+- **配对**：hub 机器上 `jarvisd hub tailcat-key` 打印 hub 的公钥（第一次生成 `~/.jarvis/tailcat-hub.json`）；那台电脑上
+  `jarvisd node tailcat init --hub <公钥>` 生成 `~/.jarvis/tailcat.json`（node 私钥、预共享密钥、选定的 DERP 区域、允许的 hub 公钥）
+  并打印地址，填进 hub.json 的 `tailcat_addr`；重启那台的常驻 node 和 hub。再跑一次 `init` 可以加别的 hub，地址不变；
+  `jarvisd node tailcat addr` 再打印一遍。
+- **安全**：node 只回应 `tailcat.json` 里列出的 hub 公钥（tailcat 在列表为空时放所有人进来，所以没有 hub 公钥的文件直接拒绝加载），
+  其他 key 连握手都没有；只放行 18662–18663 两个端口。地址里有预共享密钥，和 hub token 一样是密钥：只放 hub.json，日志里不打印。
+  两个 key 文件都是 0600（读到权限更宽的会改回 0600）。
+- **吊销 / 换密钥**：node 只在启动时读允许的 hub 公钥，tailcat 也不会踢掉已经连上的 peer。去掉一个 hub：从那台的 `tailcat.json`
+  的 `hubs` 删掉它，再 `scripts/node-launchd.sh restart`。地址泄露（换预共享密钥和 node 私钥）：删掉 `tailcat.json` 重新 `init`，
+  把新地址填进 hub.json 并重启 hub。换 hub 的 key：删掉 hub 机器的 `tailcat-hub.json`，重启 hub 后用新的 `hub tailcat-key` 在每台重新 `init --hub`，
+  再从各台 `tailcat.json` 的 `hubs` 删掉旧的、重启常驻 node。
+- **地址固定**：地址只写 DERP 区域 id（不内嵌中继服务器），`init` 时选一次最近的区域存起来；否则每次启动重新选区域，地址会变。
+- **部署**：走 tailcat 的机器点「重新部署」时，hub 把二进制经 tailcat 的 18663 发过去（一行 `{"size","sha256"}` + gzip）；node 校验
+  大小和 sha256、确认新二进制在本机跑得起来（`version`）后才替换自己，回 `{"ok"}` 再退出，由 launchd / systemd 拉起新版本。
+  一次只收一个（同时来的第二个立即回「正在上传」）；60 秒没收到数据就放弃，hub 中途重启不会把下一次部署卡住。
+  `deploy.sh` 首次安装仍要能 ssh 到那台（或手动放二进制）。
+- **代价**：jarvisd 从约 19 MB 变成约 36 MB（gzip 后 8 MB → 15 MB）；冷启动约 7 秒（拉 DERP map、选区域），第一次拨通约 6.5 秒。
+  公共中继没有 SLA、走中继时限速，可以用 `--derp-map-url` / hub.json 的 `tailcat.derp_map_url` 换成自建的 derper。tailcat 不承诺 API 稳定，
+  升级依赖时跑一遍下面的联调。
+- **只管 hub ↔ node**：手机 / 网页到 hub 仍然需要一个能访问到的入口（`public_url`）。
+- 联调（要外网）：`JARVIS_TEST_TAILCAT=1 go test ./internal/tunnel -run EndToEnd`（真实中继上的拨号、鉴权、上传），以及
+  `internal/hub/tailcat_e2e_test.go` 顶部注释里的命令（两版真实 jarvisd：ssh 不通 → 走 tailcat 上线 → 经 tailcat 部署新版本并重连）。
+  `JARVIS_TAILCAT_DEBUG=1` 打开 tailscale 的日志（默认静音，打洞期间每秒好几行）。
 
 ## 数据库（Postgres）
 

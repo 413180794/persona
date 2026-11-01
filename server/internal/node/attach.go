@@ -48,9 +48,11 @@ func Relay(ctx context.Context, r io.Reader, w io.Writer) (ok bool, err error) {
 }
 
 // Attach runs a resident node: it listens on AttachSocketPath and serves one hub connection at a time, each relayed
-// by `jarvisd node --stdio`. A new connection replaces the one being served (the hub reconnected; the old ssh may not
-// have noticed yet), as a new ssh-started node used to replace the old one. newNode makes the Node for a connection.
-func Attach(ctx context.Context, newNode func() (*Node, error)) error {
+// by `jarvisd node --stdio`, or arriving on extra (the hub dialing in over tailcat, tailcat.go; nil: none). A new
+// connection replaces the one being served whichever way either came (the hub reconnected, maybe the other way; the
+// old one may not have noticed yet), as a new ssh-started node used to replace the old one. newNode makes the Node
+// for a connection.
+func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net.Conn) error {
 	path := AttachSocketPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -68,29 +70,50 @@ func Attach(ctx context.Context, newNode func() (*Node, error)) error {
 	_ = os.Chmod(path, 0o600)
 	ln.(*net.UnixListener).SetUnlinkOnClose(false) // a replacement may already own the path (hooks.go has the same trap)
 	go func() { <-ctx.Done(); ln.Close() }()
+	relayed := make(chan net.Conn)
+	go func() {
+		defer close(relayed)
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+					return
+				}
+				continue
+			}
+			select {
+			case relayed <- c:
+			case <-ctx.Done():
+				c.Close()
+				return
+			}
+		}
+	}()
 
-	var mu sync.Mutex
 	var current context.CancelFunc
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	for {
-		c, err := ln.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
+		var c net.Conn
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return nil
+		case c, ok = <-relayed:
+			if !ok {
 				return nil
 			}
-			if errors.Is(err, net.ErrClosed) {
-				return nil
+		case c, ok = <-extra:
+			if !ok {
+				extra = nil // that way is gone; relays go on
+				continue
 			}
-			continue
 		}
-		mu.Lock()
 		if current != nil {
 			current() // the previous connection's node shuts down; its hooks retry on the new one (hooks.go)
 		}
 		cctx, cancel := context.WithCancel(ctx)
 		current = cancel
-		mu.Unlock()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

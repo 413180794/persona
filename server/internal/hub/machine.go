@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -40,12 +41,23 @@ type Machine struct {
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying bool
 	deployErr string
+	// via is how the connection runs (local | ssh | tailcat), path how tailcat's packets go (direct | relay).
+	via, path string
+	// directFailed: when ssh last failed to connect and tailcat was tried instead; switchedBack: when the hub last
+	// went back to ssh from tailcat; flaps: how many times in a row that failed right away (tailcat.go).
+	directFailed, switchedBack time.Time
+	flaps                      int
+	timings                    tailcatTimings
 	// nodeCmd replaces the node command (tests).
 	nodeCmd func(context.Context) *exec.Cmd
+	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).
+	dialTailcat func(context.Context) (net.Conn, error)
+	probeDirect func(context.Context) error
 }
 
 func newMachine(h *Hub, cfg MachineConfig) *Machine {
-	return &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1)}
+	return &Machine{cfg: cfg, hub: h, watchers: map[string]int{}, lastSeq: map[string]int{}, kick: make(chan struct{}, 1),
+		timings: defaultTailcatTimings}
 }
 
 func (m *Machine) snapshot() proto.Machine {
@@ -61,7 +73,8 @@ func (m *Machine) snapshot() proto.Machine {
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
 		Deploying: m.deploying, DeployError: m.deployErr,
-		System: m.hub.metrics.system(m.cfg.ID),
+		System:    m.hub.metrics.system(m.cfg.ID),
+		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
 	}
 }
 
@@ -122,28 +135,70 @@ func (m *Machine) command(ctx context.Context) *exec.Cmd {
 		"-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", host, bin+" node --stdio")
 }
 
+// connect makes one connection to the node and serves it until it ends. Each way the machine can be reached is tried
+// in order (transports): ssh first when it can be, tailcat when not (tailcat.go).
 func (m *Machine) connect(ctx context.Context) error {
+	var failed []string
+	for _, via := range m.transports() {
+		online, err := m.connectVia(ctx, via)
+		if online || ctx.Err() != nil {
+			return err
+		}
+		failed = append(failed, via+"："+err.Error())
+		if via == "ssh" && m.cfg.TailcatAddr != "" {
+			m.noteDirectFailed()
+		}
+	}
+	if len(failed) == 1 {
+		_, msg, _ := strings.Cut(failed[0], "：")
+		return errors.New(msg)
+	}
+	return errors.New(strings.Join(failed, "；"))
+}
+
+// link is one way to a node: what it says, where to write, and why it failed (ssh's last stderr line).
+type link struct {
+	r       io.Reader
+	w       io.Writer
+	lastErr func() string
+	close   func() // ends it and waits until it is gone
+	// activity is when bytes last moved either way (tailcat only: watchTailcat pings only an idle connection).
+	activity *activityConn
+}
+
+func (m *Machine) open(ctx context.Context, via string) (*link, error) {
+	if via == "tailcat" {
+		dctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+		c, err := m.tailcatDial(dctx)
+		if err != nil {
+			return nil, err
+		}
+		ac := &activityConn{Conn: c}
+		ac.touch()
+		return &link{r: ac, w: ac, lastErr: func() string { return "" }, close: func() { _ = c.Close() }, activity: ac}, nil
+	}
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	cmd := m.command(ctx)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return err
+		cancel()
+		return nil, err
 	}
-	defer func() { _ = cmd.Wait() }()
-	defer cancel()
-
 	var lastErr strings.Builder
 	var errMu sync.Mutex
 	go func() {
@@ -157,12 +212,36 @@ func (m *Machine) connect(ctx context.Context) error {
 			errMu.Unlock()
 		}
 	}()
+	return &link{r: stdout, w: stdin,
+		lastErr: func() string {
+			errMu.Lock()
+			defer errMu.Unlock()
+			return lastErr.String()
+		},
+		close: func() { cancel(); _ = cmd.Wait() },
+	}, nil
+}
 
-	peer := rpc.New("h", stdin)
+// connectVia connects one way and serves the connection until it ends. online: the node answered, so the machine
+// was up (a failure before that lets connect try the next way).
+func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	l, err := m.open(ctx, via)
+	if err != nil {
+		if via == "tailcat" {
+			m.tailcatReset()
+		}
+		return false, err
+	}
+	defer l.close()
+	defer cancel()
+
+	peer := rpc.New("h", l.w)
 	peer.OnEvent = m.onEvent
 	peer.OnRequest = m.onRequest
 	served := make(chan error, 1)
-	go func() { served <- peer.Serve(ctx, stdout) }()
+	go func() { served <- peer.Serve(ctx, l.r) }()
 
 	ictx, icancel := context.WithTimeout(ctx, 40*time.Second)
 	var info proto.NodeInfo
@@ -170,17 +249,22 @@ func (m *Machine) connect(ctx context.Context) error {
 	icancel()
 	if err != nil {
 		peer.Close(err)
-		errMu.Lock()
-		msg := lastErr.String()
-		errMu.Unlock()
-		if msg != "" {
-			return fmt.Errorf("%s", msg)
+		if via == "tailcat" {
+			m.tailcatReset()
 		}
-		return err
+		if msg := l.lastErr(); msg != "" {
+			return false, fmt.Errorf("%s", msg)
+		}
+		return false, err
 	}
 
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = peer, info, true, "", time.Now().UTC()
+	m.via, m.path = via, ""
+	if via == "ssh" {
+		m.directFailed = time.Time{}
+	}
+	onlineAt := time.Now()
 	rewatch := map[string]int{}
 	for id, n := range m.watchers {
 		if n > 0 {
@@ -188,12 +272,15 @@ func (m *Machine) connect(ctx context.Context) error {
 		}
 	}
 	m.mu.Unlock()
-	m.hub.logf("[%s] connected: %s %s/%s herdr %s claude %s", m.cfg.ID, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
+	m.hub.logf("[%s] connected over %s: %s %s/%s herdr %s claude %s", m.cfg.ID, via, info.Hostname, info.OS, info.Arch, info.HerdrVersion, info.ClaudeVersion)
 	m.hub.onSystem(m.cfg.ID, info.System)
 	if nodeMismatch(m.hub.version, info.Version) {
 		m.hub.logf("[%s] node %s is not the hub's build %s: deploy it (scripts/deploy.sh %s)", m.cfg.ID, info.Version, m.hub.version, m.cfg.ID)
 	}
 	m.hub.broadcastMachines()
+	if via == "tailcat" {
+		go m.watchTailcat(ctx, peer, l.activity)
+	}
 
 	m.configureNode(ctx, peer)
 	var list struct {
@@ -212,20 +299,25 @@ func (m *Machine) connect(ctx context.Context) error {
 	select {
 	case err = <-served:
 	case <-peer.Done():
-		err = errors.New("reconnect requested")
+		if err = peer.Err(); err == nil {
+			err = errors.New("reconnect requested")
+		}
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
+	if via == "ssh" && time.Since(onlineAt) > 10*time.Minute { // ssh held: going back to it worked
+		m.mu.Lock()
+		m.flaps, m.switchedBack = 0, time.Time{}
+		m.mu.Unlock()
+	}
 	if errors.Is(err, io.EOF) {
-		errMu.Lock()
-		if msg := lastErr.String(); msg != "" {
+		if msg := l.lastErr(); msg != "" {
 			err = fmt.Errorf("node exited: %s", msg)
 		} else {
 			err = errors.New("node exited")
 		}
-		errMu.Unlock()
 	}
-	return err
+	return true, err
 }
 
 func (m *Machine) setOffline(err error) {
@@ -233,6 +325,7 @@ func (m *Machine) setOffline(err error) {
 	m.mu.Lock()
 	m.peer = nil
 	m.online = false
+	m.via, m.path = "", ""
 	if err != nil {
 		m.err = err.Error()
 	}

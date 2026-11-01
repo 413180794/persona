@@ -43,6 +43,8 @@ type Hub struct {
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 
+	tailcat tailcatDialer // reaching machines the hub cannot ssh to (tailcat.go)
+
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
@@ -193,6 +195,7 @@ func Run(ctx context.Context, version string) error {
 		h.byID[mc.ID] = m
 		go m.run(ctx)
 	}
+	defer h.closeTailcat()
 	go h.expireLoop(ctx)
 	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)

@@ -18,7 +18,7 @@
   以后有「旧 hub 会误解」的新请求时先查这里。机器列表里的 `node_version` / `node_mismatch`：那台电脑上的 jarvisd 不是 hub 这次部署的
   （`deploy.sh` 只部署了一部分），App 在「设置 › 机器」里提示并给一个「重新部署」按钮，hub 连上时也记一行日志。
   `POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.jarvis/bin/nodes/jarvisd-<os>-<arch>`）
-  经 ssh 装到那台电脑，杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，
+  经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，
   立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
@@ -29,6 +29,9 @@
 {"id":"laptop","name":"笔记本","kind":"ssh","ssh_host":"laptop","online":true,"error":"",
  "hostname":"example-machine","os":"darwin","arch":"arm64","herdr_version":"0.8.0","claude_version":"2.1.310",
  "last_seen":"...",
+ // 怎么连的（docs/server.md「tailcat 打洞」）：transport 是 local | ssh | tailcat（离线时没有）；tailcat：配了 tailcat 地址；
+ // tailcat_path 只在走 tailcat 时有：direct（打洞成功，点对点）| relay（经 DERP 中继）。旧 hub 没有这几个字段
+ "transport":"ssh","tailcat":true,
  // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
  "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
            "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,

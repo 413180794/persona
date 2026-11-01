@@ -23,8 +23,10 @@
 | 每台要接入的电脑 | herdr，以及 Claude Code（或 Codex）；`~/.jarvis/bin/jarvisd`（第 2 步部署脚本会拷过去） |
 | SSH | hub 机器能**免密码**登录每台电脑（hub 用 `BatchMode=yes`，只能用密钥），在 hub 机器的 `~/.ssh/config` 里给每台起个别名；开发机也要能 SSH 到每台（部署用） |
 
-在 NAT 后面、hub 连不进去的电脑（比如家里的 Mac），从它那边建一条到 hub 机器的反向隧道（`ssh -R 2222:localhost:22 hub机器`，
-用 launchd / autossh 保活），hub 机器的 `~/.ssh/config` 里把别名指到 `localhost:2222`。
+在 NAT 后面、hub 连不进去的电脑（比如家里的 Mac、另一个内网里的机器），用 **tailcat**（`docs/server.md`「tailcat 打洞」）：
+那台电脑上装常驻 node、跑一次 `jarvisd node tailcat init`，把打印的地址填进 hub.json 那台的 `tailcat_addr`。两边都不需要公网 IP、
+开端口或 Tailscale 账号；hub 先试 ssh，连不上再走 tailcat。也可以照旧从那台电脑建一条到 hub 机器的反向隧道
+（`ssh -R 2222:localhost:22 hub机器`，用 launchd / autossh 保活），hub 机器的 `~/.ssh/config` 里把别名指到 `localhost:2222`。
 
 ### 步骤
 
@@ -140,6 +142,11 @@
 ```
 
 - 第一次运行只写本机一台（`kind: local`，id 是主机名），对外地址是 `http://<主机名>:18660`；其他机器、域名自己加。
+- `machines[].tailcat_addr`（可选）：那台电脑 `jarvisd node tailcat init` 打印的 `tc…` 地址，hub ssh 不过去时经 tailcat 连
+  （`docs/server.md`「tailcat 打洞」）。地址是密钥（带 WireGuard 的预共享密钥），和 token 一样只放 hub.json。`kind: "tailcat"` 表示
+  只走 tailcat、不试 ssh（没有 `ssh_host`）；`kind: "ssh"` 加 `tailcat_addr` 是先 ssh、不行再 tailcat。
+- `tailcat.derp_map_url`（可选）：用自建的 DERP 中继（derper）代替 Tailscale 的公共中继时，它的 DERP map 地址；各台电脑
+  `init` 时要带同一个 `--derp-map-url`。
 - `machines[].claude_config_dirs`（可选）：这台机器上除 `~/.claude` 以外的 Claude Code 配置目录（启动器设的 `CLAUDE_CONFIG_DIR`，
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
   这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。
