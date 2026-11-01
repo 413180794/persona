@@ -1,3 +1,4 @@
+import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -302,6 +303,10 @@ struct QuestionForm: View {
     private var questions: [Question] { interaction.questions ?? [] }
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUIQuestionForm(interaction: interaction) } else { plain }
+    }
+
+    @ViewBuilder private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             if questions.indices.contains(page) {
                 let q = questions[page]
@@ -502,6 +507,10 @@ struct PlanForm: View {
     @State private var rejecting = false
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUIPlanForm(interaction: interaction, showFull: $showFull) } else { plain }
+    }
+
+    @ViewBuilder private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             ScrollView {
                 Markdown(MarkdownMemo.content(interaction.plan ?? ""))
@@ -557,6 +566,10 @@ struct PermissionForm: View {
     var interaction: Interaction
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUIPermissionForm(interaction: interaction) } else { plain }
+    }
+
+    @ViewBuilder private var plain: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
@@ -608,6 +621,10 @@ struct ScreenForm: View {
     @FocusState private var focused: Bool
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUIScreenForm(interaction: interaction) } else { plain }
+    }
+
+    @ViewBuilder private var plain: some View {
         let screen = interaction.screen ?? ""
         if let d = interaction.screenDialog {
             dialog(d, screen: screen)
@@ -886,3 +903,305 @@ extension Interaction {
     }
 }
 #endif
+
+// MARK: - The BeautifulUI style's forms
+
+/// How the interaction forms fit BeautifulUI's approval card into the panel: no card of its own (the panel is the
+/// surface), the panel's width, no × (the panel has its menu) and no Start over (the panel goes once answered).
+extension ApprovalCardOptions {
+    static func panel(sending: Bool = false, autoAdvance: Bool = true) -> ApprovalCardOptions {
+        var o = ApprovalCardOptions()
+        o.drawsSurface = false
+        o.maxWidth = nil
+        o.showsDismiss = false
+        o.allowsStartOver = false
+        o.autoAdvance = autoAdvance
+        o.isSending = sending
+        return o
+    }
+}
+
+/// The BeautifulUI style's AskUserQuestion: its approval card, a question at a time with its step counter; the options with
+/// their descriptions and 推荐 for the suggested one; one choice moves on by itself (and on the last question,
+/// sends), several wait for 下一题 / 提交; "其他回答…" is the card's own field.
+struct BUIQuestionForm: View {
+    @Environment(AppModel.self) private var model
+    var interaction: Interaction
+
+    private var questions: [Question] { interaction.questions ?? [] }
+
+    var body: some View {
+        ApprovalCard(questions: questions.map(Self.card), skipLabel: nil, continueLabel: "下一题", sendLabel: "提交",
+                     customPlaceholder: "其他回答…", sentMessage: "已发送", options: .panel()) { answers in
+            Haptics.tap()
+            Task { await model.resolve(interaction, Resolution(answers: Self.answers(answers, questions))) }
+        }
+    }
+
+    static func card(_ q: Question) -> ApprovalQuestion {
+        ApprovalQuestion(
+            id: q.question, q.question, kind: q.multiSelect ? .multiple : .single,
+            choices: q.options.map { o in
+                let (label, recommended) = display(o.label)
+                return ApprovalQuestion.Choice(label, detail: o.description, tag: recommended ? "推荐" : nil)
+            },
+            eyebrow: eyebrow(q)
+        )
+    }
+
+    /// "header · 可多选" above the question, when there is either.
+    private static func eyebrow(_ q: Question) -> String? {
+        let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? "可多选" : nil].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The card's answers as the hub wants them: per question, what was typed, else the picked labels as Claude wrote
+    /// them (with "(Recommended)"), in the options' order.
+    static func answers(_ a: ApprovalAnswers, _ questions: [Question]) -> [String: String] {
+        var out: [String: String] = [:]
+        for (n, q) in questions.enumerated() {
+            let custom = (a.custom[n] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !custom.isEmpty { out[q.question] = custom; continue }
+            let picked = Set(a.picks[n] ?? [])
+            let labels = q.options.enumerated().filter { picked.contains($0.offset) }.map(\.element.label)
+            if !labels.isEmpty { out[q.question] = labels.joined(separator: ", ") }
+        }
+        return out
+    }
+
+    /// "取最长的那段 (Recommended)" → ("取最长的那段", true). The answer sent back keeps the original label.
+    static func display(_ label: String) -> (String, Bool) { QuestionOption.display(label) }
+}
+
+/// The BeautifulUI style's ExitPlanMode: an approval card with the plan (Markdown, scrolls; full screen from the panel's
+/// header), then how to go on. A tap on an approval sends it, as the plain form's buttons do; to send the plan back,
+/// write what to change in the card's field and send.
+struct BUIPlanForm: View {
+    @Environment(AppModel.self) private var model
+    var interaction: Interaction
+    @Binding var showFull: Bool
+
+    private static let choices = [
+        ApprovalQuestion.Choice("批准并自动执行", detail: "之后不再逐个确认"),
+        ApprovalQuestion.Choice("批准，自动接受编辑", detail: "改文件不问，其他操作照常确认"),
+    ]
+
+    var body: some View {
+        ApprovalCard(questions: [ApprovalQuestion("按这个计划做吗？", choices: Self.choices,
+                                                  customPlaceholder: "打回并说明要怎么改…")],
+                     skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+                     options: .panel()) { answers in
+            Haptics.tap()
+            Task { await model.resolve(interaction, Self.resolution(answers)) }
+        } context: { _ in
+            ScrollView {
+                Markdown(MarkdownMemo.content(interaction.plan ?? ""))
+                    .markdownTheme(.jarvis)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scaledFrame(maxHeight: Theme.Size.box200)
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .sheet(isPresented: $showFull) {
+            NavigationStack {
+                ScrollView {
+                    Markdown(MarkdownMemo.content(interaction.plan ?? "")).markdownTheme(.jarvis).padding()
+                }
+                .navigationTitle(PlanText.title(interaction.plan ?? ""))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showFull = false } } }
+            }
+        }
+    }
+
+    static func resolution(_ a: ApprovalAnswers) -> Resolution {
+        let feedback = (a.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !feedback.isEmpty { return Resolution(approve: false, feedback: feedback) }
+        switch a.picks[0]?.first {
+        case 0: return Resolution(approve: true, mode: "bypassPermissions")
+        case 1: return Resolution(approve: true, mode: "acceptEdits")
+        default: return Resolution(approve: false, feedback: "")
+        }
+    }
+}
+
+/// The BeautifulUI style's tool approval: an approval card with the tool and what it will run on top, then 允许 /
+/// 本会话总是允许 / 拒绝. A tap sends, as the plain form's buttons do. Typing in the field denies with that reason,
+/// which Claude reads.
+struct BUIPermissionForm: View {
+    @Environment(AppModel.self) private var model
+    var interaction: Interaction
+
+    private var choices: [ApprovalQuestion.Choice] {
+        var c = [ApprovalQuestion.Choice("允许")]
+        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice("本会话总是允许", detail: "这个会话里同样的操作不再问")) }
+        c.append(ApprovalQuestion.Choice("拒绝"))
+        return c
+    }
+
+    var body: some View {
+        let choices = choices
+        ApprovalCard(questions: [ApprovalQuestion("允许 \(interaction.toolName ?? "这个工具") 吗？", choices: choices,
+                                                  customPlaceholder: "拒绝并说明原因…")],
+                     skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+                     options: .panel()) { answers in
+            Haptics.tap()
+            Task { await model.resolve(interaction, Self.resolution(answers, choices: choices)) }
+        } context: { _ in
+            HStack(alignment: .top, spacing: Theme.Space.s) {
+                Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
+                Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
+                    .font(Theme.Font.code)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(Theme.Space.m)
+            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        }
+    }
+
+    static func resolution(_ a: ApprovalAnswers, choices: [ApprovalQuestion.Choice]) -> Resolution {
+        let reason = (a.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !reason.isEmpty { return Resolution(allow: false, message: reason) }
+        switch a.picks[0]?.first.map({ choices[$0].label }) {
+        case "允许": return Resolution(allow: true)
+        case "本会话总是允许": return Resolution(allow: true, always: true)
+        default: return Resolution(allow: false)
+        }
+    }
+}
+
+/// The BeautifulUI style's terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…).
+/// The dialog is read off the screen and laid out as an approval card: question, numbered options with their descriptions, "其他回答…"
+/// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
+struct BUIScreenForm: View {
+    @Environment(AppModel.self) private var model
+    var interaction: Interaction
+    @State private var text = ""
+    @State private var sending: String?
+    @State private var showTerminal = false
+
+    var body: some View {
+        let screen = interaction.screen ?? ""
+        if let d = interaction.screenDialog {
+            dialog(d, screen: screen)
+        } else {
+            VStack(alignment: .leading, spacing: Theme.Space.m) { terminal(screen) }
+        }
+    }
+
+    /// The dialog as an approval card: the terminal's numbered options (推荐 for the suggested one), "Type something."
+    /// as the card's field, the dialog's detail on top. A tap sends the option to the terminal, as the plain form does.
+    private func dialog(_ d: ScreenParser.Dialog, screen: String) -> some View {
+        let choices = d.options.filter { $0.kind != .chat && $0.kind != .typeSomething }
+        let typing = d.options.first { $0.kind == .typeSomething }
+        return VStack(alignment: .leading, spacing: Theme.Space.m) {
+            if !d.steps.isEmpty { BUIScreenSteps(steps: d.steps) }
+            ApprovalCard(
+                questions: [ApprovalQuestion(
+                    d.question.isEmpty ? (d.header ?? "") : d.question,
+                    choices: choices.map { o in
+                        let (label, recommended) = QuestionForm.display(o.label)
+                        return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? "推荐" : nil)
+                    },
+                    eyebrow: d.steps.isEmpty && !d.question.isEmpty ? d.header : nil,
+                    allowsCustom: typing != nil, customPlaceholder: "其他回答…")],
+                skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
+                options: .panel(sending: sending != nil)
+            ) { answers in
+                let text = (answers.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if let typing, !text.isEmpty {
+                    send(typing.key, answer(typing, text: text))
+                } else if let n = answers.picks[0]?.first, choices.indices.contains(n) {
+                    send(choices[n].key, answer(choices[n]))
+                }
+            } context: { _ in
+                if let detail = d.detail {
+                    Text(detail)
+                        .font(Theme.Font.code)
+                        .foregroundStyle(.secondary)
+                        .padding(Theme.Space.m)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                }
+            }
+            HStack(spacing: Theme.Space.l) {
+                if let chat = d.options.first(where: { $0.kind == .chat }) {
+                    Button { send(chat.key, answer(chat)) } label: {
+                        Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button { withAnimation(Theme.Motion.standard) { showTerminal.toggle() } } label: {
+                    Label(showTerminal ? "收起终端" : "查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
+                }
+            }
+            .font(Theme.Font.captionMedium)
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.accent)
+            if showTerminal { terminal(screen) }
+        }
+    }
+
+    /// The raw screen, its keys and a line of text: for anything the dialog reading did not catch.
+    @ViewBuilder private func terminal(_ screen: String) -> some View {
+        TerminalText(text: screen, maxLines: 18)
+            .frame(maxHeight: 220)
+        TerminalKeyBar { keys in Task { await model.resolve(interaction, Resolution(keys: keys)) } }
+        HStack {
+            Group {
+                if interaction.secret == true {
+                    SecureField("输入密码（不会保存）", text: $text)
+                } else {
+                    TextField("输入文字发送到终端", text: $text)
+                }
+            }
+            .textFieldStyle(.plain)
+            .padding(Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            Button {
+                let t = text
+                text = ""
+                Task { await model.resolve(interaction, Resolution(keys: ["enter"], text: t)) }
+            } label: { Image(systemName: Theme.Icon.enter) }
+                .themedButton(prominent: true)
+                .disabled(text.isEmpty)
+        }
+    }
+
+    /// The answer for an option: by its key when the hub read the dialog (it checks the screen first), else the keys.
+    private func answer(_ opt: ScreenParser.Dialog.Option, text: String? = nil) -> Resolution {
+        if interaction.dialog != nil { return Resolution(text: text, option: opt.key) }
+        if let text { return Resolution(keys: ["enter"], text: text, preKeys: [opt.key]) }
+        return Resolution(keys: [opt.key])
+    }
+
+    private func send(_ key: String, _ r: Resolution) {
+        Haptics.tap()
+        sending = key
+        Task {
+            await model.resolve(interaction, r)
+            sending = nil
+        }
+    }
+}
+
+/// A multi-question dialog's questions, from the terminal's tab bar, as status pills: done ones green with a check,
+/// the rest numbered.
+struct BUIScreenSteps: View {
+    var steps: [ScreenParser.Dialog.Step]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Space.sm) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
+                    BUIPill(s.done ? s.label : "\(i + 1) \(s.label)", tone: s.done ? .green : .neutral,
+                            icon: s.done ? .symbol(Theme.Icon.done) : nil)
+                }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("共 \(steps.count) 个问题，已答 \(steps.filter(\.done).count) 个")
+    }
+}
