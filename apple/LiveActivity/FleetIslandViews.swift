@@ -14,6 +14,9 @@ enum FleetPalette {
     static let accent = Palette.systemBlue
     /// A system blue dark enough for white button labels (4.7:1).
     static let button = Palette.buttonBlue
+    /// The pictures of the island in 设置: where the camera sits, and another app's activity (a stand-in).
+    static let camera = Color(white: 0.12)
+    static let otherApp = Color(white: 0.35)
 
     static func color(_ phase: FleetState.Phase) -> Color {
         switch phase {
@@ -33,51 +36,148 @@ enum FleetPalette {
     }
 }
 
-/// One side of the compact Dynamic Island: a symbol and a short number. Counts take their state's color; the
-/// numbers (TPM, tokens…) stay white beside a coral symbol. `small` is the minimal island's circle.
+/// The island's symbols, one per meaning (the extension does not build `Theme.Icon`): the counts' symbols are the
+/// lock screen's too.
+enum FleetSymbol {
+    static let needsYou = "exclamationmark.bubble.fill"
+    static let working = "gearshape.fill"
+    static let unread = "circle.fill"
+    static let tpm = "bolt.fill"
+    static let tokens = "chart.bar.fill"
+    static let requests = "arrow.up.arrow.down"
+    static let load = "cpu"
+    static let assistant = "sparkle"
+    static let timer = "timer"
+}
+
+/// A cell that is a symbol and a number: what it shows and in which colors. Counts take their state's color; the
+/// numbers (TPM, tokens…) stay white beside a coral symbol.
+struct IslandPair {
+    var symbol: String
+    var text: String
+    var tint: Color
+    var number: Color = .white
+    /// 做完未看's dot: a smaller symbol than the others.
+    var dot = false
+
+    init?(_ cell: IslandCell) {
+        switch cell {
+        case let .needsYou(n): self.init(symbol: FleetSymbol.needsYou, text: "\(n)", tint: FleetPalette.needsYou, number: FleetPalette.needsYou)
+        case let .working(n): self.init(symbol: FleetSymbol.working, text: "\(n)", tint: FleetPalette.working, number: FleetPalette.working)
+        case let .unread(n): self.init(symbol: FleetSymbol.unread, text: "\(n)", tint: FleetPalette.unread, number: FleetPalette.unread, dot: true)
+        case let .tpm(n): self.init(symbol: FleetSymbol.tpm, text: FleetText.short(n), tint: FleetPalette.coral)
+        case let .tokens(n): self.init(symbol: FleetSymbol.tokens, text: FleetText.short(n), tint: FleetPalette.coral)
+        case let .requests(n): self.init(symbol: FleetSymbol.requests, text: FleetText.short(n), tint: FleetPalette.coral)
+        case let .load(_, p): self.init(symbol: FleetSymbol.load, text: "\(p)%", tint: FleetPalette.coral)
+        case .assistant, .timer, .empty: return nil
+        }
+    }
+
+    private init(symbol: String, text: String, tint: Color, number: Color = .white, dot: Bool = false) {
+        self.symbol = symbol
+        self.text = text
+        self.tint = tint
+        self.number = number
+        self.dot = dot
+    }
+}
+
+/// One side of the compact Dynamic Island: a symbol and a short number. `small` is the minimal island's size.
 struct IslandCellView: View {
     var cell: IslandCell
     var small = false
 
     var body: some View {
-        switch cell {
-        case let .needsYou(n):
-            pair(Image(systemName: "exclamationmark.bubble.fill"), "\(n)", FleetPalette.needsYou, number: FleetPalette.needsYou)
-        case let .working(n):
-            // Static: Live Activities do not run repeating symbol effects (a .rotate gear stayed still, 2026-10-29).
-            pair(Image(systemName: "gearshape.fill"), "\(n)", FleetPalette.working, number: FleetPalette.working)
-        case let .unread(n):
-            pair(Image(systemName: "circle.fill").font(.system(size: small ? 6 : 8)), "\(n)", FleetPalette.unread, number: FleetPalette.unread)
-        case let .tpm(n):
-            pair(Image(systemName: "bolt.fill"), FleetText.short(n), FleetPalette.coral)
-        case let .tokens(n):
-            pair(Image(systemName: "chart.bar.fill"), FleetText.short(n), FleetPalette.coral)
-        case let .requests(n):
-            pair(Image(systemName: "arrow.up.arrow.down"), FleetText.short(n), FleetPalette.coral)
-        case let .assistant(on):
-            Image(systemName: "sparkle")
-                .font(.system(size: small ? 12 : 15, weight: .bold))
-                .foregroundStyle(on ? FleetPalette.coral : Color.white.opacity(0.4))
-        case let .load(_, p):
-            pair(Image(systemName: "cpu"), "\(p)%", FleetPalette.coral)
-        case let .timer(since):
-            HStack(spacing: 3) {
-                Image(systemName: "timer").font(.system(size: 11, weight: .bold)).foregroundStyle(FleetPalette.working)
-                Text(timerInterval: since...Date.distantFuture, countsDown: false, showsHours: false)
-                    .font(.system(size: 13, weight: .semibold)).monospacedDigit().lineLimit(1)
-                    .frame(maxWidth: 40, alignment: .leading)
+        if let pair = IslandPair(cell) {
+            IslandPairView(pair: pair, small: small)
+        } else {
+            switch cell {
+            case let .assistant(on):
+                Image(systemName: FleetSymbol.assistant)
+                    .font(.system(size: small ? IslandMetrics.smallStar : IslandMetrics.star, weight: .bold))
+                    .foregroundStyle(on ? FleetPalette.coral : Color.white.opacity(0.4))
+            case let .timer(since):
+                HStack(spacing: IslandMetrics.gap) {
+                    Image(systemName: FleetSymbol.timer).font(.system(size: IslandMetrics.timerSymbol, weight: .bold))
+                        .foregroundStyle(FleetPalette.working)
+                    Text(timerInterval: since...Date.distantFuture, countsDown: false, showsHours: false)
+                        .font(.system(size: IslandMetrics.timerNumber, weight: .semibold)).monospacedDigit().lineLimit(1)
+                        .frame(maxWidth: IslandMetrics.timerWidth, alignment: .leading)
+                }
+            default:
+                EmptyView()
             }
-        case .empty:
-            EmptyView()
         }
     }
+}
 
-    private func pair(_ symbol: some View, _ text: String, _ tint: Color, number: Color = .white) -> some View {
-        HStack(spacing: small ? 1 : 3) {
-            symbol.font(.system(size: small ? 10 : 13, weight: .bold)).foregroundStyle(tint)
-            Text(text).font(.system(size: small ? 12 : 15, weight: .bold, design: .rounded)).monospacedDigit()
-                .foregroundStyle(number).lineLimit(1).minimumScaleFactor(0.7)
+/// The symbol and the number side by side, at their full size.
+struct IslandPairView: View {
+    var pair: IslandPair
+    var small: Bool
+
+    var body: some View {
+        HStack(spacing: small ? IslandMetrics.smallGap : IslandMetrics.gap) {
+            Image(systemName: pair.symbol)
+                .font(pair.dot ? .system(size: small ? IslandMetrics.smallDot : IslandMetrics.dot) : IslandMetrics.symbolFont(small: small))
+                .foregroundStyle(pair.tint)
+            IslandNumber(pair: pair, small: small)
         }
+    }
+}
+
+/// The number, never shortened or shrunk.
+struct IslandNumber: View {
+    var pair: IslandPair
+    var small: Bool
+    var text: String?
+
+    var body: some View {
+        Text(text ?? pair.text).font(IslandMetrics.numberFont(small: small)).monospacedDigit()
+            .foregroundStyle(pair.number).lineLimit(1).fixedSize()
+    }
+}
+
+/// The Fleet in one glyph: the minimal island (another app's activity beside ours, StandBy) and a compact side the
+/// system limits in width (iPhone 18 Pro beside another app's activity, landscape, iPhone Duo), where the compact
+/// island's other side is left empty and the system hides it. The most urgent count (需要你 > 在工作 > 做完未看), whole
+/// (IslandFitTests): its symbol and number while they fit, in a limited side's 28 pt circle the number in a ring of its
+/// state's color from 10 on, and 99+ in its color past 99. Chosen by the count: outside limited mode the island offers
+/// no width, it grows with what it shows (up to 35 pt for the minimal island), so `ViewThatFits` would always pick
+/// the first.
+struct IslandGlyph: View {
+    var cell: IslandCell
+    var limited: Bool
+
+    enum Look: Equatable { case pair, ring, many }
+
+    static func look(_ count: Int, limited: Bool) -> Look {
+        if count > 99 { return .many }
+        return limited && count > 9 ? .ring : .pair
+    }
+
+    var body: some View {
+        if let count = cell.count, let pair = IslandPair(cell) {
+            switch Self.look(count, limited: limited) {
+            case .pair: IslandPairView(pair: pair, small: true)
+            case .ring: IslandRing(pair: pair)
+            case .many: IslandNumber(pair: pair, small: true, text: FleetText.many)
+            }
+        } else {
+            IslandCellView(cell: cell, small: true)
+        }
+    }
+}
+
+/// A count in a ring of its state's color, for a limited side where its symbol does not fit: the ring says it is a
+/// count, its color which one.
+struct IslandRing: View {
+    var pair: IslandPair
+
+    var body: some View {
+        IslandNumber(pair: pair, small: true)
+            .frame(width: IslandMetrics.limitedContent, height: IslandMetrics.limitedContent)
+            .overlay(Circle().strokeBorder(pair.tint, lineWidth: IslandMetrics.ring))
     }
 }
 
@@ -89,11 +189,11 @@ struct IslandPreview: View {
         let sides = IslandCell.sides(state)
         HStack(spacing: 0) {
             IslandCellView(cell: sides.left).frame(maxWidth: .infinity, alignment: .leading)
-            Capsule().fill(Color(white: 0.12)).frame(width: 70, height: 22) // where the camera sits
+            IslandCamera()
             IslandCellView(cell: sides.right).frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 14)
-        .frame(width: 230, height: 36)
+        .padding(.horizontal, IslandMetrics.previewInset)
+        .frame(width: IslandMetrics.previewWidth, height: IslandMetrics.previewHeight)
         .background(Capsule().fill(.black))
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .ignore)
@@ -109,5 +209,42 @@ struct IslandPreview: View {
         case .empty: "空"
         default: FleetText.stat(cell) ?? ""
         }
+    }
+}
+
+/// The island beside another app's activity, for 设置 › 通知 › 灵动岛: our glyph by the camera, the other app's activity
+/// (a gray stand-in) in a circle of its own. Which of the two sits by the camera is the system's choice; ours reads
+/// the same in either place.
+struct IslandSharedPreview: View {
+    var state: FleetState
+
+    var body: some View {
+        let cell = IslandCell.minimal(state)
+        HStack(spacing: IslandMetrics.previewGap) {
+            HStack(spacing: 0) {
+                IslandGlyph(cell: cell, limited: true)
+                    .frame(width: IslandMetrics.limited)
+                Spacer(minLength: 0)
+                IslandCamera()
+            }
+            .padding(.horizontal, IslandMetrics.previewInset / 2)
+            .frame(width: IslandMetrics.previewSharedWidth, height: IslandMetrics.previewHeight)
+            .background(Capsule().fill(.black))
+            Circle().fill(FleetPalette.otherApp)
+                .frame(width: IslandMetrics.previewOther, height: IslandMetrics.previewOther)
+                .frame(width: IslandMetrics.previewHeight, height: IslandMetrics.previewHeight)
+                .background(Circle().fill(.black))
+        }
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("和其他 App 共用时：" + IslandPreview.describe(cell))
+    }
+}
+
+/// Where the camera sits, in the pictures of the island.
+private struct IslandCamera: View {
+    var body: some View {
+        Capsule().fill(FleetPalette.camera)
+            .frame(width: IslandMetrics.previewCamera.width, height: IslandMetrics.previewCamera.height)
     }
 }

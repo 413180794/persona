@@ -3,8 +3,9 @@ import SwiftUI
 import WidgetKit
 
 /// Draws the Fleet activity: lock screen (and the Watch Smart Stack's small family), Dynamic Island compact / minimal /
-/// expanded. The compact island is two counts or numbers the device chose (IslandCell, 设置 › 通知 › 灵动岛); the expanded
-/// island and the lock screen lead with the same counts, then the agents. Status colors are Jarvis' agent colors
+/// expanded. The compact island is two counts or numbers the device chose (IslandCell, 设置 › 通知 › 灵动岛); beside
+/// another app's activity it is one glyph, the most urgent count (`IslandGlyph`); the expanded island and the lock
+/// screen lead with the same counts, then the agents. Status colors are Jarvis' agent colors
 /// (docs/agent-states.md), fixed rather than following the app's style: the extension cannot read it.
 struct FleetLiveActivity: Widget {
     /// Agent rows that fit: the expanded island and the lock screen are both capped at about 160 pt.
@@ -55,11 +56,11 @@ struct FleetLiveActivity: Widget {
                     .padding(.top, 4)
                 }
             } compactLeading: {
-                IslandCellView(cell: IslandCell.sides(state).left).padding(.leading, 2)
+                IslandSide(state: state, leading: true)
             } compactTrailing: {
-                IslandCellView(cell: IslandCell.sides(state).right).padding(.trailing, 2)
+                IslandSide(state: state, leading: false)
             } minimal: {
-                IslandCellView(cell: IslandCell.minimal(state), small: true)
+                IslandWidth { limited in IslandGlyph(cell: IslandCell.minimal(state), limited: limited) }
             }
             .widgetURL(FleetLink.whole(state))
             .keylineTint(FleetPalette.accent)
@@ -70,11 +71,53 @@ struct FleetLiveActivity: Widget {
 
 // MARK: - Pieces
 
+/// One side of the compact island. When the system limits its width (another app's activity beside ours on iPhone 18
+/// Pro, landscape, iPhone Duo: 28 pt a side, both sides together by the camera), the leading side is the minimal
+/// island's glyph and the trailing one is empty, which the system then hides: both sides squeezed into 28 pt each cut
+/// 「⚙3 📊42M」 to 「⚙3 📊4」 (2026-11-02). Apple's advice for limited width, and the leading side alone says what matters.
+struct IslandSide: View {
+    var state: FleetState
+    var leading: Bool
+
+    var body: some View {
+        IslandWidth { limited in
+            if limited {
+                if leading { IslandGlyph(cell: IslandCell.minimal(state), limited: true) }
+            } else {
+                let sides = IslandCell.sides(state)
+                IslandCellView(cell: leading ? sides.left : sides.right)
+                    .padding(leading ? .leading : .trailing, IslandMetrics.edge)
+            }
+        }
+    }
+}
+
+/// Whether the system limits the island's width (`isDynamicIslandLimitedInWidth`, iOS 27). Before iOS 27 it is never
+/// said, and the compact island is the two sides as always.
+struct IslandWidth<Content: View>: View {
+    @ViewBuilder var content: (Bool) -> Content
+
+    var body: some View {
+        if #available(iOS 27.0, *) {
+            Reader(content: content)
+        } else {
+            content(false)
+        }
+    }
+
+    @available(iOS 27.0, *)
+    private struct Reader: View {
+        @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+        var content: (Bool) -> Content
+        var body: some View { content(limited) }
+    }
+}
+
 /// The coral four-point star on a dark disc, like the app icon.
 struct FleetMark: View {
     var size: CGFloat
     var body: some View {
-        Image(systemName: "sparkle")
+        Image(systemName: FleetSymbol.assistant)
             .font(.system(size: size * 0.6, weight: .bold))
             .foregroundStyle(FleetPalette.coral)
             .frame(width: size, height: size)
@@ -139,9 +182,9 @@ struct FleetCounts: View {
     var short = false
     var body: some View {
         HStack(spacing: short ? 8 : 10) {
-            if state.needsYou > 0 { chip(Image(systemName: "exclamationmark.bubble.fill"), "\(state.needsYou)", "需要你", FleetPalette.needsYou) }
-            if state.working > 0 { chip(Image(systemName: "gearshape.fill"), "\(state.working)", "在工作", FleetPalette.working) }
-            if state.unread > 0 { chip(Image(systemName: "circle.fill").font(.system(size: 7)), "\(state.unread)", "未看", FleetPalette.unread) }
+            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", "需要你", FleetPalette.needsYou) }
+            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", "在工作", FleetPalette.working) }
+            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", "未看", FleetPalette.unread) }
         }
         .layoutPriority(1)
     }

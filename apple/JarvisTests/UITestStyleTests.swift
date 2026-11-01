@@ -4,7 +4,8 @@ import Testing
 /// Every UI test launches in a style it names (`UITestStyle` in JarvisUITests): the app keeps the style the last run
 /// left, and the BeautifulUI style draws its own components, so a test that leaves it out finds another test's looks.
 /// A launch is `launchPinned()` (not `launch()` or `launchJarvis()`), or the file passes `-ui.style` itself (a test about
-/// one style). Reads the sources.
+/// one style). Another app (`XCUIApplication(bundleIdentifier:)`, e.g. LiveActivityShots' peer) has no style to pin.
+/// Reads the sources.
 struct UITestStyleTests {
     @Test func everyLaunchPinsAStyle() throws {
         let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "JarvisUITests")
@@ -14,7 +15,11 @@ struct UITestStyleTests {
         for f in files {
             let text = try String(contentsOf: f, encoding: .utf8)
             guard !text.contains("\"-ui.style\"") else { continue }
+            let others = try NSRegularExpression(pattern: #"let (\w+) = XCUIApplication\(bundleIdentifier:"#)
+                .matches(in: text, range: NSRange(text.startIndex..., in: text))
+                .compactMap { Range($0.range(at: 1), in: text).map { String(text[$0]) + ".launch()" } }
             for (i, line) in text.components(separatedBy: "\n").enumerated() where line.contains(".launch()") || line.contains(".launchJarvis()") {
+                if others.contains(where: { line.contains($0) }) { continue }
                 found.append("\(f.lastPathComponent):\(i + 1): \(line.trimmingCharacters(in: .whitespaces))")
             }
         }

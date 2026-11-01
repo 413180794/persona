@@ -104,7 +104,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             }
         }
         if let phase = d.string(forKey: "showFleetSample") {
-            LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"))
+            LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"),
+                                                     count: d.integer(forKey: "showFleetCount"))
         }
         let automation = d.string(forKey: "pairURL") != nil
         #else

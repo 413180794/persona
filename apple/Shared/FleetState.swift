@@ -210,6 +210,9 @@ nonisolated enum FleetText {
         }
     }
 
+    /// A count past 99 where the island has room for one short number (IslandGlyph).
+    static let many = "99+"
+
     /// The words for a number on the expanded island / lock screen.
     static func stat(_ cell: IslandCell) -> String? {
         switch cell {
@@ -316,10 +319,13 @@ nonisolated enum IslandCell: Hashable, Sendable {
     case timer(Date)
     case empty
 
-    var isStatus: Bool {
+    var isStatus: Bool { count != nil }
+
+    /// How many agents a status cell counts.
+    var count: Int? {
         switch self {
-        case .needsYou, .working, .unread: true
-        default: false
+        case let .needsYou(n), let .working(n), let .unread(n): n
+        default: nil
         }
     }
 

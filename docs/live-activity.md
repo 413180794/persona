@@ -24,12 +24,65 @@ App 负责开始活动、上报 token；Widget 扩展（`apple/JarvisWidgets`）
 ```
 
 - 「需要你」永远占左侧（盖过自定义的选择），红色；右侧选了「状态数量」时显示左侧之后的下一类。规则在 `IslandCell.sides`（`apple/Shared/FleetState.swift`），单元测试钉住。
-- 最小态（和别的 App 的活动并存时只剩一个圈）：最急的那一类的符号 + 数量。
+- 和别的 App 的活动并存时（最小态、限宽的紧凑态）：只显示最急的那一类，见下一节。
 - 展开态：左上是三类数量，右上是选了的数字（如「12k/分」），下面照旧是 Agent 列表和按钮。锁屏头部同样：数量 + 选了的数字；选了两个数字时数量只留符号和数字，免得挤成「3 在…」。
 - 齿轮不转：实时活动里 `symbolEffect(.rotate, options: .repeating)` 不动（隔 0.4 秒拍两张，齿轮区域像素差 ≤1，和静止区域一样），所以用静态齿轮；脉冲之类的重复动画同理。
 - 不显示花费（用户决定，2026-10-29）：订阅用户看「等价 API 花费」会误导，只做 token 类指标。
-- 设置：设置 › 通知 › 实时活动 › 灵动岛（`IslandSettingsView`），顶部是「平时 / 有 Agent 需要你时」两张预览；存在 hub 上按设备分开（`prefs.island`，`notify.go IslandPrefs`）。
+- 设置：设置 › 通知 › 实时活动 › 灵动岛（`IslandSettingsView`），顶部是「平时 / 有 Agent 需要你时 / 和其他 App 共用时」三张预览；存在 hub 上按设备分开（`prefs.island`，`notify.go IslandPrefs`）。
   选「机器负载」时可以选看哪台，不选就是最忙的那台。
+
+### 和其他 App 共用灵动岛（2026-11-02）
+
+用户的截图：另一个 App 也有实时活动（右边单独一个圆「8分」），Jarvis 只剩左边一截「⚙4📊⁚」，后半截被截掉。
+
+**规则**（iOS 27；Apple 的 Displaying live data with Live Activities 和 HIG Live Activities 2026-10 更新，模拟器实测）
+
+- 只有一个活动：紧凑态，摄像头两侧各一块。系统不给宽度，内容多宽岛就多宽：iPhone 17 / 17 Pro 每侧最多约 94pt，
+  iPhone 18 Pro / Pro Max 的摄像头窄（岛本体约 95pt，17 是 125pt），每侧 100pt 也放得下；再宽就截掉。
+- 几个 App 都有活动：系统挑两个（有的机型三个）上岛，谁贴着岛、谁单独一圈由系统定，App 管不了。
+  - iPhone 18 Pro / Pro Max：两个都用**紧凑态，但限宽**：每侧 28×28pt，左右两块并排在一处（贴岛的在摄像头左边，另一个单独一个胶囊）。
+    用户的截图就是这样：「⚙4」和「📊42M」两块挤在 56pt 里，第二块被截。
+  - 其他有灵动岛的机型（17、17 Pro、16 Pro…）：两个都用**最小态**，一个贴着岛（左），一个单独的圆（右）。宽 36.67–45pt，
+    内容最多显示 35pt，多的截掉；系统同样不给宽度。
+  - 横屏、iPhone Duo（岛竖着，两块上下叠）：只有自己一个活动也是限宽的紧凑态，每侧 28pt。
+- 同一个 App 的几个活动：只有 `relevanceScore` 最高的上岛（Fleet 只有一个，不涉及）。
+
+**App 能知道什么**
+
+- 能：iOS 27 的 `isDynamicIslandLimitedInWidth`（WidgetKit 的环境值）。扩展画某一块时知道它被限宽了（上面三种限宽的情况实测都是 true）。
+  Apple 的建议：限宽时 leading 放最小态那样的一个图形，trailing 给空视图，系统会把空的那一块藏起来。
+- 不能：当前是哪种呈现（紧凑 / 最小 / 展开由系统分别渲染，视图只知道自己是哪一块）、有没有别的 App 的活动、自己是贴着岛还是单独一圈。
+  App 进程里更拿不到；`relevanceScore` 只排自家的活动。
+- 所以每种呈现都要自己就能看懂，不能指望另一半。
+
+**做法**（`IslandGlyph`、`IslandSide`，`apple/LiveActivity/FleetIslandViews.swift`、`apple/JarvisWidgets/FleetLiveActivity.swift`）
+
+- 最小态和限宽时的 leading 是同一个图形：最急的那一类（需要你 > 在工作 > 做完未看），完整显示，不受「样式」设置影响；限宽时 trailing 为空，系统把它藏掉。
+  非限宽的紧凑态照旧按设置显示两侧。
+
+```
+            1 位        2 位         3 位及以上
+最小态      ⚙3          ⚙12          99+（状态色）      内容 ≤ 35pt
+限宽 28pt   ⚙3          (12) 状态色圈  99+（状态色）      在 28pt 的圆里
+```
+
+- 按数量选样子，不用 `ViewThatFits`：非限宽时系统不给宽度（视图拿到的是「要多宽给多宽」），`ViewThatFits` 永远选第一个。
+- 尺寸都在 `IslandMetrics`（`apple/Shared/Design/IslandMetrics.swift`，扩展也编译）：限宽 28、图形可用 24（圆里一行字的宽度）、
+  最小态 45 / 内容 35、紧凑一侧最多约 94，以及符号和数字的字号。
+- 设置页加了「和其他 App 共用时」的预览（`IslandSharedPreview`）：贴着摄像头的是 Jarvis 的图形，右边灰色的圆代表别的 App。
+
+**实测**（iOS 27 模拟器，每台各拍单独 / 并存 / 横屏）
+
+| 机型 | 单独（紧凑态每侧） | 和别的 App 并存 | 横屏 |
+| --- | --- | --- | --- |
+| iPhone 18 Pro / Pro Max | 随内容变宽，100pt 也放得下 | 紧凑态限宽，每侧 28×28 | 限宽 28 |
+| iPhone 17 / 17 Pro | 随内容变宽，最多约 94pt | 最小态，内容最多 35pt | 限宽 28 |
+| iPhone Duo（iOS 27.1） | — | 限宽 28，两块上下叠 | — |
+
+**验证**：`IslandFitTests` 把最小态、限宽、紧凑一侧在 1 / 2 / 3 / 4 位数时按各自的尺寸画出来，检查画出的像素都在给的范围里
+（字不缩、不省略，放不下就会溢出被查到）。模拟器上用另一个 App 的活动复现：`scripts/island_peer.sh <模拟器>` 装一个只有实时活动的
+示例 App（`apple/IslandPeer`，「8分」），`LiveActivityShots` 带 `JARVIS_ISLAND_PEER=dev.example.islandpeer` 时多拍「并存」和「横屏」两张，
+`JARVIS_FLEET_COUNT=12` 把编造的数量改成两位数。
 
 - 不算进来：已看（idle）、离线、屏蔽的 Agent、`/loop` 等下次唤醒的；助手（对话 tab）只有在问你时才算。规则和 Agents 列表一致（`hub/liveactivity.go buildFleet`）。
 - 条目顺序：需要你（最早的请求在前）→ 工作中（跑得最久的在前）→ 做完未看（最新的在前）；推送里最多 3 条，界面画 2 条，其余「+N 个」。
@@ -122,7 +175,8 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 ## 验证
 
 - 布局：`-showFleetSample needsYou|working|done`（`-fleetDetails YES` 看锁屏详情，`-fleetIsland b|c|custom:assistant,load` 选灵动岛两侧）用编造的数据开一个活动，不需要 hub。
-  UI 测试 `LiveActivityShots` 读 `JARVIS_FLEET_ISLAND`，紧凑态隔 0.4 秒拍两张（`compact` / `compact2`），用来比对有没有动画。
+  UI 测试 `LiveActivityShots` 读 `JARVIS_FLEET_ISLAND`，紧凑态隔 0.4 秒拍两张（`compact` / `compact2`），用来比对有没有动画；
+  `JARVIS_ISLAND_PEER`（另一个 App 的活动并存、横屏）和 `JARVIS_FLEET_COUNT`（`-showFleetCount`，数量改成几位数）见上面「和其他 App 共用灵动岛」。
   设置页：`-tab settings -openNotificationSettings YES -openIslandSettings YES`。
   `simctl io screenshot` 拍不到灵动岛和锁屏，用 UI 测试 `LiveActivityShots` 拍紧凑 / 展开 / 锁屏三张（`docs/testing.md`）。
 - 推送：`xcrun simctl push` 不支持实时活动；但模拟器能收真实的 APNs sandbox 推送。DEBUG 构建在系统日志里打印活动的 push token
@@ -136,6 +190,8 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 - 示例里先 `endAll()` 再 `request` 会撞上：正在结束的活动仍然报 `.active`，新的就没开出来。直接用 `apply`（有就更新）。
 - 锁屏 / 展开态超过约 160pt 会被裁掉（顶部或底部），而且不报错：加内容前先拍图看。
 - `Text(timerInterval:)` 会占满可用宽度，要给固定宽度，否则把旁边的文字挤成「3…」。
+- 灵动岛的紧凑态和最小态不给宽度（`GeometryReader` 量到的是它的默认大小），内容多宽岛就多宽，到上限才截；只有限宽时给 28pt。
+  所以 `ViewThatFits` 在这里没用，按内容自己选样子，用 `IslandFitTests` 量。
 - 重复的 symbol 动画（`.rotate`、`.pulse` 加 `.repeating`）在实时活动里不动，App 里的预览却会动：两边都用静态符号，免得预览骗人。
 - `sips -c 高 宽 --cropOffset 0 0` 会被当成居中裁切（偏移 0 等于没给）；从顶部裁要用 `--cropOffset 1 0` 之类。
 - UI 测试把模拟器锁屏后要解锁，否则下一次 `xcodebuild test` 报「test runner hung before establishing connection」。

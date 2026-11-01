@@ -367,3 +367,6 @@ xcrun xcresulttool export attachments --path /tmp/shots.xcresult --output-path /
 ```
 
 `JARVIS_FLEET_SAMPLE=current` 不启动 App，只拍活动现在的样子（配合真实 APNs 推送，见 `docs/live-activity.md` 验证一节）。
+和别的 App 的活动共用灵动岛：先 `scripts/island_peer.sh <模拟器 udid>` 装示例 App（`apple/IslandPeer`，只有一个「8分」的实时活动），
+再加 `TEST_RUNNER_JARVIS_ISLAND_PEER=dev.example.islandpeer`，多拍 `-shared`（两个活动并存）和 `-landscape`（示例 App 在前台横屏，Jarvis 的活动单独在横屏的岛上）；
+`TEST_RUNNER_JARVIS_FLEET_COUNT=12` 把编造的数量都改成 12（看两位、三位数）。iPhone 18 Pro 和 17 Pro 的规则不同，两台都要拍（`docs/live-activity.md`「和其他 App 共用灵动岛」）。

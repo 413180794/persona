@@ -242,6 +242,9 @@
   `simctl push` 不支持实时活动推送，但模拟器能收真实的 APNs sandbox 推送（`TestManualLiveActivityPush`）。
   重复的 symbol 动画（`.rotate` / `.pulse` + `.repeating`）在活动里不动（像素比对验证过），别设计「转动的齿轮」这种效果。
   灵动岛上的数字（TPM、token、负载）会占推送预算：hub 只推设备显示的项、取两位有效数字、每台最多每分钟一次。
+  和别的 App 的活动共用灵动岛时，iPhone 18 Pro 上两个都是限宽 28pt 的紧凑态（左右两块挤在一起，第二块被截），17 Pro 等是最小态：
+  限宽靠 iOS 27 的 `isDynamicIslandLimitedInWidth` 知道，其余（哪种呈现、有没有别的 App）App 都感知不到；紧凑 / 最小态不给宽度，`ViewThatFits` 没用。
+  两种机型都要拍（`scripts/island_peer.sh` + `LiveActivityShots`，`docs/live-activity.md`「和其他 App 共用灵动岛」）。
 - 机器页面的计数和列表不算「对话」tab 助手的无头会话（`MachineDetailView.agents`，和 Agents 列表一致）：它们跑在 hub 那台机器上，
   以前「服务器」卡片的「运行中」把它们也算进去了。
 - 体验模式（`docs/ios.md`「体验模式」）挂在 `APIClient` / `LiveConnection` 下面（`DemoHub`），页面代码不写 `if demo`：新页面要的接口在

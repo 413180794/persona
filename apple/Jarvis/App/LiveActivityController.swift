@@ -178,9 +178,9 @@ final class LiveActivityController {
 #if DEBUG
 extension LiveActivityController {
     /// `-showFleetSample needsYou|working|done` (`-fleetDetails YES` for names on the lock screen, `-fleetIsland b`,
-    /// `c` or `custom:assistant,load` for the island's sides): starts the activity with made-up agents, no hub needed,
-    /// for screenshots.
-    func showSample(_ phase: String, details: Bool, island spec: String?) {
+    /// `c` or `custom:assistant,load` for the island's sides, `-showFleetCount 12` for that many in each kind there is):
+    /// starts the activity with made-up agents, no hub needed, for screenshots.
+    func showSample(_ phase: String, details: Bool, island spec: String?, count: Int = 0) {
         UserDefaults.standard.set(details, forKey: Self.detailsKey)
         var island = IslandPrefs()
         if let spec {
@@ -204,6 +204,11 @@ extension LiveActivityController {
         case "working": FleetState(phase: .working, working: 3, unread: 1, items: [work, done], workingSince: now - 754)
         case "done": FleetState(phase: .done, unread: 1, items: [done])
         default: FleetState(phase: .needsYou, needsYou: 2, working: 3, unread: 1, items: [ask, plan, work], workingSince: now - 754)
+        }
+        if count > 0 {
+            state.needsYou = state.needsYou > 0 ? count : 0
+            state.working = state.working > 0 ? count : 0
+            state.unread = state.unread > 0 ? count : 0
         }
         state.assistant = phase != "done"
         state.stats = .init(tpm: 12000, tokens: 42_000_000, requests: 1200,

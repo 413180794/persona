@@ -216,6 +216,7 @@ targets:
       - path: Shared/FleetState.swift
       - path: Shared/StatusPalette.swift
       - path: Shared/Design/Palette.swift
+      - path: Shared/Design/IslandMetrics.swift
     info:
       path: JarvisWidgets/Info.plist
       properties:
