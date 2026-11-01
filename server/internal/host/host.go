@@ -15,11 +15,13 @@ import (
 const (
 	Herdr = "herdr"
 	Orca  = "orca" // not implemented yet (docs/plan-orca-support.md)
+	// HerdrCore is herdr-core (hc), the runtime behind the Herdr desktop app: not classic herdr, a host of its own.
+	HerdrCore = "herdr-core"
 )
 
 // Kinds are the host kinds a stored pane may be prefixed with; the list is fixed, not what a machine registers, so
 // a stored pane means the same everywhere.
-var Kinds = []string{Herdr, Orca}
+var Kinds = []string{Herdr, Orca, HerdrCore}
 
 // Host is what every terminal host provides. Pane ids in what it returns (Agent.PaneID, Created.Pane) are PaneRefs
 // of its own kind; the PaneRefs it is given are always of its kind.
@@ -58,6 +60,13 @@ type Watcher interface {
 	// panes are the agent panes whose state changes to report (a different set needs a new Watch); the first call of
 	// changed means the stream is live (snapshot then, to cover the gap before it).
 	Watch(ctx context.Context, panes []PaneRef, changed func()) error
+}
+
+// PlainScreen is a host whose screens may come without colors: when PlainScreen is true, Read with ReadOpts.ANSI
+// fails (ErrUnsupported) and the node judges a screen by its text alone (the dialog check before a send, no draft
+// check: a draft and Claude's grey placeholder look the same without colors). A host without it keeps colors.
+type PlainScreen interface {
+	PlainScreen() bool
 }
 
 // Launcher opens new panes running a command.
@@ -120,6 +129,9 @@ var (
 	ErrAttachBusy = errors.New("attach_busy")
 	// ErrTakenOver: the terminal being driven was taken by another client.
 	ErrTakenOver = errors.New("taken_over")
+	// ErrNotRunning: the host is not running on this machine (no socket): it has no panes, as opposed to panes it
+	// cannot be asked about right now.
+	ErrNotRunning = errors.New("not running")
 	// ErrUnsupported: the host cannot do this (a capability it lacks). Errors carrying it start with "unsupported",
 	// the prefix the hub falls back on.
 	ErrUnsupported = errors.New("unsupported")

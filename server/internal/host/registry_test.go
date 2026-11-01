@@ -92,3 +92,13 @@ func TestMark(t *testing.T) {
 		t.Fatal("Mark(nil) must stay nil")
 	}
 }
+
+func TestParsePaneHerdrCore(t *testing.T) {
+	ref := ParsePane("herdr-core:t1b")
+	if ref != (PaneRef{HerdrCore, "t1b"}) || ref.String() != "herdr-core:t1b" {
+		t.Errorf("ParsePane(herdr-core:t1b) = %+v (%s)", ref, ref.String())
+	}
+	if h, ref := NewRegistry(stub{Herdr}).Pane("herdr-core:t7"); h != nil || ref.Kind != HerdrCore {
+		t.Errorf("a herdr-core pane without that host went to %v, %+v", h, ref)
+	}
+}
