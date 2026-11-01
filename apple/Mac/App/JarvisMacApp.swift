@@ -248,6 +248,9 @@ enum MacLaunchArguments {
         if let s = d.string(forKey: "pairURL"), let cfg = ServerConfig(pairURL: s) {
             Keychain.serverConfig = cfg
             model.adopt(cfg)
+            // Snapshots skip the keychain (Keychain.load), so AppModel.init saw no config and left the outbox on disk:
+            // bring it back as a launch with a stored pairing does (it skips messages already there).
+            model.restoreOutbox()
         }
         if d.bool(forKey: "openChatsFresh") { ChatCache.removeAll() }
         if d.bool(forKey: "openAgentsFresh") {
