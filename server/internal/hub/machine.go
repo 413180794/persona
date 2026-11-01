@@ -209,7 +209,9 @@ func (m *Machine) open(ctx context.Context, via string) (*link, error) {
 	}
 	var lastErr strings.Builder
 	var errMu sync.Mutex
+	stderrDone := make(chan struct{})
 	go func() {
+		defer close(stderrDone)
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
 			line := sc.Text()
@@ -221,7 +223,13 @@ func (m *Machine) open(ctx context.Context, via string) (*link, error) {
 		}
 	}()
 	return &link{r: stdout, w: stdin,
+		// Asked once the link has failed: stdout can close before ssh's last stderr line is read, so give the reader a
+		// moment to finish (TestBothWaysFailing lost "ssh: connect to host …" that way on a loaded machine).
 		lastErr: func() string {
+			select {
+			case <-stderrDone:
+			case <-time.After(2 * time.Second):
+			}
 			errMu.Lock()
 			defer errMu.Unlock()
 			return lastErr.String()
