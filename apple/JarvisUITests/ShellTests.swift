@@ -68,6 +68,21 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(button("shell-assistant").waitForExistence(timeout: 5), "back on 助手 after closing 设置")
     }
 
+    /// 机器 in the drawer: the one machines page (agents and monitoring together, docs/machines.md「App」), and a card
+    /// opens the machine with its agents and charts on one page.
+    @MainActor func testDrawerOpensMachines() {
+        launch()
+        see(button("assistant-sidebar-button"), "☰", timeout: 15).tapCenter()
+        see(button("sidebar-machines"), "机器 in the drawer").tap()
+        see(app.navigationBars["机器"], "机器 pushed on 助手")
+        let server = see(app.staticTexts["服务器"], "a machine's card")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "个 Agent 工作中")).firstMatch.exists,
+                      "the agents counted on the card")
+        server.tap()
+        see(app.segmentedControls["metric-range"], "the machine's charts on its page")
+        XCTAssertTrue(app.navigationBars["服务器"].exists)
+    }
+
     @MainActor func testComposerGrowsWhileTyping() {
         launch()
         let field = see(app.textViews["shell-composer-field"].firstMatch.exists ? app.textViews["shell-composer-field"].firstMatch

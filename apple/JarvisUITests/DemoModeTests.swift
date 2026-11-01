@@ -206,14 +206,15 @@ final class DemoModeTests: XCTestCase {
         back()
         toTop()
 
-        // Machines: the dashboard, one machine, its 24 hours.
+        // Machines: all of them, one machine, its 24 hours.
         menu.tap()
-        see(app.buttons["机器监控"], "机器监控 in the menu").tap()
-        see(app.staticTexts["服务器"], "the dashboard")
-        noErrors("dashboard")
-        shot("dashboard")
+        see(app.buttons["机器"], "机器 in the menu").tap()
+        see(app.staticTexts["服务器"], "the machines")
+        noErrors("machines")
+        shot("machines")
         app.staticTexts["服务器"].tap()
         let range = see(app.segmentedControls["metric-range"], "the machine page")
+        if !range.isHittable { app.swipeUp() }
         range.buttons["24 小时"].tap()
         see(app.descendants(matching: .any)["chart-CPU"], "the CPU chart")
         noErrors("machine")

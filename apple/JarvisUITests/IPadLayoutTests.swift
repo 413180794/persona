@@ -56,6 +56,32 @@ final class IPadLayoutTests: XCTestCase {
 
     /// The list column reaches the top of the screen (the strip under the status bar has its color), and when the
     /// column is closed the strip is the detail's again (2026-10-31: the list looked cut off at the top).
+    /// 机器 from the Agents menu opens in the detail column, its cards side by side; a card opens the machine there too,
+    /// the list column staying (docs/machines.md「App」).
+    @MainActor func testMachinesInTheDetailColumn() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        app.launchJarvis()
+        let menu = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组")).firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 20), app.debugDescription)
+        menu.tap()
+        let item = app.buttons["机器"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
+        item.tap()
+        // The cards, not the machine names on the Agents rows in the list column.
+        func card(_ name: String) -> XCUIElement { app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + "、")).firstMatch }
+        let nas = card("NAS"), server = card("服务器")
+        XCTAssertTrue(server.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.searchFields.firstMatch.exists, "the Agents list stays in its column")
+        XCTAssertEqual(nas.frame.minY, server.frame.minY, accuracy: 2, "the first two cards side by side")
+        XCTAssertLessThan(nas.frame.minX, server.frame.minX, "the offline NAS first")
+        shot("machines")
+        server.tap()
+        XCTAssertTrue(app.segmentedControls["metric-range"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.searchFields.firstMatch.exists, "still split")
+        sleep(1)
+        shot("machine")
+    }
+
     @MainActor func testSidebarReachesTheTop() throws {
         XCUIDevice.shared.orientation = .portrait
         let base = app.launchArguments

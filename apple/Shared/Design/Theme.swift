@@ -300,6 +300,8 @@ nonisolated enum Theme {
         static let sidebarMin: CGFloat = 340
         static let sidebar: CGFloat = 400
         static let sidebarMax: CGFloat = 480
+        /// The narrowest column of a card grid (机器's cards): two side by side in an iPad's detail column.
+        static let cardColumn: CGFloat = 330
     }
 
     /// The system's sidebar column on iPad (iOS 26, the glass styles), measured from its pixels: the split fills the

@@ -186,9 +186,9 @@ struct ChatsView: View {
                     #if DEBUG
                     // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.
                     if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMachinePage") { openFromList(MachineRoute(id: m)) }
-                    // `-openMonitor all|<machine id>` (with `-tab dev`): 机器监控, or one machine's charts.
+                    // `-openMonitor all|<machine id>` (with `-tab dev`): 机器, or one machine's page.
                     if path.isEmpty, let m = UserDefaults.standard.string(forKey: "openMonitor") {
-                        if m == "all" { openFromList(MachineDashboardRoute()) } else { openFromList(MachineMonitorRoute(id: m)) }
+                        if m == "all" { openFromList(MachineListRoute()) } else { openFromList(MachineDetailRoute(id: m)) }
                     }
                     #endif
                     if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(machineFilter) == nil { machineFilter = "" }
@@ -342,7 +342,7 @@ private struct AgentsList: View {
         let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
-                                   onMonitor: { openFromList(MachineDashboardRoute()) })
+                                   onMachines: { openFromList(MachineListRoute()) })
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         List {
@@ -1275,9 +1275,8 @@ private struct AgentsDestinations: ViewModifier {
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id).splitDetailPage() }
             .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(machineID: r.id).splitDetailPage() }
+            .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id).splitDetailPage() }
-            .navigationDestination(for: MachineDashboardRoute.self) { _ in MachineDashboardView().splitDetailPage() }
-            .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id).splitDetailPage() }
     }
 }
 

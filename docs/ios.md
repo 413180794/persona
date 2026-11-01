@@ -62,9 +62,10 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   空间页顶部的机器按钮（「公司 Mac ›」）进机器页（`MachineSpacesView`）：这台机器的在线状态和各状态数量，进行中的项目（每个带最需要注意的
   那个 Agent 的最新一句）和空闲的项目，点进各自的空间页；不属于任何 herdr 空间的 Agent 直接列出；右上角 ⓘ 是机器详情。
   DEBUG：`-tab dev -openMachinePage <机器 id>`。
-- 机器监控（`docs/machines.md`）：Agents 列表左上角机器菜单最下面的「机器监控」是所有机器一屏的 Dashboard（系统图标、在线、CPU / 内存 / 网络
-  当前值和最近 1 小时迷你曲线、异常高亮），点卡片进机器的曲线页（1 / 6 / 24 小时，按住看某一时刻）；设置 › 机器 右上角、机器详情的「系统与监控」也能进。
-  机器卡片的图标换成了系统图标（`OSBadge`）。DEBUG：`-tab dev -openMonitor all|<机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`。
+- 机器（`docs/machines.md`「App」）：一个页面看全部机器，每台一张卡：在线、系统、Agent 数（需要你 / 工作中 / 空闲）、CPU / 内存 / 网络当前值和
+  最近 1 小时迷你曲线、告警、版本不一致时的「重新部署」，需要注意的排前面。点卡片进机器详情：上面是这台的 Agent（点进对话），下面是曲线
+  （1 / 6 / 24 小时，按住看某一时刻）、系统信息、启动器。入口：抽屉「机器」、设置 › 机器、Agents 左上角菜单「机器」（原来的「机器监控」并进来了）。
+  DEBUG：`-tab dev -openMonitor all|<机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`。
 - 离开回顾（recap）：Claude Code 的 away_summary 显示成「离开期间回顾」卡片，去掉了「(disable recaps in /config)」；关掉它在 设置 › Claude Code 设置。
 - 展示逻辑（助手和开发统一，`chatLines` + `WorkLine`）：一轮按「消息」切成若干段，每条消息自成一段对话：
   你的消息 → 一行灰色的工作行「工具 5 · 思考 1 · 回复 1 · 4 分 17 秒 ›」（计数一律「名称 数字」）→ Agent 在下一条消息之前说的最后一段话 → 下一条消息……
@@ -514,7 +515,7 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
   所以页面、`ChatStore`、`AppModel.handle` 都不知道自己在体验模式里。没有的接口回 404「体验模式里没有这项数据」，DEBUG 下记一行 `DemoHub miss`。
 - **数据**：`scripts/make_demo_data.py` 从 `scripts/mock_hub.py`（UI 测试用的假 hub）导出 `apple/Jarvis/Resources/Demo.json`，再加几个 Agent
   （每种状态、几个空间都有）、飞书会话的消息、邮件正文、知识库条目，终端是按手机宽度排好的 Claude 屏幕（`phone_screen`，96 列的帧在手机上每行都折）。
-  全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器监控的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
+  全是编造的；时间存成相对值（`@rel:<秒>`、`@unix:<秒>`），载入时换成「现在」附近，演示永远是新的。机器页的曲线由 `DemoHub` 现算（`mock_hub.metric_at` 的移植）。
   改了 mock 的数据就重跑脚本、提交 JSON；`DemoHubTests` 让每个接口都经 `APIClient` 解码成 App 的模型，模型改了形状会在这里挂。
 - **副作用**：给 Agent / Jarvis 发消息在本地回显，1.5 秒后「Agent」回一段「这是体验模式……」；回答提问 / 批准计划时卡片消失、Agent 接着「做」再回同一段话，
   另弹「体验模式下不会真的发送」；Jarvis 新对话本地新建。其余会碰到电脑、飞书、邮件的操作（新建会话、中断、关闭、终端按键、发邮件、立即运行……）

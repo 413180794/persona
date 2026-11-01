@@ -137,7 +137,7 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 
 ### 机器页面（`MachinePagesTests`、`MachinePagesLiveTests`）
 
-把机器相关的每个入口真点一遍：设置 › 机器（列表、下拉刷新、卡片 → 详情、详情里的会话 → 对话、离线机器的说明、重新连接）、
+把机器相关的每个入口真点一遍：设置 › 机器（列表、下拉刷新、卡片 → 详情、详情里的 Agent → 对话、36 个 Agent 的「显示全部」、离线机器的说明、重新连接）、
 Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、项目页的机器名 → 机器的项目页（项目 → 项目页、ⓘ → 详情、离线时的空状态）、
 新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方）。
 
@@ -192,7 +192,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 不用 mock hub：`TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light xcodebuild test … -only-testing:JarvisUITests/DemoModeTests`，深色再跑一遍。
 `testWalkThroughAndLeave` 从配对页（`-openWelcome YES`）进体验模式，走一遍 Agents（筛选、细列表、Claude 会话发消息收到演示回复、终端、提问卡片作答、
-计划卡片、Codex 会话、表格和链接）、机器监控和 24 小时曲线、Jarvis（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
+计划卡片、Codex 会话、表格和链接）、机器页和机器的 24 小时曲线、Jarvis（主对话、侧边栏、定时任务）、收件箱（飞书会话、邮件），
 每页断言没有「体验模式里没有这项数据」，最后从设置退出、重启后还在配对页；`testStaysAcrossLaunches` 断言体验模式重启后还在。
 跑完看模拟器日志里有没有页面要了 `DemoHub` 没有的接口：
 `xcrun simctl spawn <udid> log show --last 10m --predicate 'eventMessage CONTAINS "DemoHub miss"'`（应为空）。

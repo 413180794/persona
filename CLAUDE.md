@@ -98,7 +98,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、还不支持什么 |
 | `docs/assistant.md` | 「Jarvis」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
-| `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、Dashboard 和机器详情 |
+| `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `jarvisd relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |

@@ -6,93 +6,356 @@ import SwiftUI
 struct MachineListRoute: Hashable {}
 struct MachineDetailRoute: Hashable { var id: String }
 
-/// Settings › 机器.
-struct MachinesView: View {
-    @Environment(AppModel.self) private var model
+/// What brings a machine to the top of 机器 (docs/machines.md「App」), most pressing first: it is offline, a value is
+/// too high, an agent there needs you, its jarvisd is not the hub's build.
+enum MachineConcern: Int, Comparable {
+    case offline, critical, warning, needsYou, mismatch
 
-    var body: some View {
-        ScrollView {
-                VStack(spacing: Theme.Space.l) {
-                    ForEach(model.machines) { m in
-                        NavigationLink(value: MachineDetailRoute(id: m.id)) { MachineCard(machine: m) }
-                            .buttonStyle(.plain)
-                    }
-                    if model.machines.isEmpty {
-                        EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
-                    }
-                }
-                .padding(Theme.Space.l)
-            }
-        .themedGroupedPage()
-        .navigationTitle("机器")
-        // A large title stays below; the bar's middle is only for 连接中… and the like.
-        .toolbar {
-            ToolbarItem(placement: .principal) { ConnectionTitle() }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { MachineDashboardView() } label: { Label("机器监控", systemImage: Theme.Icon.context) }
-            }
-        }
-        .refreshable { await model.refresh() }
+    static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+
+    /// `alert`: the worst of the machine's latest values; `waiting`: its agents that need you.
+    static func of(_ m: Machine, alert: MetricLevel, waiting: Int) -> MachineConcern? {
+        if !m.online { return .offline }
+        if alert == .critical { return .critical }
+        if alert == .warning { return .warning }
+        if waiting > 0 { return .needsYou }
+        if m.nodeMismatch == true || m.deploying == true { return .mismatch }
+        return nil
+    }
+
+    /// The machines with a concern first, most pressing first; the same concern and the rest keep the hub's order, so a
+    /// card moves only when what it shows changes.
+    static func ordered(_ machines: [Machine], by concern: (Machine) -> MachineConcern?) -> [Machine] {
+        machines.enumerated()
+            .map { (rank: concern($0.element)?.rawValue ?? Int.max, index: $0.offset, machine: $0.element) }
+            .sorted { ($0.rank, $0.index) < ($1.rank, $1.index) }
+            .map(\.machine)
     }
 }
 
+/// A machine's live agents by what they need: 需要你, 工作中, and 空闲 for the rest (finished, seen, unknown).
+struct AgentTally: Equatable {
+    var needsYou = 0
+    var working = 0
+    var idle = 0
+
+    init(_ sessions: [Session]) {
+        for s in sessions {
+            switch s.state {
+            case .needsYou: needsYou += 1
+            case .working: working += 1
+            default: idle += 1
+            }
+        }
+    }
+}
+
+/// 机器 (docs/machines.md「App」): every machine on one screen, what needs a look first. A card each: online or not,
+/// the system, its agents (需要你 / 工作中 / 空闲), CPU / memory / network now and over the last hour, what is too high,
+/// a build unlike the hub's with 重新部署. The machine list is live; the metrics refresh every 10 s while the page is
+/// on screen and the app is in front. A tap opens the machine.
+struct MachinesView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
+    @State private var metrics: [String: MachineMetrics] = [:]
+    /// The hub keeps no metrics (404: before machine monitoring): the cards have no CPU / memory / network.
+    @State private var unmonitored = false
+
+    var body: some View {
+        let machines = model.machines
+        let tallies = Dictionary(machines.map { ($0.id, AgentTally(MachineDetailView.agents(model, $0.id))) }, uniquingKeysWith: { a, _ in a })
+        let alerts = Dictionary(machines.map { ($0.id, alertLevel($0)) }, uniquingKeysWith: { a, _ in a })
+        let ordered = MachineConcern.ordered(machines) { m in
+            MachineConcern.of(m, alert: alerts[m.id] ?? .normal, waiting: tallies[m.id]?.needsYou ?? 0)
+        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                if !machines.isEmpty {
+                    summary(machines, alerts: alerts.values.filter { $0 > .normal }, waiting: tallies.values.reduce(0) { $0 + $1.needsYou })
+                }
+                // Top-aligned: an offline card is shorter than its neighbour and would float in the middle of the row.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Size.cardColumn), spacing: Theme.Space.m, alignment: .top)],
+                          spacing: Theme.Space.m) {
+                    ForEach(ordered) { m in
+                        NavigationLink(value: MachineDetailRoute(id: m.id)) {
+                            MachineCard(machine: m, tally: tallies[m.id], metrics: metrics[m.id], showsMetrics: !unmonitored)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .animation(Theme.Motion.layout, value: ordered.map(\.id))
+                if machines.isEmpty {
+                    EmptyStateView(symbol: Theme.Icon.machines, title: "还没有机器", message: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。")
+                } else if !unmonitored {
+                    Text("CPU、内存、网络每 10 秒更新，曲线是最近 1 小时。")
+                        .font(Theme.Font.label).foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.Space.xs)
+                }
+            }
+            .padding(Theme.Space.l)
+        }
+        .themedGroupedPage()
+        .navigationTitle("机器")
+        // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would
+        // then hide the title); the bar's middle is only for 连接中… and the like.
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar { ToolbarItem(placement: .principal) { ConnectionTitle() } }
+        .refreshable {
+            await model.refresh()
+            await loadMetrics()
+        }
+        #if os(macOS)
+        .macRefreshes { // ⌘R: no pull to refresh on the Mac
+            await model.refresh()
+            await loadMetrics()
+        }
+        #endif
+        .task(id: phase == .active) {
+            guard phase == .active else { return } // in the background: nothing to draw, nothing to fetch
+            while !Task.isCancelled {
+                await loadMetrics()
+                try? await Task.sleep(for: .seconds(10))
+            }
+        }
+    }
+
+    /// The worst of a machine's latest values; normal while it is offline or has sent nothing lately.
+    private func alertLevel(_ m: Machine) -> MetricLevel {
+        guard m.online, let mm = metrics[m.id], let s = mm.latest else { return .normal }
+        return MetricAlert.of(s, cores: (mm.system ?? m.system)?.cores).first?.level ?? .normal
+    }
+
+    private func summary(_ machines: [Machine], alerts: [MetricLevel], waiting: Int) -> some View {
+        let online = machines.filter(\.online).count
+        return HStack(spacing: Theme.Space.l) {
+            Label("\(online)/\(machines.count) 台在线", systemImage: Theme.Icon.dot)
+                .labelStyle(DotLabel(color: online == machines.count ? Theme.positive : .secondary))
+            if let worst = alerts.max() {
+                HStack(spacing: Theme.Space.xs) {
+                    Image(systemName: Theme.Icon.errorFilled).foregroundStyle(MetricColor.level(worst))
+                    Text("\(alerts.count) 台用量偏高")
+                }
+            }
+            if waiting > 0 {
+                Label("\(waiting) 个 Agent 需要你", systemImage: Theme.Icon.dot)
+                    .labelStyle(DotLabel(color: StatusPalette.needsYou.dot))
+            }
+            Spacer(minLength: 0)
+        }
+        .font(Theme.Font.captionMedium)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, Theme.Space.xs)
+    }
+
+    private func loadMetrics() async {
+        guard let api = model.api else { return }
+        do {
+            let fresh = try await api.metricsOverview()
+            metrics = Dictionary(fresh.map { ($0.machineID, $0) }, uniquingKeysWith: { a, _ in a })
+            unmonitored = false
+        } catch {
+            if error.isCancellation { return }
+            // A hub before machine monitoring: the cards go without numbers. Other errors keep the last numbers (the
+            // title says when the hub is out of reach).
+            if let e = error as? APIError, e.status == 404 { unmonitored = true }
+        }
+    }
+}
+
+struct DotLabel: LabelStyle {
+    var color: Color
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Theme.Space.sm) {
+            Circle().fill(color).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+            configuration.title
+        }
+    }
+}
+
+/// One machine: on 机器 with its numbers, and at the top of its page without them (the page has the charts).
 struct MachineCard: View {
     @Environment(AppModel.self) private var model
     var machine: Machine
+    /// Its agents counted; nil counts them here.
+    var tally: AgentTally?
+    /// Its latest values (and for 机器 the last hour); nil until they come, or from a hub without machine monitoring.
+    var metrics: MachineMetrics?
+    var showsMetrics = true
 
     var body: some View {
-        let live = MachineDetailView.agents(model, machine.id)
-        let working = live.filter { $0.state == .working }.count
-        let waiting = live.filter { $0.state == .needsYou }.count
-        VStack(alignment: .leading, spacing: Theme.Space.l) {
-            HStack(alignment: .top) {
-                OSBadge(system: machine.system, fallback: machine.symbol, size: 52, online: machine.online)
-                VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    // Color.primary / Color.secondary, not .primary / .secondary: as the details page's section header the
-                    // list moves the hierarchical styles a step lighter (the name came out grey, the labels faint).
-                    Text(machine.name).font(Theme.Font.title).foregroundStyle(Color.primary)
-                    Text(machine.hostname ?? machine.sshHost ?? machine.id).font(Theme.Font.code).foregroundStyle(Color.secondary)
+        let system = machine.system ?? metrics?.system
+        let sample = machine.online ? metrics?.latest : nil
+        let alerts = sample.map { MetricAlert.of($0, cores: system?.cores) } ?? []
+        let worst = alerts.first?.level ?? .normal
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.m) {
+                OSBadge(system: system, fallback: machine.symbol, size: Theme.Size.avatarM, online: machine.online)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    // Color.primary / Color.secondary, not .primary / .secondary: the hierarchical styles come out a step
+                    // lighter where the card sits in a section header.
+                    Text(machine.name).font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
+                    Text(Self.subtitle(machine, system: system)).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
                 }
-                Spacer()
-                Chip(text: machine.online ? "在线" : "离线", symbol: Theme.Icon.dot, look: machine.online ? .tint(Theme.positive) : .neutral)
+                Spacer(minLength: Theme.Space.sm)
+                status
+            }
+            if !alerts.isEmpty {
+                FlowLayoutRow {
+                    ForEach(alerts, id: \.label) { a in AlertChip(alert: a) }
+                }
             }
             if machine.online {
-                HStack(spacing: 0) {
-                    stat("\(live.count)", "运行中")
-                    Divider().scaledFrame(height: Theme.Size.wellXS)
-                    stat("\(working)", "工作中", tint: working > 0 ? StatusPalette.working.dot : nil) // the orange the working dots are
-                    Divider().scaledFrame(height: Theme.Size.wellXS)
-                    stat("\(waiting)", "需要你", tint: waiting > 0 ? StatusPalette.needsYou.text : nil)
-                }
-                // Wraps: OS, herdr and claude side by side are wider than a phone, and Chip does not shrink, so one row
-                // pushed the whole card (and the page) past both edges of the screen.
-                FlowLayoutRow {
-                    if let sys = machine.system { Chip(text: sys.name, symbol: Theme.Icon.cpu, shrinks: true) }
-                    else if let os = machine.os { Chip(text: "\(os)/\(machine.arch ?? "")", symbol: Theme.Icon.cpu, shrinks: true) }
-                    if let h = machine.herdrVersion, !h.isEmpty { Chip(text: "herdr \(h)") }
-                    if let c = machine.claudeVersion, !c.isEmpty { Chip(text: "claude \(c)") }
-                }
-                if machine.nodeMismatch == true || machine.deploying == true {
-                    DeployRow(machine: machine)
-                }
+                AgentCounts(tally: tally ?? AgentTally(MachineDetailView.agents(model, machine.id)))
+                if showsMetrics { metricsRow(sample) }
             } else if let err = machine.error, !err.isEmpty {
-                Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(3)
+                Text(err).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(2)
+            }
+            if machine.nodeMismatch == true || machine.deploying == true {
+                DeployRow(machine: machine)
             }
         }
-        .card(padding: 16)
+        .card(padding: 14)
+        .overlay {
+            if worst > .normal {
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                    .stroke(MetricColor.level(worst).opacity(0.7), lineWidth: Theme.Size.lineMedium)
+            }
+        }
+        .contentShape(.rect)
     }
 
-    private func stat(_ value: String, _ label: String, tint: Color? = nil) -> some View {
-        VStack(spacing: Theme.Space.xxs) {
-            Text(value).font(Theme.Font.title.monospacedDigit()).foregroundStyle(tint ?? Color.primary)
-            Text(label).font(Theme.Font.label).foregroundStyle(Color.secondary)
+    /// "Ubuntu 24.04.1 LTS · 16 核 · 64.0 GB"; the host name when the machine never said what it runs.
+    static func subtitle(_ m: Machine, system: MachineSystem?) -> String {
+        guard let sys = system else { return m.hostname ?? m.sshHost ?? m.id }
+        var parts = [sys.name]
+        if sys.cores > 0 { parts.append("\(sys.cores) 核") }
+        if sys.memory > 0 { parts.append(MetricFormat.bytes(sys.memory)) }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var status: some View {
+        if machine.online {
+            HStack(spacing: Theme.Space.sm) {
+                Circle().fill(Theme.positive).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+                Text("在线").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
+            }
+            .fixedSize()
+        } else {
+            VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
+                Text("离线").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary)
+                if let seen = machine.lastSeen, seen.timeIntervalSince1970 > 0 {
+                    Text(Fmt.relative(seen)).font(Theme.Font.label).foregroundStyle(.tertiary)
+                }
+            }
+            .fixedSize()
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func metricsRow(_ s: MetricSample?) -> some View {
+        let points = metrics?.points ?? []
+        let end = Date.now
+        let domain = end.addingTimeInterval(-3600)...end
+        return HStack(alignment: .top, spacing: Theme.Space.m) {
+            MetricCell(title: "CPU", value: MetricFormat.percent(s?.cpu), detail: s?.load.map { "负载 " + MetricFormat.load($0) },
+                       level: MetricLevel.of(s?.cpu, warn: 75, crit: 90)) {
+                Sparkline(points: points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu) { $0.cpu }], domain: domain, yMax: 100)
+            }
+            MetricCell(title: "内存", value: MetricFormat.percent(s?.memPercent),
+                       detail: s.map { MetricFormat.bytes($0.memUsed) + " / " + MetricFormat.bytes($0.memTotal) },
+                       level: MetricLevel.of(s?.memPercent, warn: 80, crit: 90)) {
+                let total = Double(s?.memTotal ?? metrics?.system?.memory ?? 0)
+                Sparkline(points: points, series: [ChartSeries(name: "内存", color: MetricColor.mem) { p in
+                    p.mem.map { total > 0 ? 100 * $0 / total : 0 }
+                }], domain: domain, yMax: 100)
+            }
+            MetricCell(title: "网络", value: s == nil ? "—" : "↓ " + MetricFormat.rate(s?.netRx),
+                       detail: s == nil ? nil : "↑ " + MetricFormat.rate(s?.netTx), level: .normal) {
+                Sparkline(points: points, series: [
+                    ChartSeries(name: "下行", color: MetricColor.rx) { $0.rx },
+                    ChartSeries(name: "上行", color: MetricColor.tx) { $0.tx },
+                ], domain: domain, yMax: nil)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 需要你 / 工作中 / 空闲 side by side, a dot and a count each; a state with none stays gray.
+struct AgentCounts: View {
+    var tally: AgentTally
+
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            item(tally.needsYou, "需要你", tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
+            item(tally.working, "工作中", tone: StatusPalette.working, ink: StatusPalette.working.text)
+            item(tally.idle, "空闲", tone: StatusPalette.idle, ink: Color.primary)
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+    }
+
+    private func item(_ n: Int, _ label: String, tone: StatusTone, ink: Color) -> some View {
+        HStack(spacing: Theme.Space.sm) {
+            Circle().fill(n > 0 ? tone.dot : StatusPalette.offline.dot).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+            Text("\(n)").font(Theme.Font.bodyStrong.monospacedDigit()).foregroundStyle(n > 0 ? ink : Color.secondary)
+                .contentTransition(.numericText(value: Double(n)))
+            Text(label).font(Theme.Font.label).foregroundStyle(Color.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(n) 个 Agent \(label)")
+    }
+}
+
+/// CPU / 内存 / 网络 on a card: the value now, a detail under it, the last hour under that.
+struct MetricCell<Chart: View>: View {
+    var title: String
+    var value: String
+    var detail: String?
+    var level: MetricLevel
+    @ViewBuilder var chart: Chart
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            HStack(spacing: Theme.Space.xs) {
+                Text(title).font(Theme.Font.label).foregroundStyle(Color.secondary)
+                if level > .normal {
+                    Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.label).imageScale(.small).foregroundStyle(MetricColor.level(level))
+                }
+            }
+            Text(value).font(Theme.Font.bodyStrong.monospacedDigit()).foregroundStyle(Color.primary).lineLimit(1).minimumScaleFactor(0.7)
+            Text(detail ?? " ").font(Theme.Font.label.monospacedDigit()).foregroundStyle(Color.secondary).lineLimit(1).minimumScaleFactor(0.7)
+            chart.scaledFrame(height: Theme.Size.wellS).padding(.top, Theme.Space.xxs)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// What is too high: the icon carries the level's color, the words stay in text ink (warning yellow is unreadable
+/// as text on a light card).
+struct AlertChip: View {
+    var alert: MetricAlert
+
+    var body: some View {
+        let color = MetricColor.level(alert.level)
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: alert.level == .critical ? Theme.Icon.critical : Theme.Icon.errorFilled)
+                .foregroundStyle(color)
+            Text(alert.label).foregroundStyle(Color.primary)
+        }
+        .font(Theme.Font.labelStrong)
+        .lineLimit(1)
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.xs)
+        .background(color.opacity(0.16), in: .capsule)
+        .accessibilityLabel((alert.level == .critical ? "严重：" : "注意：") + alert.label)
     }
 }
 
 /// A machine whose jarvisd is not the hub's build: says so, and 重新部署 has the hub install its own build there.
-private struct DeployRow: View {
+struct DeployRow: View {
     @Environment(AppModel.self) private var model
     var machine: Machine
     @State private var starting = false
@@ -133,127 +396,5 @@ private struct DeployRow: View {
         } catch {
             if let m = error.shown { model.toast = Toast("部署失败：\(m)", style: .error) }
         }
-    }
-}
-
-struct MachineDetailView: View {
-    @Environment(AppModel.self) private var model
-    var machineID: String
-    @State private var launchers: [Launcher] = []
-    @State private var launcherError: String?
-    @State private var reconnecting = false
-
-    /// A machine's agents: live ones, not the 对话 tab's assistant conversations (the Agents tab leaves those out too).
-    static func agents(_ model: AppModel, _ machineID: String) -> [Session] {
-        (model.sessionsByMachine[machineID] ?? []).filter { $0.status.isLive && !$0.assistant }
-    }
-
-    var body: some View {
-        let machine = model.machine(machineID)
-        let sessions = Self.agents(model, machineID)
-        List {
-            if let machine {
-                Section {
-                    if sessions.isEmpty {
-                        Text(machine.online ? "没有运行中的会话" : "机器离线，连上后显示它的会话").foregroundStyle(.secondary)
-                    }
-                    ForEach(sessions) { s in
-                        NavigationLink(value: s.key) { SessionRow(session: s, machine: machine, showMachine: false) }
-                    }
-                } header: {
-                    // The card is the header, not a row: as a row it was tappable and pushed this page again.
-                    VStack(alignment: .leading, spacing: Theme.Space.l) {
-                        MachineCard(machine: machine)
-                        Text("运行中的 Claude").padding(.leading, Theme.Space.l) // where the header text sits by default
-                    }
-                    .textCase(nil)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                }
-                Section {
-                    NavigationLink {
-                        EngineSelectionView(machineID: machineID)
-                    } label: {
-                        HStack {
-                            Text("引擎").lineLimit(1)
-                            Spacer()
-                            Text(machine.engineName).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                    .accessibilityIdentifier("machine.engine")
-                } footer: {
-                    Text("只显示所选引擎里的会话。")
-                }
-                Section {
-                    NavigationLink { MachineMonitorView(machineID: machineID) } label: {
-                        Label("系统与监控", systemImage: Theme.Icon.context)
-                    }
-                }
-                Section {
-                    if !machine.online {
-                        Text("机器离线，连上后显示").foregroundStyle(.secondary)
-                    } else if let launcherError, launchers.isEmpty {
-                        Label(launcherError, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
-                    }
-                    ForEach(launchers) { l in
-                        HStack {
-                            Text(l.name).font(Theme.Font.body.monospaced())
-                            Spacer()
-                            Text(Fmt.model(l.model) ?? "").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                } header: { Text(machine.online ? "启动器 \(launchers.count)" : "启动器") }
-                Section {
-                    Button {
-                        Task { await reconnect() }
-                    } label: {
-                        HStack {
-                            Label(reconnecting ? "正在重新连接…" : "重新连接", systemImage: Theme.Icon.retry).lineLimit(1)
-                            if reconnecting { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(reconnecting)
-                } footer: {
-                    Text(machine.kind == "local" ? "hub 所在机器，直接运行 node。" : "hub 通过 `ssh \(machine.sshHost ?? machine.id)` 接入。")
-                }
-            }
-        }
-        .themedPage()
-        .navigationTitle(machine?.name ?? machineID)
-        .navigationBarTitleDisplayMode(.inline)
-        // Again when it comes online (after 重新连接): an offline machine has no launchers to list.
-        .task(id: machine?.online == true) { await loadLaunchers(refresh: false) }
-    }
-
-    private func loadLaunchers(refresh: Bool) async {
-        guard model.machine(machineID)?.online == true else { launchers = []; return }
-        do {
-            launchers = try await model.launchers(machineID, refresh: refresh)
-            launcherError = nil
-        } catch {
-            launcherError = error.shown.map { "读不到启动器：\($0)" }
-        }
-    }
-
-    /// Asks the hub to reconnect, then waits (up to 15 s) for the machine to come online; says so if it does not.
-    private func reconnect() async {
-        reconnecting = true
-        defer { reconnecting = false }
-        do {
-            try await model.api?.reconnect(machine: machineID)
-        } catch {
-            if let m = error.shown { model.toast = Toast("重新连接失败：\(m)", style: .error) }
-            return
-        }
-        for _ in 0..<10 {
-            try? await Task.sleep(for: .seconds(1.5))
-            await model.refresh()
-            if model.machine(machineID)?.online == true {
-                Haptics.success()
-                await loadLaunchers(refresh: true)
-                return
-            }
-        }
-        let err = model.machine(machineID)?.error
-        model.toast = Toast("还没连上\(err.map { "：\($0)" } ?? "")", style: .error)
     }
 }

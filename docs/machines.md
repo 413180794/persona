@@ -1,13 +1,13 @@
 # 机器监控
 
-每台电脑是什么系统、现在忙不忙、过去 24 小时的曲线。node 采集，hub 落 Postgres，App 里看 Dashboard 和机器详情。
+每台电脑是什么系统、现在忙不忙、过去 24 小时的曲线。node 采集，hub 落 Postgres，App 里在「机器」页和机器详情看（和 Agent 运行数放在一起）。
 
 | 部分 | 代码 |
 | --- | --- |
 | 采集（解析 /proc、vm_stat、iostat、sw_vers 等） | `server/internal/sysmon/`（`sysmon.go` 纯解析，`linux.go` / `darwin.go` 读系统） |
 | node 发送 | `server/internal/node/metrics.go` |
 | hub 存储、降采样、清理、API | `server/internal/hub/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
-| App | `apple/Jarvis/Views/Machines/`（`MachineDashboardView`、`MachineMonitorView`、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
+| App | `apple/Jarvis/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
 | 本机看采集结果 / 开销 | `jarvisd sysmon [n]`：打印系统信息和 n+1 个样本（每 10 秒一个），最后一行是每次采集耗时和 jarvisd 的 CPU |
 
 ## 系统信息
@@ -93,22 +93,33 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 
 ## App
 
-- **入口**：Agents 列表左上角的机器菜单 →「机器监控」（Dashboard）；设置 › 机器 右上角的仪表图标；机器详情页的「系统与监控」。
-- **Dashboard**（`MachineDashboardView`）：顶部「N/M 台在线 · K 台需要注意」，每台一张卡：系统图标、名字、系统 · 核数 · 内存、在线 / 离线（离线显示最后在线时间），
-  CPU / 内存 / 网络的当前值和最近 1 小时的迷你曲线。点卡片进详情。
-- **机器详情**（`MachineMonitorView`）：系统、在线和已运行时长，现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换，1 小时 / 6 小时 / 24 小时切换，
-  CPU、内存、网络（下行 + 上行）、负载四张曲线（负载图上虚线标出核数），Linux 还有每个核心的柱子，最后是系统信息表。
-  按住任一张图拖动看某一时刻，四张图跟着同一时刻（共享选中时间），标题行显示那一刻的值和时间。
-- **更新**：页面在屏幕上且 App 在前台时轮询：Dashboard 每 10 秒，详情 1 小时范围每 10 秒、其余每分钟；进后台就停（`task(id: scenePhase)`）。
+原来「机器」（Agent 运行数）和「机器监控」（Dashboard）是两个页面，机器详情里还要再点一层「系统与监控」才看到曲线；2026-11-01 按用户要求合成一个「机器」页，
+「机器监控」这个名字和入口都去掉了。
+
+- **入口**（都进同一个 `MachinesView`）：新外壳抽屉里的「机器」；设置 › 机器；Agents 列表左上角菜单最下面的「机器」（`MachineListRoute`，iPad 分栏里开在右栏）；
+  Mac 侧边栏的「机器」（⌘5）。项目页 / 机器的项目页右上角 ⓘ 进机器详情（`MachineDetailRoute`）。
+- **机器页**（`MachinesView`）：顶部一行「N/M 台在线 · K 台用量偏高 · J 个 Agent 需要你」。每台一张卡（`MachineCard`）：系统图标、名字、系统 · 核数 · 内存、
+  在线 / 离线（离线显示最后在线时间和 ssh 的错误）；告警标签（下面「异常」）；Agent 数「需要你 / 工作中 / 空闲」（空闲 = 完成未看 + 已看 + 未知，
+  只算活着的、不含助手的对话，和 Agents 列表一致）；CPU / 内存 / 网络的当前值和最近 1 小时的迷你曲线；jarvisd 和 hub 不是同一次部署时的「重新部署」。
+  iPad / Mac 上卡片按宽度排成多列。点卡片进机器详情。
+- **排序**（`MachineConcern`）：需要注意的在前，依次是 离线 → 严重告警 → 注意告警 → 有 Agent 需要你 → 版本不一致；同一类和其余的按 hub 配置里的顺序，
+  只有卡片上显示的东西变了才会换位置（换位置有动画）。
+- **机器详情**（`MachineDetailView`）：一页看完，常用的在上面。顶部是同一张卡（不带数字，下面有）；离线时紧接着是「hub 通过 ssh … 接入」和「重新连接」。
+  然后是 **Agent**：需要你的在前、工作中其次，最多先列 5 个，其余点「显示全部 N 个」，点一个进对话；下面一行「引擎」（这台显示哪个引擎的会话，点开选，`EngineSelectionView`）。然后是 **监控**：现在的 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换，
+  1 小时 / 6 小时 / 24 小时切换，CPU、内存、网络（下行 + 上行）、负载四张曲线（负载图上虚线标出核数），Linux 还有每个核心的柱子；
+  按住任一张图拖动看某一时刻，四张图跟着同一时刻（共享选中时间），标题行显示那一刻的值和时间。然后是 **系统**（系统、内核、架构、机型、处理器、
+  核心、内存、主机名、开机时间和已运行多久、herdr / Claude Code / node 版本），**启动器**，在线时最后是接入方式和「重新连接」。
+- **更新**：机器的在线状态和 Agent 随 hub 推送实时变；数字在页面在屏幕上且 App 在前台时轮询：机器页每 10 秒，详情 1 小时范围每 10 秒、其余每分钟；
+  进后台就停（`task(id: scenePhase)`）。下拉刷新（Mac 上是 ⌘R，`macRefreshes`）连机器列表一起重新取。
 - **异常**（`MetricAlert`）：CPU ≥ 75% 注意、≥ 90% 严重；内存 ≥ 80% / 90%；磁盘 ≥ 80% / 90%；负载 ≥ 1 / 2 倍核数。卡片加一圈状态色的边，
   标签是图标（状态色）+ 文字（正文色），不单靠颜色。
-- 旧 hub 没有这些接口（404）时页面说「部署新版本的 hub 和 node 后再看」；旧 node 不发样本，卡片只有在线状态，没有数字。
+- 旧 hub 没有这些接口（404）时机器页的卡片不带数字（Agent 数照常），详情的监控说「部署新版本的 hub 和 node 后再看」；旧 node 不发样本，数字是「—」。
 
 ### 图
 
 按 dataviz 的规则：
 
-- 一个指标一个颜色，Dashboard 和详情一致；浅色 / 深色是各自选的色阶（`MetricColor`），用 `validate_palette.js` 验过两种模式
+- 一个指标一个颜色，机器页和详情一致；浅色 / 深色是各自选的色阶（`MetricColor`），用 `validate_palette.js` 验过两种模式
   （CPU 蓝、内存青绿、下行橙、上行紫、负载品红；网络两条线的色盲区分 ΔE > 25）。
 - 线 2pt（迷你图 1.5pt），单条线下面铺 10% 的同色面积，两条线不铺；网格是一像素的细线；纵轴在右边、最多 3 个刻度，横轴最多 4 个时间。
 - 数值用正文色，颜色只在线和图例的圆点上；两条线的图（网络）有图例（圆点 + 名字），一条线的图标题就是名字。
@@ -117,14 +128,17 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 
 ## API
 
-见 `docs/protocol.md`：`GET /api/v1/metrics`（Dashboard）、`GET /api/v1/machines/{id}/metrics?range=1h|6h|24h`（详情），
+见 `docs/protocol.md`：`GET /api/v1/metrics`（机器页）、`GET /api/v1/machines/{id}/metrics?range=1h|6h|24h`（详情），
 node → hub 的 `metrics` 事件，`node.info` / `Machine` 里的 `system`。
 
 ## 验证
 
 - Go：`sysmon` 的夹具测试（`testdata/` 里的 /proc/stat、meminfo、net/dev、os-release、cpuinfo、vm_stat、iostat、sw_vers、system_profiler），
   `db.TestMachineMetrics`（降采样、加权平均、空档没有点、清理），`hub.TestMetricGaps`（断开标记）；`./scripts/test-server.sh`。
-- 真实采集：本机起一个测试 hub（假 HOME、独立数据库经 SSH 隧道，一台 `kind: local` 的 Mac 加一台 ssh 的 Linux），模拟器配对它看 Dashboard 和详情。
+- 真实采集：本机起一个测试 hub（假 HOME、独立数据库经 SSH 隧道，一台 `kind: local` 的 Mac 加一台 ssh 的 Linux），模拟器配对它看机器页和详情。
 - 假数据：`scripts/mock_hub.py` 有 4 台机器：服务器最近 25 分钟高负载（CPU / 内存 / 负载告警），Mac Studio 早上断开过两小时（空档），
-  NAS 三小时前离线。UI 测试 `MachineMonitorTests`：从机器菜单打开 Dashboard、进服务器详情、切到 24 小时、按住网络图、看系统信息；离线机器的详情。
-- 截图：`-tab dev -openMonitor all`（Dashboard）、`-openMonitor <机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`（详情，按住在范围的 55% 处）。
+  NAS 三小时前离线。UI 测试 `MachinesPageTests`：从机器菜单打开机器页（离线的 NAS 在最前、服务器的告警、MacBook 的「需要你」）、进服务器详情
+  （Agent 在曲线上面、没有「系统与监控」这一层）、切到 24 小时、按住网络图、看系统信息、点 Agent 进对话；离线机器的详情（「重新连接」在第一屏）。
+  排序的单元测试 `MachineConcernTests`。36 个 Agent 的「显示全部」在 `MachinePagesTests.testMachineProjects`，「重新部署」在 `DeployButtonTests`。
+- 截图：`-tab dev -openMonitor all`（机器页）、`-openMonitor <机器 id> [-openMonitorRange 6h|24h] [-openMonitorScrub 0.55]`（详情，按住在范围的 55% 处）；
+  `-tab settings -openMachines YES [-openMachineDetail <机器 id>]` 从设置进。

@@ -24,7 +24,7 @@
   - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
-  - **机器**：机器监控总览 + 每台机器。
+  - **机器**：所有机器（Agent 数和监控在一页）+ 每台机器。
   - 底部：连接状态（等待网络 / 连接中…，点开是连接详情）。已做（`MacConnectionFooter`，连上时不显示；`-showConnection connecting` 截图看过）。
 - 列表栏：iOS 同一份列表内容（Agents 列表的分组、卡片 / 紧凑、折叠空间、置顶），Mac 上行高更紧，选中用系统高亮，
   键盘 ↑↓ 移动选中、⏎ 打开、空格预览（Quick Look 式：对话最后几条）。
@@ -170,7 +170,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 
 选中的 知识库 / 机器 跨启动记住（`mac.section`；tab 由 AppModel 记）。启动参数指定了 tab / 对话（`-tab`、`-openSession`…）时以参数为准、清掉记住的选择。
 
-壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Jarvis 里）、机器（`MachineDashboardView` 机器监控，手机上在 Agents / 设置里），
+壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Jarvis 里）、机器（`MachinesView`，手机上在抽屉 / Agents / 设置里），
 ⌘1…⌘6 依次是 Jarvis、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
 通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
 
@@ -365,8 +365,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：共用逻辑（PinsStore、togglePin / toggleMute），Mac 的菜单调同一组函数，`MacAttention` 的测试覆盖屏蔽对 Dock 角标的影响，体验数据的置顶空间显示为置顶；没对真 hub 跑过。
 - [x] Badges: 「⟳ 下次 12:20」 loop, 「⚙ 后台 N」, 「👥 子 Agent N」, muted 🔕 styling — ChatsView.swift (SessionRow)
   - Mac（2026-11-01 核对）：清单写旧了：现在列表行（iOS 也一样）不再带循环 / 后台 chip，挪到了对话页顶上的 `ActivityChips`，Mac 上看到「⚙ 1」；屏蔽的 🔕 和淡化在共用的 SlotRow 里（读代码，体验数据没有屏蔽的 Agent），子 Agent 没截。
-- [ ] Machine filter menu, 「机器监控」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
-  - 要到 Mac 前看：打开工具栏的 ≡ 菜单选一台机器筛，再点「机器监控」。菜单按钮和新建会话按钮截图里都在；机器监控在 Mac 上也是侧栏的「机器」。
+- [ ] Machine filter menu, 「机器」 entry, 新建会话 button — ChatsView.swift (TopBar), AgentsMenus.swift
+  - 要到 Mac 前看：打开工具栏的 ≡ 菜单选一台机器筛，再点「机器」（2026-11-01 起原来的「机器监控」并进了机器页）。菜单按钮和新建会话按钮截图里都在；Mac 上它也是侧栏的「机器」。
 - [x] Connection status in title slot — Views/ConnectionTitle.swift
   - Mac（2026-11-01 核对）截图（`-showConnection connecting`）：列表栏标题位置是「连接中…」加转圈，侧栏底部也有。
 - [ ] Pull to refresh — ChatsView.swift
@@ -555,12 +555,10 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：在收件箱的邮件上点工具栏的 ✦「让 Claude 处理」，滚到第一条消息看是否带着读这封邮件的提示，开始对话后新 Agent 在 Agents 里打开。新开关 `-showMailAskClaude YES`（配 `-tab mail -openInboxMatch <标题里的字>`，已加进 release.sh 的列表）截图里表单完整，第一条消息在 sheet 下面没看到。
 
 ## 11. Machines / monitoring
-- [x] 设置 › 机器 list: online, sessions, version, launcher, reconnect; version-mismatch 重新部署 — Views/Machines/MachinesView.swift (MachinesView, MachineCard, DeployRow)
-- [ ] Machine detail (系统与监控, running Claude list) — MachinesView.swift (MachineDetailView)
-  - Mac（2026-11-01 核对）：从 设置 › 机器 进去的截图看过（在线、计数、系统 chip、运行中的 Claude、系统与监控、启动器、重新连接）；侧栏「机器」里的新路径（`-macSection machines -openMachineDetail <id>`，`MacMachinesPage`）只有代码，没截图。
-- [x] Dashboard: N/M online, per-machine card with CPU/mem/net now + 1h sparklines, alert rings, 10s polling — Views/Machines/MachineDashboardView.swift（Mac：侧边栏「机器」⌘5）
-- [ ] Monitor page: 1/6/24h, CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps — Views/Machines/MachineMonitorView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
-  - Mac（2026-11-01 核对）：侧栏「机器」原来没法用启动参数打开某台机器的图表，加了 `MacMachinesPage`（`Mac/App/MacRootView.swift`）和 `-macSection machines -openMonitor <id>`；截图看到 1 / 24 小时、告警卡片、CPU 和内存图（两图同步的指示是启动参数设的）。要到 Mac 前看：往下滚看网络、负载图、每核条、系统信息、断档（在最高的离屏窗口下面），用鼠标拖图看两张图一起动。
+- [ ] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
+  - 合并前的「机器」列表和「机器监控」总览在 Mac 上都核对过（2026-11-01）；合并后的页面 Mac 只编译通过，没截图。要到 Mac 前看：侧栏「机器」的卡片、排序、⌘R。
+- [ ] Machine detail: agents (open the chat), 引擎, 1/6/24h CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps, launchers, reconnect — Views/Machines/MachineDetailView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
+  - 原来的监控页在 Mac 上看过 1 / 24 小时、告警卡片、CPU 和内存图（`-macSection machines -openMonitor <id>`，现在打开的是合并后的机器页）。要到 Mac 前看：往下滚看网络、负载图、每核条、系统信息、断档，用鼠标拖图看两张图一起动，点一个 Agent 进对话。
 - [x] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
   - Mac（2026-11-01 核对）：总览卡片上 Ubuntu、两台 Apple、Debian 的标志，详情和监控页头部也有；`MachineMetricsTests` 在 JarvisMacTests 里通过。
 

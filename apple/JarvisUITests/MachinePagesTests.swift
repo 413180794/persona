@@ -106,7 +106,7 @@ final class MachinePagesTests: XCTestCase {
         see(text("Connection refused"), "the offline machine's error")
         // The hub's machine runs the 对话 tab's assistant too: its conversations are not counted as agents.
         let server = see(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "服务器")).firstMatch, "服务器 card")
-        XCTAssertTrue(server.label.contains("1、运行中"), server.label)
+        XCTAssertTrue(server.label.contains("1 个 Agent 工作中"), server.label)
         shot("machines-list")
 
         let before = hits("/api/v1/machines")
@@ -115,10 +115,12 @@ final class MachinePagesTests: XCTestCase {
 
         text("MacBook").tap()
         see(app.navigationBars["MacBook"], "MacBook details")
-        see(text("运行中的 Claude"), "running agents header")
-        see(text("启动器 2"), "launchers header")
-        see(text("claude"), "a launcher")
+        see(app.staticTexts["Agent"], "the agents' header")
+        see(app.segmentedControls["metric-range"], "its charts on the same page")
         shot("machine-detail")
+        for _ in 0..<6 where !app.staticTexts["启动器"].isHittable { app.swipeUp() }
+        see(app.staticTexts["启动器"], "launchers header")
+        see(app.staticTexts["claude"], "a launcher")
         for _ in 0..<6 where !text("ssh macbook").isHittable { app.swipeUp() }
         see(text("ssh macbook"), "how the hub reaches it")
         for _ in 0..<6 where !button("补齐网络层的单元测试").isHittable { app.swipeDown() }
@@ -141,7 +143,8 @@ final class MachinePagesTests: XCTestCase {
         reconnect.tap()
         wait("POST …/reconnect sent") { (mock("reconnects")["reconnects"] as? [String])?.contains("lab") == true }
         see(text("在线"), "online after reconnecting", timeout: 15)
-        see(text("启动器 2"), "launchers load once it is online", timeout: 15)
+        for _ in 0..<6 where !app.staticTexts["启动器"].isHittable { app.swipeUp() }
+        see(app.staticTexts["claude"], "launchers load once it is online", timeout: 15)
         shot("machine-detail-reconnected")
     }
 
@@ -202,8 +205,11 @@ final class MachinePagesTests: XCTestCase {
         machineLink.tap()
         see(app.navigationBars["Mac Studio"], "machine projects again from the project page")
         app.buttons["机器详情"].tap()
-        see(text("运行中的 Claude"), "details from the info button")
+        see(app.segmentedControls["metric-range"], "details from the info button, with the charts")
+        // Needs-you first, five of them; the rest behind 显示全部 so the charts stay near.
+        XCTAssertFalse(button("infra 的第 1 个任务").exists, "a working agent behind the ones needing you")
         shot("machine-detail-many")
+        see(button("显示全部"), "显示全部").tap() // 显示全部 38 个: the 36 plus the two Mac Studio always has
         let agent = see(button("infra 的第 1 个任务"), "one of the 36 agents")
         agent.tap()
         see(app.textFields.firstMatch.exists ? app.textFields.firstMatch : app.textViews.firstMatch, "that agent's chat, on top")

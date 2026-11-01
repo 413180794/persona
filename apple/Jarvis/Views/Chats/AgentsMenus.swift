@@ -20,7 +20,7 @@ nonisolated struct MachineChoice: Equatable, Identifiable {
     }
 }
 
-/// The menu at the top left of Agents: grouping, 卡片 / 细列表, folding, the machine filter, 机器监控. Shows the chosen
+/// The menu at the top left of Agents: grouping, 卡片 / 细列表, folding, the machine filter, 机器. Shows the chosen
 /// machine's name in the corner; "全部" keeps the plain filter icon.
 struct AgentsListMenu: View {
     @Environment(AppModel.self) private var model
@@ -31,22 +31,22 @@ struct AgentsListMenu: View {
         private(set) var sections: [String] = []
         private var foldAll: ([String]) -> Void = { _ in }
         private var unfoldAll: () -> Void = {}
-        /// Not `openMonitor`: a stored property's name is in the Release binary, and `-openMonitor` is a DEBUG launch
-        /// argument the release check looks for (TestFlight 50 stopped on it).
-        private var onMonitor: () -> Void = {}
+        /// Not `openMonitor` / `openMachines`: a stored property's name is in the Release binary, and those are DEBUG
+        /// launch arguments the release check looks for (TestFlight 50 stopped on one).
+        private var onMachines: () -> Void = {}
 
         /// `sections`: the fold ids of what the list shows now.
         func update(sections: [String], foldAll: @escaping ([String]) -> Void, unfoldAll: @escaping () -> Void,
-                    onMonitor: @escaping () -> Void) {
+                    onMachines: @escaping () -> Void) {
             self.sections = sections
             self.foldAll = foldAll
             self.unfoldAll = unfoldAll
-            self.onMonitor = onMonitor
+            self.onMachines = onMachines
         }
 
         func collapse() { foldAll(sections) }
         func expand() { unfoldAll() }
-        func monitor() { onMonitor() }
+        func machinesPage() { onMachines() }
     }
 
     @AppStorage("dev.machineFilter") private var machineFilter = ""
@@ -94,8 +94,8 @@ struct AgentsListMenu: View {
                 }
             }
             Section {
-                Button { actions.monitor() } label: {
-                    Label("机器监控", systemImage: Theme.Icon.context)
+                Button { actions.machinesPage() } label: {
+                    Label("机器", systemImage: Theme.Icon.machines)
                 }
             }
     }

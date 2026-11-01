@@ -2,7 +2,7 @@ import BeautifulUI
 import SwiftUI
 
 /// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
-/// Jarvis, and 机器监控 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
+/// Jarvis, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
 /// (docs/mac.md「主窗口」). ⌘1…⌘6 in this order.
 enum MacSection: String, CaseIterable, Identifiable {
     case assistant, agents, inbox, knowledge, machines, settings
@@ -215,22 +215,23 @@ private struct MacShell: View {
     }
 }
 
-/// The sidebar's 机器: the dashboard, pushing a machine's charts or its details.
+/// The sidebar's 机器: the machines page, pushing a machine's page; its agents open their chats here too
+/// (SessionKey), as on the phone.
 struct MacMachinesPage: View {
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
-            MachineDashboardView()
-                .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
+            MachinesView()
                 .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+                .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }
         }
         #if DEBUG
-        // `-macSection machines -openMonitor <machine id>`: that machine's charts (`-openMachineDetail <id>`: its details).
+        // `-macSection machines -openMonitor <machine id>` (or `-openMachineDetail <id>`): that machine's page.
         .onAppear {
             guard path.isEmpty else { return }
             let d = UserDefaults.standard
-            if let m = d.string(forKey: "openMonitor"), m != "all" { path.append(MachineMonitorRoute(id: m)) }
+            if let m = d.string(forKey: "openMonitor"), m != "all" { path.append(MachineDetailRoute(id: m)) }
             else if let m = d.string(forKey: "openMachineDetail") { path.append(MachineDetailRoute(id: m)) }
         }
         #endif

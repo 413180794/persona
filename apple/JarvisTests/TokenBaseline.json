@@ -96,14 +96,8 @@
   "Jarvis\/Views\/Knowledge\/KnowledgeView.swift" : {
     "padding" : 1
   },
-  "Jarvis\/Views\/Machines\/MachineDashboardView.swift" : {
+  "Jarvis\/Views\/Machines\/MachineDetailView.swift" : {
     "padding" : 2
-  },
-  "Jarvis\/Views\/Machines\/MachineMonitorView.swift" : {
-    "padding" : 2
-  },
-  "Jarvis\/Views\/Machines\/MachinesView.swift" : {
-    "hstackSpacing" : 1
   },
   "Jarvis\/Views\/Machines\/MetricCharts.swift" : {
     "hexColor" : 16
