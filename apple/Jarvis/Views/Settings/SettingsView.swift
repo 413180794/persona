@@ -94,7 +94,10 @@ struct SettingsView: View {
                     }
                 }
 
+                #if os(iOS)
+                // A Mac pairs with no watch (WatchSync does nothing there): no button that would claim it sent something.
                 if !model.isDemo { watchSection }
+                #endif
 
                 if !model.isDemo {
                     Section("服务器") {
@@ -450,6 +453,10 @@ struct WelcomeView: View {
         .frame(maxWidth: .infinity)
         .sheet(isPresented: $showPair) { PairView() }
         .onAppear { withAnimation(.spring(duration: 0.8, bounce: 0.35)) { appear = true } }
+        #if os(macOS) && DEBUG
+        // `-openWelcome YES -openPairSheet YES`: the 连接 hub sheet, for screenshots (scripts/mac_shot.sh).
+        .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
+        #endif
     }
 
     private func feature(_ symbol: String, _ title: String, _ detail: String) -> some View {

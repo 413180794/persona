@@ -14,6 +14,16 @@ extension AppModel {
     /// This phone's device token id; nil while it still uses the pairing token.
     var deviceID: String? { UserDefaults.standard.string(forKey: Self.deviceIDKey) }
 
+    /// The kind of this device's own credential at the hub (POST /auth/tokens), shown in 设置 › 设备. A Mac is a
+    /// desktop, not the phone (AppModel.registration): the hub keeps it as "other" (full rights, a computer's icon).
+    nonisolated static var credentialKind: String {
+        #if os(macOS)
+        "desktop"
+        #else
+        "phone"
+        #endif
+    }
+
     func upgradeCredentials() async {
         guard var cfg = config else { return }
         #if DEBUG
@@ -21,7 +31,7 @@ extension AppModel {
         #endif
         if deviceID == nil {
             do {
-                let t = try await APIClient(config: cfg).createToken(name: UIDevice.current.name, kind: "phone")
+                let t = try await APIClient(config: cfg).createToken(name: UIDevice.current.name, kind: Self.credentialKind)
                 cfg.token = t.token
                 Keychain.serverConfig = cfg
                 UserDefaults.standard.set(t.id, forKey: Self.deviceIDKey)
@@ -73,7 +83,7 @@ struct DevicesView: View {
         .overlay {
             if loaded, tokens.isEmpty {
                 ContentUnavailableView("还没有设备凭据", systemImage: Theme.Icon.credentials,
-                                       description: Text(model.deviceID == nil ? "hub 更新后，这台 iPhone 会自动换成自己的凭据。" : ""))
+                                       description: Text(model.deviceID == nil ? Self.upgradeNote : ""))
             }
         }
         .themedPage()
@@ -85,9 +95,17 @@ struct DevicesView: View {
         ), titleVisibility: .visible, presenting: revoking) { t in
             Button(t.id == current ? "撤销并退出配对" : "撤销", role: .destructive) { Task { await revoke(t) } }
         } message: { t in
-            Text(t.id == current ? "这台 iPhone 会立刻断开，要重新扫码配对。" : "那台设备会立刻断开，要重新配对才能用。")
+            Text(t.id == current ? Self.revokeSelfNote : "那台设备会立刻断开，要重新配对才能用。")
         }
     }
+
+    #if os(macOS)
+    private static let upgradeNote = "hub 更新后，这台 Mac 会自动换成自己的凭据。"
+    private static let revokeSelfNote = "这台 Mac 会立刻断开，要重新粘贴配对链接。"
+    #else
+    private static let upgradeNote = "hub 更新后，这台 iPhone 会自动换成自己的凭据。"
+    private static let revokeSelfNote = "这台 iPhone 会立刻断开，要重新扫码配对。"
+    #endif
 
     private func row(_ t: APIClient.DeviceToken) -> some View {
         HStack(spacing: Theme.Space.m) {

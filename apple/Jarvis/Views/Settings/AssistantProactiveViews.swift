@@ -190,7 +190,12 @@ struct AssistantRoutinesView: View {
                 } header: {
                     Text("一次性跟进")
                 } footer: {
+                    #if os(macOS)
+                    // The Mac's long press is the right click (the row's contextMenu).
+                    Text("Jarvis 在对话里替自己安排的，到点自己醒来接着做。右键可以立即运行或删除。")
+                    #else
                     Text("Jarvis 在对话里替自己安排的，到点自己醒来接着做。左滑删除，长按可以立即运行。")
+                    #endif
                 }
             }
             if !lastRuns.isEmpty {
@@ -943,6 +948,12 @@ struct AssistantMemoryView: View {
                         .swipeActions(edge: .trailing) {
                             Button { pendingDelete = e } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
                         }
+                        #if os(macOS)
+                        // A swipe needs a trackpad: the right click deletes too.
+                        .contextMenu {
+                            Button(role: .destructive) { pendingDelete = e } label: { Label("删除", systemImage: Theme.Icon.delete) }
+                        }
+                        #endif
                     }
                 } footer: {
                     Text("Jarvis 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
