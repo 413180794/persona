@@ -17,7 +17,7 @@ final class ConnectionTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
-        app.launchJarvis()
+        app.launchPinned()
         return app
     }
 

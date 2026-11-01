@@ -22,7 +22,7 @@ final class DrawerSwipeTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistant", open, "-showDrawerProbe", "YES"]
-        app.launchJarvis()
+        app.launchPinned()
         XCTAssertTrue(app.buttons["jarvis-avatar"].waitForExistence(timeout: 15), "the Jarvis tab did not open")
         return app
     }

@@ -10,7 +10,7 @@ final class LiveActivityShots: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings"]
-            app.launchJarvis()
+            app.launchPinned()
             sleep(4)
         }
         XCUIDevice.shared.press(.home)

@@ -19,7 +19,7 @@ final class AssistantTitlesTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES", "-ui.oldLayout", shell ? "NO" : "YES"]
-        app.launchJarvis()
+        app.launchPinned()
         return app
     }
 

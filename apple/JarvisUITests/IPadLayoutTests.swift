@@ -30,7 +30,7 @@ final class IPadLayoutTests: XCTestCase {
     @MainActor func testFillsTheScreenWithASidebar() {
         for (name, orientation) in [("portrait", UIDeviceOrientation.portrait), ("landscape", .landscapeLeft)] {
             XCUIDevice.shared.orientation = orientation
-            app.launchJarvis()
+            app.launchPinned()
             let empty = app.staticTexts["选一个 Agent"]
             XCTAssertTrue(empty.waitForExistence(timeout: 20), "no detail column in \(name):\n\(app.debugDescription)")
             let window = app.windows.firstMatch.frame
@@ -60,7 +60,7 @@ final class IPadLayoutTests: XCTestCase {
     /// the list column staying (docs/machines.md「App」).
     @MainActor func testMachinesInTheDetailColumn() {
         XCUIDevice.shared.orientation = .landscapeLeft
-        app.launchJarvis()
+        app.launchPinned()
         let menu = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "分组")).firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 20), app.debugDescription)
         menu.tap()
@@ -88,7 +88,7 @@ final class IPadLayoutTests: XCTestCase {
         for (name, tint) in [("glass", "style"), ("glass", "coral")] {
             let style = "\(name)-\(tint)"
             app.launchArguments = base + ["-ui.style", name, "-ui.color", tint]
-            app.launchJarvis()
+            app.launchJarvis() // this test names its styles itself
             XCTAssertTrue(app.staticTexts["选一个 Agent"].waitForExistence(timeout: 20))
             sleep(1)
             var image = app.screenshot().image

@@ -41,7 +41,7 @@ final class ShellSearchTests: XCTestCase {
     @MainActor func testSearchTakesTheTopBarAndGivesItBack() {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-app.tab", "chats", "-dev.openChat", ""]
-        app.launchJarvis()
+        app.launchPinned()
         // Agents (a stored tab from another test, 设置, would open its sheet over the shell).
         see(app.buttons["agents-new"].firstMatch, "新建会话 on Agents", timeout: 15)
         let field = app.revealAgentsSearch()
@@ -77,7 +77,7 @@ final class ShellSearchTests: XCTestCase {
         for (page, title) in [("inbox", "收件箱"), ("knowledge", "知识库")] {
             app = XCUIApplication()
             app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-newAssistant", "YES", "-openShellPage", page]
-            app.launchJarvis()
+            app.launchPinned()
             see(app.navigationBars[title], "\(title) pushed on 助手", timeout: 15)
             let field = see(app.searchFields.firstMatch, "\(title)'s search")
             field.tapCenter()

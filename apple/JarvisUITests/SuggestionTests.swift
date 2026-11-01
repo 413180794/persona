@@ -11,7 +11,7 @@ final class SuggestionTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006"]
-        app.launchJarvis()
+        app.launchPinned()
         let pill = app.buttons["Claude 建议：" + suggestion]
         XCTAssertTrue(pill.waitForExistence(timeout: 15), "no suggestion:\n\(app.debugDescription)")
         pill.tap()

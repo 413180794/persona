@@ -20,7 +20,7 @@ final class TranslationTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", kind, "-inbox.source", "", "-openInboxFirst", "YES",
                                "-translate.enabled", "YES", "-translate.target", "zh-Hans", "-translate.mail", "YES",
                                "-translate.larkChats", chats]
-        app.launchJarvis()
+        app.launchPinned()
         return app
     }
 

@@ -22,7 +22,7 @@ final class RichReplyTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-00000000000a"]
-        app.launchJarvis()
+        app.launchPinned()
 
         let cell = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "按小时刷新")).firstMatch
         XCTAssertTrue(cell.waitForExistence(timeout: 20), "the reply did not open:\n\(app.debugDescription)")

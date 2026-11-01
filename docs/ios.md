@@ -430,6 +430,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 和 BeautifulUI 一样，层次主要靠字重和颜色：行标题是 body 大小加粗，分组头是 caption 大小加粗、次要色，比行标题小；
     Markdown 的一级标题是 title，其余标题是 heading，靠上方的空白分开；代码块是 code。
   - 间距 `Theme.Space` 是 4pt 网格（2 4 6 8 12 16 24 32），竖向的 `VStack(spacing:)` 都用它；横向间距在按钮文字旁边，没有统一改。
+    页面的左右边是 `Theme.Space.page`（16）：一页上的搜索框、筛选 chip、分组标题、卡片和胶囊都对齐它，不各用各的内边距。
   - 尺寸 `Theme.Size`（2026-10-31 用户要求）：图标框、圆点、头像、点按区域、缩略图、标签列宽这类挨着文字的尺寸都有名字，默认字号下和原来的点数一样，
     用 `.scaledFrame(width:height:)` / `.scaledFrame(minWidth:…)` 随字号缩放，到辅助功能大字号最多 1.6×（44pt 的按钮不至于占掉三分之一屏幕）。
     4pt 及以下的线、分隔条、进度条不缩，用普通 `frame`；按视图自己的几何算出来的尺寸照旧；手表不跟 App 的字号，保留自己的尺寸。

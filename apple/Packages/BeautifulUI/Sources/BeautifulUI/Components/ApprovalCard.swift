@@ -9,16 +9,52 @@ public struct ApprovalQuestion: Identifiable, Sendable {
         case multiple
     }
 
+    /// One answer to pick: its words, an optional line under them and an optional tag (a host's "Recommended").
+    public struct Choice: Hashable, Sendable {
+        public var label: String
+        public var detail: String?
+        public var tag: String?
+
+        public init(_ label: String, detail: String? = nil, tag: String? = nil) {
+            self.label = label
+            self.detail = detail
+            self.tag = tag
+        }
+    }
+
     public var id: String
     public var prompt: String
     public var kind: Kind
-    public var options: [String]
+    public var choices: [Choice]
+    /// A short label above the prompt, e.g. the topic of the question.
+    public var eyebrow: String?
+    /// Whether the person can type their own answer instead (the "Something else…" field).
+    public var allowsCustom: Bool
+    /// The free-text field's placeholder for this question; `nil` uses the card's.
+    public var customPlaceholder: String?
+
+    public var options: [String] { choices.map(\.label) }
 
     public init(id: String? = nil, _ prompt: String, kind: Kind = .single, options: [String]) {
+        self.init(id: id, prompt, kind: kind, choices: options.map { Choice($0) })
+    }
+
+    public init(
+        id: String? = nil,
+        _ prompt: String,
+        kind: Kind = .single,
+        choices: [Choice],
+        eyebrow: String? = nil,
+        allowsCustom: Bool = true,
+        customPlaceholder: String? = nil
+    ) {
         self.id = id ?? prompt
         self.prompt = prompt
         self.kind = kind
-        self.options = options
+        self.choices = choices
+        self.eyebrow = eyebrow
+        self.allowsCustom = allowsCustom
+        self.customPlaceholder = customPlaceholder
     }
 }
 
@@ -56,18 +92,39 @@ public struct ApprovalAnswers: Sendable, Equatable {
     }
 }
 
+/// How a host fits the card in.
+public struct ApprovalCardOptions: Sendable {
+    /// The card's own surface and shadow; off when the host's panel already is one.
+    public var drawsSurface = true
+    /// The original's 320 pt; `nil` fills the host's width.
+    public var maxWidth: CGFloat? = 320
+    /// Picking a single-choice answer moves on (and on the last question, sends) after a beat. Off, the
+    /// person sends with the button — for answers that are costly to get wrong, such as an approval.
+    public var autoAdvance = true
+    /// The × that closes the card.
+    public var showsDismiss = true
+    /// "Start over" on the sent state.
+    public var allowsStartOver = true
+    /// The send button shows a spinner and the card takes no input (the host is submitting).
+    public var isSending = false
+
+    public init() {}
+}
+
 /// Human-in-the-loop questions, one at a time: the card slides between questions and
 /// resizes to fit, the step counter rolls like an odometer, single-choice answers advance on
 /// their own and multi-select waits for Continue.
-public struct ApprovalCard: View {
+public struct ApprovalCard<Context: View>: View {
     var questions: [ApprovalQuestion]
-    var skipLabel: String
+    var skipLabel: String?
     var continueLabel: String
     var sendLabel: String
     var customPlaceholder: String
     var sentMessage: String
     var onSubmit: ((ApprovalAnswers) -> Void)?
     var onDismiss: (() -> Void)?
+    var options: Options
+    var context: (Int) -> Context
 
     @State private var index: Int
     @State private var answers: ApprovalAnswers
@@ -78,21 +135,29 @@ public struct ApprovalCard: View {
     @FocusState private var customFocused: Bool
     @Environment(\.buiTheme) private var theme
 
+    public typealias Options = ApprovalCardOptions
+
     /// - Parameters:
     ///   - startAt / answers / submitted: resume a partly answered approval.
+    ///   - skipLabel: `nil` hides Skip.
+    ///   - context: a view under question `n`'s prompt, e.g. the command an approval is for.
     public init(
         questions: [ApprovalQuestion],
         startAt: Int = 0,
         answers: ApprovalAnswers = ApprovalAnswers(),
         submitted: Bool = false,
-        skipLabel: String = "Skip",
+        skipLabel: String? = "Skip",
         continueLabel: String = "Continue",
         sendLabel: String = "Send",
         customPlaceholder: String = "Something else…",
         sentMessage: String = "Answers sent",
+        options: Options = Options(),
         onSubmit: ((ApprovalAnswers) -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder context: @escaping (Int) -> Context
     ) {
+        self.options = options
+        self.context = context
         self.questions = questions
         self.skipLabel = skipLabel
         self.continueLabel = continueLabel
@@ -107,12 +172,12 @@ public struct ApprovalCard: View {
     }
 
     private var isLast: Bool { index == questions.count - 1 }
-    private static let slide = BUICurve(0.22, 1, 0.36, 1).animation(duration: 0.36)
+    private static var slide: Animation { BUICurve(0.22, 1, 0.36, 1).animation(duration: 0.36) }
 
     public var body: some View {
         Group {
             if !open {
-                Button("Open approval") {
+                Button(theme.strings.openApproval) {
                     withAnimation(BUIMotion.popIn) { open = true }
                 }
                 .buttonStyle(.bui(.secondary, fontSize: 12.5))
@@ -122,7 +187,7 @@ public struct ApprovalCard: View {
                 card
             }
         }
-        .frame(maxWidth: 320)
+        .frame(maxWidth: options.maxWidth ?? .infinity)
     }
 
     private var sentView: some View {
@@ -140,14 +205,16 @@ public struct ApprovalCard: View {
             .padding(.trailing, 10)
             .padding(.vertical, 4)
             .background(theme.colors.greenTint, in: Capsule())
+            if options.allowsStartOver {
             Button {
                 reset()
             } label: {
-                Text("Start over")
+                Text(theme.strings.startOver)
                     .buiFont(BUITextStyle(size: 12, weight: .medium))
                     .foregroundStyle(theme.colors.ink3)
             }
             .buttonStyle(.plain)
+            }
             Spacer(minLength: 0)
         }
         .buiEntrance(.popIn, duration: 0.26)
@@ -165,11 +232,15 @@ public struct ApprovalCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .clipped()
-            .padding(12)
+            .padding(options.drawsSurface ? 12 : 0)
             footer
+                .padding(options.drawsSurface ? 0 : -10)
+                .padding(.top, options.drawsSurface ? 0 : 12)
         }
-        .buiSurface(radius: theme.radii.card, elevation: .card)
+        .disabled(options.isSending)
+        .modifier(CardSurface(active: options.drawsSurface))
         .overlay(alignment: .topTrailing) {
+            if options.showsDismiss {
             Button {
                 withAnimation(BUIMotion.standard) { open = false }
                 onDismiss?()
@@ -177,8 +248,9 @@ public struct ApprovalCard: View {
                 BUIIcon(.close, size: 14, lineWidth: 2.2)
             }
             .buttonStyle(IconButtonStyle())
-            .padding(10)
-            .accessibilityLabel("Dismiss")
+            .padding(options.drawsSurface ? 10 : -2)
+            .accessibilityLabel(theme.strings.dismiss)
+            }
         }
         .buiEntrance(.fadeUp, duration: 0.38)
     }
@@ -186,23 +258,44 @@ public struct ApprovalCard: View {
     private func question(_ question: ApprovalQuestion, at qIndex: Int) -> some View {
         let picked = answers.picks[qIndex] ?? []
         return VStack(alignment: .leading, spacing: 10) {
-            Text(question.prompt)
-                .buiFont(BUITextStyle(size: 14, weight: .medium))
-                .foregroundStyle(theme.colors.ink)
-                .padding(.trailing, 28)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(question.options.enumerated()), id: \.offset) { option, label in
+                if let eyebrow = question.eyebrow {
+                    Text(eyebrow)
+                        .buiFont(BUITextStyle(size: 11.5, weight: .medium))
+                        .foregroundStyle(theme.colors.ink3)
+                }
+                Text(question.prompt)
+                    .buiFont(BUITextStyle(size: 14, weight: .medium))
+                    .foregroundStyle(theme.colors.ink)
+                    .padding(.trailing, options.showsDismiss ? 28 : 0)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            context(qIndex)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(question.choices.enumerated()), id: \.offset) { option, choice in
                     let on = picked.contains(option)
                     Button {
                         pick(option, question: question)
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(alignment: choice.detail == nil ? .center : .top, spacing: 6) {
                             Indicator(kind: question.kind, on: on)
-                            Text(label)
-                                .buiFont(BUITextStyle(size: 13, lineHeight: 1))
-                                .foregroundStyle(on ? theme.colors.ink : theme.colors.ink2)
+                                .padding(.top, choice.detail == nil ? 0 : 1)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(choice.label)
+                                        .buiFont(BUITextStyle(size: 13, lineHeight: 1))
+                                        .foregroundStyle(on ? theme.colors.ink : theme.colors.ink2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let tag = choice.tag { BUIPill(tag, tone: .accent) }
+                                }
+                                if let detail = choice.detail, !detail.isEmpty {
+                                    Text(detail)
+                                        .buiFont(BUITextStyle(size: 12, lineHeight: 1.35))
+                                        .foregroundStyle(theme.colors.ink3)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
                             Spacer(minLength: 0)
                         }
                         .padding(.leading, 4)
@@ -213,7 +306,8 @@ public struct ApprovalCard: View {
                     .buttonStyle(PressHighlightStyle(radius: theme.radii.control, color: theme.colors.hover))
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
-                TextField(customPlaceholder, text: Binding(
+                if question.allowsCustom {
+                TextField(question.customPlaceholder ?? customPlaceholder, text: Binding(
                     get: { answers.custom[qIndex] ?? "" },
                     set: { text in answers.setCustom(text, in: qIndex, kind: question.kind) }
                 ))
@@ -225,26 +319,30 @@ public struct ApprovalCard: View {
                 .padding(.leading, 10)
                 .padding(.trailing, 8)
                 .padding(.vertical, 4)
-                .accessibilityLabel("Custom answer")
+                .accessibilityLabel(theme.strings.customAnswer)
+                }
             }
         }
     }
 
     private var footer: some View {
         HStack(spacing: 12) {
+            if questions.count > 1 {
             HStack(spacing: 4) {
                 stepButton(.up, disabled: index <= 0) { go(to: index - 1) }
-                    .accessibilityLabel("Previous question")
+                    .accessibilityLabel(theme.strings.previousQuestion)
                 Text("\(index + 1) / \(questions.count)")
                     .buiFont(BUITextStyle(size: 12, weight: .medium, lineHeight: 1, tracking: -0.008))
                     .monospacedDigit()
                     .foregroundStyle(theme.colors.ink3)
                     .contentTransition(.numericText(countsDown: !forward))
                 stepButton(.down, disabled: isLast) { go(to: index + 1) }
-                    .accessibilityLabel("Next question")
+                    .accessibilityLabel(theme.strings.nextQuestion)
+            }
             }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
+                if let skipLabel {
                 Button(skipLabel) {
                     if isLast {
                         withAnimation(BUIMotion.standard) { open = false }
@@ -254,7 +352,13 @@ public struct ApprovalCard: View {
                     }
                 }
                 .buttonStyle(.bui(.ghost))
-                Button(isLast ? sendLabel : continueLabel) { advance() }
+                }
+                Button { advance() } label: {
+                    HStack(spacing: 6) {
+                        if options.isSending && isLast { BUISpinner(size: 11) }
+                        Text(isLast ? sendLabel : continueLabel).lineLimit(1)
+                    }
+                }
                     .buttonStyle(.bui(.accent))
                     .disabled(!answers.hasAnswer(index))
             }
@@ -283,7 +387,7 @@ public struct ApprovalCard: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             answers.toggle(option, in: index, kind: question.kind)
         }
-        guard question.kind == .single else { return }
+        guard question.kind == .single, options.autoAdvance else { return }
         advanceTask?.cancel()
         advanceTask = Task {
             try? await Task.sleep(for: .milliseconds(480))
@@ -319,6 +423,36 @@ public struct ApprovalCard: View {
             sent = false
             open = true
         }
+    }
+}
+
+public extension ApprovalCard where Context == EmptyView {
+    init(
+        questions: [ApprovalQuestion],
+        startAt: Int = 0,
+        answers: ApprovalAnswers = ApprovalAnswers(),
+        submitted: Bool = false,
+        skipLabel: String? = "Skip",
+        continueLabel: String = "Continue",
+        sendLabel: String = "Send",
+        customPlaceholder: String = "Something else…",
+        sentMessage: String = "Answers sent",
+        options: Options = Options(),
+        onSubmit: ((ApprovalAnswers) -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
+    ) {
+        self.init(questions: questions, startAt: startAt, answers: answers, submitted: submitted, skipLabel: skipLabel,
+                  continueLabel: continueLabel, sendLabel: sendLabel, customPlaceholder: customPlaceholder,
+                  sentMessage: sentMessage, options: options, onSubmit: onSubmit, onDismiss: onDismiss) { _ in EmptyView() }
+    }
+}
+
+private struct CardSurface: ViewModifier {
+    var active: Bool
+    @Environment(\.buiTheme) private var theme
+
+    func body(content: Content) -> some View {
+        if active { content.buiSurface(radius: theme.radii.card, elevation: .card) } else { content }
     }
 }
 

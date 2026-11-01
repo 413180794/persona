@@ -37,7 +37,7 @@ final class LiveUpdateTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev", "-openAgentsFresh", "YES", "-openChatsFresh", "YES", "-perfCounts", "YES"]
-        app.launchJarvis()
+        app.launchPinned()
     }
 
     @discardableResult
@@ -183,6 +183,14 @@ final class LiveUpdateTests: XCTestCase {
         if head.label == "展开过程" { head.tap() }
         // The screenshot is the result of a tool call: open that step.
         let step = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "截一张小组件的图")).firstMatch
+        if UITestStyle.isBeautiful, !step.waitForExistence(timeout: 3) {
+            // The BeautifulUI style folds calls into runs of chips: open them until the screenshot's shows.
+            let runs = app.buttons.matching(identifier: "tool-run")
+            for i in 0..<runs.count where !step.exists {
+                runs.element(boundBy: i).tap()
+                _ = step.waitForExistence(timeout: 2)
+            }
+        }
         XCTAssertTrue(step.waitForExistence(timeout: 5), "the screenshot's step")
         step.tap()
         let image = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "图片，点按查看大图")).firstMatch

@@ -23,7 +23,7 @@ final class BackgroundNoticeTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000009"]
-        app.launchJarvis()
+        app.launchPinned()
 
         let work = app.buttons["work-head"]
         XCTAssertTrue(work.waitForExistence(timeout: 20), "the chat did not open:\n\(app.debugDescription)")

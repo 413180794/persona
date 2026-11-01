@@ -21,7 +21,7 @@ final class PhotoSaveTests: XCTestCase {
         app.resetAuthorizationStatus(for: .photos) // the alert comes up again, like on a fresh install
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", session] + extra
-        app.launchJarvis()
+        app.launchPinned()
         return app
     }
 

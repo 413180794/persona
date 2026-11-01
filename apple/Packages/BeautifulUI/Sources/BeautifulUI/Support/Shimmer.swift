@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The site's `shimmer-text` effect: a bright band sweeping left to right across text
-/// drawn in `ink3` (1.4 s, linear, forever). The sweep is a single animated offset, so
-/// the text's body is not re-evaluated per frame.
+/// drawn in `ink3` (1.4 s, linear, forever). The sweep is a layer animation, so the text's body is not re-evaluated
+/// per frame and nothing runs on the main thread for it.
 struct ShimmerModifier: ViewModifier {
     var active: Bool
     var duration: Double
@@ -10,36 +10,16 @@ struct ShimmerModifier: ViewModifier {
     var highlight: Color?
     @Environment(\.buiTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = 0
 
     func body(content: Content) -> some View {
         if active && !reduceMotion {
             content
                 .foregroundStyle(base ?? theme.colors.ink3)
                 .overlay {
-                    GeometryReader { proxy in
-                        // background-size: 200%; background-position 150% → -50%
-                        // moves the band's centre from -0.5w to 1.5w.
-                        LinearGradient(
-                            stops: [
-                                .init(color: (highlight ?? theme.colors.ink).opacity(0), location: 0.35),
-                                .init(color: highlight ?? theme.colors.ink, location: 0.5),
-                                .init(color: (highlight ?? theme.colors.ink).opacity(0), location: 0.65),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: proxy.size.width * 2)
-                        .offset(x: proxy.size.width * (phase * 2 - 1.5))
-                    }
-                    .mask(content)
-                    .allowsHitTesting(false)
-                }
-                .onAppear {
-                    phase = 0
-                    withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
-                        phase = 1
-                    }
+                    // The band itself is a Core Animation layer on iOS (`SweepBand`): the text is drawn once.
+                    SweepBand(color: highlight ?? theme.colors.ink, duration: duration)
+                        .mask(content)
+                        .allowsHitTesting(false)
                 }
         } else {
             content.foregroundStyle(active ? (base ?? theme.colors.ink2) : theme.colors.ink)

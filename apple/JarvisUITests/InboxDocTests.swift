@@ -16,7 +16,7 @@ final class InboxDocTests: XCTestCase {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "mention", "-inbox.source", ""]
-        app.launchJarvis()
+        app.launchPinned()
     }
 
     private func json(_ path: String) -> [String: Any] {

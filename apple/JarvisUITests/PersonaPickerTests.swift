@@ -23,7 +23,7 @@ final class PersonaPickerTests: XCTestCase {
             let app = XCUIApplication()
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             app.launchArguments = ["-pairURL", pair, "-openPersona", "jarvis"]
-            app.launchJarvis()
+            app.launchPinned()
             _ = app.tabBars.firstMatch.waitForExistence(timeout: 10)
             app.terminate()
         }
@@ -35,7 +35,7 @@ final class PersonaPickerTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openAssistant", main, "-openPersona", "jarvis"]
-        app.launchJarvis()
+        app.launchPinned()
         return app
     }
 

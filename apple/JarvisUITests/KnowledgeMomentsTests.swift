@@ -11,7 +11,7 @@ final class KnowledgeMomentsTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-openAssistantPage", "knowledge",
                                "-showKnowledgeEntry", "projects/weather-app"]
-        app.launch()
+        app.launchPinned()
 
         let post = app.buttons.matching(identifier: "kb.moment").firstMatch
         let list = app.collectionViews.firstMatch

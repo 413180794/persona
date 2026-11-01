@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// Agent state dot (docs/agent-states.md): needs you breathes — the one dot that moves, and not with Reduce Motion;
@@ -72,6 +73,7 @@ struct SessionAvatar: View {
 /// `.neutral`: secondary words on a soft gray (a model, a version, a tab, 私聊);
 /// `.tint`: a meaning's words on its soft fill (a state's tone, @我, 推荐 in the AI's color);
 /// `.outline`: secondary words in a hairline (which agent: Claude / Codex).
+/// The BeautifulUI style draws it as that library's pill (`BUIPill`).
 struct Chip: View {
     enum Look {
         case neutral
@@ -89,6 +91,24 @@ struct Chip: View {
     var shrinks = false
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            BUIPill(text, tone: pillTone, icon: symbol.map { .symbol($0) }, truncates: shrinks)
+        } else {
+            plain
+        }
+    }
+
+    /// The BeautifulUI style: its pill in the look's colors.
+    private var pillTone: BUIPill.Tone {
+        switch look {
+        case .neutral: .neutral
+        // A tone's tint is already soft; a bare color gets its own.
+        case .tint(let c, let text): .custom(ink: text ?? c, fill: text == nil ? c.opacity(0.12) : c)
+        case .outline: .outline
+        }
+    }
+
+    private var plain: some View {
         Group {
             if let symbol {
                 HStack(spacing: Theme.Space.xs) {
@@ -186,6 +206,16 @@ struct EmptyStateView: View {
     var action: (title: String, run: () -> Void)?
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            // BeautifulUI's empty state: the mark on a raised tile, the title, a line of help and one action.
+            BUIEmptyState(symbol: symbol, title: title, message: message, actionTitle: action?.title, action: action?.run)
+                .frame(maxWidth: .infinity)
+        } else {
+            plain
+        }
+    }
+
+    private var plain: some View {
         VStack(spacing: Theme.Space.l) {
             Image(systemName: symbol)
                 .font(Theme.Font.display).imageScale(.large)
@@ -208,11 +238,17 @@ struct EmptyStateView: View {
 }
 
 extension View {
-    /// Rounded card surface used across lists.
-    func card(padding: CGFloat = 14, radius: CGFloat = Theme.Radius.card) -> some View {
-        self.padding(padding)
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
+    /// Rounded card surface used across lists; in the BeautifulUI style its surface (the style's card color, its ring and
+    /// soft shadow).
+    @ViewBuilder func card(padding: CGFloat = 14, radius: CGFloat = Theme.Radius.card) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            self.padding(padding)
+                .buiSurface(radius: radius, elevation: .card)
+        } else {
+            self.padding(padding)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: radius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Theme.cardStroke, lineWidth: 0.5))
+        }
     }
 }
 
@@ -374,14 +410,24 @@ struct LoadableContent<Value, Content: View>: View {
     var body: some View {
         switch state {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            if AppStyle.current.usesBeautifulUI {
+                // A page loading, not a row: BeautifulUI's pixel loader is fine here.
+                LoadingState("正在载入", pattern: .dots).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         case .loaded(let value):
             content(value)
         case .failed(let message):
-            ContentUnavailableView {
-                Label(message, systemImage: Theme.Icon.error)
-            } actions: {
-                if let retry { Button("重试", action: retry).themedButton() }
+            if AppStyle.current.usesBeautifulUI {
+                BUIEmptyState(symbol: Theme.Icon.error, title: message, actionTitle: retry == nil ? nil : "重试", action: retry)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView {
+                    Label(message, systemImage: Theme.Icon.error)
+                } actions: {
+                    if let retry { Button("重试", action: retry).themedButton() }
+                }
             }
         }
     }

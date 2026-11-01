@@ -317,7 +317,7 @@ private extension View {
 }
 
 /// `active:scale-[0.98]` plus the press fill that stands in for hover.
-private struct RowPressScaleStyle: ButtonStyle {
+struct RowPressScaleStyle: ButtonStyle {
     @Environment(\.buiTheme) private var theme
 
     func makeBody(configuration: Configuration) -> some View {

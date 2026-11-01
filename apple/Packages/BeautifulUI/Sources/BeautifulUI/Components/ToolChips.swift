@@ -162,24 +162,9 @@ public struct ToolChips: View {
     }
 
     private var header: some View {
-        Button {
+        ToolRunHeader(summary, isOpen: open) {
             withAnimation(BUICurve.twEaseInOut.animation(duration: 0.3)) { open.toggle() }
-        } label: {
-            HStack(spacing: 6) {
-                BUIIcon(.chevronDown, size: 12, lineWidth: 2.2)
-                    .rotationEffect(.degrees(open ? 0 : -90))
-                Text(summary)
-                    .buiFont(BUITextStyle(size: 12.5))
-                    .monospacedDigit()
-            }
-            .foregroundStyle(theme.colors.ink2)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .contentShape(.rect(cornerRadius: theme.radii.control))
         }
-        .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
-        .padding(.horizontal, -6)
-        .accessibilityValue(theme.strings.expanded(open))
     }
 
     private func row(_ call: ToolCall) -> some View {
@@ -223,34 +208,162 @@ public struct ToolChips: View {
     }
 
     private func diffSection(_ diffs: [FileDiff]) -> some View {
+        FileDiffChips(diffs, selected: previewFile, moreLabel: moreLabel, onMore: onMore) { diff in
+            withAnimation(BUICurve.outStrong.animation(duration: 0.16)) {
+                previewFile = previewFile == diff.file ? nil : diff.file
+            }
+        }
+        .padding(.top, 10)
+        .overlay(alignment: .top) {
+            Rectangle().fill(theme.colors.line).frame(height: 1)
+        }
+        .padding(.top, 10)
+    }
+}
+
+/// The collapsible header of a run of tool calls: a chevron (a spinner while the run is going, the words shimmering)
+/// and a summary such as "4 tool calls, 2 messages". `accessory` sits at the trailing end.
+public struct ToolRunHeader<Label: View, Accessory: View>: View {
+    var isOpen: Bool
+    var isRunning: Bool
+    var action: () -> Void
+    var label: Label
+    var accessory: Accessory
+    @Environment(\.buiTheme) private var theme
+
+    public init(
+        isOpen: Bool,
+        isRunning: Bool = false,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.isOpen = isOpen
+        self.isRunning = isRunning
+        self.action = action
+        self.label = label()
+        self.accessory = accessory()
+    }
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            Button(action: action) {
+                ToolRunTitle(isOpen: isOpen, isRunning: isRunning) { label }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .contentShape(.rect(cornerRadius: theme.radii.control))
+            }
+            .buttonStyle(PressHighlightStyle(radius: theme.radii.control))
+            .padding(.horizontal, -6)
+            .accessibilityValue(theme.strings.expanded(isOpen))
+            Spacer(minLength: 0)
+            accessory
+        }
+    }
+}
+
+/// `ToolRunHeader`'s words without its button, for a host that wraps them in its own: the chevron (a spinner while
+/// running) and the summary, shimmering while the run goes on.
+public struct ToolRunTitle<Label: View>: View {
+    var isOpen: Bool
+    var isRunning: Bool
+    var label: Label
+    @Environment(\.buiTheme) private var theme
+
+    private var styled: some View {
+        label
+            .buiFont(BUITextStyle(size: 12.5))
+            .monospacedDigit()
+            .lineLimit(1)
+    }
+
+    public init(isOpen: Bool, isRunning: Bool = false, @ViewBuilder label: () -> Label) {
+        self.isOpen = isOpen
+        self.isRunning = isRunning
+        self.label = label()
+    }
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            if isRunning {
+                BUISpinner(size: 11 * theme.typeScale)
+                    .frame(width: 12 * theme.typeScale)
+            } else {
+                BUIIcon(.chevronDown, size: 12 * theme.typeScale, lineWidth: 2.2)
+                    .rotationEffect(.degrees(isOpen ? 0 : -90))
+            }
+            // The shimmer draws its own inks; settled, the words keep the header's ink-2.
+            if isRunning {
+                styled.buiShimmer()
+            } else {
+                styled
+            }
+        }
+        .foregroundStyle(theme.colors.ink2)
+    }
+}
+
+public extension ToolRunHeader where Label == Text, Accessory == EmptyView {
+    init(_ summary: String, isOpen: Bool, isRunning: Bool = false, action: @escaping () -> Void) {
+        self.init(isOpen: isOpen, isRunning: isRunning, action: action) { Text(summary) } accessory: { EmptyView() }
+    }
+}
+
+/// The files a run changed, as chips that wrap: the name in the code face with its green +N and red −N, then an
+/// optional "+2 more". Tapping a chip calls back with its file (`ToolChips` opens a diff preview under it).
+public struct FileDiffChips: View {
+    var diffs: [FileDiff]
+    var selected: String?
+    var moreLabel: String?
+    var onMore: (() -> Void)?
+    var onSelect: ((FileDiff) -> Void)?
+    @Environment(\.buiTheme) private var theme
+
+    public init(
+        _ diffs: [FileDiff],
+        selected: String? = nil,
+        moreLabel: String? = nil,
+        onMore: (() -> Void)? = nil,
+        onSelect: ((FileDiff) -> Void)? = nil
+    ) {
+        self.diffs = diffs
+        self.selected = selected
+        self.moreLabel = moreLabel
+        self.onMore = onMore
+        self.onSelect = onSelect
+    }
+
+    public var body: some View {
         BUIFlowLayout(spacing: 6) {
             ForEach(Array(diffs.enumerated()), id: \.element.id) { index, diff in
                 Button {
-                    withAnimation(BUICurve.outStrong.animation(duration: 0.16)) {
-                        previewFile = previewFile == diff.file ? nil : diff.file
-                    }
+                    onSelect?(diff)
                 } label: {
                     HStack(spacing: 8) {
                         Text(diff.file)
                             .foregroundStyle(theme.colors.ink)
                             .lineLimit(1)
-                        Text("+\(diff.additions)")
-                            .foregroundStyle(theme.colors.green)
+                            .truncationMode(.middle)
+                        if diff.additions > 0 || diff.deletions == 0 {
+                            Text("+\(diff.additions)")
+                                .foregroundStyle(theme.colors.green)
+                        }
                         if diff.deletions > 0 {
-                            Text("−\(diff.deletions)")
+                            Text("\u{2212}\(diff.deletions)")
                                 .foregroundStyle(theme.colors.red)
                         }
                     }
                     .buiFont(BUITextStyle(size: 11.5, design: .monospaced))
                     .monospacedDigit()
                     .padding(.horizontal, 8)
-                    .frame(height: 28)
-                    .buiSurface(radius: theme.radii.chip, fill: previewFile == diff.file ? theme.colors.hover : nil, elevation: .button)
+                    .frame(height: 28 * max(1, theme.typeScale * 0.9))
+                    .buiSurface(radius: theme.radii.chip, fill: selected == diff.file ? theme.colors.hover : nil, elevation: .button)
                     .contentShape(.rect(cornerRadius: theme.radii.chip))
                 }
                 .buttonStyle(.plain)
+                .disabled(onSelect == nil)
                 .anchorPreference(key: DiffChipAnchor.self, value: .bounds) { [diff.file: $0] }
-                .accessibilityLabel("Show diff for \(diff.file)")
+                .accessibilityLabel("\(diff.file) +\(diff.additions) \u{2212}\(diff.deletions)")
                 .buiEntrance(.popIn, duration: 0.25, delay: Double(index) * 0.08)
             }
             if let moreLabel {
@@ -261,17 +374,13 @@ public struct ToolChips: View {
                         .buiFont(BUITextStyle(size: 11.5, design: .monospaced))
                         .foregroundStyle(theme.colors.ink3)
                         .padding(.horizontal, 6)
-                        .frame(height: 28)
+                        .frame(height: 28 * max(1, theme.typeScale * 0.9))
                 }
                 .buttonStyle(.plain)
+                .disabled(onMore == nil)
                 .buiEntrance(.fadeIn, duration: 0.3, delay: Double(diffs.count) * 0.08, curve: .easeOut)
             }
         }
-        .padding(.top, 10)
-        .overlay(alignment: .top) {
-            Rectangle().fill(theme.colors.line).frame(height: 1)
-        }
-        .padding(.top, 10)
     }
 }
 

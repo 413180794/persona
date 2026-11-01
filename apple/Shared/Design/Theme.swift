@@ -38,9 +38,12 @@ nonisolated enum Theme {
     #if os(watchOS)
     static let systemPage = Color.black
     static let systemCard = Color(white: 0.12)
+    static let groupedCard = Color(white: 0.12)
     #else
     static let systemPage = Color(uiColor: .systemBackground)
     static let systemCard = Color(uiColor: .secondarySystemBackground)
+    /// A card on a grouped page: white in light, where `systemCard` is the grouped page's own gray (the same in dark).
+    static let groupedCard = Color(uiColor: .secondarySystemGroupedBackground)
     #endif
 
     static var accent: Color { spec.accent }
@@ -120,6 +123,8 @@ nonisolated enum Theme {
         static let block: CGFloat = l
         /// Between sections.
         static let section: CGFloat = xl
+        /// A page's left and right edge: its search field, filter chips, section titles and cards line up on it.
+        static let page: CGFloat = l
     }
 
     /// Three grays for backgrounds instead of `Color.primary.opacity(…)`: they are the system fills, so they read in

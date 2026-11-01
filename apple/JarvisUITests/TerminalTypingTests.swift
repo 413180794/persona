@@ -17,7 +17,7 @@ final class TerminalTypingTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "mirror"]
-        app.launchJarvis()
+        app.launchPinned()
 
         func sent() -> [(keys: [String], text: String)] {
             guard let data = try? Data(contentsOf: URL(string: hub + "/mock/keys")!),
@@ -66,7 +66,7 @@ final class TerminalTypingTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
-        app.launchJarvis()
+        app.launchPinned()
 
         func input() -> [[String: Any]] {
             guard let data = try? Data(contentsOf: URL(string: hub + "/mock/terminal_input")!),
@@ -135,7 +135,7 @@ final class TerminalTypingTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget, "-openPane", "terminal",
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
         app.launchArguments += engine
-        app.launchJarvis()
+        app.launchPinned()
         func input() -> [[String: Any]] {
             guard let data = try? Data(contentsOf: URL(string: hub + "/mock/terminal_input")!),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
@@ -182,7 +182,7 @@ final class TerminalTypingTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/" + widget,
                                "-terminalInputMode", "direct", "-terminalTipsSeen", "YES", "-terminalSize", "phone"]
-        app.launchJarvis()
+        app.launchPinned()
         let tab = app.buttons["更多"].firstMatch // the terminal is in the header's ··· menu
         XCTAssertTrue(tab.waitForExistence(timeout: 15), "no session page:\n\(app.debugDescription)")
         sleep(3) // connected by now

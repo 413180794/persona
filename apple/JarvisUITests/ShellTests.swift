@@ -13,7 +13,7 @@ final class ShellTests: XCTestCase {
     @MainActor private func launch(_ extra: [String] = [], emptyChat: Bool = true) {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO"] + (emptyChat ? ["-newAssistant", "YES"] : []) + extra
-        app.launchJarvis()
+        app.launchPinned()
     }
 
     @MainActor @discardableResult private func see(_ e: XCUIElement, _ what: String, timeout: TimeInterval = 10) -> XCUIElement {

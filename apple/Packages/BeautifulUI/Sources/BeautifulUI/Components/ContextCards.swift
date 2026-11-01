@@ -28,24 +28,44 @@ public struct ContextChunk: Identifiable, Sendable {
 /// Retrieved chunks as cards with their source chips. Cards fade up in turn; source chips
 /// pop in 0.7 s later.
 public struct ContextCards: View {
-    var title: String
+    var title: String?
     var count: String?
     var chunks: [ContextChunk]
+    var maxWidth: CGFloat?
+    var bodyLines: Int?
     var onOpenSource: ((ContextChunk) -> Void)?
 
     @State private var chipsShown = false
     @Environment(\.buiTheme) private var theme
     @Environment(\.openURL) private var openURL
 
-    public init(title: String = "All chunks", count: String? = nil, chunks: [ContextChunk], onOpenSource: ((ContextChunk) -> Void)? = nil) {
+    /// - Parameters:
+    ///   - title: `nil` leaves out the heading row (a host showing a quote or two above a message).
+    ///   - maxWidth: the original's 380 pt; `nil` fills the host's width.
+    ///   - bodyLines: cut each chunk's text after this many lines.
+    public init(
+        title: String? = "All chunks",
+        count: String? = nil,
+        chunks: [ContextChunk],
+        maxWidth: CGFloat? = 380,
+        bodyLines: Int? = nil,
+        onOpenSource: ((ContextChunk) -> Void)? = nil
+    ) {
         self.title = title
         self.count = count
         self.chunks = chunks
+        self.maxWidth = maxWidth
+        self.bodyLines = bodyLines
         self.onOpenSource = onOpenSource
     }
 
+    /// The source chips pop in after the cards; with entrances off (a host's lazy list) they are simply there, and no
+    /// task starts each time the cards appear.
+    private var showsChips: Bool { chipsShown || !theme.entrances }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let title {
             HStack(spacing: 8) {
                 Text(title)
                     .buiFont(.title)
@@ -63,17 +83,15 @@ public struct ContextCards: View {
             }
             .padding(.horizontal, 2)
             .buiEntrance(.fadeIn, duration: 0.4, curve: .easeOut)
+            }
 
             ForEach(Array(chunks.enumerated()), id: \.element.id) { index, chunk in
                 card(chunk, index: index)
                     .buiEntrance(.fadeUp, duration: 0.4, delay: Double(index) * 0.1)
             }
         }
-        .frame(maxWidth: 380)
-        .task {
-            try? await Task.sleep(for: .milliseconds(700))
-            chipsShown = true
-        }
+        .frame(maxWidth: maxWidth ?? .infinity)
+        .modifier(RevealChips(active: theme.entrances, shown: $chipsShown))
     }
 
     private func card(_ chunk: ContextChunk, index: Int) -> some View {
@@ -101,6 +119,7 @@ public struct ContextCards: View {
             Text(chunk.body)
                 .buiFont(BUITextStyle(size: 12.5, lineHeight: 1.625))
                 .foregroundStyle(theme.colors.ink2)
+                .lineLimit(bodyLines)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
@@ -130,14 +149,31 @@ public struct ContextCards: View {
                 .buiSurface(Capsule(), fill: theme.colors.inset, elevation: .button)
             }
             .buttonStyle(.plain)
-            .opacity(chipsShown ? 1 : 0)
-            .scaleEffect(chipsShown ? 1 : 0.95)
-            .animation(BUICurve.outStrong.animation(duration: 0.3).delay(Double(index) * 0.08), value: chipsShown)
+            .opacity(showsChips ? 1 : 0)
+            .scaleEffect(showsChips ? 1 : 0.95)
+            .animation(BUICurve.outStrong.animation(duration: 0.3).delay(Double(index) * 0.08), value: showsChips)
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .accessibilityLabel("Open \(chunk.source)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .buiSurface(radius: theme.radii.card, elevation: .card)
+    }
+}
+
+/// Pops the source chips in 0.7 s after the cards appear, only while entrances are on.
+private struct RevealChips: ViewModifier {
+    var active: Bool
+    @Binding var shown: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content.task {
+                try? await Task.sleep(for: .milliseconds(700))
+                shown = true
+            }
+        } else {
+            content
+        }
     }
 }

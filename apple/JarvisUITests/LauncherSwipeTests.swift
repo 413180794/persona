@@ -12,7 +12,7 @@ final class LauncherSwipeTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openModelLaunchers", "YES", "-dev.openChat", ""]
-        app.launchJarvis()
+        app.launchPinned()
 
         let glm = app.cells.containing(.staticText, identifier: "cc_glm").firstMatch
         XCTAssertTrue(glm.waitForExistence(timeout: 15), "no cc_glm:\n\(app.debugDescription)")

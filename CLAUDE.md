@@ -46,7 +46,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | 要什么 | 用什么（`apple/Shared/Design`，手表 / 小组件也编译） |
 | --- | --- |
 | 字号、强调、行高 | `Theme.Font` 的级别（display / title / heading / body / secondary / caption / sectionHeader / label / code）和强调 token（`labelStrong`、`secondaryMedium`…），`.lineHeight(_:)` |
-| 间距 | `Theme.Space`：4pt 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32 |
+| 间距 | `Theme.Space`：4pt 网格 xxs 2 · xs 4 · sm 6 · s 8 · m 12 · l 16 · xl 24 · xxl 32；页面的左右边 `page`（16，搜索框、筛选 chip、分组标题、卡片都对齐它） |
 | 圆角 | `Theme.Radius`：badge 6 · control 10 · card 14 · bubble 20 · panel 22 |
 | 尺寸 | `Theme.Size` + `.scaledFrame(…)`：图标框、圆点、头像、点按区域随字号缩放（最多 1.6×）；4pt 及以下的线、条用普通 `frame` |
 | 动画 | `Theme.Motion`：`standard` / `state`（0.25 s）、`layout`（0.3 s）、`blink`（默认形象眨眼）；对话里展开的内容 `reveal`（0.28 s）/ `conceal`（0.2 s），用 `.unfolding` |
@@ -59,6 +59,8 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 - **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `ComponentSpec` 加一个 `AppStyle` case，加主题色就是写一个 `ColorSpec` 加一个 `ThemeColor` case，
   别处只读 `StyleSpec.current`、不 `switch AppStyle` / `ThemeColor`。
   换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Jarvis 里改。
+  做法：视图里按 `AppStyle.current.usesBeautifulUI` 二选一，原来的画法原样留着（`plain`）。能放进设计系统组件的就放在组件里，
+  页面不用各自判断：`Chip`、`.card()`、`EmptyStateView`、`LoadableContent` 在 BeautifulUI 风格下画 `BUIPill`、BUI 卡片、`BUIEmptyState`、`LoadingState`。
 - **检查**（JarvisTests 扫源码）：`TypeScaleTests`（字号级别、强调、竖向间距在网格上）、`IconVocabularyTests`（图标登记）、
   `TokenRatchetTests`（每个文件写死的 padding、横向间距、圆角、十六进制颜色、动画、固定尺寸只能减少；减少后删掉 `TokenBaseline.json` 重跑记下新基线）、
   `StyleSpecTests`（每种风格 × 每种主题色深浅色的对比度）。不许为了过测试加豁免或调高基线。
@@ -138,6 +140,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
   push 前 `git diff origin/master...HEAD --stat` 只能有自己的文件。数据库迁移号挑之前先看所有 worktree。（`workflow.md`）
 - 等后台任务 / 日志的脚本一律带超时，成功、失败、超时都退出并打印一行结论。
 - 手动 `xcodebuild` 前先 `eval "$(python3 scripts/jarvis_config.py env)"`（`DEVELOPER_DIR`），否则用的是旧 Xcode，报一堆像别人代码坏了的错。（`testing.md`）
+- UI 测试一律 `app.launchPinned()` 启动：固定风格（默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换），布局同 `launchJarvis()`。（`testing.md`）
 - DEBUG 启动参数的名字不能和任何 Swift 标识符（类型成员、存储属性）同名，否则 `release.sh` 的 strings 检查拦下 TestFlight；新开关用 `open…` / `show…` 并加进 release.sh 的列表。（`ios.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。

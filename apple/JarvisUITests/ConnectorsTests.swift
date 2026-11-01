@@ -10,7 +10,7 @@ final class ConnectorsTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-dev.openChat", ""]
-        app.launch()
+        app.launchPinned()
         func row(_ label: String) -> XCUIElement {
             let r = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
             // From the top, down to it: after a back the list may be anywhere.

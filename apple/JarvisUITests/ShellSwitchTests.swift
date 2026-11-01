@@ -37,7 +37,7 @@ final class ShellSwitchTests: XCTestCase {
             app.launchArguments = ["-demo.on", "YES"]
         }
         app.launchArguments += ["-ui.oldLayout", "NO", "-newAssistant", "YES"]
-        app.launchJarvis()
+        app.launchPinned()
     }
 
     @MainActor private func button(_ id: String) -> XCUIElement { app.buttons[id].firstMatch }

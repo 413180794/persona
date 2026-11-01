@@ -12,7 +12,7 @@ final class OpenChatTabBarTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-tab", "dev", "-openAgentsFresh", "YES"]
-        app.launchJarvis()
+        app.launchPinned()
         // A fresh install asks for notifications over the list.
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons
             .matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch

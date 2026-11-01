@@ -54,6 +54,13 @@ public struct BUIStrings: Sendable, Equatable {
     public var noMatches = "No matches for “%@”"
     /// `%@` is the file.
     public var remove = "Remove %@"
+    /// The approval card's.
+    public var openApproval = "Open approval"
+    public var startOver = "Start over"
+    public var dismiss = "Dismiss"
+    public var customAnswer = "Custom answer"
+    public var previousQuestion = "Previous question"
+    public var nextQuestion = "Next question"
 
     public init(expanded: String = "Expanded", collapsed: String = "Collapsed") {
         self.expanded = expanded

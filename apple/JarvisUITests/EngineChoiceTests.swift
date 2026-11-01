@@ -69,7 +69,7 @@ final class EngineChoiceTests: XCTestCase {
     @MainActor func testPairingCanChooseAndSkip() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-pairURL", ""]
-        app.launchJarvis()
+        app.launchPinned()
         XCTAssertTrue(app.buttons["welcome.pair"].waitForExistence(timeout: 10))
         app.open(URL(string: pair)!)
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 15))
@@ -89,7 +89,7 @@ final class EngineChoiceTests: XCTestCase {
     @MainActor func testSettingsEngineRowAndPicker() throws {
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "server"]
-        app.launchJarvis()
+        app.launchPinned()
         let row = app.buttons["machine.engine"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         if !row.isHittable { app.swipeUp() }
@@ -106,7 +106,7 @@ final class EngineChoiceTests: XCTestCase {
     @MainActor func testSettingsTracksPushAndSavesOffline() async throws {
         app = XCUIApplication()
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "nas"]
-        app.launchJarvis()
+        app.launchPinned()
         let row = app.buttons["machine.engine"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         if !row.isHittable { app.swipeUp() }
@@ -128,7 +128,7 @@ final class EngineChoiceTests: XCTestCase {
     @MainActor func testManualPairingShowsEngineStep() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-pairURL", ""]
-        app.launchJarvis()
+        app.launchPinned()
         XCTAssertTrue(app.buttons["welcome.pair"].waitForExistence(timeout: 10))
         app.buttons["welcome.pair"].tap()
         let address = app.textFields["服务器地址"]
@@ -151,7 +151,7 @@ final class EngineChoiceTests: XCTestCase {
         hub = errorHub
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-pairURL", ""]
-        app.launchJarvis()
+        app.launchPinned()
         app.open(URL(string: pair)!)
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 15))
         app.buttons["engine.option.herdr-core"].tap()

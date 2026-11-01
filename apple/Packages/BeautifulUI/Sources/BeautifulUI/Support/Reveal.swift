@@ -46,14 +46,13 @@ public extension View {
     }
 }
 
-/// A 12 pt ring spinner: `border-line-strong` track with an `ink-2` head (700 ms per turn).
+/// A 12 pt ring spinner: `border-line-strong` track with an `ink-2` head (700 ms per turn). On iOS the head is a Core
+/// Animation layer (`SpinningArc`): nothing runs on the main thread per frame.
 public struct BUISpinner: View {
     var size: CGFloat
     var lineWidth: CGFloat
     var period: Double
     @Environment(\.buiTheme) private var theme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var turning = false
 
     public init(size: CGFloat = 12, lineWidth: CGFloat = 1.5, period: Double = 0.7) {
         self.size = size
@@ -62,20 +61,9 @@ public struct BUISpinner: View {
     }
 
     public var body: some View {
-        ZStack {
-            Circle().strokeBorder(theme.colors.lineStrong, lineWidth: lineWidth)
-            // A CSS border-top on a circle covers the top quarter.
-            Circle()
-                .inset(by: lineWidth / 2)
-                .trim(from: 0.625, to: 0.875)
-                .stroke(theme.colors.ink2, lineWidth: lineWidth)
-        }
-        .frame(width: size, height: size)
-        .rotationEffect(.degrees(turning ? 360 : 0))
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: period).repeatForever(autoreverses: false)) { turning = true }
-        }
-        .accessibilityHidden(true)
+        // A CSS border-top on a circle covers the top quarter.
+        SpinningArc(track: theme.colors.lineStrong, head: theme.colors.ink2, lineWidth: lineWidth, period: period, from: 0.625, to: 0.875)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }

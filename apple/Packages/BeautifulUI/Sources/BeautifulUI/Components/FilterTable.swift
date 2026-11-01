@@ -98,35 +98,7 @@ public struct FilterTable: View {
     }
 
     private func chip(id: String?, label: String, dot: Color?, count: Int) -> some View {
-        let active = filter == id
-        return Button {
-            filter = id
-        } label: {
-            HStack(spacing: 6) {
-                if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
-                Text(label)
-                    .buiFont(BUITextStyle(size: 12, weight: .medium, lineHeight: 1.19))
-                    .foregroundStyle(active ? theme.colors.ink : theme.colors.ink2)
-                Text("\(count)")
-                    .buiFont(BUITextStyle(size: 10.5, lineHeight: 1.19))
-                    .monospacedDigit()
-                    .foregroundStyle(active ? theme.colors.ink2 : theme.colors.ink3)
-                    .padding(.horizontal, 4)
-                    .background(active ? theme.colors.field : .clear, in: .rect(cornerRadius: 4))
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .background {
-                if active {
-                    Capsule().fill(theme.colors.surface)
-                        .overlay(Capsule().strokeBorder(BUIElevation.button.ring(theme.colors) ?? .clear, lineWidth: 1))
-                        .shadow(color: .black.opacity(0.04), radius: 2)
-                }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(PressHighlightStyle(radius: 13, color: theme.colors.hover))
-        .accessibilityAddTraits(active ? .isSelected : [])
+        BUIFilterChip(label, dot: dot, count: count, isActive: filter == id) { filter = id }
     }
 
     private func dataRow(_ row: FilterTableRow) -> some View {

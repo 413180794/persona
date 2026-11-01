@@ -1,6 +1,6 @@
 # BeautifulUI（拷入的副本）
 
-来源：BeautifulUI 仓库的 `02907da`（`main` 的 `9b05853` 之后，`jarvis-host-hooks` 分支上的 Prompt Bar 接口），`BeautifulUI/` 目录原样拷入，
+来源：BeautifulUI 仓库的 `d22da54`（`jarvis-full-refactor` 分支，在 `jarvis-host-hooks` 的 `02907da` 之后：胶囊放不下时可以截断（`BUIPill(truncates:)`）、单行的任务行、状态胶囊、筛选 chip、分段切换、工具组表头和改动文件 chip、审批卡和上下文卡片的宿主选项、列表行和分组、空状态、读数卡、侧边栏的行和搜索框；iOS 上转圈和扫光用 Core Animation），`BeautifulUI/` 目录原样拷入，
 作为本地 Swift Package 由 `apple/project.yml` 引用。许可：`LICENSE`、`LICENSE-beautifului`、`NOTICE`，根目录的
 `THIRD_PARTY_NOTICES.md` 也有一份。
 
