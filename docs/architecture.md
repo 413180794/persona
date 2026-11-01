@@ -29,7 +29,7 @@
                                ├─ tail ~/.claude/projects/*/<session>.jsonl → 结构化事件
                                ├─ unix socket ~/.jarvis/node.sock ◄── jarvisd hook（Claude Code hooks）
                                │                                 ◄── jarvisd mcp（给 claude 的 MCP 工具）
-                               └─ 启动器列表：zsh -ic _claude_launchers
+                               └─ 启动器列表：zsh -ic（`_claude_launchers` + 调用 claude 的 alias）
 ```
 
 单一二进制 `jarvisd`，四种模式：

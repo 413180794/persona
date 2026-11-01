@@ -1,0 +1,172 @@
+package node
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// asNode runs script the way the node does (loginShell: `zsh -ic`), with defs as the ~/.zshrc it sources first
+// (aliases only expand in a script parsed after they were defined), in a minimal environment: nothing of the test
+// runner's leaks into the output.
+func asNode(t *testing.T, defs, script string) string {
+	t.Helper()
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("no zsh")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".zshrc"), []byte(defs), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(context.Background(), zsh, "-ic", script)
+	cmd.Env = []string{"HOME=" + dir, "ZDOTDIR=" + dir, "PATH=/usr/bin:/bin", "USER=tester", "TERM=dumb"}
+	out, err := cmd.Output()
+	if err != nil && len(out) == 0 {
+		t.Fatalf("zsh: %v", err)
+	}
+	return string(out)
+}
+
+// listFrom is the node's launcher list for a ~/.zshrc made of defs.
+func listFrom(t *testing.T, defs string) []proto.Launcher {
+	t.Helper()
+	return mergeLaunchers(asNode(t, defs, launcherScript))
+}
+
+func fixture(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func byName(list []proto.Launcher) map[string]proto.Launcher {
+	m := map[string]proto.Launcher{}
+	for _, l := range list {
+		m[l.Name] = l
+	}
+	return m
+}
+
+// Aliases that start claude are launchers, with the gateway and model they set; the others are not.
+func TestAliasLaunchers(t *testing.T) {
+	list := listFrom(t, fixture(t, "aliases.zsh"))
+	var names []string
+	for _, l := range list {
+		names = append(names, l.Name)
+	}
+	want := []string{"dmcc", "envcc", "expcc", "kcc", "mycc", "ncc", "pathcc", "spaced"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("launchers %v, want %v (sorted; no codex alias, no alias named claude, no ls / git)", names, want)
+	}
+	m := byName(list)
+	for name, w := range map[string][2]string{
+		"kcc":    {"https://gw-a.example.com/anthropic", "model-a[1m]"},
+		"dmcc":   {"https://gw-b.example.com", ""},
+		"spaced": {"https://gw-c.example.com", "model with space"},
+		"mycc":   {"", "model-default"},
+		"ncc":    {"", ""},
+		"envcc":  {"https://gw-d.example.com", ""},
+		"pathcc": {"https://gw-e.example.com", "flag-model"},
+		"expcc":  {"https://gw-f.example.com", "eq-model"},
+	} {
+		if l := m[name]; l.BaseURL != w[0] || l.Model != w[1] || l.Source != "zshrc" {
+			t.Errorf("%s: base %q model %q source %q, want %q %q zshrc", name, l.BaseURL, l.Model, l.Source, w[0], w[1])
+		}
+	}
+	for _, l := range list {
+		if strings.Contains(l.BaseURL+l.Model, "fake") {
+			t.Errorf("%s carries a key: %+v", l.Name, l)
+		}
+	}
+}
+
+// A ~/.zshrc with the `_claude_launchers` helper keeps its list first; aliases it names are not repeated.
+func TestHelperAndAliasesTogether(t *testing.T) {
+	helper := `_claude_launchers() {
+  printf '%-26s%-40s%s\n' kcc https://helper.example.com helper-model
+  printf '%-26s%-40s%s\n' cc_fn https://fn.example.com fn-model
+}`
+	list := listFrom(t, helper+"\n"+fixture(t, "aliases.zsh"))
+	if list[0].Name != "kcc" || list[1].Name != "cc_fn" {
+		t.Fatalf("helper's launchers not first: %v", list[:2])
+	}
+	m := byName(list)
+	if m["kcc"].BaseURL != "https://helper.example.com" {
+		t.Errorf("kcc from the alias overrode the helper's: %+v", m["kcc"])
+	}
+	n := 0
+	for _, l := range list {
+		if l.Name == "kcc" {
+			n++
+		}
+	}
+	if n != 1 || m["dmcc"].Name == "" {
+		t.Errorf("kcc listed %d times, dmcc %+v", n, m["dmcc"])
+	}
+}
+
+// No helper, no alias that starts claude: plain claude, as before.
+func TestNoLaunchersMeansClaude(t *testing.T) {
+	list := listFrom(t, `alias ll="ls -l"`)
+	if len(list) != 1 || list[0].Name != "claude" {
+		t.Fatalf("got %v", list)
+	}
+}
+
+// The parser on its own: separators, env flags, a wrapper with nothing after it.
+func TestParseAliasLaunchers(t *testing.T) {
+	rec := func(words ...string) string { return strings.Join(words, "\x1f") + "\x1f\x1e" }
+	out := rec("a", "env", "-i", "ANTHROPIC_MODEL=m", "claude") +
+		rec("b", "cd", "/tmp", "&&", "ANTHROPIC_BASE_URL=https://x.example.com", "claude") +
+		rec("c", "command") +
+		rec("d", "ANTHROPIC_BASE_URL=https://y.example.com", "traex") +
+		rec("bad name", "claude") +
+		"junk-without-separators"
+	got := parseAliasLaunchers(out)
+	if len(got) != 2 || got[0].Name != "a" || got[0].Model != "m" || got[1].Name != "b" || got[1].BaseURL != "https://x.example.com" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+// The launcher page's probe works on aliases too: the variables in front of claude reach it.
+func TestProbeOfAnAlias(t *testing.T) {
+	out := asNode(t, fixture(t, "aliases.zsh"), probeScript("dmcc"))
+	p, ok := parseProbe(out)
+	if !ok {
+		t.Fatalf("no probe output (%d lines, agent line: %v)", strings.Count(out, "\n"), strings.Contains(out, probeMarker+" agent"))
+	}
+	d := LauncherDetail(p)
+	if d.Agent != "claude" || d.BaseURL != "https://gw-b.example.com" || d.Auth != "ANTHROPIC_AUTH_TOKEN" {
+		t.Fatalf("%+v", d)
+	}
+	if !slices.Contains(d.Args, "--dangerously-skip-permissions") {
+		t.Errorf("args %v", d.Args)
+	}
+	for _, e := range d.Env {
+		if strings.Contains(e.Value, "fake") {
+			t.Errorf("a key in the detail: %s=%s", e.Key, e.Value)
+		}
+	}
+}
+
+// What 查看定义 shows for an alias (whence -f prints its text): keys masked, a token starting with "-" too.
+func TestRedactAliasDefinition(t *testing.T) {
+	def := `CLAUDE_CODE_NO_FLICKER=1 ANTHROPIC_BASE_URL=https://gw-b.example.com ANTHROPIC_AUTH_TOKEN=-fakeTokenWithALeadingDash000000000000 claude --dangerously-skip-permissions`
+	got := redactSecrets(def)
+	if strings.Contains(got, "fakeToken") || !strings.Contains(got, "https://gw-b.example.com") || !strings.Contains(got, "--dangerously-skip-permissions") {
+		t.Fatalf("redacted: %s", got)
+	}
+	if got := redactSecrets(`ANTHROPIC_AUTH_TOKEN=sk-fake-aaaaaaaaaaaaaaaaaaaa claude`); strings.Contains(got, "aaaaaaaa") {
+		t.Fatalf("redacted: %s", got)
+	}
+}

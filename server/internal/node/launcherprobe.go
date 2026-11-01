@@ -23,7 +23,9 @@ import (
 
 const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
 
-// probeScript runs launcher `name` with the agents stubbed. Output: "<marker> base" and the shell's environment before
+// probeScript runs launcher `name` with the agents stubbed. The stubs are defined with `function name {`: in the
+// `name() {` form an alias of the same name (`alias claude="claude --…"`, common in ~/.zshrc) is expanded first and
+// the whole script fails to parse. Output: "<marker> base" and the shell's environment before
 // (NUL-separated KEY=VALUE on one line), "<marker> agent <name>", "<marker> arg <arg>" lines, then "<marker> env" and
 // the environment the agent got. Only what the launcher changed counts: the node's own environment (a claude it runs
 // in, a gateway exported in ~/.zshrc for everything) is not the launcher's.
@@ -35,11 +37,11 @@ __jp_report() {
   print -rn -- "%[1]s env "; print -rn -N -- ${(f)"$(/usr/bin/env)"}; print
   exit 0
 }
-claude() { __jp_report claude "$@" }
-codex() { __jp_report codex "$@" }
-traex() { __jp_report traex "$@" }
-command() { case "$1" in claude|codex|traex) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac }
-env() {
+function claude { __jp_report claude "$@" }
+function codex { __jp_report codex "$@" }
+function traex { __jp_report traex "$@" }
+function command { case "$1" in claude|codex|traex) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac }
+function env {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -u) unset "$2"; shift 2 ;;

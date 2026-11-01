@@ -50,7 +50,7 @@
 {"t":1790000000,"cpu":10.2,"load":1.25,"mem":34359738368,"swap":0,"rx":2048,"tx":512,"disk":10737418240}
 {"t":1790000240,"gap":true}
 
-// Launcher（来自 zsh 的 _claude_launchers）
+// Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）
 {"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。

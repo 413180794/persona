@@ -66,3 +66,10 @@
   `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
   `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
   指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。
+- 启动器（`docs/launchers.md`，2026-11-01）：以前只认 `_claude_launchers` 这个辅助函数的输出，`~/.zshrc` 里全是 alias 的机器（一个用户 41 个）
+  列表里只剩 `claude`。alias 交给 zsh 自己拆词（`${(@Q)${(z)value}}`），不在 Go 里解析引号。`zsh -c` 里同一段脚本定义的 alias 不会在这段
+  脚本里展开（整段先解析），测试要像 node 一样 `zsh -ic` 并把定义写进临时的 `$ZDOTDIR/.zshrc`。`~/.zshrc` 里有 `alias claude=…` 时，
+  探测脚本 `claude() { … }` 这种定义会先被 alias 展开、整段语法错误，桩函数一律写成 `function claude { … }`。
+- 跑启动器或探测脚本的测试给最小环境（`HOME`、`ZDOTDIR`、`PATH`），失败信息不要整段打印输出：探测输出里是完整的进程环境，开发机上
+  有各种真实的 Key。
+

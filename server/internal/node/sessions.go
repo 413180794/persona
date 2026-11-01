@@ -1067,7 +1067,22 @@ var launcherCache struct {
 	fetching bool       // a background refresh (cachedLaunchers) is running
 }
 
-// launchers lists the claude wrapper functions defined in ~/.zshrc (via the `_claude_launchers` helper).
+// launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
+// `_claude_launchers` helper prints when ~/.zshrc has one, a GS byte, then every alias as its name and its words
+// as zsh itself splits and unquotes them (name US word US … RS), so quoting never has to be parsed here.
+const launcherScript = `_claude_launchers 2>/dev/null || true
+printf '\035'
+if [ -n "$ZSH_VERSION" ]; then
+  for __k __v in "${(@kv)aliases}"; do
+    print -rn -- "$__k"$'\x1f'
+    for __w in "${(@Q)${(z)__v}}"; do print -rn -- "$__w"$'\x1f'; done
+    print -rn -- $'\x1e'
+  done
+fi`
+
+// launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
+// functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
+// the helper lists is not repeated; none at all: plain claude.
 func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	launcherCache.fetch.Lock()
 	defer launcherCache.fetch.Unlock()
@@ -1080,18 +1095,35 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	launcherCache.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := loginShell(ctx, "_claude_launchers 2>/dev/null || true").Output()
+	out, err := loginShell(ctx, launcherScript).Output()
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("list launchers: %w", err)
 	}
-	list := parseLaunchers(string(out))
-	if len(list) == 0 {
-		list = []proto.Launcher{{Name: "claude", Model: "默认"}}
-	}
+	list := mergeLaunchers(string(out))
 	launcherCache.Lock()
 	launcherCache.at, launcherCache.list = time.Now(), list
 	launcherCache.Unlock()
 	return list, nil
+}
+
+// mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name;
+// nothing at all: plain claude.
+func mergeLaunchers(out string) []proto.Launcher {
+	helper, aliases, _ := strings.Cut(out, "\x1d")
+	list := parseLaunchers(helper)
+	seen := map[string]bool{}
+	for _, l := range list {
+		seen[l.Name] = true
+	}
+	for _, l := range parseAliasLaunchers(aliases) {
+		if !seen[l.Name] {
+			list = append(list, l)
+		}
+	}
+	if len(list) == 0 {
+		list = []proto.Launcher{{Name: "claude", Model: "默认"}}
+	}
+	return list
 }
 
 // cachedLaunchers never waits for the login shell: it returns the last list (possibly stale, nil before the first
@@ -1148,6 +1180,103 @@ func matchLauncher(list []proto.Launcher, baseURL, model string) string {
 }
 
 var nameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+var assignRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
+// parseAliasLaunchers reads launcherScript's alias records and keeps the aliases that start claude: after the
+// variables set in front of it (`A=1 B=2 claude …`), through env / command / exec / noglob, by path or not, with
+// `export A=1;` before it in the same alias. Their gateway and model come from ANTHROPIC_BASE_URL and ANTHROPIC_MODEL
+// (or --model). Aliases of Codex / TRAEX are left out: a new session can only start claude (docs/codex.md). Sorted
+// by name: the shell keeps no order.
+func parseAliasLaunchers(out string) []proto.Launcher {
+	var list []proto.Launcher
+	for _, rec := range strings.Split(out, "\x1e") {
+		words := strings.Split(rec, "\x1f")
+		if len(words) < 2 {
+			continue
+		}
+		name := words[0]
+		if !nameRe.MatchString(name) || name == "claude" {
+			continue
+		}
+		if l, ok := aliasLauncher(words[1 : len(words)-1]); ok {
+			l.Name = name
+			list = append(list, l)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
+	return list
+}
+
+// commandIndex is where the command of one simple command starts, past the variables set for it (put in env) and
+// the wrappers that run what follows (env, with its -u / -i, command, exec, noglob, nocorrect); -1: there is none.
+func commandIndex(cmd []string, env map[string]string) int {
+	for i := 0; i < len(cmd); i++ {
+		w := cmd[i]
+		switch {
+		case assignRe.MatchString(w):
+			k, v, _ := strings.Cut(w, "=")
+			env[k] = v
+		case w == "env" || w == "command" || w == "exec" || w == "noglob" || w == "nocorrect":
+		case w == "-u" && i > 0 && i+1 < len(cmd): // env -u NAME
+			delete(env, cmd[i+1])
+			i++
+		case strings.HasPrefix(w, "-") && i > 0 && (cmd[i-1] == "env" || cmd[i-1] == "-i"): // env -i
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+// aliasLauncher finds the claude command in an alias's words and what it is started with.
+func aliasLauncher(words []string) (proto.Launcher, bool) {
+	exported := map[string]string{}
+	for len(words) > 0 {
+		end := len(words)
+		for i, w := range words {
+			if w == ";" || w == "&&" || w == "||" || w == "|" || w == "&" {
+				end = i
+				break
+			}
+		}
+		cmd := words[:end]
+		if end < len(words) {
+			words = words[end+1:]
+		} else {
+			words = nil
+		}
+		if len(cmd) > 0 && cmd[0] == "export" {
+			for _, w := range cmd[1:] {
+				if k, v, ok := strings.Cut(w, "="); ok && assignRe.MatchString(w) {
+					exported[k] = v
+				}
+			}
+			continue
+		}
+		env := map[string]string{}
+		for k, v := range exported {
+			env[k] = v
+		}
+		i := commandIndex(cmd, env)
+		if i < 0 {
+			continue
+		}
+		if filepath.Base(cmd[i]) != "claude" {
+			continue
+		}
+		l := proto.Launcher{BaseURL: env["ANTHROPIC_BASE_URL"], Model: env["ANTHROPIC_MODEL"], Source: "zshrc"}
+		for j := i + 1; j < len(cmd); j++ {
+			if cmd[j] == "--model" && j+1 < len(cmd) && l.Model == "" {
+				l.Model = cmd[j+1]
+			} else if m, ok := strings.CutPrefix(cmd[j], "--model="); ok && l.Model == "" {
+				l.Model = m
+			}
+		}
+		return l, true
+	}
+	return proto.Launcher{}, false
+}
 
 // parseLaunchers parses `_claude_launchers` output: name padded to 26, base URL padded to 40, then model.
 func parseLaunchers(out string) []proto.Launcher {

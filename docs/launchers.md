@@ -1,7 +1,7 @@
 # 启动器与「设置 › 模型」
 
-启动器决定 claude 用哪个网关、哪个模型。以前全是各台电脑 `~/.zshrc` 里调用 claude 的函数（`_claude_launchers` 列出来，
-node 用 `zsh -ic <名字>` 跑）；2026-10-31 起「设置 › 模型」把它们和在 App 里加的放在一起管理。
+启动器决定 claude 用哪个网关、哪个模型。以前全是各台电脑 `~/.zshrc` 里调用 claude 的函数或 alias（见下「~/.zshrc 里怎么认」，
+node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都会展开）；2026-10-31 起「设置 › 模型」把它们和在 App 里加的放在一起管理。
 代码：`server/internal/hub/launchers.go`、`server/internal/node/managed.go`；App `Views/Settings/ModelLaunchersView.swift`。
 
 ## 两种来源
@@ -14,6 +14,20 @@ node 用 `zsh -ic <名字>` 跑）；2026-10-31 起「设置 › 模型」把它
 - 范围是**全局一份**：Jarvis 管理的每台电脑都能用；~/.zshrc 的标出来自哪几台（同名的合成一行）。离线电脑的列表用上次同步的（settings `launchers.zshrc`）。
 - 删除 ~/.zshrc 的启动器**只在 Jarvis 里隐藏**（settings `launchers.hidden`），文件不动；新对话、助手的选择器里不再出现。
 - 同名时 Jarvis 管理的优先（~/.zshrc 的那个被盖住）。名字只能是字母、数字、`_`、`-`，不能叫 `claude`。
+
+## ~/.zshrc 里怎么认（`node/sessions.go` 的 `launcherScript`）
+
+node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，缓存 1 分钟：
+
+- **`_claude_launchers` 的输出**：有这个辅助函数的 `~/.zshrc`（每行名字、网关、模型，定宽）照旧，排在最前。
+- **alias**（2026-11-01 起）：zsh 自己把每个 alias 拆成词、去掉引号（`${(@Q)${(z)…}}`），node 只认**最后跑的是 `claude`** 的：
+  前面可以有变量（`alias dmcc="ANTHROPIC_BASE_URL=… ANTHROPIC_AUTH_TOKEN=… claude --dangerously-skip-permissions"`）、经过
+  `env`（含 `-u` / `-i`）/ `command` / `exec` / `noglob`、写绝对路径，或者同一个 alias 里先 `export …;`。网关取 `ANTHROPIC_BASE_URL`，
+  模型取 `ANTHROPIC_MODEL`，没有就看 `--model`。按名字排序（shell 不保留定义顺序）；`_claude_launchers` 已经列出的同名 alias 不重复。
+- 不算启动器的：名字就叫 `claude` 的 alias、跑 `codex` / `traex` 的 alias（从 Jarvis 新建会话只支持 claude，`docs/codex.md`）、
+  跟 Agent 无关的（`ll`、`gst`…）。两样都没有时只有默认的 `claude`。
+- 列表里只有名字、网关、模型；alias 里的 Key / Token 不出 node。「查看定义」对 alias 显示的是 `whence -f` 给的原文，Key 照样打码。
+- 函数写的启动器还是要靠 `_claude_launchers` 列出来：函数体里最后跑什么，不真跑一遍看不出来（见下「启动器页面上的参数」）。
 
 ## Jarvis 管理的怎么跑
 
