@@ -158,6 +158,9 @@ const (
 	// keysTimeout bounds terminal.keys (the same wait for quiet). Keys herdr-core still holds when it ends are pressed
 	// later anyway (it does not drop a call whose caller left): kept short so that window is small.
 	keysTimeout = 8 * time.Second
+	// killTimeout bounds terminal.kill: the core signals hangup, terminate, then kill, waiting 0.5 + 0.5 + 2 s for the
+	// program to go before it answers.
+	killTimeout = 10 * time.Second
 	maxLine     = 64 << 20
 	// heartbeatGap: events.subscribe sends a heartbeat every 15 s; a stream silent for this long is dead.
 	heartbeatGap = 45 * time.Second

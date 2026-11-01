@@ -7,6 +7,8 @@ package node
 //   - TestHerdrCoreLiveIsolated starts its own herdr-core (HC_SOCKET, HC_SESSION and XDG dirs under /tmp, so the
 //     user's instance and Herdr app are never touched), runs a small program that reports its state with OSC 7501
 //     like Claude Code does, drives it through the host, and stops that core.
+//   - TestHerdrCoreLiveCloseKeep closes, as the phone does, an agent in a terminal the way the Herdr app runs one (a
+//     shell with keep set that runs the agent and then stays a shell), on its own core too.
 //   - TestHerdrCoreLiveReadOnly lists the default instance's sessions the way the node does, with read-only calls
 //     only (terminal.list, doc.get, terminal.get), printing session ids, panes and states — no screen text.
 
@@ -83,7 +85,10 @@ func buildFakeClaude(t *testing.T, dir string) string {
 	return bin
 }
 
-func TestHerdrCoreLiveIsolated(t *testing.T) {
+// isolatedHC starts a herdr-core of its own (HC_SOCKET, HC_SESSION and XDG dirs under a /tmp dir, so the user's
+// instance and Herdr app are never touched) and stops it when the test ends; it returns the dir, a client and a host.
+func isolatedHC(t *testing.T) (string, *herdrcore.Client, *herdrCoreHost) {
+	t.Helper()
 	bin := hcBin(t)
 	dir, err := os.MkdirTemp("/tmp", "hcl")
 	if err != nil {
@@ -93,22 +98,23 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	sock := filepath.Join(dir, "c.sock")
 	env := append(os.Environ(), "HC_SOCKET="+sock, "HC_SESSION=jarvislive",
 		"XDG_STATE_HOME="+filepath.Join(dir, "state"), "XDG_CONFIG_HOME="+filepath.Join(dir, "cfg"), "XDG_RUNTIME_DIR=")
-	hc := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command(bin, args...)
-		cmd.Env = env
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("hc %v: %v\n%s", args, err, out)
-		}
+	cmd := exec.Command(bin, "server", "start")
+	cmd.Env = env
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hc server start: %v\n%s", err, out)
 	}
-	hc("server", "start")
 	t.Cleanup(func() {
 		cmd := exec.Command(bin, "server", "stop")
 		cmd.Env = env
 		_ = cmd.Run()
 	})
 	c := &herdrcore.Client{Socket: sock, Log: t.Logf}
-	h := &herdrCoreHost{c: c}
+	return dir, c, &herdrCoreHost{c: c}
+}
+
+func TestHerdrCoreLiveIsolated(t *testing.T) {
+	dir, c, h := isolatedHC(t)
+	sock := c.Socket
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	t.Logf("herdr-core %s", h.Version(ctx))
@@ -206,6 +212,87 @@ func TestHerdrCoreLiveIsolated(t *testing.T) {
 	}
 	if err := h.SendKeys(ctx, ref, "ctrl+c"); err != nil {
 		t.Error(err)
+	}
+}
+
+// The Herdr app runs an agent as `sh -ic '"$@"; exec "$0" -i' sh <agent>` with keep set. Closing it from the phone
+// (ctrl+c twice, then Close) must end the terminal for good: a kill is final even with keep (keep only replaces a
+// program lost some other way with a shell), so it stays finished and leaves the live list. Closing it again, or once
+// it is removed, is not an error.
+func TestHerdrCoreLiveCloseKeep(t *testing.T) {
+	dir, c, h := isolatedHC(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	claude := buildFakeClaude(t, dir)
+	var run struct {
+		Address string `json:"address"`
+	}
+	if err := c.Call(ctx, 20*time.Second, "terminal.run", map[string]any{
+		"argv": []string{"/bin/sh", "-ic", `"$@"; exec "$0" -i`, "/bin/sh", claude}, "cwd": dir, "keep": true,
+		"labels": map[string]string{herdrSpaceLabel: "S1", herdrTabLabel: "T1", herdrWhereLabel: "live / 1"}}, &run); err != nil {
+		t.Fatal(err)
+	}
+	ref := host.PaneRef{Kind: host.HerdrCore, ID: run.Address}
+	for deadline := time.Now().Add(15 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		if a, err := h.Agent(ctx, ref); err == nil && a.Agent == "claude" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s never ran claude", ref)
+		}
+	}
+	// What the node's close does. The interrupts end the agent, but the terminal lives on as the app's shell: without
+	// the kill the pane would stay open.
+	for range 2 {
+		if err := h.SendKeys(ctx, ref, "ctrl+c"); err != nil {
+			t.Logf("ctrl+c: %v", err)
+		}
+	}
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		tm, err := c.Get(ctx, ref.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tm.State == "live" && tm.Foreground != nil && isShell(tm.Foreground) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after ctrl+c: %s is %s, foreground %+v", ref, tm.State, tm.Foreground)
+		}
+	}
+	if err := h.Close(ctx, ref, "S1", "T1"); err != nil {
+		t.Fatal(err)
+	}
+	gone := func(when string) {
+		t.Helper()
+		tm, err := c.Get(ctx, ref.ID)
+		if err != nil {
+			t.Fatalf("%s: %v", when, err)
+		}
+		if tm.State != "finished" {
+			t.Errorf("%s: %s is %s (foreground %+v)", when, ref, tm.State, tm.Foreground)
+		}
+		l, err := h.Snapshot(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range l.Panes {
+			if p.PaneID == ref.String() {
+				t.Errorf("%s: still listed %+v", when, p)
+			}
+		}
+	}
+	gone("after close")
+	time.Sleep(3 * time.Second) // past keep's grace before it would restart a lost program as a shell
+	gone("later")
+	if err := h.Close(ctx, ref, "S1", "T1"); err != nil {
+		t.Errorf("closing a finished terminal: %v", err)
+	}
+	if err := c.Call(ctx, 5*time.Second, "terminal.rm", map[string]any{"terminal": ref.ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Close(ctx, ref, "S1", "T1"); err != nil {
+		t.Errorf("closing a removed terminal: %v", err)
 	}
 }
 

@@ -19,8 +19,8 @@ import (
 
 // herdrCoreHost is herdr-core (hc), the runtime behind the Herdr desktop app (docs/plan-orca-support.md「herdr-core
 // 宿主」). A pane is a terminal, its id the terminal's address ("t7"), which a core never gives to another terminal.
-// Phase 1: listing, state, plain-text reads, prompts and keys, process → session, events. No colors, no typing without
-// submitting, no live stream, no starting / renaming / closing.
+// Phase 1: listing, state, plain-text reads, prompts and keys, process → session, events, closing. No colors, no typing
+// without submitting, no live stream, no starting or renaming.
 type herdrCoreHost struct {
 	c *herdrcore.Client
 
@@ -34,6 +34,7 @@ var (
 	_ host.Watcher     = (*herdrCoreHost)(nil)
 	_ host.PlainScreen = (*herdrCoreHost)(nil)
 	_ host.TextTyper   = (*herdrCoreHost)(nil)
+	_ host.Organizer   = (*herdrCoreHost)(nil)
 )
 
 // herdrCorePaneEnv is the variable herdr-core sets in every terminal: its address.
@@ -242,6 +243,30 @@ func inputErr(err error) error {
 		return host.Mark(hcErr(err), host.ErrNotDelivered)
 	}
 	return err
+}
+
+// errHerdrCoreRename: the Herdr app owns its spaces' and tabs' names (its layout document); Jarvis does not write it.
+var errHerdrCoreRename = fmt.Errorf("%w: Herdr App 里的空间和标签页暂时不能从手机改名", host.ErrUnsupported)
+
+func (h *herdrCoreHost) RenameSpace(context.Context, string, string) error { return errHerdrCoreRename }
+func (h *herdrCoreHost) RenameSlot(context.Context, string, string) error  { return errHerdrCoreRename }
+
+// Close ends the terminal with terminal.kill, which is what closing a pane in the Herdr app does: the app then drops
+// the pane (its tab when it was the only one) on its own. A kill is final even for a keep terminal (the app's shells
+// are kept; keep restarts a shell only after a loss). The finished record is left for the app, as it leaves it: no
+// terminal.rm. A terminal that already finished or is gone counts as closed.
+func (h *herdrCoreHost) Close(ctx context.Context, pane host.PaneRef, _, _ string) error {
+	t, err := h.c.Kill(ctx, pane.ID)
+	if herdrcore.IsKind(err, "not_found") {
+		return nil
+	}
+	if err != nil {
+		return hcErr(err)
+	}
+	if t.State == "live" {
+		return fmt.Errorf("herdr-core: %s still runs after terminal.kill", pane.ID)
+	}
+	return nil
 }
 
 // PaneProcesses: the terminal's foreground process (claude's own pid, which names its sessions/<pid>.json), then its

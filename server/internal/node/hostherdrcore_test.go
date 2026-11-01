@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -378,5 +379,94 @@ func TestHookPane(t *testing.T) {
 		if got := HookPane(c.env); got != c.want {
 			t.Errorf("HookPane = %q, want %q", got, c.want)
 		}
+	}
+}
+
+// session.close: ctrl+c twice, then terminal.kill — what closing a pane in the Herdr app does (the app then drops the
+// pane). A terminal already finished or gone counts as closed; one still live after the kill is an error.
+func TestHerdrCoreClose(t *testing.T) {
+	n, hc := hcSession(t)
+	hc.handle("terminal.kill", func(p map[string]any) any {
+		k := hcTerminal("t1", "", "", 0, "", hcCwd, "", "", "")
+		k["state"] = "finished"
+		return k
+	})
+	if _, err := request(t, n, "session.close", map[string]any{"session_id": sidA}); err != nil {
+		t.Fatal(err)
+	}
+	assertTrace(t, hc.trace(), []string{
+		call("terminal.keys", map[string]any{"terminal": "t1", "keys": []any{"ctrl+c"}}),
+		call("terminal.keys", map[string]any{"terminal": "t1", "keys": []any{"ctrl+c"}}),
+		call("terminal.kill", map[string]any{"terminal": "t1"}),
+	})
+
+	// Already gone: the keys fail, the kill finds nothing; closed all the same.
+	for _, kind := range []string{"finished", "not_found"} {
+		n, hc := hcSession(t)
+		hc.handle("terminal.keys", func(map[string]any) any { return hcFail{"finished"} })
+		if kind == "not_found" {
+			hc.handle("terminal.kill", func(map[string]any) any { return hcFail{"not_found"} })
+		} else {
+			hc.handle("terminal.kill", func(map[string]any) any {
+				k := hcTerminal("t1", "", "", 0, "", hcCwd, "", "", "")
+				k["state"] = "finished"
+				return k
+			})
+		}
+		if _, err := request(t, n, "session.close", map[string]any{"session_id": sidA}); err != nil {
+			t.Errorf("%s: %v", kind, err)
+		}
+		if tr := hc.trace("terminal.kill"); len(tr) != 1 {
+			t.Errorf("%s: kills %v", kind, tr)
+		}
+	}
+
+	// Still live after the kill (the core did not end it): not closed.
+	n, hc = hcSession(t)
+	hc.handle("terminal.kill", func(map[string]any) any { return hcTerminal("t1", "", "", 0, "", hcCwd, "", "", "") })
+	if _, err := request(t, n, "session.close", map[string]any{"session_id": sidA}); err == nil {
+		t.Error("closed a terminal that still runs")
+	}
+}
+
+// A session herdr-core never had cannot be closed; the refusal does not name an engine.
+func TestHerdrCoreCloseUnknown(t *testing.T) {
+	n, hc := hcSession(t)
+	_, err := request(t, n, "session.close", map[string]any{"session_id": "0d000000-0000-4000-8000-0000000000ff"})
+	if err == nil || strings.Contains(err.Error(), "herdr") {
+		t.Fatalf("close of an unknown session: %v", err)
+	}
+	if tr := hc.trace(); len(tr) != 0 {
+		t.Errorf("herdr-core called: %v", tr)
+	}
+}
+
+// The Herdr app owns its spaces' and tabs' names: renaming them is unsupported, with nothing sent to herdr-core.
+func TestHerdrCoreRenameUnsupported(t *testing.T) {
+	n, _, hc, home := hcNode(t)
+	writeTranscript(t, home, hcCwd, sidA, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	writeClaudePID(t, home, 4242, sidA)
+	hc.setTerminals(hcTerminal("t1", "claude-code", "idle", 4242, "claude", hcCwd, "S1", "T1", "proj / 1"))
+	if m := byID(listSessions(t, n)); m[sidA].SlotID != "T1" {
+		t.Fatalf("not listed: %v", m)
+	}
+	hc.reset()
+	for _, req := range []struct {
+		method string
+		params map[string]any
+	}{
+		{"space.rename", map[string]any{"workspace_id": "S1", "name": "backend"}},
+		{"session.rename", map[string]any{"session_id": sidA, "tab_name": "review"}},
+	} {
+		_, err := request(t, n, req.method, req.params)
+		if err == nil || !strings.Contains(err.Error(), "unsupported") || !strings.Contains(err.Error(), "不能从手机改名") {
+			t.Errorf("%s: %v", req.method, err)
+		}
+	}
+	if tr := hc.trace(); len(tr) != 0 {
+		t.Errorf("herdr-core called: %v", tr)
+	}
+	if err := (&herdrCoreHost{}).RenameSlot(context.Background(), "T1", "x"); !errors.Is(err, host.ErrUnsupported) {
+		t.Errorf("RenameSlot = %v", err)
 	}
 }

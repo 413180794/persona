@@ -87,6 +87,17 @@ func (c *Client) Keys(ctx context.Context, terminal string, keys ...string) erro
 	return c.Call(ctx, keysTimeout, "terminal.keys", map[string]any{"terminal": terminal, "keys": keys}, nil)
 }
 
+// Kill is terminal.kill: ends the terminal's program (hangup, then terminate, then kill) and returns the terminal as
+// it is after. Ended this way the terminal is finished even with keep set (keep restarts a shell only after a loss);
+// one already finished is returned as it is.
+func (c *Client) Kill(ctx context.Context, terminal string) (*Terminal, error) {
+	var t Terminal
+	if err := c.Call(ctx, killTimeout, "terminal.kill", map[string]any{"terminal": terminal}, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 // Version is the core's version from hello, "" when it does not answer.
 func (c *Client) Version(ctx context.Context) string {
 	var out struct {

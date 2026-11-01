@@ -90,15 +90,16 @@ func (n *Node) hostPrompt(ctx context.Context, pane, text string) error {
 	return h.Prompt(ctx, ref, text)
 }
 
-// defaultHost is where new sessions start and where spaces without a host kind live: herdr, the only host so far.
-func (n *Node) defaultHost() host.Host { return n.hosts.Get(host.Herdr) }
+// defaultHost is where new sessions start and where spaces without a host kind live: the machine's engine (engine
+// names are host kinds), herdr unless herdr-core was chosen.
+func (n *Node) defaultHost() host.Host { return n.hosts.Get(n.engine()) }
 
 // hostCap is the default host as capability C.
 func hostCap[C any](n *Node) (C, error) {
 	var none C
 	h := n.defaultHost()
 	if h == nil {
-		return none, fmt.Errorf("no %s host on this machine", host.Herdr)
+		return none, fmt.Errorf("no %s host on this machine", n.engine())
 	}
 	c, ok := h.(C)
 	if !ok {

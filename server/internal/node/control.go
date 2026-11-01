@@ -42,7 +42,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 
-	launch, err := hostCap[host.Launcher](n) // new sessions start in herdr, the only host so far
+	launch, err := hostCap[host.Launcher](n) // new sessions start in the engine (herdr only so far: herdr-core cannot start them)
 	if err != nil {
 		return nil, err
 	}
@@ -485,15 +485,15 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string, 
 	return text, a.AgentStatus, err
 }
 
-// close quits any Claude running in herdr (started by Jarvis or by hand) and closes its tab; in a split tab only
-// its own pane goes, so the other panes survive.
+// close quits any Claude running in the machine's engine (started by Jarvis or by hand) and closes its pane: herdr
+// closes its tab, or in a split tab only its own pane, so the other panes survive; herdr-core ends its terminal.
 func (n *Node) close(ctx context.Context, id string) error {
 	a, ok := n.agent(id)
 	if !ok {
 		if _, mine := n.state.get(id); mine {
 			return nil // already gone
 		}
-		return fmt.Errorf("这个 Agent 不在 herdr 里运行，没法从手机关闭")
+		return fmt.Errorf("这个 Agent 不在这台电脑的终端里运行，没法从手机关闭")
 	}
 	org, ref, err := paneCap[host.Organizer](n, a.PaneID) // a host that cannot close it is not interrupted first
 	if err != nil {
@@ -694,7 +694,7 @@ func (n *Node) renameSpace(ctx context.Context, workspaceID, name string) error 
 	if workspaceID == "" || name == "" {
 		return fmt.Errorf("workspace and name are required")
 	}
-	org, err := hostCap[host.Organizer](n) // space ids carry no host kind yet: herdr's
+	org, err := hostCap[host.Organizer](n) // space ids carry no host kind yet: the engine's
 	if err != nil {
 		return err
 	}

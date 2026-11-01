@@ -158,6 +158,8 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
   选了 herdr-core 时 `node.info` 也不问 herdr，herdr 的版本取 `herdr --version`。
 - **运行时切换**：`engine.use` 换掉宿主表，丢掉旧引擎的 Agent、空间名、进程缓存（切换前开始的刷新结果作废），结束所有终端流
   （推 `terminal.end`），停掉旧事件流、起新的，再推一次会话列表。每个事件流有自己的「在线」标记，停掉的旧流不会清掉新流的状态。
+- **不带宿主的操作**：新建会话、改空间名这类不从窗格认宿主的操作找这台机器的引擎（`defaultHost`）：选了 herdr-core 时就是 herdr-core，
+  它做不到的报 `unsupported`，而不是「这台机器没有 herdr」。选 herdr 的机器不变。
 - **嵌套的 herdr**：选了 herdr-core 时，前台是经典 herdr 客户端的终端不算 Agent，即使里面 claude 的 OSC 7501 透了出来。
 
 ### 连接方式
@@ -189,7 +191,9 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 | 认 hook 的窗格 | 终端里的进程都有 `HC_TERMINAL_ID`（就是地址）；`jarvisd hook` 在没有 `HERDR_PANE_ID` 时报 `herdr-core:<地址>` | ✅ |
 | 推送变化 | `events.subscribe` 一条连接管所有终端，任何变化（大小、keep 和别的机器的除外）都马上取一次快照 | ✅ |
 | 实时终端 | 不做，见下；hub 退回读屏 | ❌ |
-| 新建、改名、关闭、接管 | 第一期不做（没有 Launcher / Organizer / Controller） | 之后 |
+| 关闭 | 和 herdr 一样先按两次 ctrl+c，再 `terminal.kill`（挂断 → 终止 → 强杀，最多约 3 秒后返回终端当时的样子）。Herdr App 自己关窗格也只调 `terminal.kill`，终端以 `killed` 结束后 App 自己把窗格（只剩它时是标签页）去掉，不调 `terminal.rm`，所以我们也只 kill、留下已结束的记录。已结束或已不存在（`not_found`）的终端算关好了；kill 后还是 `live` 报错 | ✅ |
+| 改名 | 空间和标签页的名字在 Herdr App 的布局文档里，归 App 管，不从手机改：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Herdr App 里的空间和标签页暂时不能从手机改名」）。会话标题（`/rename`）照常 | ❌ |
+| 新建、接管 | 第一期不做（没有 Launcher / Controller） | 之后 |
 
 ### 查清的几件事
 
@@ -207,6 +211,11 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 - **流是什么格式**：`terminal.attach {observe:true}` 先发一帧完整重绘（`0x18` 后跟 VT 序列），之后是程序原样的 PTY 输出，没有差量帧，
   只有积压超过 4 MB 才重绘。node 现在的帧是 herdr 按网格重画的子集，App 自写的 VT 子集不一定吃得下程序的原始输出，
   所以第一期不实现 `Streamer`，hub 退回读屏。
+- **keep 终端能不能关掉**：能，但只靠 ctrl+c 不行。Herdr App 开的 Agent 终端是 `sh -ic '"$@"; exec "$0" -i' sh <agent>` 并设了 `keep`：
+  Agent 退出后壳层接着跑，终端一直是 `live`。`keep` 只在程序「丢失」（被信号杀、holder 没了等）时换成新的 shell，正常退出（有退出码）和
+  `terminal.kill` 都是最终结束（herdr-core 源码 `terminals.rs` 的 `keep_preserves_losses…` 测试、`terminal.keep` 的说明）。所以关闭在两次
+  ctrl+c 之后一定要 `terminal.kill`。在自己起的实例上实测过：ctrl+c 后终端仍是 `live`、前台是 shell；kill 后是 `finished`，
+  过了 keep 的宽限期也没有复活（`TestHerdrCoreLiveCloseKeep`）。
 
 ### 注意
 
@@ -217,7 +226,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
   只影响选了 herdr-core 的机器）；窗格 id 不带 core 的身份，清空状态后地址从 `t1` 重来（认会话先看进程，影响小）。
 - `terminal.list` 也会列出连到这个 core 的别的机器（地址带 `/`），那些机器有自己的 node，这里跳过。
 - 联调只用自己起的实例：`HC_SOCKET`、`HC_SESSION`、`XDG_STATE_HOME`、`XDG_CONFIG_HOME` 都指向 `/tmp`，用完 `hc server stop`；
-  对默认实例只做只读调用（`terminal.list`、`terminal.get`、`doc.get`）。见 `server/internal/node/hostherdrcore_live_test.go`（`-tags hclive`）。
+  对默认实例只做只读调用（`terminal.list`、`terminal.get`、`doc.get`），关闭这类会结束终端的调用只在自己的实例上试。见 `server/internal/node/hostherdrcore_live_test.go`（`-tags hclive`）。
 
 ## 实施顺序
 
@@ -229,7 +238,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
    第 0 步的测试只许改 `herdrfake_test.go` 里的「Node adapters」块，三个 `herdr_*_test.go` 一行不动，否则就不算证明了行为没变。
    部署后用 `scripts/live_panes_check.py` 对比真实窗格，确认认会话的结果没变。单独合并、部署，跑一两天再做下一步。
 2. [ ] **Orca 第一期**：发现、状态、发消息、纯文本读屏、读屏回答对话框。用一个假的 Orca socket 写测试。
-   另一个宿主：[ ] **herdr-core 第一期**（2026-11-01 写完，未合并；改成一机一引擎）：见上面「herdr-core 宿主」。之后：只粘贴不回车（等上游加方法）、实时终端、新建 / 改名 / 关闭。
+   另一个宿主：[ ] **herdr-core 第一期**（2026-11-01 写完，未合并；改成一机一引擎）：见上面「herdr-core 宿主」。关闭已支持（2026-11-01）；改名不做（归 Herdr App 管）。之后：只粘贴不回车（等上游加方法）、实时终端、新建。
    宿主表仍能放多个宿主（`PaneRef` 解析、以后的 Orca），但 node 只注册一个引擎，刷新按顺序问；真要并列多个宿主时，要先让刷新不等最慢的那个。
 3. [ ] **App**：分组键带宿主类型、按能力隐藏按钮、通用文案。
 4. [ ] 之后：Orca 第二期（新建、模式）、第三期（实时终端）。
