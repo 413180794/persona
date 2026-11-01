@@ -74,3 +74,12 @@
 - 跑启动器或探测脚本的测试给最小环境（`HOME`、`ZDOTDIR`、`PATH`），失败信息不要整段打印输出：探测输出里是完整的进程环境，开发机上
   有各种真实的 Key。
 
+- Codex 的提问有两种（2026-11-02 读源码 + 实测 0.153.4 / 0.163.0）：Default 模式下现在的模型拿到的是 `request_user_input_async`，调用马上回
+  `{"accepted":true}`、回合照常结束，答案以后作为一条带 `<send_user_message_question_reply>` 的用户消息回来——「有 call 没有 output」认不出它，
+  要看 `item_completed` 里 `delivery: "async"` 的 AgentMessage；0.163 的 TUI 在回合结束时就把提问面板清掉了，题只剩一段文字。Plan 模式才是阻塞的
+  `request_user_input`（覆盖层，output 在答完之后）。覆盖层上按「None of the above」的数字会直接把这句当答案交上去，写自己的话要光标移过去再 Tab。
+- herdr 对 Codex：有没答的 async 提问时报 blocked，`agent prompt` 回 `agent_blocked`；`agent prompt` 会把文字接在输入框里的草稿后面一起发出去
+  （以前 Codex 的发消息不查草稿）。往上翻过的窗格 `pane read --source visible` 读到的是翻上去的内容，`--source recent` 才是输出末尾；
+  按键不受滚动影响。0.153 的 Ctrl+T pager 会盖住之后来的审批（pager 里 `esc` 是编辑上一条消息，关它用 `q`）；0.163 的 Ctrl+T 只是展开细节。
+  无头 herdr 分屏不会让窗格变窄，测小窗口用 `stty cols <n>` 再起 Codex。`pane.send_text` 原样转发，括号粘贴（`\x1b[200~…\x1b[201~`）在 Codex 里有效。
+- 在本机测 Codex 时信任一个目录会写进 `~/.codex/config.toml`（`codex exec` 也会写），`-c projects.…trust_level` 压不住信任对话框；测完删掉自己加的。

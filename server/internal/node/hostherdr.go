@@ -85,6 +85,9 @@ func (h *herdrHost) Prompt(ctx context.Context, pane host.PaneRef, text string) 
 	if herdr.IsNotFound(err) {
 		return host.Mark(err, host.ErrNoAgent)
 	}
+	if herdr.IsBlocked(err) {
+		return host.Mark(err, host.ErrAgentBlocked)
+	}
 	return err
 }
 

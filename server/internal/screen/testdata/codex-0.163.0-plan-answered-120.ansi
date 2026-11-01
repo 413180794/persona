@@ -1,0 +1,40 @@
+[0m[1m[2m› [0m> Which color should the banner be? Green
+[0m[2m  Worked for 2s • 9:41 PM                                                                                              [0m
+ 
+ 
+[0m[1m[2m› [0mRun this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+ 
+ 
+[0m[2m• [0mI’ll run the exact command with escalated permissions.
+ 
+[0m[38;5;2m✔ [0mYou [0m[1mapproved [0mcodex to run [0m[2mcurl -sI https://example.com | head -1[0m[1m this time[0m
+ 
+[0m[1m[38;5;2m• [0m[1mRan [0m[38;2;137;180;250mcurl[0m[38;2;147;153;178m -[0m[38;2;235;160;172msI[0m[38;2;205;214;244m https://example.com [0m[38;2;148;226;213m|[0m[38;2;205;214;244m [0m[38;2;137;180;250mhead[0m[38;2;147;153;178m -[0m[38;2;235;160;172m1[0m
+[0m[2m  └ HTTP/2 200[0m
+ 
+[0m[2m• [0mHTTP/2 200
+ 
+[0m[2m  Worked for 38s • 9:44 PM                                                                                             [0m
+ 
+[0m[2m• [0mModel changed to gpt-6-astra medium for Plan mode.
+ 
+ 
+[0m[1m[2m› [0mBefore planning, use request_user_input to ask me exactly two questions at once: (1) header 'Color', question 'Which
+  color should the banner be?', options Red (warm) and Blue (calm); (2) header 'Size', question 'How tall should it
+  be?', options Small (one line) and Large (two lines). Ask nothing else.
+ 
+ 
+[0m[2m• [0m[1mQuestions[0m[2m 2/2 answered[0m
+  • Which color should the banner be?
+[0m[2m    answer: [0m[38;2;99;168;248mBlue[0m
+  • How tall should it be?
+[0m[2m    answer: [0m[38;2;99;168;248mNone of the above[0m
+ 
+[0m[1m[38;2;128;128;128m• [0m[2mWorking (5s • [0m[1mesc[0m[2m to interrupt)[0m
+ 
+ 
+[0m[1m› [0m[2mAsk Codex to do anything[0m
+
+  [0m[38;2;246;226;183mGPT-6-Astra medium[0m · [0m[38;2;171;223;167m/private/tmp/project[0m · [0m[38;2;242;205;205mAsk banner color[0m                                           [0m[38;5;5mPlan mode[0m
+  [0m[1m? [0mfor shortcuts                                                                            ⚠ [0m[38;2;196;167;103m2 warnings [0m· [0m[1mf2 [0mto view

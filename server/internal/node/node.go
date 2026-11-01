@@ -68,6 +68,7 @@ type Node struct {
 	machineID string
 	sends     sentLog         // recent client_msg_ids (sendsafe.go)
 	typing    typingLocks     // one send at a time per session (sendsafe.go)
+	cx        codexCards      // Codex questions and approvals listed to the hub (codexask.go)
 	kept      map[string]bool // sessions always listed (node.configure keep_sessions)
 	starts    startLog        // sessions starting in the background (starting.go)
 	ups       uploads         // files arriving from the phone (upload.go)
@@ -450,6 +451,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			time.Sleep(150 * time.Millisecond) // the TUI opens the field the keys picked before the text arrives
 		}
 		return ok(n.keys(ctx, p.SessionID, p.Keys, p.Text))
+	case "codex.answer": // the phone's answer to a Codex question or approval card (codexask.go)
+		var a struct {
+			ID         string           `json:"id"`
+			Resolution proto.Resolution `json:"resolution"`
+		}
+		if err := json.Unmarshal(params, &a); err != nil {
+			return nil, err
+		}
+		return ok(n.codexAnswer(ctx, p.SessionID, a.ID, a.Resolution))
 	case "session.interrupt":
 		if n.isAssistantSession(p.SessionID) {
 			return ok(n.assistantInterrupt(p.SessionID))

@@ -1,0 +1,39 @@
+› Use your question tool (request_user_input_async) to ask me one question: which color should the banner be? Options…
+• Which color should the banner be?
+
+  • Red
+  • Green
+  • Blue
+
+  Worked for 5s • 9:40 PM
+
+
+› > Which color should the banner be?
+
+  Green
+
+
+• Green it is.
+
+  Worked for 2s • 9:41 PM
+
+
+› Run this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+
+
+• I’ll run the exact command with escalated permissions.
+
+✔ You approved codex to run curl -sI https://example.com | head -1 this time
+
+• Ran curl -sI https://example.com | head -1
+  └ HTTP/2 200
+
+• HTTP/2 200
+
+  Worked for 38s • 9:44 PM
+› /plan  switch to Plan mode
+
+› /plan
+
+  GPT-6-Astra low · /private/tmp/project · Ask banner color

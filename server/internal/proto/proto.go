@@ -520,6 +520,14 @@ type Interaction struct {
 	// Resumable: a hook waits on it that reconnects when its node goes away (hub or node restart), so the hub keeps
 	// it pending through the gap instead of cancelling it (docs/protocol.md「交互挺过重启」).
 	Resumable bool `json:"resumable,omitempty"`
+	// Agent is who asks when it is not Claude Code: "codex" or "traex" (a card the node read off a Codex TUI,
+	// docs/codex.md「提问和审批」).
+	Agent string `json:"agent,omitempty"`
+	// Reason: why the agent asks for this permission, in its words (Codex's "Reason: …").
+	Reason string `json:"reason,omitempty"`
+	// AlwaysLabel names what "always allow" does for this request ("本会话不再问这个命令"); a permission card offers it
+	// only when set or for Claude.
+	AlwaysLabel string `json:"always_label,omitempty"`
 }
 
 type Resolution struct {

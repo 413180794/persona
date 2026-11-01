@@ -109,7 +109,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
                "options":[{"label":"…","description":"…"}]}],   // question
  "plan":"markdown",                                              // plan
  "tool_input":{...}, "summary":"rm -rf build",                   // permission
- "screen":"终端可见区域文本"}                                     // screen（hook 覆盖不到的 TUI 对话框）
+ "screen":"终端可见区域文本",                                     // screen（hook 覆盖不到的 TUI 对话框）
+ "agent":"codex", "reason":"…", "always_label":"本会话不再问这个命令"} // node 从 Codex / TRAEX 的 TUI 读出来的卡（「Codex 的提问和审批」）
 
 // Resolution（按 kind）
 {"answers":{"<question 原文>":"所选 label；多选用 \", \" 连接；或自定义文本"}}   // question
@@ -230,6 +231,15 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 | `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `pong` | — |
+
+### Codex 的提问和审批
+
+Codex / TRAEX 在终端里没有 hook，node 自己从 rollout 读提问（`request_user_input_async` / `request_user_input`）、从屏幕读审批，做成普通的
+`question` / `permission` 交互，带 `agent: "codex" | "traex"`；授权卡还带 `reason`（Codex 说的理由）和 `always_label`（「总是同意」会放行什么，
+没有这个字段就没有「总是同意」）。回答格式和 Claude 的一样：`{"answers":…}`，`{"allow":true,"always":…}`，`{"allow":false,"message":"…"}`
+（有 `message` 时停下这一轮、把它作为下一条消息发进去）。回答是同步的：hub 把它交给 node（`codex.answer`），node 确认电脑上还是这道题 / 这个审批、
+TUI 回到了能作答的状态，输入后再确认 Codex 收下了才回成功；否则回 409 `input_draft` / `dialog_open` / `prompt_changed`（什么都没输入），
+卡片留着（`prompt_changed` 除外）。细节见 `docs/codex.md`「提问和审批」。
 
 ### 终端对话框（screen 交互）
 
@@ -402,6 +412,7 @@ hub → node 请求：
 | `interaction.resolve` | `{id, resolution}` |
 | `port.probe` | `{port}` → `{port, listening, http, title?}`：GET / 一次（Host 是 `localhost:端口`） |
 | `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
+| `codex.answer` | `{session_id, id, resolution}`：回答 node 列出的 Codex 卡片（`docs/codex.md`「提问和审批」）；拒绝时是带 `code` 的错误，什么都没输入 |
 
 流（`internal/streams`，两个方向都有）：`stream.data {id, data}`（data 是 base64，一次最多 32 KB）、`stream.ack {id, n}`（写出去了 n 字节；
 每个方向没确认的最多 512 KB，发的一方到了就停下等）、`stream.close {id, error?}`（这一端的连接断了；对方把已收到的写完再关）。hub 先登记流再发 `port.dial`，node 连上、登记好才回包，所以字节不会先于流到达。
@@ -414,7 +425,8 @@ node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows,
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
 连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、
-`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；hub 存进 `machine_metrics`，`docs/machines.md`）。
+`metrics {sample: MetricSample}`（每 10 秒，对齐到整 10 秒；hub 存进 `machine_metrics`，`docs/machines.md`）、
+`codex.interactions {interactions}`（这台机器上所有开着的 Codex / TRAEX 提问和审批，有变化时整份发；hub 增删卡片，旧 hub 不认就照旧是屏幕卡）。
 
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）

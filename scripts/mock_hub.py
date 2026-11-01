@@ -543,6 +543,30 @@ INTERACTIONS = [
      "plan": "## 支持 HEIC\n\n1. 用 `sips` 把 HEIC 转成 JPEG，质量 90，保留 EXIF\n2. 转换放到导出前，原文件不动\n3. 已经转过的按内容哈希跳过\n4. 补测试：竖拍、实况照片、没有 EXIF 的图"},
 ]
 
+# MOCK_CODEX=1: the Codex session's question (Plan mode, two questions) and an approval, as a node reads them off the
+# Codex TUI (docs/codex.md「提问和审批」); the first answer to the approval is refused as if the computer's input box held
+# a draft (409 input_draft), the next one goes through (GET /mock/resolved has them all).
+if os.environ.get("MOCK_CODEX"):
+    INTERACTIONS.append(
+        {"id": "cxa_orders_curl", "machine_id": "server", "session_id": ORDERS, "session_title": "排查 /orders 接口变慢",
+         "cwd": "/home/me/code/shop-api", "kind": "permission", "agent": "codex", "created_at": ago(minutes=1),
+         "expires_at": later(hours=24), "tool_name": "Bash",
+         "summary": "curl -s 'http://localhost:8080/orders?page=1' -o /dev/null -w '%{time_total}'",
+         "tool_input": {"command": "curl -s 'http://localhost:8080/orders?page=1' -o /dev/null -w '%{time_total}'"},
+         "reason": "Allow this command to access localhost:8080 over the network?",
+         "always_label": "以后不再问以 curl -s 开头的命令"})
+    INTERACTIONS.append(
+        {"id": "cxq_orders_plan", "machine_id": "server", "session_id": ORDERS, "session_title": "排查 /orders 接口变慢",
+         "cwd": "/home/me/code/shop-api", "kind": "question", "agent": "codex", "created_at": ago(minutes=2),
+         "expires_at": later(hours=24), "tool_name": "request_user_input", "tool_use_id": "call_plan1",
+         "questions": [
+             {"question": "订单列表的索引怎么加？", "header": "索引", "multi_select": False, "options": [
+                 {"label": "(user_id, created_at) 联合索引 (Recommended)", "description": "覆盖按用户分页的查询，写入稍慢一点。"},
+                 {"label": "只给 user_id 加索引", "description": "改动最小，排序仍要回表。"}]},
+             {"question": "改完以后怎么验证？", "header": "验证", "multi_select": False, "options": [
+                 {"label": "预发环境压测", "description": "用上周的流量回放跑 10 分钟。"},
+                 {"label": "灰度 10% 上线", "description": "看 30 分钟的 p95 再全量。"}]}]})
+
 # MOCK_SCREEN_DIALOG=1: a terminal dialog (screen interaction) as a newer hub reads it; MOCK_PROMPT_CHANGED=1 makes
 # answering it fail as if the dialog changed on the computer (409 prompt_changed).
 if os.environ.get("MOCK_SCREEN_DIALOG"):
@@ -2222,6 +2246,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p.startswith("/api/v1/interactions/") and p.endswith("/resolve"):  # notification buttons (UI test reads it back)
             RESOLVED.append({"id": p.split("/")[4], "resolution": json.loads(self.last_body or b"{}")})
+            if os.environ.get("MOCK_CODEX") and p.split("/")[4] == "cxa_orders_curl" and \
+                    sum(r["id"] == "cxa_orders_curl" for r in RESOLVED) == 1:
+                return self.send_json({"error": "电脑上 Codex 的输入框里有没发出去的内容：「先看下慢查询日志」。这次什么都没输入，免得和它拼在一起：在电脑上发出去或清空后再答。",
+                                       "code": "input_draft", "delivered": "none"}, 409)
             if os.environ.get("MOCK_PROMPT_CHANGED") and p.split("/")[4].startswith("scr_"):
                 return self.send_json({"error": "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。",
                                        "code": "prompt_changed", "delivered": "none"}, 409)

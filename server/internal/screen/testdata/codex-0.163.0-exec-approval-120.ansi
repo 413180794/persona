@@ -1,0 +1,40 @@
+[0m[1m[2m› [0mUse your question tool (request_user_input_async) to ask me one question: which color should the banner be? Options…
+  • Green
+  • Blue
+ 
+[0m[2m  Worked for 5s • 9:40 PM                                                                                              [0m
+ 
+ 
+[0m[1m[2m› [0m> Which color should the banner be?
+ 
+  Green
+ 
+ 
+[0m[2m• [0mGreen it is.
+ 
+[0m[2m  Worked for 2s • 9:41 PM                                                                                              [0m
+ 
+ 
+[0m[1m[2m› [0mRun this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+ 
+
+[0m[2m• [0mI’ll run the exact command with escalated permissions.
+ 
+[0m[1m[38;2;128;128;128m• [0m[1mRunning [0m[38;2;137;180;250mcurl[0m[38;2;147;153;178m -[0m[38;2;235;160;172msI[0m[38;2;205;214;244m https://example.com [0m[38;2;148;226;213m|[0m[38;2;205;214;244m [0m[38;2;137;180;250mhead[0m[38;2;147;153;178m -[0m[38;2;235;160;172m1[0m
+ 
+ 
+  [0m[1mWould you like to run the following command?[0m
+ 
+  Environment: [0m[1mlocal[0m
+ 
+  Reason: [0m[3mAllow this command to access https://example.com over the network?[0m
+ 
+  $ [0m[38;2;137;180;250mcurl[0m[38;2;147;153;178m -[0m[38;2;235;160;172msI[0m[38;2;205;214;244m https://example.com [0m[38;2;148;226;213m|[0m[38;2;205;214;244m [0m[38;2;137;180;250mhead[0m[38;2;147;153;178m -[0m[38;2;235;160;172m1[0m
+ 
+ 
+[0m[1m[7m› 1. Yes, proceed (y)                                                                                                  [0m
+  2. Yes, and don't ask again for commands that start with `curl -sI https://example.com` ([0m[1mp[0m)
+  3. No, and tell Codex what to do differently ([0m[1mesc[0m)
+
+  [0m[2mPress [0m[1menter[0m[2m to confirm or [0m[1mesc[0m[2m to cancel                                                                              [0m

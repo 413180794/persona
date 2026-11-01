@@ -675,6 +675,12 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var dialog: ScreenDialog?
     /// The terminal asks for a password: typed into a password field, not kept anywhere.
     var secret: Bool?
+    /// Who asks when it is not Claude Code: "codex" / "traex" (a card read off a Codex TUI, docs/codex.md「提问和审批」).
+    var agent: String?
+    /// Why the agent asks for this permission, in its words.
+    var reason: String?
+    /// What "always allow" allows for this request ("本会话不再问这个命令"); a Codex card without it offers no such button.
+    var alwaysLabel: String?
 
     var sessionKey: SessionKey { SessionKey(machineID: machineID, sessionID: sessionID) }
 
@@ -682,10 +688,10 @@ nonisolated struct Interaction: Codable, Identifiable, Hashable, Sendable {
     var screenDialog: ScreenParser.Dialog? { dialog?.parsed ?? screen.flatMap(ScreenParser.dialog) }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, questions, plan, summary, screen, cwd, dialog, secret
+        case id, kind, questions, plan, summary, screen, cwd, dialog, secret, agent, reason
         case machineID = "machine_id", sessionID = "session_id", sessionTitle = "session_title",
              createdAt = "created_at", expiresAt = "expires_at", toolName = "tool_name", toolUseID = "tool_use_id",
-             toolInput = "tool_input"
+             toolInput = "tool_input", alwaysLabel = "always_label"
     }
 }
 

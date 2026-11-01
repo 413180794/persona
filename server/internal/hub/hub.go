@@ -71,6 +71,9 @@ type Hub struct {
 	usage         usageBook            // token usage of every machine (usage.go)
 	metrics       metricsBook          // OS and load of every machine (metrics.go)
 
+	// codexAnnounced: Codex card id -> when it was announced (codexcards.go)
+	codexAnnounced map[string]time.Time
+
 	sched  schedule  // the assistant's scheduled tasks (assistant_schedule.go)
 	titles titleBook // assistant conversations' titles (assistant_titles.go)
 	ports  portOpens // ports the user opened in the app (ports.go)
@@ -150,6 +153,8 @@ type pending struct {
 	// checkedAt / checking bound transcript reads for a plan answered outside Jarvis.
 	checkedAt time.Time
 	checking  bool
+	// codex: a card a node listed for a Codex TUI (codexcards.go); it lasts as long as the node lists it.
+	codex bool
 }
 
 // resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
@@ -322,7 +327,7 @@ func (h *Hub) syncScreenInteractions(m *Machine, list []proto.Session) {
 				stale = append(stale, id)
 			}
 			hasHook[p.ix.SessionID] = true
-		} else {
+		} else if coversScreen(p) {
 			hasHook[p.ix.SessionID] = true
 		}
 	}
@@ -341,8 +346,13 @@ func (h *Hub) syncScreenInteractions(m *Machine, list []proto.Session) {
 func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// Hook dialogs flip the agent to blocked a moment before the hook reaches us; give them a head start.
-	time.Sleep(1500 * time.Millisecond)
+	// Hook dialogs flip the agent to blocked a moment before the hook reaches us; give them a head start. A Codex
+	// node reads its approvals off the screen once a second (codexcards.go): a little longer.
+	wait := 1500 * time.Millisecond
+	if s.Agent == "codex" || s.Agent == "traex" {
+		wait = 3 * time.Second
+	}
+	time.Sleep(wait)
 	if cur, ok := m.session(s.SessionID); !ok || cur.Status != proto.StatusBlocked {
 		return
 	}
@@ -363,11 +373,19 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 		Secret: screen.SecretPrompt(scr.Text),
 	}
 	h.mu.Lock()
+	asking := false
 	for _, p := range h.interactions {
 		if p.ix.MachineID == m.cfg.ID && p.ix.SessionID == s.SessionID {
-			h.mu.Unlock()
-			return
+			if p.ix.Kind == proto.IxScreen || coversScreen(p) {
+				h.mu.Unlock()
+				return
+			}
+			asking = true
 		}
+	}
+	if asking && d == nil { // only the async question's input box on screen: its card says it all
+		h.mu.Unlock()
+		return
 	}
 	h.interactions[id] = &pending{ix: ix, local: func(r proto.Resolution) error {
 		if r.Dismiss {
@@ -390,6 +408,11 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	h.record(ix)
 	h.announce(ix)
 }
+
+// coversScreen: the interaction stands for what the terminal waits on (a hook's, a Codex approval or overlay
+// question), so no screen card is made beside it. A Codex async question does not: Codex shows no dialog for it,
+// though herdr calls the agent blocked while it is open (codexcards.go).
+func coversScreen(p *pending) bool { return !(p.codex && p.ix.ToolName == "request_user_input_async") }
 
 // screenAnswer turns an answer to a screen card into session.keys parameters. With a dialog the node checks its
 // revision before pressing anything; an option's keys come from the node's fresh reading of the screen, and the

@@ -369,6 +369,10 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		text = strings.TrimSpace(text) + "\n\n<attached_images>\n" + strings.Join(paths, "\n") + "\n</attached_images>"
 	}
 	err = n.prompt(ctx, pane, text)
+	if errors.Is(err, host.ErrAgentBlocked) && (kind == "codex" || kind == traexAgent) {
+		// herdr refuses to prompt a Codex with an async question open; its box (checked above) takes the message.
+		err = n.codexType(ctx, pane, text, func(draft string) bool { return stillPrompted(draft, text) || pastedRE.MatchString(draft) })
+	}
 	if r := deliveryRefusal(err); r != nil { // the host refused it with nothing typed (herdr-core)
 		return r
 	}

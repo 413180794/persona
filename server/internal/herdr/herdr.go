@@ -233,6 +233,12 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &he) && strings.HasSuffix(he.Code, "not_found")
 }
 
+// IsBlocked: herdr refused an agent prompt because it takes the agent to be waiting on the user (agent_blocked).
+func IsBlocked(err error) bool {
+	var he *Error
+	return errors.As(err, &he) && he.Code == "agent_blocked"
+}
+
 // AgentSession is what an agent integration reported about its session ({kind: "id", value: <session id>}).
 type AgentSession struct {
 	Kind  string `json:"kind"`

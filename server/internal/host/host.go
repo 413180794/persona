@@ -133,6 +133,9 @@ type Control interface {
 var (
 	// ErrNoAgent: Prompt found no agent the host knows in the pane.
 	ErrNoAgent = errors.New("no agent in the pane")
+	// ErrAgentBlocked: Prompt refused, nothing typed, because the host takes the agent to be waiting on the user (herdr
+	// says so of a Codex with an async question open, whose input box still takes a message).
+	ErrAgentBlocked = errors.New("agent blocked")
 	// ErrAttachBusy: another client holds the terminal (Controller.Control without takeover).
 	ErrAttachBusy = errors.New("attach_busy")
 	// ErrTakenOver: the terminal being driven was taken by another client.

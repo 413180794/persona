@@ -1,0 +1,39 @@
+/ T R A N S C R I P T / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / / /
+› half typed draftreply with the single word: ok
+
+
+• ok
+
+
+› Run this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+
+
+• I’ll run the exact command with escalated permissions.
+
+✔ You approved codex to run curl -sI https://example.com | head -1 this time
+
+$ curl -sI https://example.com | head -1
+HTTP/2 200
+✓ • 562ms
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• HTTP/2 200
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› First run: sleep 6 (no escalation needed). Then run this exact command requesting escalated permissions (network):
+  curl -sI https://example.org | head -1
+
+
+• I’ll run sleep 6, then run the exact network command with escalated permissions.
+
+$ sleep 6
+✓ • 5.90s
+
+$ curl -sI https://example.org | head -1
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────── 100% ─
+ ↑/↓ to scroll   pgup/pgdn to page   home/end to jump
+ q to quit   esc to edit prev

@@ -81,8 +81,13 @@ func refusal(code, message string, data map[string]any) error {
 // checkPane refuses a send into a pane that is not ready for typed text, after clearing the draft the user agreed
 // to clear. kind is the agent ("claude", "codex", TRAEX).
 func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) error {
-	// Codex / TRAEX, and Claude in a host that reads screens without colors (host.PlainScreen: a draft and the grey
-	// placeholder look the same there): only the numbered approvals and pickers.
+	// Codex / TRAEX: their own screen (codexask.go) — a draft in the box, an approval or a question overlay refuses;
+	// the transcript pager and 0.163's question pane are only shown, and step aside.
+	if kind == "codex" || kind == traexAgent {
+		return n.codexReady(ctx, pane, false)
+	}
+	// Claude in a host that reads screens without colors (host.PlainScreen: a draft and the grey placeholder look the
+	// same there), any other agent: only the numbered approvals and pickers.
 	if kind != "claude" || n.plainScreen(pane) {
 		text, err := n.readPane(ctx, pane, "visible", 60)
 		if err == nil && screen.Choosing(text) {

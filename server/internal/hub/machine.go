@@ -579,6 +579,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.hub.usage.apply(m.cfg.ID, params, time.Now())
 	case "metrics":
 		m.hub.onMetrics(m.cfg.ID, params)
+	case "codex.interactions": // the Codex questions and approvals open on this machine (codexcards.go)
+		m.hub.syncCodexInteractions(m, params)
 	case "interaction.cancel":
 		var p struct {
 			ID string `json:"id"`

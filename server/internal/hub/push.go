@@ -492,6 +492,14 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	if ix.ToolName == "ask_user" {
 		title = "Jarvis 在问你"
 	}
+	if name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]; name != "" {
+		switch ix.Kind {
+		case proto.IxQuestion:
+			title = name + " 在问你"
+		case proto.IxPermission:
+			title = name + " 需要你授权"
+		}
+	}
 	body := ix.Summary
 	switch ix.Kind {
 	case proto.IxQuestion:

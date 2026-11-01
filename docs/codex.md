@@ -50,10 +50,59 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
 
 一台电脑多个已有 app-server（桌面 App、独立 `CODEX_HOME`、多客户端读写和审批）已接入现有 Agents 列表，源码研究、配置和能力边界见 [`codex-app-server.md`](codex-app-server.md)。发现历史不需要 herdr；只有提供受保护 Unix/回环 WebSocket 入口的实例能实时接入和控制，外部 stdio 明确只读。
 
+## 提问和审批（结构化卡片）
+
+2026-11-02 起，Agents 里的 Codex / TRAEX 提问和审批是和 Claude 一样的提问卡片、授权卡片，不再是通用的「终端在问你」。
+Codex 在终端里没有能代答的 hook（见下面「调研」），node 自己读 rollout 和屏幕：
+
+| 来源 | 怎么发现 | 卡片 | 怎么答 | 怎么算答上了 |
+| --- | --- | --- | --- | --- |
+| `request_user_input_async`（Default 模式；模型目录的 `experimental_supported_tools` 里有 `send_user_message_async` / `request_user_input_async` 才有，现在的 gpt-6 系都有） | rollout 里 `item_completed` 的 AgentMessage 带 `delivery: "async"` 和 `questions`（`title` + 字符串选项；item id 就是 call id）。调用马上回 `{"accepted":true}`，回合照常继续或结束 | 提问卡片（选项 + 其他回答） | 发一条用户消息，内容是 Codex 自己的客户端（desktop、0.163 的 TUI）用的回复信封：`<send_user_message_question_reply>[{"questionItemId":"[\"request_user_input_async\",\"<call id>\",<序号>]","question":…,"answer":…}]</send_user_message_question_reply>`，一行，JSON 不做 HTML 转义 | rollout 出现带这个 `questionItemId` 的用户消息（0.163 的 TUI 也凭它把题从面板上拿掉）；或者屏幕上它排进了「Queued follow-up inputs」 |
+| `request_user_input`（Plan 模式；或 `features.default_mode_request_user_input`） | rollout 里 `function_call` name `request_user_input`，参数 `{questions:[{id, header, question, options:[{label, description}]}]}`；回合停在 TUI 的覆盖层上（「Question 1/2」） | 提问卡片（多题、标题、选项说明） | 按键：选项按数字（选中并进下一题，最后一题提交）；自己写的回答是光标移到「None of the above」、Tab 打开备注、粘贴、回车，Codex 记成 `["None of the above", "user_note: …"]` | 这个 call 的 `function_call_output` |
+| 审批（命令、补丁、权限、MCP） | 不进 rollout：herdr 报 blocked 时读屏幕，认「Would you like to …?」、编号选项和「Press enter to confirm or esc to cancel」（选项文案在 `tui/src/bottom_pane/approval_overlay.rs`，0.153 / 0.163 一样） | 授权卡片：命令全文或改动、Codex 的理由，同意 / 总是同意（写明会放行什么；Codex 没给这个选项就没有）/ 拒绝（可写理由） | 选项按数字：同意 = Yes, proceed；总是同意 = 本会话那项（don't ask again … in this session / for these files）优先，没有就用前缀那项（commands that start with …）；拒绝 = No, continue without running it，没有这一项或写了理由时 = No, and tell Codex what to do differently（停下这一轮），理由随后作为下一条消息发进去 | 屏幕上这个审批（按 `rev`）消失 |
+
+- 题目在电脑上答了（回复信封，或者任何别的用户消息：0.153 没有提问面板，用户就是直接打字回答）、回合被中断（`turn_aborted`）、Agent 退出，
+  卡片都会消失。12 小时前的 async 提问不再拿出来（node 重启会重读 rollout）。
+- TRAEX 共用 rollout 解析（`history_mutation` 里的 AgentMessage / UserMessage 也认）和屏幕解析，状态是 node 自己判断的；还没在真的 TRAEX 上测过。
+- 实现：node 每秒扫一遍 live 的 Codex / TRAEX（`node/codexask.go`；rollout 只读新增部分，第一次读最后 8 MB），开着的卡片变了就整份发给 hub
+  （`codex.interactions`）。hub 给每张卡建一个本地交互（`hub/codexcards.go`）：新的推送，不在单子里的结束，同一会话的通用屏幕卡让位；
+  答案经 `codex.answer` 交回 node，node 按键 / 输入之前重读屏幕和 rollout，错误直接回给答题的人（和屏幕卡一样同步）；
+  没能输入（草稿、界面不对）时卡片留着，node 说 Codex 已经不问了（`prompt_changed`）时卡片消失。node 重连后重新列出的卡不再响铃。
+  hub 给 Codex 会话建通用屏幕卡前多等 3 秒，让 node 的卡先到。推送标题是「Codex 在问你」「Codex 需要你授权」。
+  async 提问的卡不代替终端上的对话框：它开着时 herdr 也报 blocked，这时 hub 只在屏幕上真读出别的对话框时才另建通用屏幕卡（光是输入框就不建）。
+- 已经经 app-server 实时接入的 thread（`codex-app-server.md`，`codex_remote.go` 里 `joined`）不读 TUI：它的提问和审批由 app-server 直接发成卡片，再读一遍就问两次。
+
+### 电脑上处在各种界面时
+
+答题前 node 先把 TUI 带回能作答的状态；带不回来就什么都不按，把原因告诉答题的人（错误码和发消息相同：`input_draft` / `dialog_open` / `prompt_changed`）。
+
+| 电脑上 | 怎么办 |
+| --- | --- |
+| 输入框里有打了一半的字 | 拒绝作答，提示里带上那段草稿：Codex 的输入框没有可靠的「先存起来、答完放回去」（图片、粘贴块放不回去）。普通的发消息也一样拒绝——以前 herdr 的 `agent prompt` 会直接拼在草稿后面发出去 |
+| 0.153 的对话记录（Ctrl+T 的 pager） | pager 盖住了后来的审批，herdr 却已经报 blocked：node 看到审批被 pager 盖住就按 `q` 关掉它（只读界面，不丢东西；最多 10 秒一次）。pager 里的 `esc` 是「编辑上一条消息」，绝不按。0.163 的 Ctrl+T 只是展开细节，输入框还在 |
+| 0.163 的提问面板展开着（⇧←） | 这时打进去的字会成为这道题的「Other」答案：先 ⇧→ 收起，再发回复 |
+| `/` 命令菜单、`@` 文件选择 | 只在输入框里有字时出现，按草稿处理。回答一律用括号粘贴（bracketed paste）输入，里面的 `@`、换行不会弹出选择、不会提前提交 |
+| 往上翻了（herdr 滚动回看） | `pane read --source visible` 读到的是翻上去的内容：Codex 的屏幕一律读输出末尾（`--source recent`；pager 在备用屏幕上，读到的就是 pager 本身）。按键不受滚动影响，也不会把滚动拉回去 |
+| 审批、覆盖层或别的选择框正开着时答 async 题 | 拒绝（`dialog_open`）：先处理审批卡片 |
+| 覆盖层的备注框里有人在写 | 拒绝，什么都不按 |
+| 在电脑上先答了 | 卡片随 rollout / 屏幕消失；手机随后的回答 node 找不到这张卡，回 `prompt_changed`，什么都没输入 |
+| pane 不在前台、herdr 在别的 tab、窗口很小 | 读屏和按键都对 pane 本身，不受影响；窄窗口里标题、命令、选项会折行，解析时接回去 |
+| 回复发出时这一轮还在跑 | 0.163 当场插进这一轮（steer）或排进队列，都算收下 |
+
+herdr 在 Codex 有没答的 async 提问时报 blocked，于是 `agent prompt` 拒绝（`agent_blocked`）：Codex 的发消息遇到这个改为自己粘贴 + 回车（输入框已确认是空的）。
+
+### 测试
+
+- 单元测试：`screen/codex_test.go`（录下来的屏幕，0.153.4 / 0.163.0，`screen/testdata/codex-*`）、`transcript/codexask_test.go`（rollout 识别、两种 schema、
+  部分回答、直接打字、旧 desktop 回复、TRAEX）、`node/codexask_test.go`（假 herdr 上每种界面状态的按键和输入、拒绝时什么都没按）、
+  `hub/codexcards_test.go`（列表增删、答失败卡片回来、重连不响铃、推送标题）。
+- 真实 Codex：`scripts/test-codex.sh`（`docs/testing.md`「Codex 联调」）在独立的 herdr 里起 Codex，让它提问、请求审批，每种界面状态各一个用例，连跑多轮。
+- App：`CodexCardsTests`（mock `MOCK_CODEX=1`），浅色 / 深色截图。
+
 ## 还不支持
 
 - 从手机新建外部 Codex 会话尚未开放；已知 Codex home 的近期离线/归档历史进入列表，但不能偷偷启动另一个 app-server 续聊。
-- Codex 没有 Claude 那样的 hook 代答：它在终端里等确认时（herdr 状态 blocked）走通用的「终端等你处理」屏幕交互。
+- 认不出来的 Codex 对话框（不是上面「提问和审批」里的格式）照旧走通用的「终端等你处理」屏幕交互。
 - 排队消息、子 Agent、后台任务这些 Claude transcript 才有的信息，Codex 会话里都是空的。
 
 ## TRAEX
@@ -74,3 +123,58 @@ TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，�
   `TerminalInteraction`（向运行中的命令轮询 / 输入）不显示。
 - **发消息**：herdr 的 `agent prompt` 只认它识别的 Agent，对 traex 窗格报 not found，于是改成 `pane send-text` + 回车（`Node.prompt`）。
 - 已退出的 TRAEX / Codex 会话从手机发消息会报错（不能用 claude 去 resume 它们的会话 id）。
+
+## 调研：Agents 里的 Codex 改走 app-server、审批 hook（2026-11-02，只有结论，没实现）
+
+读的是 codex-rs 源码 `rust-v0.153.4` / `rust-v0.163.0` 两个 tag，再加两个版本的二进制（`--help`、`app-server generate-json-schema`）。
+「源码」指在代码里核实过，「推断」指没跑起来验证。
+
+### B. 改走 app-server
+
+- **TUI 能连 app-server，而且本来就是 app-server 的客户端**（源码）：TUI 只和 app-server 说话，进程内、本机守护进程或远端三选一
+  （`tui/src/lib.rs`）。`codex`、`resume`、`fork` 都有 `--remote ws://|wss://|unix://`，不用 feature flag。守护进程是 `codex app-server --listen unix://`，
+  socket 在 `$CODEX_HOME/app-server-control/app-server-control.sock`，上面跑的是 WebSocket，不是按行的 JSON：Jarvis 现在助手用的 stdio 客户端
+  不能直接复用（`codex app-server proxy` 只是转字节），node 要一个走 unix socket 的 WebSocket 客户端。
+- **0.163 默认就在守护进程上**（源码）：`daemon_auto_start` 是 Stable、默认开，裸 `codex` 自动启动或加入共享守护进程（`--no-daemon` 关掉）。
+  带 `-c`、`--profile`、`--enable/--disable`、`--oss` 等参数时退回进程内——`docs/assistant.md` 里那种带 `-c model_provider=…` 的启动器起的会话不在守护进程上。
+  0.153 只在 socket 已经在时自动连上，没人替你起守护进程。
+- **多个客户端共用一个 thread**（源码，两个版本一样）：事件发给所有订阅了这个 thread 的连接；服务端发起的请求（命令 / 补丁审批、
+  `item/permissions/requestApproval`、`item/tool/requestUserInput`、MCP elicitation）同一个 request id 发给所有人，先答的算数，后答的只记日志；
+  答完后每个订阅者都收到 `serverRequest/resolved {threadId, requestId}`，TUI 收到就收起自己的提示框。第二个客户端用 `thread/resume` 订阅正在跑的
+  thread，挂着的请求会补发给它。这正是「电脑上先答了手机要知道」需要的语义，而且不用读屏幕。这些都在不需要 `--experimental` 的稳定 schema 里，
+  两个版本的审批、提问、elicitation 参数和 `serverRequest/resolved` 导出来一字不差（0.163 删了 `thread/rollback`，加了 `thread/attachment/*`）。
+- **代价**：
+  - 只覆盖跑在守护进程上的会话：0.153 要先有人起守护进程；带 `-c` 的启动器、`--no-daemon`、已经以纯 TUI 跑着的会话、TRAEX 都不在上面，
+    rollout + 屏幕这条路还得留着。0.163 对同一个 thread 拒绝第二个写入进程（`rollout/src/writer_lock.rs`），已经在跑的会话也不能另起进程接管。
+  - 守护进程继承启动它的那个进程的环境（源码）；推断：启动器的环境、herdr 的 `HERDR_PANE_ID` 会变成第一个起守护进程的窗格的，herdr 的
+    SessionStart hook 也在守护进程里跑——用之前要先看 `herdr-agent-state.sh` 怎么认窗格。
+  - app-server 和守护进程的命令都标着 `[experimental]`；0.163 的 `daemon update` 可能打断正在跑的工作。
+- **顺带「从手机新建 Codex 会话」可行**：守护进程上 `thread/start`，再在 herdr 窗格里跑 `codex resume <id>`（0.163 自动连守护进程；否则
+  `--remote unix:// -C <cwd>`），之后电脑和手机都能看到、都能答。推断：rollout 在第一条用户消息之后才写，空 thread 可能 resume 不了，
+  要先发第一条 `turn/start` 再开窗格；更简单的是直接在窗格里 `codex "<第一条消息>"`，从 `thread/started` 认出 thread。
+- **结论**：值得做，但只做 0.163、只管守护进程上的窗格，屏幕卡片留作其余情况的后备。
+- **和已有实现的关系**：`codex-app-server.md`（dd83e7b0）已经接入了提供 Unix / 回环 WebSocket 入口的外部实例，0.163 的共享守护进程就是这种入口；
+  但 herdr 里活着的 Codex 窗格优先按终端会话处理（`externalCodex` 为假），不会去 join 它在守护进程上的 thread。下一步可以是：herdr 窗格里的
+  0.163 Codex 先找守护进程上的 owner（`codexOwner`），有就 join，提问和审批走 app-server（两边谁先答都行，`serverRequest/resolved` 撤卡），
+  没有再退回这里的读 rollout / 屏幕。已经 join 的 thread 这里已经跳过（上面「提问和审批」）。
+
+### C. 有没有像 Claude PreToolUse 那样能拦审批的 hook
+
+- **有：`PermissionRequest`，格式和 Claude 的一样**（源码），hook 引擎两个版本代码相同，`hooks` 在两个版本都是 Stable、默认开。配置在
+  `$CODEX_HOME/hooks.json` 或 `config.toml` 的 `[hooks]`。事件：PreToolUse、PermissionRequest、PostToolUse、PreCompact、PostCompact、
+  SessionStart、SessionEnd、UserPromptSubmit、SubagentStart、SubagentStop、Stop、Interrupt。
+- `PermissionRequest` 在审批流程的最前面跑，先于 Guardian 和终端提示，覆盖 shell 命令（`Bash`）、apply_patch（`apply_patch`，也匹配
+  `Write` / `Edit`）、`write_stdin`、MCP 工具（`mcp__server__tool`）、网络访问（`Bash`，描述是 `network-access <目标>`）、`request_permissions`。
+  回答 `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"|"deny","message":…}}}`，或退出码 2 + stderr 理由
+  表示拒绝；不支持 `updatedInput` / `updatedPermissions`；多个 hook 时有一个拒绝就拒绝。超时默认 600 秒、可配；hook 失败、超时或不表态，
+  照常弹终端提示。输入里有 `session_id`（thread id）、`turn_id`、`cwd`、`transcript_path`，不用再猜是哪个会话。
+- **限制**：
+  - hook 在终端提示**之前**跑，不是同时：手机还没答时，电脑前的人看不到提示、没法先答，和这次要求的「电脑上先答了手机要感知到」冲突。
+    只能给一个很短的超时（几秒到几十秒），超时后交回终端；那样手机晚到的答案就没用了。
+  - 用户的 hook 要被信任才跑：`config.toml` 的 `hooks.state` 里记一个 `trusted_hash`，或者走 managed / system 配置，或者
+    `--dangerously-bypass-hook-trust`（0.163 上这个参数还会关掉守护进程）。每台机器都要改 Codex 的配置。
+  - 异步 hook 不能做决定。
+  - `request_user_input` 不触发 `PermissionRequest`，只触发 `PreToolUse`（tool name `request_user_input`）。PreToolUse 只能「拒绝 + 理由」或
+    「放行并改写输入」，不能纯放行。推断可用的变通：拿手机的答案当拒绝理由，模型会把它当工具输出读到，但终端上永远看不到这道题。`notify` 只有 `agent-turn-complete`。
+- **结论**：审批可以用 `PermissionRequest` 接，两个版本、进程内和守护进程都行；但它和「电脑前的人能先答」二选一，这次按要求做的是读屏幕的卡片，
+  电脑和手机谁先答都行。B 做了之后两边都能答，不需要这个 hook；在那之前，如果更看重「手机上答得快」，可以把它作为可选项（短超时）再评估。

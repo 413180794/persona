@@ -347,19 +347,18 @@ func codexItemLines(seq int, ts time.Time, it *codexItem, meta *Meta) []proto.It
 var (
 	// Ambient state the Codex app attaches to a message (open browser tabs and such), not something the user said.
 	codexAmbientRe = regexp.MustCompile(`(?s)<in-app-browser-context[^>]*>.*?</in-app-browser-context>`)
-	codexReplyRe   = regexp.MustCompile(`(?s)<send_user_message_question_reply>\s*(.*?)\s*</send_user_message_question_reply>`)
 )
 
 // codexUserText cleans what Codex records as the user's message: ambient context (and Jarvis's) goes, and the answer to a question
 // Codex asked (request_user_input, stored as JSON) reads as the answer itself ("question：answer" when several).
 func codexUserText(s string) string {
 	s = ContextRe.ReplaceAllString(codexAmbientRe.ReplaceAllString(s, ""), "")
-	return strings.TrimSpace(codexReplyRe.ReplaceAllStringFunc(s, func(block string) string {
+	return strings.TrimSpace(CodexReplyRe.ReplaceAllStringFunc(s, func(block string) string {
 		var replies []struct {
 			Question string `json:"question"`
 			Answer   string `json:"answer"`
 		}
-		m := codexReplyRe.FindStringSubmatch(block)
+		m := CodexReplyRe.FindStringSubmatch(block)
 		if json.Unmarshal([]byte(m[1]), &replies) != nil || len(replies) == 0 {
 			return block
 		}

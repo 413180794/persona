@@ -23,8 +23,28 @@ extension InteractionKind {
 }
 
 extension Interaction {
-    /// The assistant asks through its ask_user tool: it is Jarvis asking, not a Claude Code agent.
-    var title: String { toolName == "ask_user" ? "Jarvis 在问你" : kind.title }
+    /// The assistant asks through its ask_user tool: it is Jarvis asking, not a Claude Code agent; a Codex card names
+    /// Codex.
+    var title: String {
+        if toolName == "ask_user" { return "Jarvis 在问你" }
+        if let name = agentName {
+            switch kind {
+            case .question: return "\(name) 在问你"
+            case .permission: return "\(name) 需要你授权"
+            default: break
+            }
+        }
+        return kind.title
+    }
+
+    /// The agent's name on a card the node read off its TUI (Codex, TRAEX), nil for Claude's.
+    var agentName: String? {
+        switch agent {
+        case "codex": "Codex"
+        case "traex": "TRAEX"
+        default: nil
+        }
+    }
 }
 
 /// Compact card on the chat list: enough context plus one-tap answers for simple questions. A terminal dialog
@@ -117,7 +137,7 @@ struct InteractionPreviewCard: View {
             }
         case .permission:
             HStack {
-                Button("允许") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
+                Button(interaction.agentName == nil ? "允许" : "同意") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
                     .themedButton(prominent: true)
                 Button("拒绝") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
                     .themedButton()
@@ -264,7 +284,8 @@ struct InteractionPanel: View {
         switch interaction.kind {
         case .question: QuestionForm(interaction: interaction)
         case .plan: PlanForm(interaction: interaction, showFull: $showFullPlan)
-        case .permission: PermissionForm(interaction: interaction)
+        case .permission:
+            if interaction.agentName != nil { AgentPermissionForm(interaction: interaction) } else { PermissionForm(interaction: interaction) }
         case .screen: ScreenForm(interaction: interaction)
         }
     }
@@ -608,6 +629,112 @@ struct PermissionForm: View {
     }
 }
 
+/// A Codex / TRAEX approval read off its TUI (docs/codex.md「提问和审批」): the command or the edits in full, the agent's
+/// reason, 拒绝 / 同意, 总是同意 naming what it would allow (only when the TUI offers it), and 拒绝并说明理由: the reason
+/// stops the turn and goes to the agent as its next message.
+struct AgentPermissionForm: View {
+    @Environment(AppModel.self) private var model
+    var interaction: Interaction
+    @State private var explaining = false
+    @State private var why = ""
+    @FocusState private var whyFocused: Bool
+
+    private var name: String { interaction.agentName ?? "Codex" }
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUIPermissionForm(interaction: interaction) } else { plain }
+    }
+
+    @ViewBuilder private var plain: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
+                Text(interaction.toolName ?? "工具").font(Theme.Font.secondaryStrong)
+            }
+            if let reason = interaction.reason, !reason.isEmpty {
+                Text(reason)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
+                .font(Theme.Font.code)
+                .padding(Theme.Space.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                .textSelection(.enabled)
+            HStack {
+                Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
+                    Text("拒绝").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                }
+                .themedButton()
+                Button { Task { await model.resolve(interaction, Resolution(allow: true)) } } label: {
+                    Text("同意").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                }
+                .themedButton(prominent: true)
+            }
+            .controlSize(.large)
+            if let always = interaction.alwaysLabel, !always.isEmpty {
+                Button {
+                    Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
+                } label: {
+                    Text("总是同意 · \(always)").lineLimit(1).minimumScaleFactor(0.8)
+                }
+                #if os(macOS)
+                .buttonStyle(.link)
+                #endif
+                .font(Theme.Font.caption)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("codex-always")
+            }
+            reasonRow
+        }
+    }
+
+    /// "拒绝并说明理由…": a quiet row that turns into a field with its own send arrow.
+    @ViewBuilder private var reasonRow: some View {
+        if explaining {
+            HStack(alignment: .center, spacing: Theme.Space.m) {
+                TextField("告诉 \(name) 该怎么做", text: $why, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($whyFocused)
+                    .accessibilityIdentifier("codex-deny-reason")
+                if !why.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        whyFocused = false
+                        Task { await model.resolve(interaction, Resolution(allow: false, message: why)) }
+                    } label: {
+                        Image(systemName: Theme.Icon.send)
+                            .font(Theme.Font.labelHeavy)
+                            .foregroundStyle(.white)
+                            .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+                            .background(Theme.accent, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("拒绝并发送理由")
+                }
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.vertical, Theme.Space.m)
+            .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        } else {
+            Button {
+                withAnimation(Theme.Motion.standard) { explaining = true }
+                whyFocused = true
+            } label: {
+                Text("拒绝并说明理由…").lineLimit(1)
+            }
+            #if os(macOS)
+            .buttonStyle(.link)
+            #endif
+            .font(Theme.Font.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("codex-deny-explain")
+        }
+    }
+}
+
 /// The terminal waiting on a choice (AskUserQuestion that bypassed the hook, a permission prompt…). The dialog is read
 /// off the screen and laid out like a question: header, question, numbered options with their descriptions, "其他回答…"
 /// for "Type something." The raw terminal and its keys stay one tap away; a screen with no dialog shows them directly.
@@ -887,6 +1014,34 @@ extension Interaction {
         return try? JSON.decoder.decode(Interaction.self, from: data)
     }
 
+    /// A Codex approval read off its TUI (同意 / 拒绝 / 总是同意 / 拒绝并说明理由), for screenshots.
+    static func sampleCodexApproval(_ key: SessionKey) -> Interaction? {
+        let command = "curl -s 'http://localhost:8080/orders?page=1' -o /dev/null -w '%{time_total}'"
+        let payload: [String: Any] = [
+            "id": "sample-cxa", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "permission", "agent": "codex",
+            "tool_name": "Bash", "summary": command, "tool_input": ["command": command],
+            "reason": "Allow this command to access localhost:8080 over the network?",
+            "always_label": "以后不再问以 curl -s 开头的命令",
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return try? JSON.decoder.decode(Interaction.self, from: data)
+    }
+
+    /// Codex's request_user_input in Plan mode (two questions with headers and descriptions), for screenshots.
+    static func sampleCodexQuestion(_ key: SessionKey) -> Interaction? {
+        let json = """
+        {"id":"sample-cxq","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","agent":"codex",
+         "tool_name":"request_user_input","questions":[
+         {"question":"订单列表的索引怎么加？","header":"索引","multi_select":false,"options":[
+          {"label":"(user_id, created_at) 联合索引 (Recommended)","description":"覆盖按用户分页的查询，写入稍慢一点。"},
+          {"label":"只给 user_id 加索引","description":"改动最小，排序仍要回表。"}]},
+         {"question":"改完以后怎么验证？","header":"验证","multi_select":false,"options":[
+          {"label":"预发环境压测","description":"用上周的流量回放跑 10 分钟。"},
+          {"label":"灰度 10% 上线","description":"看 30 分钟的 p95 再全量。"}]}]}
+        """
+        return try? JSON.decoder.decode(Interaction.self, from: Data(json.utf8))
+    }
+
     static func sampleQuestion(_ key: SessionKey) -> Interaction? {
         let json = """
         {"id":"sample-q","machine_id":"\(key.machineID)","session_id":"\(key.sessionID)","kind":"question","questions":[
@@ -1027,12 +1182,19 @@ struct BUIPlanForm: View {
 
 /// The BeautifulUI style's tool approval: an approval card with the tool and what it will run on top, then 允许 /
 /// 本会话总是允许 / 拒绝. A tap sends, as the plain form's buttons do. Typing in the field denies with that reason,
-/// which Claude reads.
+/// which Claude reads. A Codex card (docs/codex.md「提问和审批」) offers 同意 / 总是同意 (what it allows, only when Codex
+/// does) / 拒绝, with Codex's reason over the command.
 struct BUIPermissionForm: View {
     @Environment(AppModel.self) private var model
     var interaction: Interaction
 
     private var choices: [ApprovalQuestion.Choice] {
+        if interaction.agentName != nil {
+            var c = [ApprovalQuestion.Choice("同意")]
+            if let always = interaction.alwaysLabel, !always.isEmpty { c.append(ApprovalQuestion.Choice("总是同意", detail: always)) }
+            c.append(ApprovalQuestion.Choice("拒绝"))
+            return c
+        }
         var c = [ApprovalQuestion.Choice("允许")]
         if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice("本会话总是允许", detail: "这个会话里同样的操作不再问")) }
         c.append(ApprovalQuestion.Choice("拒绝"))
@@ -1041,31 +1203,45 @@ struct BUIPermissionForm: View {
 
     var body: some View {
         let choices = choices
-        ApprovalCard(questions: [ApprovalQuestion("允许 \(interaction.toolName ?? "这个工具") 吗？", choices: choices,
+        ApprovalCard(questions: [ApprovalQuestion("\(interaction.agentName == nil ? "允许" : "同意") \(interaction.toolName ?? "这个工具") 吗？", choices: choices,
                                                   customPlaceholder: "拒绝并说明原因…")],
                      skipLabel: nil, sendLabel: "发送", sentMessage: "已发送",
                      options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Self.resolution(answers, choices: choices)) }
         } context: { _ in
-            HStack(alignment: .top, spacing: Theme.Space.s) {
-                Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
-                    .font(Theme.Font.code)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if interaction.agentName != nil, let reason = interaction.reason, !reason.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text(reason)
+                        .font(Theme.Font.secondary)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    command
+                }
+            } else {
+                command
             }
-            .padding(Theme.Space.m)
-            .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         }
+    }
+
+    private var command: some View {
+        HStack(alignment: .top, spacing: Theme.Space.s) {
+            Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
+            Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
+                .font(Theme.Font.code)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Theme.Space.m)
+        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 
     static func resolution(_ a: ApprovalAnswers, choices: [ApprovalQuestion.Choice]) -> Resolution {
         let reason = (a.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !reason.isEmpty { return Resolution(allow: false, message: reason) }
         switch a.picks[0]?.first.map({ choices[$0].label }) {
-        case "允许": return Resolution(allow: true)
-        case "本会话总是允许": return Resolution(allow: true, always: true)
+        case "允许", "同意": return Resolution(allow: true)
+        case "本会话总是允许", "总是同意": return Resolution(allow: true, always: true)
         default: return Resolution(allow: false)
         }
     }

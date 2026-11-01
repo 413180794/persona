@@ -219,6 +219,12 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
   按键栏和输入框收在「查看终端」里。读不出对话框时直接显示终端。DEBUG：`-showSampleScreen YES`。
 - 交互面板：贴在输入框上方。提问（`QuestionForm`，iOS 分组列表的样子：题目 + 一个圆角框里的选项，前面是终端那样的编号圆点、选中变勾，「(Recommended)」显示成「推荐」标签但回答仍发原文；「其他回答…」是框里最后一行，点了才变输入框；单题单选点一下就提交，多题顶部「标题 · 1/2」、底部小号「上一题 / 下一题 / 提交」，单选后自动翻到下一题；`-showSampleQuestion YES` 塞一个示例截图用）、计划（markdown 预览 + 全屏、批准并自动执行 /
   批准并自动接受编辑 / 打回写意见）、授权（允许 / 拒绝 / 本会话总是允许）、终端（屏幕快照 + 解析出的编号选项 + 按键面板 + 发文字）。
+- Codex / TRAEX 的卡片（带 `agent`，`docs/codex.md`「提问和审批」）：标题「Codex 在问你」「Codex 需要你授权」，提问用同一个 `QuestionForm`；
+  授权是 `AgentPermissionForm`：Codex 的理由、命令全文或改动、拒绝 / 同意，「总是同意 · 以后不再问以 … 开头的命令」（`always_label`，没有就不显示），
+  「拒绝并说明理由…」点开变输入框（理由会停下这一轮并作为下一条消息发给它）。Claude 的授权卡不变。没能输入时（电脑上有草稿等）卡片留着、
+  toast 说原因。BeautifulUI 风格里是它的审批卡（`BUIPermissionForm`）：问「同意 Bash 吗？」，选项同意 / 总是同意（说明放行什么）/ 拒绝，
+  Codex 的理由在命令上面，输入框里写字就是拒绝并说明理由。DEBUG：`-showSampleCodexApproval YES`、`-showSampleCodexQuestion YES`；
+  UI 测试 `CodexCardsTests`（mock `MOCK_CODEX=1`，含 BeautifulUI）。
 - 输入框：见上面「输入框」一条（照片最多 4 张，压缩到 1600px；「/」里是快捷消息和指令；工作中发送换成红色中断）。
 - 导航副标题：机器 · 模型 · 状态。
 

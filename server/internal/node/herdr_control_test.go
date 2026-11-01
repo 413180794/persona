@@ -32,6 +32,11 @@ func readVisible(pane string) string {
 	return call("pane.read", map[string]any{"pane_id": pane, "source": "visible", "lines": 60})
 }
 
+// readCodexEnd is how a Codex pane is read (codexScreen): the end of its output, colored.
+func readCodexEnd(pane string) string {
+	return call("pane.read", map[string]any{"pane_id": pane, "source": "recent", "lines": 60, "format": "ansi", "strip_ansi": false})
+}
+
 func readANSI(pane string) string {
 	return call("pane.read", map[string]any{"pane_id": pane, "source": "visible", "lines": 60, "format": "ansi", "strip_ansi": false})
 }
@@ -263,7 +268,8 @@ func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {
 }
 
 // session.send to an agent herdr does not prompt (agent.prompt: *_not_found, as for TRAEX): the text is typed and
-// enter pressed; other errors are returned as they are. A non-claude pane is checked with one plain read.
+// enter pressed; other errors are returned as they are. A Codex pane is checked with one colored read of its end
+// (codexReady: a pane scrolled back reads the same).
 func TestHerdrSendFallsBackToTyping(t *testing.T) {
 	n, f, _ := herdrNode(t)
 	seedAgents(t, n, f,
@@ -293,15 +299,15 @@ func TestHerdrSendFallsBackToTyping(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	assertTrace(t, f.trace(), []string{
-		readVisible("w1:p1"),
+		readCodexEnd("w1:p1"),
 		call("agent.prompt", map[string]any{"target": "w1:p1", "text": "line one\nline two"}),
 		call("pane.send_text", map[string]any{"pane_id": "w1:p1", "text": "line one\nline two"}),
 		sendKeys("w1:p1", "enter"),
-		readVisible("w1:p2"),
+		readCodexEnd("w1:p2"),
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "x"}),
 		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": "x"}),
 		sendKeys("w1:p2", "enter"),
-		readVisible("w1:p3"),
+		readCodexEnd("w1:p3"),
 		call("agent.prompt", map[string]any{"target": "w1:p3", "text": "y"}),
 	})
 }

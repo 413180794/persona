@@ -63,6 +63,7 @@ func (n *Node) startWhenConfigured(ctx context.Context) {
 		return
 	}
 	go n.pollAgents(ctx)
+	go n.watchCodexCards(ctx)
 	n.watchEngine(ctx)
 }
 

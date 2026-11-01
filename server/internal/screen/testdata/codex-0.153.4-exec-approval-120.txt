@@ -1,0 +1,40 @@
+╭───────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.153.4)                    │
+│                                               │
+│ model:     gpt-6-astra low   /model to change │
+│ directory: /private/tmp/project            │
+╰───────────────────────────────────────────────╯
+
+  Tip: Try the Desktop app. Run 'codex app' or visit https://chatgpt.com/codex?app-landing-page=true
+
+• You have 2 usage limit resets available. Run /usage to use one.
+
+
+› half typed draftreply with the single word: ok
+
+
+• ok
+
+
+› Run this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+
+
+• I’ll run the exact command with escalated permissions.
+
+• Running curl -sI https://example.com | head -1
+
+
+  Would you like to run the following command?
+
+  Environment: local
+
+  Reason: Allow this command to access example.com over the network?
+
+  $ curl -sI https://example.com | head -1
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `curl -sI https://example.com` (p)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

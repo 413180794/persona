@@ -1,0 +1,36 @@
+
+• I’ll run the exact command with escalated permissions.
+
+✔ You approved codex to run curl -sI https://example.com | head -1 this time
+
+• Ran curl -sI https://example.com | head -1
+  └ HTTP/2 200
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• HTTP/2 200
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› First run: sleep 6 (no escalation needed). Then run this exact command requesting escalated permissions (network):
+  curl -sI https://example.org | head -1
+
+
+• I’ll run sleep 6, then run the exact network command with escalated permissions.
+
+• Ran sleep 6
+  └ (no output)
+
+✗ You canceled the request to run curl -sI https://example.org | head -1
+
+• Ran curl -sI https://example.org | head -1
+  └ (no output)
+
+■ Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to report the
+issue.
+
+
+› /plan
+
+  /plan  switch to Plan mode

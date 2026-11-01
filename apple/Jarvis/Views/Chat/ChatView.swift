@@ -998,6 +998,12 @@ struct ChatView: View {
                 if UserDefaults.standard.bool(forKey: "showSamplePermission"), let ix = Interaction.samplePermission(key) {
                     InteractionPanel(interaction: ix) // `-showSamplePermission YES`: a permission request, for screenshots
                 }
+                if UserDefaults.standard.bool(forKey: "showSampleCodexApproval"), let ix = Interaction.sampleCodexApproval(key) {
+                    InteractionPanel(interaction: ix) // `-showSampleCodexApproval YES`: a Codex approval, for screenshots
+                }
+                if UserDefaults.standard.bool(forKey: "showSampleCodexQuestion"), let ix = Interaction.sampleCodexQuestion(key) {
+                    InteractionPanel(interaction: ix) // `-showSampleCodexQuestion YES`: a Codex question, for screenshots
+                }
                 #endif
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)

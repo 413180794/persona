@@ -1,0 +1,40 @@
+› > Which color should the banner be? Green
+  Worked for 2s • 9:41 PM
+
+
+› Run this exact shell command, requesting escalated permissions (it needs network): curl -sI https://example.com |
+  head -1
+
+
+• I’ll run the exact command with escalated permissions.
+
+✔ You approved codex to run curl -sI https://example.com | head -1 this time
+
+• Ran curl -sI https://example.com | head -1
+  └ HTTP/2 200
+
+• HTTP/2 200
+
+  Worked for 38s • 9:44 PM
+
+• Model changed to gpt-6-astra medium for Plan mode.
+
+
+› Before planning, use request_user_input to ask me exactly two questions at once: (1) header 'Color', question 'Which
+  color should the banner be?', options Red (warm) and Blue (calm); (2) header 'Size', question 'How tall should it
+  be?', options Small (one line) and Large (two lines). Ask nothing else.
+
+
+• Questions 2/2 answered
+  • Which color should the banner be?
+    answer: Blue
+  • How tall should it be?
+    answer: None of the above
+
+• Working (5s • esc to interrupt)
+
+
+› Ask Codex to do anything
+
+  GPT-6-Astra medium · /private/tmp/project · Ask banner color                                           Plan mode
+  ? for shortcuts                                                                            ⚠ 2 warnings · f2 to view

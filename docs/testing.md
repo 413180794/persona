@@ -217,6 +217,20 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 （`input_draft`）、清空别的字不动、清空看到的那段后放行。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
 需要本机装了 herdr 和 claude（claude 只启动、不发消息）。
 
+## Codex 联调
+
+`./scripts/test-codex.sh`：Codex 的提问和审批卡片（`docs/codex.md`「提问和审批」）对真实 Codex 跑一遍。起一个独立的 herdr 会话（`jarvis-codex-<pid>`，
+结束时按名字停掉），在一个新建的临时 git 仓库里起 Codex，用 node 回答卡片的同一段代码（`codexAnswer`）作答，每个用例检查 rollout 和屏幕：
+async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开着、电脑上先答了）、审批（直接答、往上翻了、别的 tab 在前台、对话记录 pager 开着时
+拒绝并写理由、电脑上先答了）、提问后紧跟审批、Plan 模式的两道题（一道按选项、一道写自己的话）。
+
+- `JARVIS_CODEX_BINS="codex /path/to/other/codex"`：要测的 Codex（每个版本一份，比如 npm 装到临时目录的 `@openai/codex@0.163.0`）；
+  `JARVIS_CODEX_ARGS="-m <模型>"`：登录能用的模型（ChatGPT 登录不是每个模型都收）；`JARVIS_CODEX_ROUNDS`（默认 2）；
+  `JARVIS_CODEX_COLS=64` 每个版本再在 64 列的小窗口里跑一遍（`stty cols`：无头 herdr 的窗格分屏不会变窄）；`JARVIS_CODEX_CASES=a,b` 只跑这几个。
+- 用你自己的 `~/.codex` 登录，会发真实的（很小的）模型请求。信任临时目录会写进 `~/.codex/config.toml`，每个测试线程在 `~/.codex/sessions`
+  留一个 rollout：退出时两样都删掉。本机没有 Go 时在 hub 机器上交叉编译测试二进制再拷回来。
+- 每轮每个用例打一行 `LIVE <版本> round <n> <用例>: ok in <秒>`，失败时附上当时的屏幕；最后一行 `RESULT all: passed|FAILED`。
+
 ## 隐私扫描
 
 `python3 scripts/privacy_check.py`：整个仓库（文件内容和路径）里不能有这台机器的私有值——`~/.config/jarvis/config.json` 里的
