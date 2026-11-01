@@ -14,6 +14,7 @@ redrawn.
 | `brand-lark` | 飞书 / Lark | github.com/larksuite/lark-samples, `public/svg/icon.svg` | Lark user agreement; no public logo guidelines found |
 | `brand-google` | Google G | developers.google.com/identity/branding-guidelines, `signin-assets.zip` (the G matted from the light and dark buttons) | Google Sign-In branding guidelines |
 | `brand-gmail` | Gmail | gstatic.com Google product icon `gmail_2020q4_512dp.png` | Google brand terms |
+| `ios-app-*` | Apple 通讯录、日历、提醒事项、健康、照片、地图 app icons | App Store artwork of each app (iTunes lookup `artworkUrl512`, fetched at 240×240), shown next to the data Jarvis reads from that app | Apple trademarks; Apple's terms for its marks |
 | `os-*` | Ubuntu, Debian, Fedora, Red Hat, CentOS, Rocky Linux, AlmaLinux, Arch Linux, Alpine Linux, openSUSE, NixOS, Linux (Tux) | Simple Icons (CC0 for the files) | Debian CC-BY-SA-3.0, NixOS CC-BY-4.0, Rocky Linux CC-BY-SA-4.0; the others under each project's trademark policy |
 
 ## Ovis

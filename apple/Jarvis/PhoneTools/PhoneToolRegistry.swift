@@ -85,7 +85,7 @@ enum PhoneToolRegistry {
 
     /// The tool definitions announced to the hub in `register_phone`.
     static func enabledSpecs() -> [ToolSpec] {
-        all.filter { $0.source.isEnabled }.map(\.spec)
+        all.filter { $0.source.isActive }.map(\.spec)
     }
 
     /// Current permission state of one data source, for the settings screen.

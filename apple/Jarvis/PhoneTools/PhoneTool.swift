@@ -52,6 +52,19 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// The iPhone app the data comes from (its icon in 设置 › 连接器 › 这台 iPhone); nil: no app of its own, `symbol`.
+    var appIcon: String? {
+        switch self {
+        case .contacts: Theme.Brand.iosContacts
+        case .calendar: Theme.Brand.iosCalendar
+        case .reminders: Theme.Brand.iosReminders
+        case .location: Theme.Brand.iosMaps
+        case .health: Theme.Brand.iosHealth
+        case .photos: Theme.Brand.iosPhotos
+        case .device, .clipboard, .notifications: nil
+        }
+    }
+
     var detail: String {
         switch self {
         case .contacts: "查找联系人的电话、邮箱、公司"
@@ -67,6 +80,10 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
     }
 
     private var defaultsKey: String { "phoneSource.\(rawValue)" }
+
+    /// On and allowed: what the switch in 设置 shows and what is declared to the hub (2026-11-01: the switch says both,
+    /// no separate 已授权 label). One turned on before it was allowed stays off until it is.
+    var isActive: Bool { isEnabled && PhoneAuthorization.status(self).isUsable }
 
     var isEnabled: Bool {
         get { UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true }

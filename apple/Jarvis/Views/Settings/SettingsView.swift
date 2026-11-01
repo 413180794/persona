@@ -261,66 +261,103 @@ private struct DemoSection: View {
     }
 }
 
+/// 设置 › 连接器 › 这台 iPhone: which of the device's data Claude may use (phone_* tools). One switch per source, and
+/// the switch is the whole state: on = turned on and allowed (2026-11-01, no 已授权 / 点此授权 labels). Turning one on
+/// asks for the permission; refused (or refused before) it stays off and 设置 opens where it can be allowed.
 struct PhoneDataView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     @State private var statuses: [PhoneDataSource: PhoneAuthStatus] = [:]
     @State private var enabled: [PhoneDataSource: Bool] = [:]
+    @State private var asking: PhoneDataSource?
 
     var body: some View {
         List {
             Section {
-                ForEach(PhoneDataSource.onThisDevice) { s in
+                ForEach(PhoneDataSource.allCases) { s in
                     HStack(spacing: Theme.Space.m) {
-                        Image(systemName: s.symbol)
-                            .font(Theme.Font.heading)
-                            .foregroundStyle(.white)
-                            .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
-                            .background(Theme.accent.gradient, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                        SourceIcon(source: s)
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text(s.title)
+                            Text(s.title).lineLimit(1)
                             Text(s.detail).font(Theme.Font.label).foregroundStyle(.secondary)
-                            if let st = statuses[s], st != .notNeeded {
-                                Button {
-                                    Task {
-                                        if st == .denied {
-                                            await UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-                                        } else {
-                                            statuses[s] = await PhoneAuthorization.request(s)
-                                        }
-                                    }
-                                } label: {
-                                    Text(st == .granted || st == .limited ? st.title : st == .denied ? "已拒绝 · 去设置" : "点此授权")
-                                        .font(Theme.Font.labelStrong)
-                                        .foregroundStyle(st.isUsable ? Theme.positive : Theme.accent)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(st == .granted)
-                            }
                         }
-                        Spacer()
-                        Toggle("", isOn: Binding(get: { enabled[s] ?? s.isEnabled }, set: { v in
-                            s.isEnabled = v
-                            enabled[s] = v
-                            model.registerPhone()
-                        }))
-                        .labelsHidden()
+                        Spacer(minLength: Theme.Space.s)
+                        if asking == s {
+                            ProgressView()
+                        } else {
+                            Toggle(s.title, isOn: Binding(get: { isOn(s) }, set: { v in Task { await set(s, v) } }))
+                                .labelsHidden()
+                        }
                     }
                     .padding(.vertical, Theme.Space.xxs)
                 }
             } footer: {
-                #if os(macOS)
-                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在这台 Mac 上问你。Jarvis 开着（窗口关了也算）时，hub 才能调到这里。健康数据 Mac 上没有。")
-                #else
-                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
-                #endif
+                Text("打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。打开时会请求系统权限，以前拒绝过的会跳到系统设置。Jarvis 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。")
             }
         }
         .themedPage()
         .navigationTitle(ConnectorText.device)
         .navigationBarTitleDisplayMode(.inline) // like the other connectors' pages
-        .task {
-            for s in PhoneDataSource.allCases { statuses[s] = PhoneAuthorization.status(s) }
+        .task { refresh() }
+        // Back from the system's Settings, where a permission may have been given or taken away.
+        .onChange(of: phase) { _, p in if p == .active { refresh() } }
+    }
+
+    private func isOn(_ s: PhoneDataSource) -> Bool {
+        (enabled[s] ?? s.isEnabled) && (statuses[s] ?? PhoneAuthorization.status(s)).isUsable
+    }
+
+    private func refresh() {
+        for s in PhoneDataSource.allCases { statuses[s] = PhoneAuthorization.status(s) }
+    }
+
+    private func set(_ s: PhoneDataSource, _ on: Bool) async {
+        defer { model.registerPhone() } // what the hub may call follows the switch
+        guard on else {
+            s.isEnabled = false
+            enabled[s] = false
+            return
         }
+        var st = statuses[s] ?? PhoneAuthorization.status(s)
+        if st == .notDetermined {
+            asking = s
+            st = await PhoneAuthorization.request(s)
+            asking = nil
+            statuses[s] = st
+        }
+        if st.isUsable {
+            s.isEnabled = true
+            enabled[s] = true
+            Haptics.tap()
+        } else {
+            // Refused: iOS asks only once, so the rest is in its Settings; the switch stays off until it is allowed there.
+            model.toast = Toast("在系统设置里允许 Jarvis 访问\(s.title)", style: .info)
+            s.isEnabled = true // on its own once allowed there
+            enabled[s] = true
+            if let url = URL(string: UIApplication.openSettingsURLString) { await UIApplication.shared.open(url) }
+        }
+    }
+}
+
+/// A data source's icon: the iPhone app it comes from, else its symbol on a tile.
+private struct SourceIcon: View {
+    var source: PhoneDataSource
+
+    var body: some View {
+        Group {
+            if let icon = source.appIcon {
+                Image(icon).resizable().scaledToFill()
+            } else {
+                Image(systemName: source.symbol)
+                    .font(Theme.Font.heading)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.accent.gradient)
+            }
+        }
+        .scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
+        .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
+        .accessibilityHidden(true)
     }
 }
 

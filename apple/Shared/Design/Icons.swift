@@ -221,6 +221,13 @@ extension Theme {
         /// Google's G, only on the 使用 Google 账号登录 button.
         static let google = "brand-google"
         static let gmail = "brand-gmail"
+        /// iPhone's own apps, for the data Jarvis reads from them (设置 › 连接器 › 这台 iPhone): their App Store artwork.
+        static let iosContacts = "ios-app-contacts"
+        static let iosCalendar = "ios-app-calendar"
+        static let iosReminders = "ios-app-reminders"
+        static let iosHealth = "ios-app-health"
+        static let iosPhotos = "ios-app-photos"
+        static let iosMaps = "ios-app-maps"
 
         /// A Linux distribution's mark; macOS uses the system's apple.logo.
         static func os(_ f: OSFamily) -> String? {
