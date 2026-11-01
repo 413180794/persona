@@ -71,7 +71,7 @@ type Controller interface { CanControl() bool
   `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。
 - **按键名**：沿用 App 现在发的 herdr 写法（`shift+tab`、`ctrl+c`、`enter`……）作为 Jarvis 统一的按键名。herdr 原样转发，
   Orca 换成字节（如 `shift+tab` → `\x1b[Z`）。
-- **错误**：宿主用 `host.Mark` 给自己的错误加上 `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver`；宿主缺某个能力时 node 返回 `ErrUnsupported`（文本以 `unsupported` 开头，hub 按这个前缀退回读屏）（`errors.Is` 判断），错误文本不变。
+- **错误**：宿主用 `host.Mark` 给自己的错误加上 `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver`（`errors.Is` 判断），错误文本不变；宿主缺某个能力时 node 返回 `ErrUnsupported`，文本以 `unsupported` 开头（hub 按这个前缀退回读屏）。
 - **布局 `Layout`**：空间、槽位、能认出的 Agent 窗格、所有窗格。宿主知道的话顺带给出 Agent 类型、状态、会话 id（herdr 集成的 `agent_session`）。
 - **第 1 步还按 herdr 处理的地方**：新建会话、空间改名、`starts` 记下的标签页改名走默认宿主（herdr），因为空间 id 还不带宿主类型
   （第 3 步）；事件流只订阅 herdr（`watchHerdr`，`herdrEvents` 只有一份）；`node.info` 的 `herdr_version` 取 herdr 宿主的版本。
