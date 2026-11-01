@@ -1,6 +1,6 @@
 # 计划：支持 Orca
 
-状态：进行中。第 0 步（补测试）已完成，第 1 步还没开始。做完的步骤在下面「实施顺序」里打勾，全部做完后把设计部分并进
+状态：进行中。第 0、1 步已完成，第 2 步还没开始。做完的步骤在下面「实施顺序」里打勾，全部做完后把设计部分并进
 `docs/architecture.md` / `docs/server.md`，删掉这份计划。
 
 ## 背景
@@ -142,7 +142,8 @@ hub 和 App 要跟着改的：
 0. [x] **补测试**（2026-11-01 完成，`server/internal/node/herdr_*_test.go`、`herdrfake_test.go`）：给 node 和 herdr 之间的交互补「特征测试」：一个共用的假 herdr socket，按顺序记下 node 发出的每个调用；
    每条测试断言「给定这个 herdr 状态，列出的会话是什么、发给 herdr 的调用序列是什么」。测试通过 node 的请求入口驱动、不碰内部字段，
    第 1 步重构后原样再跑，用来证明行为没变。只加测试，不改业务代码。
-1. [ ] **只搬 herdr，行为不变**：定义接口，把所有 herdr 调用搬到接口后面，`PaneRef` 和带前缀的存储一起做。现有测试、语料测试全过；
+1. [x] **只搬 herdr，行为不变**（2026-11-01 合并，`server/internal/host` + `node/hostherdr.go`；单元测试、`scripts/test-herdr.sh` 联调通过；
+   部署时 herdr 里没有 Claude 窗格，`live_panes_check.py` 的真实窗格对比还没做，有窗格后补跑；观察一两天再开始第 2 步）：定义接口，把所有 herdr 调用搬到接口后面，`PaneRef` 和带前缀的存储一起做。现有测试、语料测试全过；
    第 0 步的测试只许改 `herdrfake_test.go` 里的「Node adapters」块，三个 `herdr_*_test.go` 一行不动，否则就不算证明了行为没变。
    部署后用 `scripts/live_panes_check.py` 对比真实窗格，确认认会话的结果没变。单独合并、部署，跑一两天再做下一步。
 2. [ ] **Orca 第一期**：发现、状态、发消息、纯文本读屏、读屏回答对话框。用一个假的 Orca socket 写测试。
