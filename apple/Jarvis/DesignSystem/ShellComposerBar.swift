@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] 问 Jarvis… [mic] — that grows into a card
@@ -20,6 +21,10 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     @ViewBuilder var attach: () -> Attach
     @ViewBuilder var modes: () -> Modes
     @State private var dictation = Dictation()
+    @Environment(\.buiTheme) private var theme
+
+    /// The icons' ink: the text color, or in the BeautifulUI style its quieter second ink.
+    private var ink: Color { AppStyle.current.usesBeautifulUI ? theme.colors.ink2 : Color.primary }
 
     private var expanded: Bool { focused.wrappedValue || !text.isEmpty || hasAttachments }
 
@@ -48,7 +53,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                         Image(systemName: Theme.Icon.effort)
                             .font(Theme.Font.heading)
                             .fontWeight(.medium)
-                            .foregroundStyle(modesWarn ? Theme.danger : Color.primary)
+                            .foregroundStyle(modesWarn ? Theme.danger : ink)
                             .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                             .contentShape(.circle)
                     }
@@ -71,15 +76,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         }
         .padding(.horizontal, expanded ? 0 : Theme.Space.xs)
         .padding(.vertical, expanded ? 0 : Theme.Space.xxs)
-        .background {
-            RoundedRectangle(cornerRadius: Theme.Shell.composerRadius, style: .continuous)
-                .fill(Theme.Shell.composer)
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Shell.composerRadius, style: .continuous)
-                .strokeBorder(Theme.Shell.composerStroke, lineWidth: Theme.Size.hairline)
-        }
+        .modifier(ComposerSurface())
         .contentShape(.rect(cornerRadius: Theme.Shell.composerRadius))
         .onTapGesture { focused.wrappedValue = true }
         .shellScaled()
@@ -93,7 +90,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             Image(systemName: Theme.Icon.add)
                 .font(Theme.Font.title)
                 .fontWeight(.regular)
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(ink)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
         }
@@ -109,7 +106,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             Image(systemName: dictation.isListening ? Theme.Icon.dictating : Theme.Icon.dictate)
                 .font(Theme.Font.heading)
                 .fontWeight(.medium)
-                .foregroundStyle(dictation.isListening ? Theme.danger : Color.primary)
+                .foregroundStyle(dictation.isListening ? Theme.danger : ink)
                 .symbolEffect(.pulse, isActive: dictation.isListening)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
@@ -130,9 +127,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         } label: {
             Image(systemName: symbol)
                 .font(Theme.Font.bodyHeavy)
-                .foregroundStyle(Theme.Shell.inkText)
+                .foregroundStyle(AppStyle.current.usesBeautifulUI ? theme.colors.canvas : Theme.Shell.inkText)
                 .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
-                .background(Theme.Shell.ink, in: .circle)
+                .background(AppStyle.current.usesBeautifulUI ? theme.colors.ink : Theme.Shell.ink, in: .circle)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
         }
@@ -149,6 +146,26 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             if let problem = await dictation.start(update: { heard in text = base + heard }) {
                 AppModel.shared.toast = Toast(problem, style: .error)
             }
+        }
+    }
+}
+
+/// The composer's surface: the white card with its stroke and shadow, or in the BeautifulUI style its raised surface.
+private struct ComposerSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content.buiSurface(radius: Theme.Shell.composerRadius, elevation: .raised)
+        } else {
+            content
+                .background {
+                    RoundedRectangle(cornerRadius: Theme.Shell.composerRadius, style: .continuous)
+                        .fill(Theme.Shell.composer)
+                        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: Theme.Shell.composerRadius, style: .continuous)
+                        .strokeBorder(Theme.Shell.composerStroke, lineWidth: Theme.Size.hairline)
+                }
         }
     }
 }

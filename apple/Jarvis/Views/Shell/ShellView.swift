@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 #if os(iOS)
@@ -55,7 +56,7 @@ struct ShellView: View {
                     ConnectionLabel(phase: link, compact: true)
                         .padding(.horizontal, Theme.Space.m)
                         .scaledFrame(height: Theme.Size.icon)
-                        .background(.regularMaterial, in: .capsule)
+                        .modifier(ShellStatusSurface())
                         .padding(.top, AssistantTopBar.height)
                         .transition(.opacity)
                         .allowsHitTesting(false)
@@ -128,6 +129,17 @@ struct ShellView: View {
         model.selectedTab = .assistant
         shell.show(page)
         shell.drawer.close()
+    }
+}
+
+/// The weak-network line's capsule: a material, or in the BeautifulUI style its raised capsule.
+private struct ShellStatusSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content.buiSurface(Capsule(), elevation: .button)
+        } else {
+            content.background(.regularMaterial, in: .capsule)
+        }
     }
 }
 

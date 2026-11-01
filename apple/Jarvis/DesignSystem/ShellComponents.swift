@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 // Components of the ChatGPT-style shell (docs/ios.md「新外壳」). Neutral in every style (Theme.Shell): the shell is laid
@@ -18,11 +19,28 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     @Namespace private var pill
     /// The strip under the switch: its pill follows the pages while they slide (`ShellPager`).
     @Environment(\.shell) private var shell
+    @Environment(\.buiTheme) private var theme
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ShellSwitch")
         #endif
+        if AppStyle.current.usesBeautifulUI {
+            // BeautifulUI's pill segmented control: a field-colored track, the chosen segment a raised capsule.
+            row
+                .padding(Theme.Space.xs)
+                .background(theme.colors.field, in: .capsule)
+                .overlay(Capsule().strokeBorder(theme.colors.line, lineWidth: Theme.Size.hairline))
+                .animation(Theme.Motion.state, value: tab)
+        } else {
+            row
+                .padding(Theme.Space.xs)
+                .surface(interactive: true, in: .capsule)
+                .animation(Theme.Motion.state, value: tab)
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: .zero) {
             if tab == .assistant {
                 Menu { chatMenu() } label: { segment("助手", selected: true) }
@@ -49,9 +67,6 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
         .background(alignment: .leading) {
             if let pager = shell?.pager { PagerPill(pager: pager) }
         }
-        .padding(Theme.Space.xs)
-        .surface(interactive: true, in: .capsule)
-        .animation(Theme.Motion.state, value: tab)
     }
 
     private func button(_ title: String, _ value: AppTab, id: String) -> some View {
@@ -67,7 +82,27 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
         .accessibilityAddTraits(tab == value ? .isSelected : [])
     }
 
-    private func segment(_ title: String, selected: Bool) -> some View {
+    @ViewBuilder private func segment(_ title: String, selected: Bool) -> some View {
+        if AppStyle.current.usesBeautifulUI { beautifulSegment(title, selected: selected) } else { plainSegment(title, selected: selected) }
+    }
+
+    private func beautifulSegment(_ title: String, selected: Bool) -> some View {
+        Text(title)
+            .buiFont(BUITextStyle(size: 13, weight: selected ? .semibold : .medium, lineHeight: 1.19))
+            .foregroundStyle(selected ? theme.colors.ink : theme.colors.ink3)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .scaledFrame(width: Theme.Shell.segmentWidth, height: Theme.Shell.switchHeight - Theme.Space.s)
+            .background {
+                if selected, shell == nil {
+                    Color.clear.buiSurface(Capsule(), fill: theme.colors.surface, elevation: .button)
+                        .matchedGeometryEffect(id: "pill", in: pill)
+                }
+            }
+            .contentShape(.capsule)
+    }
+
+    private func plainSegment(_ title: String, selected: Bool) -> some View {
         Text(title)
             .font(selected ? Theme.Font.bodyStrong : Theme.Font.body)
             .foregroundStyle(selected ? Color.primary : Color.secondary)
@@ -87,13 +122,21 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
 /// view: only it reads the position, the switch (and its menus) are not drawn again on every frame of a drag.
 private struct PagerPill: View {
     let pager: ShellPager
+    @Environment(\.buiTheme) private var theme
 
     var body: some View {
         GeometryReader { g in
             let half = g.size.width / 2
-            Capsule().fill(Theme.Shell.segment)
-                .frame(width: half, height: g.size.height)
-                .offset(x: min(1, max(0, pager.position)) * half)
+            if AppStyle.current.usesBeautifulUI {
+                // BeautifulUI's segmented control: the chosen segment is a raised capsule.
+                Color.clear.buiSurface(Capsule(), fill: theme.colors.surface, elevation: .button)
+                    .frame(width: half, height: g.size.height)
+                    .offset(x: min(1, max(0, pager.position)) * half)
+            } else {
+                Capsule().fill(Theme.Shell.segment)
+                    .frame(width: half, height: g.size.height)
+                    .offset(x: min(1, max(0, pager.position)) * half)
+            }
         }
     }
 }
@@ -105,7 +148,12 @@ private struct WaitingBadge: View {
 
     var body: some View {
         let waiting = model.agentsWaiting
-        if waiting > 0 {
+        if waiting > 0, AppStyle.current.usesBeautifulUI {
+            BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: .white, fill: Theme.needsYou))
+                .offset(x: Theme.Space.s, y: -Theme.Space.sm)
+                .allowsHitTesting(false)
+                .accessibilityLabel("\(waiting) 个在等你")
+        } else if waiting > 0 {
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
                 .offset(x: Theme.Space.s, y: -Theme.Space.sm)
                 .allowsHitTesting(false)
@@ -121,6 +169,7 @@ struct ShellCircleButton: View {
     var label: String
     var id: String
     var action: () -> Void
+    @Environment(\.buiTheme) private var theme
 
     var body: some View {
         Button {
@@ -131,12 +180,12 @@ struct ShellCircleButton: View {
                 .font(Theme.Font.heading)
                 .fontWeight(.medium) // a touch heavier and rounder, like ChatGPT's line icons
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(AppStyle.current.usesBeautifulUI ? theme.colors.ink : Color.primary)
                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
-        .surface(interactive: true, in: .circle)
+        .modifier(CircleSurface())
         .accessibilityLabel(label)
         .accessibilityIdentifier(id)
     }
@@ -199,6 +248,17 @@ private struct InboxMark: View {
             .overlay(Circle().stroke(Theme.pageBackground, lineWidth: Theme.Size.lineMedium))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+}
+
+/// A round button's surface: glass, or in the BeautifulUI style its raised white circle.
+private struct CircleSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content.buiSurface(Circle(), elevation: .button)
+        } else {
+            content.surface(interactive: true, in: .circle)
+        }
     }
 }
 

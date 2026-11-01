@@ -248,7 +248,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 `.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
 
 UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
-壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图。
+壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图；`-showHomeState empty|error`（新对话页：什么都不用你处理 / 一条开始失败的提示，截图用）。
 
 ## Jarvis 顶栏和侧边栏（2026-10-30）
 
