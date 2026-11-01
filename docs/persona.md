@@ -1,7 +1,7 @@
 # 形象（persona）
 
 一个形象 = Jarvis 的**名字**、**头像**、Jarvis 顶栏里**会动的状态圆点**，可以再带一套**配色**。设置 › 外观 › 形象里选，选了以后这几样一起换：
-顶栏的脸和名字、侧边栏的卡片、资料页、输入框的「问 xxx…」。
+顶栏的脸和名字（新外壳里只有脸，在左上角）、侧边栏的卡片、资料页、输入框的「问 xxx…」。
 
 **形象不改 App 的颜色**（2026-10-31 用户要求：「形象、主题色和 UI 组件的选择」分开）。设置里是三个互不影响的选择：
 形象（这一篇）、主题色（`ThemeColor`）、界面风格（`AppStyle`，只管组件的画法），见 `docs/ios.md`「设计语言」。
@@ -77,7 +77,9 @@
 
 ## 状态（顶栏的圆点）
 
-| 状态 | `dot.states` 键 | 什么时候（`AssistantTopBar.dotState`） | 生成脚本的动画 |
+旧布局里在 Jarvis 顶栏正中（名字胶囊上面）；iPhone 的新外壳里是两页左上角打开抽屉的按钮（`ShellPersonaButton`，docs/ios.md「新外壳」）。
+
+| 状态 | `dot.states` 键 | 什么时候（`AppModel.personaState`） | 生成脚本的动画 |
 | --- | --- | --- | --- |
 | 空闲 | `idle` | 默认 | 呼吸（轻微缩放、上下），每圈末尾眨一次眼 |
 | 思考中 | `thinking` | 对话在跑，还没写字也没调工具：最后一条是用户消息或 thinking | 托腮抬眼、轻轻摇摆，右上角的思考气泡里三个点轮流亮 |
@@ -220,7 +222,7 @@
 截图和录屏用的 DEBUG 启动参数：
 
 - `-openPersona <id>`：启动时选这个形象（包要已经在手机上，或者随列表下下来）。
-- `-showPersonaState idle|thinking|working|needs_you|offline`：顶栏固定在一个状态。
+- `-showPersonaState idle|thinking|working|needs_you|offline`：顶栏的头像（旧布局正中、新外壳左上角）固定在一个状态。
 
 启动参数的名字照 CLAUDE.md 的约定用 `open…` / `show…` 开头，并且加进了 `release.sh` 的列表。
 - `-tab assistant -openAssistantPage avatars`：所有形象的头像和五个状态，浅色、深色各一份。

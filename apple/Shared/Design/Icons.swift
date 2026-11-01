@@ -60,8 +60,6 @@ extension Theme {
         static let delete = "trash"
         static let edit = "pencil"
         static let compose = "square.and.pencil"
-        /// The ChatGPT-style shell's drawer button (docs/ios.md「新外壳」): the sidebar with the inbox, history and settings.
-        static let drawer = "line.3.horizontal"
         /// Speech to text in the composer (a tap starts, a second one ends).
         static let dictate = "mic"
         static let dictating = "mic.fill"

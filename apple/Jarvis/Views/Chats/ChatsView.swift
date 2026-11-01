@@ -1443,7 +1443,7 @@ private struct SearchCloseProbe: UIViewRepresentable {
 }
 #endif
 
-/// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same ☰ and switch as 助手's, in the same places,
+/// The Agents page's top bar in the shell (docs/ios.md「新外壳」): the same face and switch as 助手's, in the same places,
 /// over the navigation bar (kept for its search field), 新建会话 on the right; tapping the selected Agents opens the list's
 /// options (分组, 显示, 机器…).
 struct AgentsTopBar: View, Equatable {
@@ -1462,8 +1462,7 @@ struct AgentsTopBar: View, Equatable {
         #endif
         @Bindable var model = model
         HStack(alignment: .top, spacing: Theme.Space.s) {
-            ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "work-sidebar-button",
-                              inboxDot: true) { shell.drawer.open() }
+            ShellPersonaButton(id: "work-sidebar-button") { shell.drawer.open() }
             Spacer(minLength: 0)
             ShellCircleButton(symbol: Theme.Icon.compose, label: "新建会话", id: "agents-new", action: newSession)
         }

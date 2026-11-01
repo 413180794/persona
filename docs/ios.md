@@ -232,10 +232,11 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 | 部分 | 做法 |
 | --- | --- |
 | 底部 | 没有 tab 栏 |
-| 顶栏 | ☰（收件箱有「需要你」时带红点）· 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。点了搜索，系统把搜索框升进导航栏那一行（带「取消」）：这时 `AgentsTopBar` 淡出让位、侧边栏也拉不出来，取消后再回来（从搜索结果打开会话时也不闪回来）；搜不到时写「没有找到「…」」，不再是「开始第一个开发会话」（`ShellSearchTests`）。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
-| 两页 | 一条横条：抽屉 \| 助手 \| Agents（`ShellPager`，2026-11-01 用户要求）。助手页左拖、Agents 页右拖跟手翻到另一页，切换按钮的选中块跟着手指走；松手和抽屉一个规则（快甩就过去，否则过半），同一个弹簧。点切换按钮也是滑过去。助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去或拖过去时建好，之后都留着，切换不丢位置；静止时另一页透明、不接触摸。拖动中两页自己的顶栏藏起来，壳上一条 `ShellMovingBar` 顶替（☰ 和切换按钮不动，右边按钮从「新对话」渐变成「新建会话」）：各页的顶栏画在自己页里，会被另一页盖住一截 |
-| 横向拖动归谁 | 一个 UIKit pan（`DrawerPan`）在手指动了几个点时按实际位移定：45° 以内算横向，更陡是列表自己的滚动。助手页：右拖是抽屉（和以前一样），左拖翻到 Agents。Agents 页：右拖翻回助手；从行的中间起拖仍是行自己的右滑（置顶 / 中断 / 标为已看），从左边缘 32pt 内起拖、或者不在行上（分组标题、筛选条、空白）就翻页；左拖是行的「关闭」。Agents 页不再右拖出抽屉，用 ☰。能往那个方向滚的代码块、表格先滚；在正在输入的文字上拖不翻页；推出了页面（系统右滑返回）、在搜索、抽屉开着时都不翻页 |
-| 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；Agents 页点 ☰（右拖是翻回助手）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
+| 顶栏 | 形象的头像 · 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。点了搜索，系统把搜索框升进导航栏那一行（带「取消」）：这时 `AgentsTopBar` 淡出让位、侧边栏也拉不出来，取消后再回来（从搜索结果打开会话时也不闪回来）；搜不到时写「没有找到「…」」，不再是「开始第一个开发会话」（`ShellSearchTests`）。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
+| 左上角的头像 | 原来是 ☰。2026-11-01 用户要求：换成顶栏后旧布局正中的形象头像没地方放了，改成左上角的「历史对话」入口，用来展示形象。两页（和拖动时的 `ShellMovingBar`）都是同一个 `ShellPersonaButton`：当前形象的状态头像（`PersonaDot`，和旧布局正中的同一个，五个状态见 `docs/persona.md`「状态」），状态取助手页当前那条对话的（`assistantCurrent`），所以两页、拖动中都一样；点了打开抽屉。和右边的圆按钮一样大（点按区域 `Theme.Size.tapTarget`，随字号变大）。收件箱有「需要你」时右下角一个红底托盘角标（`InboxMark`）：用托盘不用圆点，不会被看成头像的状态；角标圆心在头像外框的角上再往外一点，和圆形的脸、等你处理的红圈、工作中的弧线之间留一条缝，也避开形象包画在右上角的思考气泡和 z。VoiceOver 读「历史对话」，值是「Jarvis，空闲」（形象名和状态）加「收件箱有事等你」。头像和角标读的数据（会话、交互、机器、连接、收件箱）都只在按钮自己里面读，顶栏不跟着推送重建（#178；`AgentsTopBar` 是 Equatable）。`ShellAvatarTests`；截图里没有角标用 mock 加 `MOCK_INBOX=empty` |
+| 两页 | 一条横条：抽屉 \| 助手 \| Agents（`ShellPager`，2026-11-01 用户要求）。助手页左拖、Agents 页右拖跟手翻到另一页，切换按钮的选中块跟着手指走；松手和抽屉一个规则（快甩就过去，否则过半），同一个弹簧。点切换按钮也是滑过去。助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去或拖过去时建好，之后都留着，切换不丢位置；静止时另一页透明、不接触摸。拖动中两页自己的顶栏藏起来，壳上一条 `ShellMovingBar` 顶替（头像和切换按钮不动，右边按钮从「新对话」渐变成「新建会话」）：各页的顶栏画在自己页里，会被另一页盖住一截 |
+| 横向拖动归谁 | 一个 UIKit pan（`DrawerPan`）在手指动了几个点时按实际位移定：45° 以内算横向，更陡是列表自己的滚动。助手页：右拖是抽屉（和以前一样），左拖翻到 Agents。Agents 页：右拖翻回助手；从行的中间起拖仍是行自己的右滑（置顶 / 中断 / 标为已看），从左边缘 32pt 内起拖、或者不在行上（分组标题、筛选条、空白）就翻页；左拖是行的「关闭」。Agents 页不再右拖出抽屉，点左上角的头像。能往那个方向滚的代码块、表格先滚；在正在输入的文字上拖不翻页；推出了页面（系统右滑返回）、在搜索、抽屉开着时都不翻页 |
+| 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；两页都可以点左上角的头像（Agents 页右拖是翻回助手）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 只有输入框；上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`）。没有就什么都不显示 |
@@ -247,7 +248,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 `.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
 
 UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
-壳自己的在 `ShellTests`、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图。
+壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图。
 
 ## Jarvis 顶栏和侧边栏（2026-10-30）
 

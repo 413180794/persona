@@ -29,7 +29,7 @@ struct AssistantTopBar: View {
     static let fade: CGFloat = 30
 
     private var session: Session? { key.flatMap { model.session($0) } }
-    private var machineID: String { key?.machineID ?? model.assistantConfig?.machineID ?? model.hubMachineID }
+    private var machineID: String { model.assistantMachineID(key) }
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -69,13 +69,13 @@ struct AssistantTopBar: View {
         if shell != nil { shellBar } else { classicBar }
     }
 
-    /// ChatGPT's top bar: ☰ (a dot while the inbox has something for the user), the switch, 新对话.
+    /// ChatGPT's top bar: the persona's face (the drawer; a mark while the inbox has something for the user), the
+    /// switch, 新对话.
     private var shellBar: some View {
         @Bindable var model = model
         let link = model.connection.shown
         return HStack(alignment: .top) {
-            ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "assistant-sidebar-button",
-                              inboxDot: true, action: openSidebar)
+            ShellPersonaButton(id: "assistant-sidebar-button", action: openSidebar)
             Spacer(minLength: Theme.Space.s)
             ShellSwitch(tab: $model.selectedTab) { menuItems(link) }
             Spacer(minLength: Theme.Space.s)
@@ -326,28 +326,34 @@ private struct TopBarDot: View {
     let key: SessionKey?
     let machineID: String
 
-    private var session: Session? { key.flatMap { model.session($0) } }
+    var body: some View {
+        PersonaDot(size: Theme.Size.avatarL, state: model.personaState(key, machineID: machineID))
+    }
+}
 
-    /// What the face in the bar shows (docs/persona.md「状态」): 离线 when the hub or Jarvis's machine is out of reach,
-    /// 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn runs (thinking until it writes or
-    /// calls a tool), else 空闲.
-    private var dotState: PersonaState {
+extension AppModel {
+    /// The machine Jarvis's conversation `key` runs on; on the new-conversation page (nil) the assistant's.
+    func assistantMachineID(_ key: SessionKey?) -> String {
+        key?.machineID ?? assistantConfig?.machineID ?? hubMachineID
+    }
+
+    /// What the persona's face shows for Jarvis's conversation `key` (docs/persona.md「状态」): 离线 when the hub or
+    /// Jarvis's machine is out of reach, 等你处理 when the conversation waits on the user, 思考中 / 工作中 while a turn
+    /// runs (thinking until it writes or calls a tool), else 空闲. Read only by the face's own view (`TopBarDot`,
+    /// `ShellPersonaButton`): every hub push changes what it reads.
+    func personaState(_ key: SessionKey?, machineID: String) -> PersonaState {
         #if DEBUG
-        // `-showPersonaState idle|thinking|working|needs_you|offline`: hold the bar in one state (screenshots).
+        // `-showPersonaState idle|thinking|working|needs_you|offline`: hold the face in one state (screenshots).
         if let s = UserDefaults.standard.string(forKey: "showPersonaState").flatMap(PersonaState.init(rawValue:)) { return s }
         #endif
         // 更新中… is the hub answering again: not 离线.
-        let link = model.connection.shown
-        if link == .waitingForNetwork || link == .connecting || model.machine(machineID)?.online == false { return .offline }
-        guard let key, let session else { return .idle }
-        if session.state == .needsYou || !model.interactions(for: key).isEmpty { return .needsYou }
+        let link = connection.shown
+        if link == .waitingForNetwork || link == .connecting || machine(machineID)?.online == false { return .offline }
+        guard let key, let session = session(key) else { return .idle }
+        if session.state == .needsYou || !interactions(for: key).isEmpty { return .needsYou }
         guard session.state == .working else { return .idle }
-        let last = model.chats[key]?.items.last
+        let last = chats[key]?.items.last
         return last == nil || last?.role == "user" || last?.kind == .thinking ? .thinking : .working
-    }
-
-    var body: some View {
-        PersonaDot(size: Theme.Size.avatarL, state: dotState)
     }
 }
 

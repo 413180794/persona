@@ -114,18 +114,15 @@ private struct WaitingBadge: View {
     }
 }
 
-/// A round glass button of the shell's top bar (☰, 新对话): the same size as the system toolbar's, so the 助手 page's
-/// floating bar and the Agents page's navigation bar line up. `inboxDot` marks the inbox having something for the user
-/// (☰); the button reads it itself, so the bar around it is not drawn again with each inbox update.
+/// A round glass button of the shell's top bar (新对话, 新建会话): the same size as the system toolbar's, so the 助手
+/// page's floating bar and the Agents page's navigation bar line up.
 struct ShellCircleButton: View {
     var symbol: String
     var label: String
     var id: String
-    var inboxDot = false
     var action: () -> Void
 
     var body: some View {
-        let dot = inboxDot && InboxStore.shared.actionCount > 0
         Button {
             Haptics.tap()
             action()
@@ -140,18 +137,68 @@ struct ShellCircleButton: View {
         }
         .buttonStyle(.plain)
         .surface(interactive: true, in: .circle)
-        .overlay(alignment: .topTrailing) {
-            if dot {
-                Circle().fill(Theme.needsYou)
-                    .scaledFrame(width: Theme.Size.dotXL, height: Theme.Size.dotXL)
-                    .overlay(Circle().stroke(Theme.pageBackground, lineWidth: Theme.Size.lineMedium))
-                    .offset(x: -Theme.Space.xxs, y: Theme.Space.xxs)
-                    .allowsHitTesting(false)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
+    }
+}
+
+/// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Jarvis's
+/// state, as the old layout's bar shows it in the middle (`PersonaDot`, docs/persona.md「状态」), opening the drawer
+/// (历史对话, 收件箱…). The state is that of Jarvis's conversation on 助手 (`assistantCurrent`), on Agents too, so the
+/// face stays the same while the strip slides. A tray mark sits on the face's lower corner while the inbox has
+/// something for the user: a tray, not a dot, so it does not read as the face's state, and just outside the frame's
+/// corner, where it clears the round face and its rings (needs-you, working) with a gap, and the corners the packages
+/// draw in (the thought bubble and the z are top right). The button reads all of it itself: the bars around it are not drawn again with each push (#178).
+struct ShellPersonaButton: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var id: String
+    var action: () -> Void
+
+    var body: some View {
+        let key = model.assistantCurrent
+        let state = model.personaState(key, machineID: model.assistantMachineID(key))
+        let inbox = InboxStore.shared.actionCount > 0
+        // As big as the bar's round buttons (ShellCircleButton's frame): the tap target, growing with the text size.
+        let k = Theme.sizeScale(typeSize)
+        let mark = Theme.Size.badge * k
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            PersonaDot(size: Theme.Size.tapTarget * k, state: state)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) {
+            if inbox {
+                InboxMark(size: mark)
+                    .offset(x: mark / 2 + Theme.Space.xxs, y: mark / 2 + Theme.Space.xxs)
             }
         }
-        .accessibilityLabel(label)
-        .accessibilityValue(dot ? "有事等你" : "")
+        .accessibilityLabel("历史对话")
+        .accessibilityValue([model.persona.name + "，" + state.title, inbox ? "收件箱有事等你" : nil]
+            .compactMap { $0 }.joined(separator: "，"))
+        .accessibilityHint("打开侧边栏")
         .accessibilityIdentifier(id)
+    }
+}
+
+/// The inbox's mark on the persona's face: a tray on the 需要你 red, ringed in the page's color to stand apart from the face.
+private struct InboxMark: View {
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: Theme.Icon.inbox)
+            .font(Theme.Font.labelHeavy)
+            .imageScale(.small)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(Theme.needsYou, in: .circle)
+            .overlay(Circle().stroke(Theme.pageBackground, lineWidth: Theme.Size.lineMedium))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

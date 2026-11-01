@@ -782,6 +782,9 @@ INBOX.insert(next(i for i, x in enumerate(INBOX) if x["kind"] == "mail"), {"id":
      "mail": {"account_id": "acc1", "mailbox": "INBOX", "uids": [504], "from": {"name": "Lucy Wang", "email": "lucy@example.com"}, "direct": True},
      # Translated by the hub as it came in (设置 › 翻译 on this device).
      "translations": {"zh-Hans": {"subject": "设计评审能改期吗？", "preview": "你好，我周四要出差，赶不上设计评审了。能不能改到周二下午？"}}})
+# MOCK_INBOX=empty: nothing in the inbox (the shell's persona button without its inbox mark).
+if os.environ.get("MOCK_INBOX") == "empty":
+    INBOX.clear()
 MAIL_BODIES = {
     504: ("Hi,\n\nI'm travelling on Thursday, so I won't make the design review. Could we move it to Tuesday afternoon, "
           "say 3 pm? I've put the new icon set in the shared folder; the two open questions are the tab bar and the empty states.\n\n"

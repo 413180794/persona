@@ -131,7 +131,7 @@ struct ShellView: View {
     }
 }
 
-/// The top bar while the strip moves, over both pages and still: ☰ and the switch where they always are (the switch's
+/// The top bar while the strip moves, over both pages and still: the face and the switch where they always are (the switch's
 /// pill under the finger), the right-hand button fading from 助手's 新对话 into Agents' 新建会话, 助手's fog fading with
 /// its page. Only to look at: the pages' own bars (hidden meanwhile, `ShellBarAtRest`) take the taps at rest. Laid out as
 /// `AgentsTopBar`, which lines up with 助手's to the pixel.
@@ -143,7 +143,7 @@ private struct ShellMovingBar: View {
         if pager.moving {
             let p = min(1, max(0, pager.position))
             HStack(alignment: .top, spacing: Theme.Space.s) {
-                ShellCircleButton(symbol: Theme.Icon.drawer, label: "侧边栏", id: "shell-moving-sidebar", inboxDot: true) {}
+                ShellPersonaButton(id: "shell-moving-sidebar") {}
                 Spacer(minLength: 0)
                 ZStack {
                     // 新对话 is dimmed on an empty chat (AssistantTopBar).
