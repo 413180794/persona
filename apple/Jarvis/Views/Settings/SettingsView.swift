@@ -536,16 +536,12 @@ struct PairView: View {
 
     private func connect() async {
         guard let u = URL(string: url.trimmingCharacters(in: .whitespaces)) else { return }
-        let wasPaired = model.isPaired
-        let previousLook = model.look
         connecting = true
         defer { connecting = false }
         do {
             try await model.pair(ServerConfig(url: u, token: token.trimmingCharacters(in: .whitespaces)))
             Haptics.success()
-            // RootView replaces this sheet's owner for a first pairing or an engine step. Dismissing the removed
-            // sheet again can leave the replacement page visible but unable to receive taps.
-            if wasPaired && model.pairingEngineMachineID == nil && previousLook == model.look { dismiss() }
+            dismiss()
         } catch {
             #if os(macOS)
             if !error.isCancellation { self.error = "连接失败：\(error.localizedDescription)。确认这台 Mac 能访问这个地址（比如在同一个网络或 VPN 上）。" }
