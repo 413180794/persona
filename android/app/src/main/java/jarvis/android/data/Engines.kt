@@ -37,11 +37,10 @@ object Engines {
     /** The machine pairing asks about: the hub's own (kind local), else the first one. */
     fun pairingMachine(machines: List<Machine>): Machine? = machines.firstOrNull { it.kind == "local" } ?: machines.firstOrNull()
 
-    /** What the picker starts on: during pairing the only available engine if there is exactly one, else the current one. */
-    fun initialChoice(m: Machine, pairing: Boolean): String {
-        val available = m.engines.filter { it.available }.map { it.id }.distinct()
-        return if (pairing && available.size == 1) available.single() else current(m)
-    }
+    /** What the picker starts on: the machine's current engine, herdr when never chosen (2026-11-01 user: an engine
+     *  must be picked, herdr by default; no guessing from what happens to be detected). */
+    @Suppress("UNUSED_PARAMETER")
+    fun initialChoice(m: Machine, pairing: Boolean): String = current(m)
 
     /** The rows to list: the hub's `engines` as given; with none reported, the known engines (not detected). */
     fun options(m: Machine): List<DetectedEngine> =

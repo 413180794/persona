@@ -65,10 +65,11 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
         )
         return
     }
-    // Right after pairing: which engine the hub's own machine uses (docs/engines.md); skipping keeps the current one.
+    // Right after pairing: which engine the hub's own machine uses (docs/engines.md). One must be chosen: back does
+    // not skip the step (2026-11-01 user).
     PairingEngine.pending.value?.let { m ->
         val done = { PairingEngine.pending.value = null }
-        BackHandler(onBack = done)
+        BackHandler {}
         EngineScreen(hub, m.id, onDone = done, pairing = true, fallback = m)
         return
     }

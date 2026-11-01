@@ -23,9 +23,10 @@ import Observation
         machines.first { $0.kind == "local" } ?? machines.first
     }
 
+    /// The machine's current engine: herdr when it was never chosen (2026-11-01 user: an engine must be picked, herdr
+    /// by default; no guessing from what happens to be detected).
     static func initialChoice(_ machine: Machine, pairing: Bool) -> MachineEngine {
-        let available = Set(machine.engines.filter(\.available).map { MachineEngine(rawValue: $0.id) })
-        return pairing && available.count == 1 ? available.first! : machine.engine
+        machine.engine
     }
 
     /// Older hubs and offline machines may not report detection; their known engines can still be configured.

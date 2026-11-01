@@ -45,16 +45,17 @@ final class EngineChoiceTests: XCTestCase {
         return (root?["machines"] as? [[String: Any]])?.first { $0["id"] as? String == machine }?["engine"] as? String
     }
 
-    /// The short Duo cover can put the last Form row below the viewport; reach it before tapping.
-    @MainActor private func skipEngine() {
-        let skip = app.buttons["engine.skip"]
+    /// Confirms the preselected engine (pairing must pick one; there is no skip). The short Duo cover can put the
+    /// button below the viewport; reach it before tapping.
+    @MainActor private func confirmEngine() {
+        let save = app.buttons["engine.save"]
         for _ in 0..<4 {
-            if skip.waitForExistence(timeout: 1) { break }
+            if save.waitForExistence(timeout: 1) && save.isHittable { break }
             app.collectionViews.firstMatch.swipeUp(velocity: .slow)
         }
-        XCTAssertTrue(skip.waitForExistence(timeout: 5), "no reachable way to skip engine selection")
-        // A Form cell can exist just below the viewport; native tap finishes scrolling it into view.
-        skip.tap()
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "no reachable way to confirm the engine")
+        XCTAssertFalse(app.buttons["engine.skip"].exists, "pairing must not offer to skip the engine")
+        save.tap()
     }
 
     /// UIKit renders the four tabs in a side rail on Duo's cover, without a TabBar accessibility parent.
@@ -63,10 +64,9 @@ final class EngineChoiceTests: XCTestCase {
             XCTAssertTrue(app.buttons[title].firstMatch.waitForExistence(timeout: 10), "no paired root control: \(title)")
         }
         XCTAssertFalse(app.buttons["engine.save"].exists, "the engine step did not finish")
-        XCTAssertFalse(app.buttons["engine.skip"].exists, "the engine step is still open")
     }
 
-    @MainActor func testPairingCanChooseAndSkip() throws {
+    @MainActor func testPairingMustChooseAnEngine() throws {
         app = XCUIApplication()
         app.launchArguments = ["-openWelcome", "YES", "-pairURL", ""]
         app.launchPinned()
@@ -81,9 +81,11 @@ final class EngineChoiceTests: XCTestCase {
         XCTAssertEqual(try current("server"), "herdr-core")
         app.open(URL(string: pair)!)
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 10))
-        skipEngine()
+        // Pairing again preselects the configured engine; confirming keeps it.
+        XCTAssertTrue(app.buttons["engine.option.herdr-core"].isSelected)
+        confirmEngine()
         pairedRoot()
-        XCTAssertEqual(try current("server"), "herdr-core", "skipping must preserve the configured engine")
+        XCTAssertEqual(try current("server"), "herdr-core", "the preselected engine is the configured one")
     }
 
     @MainActor func testSettingsEngineRowAndPicker() throws {
@@ -139,12 +141,14 @@ final class EngineChoiceTests: XCTestCase {
         app.secureTextFields["Token"].typeText("mock")
         app.navigationBars.buttons["连接"].tap()
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 15))
-        skipEngine()
+        // Never chosen: herdr is preselected; confirming saves it.
+        XCTAssertTrue(app.buttons["engine.option.herdr"].isSelected)
+        confirmEngine()
         pairedRoot()
         XCTAssertEqual(try current("server"), "herdr")
     }
 
-    @MainActor func testPairingFailureCanContinue() throws {
+    @MainActor func testPairingFailureStaysOnTheStep() throws {
         guard let errorHub = ProcessInfo.processInfo.environment["JARVIS_ENGINE_ERROR_HUB"] else {
             throw XCTSkip("needs MOCK_ENGINE_ERROR=1 hub")
         }
@@ -158,9 +162,9 @@ final class EngineChoiceTests: XCTestCase {
         app.buttons["engine.save"].tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "保存失败")).firstMatch.waitForExistence(timeout: 10))
         try shot("pairing-error")
-        skipEngine()
-        pairedRoot()
-        XCTAssertEqual(try current("server"), "herdr")
+        // No way around choosing: the step stays, with no skip, until a save succeeds.
+        XCTAssertFalse(app.buttons["engine.skip"].exists)
+        XCTAssertTrue(app.buttons["engine.save"].exists)
     }
 
 }

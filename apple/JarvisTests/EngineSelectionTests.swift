@@ -27,7 +27,7 @@ import Testing
         let future = MachineEngine(rawValue: "future")
         #expect(EngineSelectionModel.canSelect(.orca, on: m))
         #expect(EngineSelectionModel.canSelect(future, on: m))
-        #expect(EngineSelectionModel.initialChoice(m, pairing: true) == future)
+        #expect(EngineSelectionModel.initialChoice(m, pairing: true) == .orca)
         m.engines[1].available = false
         #expect(!EngineSelectionModel.canSelect(future, on: m))
         m.engines = []
@@ -43,13 +43,13 @@ import Testing
         #expect(EngineSelectionModel.pairingMachine([remote, local])?.id == local.id)
         #expect(EngineSelectionModel.pairingMachine([remote])?.id == remote.id)
         #expect(EngineSelectionModel.pairingMachine([]) == nil)
+        // Always the machine's current engine (herdr when never chosen), whatever happens to be detected.
         #expect(EngineSelectionModel.initialChoice(local, pairing: true) == .herdr)
         local.engines = [.init(id: "herdr-core", name: "Herdr App", available: true)]
-        #expect(EngineSelectionModel.initialChoice(local, pairing: true) == .herdrApp)
-        #expect(EngineSelectionModel.initialChoice(local, pairing: false) == .herdr)
-        local.engines.append(.init(id: "herdr", name: "herdr", available: true))
         #expect(EngineSelectionModel.initialChoice(local, pairing: true) == .herdr)
+        #expect(EngineSelectionModel.initialChoice(local, pairing: false) == .herdr)
         local.engine = .herdrApp
+        #expect(EngineSelectionModel.initialChoice(local, pairing: true) == .herdrApp)
         local.engines = []
         #expect(EngineSelectionModel.initialChoice(local, pairing: true) == .herdrApp)
     }

@@ -69,19 +69,17 @@ class EnginesLogicTest {
         assertNull(Engines.pairingMachine(emptyList()))
     }
 
-    @Test fun pairingPreselectsTheOnlyAvailableEngine() {
+    @Test fun pickerStartsOnTheCurrentEngineHerdrByDefault() {
+        // Never chosen: herdr, even when only another engine is detected.
         val m = machine(engine = "herdr", engines = listOf(herdr.copy(available = false), core.copy(available = true), orca))
-        assertEquals("herdr-core", Engines.initialChoice(m, pairing = true))
-        // Outside pairing the current choice stays.
+        assertEquals("herdr", Engines.initialChoice(m, pairing = true))
         assertEquals("herdr", Engines.initialChoice(m, pairing = false))
-    }
-
-    @Test fun severalOrNoneAvailableKeepsTheCurrentEngine() {
+        assertEquals("herdr", Engines.initialChoice(machine(engine = ""), pairing = true))
+        // Chosen before: that one.
         val two = machine(engine = "orca", engines = listOf(herdr, core.copy(available = true), orca))
         assertEquals("orca", Engines.initialChoice(two, pairing = true))
         val none = machine(engine = "herdr-core", engines = listOf(herdr.copy(available = false)))
         assertEquals("herdr-core", Engines.initialChoice(none, pairing = true))
-        assertEquals("herdr", Engines.initialChoice(machine(engine = ""), pairing = true))
     }
 
     @Test fun optionsAreTheHubsListElseTheKnownEngines() {

@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Which terminal engine a machine uses (docs/engines.md), as on iOS `EngineSelectionView`: after pairing ([pairing],
- * with 暂时跳过 and a way on when saving fails) and from 设置 › 电脑 › 机器 › the machine. [fallback] is the machine as
+ * an engine must be chosen: no skip, a failed save stays on the step) and from 设置 › 电脑 › 机器 › the machine. [fallback] is the machine as
  * the pairing check saw it, until the new hub's list has it.
  */
 @Composable
@@ -96,7 +96,7 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
             item(key = "error") {
                 KitGroup(Modifier.padding(top = 20.dp)) {
                     row {
-                        KitNoticeRow(err, if (pairing) "配对已完成，可以先继续，稍后在设置 › 电脑 › 机器里修改。" else null,
+                        KitNoticeRow(err, if (pairing) "必须选一个引擎才能继续，检查网络后再点一次确认。" else null,
                             tint = c.danger, icon = Icons.Default.Error)
                     }
                 }
@@ -118,9 +118,6 @@ fun EngineScreen(hub: Hub, machineId: String, onDone: () -> Unit, pairing: Boole
                         enabled = !selection.saving && Engines.canSelect(selection.selected, machine),
                         trailing = if (selection.saving) ({ CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }) else null,
                     )
-                }
-                if (pairing) row {
-                    KitActionRow(if (selection.error == null) "暂时跳过" else "先继续", onClick = onDone, enabled = !selection.saving)
                 }
             }
         }

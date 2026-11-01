@@ -66,8 +66,9 @@ fun PairScreen(reason: String? = null) {
                 }
                 val paired = Pairing(p.url.trimEnd('/'), own)
                 JarvisApp.instance.pairings.save(paired)
-                // Next: which engine the hub's own machine uses (docs/engines.md), asked once right after pairing.
-                PairingEngine.pending.value = Engines.pairingMachine(machines)
+                // Next: which engine the hub's own machine uses (docs/engines.md), asked once right after pairing; only
+                // when the hub reports engines (an older hub cannot save one and the step must not trap).
+                PairingEngine.pending.value = Engines.pairingMachine(machines)?.takeIf { it.engines.isNotEmpty() }
                 JarvisApp.instance.connect(paired)
                 null
             } catch (e: HubException) {

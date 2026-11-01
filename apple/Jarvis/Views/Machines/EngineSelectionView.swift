@@ -66,7 +66,7 @@ struct EngineSelectionView: View {
                 if let error = selection.error {
                     Section {
                         Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
-                        if pairing { Text("配对已完成，可以先继续，稍后在设置 › 机器里修改。").font(Theme.Font.secondary) }
+                        if pairing { Text("必须选一个引擎才能继续，检查网络后再点一次确认。").font(Theme.Font.secondary) }
                     }
                 }
                 Section {
@@ -79,11 +79,6 @@ struct EngineSelectionView: View {
                     }
                     .disabled(selection.saving || !EngineSelectionModel.canSelect(selection.selected, on: machine))
                     .accessibilityIdentifier("engine.save")
-                    if pairing {
-                        Button { finish() } label: { Text(selection.error == nil ? "暂时跳过" : "先继续").lineLimit(1) }
-                            .accessibilityIdentifier("engine.skip")
-                            .disabled(selection.saving)
-                    }
                 }
             } else {
                 Section {

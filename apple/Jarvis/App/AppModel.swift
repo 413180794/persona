@@ -171,7 +171,8 @@ final class AppModel {
         Keychain.serverConfig = new
         forgetDeviceCredentials()
         machines = pairedMachines
-        pairingEngineMachineID = EngineSelectionModel.pairingMachine(pairedMachines)?.id
+        // The engine step only when the hub reports engines (an older hub cannot save one; the step must not trap).
+        pairingEngineMachineID = EngineSelectionModel.pairingMachine(pairedMachines).flatMap { $0.engines.isEmpty ? nil : $0.id }
         sessionsByMachine = [:]
         interactions = [:]
         desktops = []
