@@ -43,6 +43,8 @@ type Pusher struct {
 	http  *http.Client
 
 	base string // tests: APNs host instead of Apple's
+	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
+	desktopOnline func() bool
 
 	mu      sync.Mutex
 	devices map[string]Device
@@ -127,8 +129,10 @@ func (p *Pusher) token() (string, error) {
 }
 
 // send alerts every device whose settings take it (nil: all of them).
+// A device that chose 手机静音 gets none while a desktop app is connected (desktops.go).
 func (p *Pusher) send(payload map[string]any, collapseID string, wants func(NotifyPrefs) bool) {
-	p.sendAs(payload, collapseID, "alert", "10", wants)
+	online := p != nil && p.desktopOnline != nil && p.desktopOnline()
+	p.sendAs(payload, collapseID, "alert", "10", alertWanted(wants, online))
 }
 
 func apnsHost(d Device) string {

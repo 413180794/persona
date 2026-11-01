@@ -60,6 +60,7 @@ var Features = []string{
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)
+	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 }
 
 // Files sent from the phone (POST /api/v1/machines/{mid}/files): the hub streams the body to the node in chunks.

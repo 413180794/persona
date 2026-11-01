@@ -577,7 +577,9 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) {
 			la.mu.Unlock()
 			if !already {
 				la.markSent(r.DeviceID, dst, now, true)
-				la.sendStart(d, r, liveActivityPayload("start", dst, now))
+				// 手机静音 while a desktop is online: the activity still starts, without its alert (desktops.go).
+				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline()
+				la.sendStart(d, r, startPayload(dst, now, quiet))
 			}
 		}
 	}
@@ -621,6 +623,15 @@ func liveActivityPayload(event string, st FleetState, now time.Time) map[string]
 		aps["alert"] = map[string]any{"title": "Jarvis", "body": fleetSentence(st)}
 	}
 	return map[string]any{"aps": aps}
+}
+
+// startPayload is a push-to-start; quiet drops its alert (the phone is muted while a desktop is online).
+func startPayload(st FleetState, now time.Time, quiet bool) map[string]any {
+	p := liveActivityPayload("start", st, now)
+	if quiet {
+		delete(p["aps"].(map[string]any), "alert")
+	}
+	return p
 }
 
 // fleetSentence: "2 个需要你 · 3 个在工作", the alert of a push-started activity.

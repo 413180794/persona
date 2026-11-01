@@ -520,6 +520,8 @@ type client struct {
 	subs  map[[2]string]bool
 	phone bool
 	sim   bool // a simulator registered as phone: only used when no real iPhone is connected
+	// desktop: a desktop app (the Mac app, register_desktop); never the phone (desktops.go).
+	desktop bool
 	// device and role: whose credential opened the connection (devicetokens.go); device is empty for the pairing token.
 	device, role string
 	lazy         bool // asked for items without image data (subscribe with lazy_images)
@@ -653,9 +655,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer func() {
 		cancel()
-		h.mu.Lock()
-		delete(h.clients, c)
-		h.mu.Unlock()
+		h.dropClient(c)
 		c.mu.Lock()
 		subs := c.subs
 		c.subs = map[[2]string]bool{}
@@ -704,6 +704,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	for _, ix := range h.pendingInteractions() {
 		c.sendJSON(map[string]any{"type": "interaction", "interaction": ix})
 	}
+	h.sendDesktops(c) // under the hub lock, so a desktop registering meanwhile cannot be overtaken by this older list
 
 	for {
 		_, data, err := conn.Read(ctx)
@@ -793,6 +794,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		if len(msg.Tools) > 0 {
 			h.setPhoneTools(msg.Tools)
 		}
+	case "register_desktop":
+		h.registerDesktop(c, msg.DeviceName)
 	case "seen":
 		if h.byID[msg.MachineID] != nil && msg.SessionID != "" {
 			h.markSeen(msg.MachineID, msg.SessionID)

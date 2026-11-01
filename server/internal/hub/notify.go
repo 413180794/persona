@@ -63,6 +63,9 @@ type NotifyPrefs struct {
 	Island IslandPrefs `json:"island"`
 	// Translate: the app's 设置 › 翻译, so the hub can translate new mail before it is opened (translate.go).
 	Translate TranslatePrefs `json:"translate"`
+	// MuteWhileDesktop: 手机静音 (WeChat's) — no alert pushes to this device while a desktop app (the Mac app) is
+	// connected; it shows them there (desktops.go).
+	MuteWhileDesktop bool `json:"mute_while_desktop"`
 }
 
 // TranslatePrefs mirrors 设置 › 翻译 on a device.
