@@ -1,5 +1,10 @@
+<!-- The app icon's mark (iOS AppIcon): a ring around a four-point star and a small star, as a white silhouette. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:pathData="M12,2.3a9.7,9.7 0,1 0,0 19.4a9.7,9.7 0,1 0,0 -19.4z" />
     <path android:fillColor="#FFFFFFFF"
-        android:pathData="M12,2a10,10 0,1 0,0 20a10,10 0,1 0,0 -20zM12,6.5a5.5,5.5 0,1 1,0 11a5.5,5.5 0,1 1,0 -11zM12,9.5a2.5,2.5 0,1 0,0 5a2.5,2.5 0,1 0,0 -5z" />
+        android:pathData="M12,6C12.5,9.5 14.5,11.5 18,12C14.5,12.5 12.5,14.5 12,18C11.5,14.5 9.5,12.5 6,12C9.5,11.5 11.5,9.5 12,6Z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M16.2,6.1C16.35,7.2 16.8,7.65 17.9,7.8C16.8,7.95 16.35,8.4 16.2,9.5C16.05,8.4 15.6,7.95 14.5,7.8C15.6,7.65 16.05,7.2 16.2,6.1Z" />
 </vector>
