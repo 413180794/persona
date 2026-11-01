@@ -137,6 +137,9 @@ final class DemoHub {
     }
 
     private func get(_ p: [String], _ q: [String: String]) throws -> JSONValue {
+        #if DEBUG
+        if let sample = DemoKBSample.answer(p, q, kb: data["kb"]) { return sample } // knowledge-search screenshots
+        #endif
         switch p {
         case ["health"]: return ["ok": true, "version": "demo"]
         case ["machines"]: return ["machines": .array(machines)]

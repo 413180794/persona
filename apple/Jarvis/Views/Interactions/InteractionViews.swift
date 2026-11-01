@@ -226,6 +226,14 @@ struct InteractionPanel: View {
                         .scaledFrame(width: Theme.Size.wellXS, height: Theme.Size.wellXS)
                         .contentShape(.rect)
                 }
+                #if os(macOS)
+                // Just the ⋯ as on iOS: the Mac's default menu is a bordered pop-up with its own ⌄, next to the fold ⌄.
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("更多")
+                #endif
                 Image(systemName: Theme.Icon.expand)
                     .font(Theme.Font.captionStrong)
                     .foregroundStyle(.secondary)
@@ -575,6 +583,11 @@ struct PermissionForm: View {
                 Button("本会话总是允许") {
                     Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
                 }
+                #if os(macOS)
+                // A text link as on iOS: the Mac's default style made it a third push button under 拒绝 / 允许.
+                .buttonStyle(.link)
+                .lineLimit(1)
+                #endif
                 .font(Theme.Font.caption)
                 .frame(maxWidth: .infinity)
             }
@@ -842,6 +855,17 @@ extension Interaction {
             " Enter to select · ↑/↓ to navigate · Esc to cancel",
         ].joined(separator: "\n")
         let payload: [String: Any] = ["id": "sample-s", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "screen", "screen": screen]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        return try? JSON.decoder.decode(Interaction.self, from: data)
+    }
+
+    /// A Bash permission request (允许 / 拒绝 / 本会话总是允许), for screenshots.
+    static func samplePermission(_ key: SessionKey) -> Interaction? {
+        let payload: [String: Any] = [
+            "id": "sample-p", "machine_id": key.machineID, "session_id": key.sessionID, "kind": "permission",
+            "tool_name": "Bash", "summary": "xcodebuild test -scheme Weather -destination 'platform=iOS Simulator,name=iPhone 17'",
+            "tool_input": ["command": "xcodebuild test -scheme Weather -destination 'platform=iOS Simulator,name=iPhone 17'"],
+        ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
         return try? JSON.decoder.decode(Interaction.self, from: data)
     }

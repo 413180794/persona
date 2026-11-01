@@ -939,6 +939,9 @@ struct ChatView: View {
                 if UserDefaults.standard.bool(forKey: "showSampleScreen"), let ix = Interaction.sampleScreen(key) {
                     InteractionPanel(interaction: ix) // `-showSampleScreen YES`: a terminal dialog, for screenshots
                 }
+                if UserDefaults.standard.bool(forKey: "showSamplePermission"), let ix = Interaction.samplePermission(key) {
+                    InteractionPanel(interaction: ix) // `-showSamplePermission YES`: a permission request, for screenshots
+                }
                 #endif
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)

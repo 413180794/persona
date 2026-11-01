@@ -66,7 +66,10 @@ struct KnowledgeView: View {
         #if DEBUG
         // `-showKnowledgeEntry <kind>/<id>` (with `-openAssistantPage knowledge`): that entry's page, for screenshots;
         // `-showKnowledgeSearch <text>`: searching for it; `-showKnowledgeKind <kind>`: that kind's list.
-        .navigationDestination(item: $debugEntry) { e in KnowledgeDetailView(entry: e) }
+        // With both, the entry opens as from that search (its matches first).
+        .navigationDestination(item: $debugEntry) { e in
+            KnowledgeDetailView(entry: e, query: UserDefaults.standard.string(forKey: "showKnowledgeSearch"))
+        }
         .onAppear {
             if let q = UserDefaults.standard.string(forKey: "showKnowledgeSearch") { query = q }
             if let k = UserDefaults.standard.string(forKey: "showKnowledgeKind").flatMap(KBKind.init(rawValue:)) { kind = k }
@@ -459,6 +462,9 @@ struct KnowledgeDetailView: View {
     @State private var showRecent = false
     @State private var allLog = false
     @State private var openKinds: Set<String> = []
+    #if DEBUG
+    @State private var debugDay: KBMatch?
+    #endif
 
     /// `-showKnowledgeLower YES`: the header and Agents left out, so a screenshot reaches the timeline and what follows.
     #if DEBUG
@@ -550,6 +556,17 @@ struct KnowledgeDetailView: View {
         #if DEBUG && os(macOS)
         // `-showKBEditor YES` with `-showKnowledgeEntry <kind>/<id>`: the tag editor open (Mac screenshots).
         .onAppear { if UserDefaults.standard.bool(forKey: "showKBEditor") { editing = true } }
+        #endif
+        #if DEBUG
+        // `-showKnowledgeDay YES` with `-showKnowledgeEntry chats/<id> -showKnowledgeSearch <text>`: the day of the
+        // first message found, opened at it (screenshots).
+        .navigationDestination(item: $debugDay) { m in
+            KBDayView(chat: entry.id, chatName: shown.name, day: m.day ?? "", focus: m.n, query: query ?? "")
+        }
+        .onChange(of: detail?.matches) {
+            guard UserDefaults.standard.bool(forKey: "showKnowledgeDay"), debugDay == nil, entry.kind == KBKind.chats.rawValue else { return }
+            debugDay = detail?.matches?.first(where: { $0.day != nil })
+        }
         #endif
         .sheet(isPresented: $newAgent) {
             NewChatView(initialPrompt: agentPrompt) { s in
@@ -1044,6 +1061,10 @@ struct KBDayView: View {
             .themedPage()
             .navigationTitle(Self.title(day))
             .navigationBarTitleDisplayMode(.inline)
+            #if os(macOS)
+            // The Mac's toolbar shows the title by the back button as well: a principal item said the day twice.
+            .navigationSubtitle(chatName)
+            #else
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
@@ -1052,6 +1073,7 @@ struct KBDayView: View {
                     }
                 }
             }
+            #endif
             .task(id: day) {
                 await load()
                 // Laid out first, then to the found message (a few rows above it stay in sight).
