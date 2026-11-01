@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 )
 
 func TestSubscriptionsCoverEachPane(t *testing.T) {
@@ -23,14 +23,14 @@ func TestSubscriptionsCoverEachPane(t *testing.T) {
 }
 
 func TestPanesChangedResubscribes(t *testing.T) {
-	n := &Node{agents: map[string]herdr.Agent{"s1": {PaneID: "w1:p1"}}, events: newHerdrEvents()}
+	n := &Node{agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}, events: newHerdrEvents()}
 	cancelled := 0
 	n.events.panes, n.events.resub = "w1:p1", func() { cancelled++ }
 	n.panesChanged()
 	if cancelled != 0 {
 		t.Fatal("same panes must keep the subscription")
 	}
-	n.agents["s2"] = herdr.Agent{PaneID: "w2:p1"}
+	n.agents["s2"] = host.Agent{PaneID: "w2:p1"}
 	n.panesChanged()
 	if cancelled != 1 || !n.events.resubbed || n.events.panes != "w1:p1 w2:p1" {
 		t.Fatalf("cancelled %d resubbed %v panes %q", cancelled, n.events.resubbed, n.events.panes)
@@ -38,7 +38,7 @@ func TestPanesChangedResubscribes(t *testing.T) {
 }
 
 func TestSnapshotDue(t *testing.T) {
-	n := &Node{agents: map[string]herdr.Agent{"s1": {Agent: "claude", PaneID: "w1:p1"}}, events: newHerdrEvents()}
+	n := &Node{agents: map[string]host.Agent{"s1": {Agent: "claude", PaneID: "w1:p1"}}, events: newHerdrEvents()}
 	now := time.Now()
 	if !n.snapshotDue(now) {
 		t.Fatal("without an event stream herdr is polled every tick")
@@ -50,7 +50,7 @@ func TestSnapshotDue(t *testing.T) {
 	if !n.snapshotDue(now.Add(-slowSnapshot)) {
 		t.Fatal("the slow snapshot still runs")
 	}
-	n.agents["t1"] = herdr.Agent{Agent: traexAgent, PaneID: "w1:p2"}
+	n.agents["t1"] = host.Agent{Agent: traexAgent, PaneID: "w1:p2"}
 	if !n.snapshotDue(now) {
 		t.Fatal("TRAEX state is in the title spinner, which sends no event")
 	}

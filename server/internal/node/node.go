@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/transcript"
@@ -30,7 +30,7 @@ type Node struct {
 	bin  string // absolute path of this executable
 	// managed: launchers kept by the hub (managed.go)
 	managed managedLaunchers
-	herdr   *herdr.Client
+	hosts   *host.Registry // the terminal hosts, by kind (hosts.go)
 	peer    *rpc.Peer
 	logger  *log.Logger
 
@@ -40,9 +40,9 @@ type Node struct {
 	paths    map[string]string           // session id -> transcript path
 	pathsAt  map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
 	watches  map[string]*watch
-	agents   map[string]herdr.Agent    // session id -> live agent
+	agents   map[string]host.Agent     // session id -> live agent
 	panes    map[string]string         // pane id -> session id (learned from hooks)
-	layout   layout                    // workspace / tab names from the last herdr snapshot
+	layouts  map[string]layout         // host kind -> space / slot names from its last snapshot
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)
 	spare    *assistantProc            // warm process waiting for the next new conversation
 	akeys    map[string]*assistantProc // the key a Codex conversation's MCP server reports until its thread exists
@@ -64,6 +64,9 @@ type Node struct {
 	ups      uploads                   // files arriving from the phone (upload.go)
 	sysOnce  sync.Once                 // system: read once (metrics.go)
 	sys      proto.System
+
+	// hostAgents: each host's agents in its last answer (refreshHosts), kept for a host that does not answer.
+	hostAgents map[string][]host.Agent
 
 	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
 	pushLocks map[string]*sync.Mutex
@@ -101,12 +104,11 @@ func New(version string) (*Node, error) {
 		home:     home,
 		dir:      dir,
 		bin:      bin,
-		herdr:    herdr.New(),
 		logger:   log.New(os.Stderr, "node: ", log.LstdFlags|log.Lmsgprefix),
 		files:    map[string]*transcript.File{},
 		paths:    map[string]string{},
 		watches:  map[string]*watch{},
-		agents:   map[string]herdr.Agent{},
+		agents:   map[string]host.Agent{},
 		panes:    map[string]string{},
 		procs:    map[string]*assistantProc{},
 		akeys:    map[string]*assistantProc{},
@@ -118,7 +120,7 @@ func New(version string) (*Node, error) {
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
 	}
-	n.herdr.Log = n.logger.Printf
+	n.hosts = machineHosts(n.logger.Printf)
 	n.state = newState()
 	return n, nil
 }
@@ -552,7 +554,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		mode, effort := n.modesOf(p.SessionID)
 		if pane, err := n.paneFor(ctx, p.SessionID); err == nil && !n.isAssistantSession(p.SessionID) {
-			if screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
+			if screen, err := n.readPane(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
 				mode = tuiMode(screen) // shift+tab in the terminal shows up in the transcript only with the next prompt
 			}
 		}
@@ -613,7 +615,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		OS:            runtime.GOOS,
 		Arch:          runtime.GOARCH,
 		Home:          n.home,
-		HerdrVersion:  n.herdr.Version(ctx),
+		HerdrVersion:  n.herdrVersion(ctx),
 		ClaudeVersion: claudeVersion(ctx),
 		Version:       n.Version,
 		System:        n.system(ctx),
@@ -678,4 +680,12 @@ func shellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// herdrVersion is the herdr host's version ("" without one): node.info's herdr_version.
+func (n *Node) herdrVersion(ctx context.Context) string {
+	if h := n.hosts.Get(host.Herdr); h != nil {
+		return h.Version(ctx)
+	}
+	return ""
 }

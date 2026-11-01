@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 )
 
 // The panes of sessions Jarvis started are kept in the hub's database and come back when node restarts. After a
@@ -29,7 +29,7 @@ func TestAPaneShowsWhatItsClaudeRunsNotWhatItOnceRan(t *testing.T) {
 			map[string]any{"pid": pids[params["pane_id"].(string)], "name": "claude", "argv0": "claude"}}}}
 	})
 	n, home := testNode(t)
-	n.herdr, n.panes, n.panePIDs = h, map[string]string{"w:p1": before, "w:p2": fresh}, map[string]panePID{}
+	n.hosts, n.panes, n.panePIDs = herdrHosts(h), map[string]string{"w:p1": before, "w:p2": fresh}, map[string]panePID{}
 	dir := filepath.Join(home, ".claude", "sessions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestAPaneShowsWhatItsClaudeRunsNotWhatItOnceRan(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "4242.json"), []byte(`{"pid":4242,"sessionId":"`+now+`"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	n.setAgents([]herdr.Agent{
+	n.setAgents([]host.Agent{
 		{Agent: "claude", PaneID: "w:p1", Cwd: "/work/repo"},
 		{Agent: "claude", PaneID: "w:p2", Cwd: "/work/repo"},
 	})
@@ -62,7 +62,7 @@ func TestAPidFileNotFoundIsLookedForAgainSoon(t *testing.T) {
 			map[string]any{"pid": 4444, "name": "claude", "argv0": "claude"}}}}
 	})
 	n, home := testNode(t)
-	n.herdr, n.panePIDs = h, map[string]panePID{}
+	n.hosts, n.panePIDs = herdrHosts(h), map[string]panePID{}
 	if got := n.sessionFromProcess("w:p1"); got != "" {
 		t.Fatalf("no pid file yet, got %q", got)
 	}

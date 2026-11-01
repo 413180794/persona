@@ -71,7 +71,7 @@ func (n *Node) readSuggestion(ctx context.Context, id, pane string) {
 		case <-time.After(time.Until(start.Add(at))):
 		}
 		rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		text, err := n.herdr.PaneReadANSI(rctx, pane, "visible", 60)
+		text, err := n.readPaneANSI(rctx, pane, "visible", 60)
 		cancel()
 		if err != nil {
 			continue

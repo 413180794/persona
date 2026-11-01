@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
@@ -54,8 +55,8 @@ type termEvent struct {
 }
 
 func TestTerminalWatchStreamsFramesAndStartsOver(t *testing.T) {
-	n := &Node{agents: map[string]herdr.Agent{"s1": {PaneID: "w1:p1"}}, procs: map[string]*assistantProc{}, state: newState(),
-		herdr: &herdr.Client{Bin: fakeObserveHerdr(t)}}
+	n := &Node{agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}, procs: map[string]*assistantProc{}, state: newState(),
+		hosts: herdrHosts(&herdr.Client{Bin: fakeObserveHerdr(t)})}
 	ctx, cancel := context.WithCancel(context.Background())
 	n2hR, n2hW := io.Pipe()
 	h2nR, h2nW := io.Pipe()
@@ -111,8 +112,8 @@ func TestTerminalWatchStreamsFramesAndStartsOver(t *testing.T) {
 }
 
 func TestTerminalWatchNeedsARunningSession(t *testing.T) {
-	n := &Node{agents: map[string]herdr.Agent{}, procs: map[string]*assistantProc{}, state: newState(),
-		herdr: &herdr.Client{Bin: fakeObserveHerdr(t)}}
+	n := &Node{agents: map[string]host.Agent{}, procs: map[string]*assistantProc{}, state: newState(),
+		hosts: herdrHosts(&herdr.Client{Bin: fakeObserveHerdr(t)})}
 	if _, err := n.terminalWatch(context.Background(), "gone", nil); err == nil {
 		t.Fatal("watched a session that is not running")
 	}
@@ -123,16 +124,16 @@ func TestFrameGateMergesBurstsOnly(t *testing.T) {
 	termMinGap = 40 * time.Millisecond
 	t.Cleanup(func() { termMinGap = old })
 	var mu sync.Mutex
-	var sent []herdr.Frame
+	var sent []host.Frame
 	var at []time.Time
-	g := &frameGate{send: func(f herdr.Frame) { mu.Lock(); sent = append(sent, f); at = append(at, time.Now()); mu.Unlock() }}
+	g := &frameGate{send: func(f host.Frame) { mu.Lock(); sent = append(sent, f); at = append(at, time.Now()); mu.Unlock() }}
 	b := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
 	start := time.Now()
 
 	// After a quiet spell: at once. Then a burst: held, merged.
-	g.put(herdr.Frame{Full: true, Data: b("F")})
-	g.put(herdr.Frame{Data: b("a")})
-	g.put(herdr.Frame{Data: b("b")})
+	g.put(host.Frame{Full: true, Data: b("F")})
+	g.put(host.Frame{Data: b("a")})
+	g.put(host.Frame{Data: b("b")})
 	// Quiet is counted from the last frame sent: wait for the burst to go out (late, on a loaded machine), then
 	// three gaps past it — not a fixed time from the start, which a slow timer eats into.
 	deadline := time.Now().Add(5 * time.Second)
@@ -154,10 +155,10 @@ func TestFrameGateMergesBurstsOnly(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	// Quiet again: at once. Then held, and a whole frame replaces the diffs before it; the last size wins.
-	g.put(herdr.Frame{Data: b("c")})
-	g.put(herdr.Frame{Data: b("d")})
-	g.put(herdr.Frame{Full: true, Width: 90, Data: b("G")})
-	g.put(herdr.Frame{Width: 91, Data: b("e")})
+	g.put(host.Frame{Data: b("c")})
+	g.put(host.Frame{Data: b("d")})
+	g.put(host.Frame{Full: true, Width: 90, Data: b("G")})
+	g.put(host.Frame{Width: 91, Data: b("e")})
 	g.flush() // the stream ended: what is held goes now
 
 	mu.Lock()
@@ -218,8 +219,8 @@ esac
 func controlNode(t *testing.T, bin string) (*Node, *rpc.Peer, func() []termEvent) {
 	t.Helper()
 	controlSupport.once.Do(func() { controlSupport.ok = true })
-	n := &Node{agents: map[string]herdr.Agent{"s1": {PaneID: "w1:p1"}}, procs: map[string]*assistantProc{}, state: newState(),
-		herdr: &herdr.Client{Bin: bin}}
+	n := &Node{agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}, procs: map[string]*assistantProc{}, state: newState(),
+		hosts: herdrHosts(&herdr.Client{Bin: bin})}
 	ctx, cancel := context.WithCancel(context.Background())
 	n2hR, n2hW := io.Pipe()
 	h2nR, h2nW := io.Pipe()

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
@@ -38,7 +38,7 @@ func TestSessionItemsFoldWork(t *testing.T) {
 	}
 	const sid = "s1"
 	n := &Node{home: t.TempDir(), paths: map[string]string{}, files: map[string]*transcript.File{sid: transcript.NewFile(path)},
-		procs: map[string]*assistantProc{}, agents: map[string]herdr.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
+		procs: map[string]*assistantProc{}, agents: map[string]host.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
 	call := func(params string) (res struct {
 		Items   []proto.Item `json:"items"`
 		More    bool         `json:"more"`

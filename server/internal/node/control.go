@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
@@ -41,9 +42,13 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 
+	launch, err := hostCap[host.Launcher](n) // new sessions start in herdr, the only host so far
+	if err != nil {
+		return nil, err
+	}
 	ws := workspaceID
 	if ws == "" {
-		if ws, err = n.workspaceFor(ctx, cwd); err != nil {
+		if ws, err = n.workspaceFor(ctx, launch, cwd); err != nil {
 			return nil, err
 		}
 	}
@@ -54,20 +59,20 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if id == "" {
 		id = newUUID()
 	}
-	var created *herdr.Created
+	var created *host.Created
 	if ws == "" {
-		if created, err = n.herdr.WorkspaceCreate(ctx, cwd, filepath.Base(cwd)); err == nil && created.Tab.ID != "" {
-			_ = n.herdr.TabRename(ctx, created.Tab.ID, tabLabel(tabName, nil)) // its first tab
+		if created, err = launch.CreateSpace(ctx, cwd, filepath.Base(cwd)); err == nil && created.SlotID != "" {
+			_ = renameSlot(ctx, launch, created.SlotID, tabLabel(tabName, nil)) // its first tab
 		}
 	} else {
-		created, err = n.herdr.TabCreate(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, ws)))
+		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create herdr tab: %w", err)
 	}
-	pane := created.RootPane.ID
-	if name := n.starts.tabCreated(id, created.Tab.ID); name != "" { // named while the tab was being made
-		_ = n.herdr.TabRename(ctx, created.Tab.ID, name)
+	pane := created.Pane.String()
+	if name := n.starts.tabCreated(id, created.SlotID); name != "" { // named while the tab was being made
+		_ = renameSlot(ctx, launch, created.SlotID, name)
 	}
 
 	args := "--session-id " + id
@@ -84,19 +89,19 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	n.noteModes(id, mode, effort) // shown before the first prompt writes them down
 	// Give the fresh shell a moment to load ~/.zshrc; typed input is buffered either way.
 	time.Sleep(300 * time.Millisecond)
-	if err := n.herdr.PaneRun(ctx, pane, cmd); err != nil {
+	if err := launch.Run(ctx, created.Pane, cmd); err != nil {
 		return nil, fmt.Errorf("run launcher: %w", err)
 	}
 
 	a, err := n.waitReady(ctx, pane, 60*time.Second)
 	if err != nil {
-		screen, _ := n.herdr.PaneRead(ctx, pane, "recent-unwrapped", 30)
+		screen, _ := n.readPane(ctx, pane, "recent-unwrapped", 30)
 		return nil, fmt.Errorf("%v\n%s", err, lastLines(screen, 12))
 	}
 	n.bindPane(pane, id)
-	_ = n.herdr.AgentRename(ctx, pane, "j-"+id[:6])
+	_ = launch.NameAgent(ctx, created.Pane, "j-"+id[:6])
 	if prompt != "" {
-		if err := n.herdr.AgentPrompt(ctx, pane, prompt); err != nil {
+		if err := n.hostPrompt(ctx, pane, prompt); err != nil {
 			return nil, fmt.Errorf("send first message: %w", err)
 		}
 	}
@@ -130,11 +135,15 @@ func (n *Node) checkStart(cwd, launcher, resume, mode, effort string) (string, s
 }
 
 // tabLabels are the names of the workspace's tabs.
-func (n *Node) tabLabels(ctx context.Context, ws string) map[string]bool {
+func (n *Node) tabLabels(ctx context.Context, launch host.Launcher, ws string) map[string]bool {
 	taken := map[string]bool{}
-	if snap, err := n.herdr.Snapshot(ctx); err == nil {
-		for _, t := range snap.Tabs {
-			if t.WorkspaceID == ws {
+	h, ok := launch.(host.Host)
+	if !ok {
+		return taken
+	}
+	if snap, err := h.Snapshot(ctx); err == nil {
+		for _, t := range snap.Slots {
+			if t.SpaceID == ws {
 				taken[t.Label] = true
 			}
 		}
@@ -167,8 +176,8 @@ func tabLabel(name string, taken map[string]bool) string {
 }
 
 // workspaceFor reuses the workspace named after the project directory (the user keeps one workspace per project).
-func (n *Node) workspaceFor(ctx context.Context, cwd string) (string, error) {
-	wss, err := n.herdr.Workspaces(ctx)
+func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd string) (string, error) {
+	wss, err := launch.Spaces(ctx)
 	if err != nil {
 		return "", fmt.Errorf("herdr is not running on this machine: %w", err)
 	}
@@ -183,7 +192,7 @@ func (n *Node) workspaceFor(ctx context.Context, cwd string) (string, error) {
 
 // waitReady polls until claude's input box is on screen, accepting the folder-trust dialog on the way.
 // herdr reports the trust dialog as idle, so the screen is the source of truth.
-func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration) (*herdr.Agent, error) {
+func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration) (*host.Agent, error) {
 	deadline := time.Now().Add(timeout)
 	readyStreak := 0
 	for time.Now().Before(deadline) {
@@ -192,17 +201,17 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 			return nil, ctx.Err()
 		case <-time.After(500 * time.Millisecond):
 		}
-		screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		screen, err := n.readPane(ctx, pane, "visible", 60)
 		if err != nil {
 			continue
 		}
 		if keys := trustKeys(screen); keys != nil {
-			_ = n.herdr.PaneSendKeys(ctx, pane, keys...)
+			_ = n.sendKeys(ctx, pane, keys...)
 			readyStreak = 0
 			time.Sleep(time.Second)
 			continue
 		}
-		a, err := n.herdr.AgentGet(ctx, pane)
+		a, err := n.paneAgent(ctx, pane)
 		if err != nil || a.Agent != "claude" {
 			readyStreak = 0
 			continue
@@ -270,12 +279,12 @@ func lastLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (n *Node) sessionFor(id string, a herdr.Agent) *proto.Session {
+func (n *Node) sessionFor(id string, a host.Agent) *proto.Session {
 	s := &proto.Session{
 		SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 		WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, UpdatedAt: time.Now().UTC(), // just started
 	}
-	_ = n.refreshHerdr(context.Background())
+	_ = n.refreshHosts(context.Background())
 	n.placeIn(s, a)
 	n.decorate(s)
 	s.PermissionMode, s.Effort = n.modesOf(id)
@@ -287,7 +296,7 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 	if a, ok := n.agent(id); ok {
 		return a.PaneID, nil
 	}
-	if err := n.refreshHerdr(ctx); err == nil { // the whole snapshot: agents herdr does not detect (TRAEX) too
+	if err := n.refreshHosts(ctx); err == nil { // the whole snapshot: agents the host does not detect (TRAEX) too
 		if a, ok := n.agent(id); ok {
 			return a.PaneID, nil
 		}
@@ -360,18 +369,18 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	return uncertain(err)
 }
 
-// prompt submits text to the agent in a pane. herdr only prompts agents it detects; for the others (TRAEX) the text
-// is typed into the pane and enter pressed.
+// prompt submits text to the agent in a pane. A host only prompts agents it detects (herdr); for the others (TRAEX)
+// the text is typed into the pane and enter pressed.
 func (n *Node) prompt(ctx context.Context, pane, text string) error {
-	err := n.herdr.AgentPrompt(ctx, pane, text)
-	if err == nil || !herdr.IsNotFound(err) {
+	err := n.hostPrompt(ctx, pane, text)
+	if err == nil || !errors.Is(err, host.ErrNoAgent) {
 		return err
 	}
-	if err := n.herdr.PaneSendText(ctx, pane, text); err != nil {
+	if err := n.sendText(ctx, pane, text); err != nil {
 		return err
 	}
 	time.Sleep(150 * time.Millisecond) // the TUI takes the pasted text before the enter that submits it
-	return n.herdr.PaneSendKeys(ctx, pane, "enter")
+	return n.sendKeys(ctx, pane, "enter")
 }
 
 func (n *Node) saveImages(images []proto.Image) ([]string, error) {
@@ -415,12 +424,12 @@ func (n *Node) keys(ctx context.Context, id string, keys []string, text string) 
 		return err
 	}
 	if text != "" {
-		if err := n.herdr.PaneSendText(ctx, pane, text); err != nil {
+		if err := n.sendText(ctx, pane, text); err != nil {
 			return err
 		}
 	}
 	if len(keys) > 0 {
-		return n.herdr.PaneSendKeys(ctx, pane, keys...)
+		return n.sendKeys(ctx, pane, keys...)
 	}
 	return nil
 }
@@ -446,10 +455,10 @@ func (n *Node) screen(ctx context.Context, id string, lines int, source string, 
 		a, _ = n.agent(id)
 	}
 	if ansi {
-		text, err := n.herdr.PaneReadANSI(ctx, a.PaneID, source, lines)
+		text, err := n.readPaneANSI(ctx, a.PaneID, source, lines)
 		return text, a.AgentStatus, err
 	}
-	text, err := n.herdr.PaneRead(ctx, a.PaneID, source, lines)
+	text, err := n.readPane(ctx, a.PaneID, source, lines)
 	return text, a.AgentStatus, err
 }
 
@@ -463,14 +472,15 @@ func (n *Node) close(ctx context.Context, id string) error {
 		}
 		return fmt.Errorf("这个 Agent 不在 herdr 里运行，没法从手机关闭")
 	}
-	_ = n.herdr.PaneSendKeys(ctx, a.PaneID, "ctrl+c")
+	_ = n.sendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(200 * time.Millisecond)
-	_ = n.herdr.PaneSendKeys(ctx, a.PaneID, "ctrl+c")
+	_ = n.sendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(500 * time.Millisecond)
-	if panes, err := n.herdr.TabPanes(ctx, a.WorkspaceID, a.TabID); err == nil && panes > 1 {
-		return n.herdr.PaneClose(ctx, a.PaneID)
+	org, ref, err := paneCap[host.Organizer](n, a.PaneID)
+	if err != nil {
+		return err
 	}
-	return n.herdr.TabClose(ctx, a.TabID)
+	return org.Close(ctx, ref, a.WorkspaceID, a.TabID)
 }
 
 // watch streams new transcript items of a session to the hub.
@@ -631,7 +641,7 @@ func (n *Node) editQueue(ctx context.Context, id string, keep []int) ([]string, 
 	if len(queue) == 0 {
 		return nil, fmt.Errorf("nothing is queued")
 	}
-	if err := n.herdr.PaneSendKeys(ctx, pane, "up"); err != nil {
+	if err := n.sendKeys(ctx, pane, "up"); err != nil {
 		return nil, err
 	}
 	time.Sleep(300 * time.Millisecond)
@@ -641,9 +651,9 @@ func (n *Node) editQueue(ctx context.Context, id string, keep []int) ([]string, 
 		lines += strings.Count(q, "\n") + 1
 	}
 	for i := 0; i < lines; i++ {
-		_ = n.herdr.PaneSendKeys(ctx, pane, "ctrl+u", "backspace")
+		_ = n.sendKeys(ctx, pane, "ctrl+u", "backspace")
 	}
-	_ = n.herdr.PaneSendKeys(ctx, pane, "ctrl+u")
+	_ = n.sendKeys(ctx, pane, "ctrl+u")
 	for _, k := range keep {
 		if k >= 0 && k < len(queue) {
 			if err := n.prompt(ctx, pane, queue[k]); err != nil {
@@ -661,7 +671,11 @@ func (n *Node) renameSpace(ctx context.Context, workspaceID, name string) error 
 	if workspaceID == "" || name == "" {
 		return fmt.Errorf("workspace and name are required")
 	}
-	return n.herdr.WorkspaceRename(ctx, workspaceID, name)
+	org, err := hostCap[host.Organizer](n) // space ids carry no host kind yet: herdr's
+	if err != nil {
+		return err
+	}
+	return org.RenameSpace(ctx, workspaceID, name)
 }
 
 // renameSession renames the herdr tab a session runs in and / or the Claude session itself. A live claude gets
@@ -672,8 +686,12 @@ func (n *Node) renameSession(ctx context.Context, id string, tab, title *string)
 		if name := strings.TrimSpace(*tab); name != "" {
 			if done, tabID := n.starts.nameTab(id, name); done {
 				tab = nil
-			} else if tabID != "" {
-				if err := n.herdr.TabRename(ctx, tabID, name); err != nil {
+			} else if tabID != "" { // a tab start() made: in the host sessions start in
+				org, err := hostCap[host.Organizer](n)
+				if err != nil {
+					return err
+				}
+				if err := org.RenameSlot(ctx, tabID, name); err != nil {
 					return err
 				}
 				tab = nil
@@ -686,7 +704,11 @@ func (n *Node) renameSession(ctx context.Context, id string, tab, title *string)
 		if name == "" || !live || a.TabID == "" {
 			return fmt.Errorf("the tab can only be renamed while the session runs in herdr")
 		}
-		if err := n.herdr.TabRename(ctx, a.TabID, name); err != nil {
+		org, _, err := paneCap[host.Organizer](n, a.PaneID)
+		if err != nil {
+			return err
+		}
+		if err := org.RenameSlot(ctx, a.TabID, name); err != nil {
 			return err
 		}
 	}
@@ -734,7 +756,7 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 		}
 		a, _ = n.agent(id)
 	}
-	text, err := n.herdr.PaneRead(ctx, a.PaneID, "recent", herdrScrollbackLines)
+	text, err := n.readPane(ctx, a.PaneID, "recent", herdrScrollbackLines)
 	if err != nil {
 		return nil, err
 	}
@@ -748,7 +770,7 @@ func (n *Node) screenBefore(ctx context.Context, id string, anchor []string, lin
 	if ansi {
 		// The same rows with their colors: herdr reads both from one grid, so row i is row i — unless output arrived
 		// between the two reads, then the plain page is still right.
-		if colored, err := n.herdr.PaneReadANSI(ctx, a.PaneID, "recent", herdrScrollbackLines); err == nil {
+		if colored, err := n.readPaneANSI(ctx, a.PaneID, "recent", herdrScrollbackLines); err == nil {
 			rows := strings.Split(strings.TrimRight(strings.ReplaceAll(colored, "\r\n", "\n"), "\n"), "\n")
 			if len(rows) == len(all) {
 				page = rows[start:at]

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/transcript"
@@ -77,7 +77,7 @@ func testNode(t *testing.T) (*Node, string) {
 	t.Helper()
 	home := t.TempDir()
 	n := &Node{home: home, paths: map[string]string{}, files: map[string]*transcript.File{}, procs: map[string]*assistantProc{},
-		agents: map[string]herdr.Agent{}, watches: map[string]*watch{}, state: &stateFile{Sessions: map[string]sessionState{}}}
+		agents: map[string]host.Agent{}, watches: map[string]*watch{}, state: &stateFile{Sessions: map[string]sessionState{}}}
 	return n, home
 }
 
@@ -228,7 +228,7 @@ func TestParsedTranscriptsAreEvicted(t *testing.T) {
 	}
 	defer n.unwatch(id(0))
 	n.mu.Lock()
-	n.agents[id(1)] = herdr.Agent{}
+	n.agents[id(1)] = host.Agent{}
 	n.mu.Unlock()
 	for i := 1; i < 20; i++ {
 		if _, err := n.file(id(i)); err != nil {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/screen"
 )
 
@@ -18,7 +19,7 @@ func TestLiveCheckPane(t *testing.T) {
 	if pane == "" {
 		t.Skip("JARVIS_LIVE_PANE not set")
 	}
-	n := &Node{herdr: herdr.New()}
+	n := &Node{hosts: herdrHosts(herdr.New())}
 	err := n.checkPane(context.Background(), pane, "claude", os.Getenv("JARVIS_LIVE_CLEAR"))
 	code := ""
 	if err != nil {
@@ -37,9 +38,9 @@ func TestLiveAnswerDialog(t *testing.T) {
 	if pane == "" || option == "" {
 		t.Skip("JARVIS_LIVE_PANE / JARVIS_LIVE_OPTION not set")
 	}
-	n := &Node{herdr: herdr.New(), agents: map[string]herdr.Agent{"live": {PaneID: pane}}}
+	n := &Node{hosts: herdrHosts(herdr.New()), agents: map[string]host.Agent{"live": {PaneID: pane}}}
 	ctx := context.Background()
-	text, err := n.herdr.PaneRead(ctx, pane, "visible", screen.DialogLines)
+	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestLiveAnswerDialog(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("keys %v pre %v", keys, pre)
-	if err := n.herdr.PaneSendKeys(ctx, pane, keys...); err != nil {
+	if err := n.sendKeys(ctx, pane, keys...); err != nil {
 		t.Fatal(err)
 	}
 }

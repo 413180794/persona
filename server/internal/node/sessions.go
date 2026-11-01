@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
@@ -424,10 +424,10 @@ func (n *Node) evictFiles() {
 // sessionList returns live herdr sessions plus recent offline transcripts.
 func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Session {
 	if refreshAgents {
-		_ = n.refreshHerdr(ctx)
+		_ = n.refreshHosts(ctx)
 	}
 	n.mu.Lock()
-	agents := make(map[string]herdr.Agent, len(n.agents))
+	agents := make(map[string]host.Agent, len(n.agents))
 	for k, v := range n.agents {
 		agents[k] = v
 	}
@@ -655,49 +655,83 @@ func snippet(s string) string {
 	return s
 }
 
-// setAgents maps live claude agents to session ids: herdr's own report when its claude integration is installed,
-// else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
-// layout remembers workspace and tab names from the last herdr snapshot.
+// layout remembers a host's space and slot names from its last snapshot.
 type layout struct {
-	workspaces map[string]herdr.Workspace
-	tabs       map[string]herdr.Tab
+	spaces map[string]host.Space
+	slots  map[string]host.Slot
 }
 
-// refreshHerdr takes one snapshot of herdr: agents plus the workspace / tab names shown as space / slot.
-func (n *Node) refreshHerdr(ctx context.Context) error {
-	snap, err := n.herdr.Snapshot(ctx)
-	if err != nil {
-		// Older herdr without `api snapshot`: fall back to the agent list.
-		agents, aerr := n.herdr.Agents(ctx)
-		if aerr != nil {
-			return err
+// refreshHosts takes one snapshot of every host: agents plus the space / slot names shown as space / slot. It fails
+// only when no host answered; a host that did not answer keeps the agents it gave last.
+func (n *Node) refreshHosts(ctx context.Context) error {
+	var all []host.Agent
+	var firstErr error
+	answered, snapped := false, false
+	for _, h := range n.hosts.All() {
+		agents, full, err := n.lookAt(ctx, h)
+		n.mu.Lock()
+		if n.hostAgents == nil {
+			n.hostAgents = map[string][]host.Agent{}
 		}
-		n.setAgents(agents)
-		return nil
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			agents = n.hostAgents[h.Kind()]
+		} else {
+			answered, snapped = true, snapped || full
+			n.hostAgents[h.Kind()] = agents
+		}
+		n.mu.Unlock()
+		all = append(all, agents...)
 	}
-	l := layout{workspaces: map[string]herdr.Workspace{}, tabs: map[string]herdr.Tab{}}
-	for _, w := range snap.Workspaces {
-		l.workspaces[w.ID] = w
+	if !answered {
+		return firstErr
 	}
-	for _, t := range snap.Tabs {
-		l.tabs[t.ID] = t
+	n.setAgents(all)
+	if snapped {
+		n.panesChanged()
 	}
-	n.mu.Lock()
-	n.layout = l
-	n.mu.Unlock()
-	// Panes running an agent herdr does not detect (TRAEX) become agents of our own.
-	n.setAgents(append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...))
-	n.panesChanged()
 	return nil
 }
 
-// placeIn fills the space / slot fields of a live session.
-func (n *Node) placeIn(s *proto.Session, a herdr.Agent) {
+// lookAt is one host's agents: from a snapshot (full), which also gives the space / slot names; a host that cannot
+// snapshot (older herdr without `api snapshot`) gives its agent list instead.
+func (n *Node) lookAt(ctx context.Context, h host.Host) (agents []host.Agent, full bool, err error) {
+	snap, err := h.Snapshot(ctx)
+	if err != nil {
+		agents, aerr := h.Agents(ctx)
+		if aerr != nil {
+			return nil, false, err
+		}
+		return agents, false, nil
+	}
+	l := layout{spaces: map[string]host.Space{}, slots: map[string]host.Slot{}}
+	for _, w := range snap.Spaces {
+		l.spaces[w.ID] = w
+	}
+	for _, t := range snap.Slots {
+		l.slots[t.ID] = t
+	}
 	n.mu.Lock()
-	w, wok := n.layout.workspaces[a.WorkspaceID]
-	t, tok := n.layout.tabs[a.TabID]
+	if n.layouts == nil {
+		n.layouts = map[string]layout{}
+	}
+	n.layouts[h.Kind()] = l
 	n.mu.Unlock()
-	s.SpaceKind, s.SpaceID, s.SlotID = "herdr", a.WorkspaceID, a.TabID
+	// Panes running an agent the host does not detect (TRAEX) become agents of our own.
+	return append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...), true, nil
+}
+
+// placeIn fills the space / slot fields of a live session.
+func (n *Node) placeIn(s *proto.Session, a host.Agent) {
+	kind := n.hosts.Ref(a.PaneID).Kind
+	n.mu.Lock()
+	l := n.layouts[kind]
+	w, wok := l.spaces[a.WorkspaceID]
+	t, tok := l.slots[a.TabID]
+	n.mu.Unlock()
+	s.SpaceKind, s.SpaceID, s.SlotID = kind, a.WorkspaceID, a.TabID
 	if wok {
 		s.SpaceName, s.SpaceIndex = w.Label, w.Number
 	}
@@ -706,9 +740,11 @@ func (n *Node) placeIn(s *proto.Session, a herdr.Agent) {
 	}
 }
 
-func (n *Node) setAgents(agents []herdr.Agent) {
-	m := map[string]herdr.Agent{}
-	var unknown, codex []herdr.Agent
+// setAgents maps live claude agents to session ids: the host's own report when it knows (herdr's claude integration),
+// else what our hooks told us about the pane, else the newest transcript in the agent's project directory.
+func (n *Node) setAgents(agents []host.Agent) {
+	m := map[string]host.Agent{}
+	var unknown, codex []host.Agent
 	n.mu.Lock()
 	for _, a := range agents {
 		if a.Agent == "codex" {
@@ -753,7 +789,7 @@ func (n *Node) setAgents(agents []herdr.Agent) {
 	// Codex panes: the thread named in the title (what the pane shows now: a /resume in Codex changes it), else what
 	// herdr's codex integration or our own start said; only then, after every pane that could be told has its
 	// thread, the newest rollout in the directory nobody else has.
-	var unnamed []herdr.Agent
+	var unnamed []host.Agent
 	for _, a := range codex {
 		id := a.SessionID()
 		if id == "" {
@@ -790,7 +826,7 @@ func (n *Node) sessionFromProcess(pane string) string {
 	n.mu.Unlock()
 	if !ok || time.Since(c.checked) > time.Minute || (c.pid == 0 && time.Since(c.checked) > panePIDRetry) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		pids, err := n.herdr.PaneProcesses(ctx, pane)
+		pids, err := n.paneProcesses(ctx, pane)
 		cancel()
 		if err != nil {
 			return ""
@@ -857,7 +893,7 @@ var nonAlnum = regexp.MustCompile(`[^A-Za-z0-9]`)
 
 // guessSession picks a transcript for an agent herdr could not identify. Claude sets the terminal title to the
 // session's AI title, so a title match wins; otherwise the newest unclaimed transcript in the project directory.
-func (n *Node) guessSession(a herdr.Agent, taken map[string]herdr.Agent) string {
+func (n *Node) guessSession(a host.Agent, taken map[string]host.Agent) string {
 	if a.Cwd == "" {
 		return ""
 	}
@@ -883,7 +919,7 @@ func (n *Node) guessSession(a herdr.Agent, taken map[string]herdr.Agent) string 
 	return best
 }
 
-func (n *Node) agent(id string) (herdr.Agent, bool) {
+func (n *Node) agent(id string) (host.Agent, bool) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	a, ok := n.agents[id]
@@ -909,7 +945,7 @@ func (n *Node) pollAgents(ctx context.Context) {
 		}
 		// Every tick still checks the transcripts (revs); herdr only when it said something changed (herdrevents.go).
 		if kicked || n.snapshotDue(snapped) {
-			if err := n.refreshHerdr(ctx); err != nil {
+			if err := n.refreshHosts(ctx); err != nil {
 				continue
 			}
 			snapped = time.Now()

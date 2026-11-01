@@ -31,7 +31,7 @@ func (n *Node) dialogKeys(ctx context.Context, id, rev, option string) (keys, pr
 	if err != nil {
 		return nil, nil, err
 	}
-	text, err := n.herdr.PaneRead(ctx, pane, "visible", screen.DialogLines)
+	text, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -79,16 +79,16 @@ func refusal(code, message string, data map[string]any) error {
 // to clear. kind is the agent ("claude", "codex", TRAEX).
 func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) error {
 	if kind != "claude" { // Codex / TRAEX: only their numbered approvals and pickers
-		text, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		text, err := n.readPane(ctx, pane, "visible", 60)
 		if err == nil && screen.Choosing(text) {
 			return refusal(screen.DialogOpen, dialogMessage, nil)
 		}
 		return nil
 	}
 	read := func() string {
-		s, err := n.herdr.PaneReadANSI(ctx, pane, "visible", 60)
+		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
 		if err != nil {
-			s, _ = n.herdr.PaneRead(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
+			s, _ = n.readPane(ctx, pane, "visible", 60) // no colors: any text in the box counts as a draft
 		}
 		return s
 	}
@@ -100,7 +100,7 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 		code, in = screen.CheckClaude(read())
 	}
 	if code == screen.InputDraft && clearDraft != "" && in.Clearable == clearDraft {
-		if err := n.herdr.PaneSendKeys(ctx, pane, screen.ClearKeys...); err != nil {
+		if err := n.sendKeys(ctx, pane, screen.ClearKeys...); err != nil {
 			return refusal(code, draftMessage(in.Text), map[string]any{"draft": in.Text})
 		}
 		time.Sleep(150 * time.Millisecond)
@@ -199,7 +199,7 @@ var (
 func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) {
 	deadline := time.Now().Add(submitGrace)
 	for {
-		s, err := n.herdr.PaneReadANSI(ctx, pane, "visible", 60)
+		s, err := n.readPaneANSI(ctx, pane, "visible", 60)
 		if err != nil {
 			return
 		}
@@ -211,7 +211,7 @@ func (n *Node) ensureSubmitted(ctx context.Context, pane, text string) {
 			if n.logger != nil {
 				n.logger.Printf("prompt still in the input box after %s, pressing enter", submitGrace)
 			}
-			_ = n.herdr.PaneSendKeys(ctx, pane, "enter")
+			_ = n.sendKeys(ctx, pane, "enter")
 			return
 		}
 		select {

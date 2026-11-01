@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 )
 
 // herdr pushes its changes over events.subscribe: pollAgents takes a snapshot as soon as one arrives instead of
@@ -17,13 +17,6 @@ import (
 
 // slowSnapshot is how often pollAgents still snapshots herdr while events arrive.
 const slowSnapshot = 10 * time.Second
-
-// herdrLifecycle are the events that change which sessions there are or how they are named.
-var herdrLifecycle = []string{
-	"workspace.created", "workspace.renamed", "workspace.closed", "workspace.moved",
-	"tab.created", "tab.renamed", "tab.closed", "tab.moved",
-	"pane.created", "pane.closed", "pane.exited", "pane.updated", "pane.moved", "pane.agent_detected",
-}
 
 type herdrEvents struct {
 	live atomic.Bool   // a subscription is streaming
@@ -44,22 +37,15 @@ func (e *herdrEvents) poke() {
 	}
 }
 
-// subscriptions: the lifecycle events plus agent status for each pane (herdr only sends those per pane).
-func subscriptions(panes []string) []herdr.Subscription {
-	subs := make([]herdr.Subscription, 0, len(herdrLifecycle)+len(panes))
-	for _, t := range herdrLifecycle {
-		subs = append(subs, herdr.Subscription{"type": t})
-	}
-	for _, p := range panes {
-		subs = append(subs, herdr.Subscription{"type": "pane.agent_status_changed", "pane_id": p})
-	}
-	return subs
-}
-
 // watchHerdr keeps one subscription open for as long as the node runs, reopening it when herdr closes it (it drops
 // subscribers that fall behind; events lost meanwhile are covered by the snapshot taken on reconnect) and when the
-// set of panes changes (a connection takes one subscribe call).
+// set of panes changes (a connection takes one subscribe call). It watches the herdr host (host.Watcher): the only
+// host so far, and the one these events stand for (a second host that pushes changes needs its own herdrEvents).
 func (n *Node) watchHerdr(ctx context.Context) {
+	w, ok := n.hosts.Get(host.Herdr).(host.Watcher)
+	if !ok {
+		return
+	}
 	e := n.events
 	backoff := time.Second
 	for ctx.Err() == nil {
@@ -69,7 +55,11 @@ func (n *Node) watchHerdr(ctx context.Context) {
 		e.panes, e.resub, e.resubbed = strings.Join(panes, " "), cancel, false
 		e.mu.Unlock()
 		started := time.Now()
-		err := n.herdr.Subscribe(sctx, subscriptions(panes), func(herdr.Event) {
+		refs := make([]host.PaneRef, len(panes))
+		for i, p := range panes {
+			refs[i] = n.hosts.Ref(p)
+		}
+		err := w.Watch(sctx, refs, func() {
 			e.live.Store(true) // the first one is SubscriptionStarted: snapshot to cover the gap before it
 			e.poke()
 		})
@@ -95,12 +85,15 @@ func (n *Node) watchHerdr(ctx context.Context) {
 	}
 }
 
-// livePanes are the panes of the last snapshot's agents, sorted.
+// livePanes are the herdr panes of the last snapshot's agents, sorted.
 func (n *Node) livePanes() []string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	panes := make([]string, 0, len(n.agents))
 	for _, a := range n.agents {
+		if n.hosts.Ref(a.PaneID).Kind != host.Herdr {
+			continue
+		}
 		if a.PaneID != "" && !slices.Contains(panes, a.PaneID) {
 			panes = append(panes, a.PaneID)
 		}

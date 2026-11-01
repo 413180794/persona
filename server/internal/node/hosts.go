@@ -1,0 +1,120 @@
+package node
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/chyroc/jarvis/server/internal/host"
+)
+
+// The node drives every terminal through the host its pane belongs to (internal/host). Panes are kept as PaneRef
+// strings everywhere in the node (n.panes, agents, the hub's database): a bare id is a herdr pane.
+
+// paneHost is the host of a stored pane and the pane's ref in it.
+func (n *Node) paneHost(pane string) (host.Host, host.PaneRef, error) {
+	h, ref := n.hosts.Pane(pane)
+	if h == nil {
+		return nil, ref, fmt.Errorf("no %s host on this machine for pane %s", ref.Kind, pane)
+	}
+	return h, ref, nil
+}
+
+// paneCap is the pane's host as capability C (Launcher, Organizer…), with the pane's ref.
+func paneCap[C any](n *Node, pane string) (C, host.PaneRef, error) {
+	var none C
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return none, ref, err
+	}
+	c, ok := h.(C)
+	if !ok {
+		return none, ref, fmt.Errorf("%s cannot do this", h.Kind())
+	}
+	return c, ref, nil
+}
+
+// readPane reads a pane's screen as plain text.
+func (n *Node) readPane(ctx context.Context, pane, source string, lines int) (string, error) {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return "", err
+	}
+	return h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines})
+}
+
+// readPaneANSI reads a pane's screen with its colors.
+func (n *Node) readPaneANSI(ctx context.Context, pane, source string, lines int) (string, error) {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return "", err
+	}
+	return h.Read(ctx, ref, host.ReadOpts{Source: source, Lines: lines, ANSI: true})
+}
+
+func (n *Node) sendText(ctx context.Context, pane, text string) error {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return err
+	}
+	return h.SendText(ctx, ref, text)
+}
+
+func (n *Node) sendKeys(ctx context.Context, pane string, keys ...string) error {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return err
+	}
+	return h.SendKeys(ctx, ref, keys...)
+}
+
+// hostPrompt is the host's own prompt (no fallback; prompt types when the host knows no agent there).
+func (n *Node) hostPrompt(ctx context.Context, pane, text string) error {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return err
+	}
+	return h.Prompt(ctx, ref, text)
+}
+
+// defaultHost is where new sessions start and where spaces without a host kind live: herdr, the only host so far.
+func (n *Node) defaultHost() host.Host { return n.hosts.Get(host.Herdr) }
+
+// hostCap is the default host as capability C.
+func hostCap[C any](n *Node) (C, error) {
+	var none C
+	h := n.defaultHost()
+	if h == nil {
+		return none, fmt.Errorf("no %s host on this machine", host.Herdr)
+	}
+	c, ok := h.(C)
+	if !ok {
+		return none, fmt.Errorf("%s cannot do this", h.Kind())
+	}
+	return c, nil
+}
+
+func (n *Node) paneProcesses(ctx context.Context, pane string) ([]int, error) {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return nil, err
+	}
+	return h.PaneProcesses(ctx, ref)
+}
+
+// paneAgent is the host's view of the agent in a pane.
+func (n *Node) paneAgent(ctx context.Context, pane string) (*host.Agent, error) {
+	h, ref, err := n.paneHost(pane)
+	if err != nil {
+		return nil, err
+	}
+	return h.Agent(ctx, ref)
+}
+
+// renameSlot renames a slot through the launcher's host (a slot it just made).
+func renameSlot(ctx context.Context, launch host.Launcher, slot, name string) error {
+	org, ok := launch.(host.Organizer)
+	if !ok {
+		return fmt.Errorf("cannot rename %s", slot)
+	}
+	return org.RenameSlot(ctx, slot, name)
+}

@@ -3,7 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 	"strings"
 	"testing"
@@ -14,7 +14,7 @@ import (
 func TestItemsOfStartingSession(t *testing.T) {
 	home := t.TempDir()
 	n := &Node{home: home, paths: map[string]string{}, files: map[string]*transcript.File{}, procs: map[string]*assistantProc{},
-		agents: map[string]herdr.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
+		agents: map[string]host.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
 	const started = "11111111-2222-3333-4444-555555555555"
 	n.state.put(started, sessionState{Cwd: home + "/.jarvis/assistant"})
 	res, err := n.handle(context.Background(), "session.items", json.RawMessage(`{"session_id":"`+started+`","turns":2}`))

@@ -26,7 +26,7 @@ func TestSuggestionAfterATurn(t *testing.T) {
 	old := suggestReads
 	suggestReads = []time.Duration{0, 50 * time.Millisecond}
 	t.Cleanup(func() { suggestReads = old })
-	n := &Node{herdr: &herdr.Client{Bin: bin}}
+	n := &Node{hosts: herdrHosts(&herdr.Client{Bin: bin})}
 
 	got := func() string { return n.noteStatus("s1", "claude", "w1:p1", proto.StatusDone) }
 	if s := n.noteStatus("s1", "claude", "w1:p1", proto.StatusWorking); s != "" {

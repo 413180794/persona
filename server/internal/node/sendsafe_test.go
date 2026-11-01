@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/screen"
 )
@@ -106,7 +107,7 @@ func refusalOf(t *testing.T, err error) (string, map[string]any) {
 func TestCheckPaneRefusesDraftAndClearsWhenAsked(t *testing.T) {
 	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi")
 	f := &fakePane{screens: []string{typed, screenFixture(t, "claude-2.1.312-cleared-162.ansi")}}
-	n := &Node{herdr: f.serve(t)}
+	n := &Node{hosts: herdrHosts(f.serve(t))}
 	ctx := context.Background()
 
 	code, data := refusalOf(t, n.checkPane(ctx, "w1:p1", "claude", ""))
@@ -131,14 +132,14 @@ func TestCheckPaneRefusesDraftAndClearsWhenAsked(t *testing.T) {
 func TestCheckPaneWaitsOutWhatWasJustTyped(t *testing.T) {
 	typed := screenFixture(t, "claude-2.1.312-typed-162.ansi") // the box shows "fix the flaky test"
 	f := &fakePane{screens: []string{typed, screenFixture(t, "claude-2.1.312-empty-162.ansi")}, clearAfter: 3}
-	n := &Node{herdr: f.serve(t)}
+	n := &Node{hosts: herdrHosts(f.serve(t))}
 	n.typing.typed("w1:p1", "fix the flaky test\nand the second line of the message")
 	if err := n.checkPane(context.Background(), "w1:p1", "claude", ""); err != nil {
 		t.Fatalf("our own message taken for a draft: %v", err)
 	}
 	// Someone else's draft in another pane is still a draft.
 	g := &fakePane{screens: []string{typed}}
-	m := &Node{herdr: g.serve(t)}
+	m := &Node{hosts: herdrHosts(g.serve(t))}
 	m.typing.typed("w1:p2", "fix the flaky test")
 	if code, _ := refusalOf(t, m.checkPane(context.Background(), "w1:p1", "claude", "")); code != "input_draft" {
 		t.Fatalf("a draft in another pane: %s", code)
@@ -171,17 +172,17 @@ func TestSendsToOneSessionTakeTurns(t *testing.T) {
 func TestCheckPaneRefusesDialog(t *testing.T) {
 	for _, name := range []string{"claude-2.1.312-trust-162.ansi", "claude-2.1.312-model-picker-162.ansi"} {
 		f := &fakePane{screens: []string{screenFixture(t, name)}}
-		n := &Node{herdr: f.serve(t)}
+		n := &Node{hosts: herdrHosts(f.serve(t))}
 		if code, _ := refusalOf(t, n.checkPane(context.Background(), "w1:p1", "claude", "")); code != "dialog_open" {
 			t.Fatalf("%s: %s", name, code)
 		}
 	}
 	f := &fakePane{screens: []string{screenFixture(t, "claude-2.1.312-empty-162.ansi")}}
-	if err := (&Node{herdr: f.serve(t)}).checkPane(context.Background(), "w1:p1", "claude", ""); err != nil {
+	if err := (&Node{hosts: herdrHosts(f.serve(t))}).checkPane(context.Background(), "w1:p1", "claude", ""); err != nil {
 		t.Fatalf("empty box: %v", err)
 	}
 	codex := &fakePane{screens: []string{"Allow command?\n\n› 1. Yes, proceed\n  2. No, and tell Codex what to do differently\n"}}
-	if code, _ := refusalOf(t, (&Node{herdr: codex.serve(t)}).checkPane(context.Background(), "w1:p1", "codex", "")); code != "dialog_open" {
+	if code, _ := refusalOf(t, (&Node{hosts: herdrHosts(codex.serve(t))}).checkPane(context.Background(), "w1:p1", "codex", "")); code != "dialog_open" {
 		t.Fatal(code)
 	}
 }
@@ -225,7 +226,7 @@ func TestSentLogOnce(t *testing.T) {
 func TestDialogKeysCheckRevision(t *testing.T) {
 	trust := screenFixture(t, "claude-2.1.312-trust-162.txt")
 	f := &fakePane{screens: []string{trust}}
-	n := &Node{herdr: f.serve(t), agents: map[string]herdr.Agent{"s1": {PaneID: "w1:p1"}}}
+	n := &Node{hosts: herdrHosts(f.serve(t)), agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}}
 	ctx := context.Background()
 	rev := screenDialogRev(t, trust)
 	keys, pre, err := n.dialogKeys(ctx, "s1", rev, "2")
@@ -266,21 +267,21 @@ func TestEnsureSubmittedPressesEnterOnceForAStuckPrompt(t *testing.T) {
 	ctx := context.Background()
 
 	stuck := &fakePane{screens: []string{typed, empty}}
-	n := &Node{herdr: stuck.serve(t)}
+	n := &Node{hosts: herdrHosts(stuck.serve(t))}
 	n.ensureSubmitted(ctx, "w1:p1", "fix the flaky test\n\n<attached_images>\n/tmp/a.jpg\n</attached_images>")
 	if len(stuck.keys) != 1 || stuck.keys[0][0] != "enter" {
 		t.Fatalf("stuck prompt: keys %v", stuck.keys)
 	}
 
 	taken := &fakePane{screens: []string{typed, empty}, clearAfter: 2} // Claude takes it a moment later
-	m := &Node{herdr: taken.serve(t)}
+	m := &Node{hosts: herdrHosts(taken.serve(t))}
 	m.ensureSubmitted(ctx, "w1:p1", "fix the flaky test")
 	if len(taken.keys) != 0 {
 		t.Fatalf("pressed enter on a prompt Claude took: %v", taken.keys)
 	}
 
 	other := &fakePane{screens: []string{typed}}
-	o := &Node{herdr: other.serve(t)}
+	o := &Node{hosts: herdrHosts(other.serve(t))}
 	o.ensureSubmitted(ctx, "w1:p1", "something else entirely")
 	if len(other.keys) != 0 {
 		t.Fatalf("pressed enter on someone else's draft: %v", other.keys)

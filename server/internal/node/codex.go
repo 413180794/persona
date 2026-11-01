@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 )
 
 // Codex support: herdr reports Codex panes as agent "codex"; their conversations are rollouts under
@@ -155,7 +155,7 @@ func rolloutPath(home, id string) string {
 }
 
 // codexSession picks the rollout of a Codex pane herdr could not identify: the newest in its directory not taken.
-func (n *Node) codexSession(a herdr.Agent, taken map[string]herdr.Agent) string {
+func (n *Node) codexSession(a host.Agent, taken map[string]host.Agent) string {
 	cwd := a.ForegroundCwd
 	if cwd == "" {
 		cwd = a.Cwd
@@ -171,7 +171,7 @@ func (n *Node) codexSession(a herdr.Agent, taken map[string]herdr.Agent) string 
 // codexByTitle finds the thread a Codex pane shows by the name in its title ("<name> | <directory>"; either part may
 // be cut short with "..."). Of several threads with that name it keeps prefer (what herdr or a start said), else takes
 // the most recently written one not taken. "" when the title carries no name (a new thread) or no thread has it.
-func (n *Node) codexByTitle(a herdr.Agent, prefer string, taken map[string]herdr.Agent) string {
+func (n *Node) codexByTitle(a host.Agent, prefer string, taken map[string]host.Agent) string {
 	i := strings.LastIndex(a.Title, " | ")
 	if i <= 0 {
 		return ""

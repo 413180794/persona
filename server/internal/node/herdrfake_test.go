@@ -296,7 +296,7 @@ func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	f := newFakeHerdr(t)
 	n, home := testNode(t)
-	n.herdr, n.dir, n.bin = &herdr.Client{Socket: f.sock}, filepath.Join(home, ".jarvis"), "/tmp/jarvis-test/jarvisd"
+	n.hosts, n.dir, n.bin = herdrHosts(&herdr.Client{Socket: f.sock}), filepath.Join(home, ".jarvis"), "/tmp/jarvis-test/jarvisd"
 	n.panes, n.panePIDs, n.modes, n.driving = map[string]string{}, map[string]panePID{}, map[string]sessionModes{}, map[string]bool{}
 	n.files, n.metas, n.bgScans = map[string]*transcript.File{}, map[string]quickMeta{}, map[string]*bgScan{}
 	for _, d := range []string{n.dir, filepath.Join(home, ".claude", "projects")} {

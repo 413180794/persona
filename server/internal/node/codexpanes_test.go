@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
@@ -78,12 +78,12 @@ func TestCodexPanesAreFoundByTheThreadInTheirTitle(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".codex", "session_index.jsonl"), []byte(index), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pane := func(id, title, status string) herdr.Agent {
-		return herdr.Agent{Agent: "codex", PaneID: id, Cwd: cwd, ForegroundCwd: cwd, Title: title, AgentStatus: status}
+	pane := func(id, title, status string) host.Agent {
+		return host.Agent{Agent: "codex", PaneID: id, Cwd: cwd, ForegroundCwd: cwd, Title: title, AgentStatus: status}
 	}
 	resumed := pane("w:p5", "参考时区替换能力 | repo", proto.StatusWorking)
-	resumed.AgentSession = &herdr.AgentSession{Kind: "id", Value: staleStart} // a /resume in Codex since
-	n.setAgents([]herdr.Agent{
+	resumed.AgentSession = &host.AgentSession{Kind: "id", Value: staleStart} // a /resume in Codex since
+	n.setAgents([]host.Agent{
 		pane("w:p1", "repo", proto.StatusIdle), // a new thread: no name, guessed after the named ones
 		pane("w:p2", "补测多客户端请求特征 | repo", proto.StatusIdle),
 		pane("w:p3", "一个很长很长的线程名字会... | repo", proto.StatusIdle),

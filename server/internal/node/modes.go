@@ -196,7 +196,7 @@ func tuiMode(screen string) string {
 // tuiSetMode presses shift+tab until the footer shows the wanted mode.
 func (n *Node) tuiSetMode(ctx context.Context, pane, mode string) error {
 	for range len(tuiModeCycle) + 1 {
-		screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		screen, err := n.readPane(ctx, pane, "visible", 60)
 		if err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func (n *Node) tuiSetMode(ctx context.Context, pane, mode string) error {
 		if cur == "" {
 			return fmt.Errorf("终端里没看到 Claude Code 的输入框（可能有对话框挡着）")
 		}
-		if err := n.herdr.PaneSendKeys(ctx, pane, "shift+tab"); err != nil {
+		if err := n.sendKeys(ctx, pane, "shift+tab"); err != nil {
 			return err
 		}
 		time.Sleep(350 * time.Millisecond)
@@ -236,31 +236,31 @@ func tuiPromptEmpty(screen string) bool {
 // older list ("for this session only", "s" picks it for the session) and, from Claude Code 2.1.2xx, a slider
 // ("←/→ to adjust · Enter to confirm") whose leftmost stop is low and that confirms with Enter.
 func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
-	screen, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+	screen, err := n.readPane(ctx, pane, "visible", 60)
 	if err != nil {
 		return err
 	}
 	if !tuiPromptEmpty(screen) {
 		return fmt.Errorf("终端的输入框里有还没发出的文字，先在电脑上处理掉再改思考强度")
 	}
-	if err := n.herdr.PaneSendText(ctx, pane, "/effort"); err != nil {
+	if err := n.sendText(ctx, pane, "/effort"); err != nil {
 		return err
 	}
 	time.Sleep(300 * time.Millisecond)
-	if err := n.herdr.PaneSendKeys(ctx, pane, "enter"); err != nil {
+	if err := n.sendKeys(ctx, pane, "enter"); err != nil {
 		return err
 	}
 	picker := ""
 	for range 15 {
 		time.Sleep(200 * time.Millisecond)
-		if s, err := n.herdr.PaneRead(ctx, pane, "visible", 60); err == nil {
+		if s, err := n.readPane(ctx, pane, "visible", 60); err == nil {
 			if picker = effortPicker(s); picker != "" {
 				break
 			}
 		}
 	}
 	if picker == "" {
-		_ = n.herdr.PaneSendKeys(ctx, pane, "esc")
+		_ = n.sendKeys(ctx, pane, "esc")
 		return fmt.Errorf("没打开思考强度的选择器（这个 Claude Code 版本可能不支持 /effort）")
 	}
 	// From the left end (low) one stop right per level; the slider has stops past max (ultracode), the list does not.
@@ -268,7 +268,7 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	for range slices.Index(effortLevels, effort) {
 		keys = append(keys, "right")
 	}
-	if err := n.herdr.PaneSendKeys(ctx, pane, keys...); err != nil {
+	if err := n.sendKeys(ctx, pane, keys...); err != nil {
 		return err
 	}
 	time.Sleep(150 * time.Millisecond)
@@ -276,17 +276,17 @@ func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
 	if picker == "slider" {
 		confirm = "enter"
 	}
-	if err := n.herdr.PaneSendKeys(ctx, pane, confirm); err != nil {
+	if err := n.sendKeys(ctx, pane, confirm); err != nil {
 		return err
 	}
 	for range 15 {
 		time.Sleep(200 * time.Millisecond)
-		s, err := n.herdr.PaneRead(ctx, pane, "visible", 60)
+		s, err := n.readPane(ctx, pane, "visible", 60)
 		if err == nil && effortPicker(s) == "" {
 			return effortOutcome(s, effort)
 		}
 	}
-	_ = n.herdr.PaneSendKeys(ctx, pane, "esc")
+	_ = n.sendKeys(ctx, pane, "esc")
 	return fmt.Errorf("思考强度的选择器没有关闭，已取消")
 }
 

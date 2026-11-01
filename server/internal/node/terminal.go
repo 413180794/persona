@@ -6,12 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
@@ -45,13 +44,13 @@ var termMinGap = 30 * time.Millisecond
 // output, applied in order), a whole frame drops the diffs before it. What is held goes out when the gap is up.
 type frameGate struct {
 	mu      sync.Mutex
-	send    func(herdr.Frame)
+	send    func(host.Frame)
 	last    time.Time
-	pending *herdr.Frame
+	pending *host.Frame
 	timer   *time.Timer
 }
 
-func (g *frameGate) put(f herdr.Frame) {
+func (g *frameGate) put(f host.Frame) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.pending == nil {
@@ -102,7 +101,7 @@ type termStream struct {
 	// The phone driving the terminal at its own size (nil: observing). Anything the hub sends about it renews the
 	// lease; one that runs out lets the terminal go, in case the hub lost track of it.
 	mu    sync.Mutex
-	ctl   *herdr.Control
+	ctl   host.Control
 	lease time.Time
 }
 
@@ -110,7 +109,7 @@ type termStream struct {
 // sends terminal.keepalive every 20 s while the phone holds it).
 var termLease = 75 * time.Second
 
-func (s *termStream) control() *herdr.Control {
+func (s *termStream) control() host.Control {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lease = time.Now()
@@ -123,27 +122,15 @@ func (s *termStream) leaseOver() bool {
 	return time.Since(s.lease) > termLease
 }
 
-// observeSupport, controlSupport cache whether this herdr has `terminal session observe` / `control` (herdr 0.9 on
-// Unix).
-var observeSupport, controlSupport struct {
-	once sync.Once
-	ok   bool
+// canObserve: whether any host can stream a terminal (herdr: one with `terminal session observe`).
+func (n *Node) canObserve() bool {
+	for _, h := range n.hosts.All() {
+		if st, ok := h.(host.Streamer); ok && st.CanObserve() {
+			return true
+		}
+	}
+	return false
 }
-
-func (n *Node) herdrHas(cache *struct {
-	once sync.Once
-	ok   bool
-}, sub string) bool {
-	cache.once.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cache.ok = exec.CommandContext(ctx, n.herdr.Bin, "terminal", "session", sub, "--help").Run() == nil
-	})
-	return cache.ok
-}
-
-func (n *Node) canObserve() bool { return n.herdrHas(&observeSupport, "observe") }
-func (n *Node) canControl() bool { return n.herdrHas(&controlSupport, "control") }
 
 // errNoTermStream: the hub falls back to the screen reads (old herdr, Windows).
 var errNoTermStream = errors.New("unsupported: this herdr cannot stream a terminal (needs herdr terminal session observe)")
@@ -172,10 +159,16 @@ func (n *Node) terminalWatch(ctx context.Context, id string, ctl *termControl) (
 	if err != nil {
 		return nil, err
 	}
-	if ctl != nil && ctl.Cols > 0 && ctl.Rows > 0 && n.canControl() {
-		return n.terminalControl(ctx, id, pane, *ctl)
+	st, ref, err := paneCap[host.Streamer](n, pane)
+	if err != nil || !st.CanObserve() {
+		return nil, errNoTermStream
 	}
-	cols, rows, err := n.herdr.PaneSize(ctx, pane)
+	if ctl != nil && ctl.Cols > 0 && ctl.Rows > 0 {
+		if c, cref, err := paneCap[host.Controller](n, pane); err == nil && c.CanControl() {
+			return n.terminalControl(ctx, id, c, cref, *ctl)
+		}
+	}
+	cols, rows, err := st.PaneSize(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +207,7 @@ func (n *Node) termStreamOf(id string) *termStream {
 
 // terminalControl takes the session's terminal at the phone's size. The stream before it (an observe) stops first,
 // so its frames are not mixed into the new epoch; when the slot is busy the hub starts an observe again.
-func (n *Node) terminalControl(ctx context.Context, id, pane string, p termControl) (map[string]any, error) {
+func (n *Node) terminalControl(ctx context.Context, id string, ctlr host.Controller, pane host.PaneRef, p termControl) (map[string]any, error) {
 	if old := n.termStreamOf(id); old != nil {
 		old.mu.Lock()
 		prev := old.ctl
@@ -231,7 +224,7 @@ func (n *Node) terminalControl(ctx context.Context, id, pane string, p termContr
 	s := &termStream{cancel: cancel, lease: time.Now()}
 	epoch := strconv.FormatInt(time.Now().UnixNano(), 36)
 	frames, replay := 0, 0
-	gate := &frameGate{send: func(f herdr.Frame) {
+	gate := &frameGate{send: func(f host.Frame) {
 		frames++
 		if f.Full {
 			replay = 0
@@ -250,10 +243,10 @@ func (n *Node) terminalControl(ctx context.Context, id, pane string, p termContr
 			}
 		}
 	}}
-	c, err := n.herdr.StartControl(sctx, pane, p.Cols, p.Rows, p.Takeover, gate.put)
+	c, err := ctlr.Control(sctx, pane, p.Cols, p.Rows, p.Takeover, gate.put)
 	if err != nil {
 		cancel()
-		if errors.Is(err, herdr.ErrAttachBusy) {
+		if errors.Is(err, host.ErrAttachBusy) {
 			return nil, &rpc.Error{Code: "attach_busy", Message: err.Error()}
 		}
 		return nil, err
@@ -298,7 +291,7 @@ func (n *Node) controlLoop(ctx context.Context, id string, s *termStream, gate *
 	s.cancel()
 	if mine && n.peer != nil {
 		_ = n.peer.Notify("terminal.end", map[string]any{"session_id": id, "error": why.Error(), "control": true,
-			"taken": errors.Is(why, herdr.ErrTakenOver)})
+			"taken": errors.Is(why, host.ErrTakenOver)})
 	}
 }
 
@@ -403,7 +396,11 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	cols, rows, err := n.herdr.PaneSize(ctx, pane)
+	st, ref, err := paneCap[host.Streamer](n, pane)
+	if err != nil {
+		return 0, err
+	}
+	cols, rows, err := st.PaneSize(ctx, ref)
 	if err != nil {
 		return 0, err
 	}
@@ -417,7 +414,7 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 			case <-octx.Done():
 				return
 			case <-t.C:
-				if c, r, err := n.herdr.PaneSize(octx, pane); err == nil && (c != cols || r != rows) {
+				if c, r, err := st.PaneSize(octx, ref); err == nil && (c != cols || r != rows) {
 					cancel()
 					return
 				}
@@ -426,7 +423,7 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 	}()
 	epoch := strconv.FormatInt(time.Now().UnixNano(), 36)
 	frames, replay := 0, 0
-	gate := &frameGate{send: func(f herdr.Frame) {
+	gate := &frameGate{send: func(f host.Frame) {
 		frames++
 		if f.Full {
 			replay = 0
@@ -441,7 +438,7 @@ func (n *Node) observeOnce(ctx context.Context, id string) (int, error) {
 			cancel()
 		}
 	}}
-	err = n.herdr.Observe(octx, pane, cols, rows, gate.put)
+	err = st.Observe(octx, ref, cols, rows, gate.put)
 	gate.flush()
 	gate.mu.Lock() // a flush the timer started may still be sending
 	sent := frames

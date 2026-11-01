@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
+	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
 
@@ -12,7 +12,7 @@ import (
 // finished while claude goes on with the message queued behind it.
 func TestAssistantBusyAcrossQueuedTurns(t *testing.T) {
 	n := &Node{home: t.TempDir(), paths: map[string]string{}, files: map[string]*transcript.File{}, procs: map[string]*assistantProc{},
-		agents: map[string]herdr.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
+		agents: map[string]host.Agent{}, state: &stateFile{Sessions: map[string]sessionState{}}}
 	p := &assistantProc{id: "11111111-2222-3333-4444-555555555555", busy: true}
 	busy := func() bool { p.mu.Lock(); defer p.mu.Unlock(); return p.busy }
 	stream := func(lines ...string) { n.readAssistant(p, strings.NewReader(strings.Join(lines, "\n")+"\n")) }
