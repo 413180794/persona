@@ -156,6 +156,10 @@ type Meta struct {
 // the phone, e.g. a WeChat voice-input transcript, turns into): <pasted_content id="ae9b">…</pasted_content id="ae9b">.
 var pastedRe = regexp.MustCompile(`<[\\/]*pasted_content(?:\s+id="[^"]*")?\s*>`) // also <\pasted…> / <\/pasted…> from nested pastes
 
+// ContextRe matches the live snapshot Jarvis starts each message to its assistant with (node/assistant_context.go):
+// context for the model, not something the user wrote.
+var ContextRe = regexp.MustCompile(`(?s)<jarvis-context>.*?</jarvis-context>\s*`)
+
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
 // ParseLine converts one JSONL line (1-based seq) into items, updating meta.
@@ -699,7 +703,7 @@ func markWake(items []proto.Item) {
 }
 
 func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []proto.Item {
-	trimmed := strings.TrimSpace(caveatRe.ReplaceAllString(pastedRe.ReplaceAllString(s, ""), ""))
+	trimmed := strings.TrimSpace(caveatRe.ReplaceAllString(pastedRe.ReplaceAllString(ContextRe.ReplaceAllString(s, ""), ""), ""))
 	if trimmed == "" {
 		return nil
 	}
@@ -740,6 +744,13 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	if strings.HasPrefix(trimmed, "<command-name>") || strings.HasPrefix(trimmed, "<command-message>") {
 		name := firstTag(trimmed, "command-name")
 		args := firstTag(trimmed, "command-args")
+		if name == "/compact" && strings.TrimSpace(args) == "" {
+			// Jarvis compacts an idle assistant conversation itself (node/assistant.go): a notice, not a message the
+			// user sent, and not activity that would make the conversation unread.
+			it := mk(0, "system", proto.KindNotice)
+			it.Text = "压缩上下文"
+			return []proto.Item{it}
+		}
 		it := mk(0, "user", proto.KindText)
 		it.Text = strings.TrimSpace(name + " " + args)
 		return []proto.Item{it}

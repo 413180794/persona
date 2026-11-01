@@ -27,7 +27,7 @@
 | Agents | `agents_list` / `agent_read` / `agent_send` / `agent_start`：直接用 hub 的会话状态（`decorated`）和 node 的 `session.items` / `session.send` / `session.start`，不走 ssh |
 | 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
 | 加邮箱（操作 Jarvis 自己） | `mail_account_add`（2026-11-01，替代 App 里的「AI 一键添加」）：他在对话里说「帮我加邮箱」，助手问到邮箱和密码 / 授权码就调用；手机上弹确认卡片（只显示邮箱和服务器，密码打码），批准后 hub 连一遍 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录，工具会这么告诉它。密码会进这段对话的记录（hub 机器上的 transcript），所以建议用授权码 / 应用专用密码 |
-| 实时快照 | node 启动 claude 进程前调 hub 的 `assistant.context`，拼进 `--append-system-prompt`：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。每个来源 3 秒超时，结果缓存 45 秒 |
+| 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，jarvis 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex 上时读写的也是这一份（下面「Codex」一节），换启动器记忆不丢 |
 | 关于我 | App 里编辑后存 settings `assistant.notes`，覆盖 hub.json 的 `assistant.notes`，进 CLAUDE.md 末尾 |
@@ -84,13 +84,68 @@
   真正有副作用的工具（`lark_send`、`mail_send`）自己在 hub 里要批准。
 - 定时任务错过太久不补跑：hub 停了一上午，不会中午才发早报（晚于计划 30 分钟就跳过，只记录）。
 - 静默推送会被系统限流，强制退出的 App 收不到；唤醒失败时工具结果会告诉模型「请他打开 App」。
-- 快照在进程启动时生成，进程最长空闲 20 分钟会被回收、下次 `--resume` 时重新生成；长对话里的快照会过时，提示词里写明了「之后的变化用工具查」。
+- 快照以前放在 `--append-system-prompt`，以为每次重启都会换成新的；其实 Claude Code 续聊时一直用对话第一次启动时记下的系统提示（见下节），
+  助手看到的一直是那段对话第一天的时间和未读。现在每条消息都带。
 - Go 的零时间 `0001-01-01T00:00:00Z` 会出现在 `last_run` / `next_run` 里，App 用 `Date.realDate` 当作「没有」。
 - **无人值守的运行不能卡在批准上**（2026-10-30 实测）：助手默认权限模式下，连 `notify_user`、`schedule_followup` 都要在手机上点「允许」，
   夜里到点的跟进、Monitor 事件就停在批准那一步，推出去的只有一条「需要批准」。现在 Jarvis 自己的工具预先放行（见上表）。
 - **systemd 重启 jarvisd 会杀掉整个 cgroup**：助手的 claude 和它的后台命令、Monitor 一起没了，node 来不及做任何收尾，所以「哪些任务在跑」
   要随时落库（`node_sessions.tasks`），不能等关机时再记。
 - 中文环境下 `.hour(.twoDigits(amPM: .omitted))` 是 12 小时制（17:00 显示成「05:00」）：时刻一律用 `AssistantScheduleText.hm`（固定 `HH:mm`）。
+
+## 实时快照和前缀缓存（2026-11-01）
+
+**为什么快照不能放系统提示**：提示词缓存是按前缀匹配的，一次请求从前往后依次是系统提示（含工具定义）、项目上下文（CLAUDE.md、记忆）、
+整段对话；前面任何一个字节不同，后面的整段历史都读不到缓存，要按「写缓存」的价钱和速度重算一遍。助手进程空闲 20 分钟就回收，下次说话
+`--resume` 重新起，所以「每次启动都一样」的东西才能放在前面：快照（时间、未读、会议）每次都不同，只能跟着消息走，放在对话末尾。
+
+**实际的情况比这更绕**（Claude Code 2.1.314 实测，hub 机器、走同一个启动器）：
+
+- Claude Code 续聊时**不用**新给的 `--append-system-prompt`，一直用对话第一次请求时记下的系统提示，压缩后才换（文档「System prompt flags in
+  resumed conversations」，实测换了文字后模型答的还是第一次的暗号、缓存全读到）。所以以前的快照并没有让缓存失效，而是**一直是第一天那份**。
+- 真正让重启后读不到缓存的是**工具定义变了**：把一段 27.5 万 token 的真实助手对话复制一份（换个会话 id、放在临时目录，jarvis 工具用导出的
+  同一份定义）后重启，结果见下表。schema 里键的顺序不影响；少一个 MCP 工具就整段重写。hub 上 jarvis 的工具定义来自提示词文件（部署时改了就变）
+  和手机上报的 `phone_*`（哪台设备最后连上、授权了哪些就是哪些），所以 node 现在在每次启动时比较工具列表，变了就在日志里写
+  「tools changed since its last start」，每次启动后的第一次请求也记下读到 / 重写了多少（`assistant_context.go`、`readAssistant`）。
+- 空闲超过一小时（缓存的寿命）无论如何都要重写：这时只能靠上下文小，见下面「压缩」。
+
+| 主对话的副本（27.5 万 token） | 首字 | cache_read | cache_creation |
+| --- | --- | --- | --- |
+| 冷启动（缓存过期） | 9.8 s | 0 | 275,373 |
+| 重启，什么都没变 | 7.0 s | 275,327 | 91 |
+| 重启，换了 `--append-system-prompt` 的文字 | 5.2 s | 275,418 | 46 |
+| 重启，工具 schema 的键换了顺序 | 7.7 s | 275,464 | 46 |
+| 重启，少了一个 MCP 工具 | 8.5 s | 0 | 275,385 |
+| `/compact`（缓存还热） | 35 s 压完 | 275,393 → 3,507（压缩后的历史） | |
+| 压缩后冷启动 | 5.3 s | 0 | 36,195 |
+| 压缩后再重启 | 4.1 s | 32,886 | 3,354 |
+
+改之前线上的记录（transcript 里空闲 20 分钟以上之后的第一条回复）：10-28 起那段长对话 10-29～10-30 有 5 次空闲 39–59 分钟（缓存还没过期）后
+`cache_read` 为 0、重写 30–37 万 token，第一段回复 10–320 秒，同样空闲的另外几次读到了缓存；空闲超过一小时的都是全量重写，最后一次 51 万。
+现在的主对话 11-01 空闲 46 小时后第一条：重写 25.4 万，12.6 秒。
+
+**做法**：
+
+- node 每发一条消息先问 hub 要快照（`assistant.context`，和起进程并行），按节（顶格的一行加下面缩进的几行）和这段对话上次带过的比，
+  只带变了的和时间，包成 `<jarvis-context>`（`prompts/assistant/turn_context.md`）放在消息的第一个文本块。带过什么记在 node 内存里，
+  对话压缩（`compact_boundary`；Codex 的 `contextCompaction`）后清掉，下一条带全量；node 重启也是全量一次。App、网页、标题、知识库都从
+  transcript 解析里拿掉这个块（`transcript.ContextRe`），用户看不到。定时任务、飞书 `/agent`、重启后告诉对话丢了后台任务……都走 `assistant.send`，
+  一样带上。
+- 系统提示不再有 `--append-system-prompt`；Codex 的 `developerInstructions` 只剩记忆（索引变了会不同，Codex 续聊时怎么处理没有实测）。
+- hub 的快照：数据 45 秒内复用；过期了就后台去读，消息最多等 1.5 秒，等不到就用上一份（30 分钟内），时间总是现在的、已经结束的会去掉。
+
+## 压缩（2026-11-01）
+
+助手的长对话从没压缩过（10-28 起的一段到了 52 万 token，现在的主对话 27.5 万）：模型是 1M 上下文，Claude Code 默认要到快满才自动压缩。
+
+- **自动压缩**：`CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`（node 起 claude 时设，文档「Set the auto-compact window」，可设 10 万–100 万，
+  环境变量优先于设置和 `--autocompact`）。实测 `-p` stream-json 下也会自动压缩：上一轮的上下文超过窗口，下一条消息开始前先压（`system/status`
+  `compacting` → `compact_boundary`，`trigger: auto`），这一轮要等压缩（haiku 压 21 万约 19 秒）。
+- **空闲时压缩**：Claude Code 自己的 idle compaction（`idleCompaction`，默认 20 万）只在交互式会话里跑，`-p` 不跑。所以 node 回收空闲进程时，
+  上下文超过 15 万 token（低于自动压缩的点，否则永远轮不到）就先发一条 `/compact`（stream-json 的 user 消息，实测可用，`trigger: manual`），
+  趁缓存还热压掉，压完这个进程不再压、下次空闲照常回收。这不是一轮对话：App 里状态不变、不推送；transcript 里的 `/compact` 显示成
+  「压缩上下文」提示（以前显示成用户发的消息，还会让对话变成未看）。
+- **Codex**：`-c model_auto_compact_token_limit=200000`（Codex 配置文档的顶层键）。Codex 有 `thread/compact/start`，空闲压缩暂时没接。
 
 ## 定时任务（2026-10-31 合成一张表）
 
@@ -164,7 +219,7 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
 `command codex …` 也接住），所以启动器设的环境、`-c model_provider=…`、`-m` 照样生效。一段对话一个 app-server 进程、里面一个 thread：
 thread id 就是会话 id（Codex 自己定，新对话要先 `thread/start` 才知道 id），rollout 就是对话记录（`docs/codex.md`），App 照常显示。
 握手：`initialize`（打开 experimentalApi）→ `skills/extraRoots/set` → `thread/start`（新对话）/ `thread/resume`（续聊、重启后）。
-实时快照作为 `developerInstructions`（Claude 版是 `--append-system-prompt`）。
+实时快照和 Claude 一样随每条消息带（`turn/start` / `turn/steer` 的第一个输入），`developerInstructions` 只放记忆。
 
 | 能力 | Claude（`claude -p`） | Codex（`codex app-server`） |
 | --- | --- | --- |

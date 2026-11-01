@@ -1,0 +1,137 @@
+package node
+
+import (
+	"bytes"
+	"log"
+	"strings"
+	"testing"
+	"time"
+)
+
+const snapA = `**这是主对话**：示例用户平时都在这里找你，接着之前聊过的事往下做。
+
+- 现在：2026-11-01 周日 15:04（Asia/Shanghai）
+- 在线的电脑：服务器（server）
+- Agents：需要你 1 个，完成未看 0 个，工作中 0 个（详情用 agents_list）
+  - 需要你：修登录（server，session_id=aaaaaaaa）
+- 飞书日历今天接下来：16:00–17:00 评审
+- 已安排的跟进：没有`
+
+// The first message carries the whole snapshot; the next ones only what changed, and the time.
+func TestContextDelta(t *testing.T) {
+	first, seen := contextDelta(nil, snapA)
+	if !strings.HasPrefix(first, "<jarvis-context>\n实时快照（") || !strings.HasSuffix(first, "</jarvis-context>") {
+		t.Fatalf("first block:\n%s", first)
+	}
+	for _, want := range []string{"**这是主对话**", "- 在线的电脑", "  - 需要你：修登录", "- 飞书日历今天接下来", "- 已安排的跟进：没有"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("first block lacks %q:\n%s", want, first)
+		}
+	}
+
+	same := strings.Replace(snapA, "15:04", "15:30", 1)
+	block, seen := contextDelta(seen, same)
+	if want := "<jarvis-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：2026-11-01 周日 15:30（Asia/Shanghai）\n</jarvis-context>"; block != want {
+		t.Fatalf("nothing changed but the time:\n%s", block)
+	}
+
+	// The waiting agent answered (its indented line goes with the Agents section), the meeting is over (the section
+	// is named the same either way).
+	later := strings.NewReplacer(
+		"需要你 1 个", "需要你 0 个", "\n  - 需要你：修登录（server，session_id=aaaaaaaa）", "",
+		"- 飞书日历今天接下来：16:00–17:00 评审", "- 飞书日历：今天接下来没有会",
+	).Replace(same)
+	block, _ = contextDelta(seen, later)
+	for _, want := range []string{"- 现在：", "- Agents：需要你 0 个", "- 飞书日历：今天接下来没有会"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("lacks %q:\n%s", want, block)
+		}
+	}
+	for _, not := range []string{"这是主对话", "在线的电脑", "修登录", "跟进"} {
+		if strings.Contains(block, not) {
+			t.Errorf("repeats %q, unchanged:\n%s", not, block)
+		}
+	}
+	if b, s := contextDelta(seen, ""); b != "" || s == nil {
+		t.Fatal("no snapshot (the hub didn't answer): no block, and what was seen stays")
+	}
+}
+
+type stdinBuf struct{ bytes.Buffer }
+
+func (*stdinBuf) Close() error { return nil }
+
+// A long conversation about to be let go is compacted first; a compaction makes the next message carry the whole
+// snapshot again.
+func TestAssistantIdleCompaction(t *testing.T) {
+	n := assistantNode(t)
+	const id = "11111111-2222-3333-4444-555555555555"
+	in := &stdinBuf{}
+	p := &assistantProc{id: id, agent: "claude", stdin: in}
+	n.procs[id] = p
+	stream := func(lines ...string) { n.readAssistant(p, strings.NewReader(strings.Join(lines, "\n")+"\n")) }
+	_, commit := n.turnContext(id, snapA)
+	commit()
+
+	stream(`{"type":"stream_event","event":{"type":"message_start","message":{"usage":{"input_tokens":2,"cache_read_input_tokens":180000,"cache_creation_input_tokens":900}}},"parent_tool_use_id":null}`,
+		`{"type":"stream_event","event":{"type":"message_start","message":{"usage":{"input_tokens":2,"cache_read_input_tokens":9000}}},"parent_tool_use_id":"toolu_1"}`,
+		`{"type":"result","subtype":"success"}`)
+	later := time.Now().Add(assistantIdleTimeout + time.Minute)
+	p.mu.Lock()
+	tokens, reap, compact := p.context, p.reapable(later), p.idleCompactable()
+	p.mu.Unlock()
+	if tokens != 180902 {
+		t.Fatalf("context %d: the main thread's last request, not a subagent's", tokens)
+	}
+	if !reap || !compact {
+		t.Fatalf("idle and long: reapable %v, compact first %v", reap, compact)
+	}
+
+	n.compactIdle(p)
+	if got := strings.TrimSpace(in.String()); got != `{"message":{"content":"/compact","role":"user"},"type":"user"}` {
+		t.Fatalf("sent %s", got)
+	}
+	p.mu.Lock()
+	reap, stuck := p.reapable(time.Now().Add(5*time.Minute)), p.reapable(time.Now().Add(11*time.Minute))
+	p.mu.Unlock()
+	if reap || !stuck {
+		t.Fatalf("while compacting: let go %v; one that never reports back let go after 10 minutes %v", reap, stuck)
+	}
+	stream(`{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":180902,"post_tokens":9500}}`,
+		`{"type":"result","subtype":"success"}`)
+	p.mu.Lock()
+	tokens, busy := p.context, p.busy
+	reap, compact = p.reapable(time.Now().Add(assistantIdleTimeout+time.Minute)), p.idleCompactable()
+	p.mu.Unlock()
+	if tokens != 9500 || busy {
+		t.Fatalf("after the compaction: context %d, busy %v", tokens, busy)
+	}
+	if !reap || compact {
+		t.Fatalf("compacted: let go next time (reapable %v), not compacted again (%v)", reap, compact)
+	}
+	if block, _ := n.turnContext(id, snapA); !strings.Contains(block, "实时快照（") {
+		t.Fatalf("after a compaction the whole snapshot again:\n%s", block)
+	}
+}
+
+// A process that starts with other tools than the conversation's last one says so: that start writes the whole
+// history again.
+func TestToolsChangedIsLogged(t *testing.T) {
+	n := assistantNode(t)
+	var logs bytes.Buffer
+	n.logger = log.New(&logs, "", 0)
+	const id = "11111111-2222-3333-4444-555555555555"
+	p := &assistantProc{id: id, agent: "claude"}
+	start := func(tools string) {
+		n.readAssistant(p, strings.NewReader(`{"type":"system","subtype":"init","tools":[`+tools+`]}`+"\n"))
+	}
+	start(`"Read","mcp__jarvis__agents_list","mcp__jarvis__phone_device_info"`)
+	start(`"mcp__jarvis__phone_device_info","Read","mcp__jarvis__agents_list"`)
+	if logs.Len() != 0 {
+		t.Fatalf("the same tools in another order: %s", logs.String())
+	}
+	start(`"Read","mcp__jarvis__agents_list"`)
+	if !strings.Contains(logs.String(), "tools changed since its last start (+[] -[mcp__jarvis__phone_device_info])") {
+		t.Fatalf("logged %q", logs.String())
+	}
+}

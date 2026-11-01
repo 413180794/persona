@@ -25,3 +25,11 @@ data class SlashCommand(val title: String, val word: String, val detail: String,
         }
     }
 }
+
+/** What dictation heard, at the end of the draft: a space between it and Latin text before, nothing after Chinese. */
+fun withDictation(draft: String, heard: String): String {
+    if (draft.isBlank()) return heard
+    val last = draft.trimEnd().last()
+    val sep = if (last.code < 128 && last.isLetterOrDigit() && heard.first().code < 128) " " else ""
+    return draft.trimEnd() + sep + heard
+}

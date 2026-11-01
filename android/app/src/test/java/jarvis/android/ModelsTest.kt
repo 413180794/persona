@@ -179,3 +179,13 @@ class SessionInfoTest {
         org.junit.Assert.assertEquals(51234L, i.contextTokens); org.junit.Assert.assertEquals("main", i.gitBranch); org.junit.Assert.assertEquals(3, i.turns)
     }
 }
+
+class DictationTest {
+    @Test fun heardTextGoesAtTheEnd() {
+        val f = { d: String, h: String -> jarvis.android.ui.chat.withDictation(d, h) }
+        org.junit.Assert.assertEquals("帮我看下日志", f("", "帮我看下日志"))
+        org.junit.Assert.assertEquals("先跑测试然后提交", f("先跑测试", "然后提交"))
+        org.junit.Assert.assertEquals("run the tests and commit", f("run the tests", "and commit"))
+        org.junit.Assert.assertEquals("改 README然后提交", f("改 README ", "然后提交"))
+    }
+}

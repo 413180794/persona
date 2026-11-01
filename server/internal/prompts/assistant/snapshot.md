@@ -1,6 +1,4 @@
 {{- $w := .Now.Weekday -}}
-# 实时快照（{{.Now.Format "15:04"}} 生成；之后的变化用工具查）
-
 - 现在：{{.Now.Format "2006-01-02"}} 周{{if eq $w 0}}日{{else if eq $w 1}}一{{else if eq $w 2}}二{{else if eq $w 3}}三{{else if eq $w 4}}四{{else if eq $w 5}}五{{else}}六{{end}} {{.Now.Format "15:04"}}（{{.Zone}}）
 - 在线的电脑：{{range $i, $m := .Up}}{{if $i}}、{{end}}{{$m.Name}}（{{$m.ID}}）{{end}}{{with .Down}}；离线：{{range $i, $m := .}}{{if $i}}、{{end}}{{$m.Name}}（{{$m.ID}}）{{end}}{{end}}
 - Agents：需要你 {{len .Needs}} 个，完成未看 {{len .Unread}} 个，工作中 {{len .Working}} 个（详情用 agents_list）
@@ -14,7 +12,7 @@
 {{with .AtMe}}  - @我：{{range $i, $c := first 6 .}}{{if $i}}；{{end}}{{$c.Name}}（{{$c.Unread}} 条）：{{$c.Preview}}{{end}}
 {{end}}{{with .Other}}  - 其他：{{range $i, $c := first 8 .}}{{if $i}}、{{end}}{{$c.Name}}（{{$c.Unread}} 条）{{end}}
 {{end}}{{else}}- 飞书：没有未读（免打扰的不算）
-{{end}}{{end}}{{with .Calendar}}{{if .Events}}- 飞书日历今天接下来：{{range $i, $e := .Events}}{{if $i}}；{{end}}{{$e.Start.Format "15:04"}}–{{$e.End.Format "15:04"}} {{$e.Title}}{{end}}
+{{end}}{{end}}{{with .Upcoming}}{{if .Events}}- 飞书日历今天接下来：{{range $i, $e := .Events}}{{if $i}}；{{end}}{{$e.Start.Format "15:04"}}–{{$e.End.Format "15:04"}} {{$e.Title}}{{end}}
 {{else}}- 飞书日历：今天接下来没有会
-{{end}}{{end}}{{with .Followups}}- 已安排的跟进：{{range $i, $f := .}}{{if $i}}；{{end}}{{$f.At.Format "01-02 15:04"}} {{$f.Label}}{{with $f.Every}}（每 {{.}}）{{end}}{{end}}
-{{end}}
+{{end}}{{end}}- 已安排的跟进：{{with .Followups}}{{range $i, $f := .}}{{if $i}}；{{end}}{{$f.At.Format "01-02 15:04"}} {{$f.Label}}{{with $f.Every}}（每 {{.}}）{{end}}{{end}}{{else}}没有{{end}}
+

@@ -205,17 +205,17 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 }
 
 var (
-	snapHeader = regexp.MustCompile(`^# 实时快照（\d\d:\d\d 生成；之后的变化用工具查）\n\n- 现在：\d{4}-\d\d-\d\d 周[日一二三四五六] \d\d:\d\d（([^）]+)）\n`)
+	snapHeader = regexp.MustCompile(`^- 现在：\d{4}-\d\d-\d\d 周[日一二三四五六] \d\d:\d\d（([^）]+)）\n`)
 )
 
-// normalSnapshot replaces the clock in the snapshot's first two lines.
+// normalSnapshot replaces the clock in the snapshot's first line.
 func normalSnapshot(t *testing.T, s string) string {
 	t.Helper()
 	m := snapHeader.FindStringSubmatch(s)
 	if m == nil {
 		t.Fatalf("snapshot header: %q", s[:min(len(s), 200)])
 	}
-	return "# 实时快照（HH:MM 生成；之后的变化用工具查）\n\n- 现在：YYYY-MM-DD 周X HH:MM（" + m[1] + "）\n" + s[len(m[0]):]
+	return "- 现在：YYYY-MM-DD 周X HH:MM（" + m[1] + "）\n" + s[len(m[0]):]
 }
 
 func snapshotHub(t *testing.T, full bool) *Hub {

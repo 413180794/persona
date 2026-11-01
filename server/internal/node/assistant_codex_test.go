@@ -202,7 +202,8 @@ func TestCodexStartAndTurns(t *testing.T) {
 	}
 	b, _ := json.Marshal(f.sent("thread/start")[0])
 	_ = json.Unmarshal(b, &start)
-	if start.Params.ApprovalPolicy != "untrusted" || start.Params.Sandbox != "workspace-write" || !strings.HasPrefix(start.Params.DeveloperInstructions, "snapshot\n\n# 记忆") {
+	if start.Params.ApprovalPolicy != "untrusted" || start.Params.Sandbox != "workspace-write" || !strings.HasPrefix(start.Params.DeveloperInstructions, "# 记忆") ||
+		strings.Contains(start.Params.DeveloperInstructions, "snapshot") { // the snapshot goes with each message, not here
 		t.Fatalf("thread/start params %+v", start.Params)
 	}
 	if roots := f.sent("skills/extraRoots/set"); len(roots) != 1 || !strings.Contains(string(roots[0].Params), filepath.Join(cwd, ".claude", "skills")) {
@@ -211,7 +212,7 @@ func TestCodexStartAndTurns(t *testing.T) {
 
 	// Idle: a new turn, with the mode and effort the app chose.
 	n.noteModes(testThread, "auto", "high")
-	if err := c.deliver(ctx, "你好", nil); err != nil {
+	if err := c.deliver(ctx, "<jarvis-context>\nx\n</jarvis-context>", "你好", nil); err != nil {
 		t.Fatal(err)
 	}
 	ts := f.sent("turn/start")
@@ -220,6 +221,9 @@ func TestCodexStartAndTurns(t *testing.T) {
 	}
 	var turn map[string]any
 	_ = json.Unmarshal(ts[0].Params, &turn)
+	if in, _ := turn["input"].([]any); len(in) != 2 || in[0].(map[string]any)["text"] != "<jarvis-context>\nx\n</jarvis-context>" || in[1].(map[string]any)["text"] != "你好" {
+		t.Fatalf("input %v: the live context first, then the message", turn["input"])
+	}
 	sb, _ := turn["sandboxPolicy"].(map[string]any)
 	if turn["approvalPolicy"] != "on-request" || turn["effort"] != "high" || sb["type"] != "workspaceWrite" || sb["networkAccess"] != false {
 		t.Fatalf("turn/start params %v", turn)
@@ -238,7 +242,7 @@ func TestCodexStartAndTurns(t *testing.T) {
 	})
 
 	// While the turn runs a message is steered into it.
-	if err := c.deliver(ctx, "再补一句", nil); err != nil {
+	if err := c.deliver(ctx, "", "再补一句", nil); err != nil {
 		t.Fatal(err)
 	}
 	st := f.sent("turn/steer")
@@ -271,7 +275,7 @@ func TestCodexStartAndTurns(t *testing.T) {
 
 	// A photo goes in as a local file the rollout records (and the app shows as a thumbnail).
 	n.dir = t.TempDir()
-	if err := c.deliver(ctx, "", []proto.Image{{Mime: "image/png", Data: "iVBORw0KGgo="}}); err != nil {
+	if err := c.deliver(ctx, "", "", []proto.Image{{Mime: "image/png", Data: "iVBORw0KGgo="}}); err != nil {
 		t.Fatal(err)
 	}
 	last := f.sent("turn/start")

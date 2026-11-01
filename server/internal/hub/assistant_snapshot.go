@@ -12,18 +12,56 @@ import (
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// assistantSnapshot is the live context a starting assistant process gets in its system prompt
-// (--append-system-prompt, node/assistant.go): the time, which machines are up, agents waiting for the user,
-// unread Feishu chats and the rest of today's meetings. Each source has a short deadline; a slow one is left out.
+// assistantSnapshot is the live context each message to the assistant starts with (a <jarvis-context> block,
+// node/assistant_context.go): the time, which machines are up, agents waiting for the user, unread Feishu chats and
+// the rest of today's meetings. It is taken on every message, so it must not hold the message up: the sources are
+// read at most every snapshotFresh, a message waits for a new read at most snapshotWait and otherwise goes with the
+// last one (the time is always now). Each source has a short deadline; a slow one is left out.
 func (h *Hub) assistantSnapshot(ctx context.Context) string {
 	h.mu.Lock()
-	if time.Since(h.snapAt) < 45*time.Second && h.snap != "" {
-		s := h.snap
-		h.mu.Unlock()
-		return s
+	snap, at := h.snap, h.snapAt
+	var wait chan struct{}
+	if snap == nil || time.Since(at) >= snapshotFresh {
+		if wait = h.snapping; wait == nil {
+			wait = make(chan struct{})
+			h.snapping = wait
+			go h.takeSnapshot(wait)
+		}
 	}
 	h.mu.Unlock()
+	if wait != nil {
+		limit := snapshotWait
+		if snap == nil || time.Since(at) > snapshotStale {
+			limit = snapshotSlowest // nothing usable yet: wait for the sources' own deadlines
+		}
+		select {
+		case <-wait:
+		case <-time.After(limit):
+		case <-ctx.Done():
+		}
+		h.mu.Lock()
+		snap = h.snap
+		h.mu.Unlock()
+	}
+	if snap == nil {
+		return ""
+	}
+	s := *snap
+	s.Now = time.Now().In(h.userLocation())
+	return prompts.RenderSnapshot(s)
+}
 
+const (
+	snapshotFresh   = 45 * time.Second
+	snapshotWait    = 1500 * time.Millisecond
+	snapshotStale   = 30 * time.Minute
+	snapshotSlowest = 5 * time.Second
+)
+
+// takeSnapshot reads the sources and keeps the result for assistantSnapshot; done is closed when it is in.
+func (h *Hub) takeSnapshot(done chan struct{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), snapshotSlowest)
+	defer cancel()
 	loc := h.userLocation()
 	now := time.Now().In(loc)
 	snap := prompts.Snapshot{Now: now, Zone: loc.String(), PhoneOnline: h.phoneClient() != nil}
@@ -47,12 +85,14 @@ func (h *Hub) assistantSnapshot(ctx context.Context) string {
 	snap.Followups = h.snapshotSchedule(ctx, loc)
 	wg.Wait()
 
-	out := prompts.RenderSnapshot(snap)
 	h.mu.Lock()
-	h.snap, h.snapAt = out, time.Now()
+	h.snap, h.snapAt, h.snapping = &snap, time.Now(), nil
 	h.mu.Unlock()
-	return out
+	close(done)
 }
+
+// forgetSnapshotLocked makes the next message take a new snapshot (the time zone changed); h.mu is held.
+func (h *Hub) forgetSnapshotLocked() { h.snap, h.snapAt = nil, time.Time{} }
 
 func (h *Hub) snapshotAgents() (needs, unread []prompts.SnapshotAgent, working []string) {
 	for _, m := range h.machines {

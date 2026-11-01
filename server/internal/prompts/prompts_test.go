@@ -65,12 +65,11 @@ func TestMissingFieldPanics(t *testing.T) {
 
 func TestSmallPrompts(t *testing.T) {
 	for got, want := range map[string]string{
-		RenderRefused("他说不行"):                  "（没有执行）他说不行",
-		RenderLauncherCheck():                  "Reply with exactly one word: ok",
-		RenderJSONOnly("system"):               "system\n\nReply with a single JSON object only, no prose, no code fences.",
-		RenderTranslateMailInput("S", "T"):     "主题：S\n\nT",
-		RenderCodexInstructions("snap", "mem"): "snap\n\nmem",
-		RenderCodexInstructions("", "mem"):     "mem",
+		RenderRefused("他说不行"):              "（没有执行）他说不行",
+		RenderLauncherCheck():              "Reply with exactly one word: ok",
+		RenderJSONOnly("system"):           "system\n\nReply with a single JSON object only, no prose, no code fences.",
+		RenderTranslateMailInput("S", "T"): "主题：S\n\nT",
+		RenderCodexInstructions("mem"):     "mem",
 	} {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
@@ -126,4 +125,11 @@ func TestUnknownToolPanics(t *testing.T) {
 		}
 	}()
 	Tool("no_such_tool")
+}
+
+func TestTurnContext(t *testing.T) {
+	got := RenderTurnContext(TurnContext{Sections: []string{"- 现在：x"}})
+	if want := "<jarvis-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：x\n</jarvis-context>"; got != want {
+		t.Fatalf("got %q", got)
+	}
 }

@@ -28,3 +28,9 @@
 - node 的 `assistant.send` 带一个它不认识的 session id 时不报错：找不到 transcript 就用这个 id 起一段**空白**的新对话。要「续上，续不上就告诉我」的调用
   （定时任务自己的对话，2026-11-01）带 `resume_only`：node 找不到进程也找不到 transcript 就报错，由 hub 开新对话并记下（`docs/assistant.md`「定时任务」）。
   判断对话忙不忙看 hub 里的会话状态（working / needs_you），只有在 node 列表里的会话才有：要长期续的对话放进 `keptSessions`，否则一台忙机器上 80 个新 transcript 就把它挤出列表。
+- **系统提示里不放每次都变的东西**（2026-11-01，`docs/assistant.md`「实时快照和前缀缓存」）：提示词缓存按前缀匹配，系统提示和工具定义在整段对话前面，
+  变一个字节，重启后整段历史就要重写（几十万 token 的对话首字要 10 秒到几分钟）。实时快照随每条消息带。但 Claude Code 续聊时其实一直用第一次记下的系统提示
+  （压缩后才换），所以以前的快照是「过时」而不是「失效」；重启后读不到缓存的真正原因是**工具列表变了**（实测少一个 MCP 工具整段重写，schema 键的顺序不影响）。
+  判断缓存为什么没中，别猜，复制一份真实对话（换会话 id、放临时目录）一项一项改着重启，看 `message_start` 的 `cache_read_input_tokens`。
+- 无头 `claude -p` 会自动压缩（窗口用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 调），但 Claude Code 的空闲压缩只在交互式会话里跑；stream-json 发一条 `/compact`
+  就能手动压。实测续聊进程的第一条消息有时还不压、下一条才压，别拿一次没压当「不支持」。

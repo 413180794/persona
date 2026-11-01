@@ -65,6 +65,11 @@ type Node struct {
 	sysOnce  sync.Once                 // system: read once (metrics.go)
 	sys      proto.System
 
+	// ctxSent: assistant conversation → the snapshot sections it has seen; ctxTools: the tools its process last
+	// started with (assistant_context.go).
+	ctxSent  map[string]map[string]string
+	ctxTools map[string][]string
+
 	// hostAgents: each host's agents in its last answer (refreshHosts), kept for a host that does not answer.
 	hostAgents map[string][]host.Agent
 

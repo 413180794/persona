@@ -35,6 +35,13 @@
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- 语音输入 in the composer asks the system's speech recognizer (RecognizerIntent); 11+ hides it unless declared. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:name=".JarvisApp"
         android:allowBackup="false"

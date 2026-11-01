@@ -1,0 +1,147 @@
+package node
+
+import (
+	"context"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/prompts"
+)
+
+// The assistant's live snapshot (the time, agents waiting, unread chats, today's meetings…) goes at the start of each
+// message, in a <jarvis-context> block, not into the system prompt (docs/assistant.md「实时快照」). The prompt cache
+// is a prefix: the system prompt comes before the whole conversation, so a system prompt that differs from one start
+// to the next would make every request after a restart write the entire history again. Claude Code (2.1.314) keeps a
+// resumed conversation on the system prompt it was first started with instead, so the snapshot there was the one
+// from the conversation's first day.
+//
+// Only the sections that changed since the conversation last got them are sent (the time always): what it has seen
+// is kept per conversation in memory and forgotten when it is compacted, which summarizes the old blocks away. A
+// node restart forgets it too, and the next message carries the whole snapshot again.
+
+// snapshotSection is one top-level line of the snapshot with the indented lines under it; key is what it is about
+// ("- 飞书日历" of "- 飞书日历今天接下来：…" or "- 飞书日历：…").
+type snapshotSection struct{ key, text string }
+
+func snapshotSections(text string) []snapshotSection {
+	var out []snapshotSection
+	for line := range strings.SplitSeq(text, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")) && len(out) > 0 {
+			out[len(out)-1].text += "\n" + line
+			continue
+		}
+		out = append(out, snapshotSection{key: sectionKey(line), text: line})
+	}
+	return out
+}
+
+// sectionKey is a line's subject: up to the first full-width colon, cut before「今天」so 「飞书日历今天接下来：」and
+// 「飞书日历：今天接下来没有会」are the same section.
+func sectionKey(line string) string {
+	k, _, _ := strings.Cut(line, "：")
+	k, _, _ = strings.Cut(k, "今天")
+	return strings.TrimSpace(k)
+}
+
+const timeSection = "- 现在"
+
+// contextDelta is the block for a message and what the conversation will have seen once it is sent: everything when
+// seen is nil, else the sections that are new or changed, the time always. "" when there is no snapshot.
+func contextDelta(seen map[string]string, snapshot string) (string, map[string]string) {
+	sections := snapshotSections(snapshot)
+	if len(sections) == 0 {
+		return "", seen
+	}
+	next := make(map[string]string, len(sections))
+	for k, v := range seen {
+		next[k] = v
+	}
+	var out []string
+	for _, s := range sections {
+		if seen == nil || s.key == timeSection || seen[s.key] != s.text {
+			out = append(out, s.text)
+		}
+		next[s.key] = s.text
+	}
+	return prompts.RenderTurnContext(prompts.TurnContext{Full: seen == nil, Sections: out}), next
+}
+
+// turnContext is the <jarvis-context> block for conversation id's next message from snapshot (assistantContext);
+// commit records it as seen once the message is on its way.
+func (n *Node) turnContext(id, snap string) (block string, commit func()) {
+	n.mu.Lock()
+	seen := n.ctxSent[id]
+	n.mu.Unlock()
+	block, next := contextDelta(seen, snap)
+	return block, func() {
+		if block == "" {
+			return
+		}
+		n.mu.Lock()
+		if n.ctxSent == nil {
+			n.ctxSent = map[string]map[string]string{}
+		}
+		n.ctxSent[id] = next
+		n.mu.Unlock()
+	}
+}
+
+// contextCompacted forgets what conversation id has seen: its old blocks were summarized away.
+func (n *Node) contextCompacted(id string) {
+	n.mu.Lock()
+	delete(n.ctxSent, id)
+	n.mu.Unlock()
+}
+
+// toolsAtStart notes the tools a conversation's process started with (claude's init) and says so when they differ
+// from its last start: the tool definitions come before the history in every request, so a different set (a tool
+// added or gone: a deploy, another phone's tools) writes the whole conversation again, like a different system
+// prompt would. Measured 2026-11-01: one MCP tool fewer, 0 of 275K tokens read from the cache; the same tools with
+// their schema keys in another order, all of it read.
+func (n *Node) toolsAtStart(id string, tools []string) {
+	tools = slices.Sorted(slices.Values(tools))
+	n.mu.Lock()
+	if n.ctxTools == nil {
+		n.ctxTools = map[string][]string{}
+	}
+	before, known := n.ctxTools[id]
+	n.ctxTools[id] = tools
+	n.mu.Unlock()
+	if !known || slices.Equal(before, tools) {
+		return
+	}
+	var added, gone []string
+	for _, t := range tools {
+		if !slices.Contains(before, t) {
+			added = append(added, t)
+		}
+	}
+	for _, t := range before {
+		if !slices.Contains(tools, t) {
+			gone = append(gone, t)
+		}
+	}
+	n.logger.Printf("assistant %s: tools changed since its last start (+%v -%v): its prompt cache starts over", short(id), added, gone)
+}
+
+// assistantContext asks the hub for the live snapshot (prompts.AssistantContext). The hub answers from what it read
+// lately and waits only briefly for a new read, so this doesn't hold the message up.
+func (n *Node) assistantContext(id string) string {
+	if n.peer == nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	var res struct {
+		Text string `json:"text"`
+	}
+	if err := n.peer.Call(ctx, "assistant.context", map[string]any{"session_id": id}, &res); err != nil {
+		n.logger.Printf("assistant context: %v", err)
+		return ""
+	}
+	return res.Text
+}

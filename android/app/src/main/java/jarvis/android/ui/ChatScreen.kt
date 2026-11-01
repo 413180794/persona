@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FormatQuote
@@ -336,6 +337,21 @@ fun ChatScreen(
     val askCamera = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) openCamera() else notice = "没有相机权限，可以到系统设置 › 应用 › Jarvis 打开" }
+    // 语音输入 (iOS Dictation): the phone's own voice input screen (RecognizerIntent), so it works with whichever
+    // recognizer the phone has (Xiaomi's, Google's…); what it heard goes at the end of the box, to edit before sending.
+    val dictation = remember(context) {
+        android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "说吧，说完会放进输入框")
+    }
+    val canDictate = remember(context) { dictation.resolveActivity(context.packageManager) != null }
+    val dictate = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { r ->
+        val heard = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
+        if (!heard.isNullOrEmpty()) draft = jarvis.android.ui.chat.withDictation(draft, heard)
+    }
     val pickFiles = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
@@ -636,6 +652,10 @@ fun ChatScreen(
                         },
                         modifier = Modifier.weight(1f).heightIn(max = 180.dp).focusRequester(focus), shape = RoundedCornerShape(20.dp),
                     )
+                    if (canDictate && draft.isBlank() && images.isEmpty()) IconButton(
+                        onClick = { runCatching { dictate.launch(dictation) }.onFailure { notice = "这台手机上没有语音输入" } },
+                        enabled = uploading == null,
+                    ) { Icon(Icons.Default.Mic, "语音输入") }
                     IconButton(
                         onClick = { send() },
                         enabled = uploading == null && (draft.isNotBlank() || images.isNotEmpty() || contexts.isNotEmpty()),

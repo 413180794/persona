@@ -27,6 +27,17 @@ import (
 
 const assistantIdleTimeout = 20 * time.Minute
 
+// A long conversation is compacted (docs/assistant.md「压缩」): every restart after the prompt cache expired (an hour)
+// writes the whole context again, half a million tokens for an assistant conversation that had never been compacted.
+// Claude Code compacts on its own once the context nears the auto-compact window, also under -p (tested on 2.1.314):
+// CLAUDE_CODE_AUTO_COMPACT_WINDOW lowers that from the model's 1M to 200K. Its own idle compaction only runs in
+// interactive sessions, so a process about to be let go with more than assistantIdleCompact in context is sent
+// /compact first, while its cache is still warm: the next start reads a summary instead, and nobody waits for it.
+const (
+	assistantCompactWindow = "200000"
+	assistantIdleCompact   = 150_000
+)
+
 // A process with background tasks or monitors running is kept: they are its children, and their notifications are
 // what wakes the conversation up again. Past this long without a turn it is let go anyway (a forgotten `tail -f`).
 const assistantTaskMaxIdle = 12 * time.Hour
@@ -37,7 +48,7 @@ const assistantTaskMaxIdle = 12 * time.Hour
 const assistantAllowedTools = "mcp__jarvis"
 
 // A spare process started when the app opens the 对话 tab, so the first message skips claude's startup.
-// Its context snapshot is taken at spawn time, so it is only adopted while fresh.
+// It is only adopted while fresh (what it loaded at start — CLAUDE.md, memory, tools — may have changed since).
 const assistantSpareMaxAge = 10 * time.Minute
 
 type assistantProc struct {
@@ -62,6 +73,10 @@ type assistantProc struct {
 	partial    strings.Builder // text of the assistant message being generated
 	lastDelta  time.Time
 	tasks      []string // running background tasks and monitors (descriptions), from background_tasks_changed
+	context    int      // tokens in the conversation's context at its last request (claude), or after a compaction
+	compacting bool     // an idle compaction is running (compactIdle)
+	compacted  bool     // compactIdle ran in this process: it is let go when idle again
+	requested  bool     // its first request was logged
 }
 
 func (p *assistantProc) write(line []byte) error {
@@ -150,6 +165,10 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 	if cwd == "" {
 		cwd = filepath.Join(n.home, ".jarvis", "assistant")
 	}
+	// The live snapshot the message starts with, asked for while the process starts (assistant_context.go). A new
+	// Codex conversation has no id yet: it can't be the main one.
+	snapc := make(chan string, 1)
+	go func(id string) { snapc <- n.assistantContext(id) }(id)
 	if id == "" { // a new Codex conversation: the thread's id is Codex's to pick
 		if p, err = n.spawnCodex("", cwd, launcher, false, false); err != nil {
 			return "", err
@@ -179,32 +198,38 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 			return "", err
 		}
 	}
+	live, commit := n.turnContext(id, <-snapc)
 	if p.agent == "codex" {
 		p.mu.Lock()
 		p.busy = true
 		p.lastActive = time.Now()
 		p.mu.Unlock()
-		if err := p.cx.deliver(ctx, text, images); err != nil {
+		if err := p.cx.deliver(ctx, live, text, images); err != nil {
 			p.mu.Lock()
 			p.busy = p.cx.turn() != ""
 			p.mu.Unlock()
 			return "", fmt.Errorf("send to codex: %w", err)
 		}
+		commit()
 		n.notifySessions()
 		return id, nil
 	}
 
 	content := []map[string]any{}
+	if live != "" {
+		content = append(content, map[string]any{"type": "text", "text": live})
+	}
 	for _, img := range images {
 		content = append(content, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": img.Mime, "data": img.Data}})
 	}
-	if strings.TrimSpace(text) != "" || len(content) == 0 {
+	if strings.TrimSpace(text) != "" || len(images) == 0 {
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
 	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
 	n.syncAssistantModes(p) // a new or resumed process starts without them
 	p.mu.Lock()
 	p.busy = true
+	p.compacted = false // a new turn: compact again when it is idle and long
 	p.lastActive = time.Now()
 	p.partial.Reset()
 	p.mu.Unlock()
@@ -212,6 +237,7 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		n.stopAssistant(id)
 		return "", fmt.Errorf("send to claude: %w", err)
 	}
+	commit()
 	n.notifySessions()
 	return id, nil
 }
@@ -276,24 +302,6 @@ func (n *Node) assistantWarm(cwd, launcher string) error {
 	return nil
 }
 
-// assistantContext asks the hub for the live snapshot (time, agents waiting, unread chats, today's meetings…)
-// that goes into the system prompt of a starting process.
-func (n *Node) assistantContext(id string) string {
-	if n.peer == nil {
-		return ""
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	var res struct {
-		Text string `json:"text"`
-	}
-	if err := n.peer.Call(ctx, "assistant.context", map[string]any{"session_id": id}, &res); err != nil {
-		n.logger.Printf("assistant context: %v", err)
-		return ""
-	}
-	return res.Text
-}
-
 // spawnAssistant starts the conversation's process for its launcher's agent: claude -p (spawnClaude) or codex
 // app-server (spawnCodex). A new Codex conversation (id "") gets its id from Codex.
 func (n *Node) spawnAssistant(id, cwd, launcher string, resume, spare bool) (*assistantProc, error) {
@@ -318,9 +326,6 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assis
 		"--include-partial-messages",
 		"--settings", filepath.Join(n.dir, "assistant-settings.json"), "--mcp-config", string(mcp),
 		"--allowedTools", assistantAllowedTools}
-	if snap := n.assistantContext(id); snap != "" {
-		args = append(args, "--append-system-prompt", snap)
-	}
 	// bypassPermissions only takes as a flag at start; the other modes are set with a control request (syncAssistantModes).
 	var startMode string
 	if !spare {
@@ -342,7 +347,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool) (*assis
 	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
 	cmd.Dir = cwd
 	// Jarvis's own tools are few and used all the time: load them up front instead of behind ToolSearch.
-	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false")
+	cmd.Env = append(os.Environ(), "JARVIS_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
 	cmd.Env = append(cmd.Env, n.assistantLarkEnv(cwd)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
@@ -413,6 +418,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			Tasks   []struct {
 				Description string `json:"description"`
 			} `json:"tasks"`
+			Tools    []string `json:"tools"`
 			Response struct {
 				Subtype string `json:"subtype"`
 				Error   string `json:"error"`
@@ -423,13 +429,35 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 					Type string `json:"type"`
 					Text string `json:"text"`
 				} `json:"delta"`
+				Message struct {
+					Usage struct {
+						Input       int `json:"input_tokens"`
+						CacheRead   int `json:"cache_read_input_tokens"`
+						CacheCreate int `json:"cache_creation_input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
 			} `json:"event"`
+			Compact struct {
+				Post int `json:"post_tokens"`
+			} `json:"compact_metadata"`
+			ParentToolUseID *string `json:"parent_tool_use_id"`
 		}
 		if json.Unmarshal(line, &ev) != nil {
 			continue
 		}
 		switch ev.Type {
 		case "system":
+			if ev.Subtype == "init" {
+				n.toolsAtStart(p.id, ev.Tools)
+				continue
+			}
+			if ev.Subtype == "compact_boundary" {
+				p.mu.Lock()
+				p.context = ev.Compact.Post
+				p.mu.Unlock()
+				n.contextCompacted(p.id)
+				continue
+			}
 			if ev.Subtype != "background_tasks_changed" {
 				continue
 			}
@@ -454,13 +482,23 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				// cleared busy while claude went on working, so the phone showed the chat as finished.
 				// A new message: the last one's text is in the transcript by now. Clear the app's live text, or a
 				// message that went on to call tools stays on screen twice (its item, and the live copy) meanwhile.
+				u := ev.Event.Message.Usage
 				p.mu.Lock()
 				had := p.partial.Len() > 0
 				p.partial.Reset()
 				resumed := !p.busy
 				p.busy = true
 				p.lastActive = time.Now()
+				first := false
+				if ev.ParentToolUseID == nil { // a subagent's requests are its own context
+					p.context = u.Input + u.CacheRead + u.CacheCreate
+					first, p.requested = !p.requested, true
+				}
 				p.mu.Unlock()
+				if first { // what a start costs: the history read from the prompt cache, or written again
+					n.logger.Printf("assistant %s: first request since start: %d tokens in context, %d read from the cache, %d written",
+						p.id[:8], u.Input+u.CacheRead+u.CacheCreate, u.CacheRead, u.CacheCreate)
+				}
 				if resumed {
 					n.notifySessions()
 				}
@@ -491,6 +529,7 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			}
 		case "result":
 			p.mu.Lock()
+			p.compacting = false
 			p.busy = false
 			p.lastActive = time.Now()
 			p.partial.Reset()
@@ -556,6 +595,9 @@ func (p *assistantProc) stop() {
 // (killed with it) and wake it when they report, so a process waiting on them stays (2026-10-30: a 23-minute
 // background command was killed at minute 20 and the conversation never heard back).
 func (p *assistantProc) reapable(now time.Time) bool {
+	if p.compacting {
+		return now.Sub(p.lastActive) > 10*time.Minute // a compaction that never reported back
+	}
 	if p.busy {
 		return false
 	}
@@ -563,6 +605,28 @@ func (p *assistantProc) reapable(now time.Time) bool {
 		return now.Sub(p.lastActive) > assistantTaskMaxIdle
 	}
 	return now.Sub(p.lastActive) > assistantIdleTimeout
+}
+
+// idleCompactable: about to be let go with a context worth compacting first (assistantIdleCompact); p.mu is held.
+func (p *assistantProc) idleCompactable() bool {
+	return p.agent == "claude" && !p.compacting && !p.compacted && p.context >= assistantIdleCompact
+}
+
+// compactIdle sends /compact to an idle process. It is not a turn: the conversation stays as it was in the app (the
+// transcript shows a notice), and the process is let go when idle again.
+func (n *Node) compactIdle(p *assistantProc) {
+	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": "/compact"}})
+	p.mu.Lock()
+	tokens := p.context
+	p.compacting, p.compacted = true, true
+	p.lastActive = time.Now()
+	p.mu.Unlock()
+	if err := p.write(line); err != nil {
+		n.logger.Printf("assistant %s: compact: %v", p.id[:8], err)
+		n.stopAssistant(p.id)
+		return
+	}
+	n.logger.Printf("assistant %s: idle with %d tokens in context, compacting before letting it go", p.id[:8], tokens)
 }
 
 // rememberTasks keeps a conversation's running background tasks in the session state (the hub's Postgres), so a
@@ -635,14 +699,22 @@ func (n *Node) reapAssistants(ctx context.Context) {
 			stale, n.spare = n.spare, nil
 		}
 		var idle []string
+		var compact []*assistantProc
 		for id, p := range n.procs {
 			p.mu.Lock()
 			if p.reapable(time.Now()) {
-				idle = append(idle, id)
+				if p.idleCompactable() {
+					compact = append(compact, p)
+				} else {
+					idle = append(idle, id)
+				}
 			}
 			p.mu.Unlock()
 		}
 		n.mu.Unlock()
+		for _, p := range compact {
+			n.compactIdle(p)
+		}
 		for _, id := range idle {
 			n.stopAssistant(id)
 			n.rememberTasks(id, nil) // let go on purpose: nothing to tell it after a restart

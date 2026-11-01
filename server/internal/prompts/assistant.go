@@ -83,10 +83,25 @@ func (s Snapshot) machines(online bool) []SnapshotMachine {
 	return out
 }
 
+// Upcoming is the calendar without the meetings over by Now (the snapshot's sources are read less often than it is
+// rendered).
+func (s Snapshot) Upcoming() *SnapshotCalendar {
+	if s.Calendar == nil {
+		return nil
+	}
+	out := SnapshotCalendar{}
+	for _, e := range s.Calendar.Events {
+		if e.End.After(s.Now) {
+			out.Events = append(out.Events, e)
+		}
+	}
+	return &out
+}
+
 func RenderSnapshot(s Snapshot) string { return render("assistant/snapshot", s) }
 
-// AssistantContext is what node passes with --append-system-prompt: the snapshot, for the main conversation with a
-// line saying so first (assistant/context).
+// AssistantContext is the hub's answer to assistant.context: the snapshot, for the main conversation with a line
+// saying so first (assistant/context). Node puts what changed of it at the start of each message (TurnContext).
 type AssistantContext struct {
 	Main     bool
 	Owner    string
@@ -131,8 +146,18 @@ type CodexMemory struct {
 
 func RenderCodexMemory(m CodexMemory) string { return render("assistant/codex_memory", m) }
 
-// RenderCodexInstructions is the Codex assistant's developer instructions: the live context, then the memory
-// (assistant/codex_instructions).
-func RenderCodexInstructions(snapshot, memory string) string {
-	return render("assistant/codex_instructions", struct{ Snapshot, Memory string }{snapshot, memory})
+// RenderCodexInstructions is the Codex assistant's developer instructions (assistant/codex_instructions): the memory.
+// The live snapshot is not in them but in each message (TurnContext), like Claude's.
+func RenderCodexInstructions(memory string) string {
+	return render("assistant/codex_instructions", struct{ Memory string }{memory})
 }
+
+// TurnContext is the <jarvis-context> block a message to the assistant starts with (assistant/turn_context): the
+// sections of the live snapshot (AssistantContext) the conversation hasn't seen yet. Full: all of them (the
+// conversation is new, was compacted, or node lost track); otherwise only those that changed, the time always.
+type TurnContext struct {
+	Full     bool
+	Sections []string
+}
+
+func RenderTurnContext(c TurnContext) string { return render("assistant/turn_context", c) }

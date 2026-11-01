@@ -159,7 +159,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
   `kb_get`（档案 + 最近 7 天消息）/ `kb_update`（建项目、改档案、打标、建关联、记时间线；手动打的标会锁住，压缩不再覆盖）；
   实时快照里带最重要的 6 个项目、8 个会话。
 - **主对话**：hub settings `assistant.main` 记着它的会话 id（`POST /api/v1/assistant/conversations` 带 `main: true` 时设上，
-  `PUT /api/v1/assistant {"main":"-"}` 清掉）；node 起进程时把会话 id 带给 `assistant.context`，主对话的快照开头多一句「这是主对话」。
+  `PUT /api/v1/assistant {"main":"-"}` 清掉）；node 每条消息问快照时把会话 id 带给 `assistant.context`，主对话的快照开头多一句「这是主对话」。
 - **AI 分身**：交给 Agent 的提示词末尾附上这个会话和它前 3 个项目的档案（`<jarvis-context>`），并要求它把新结论用 `kb_update` 写回项目时间线。
 - **定时任务**（早报、晚间回顾和自己建的）：每次运行的提示词末尾加一段，要求先看重点项目、按项目汇报，并把新进展记回去。
 - **Agent 做完**：herdr 里的 Agent 一轮结束（推送判定之前），它的目录属于哪个项目，就把它最后说的话记进那个项目的时间线

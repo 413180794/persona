@@ -157,6 +157,8 @@ func codexArgs(bin, key string) []string {
 		// The assistant's memory is the one the app's 记忆 page shows, shared with Claude (codexMemoryPrompt); Codex's
 		// own (~/.codex/memories) is one store for every Codex on the machine, so it stays off here.
 		"-c", "features.memories=false",
+		// Compact at about 200K like Claude (assistant.go assistantCompactWindow), not near the model's whole window.
+		"-c", "model_auto_compact_token_limit=" + assistantCompactWindow,
 	}
 }
 
@@ -282,7 +284,8 @@ func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) erro
 	mode, _ := n.modesOf(id)
 	approval, sandbox := codexPolicy(mode)
 	params := map[string]any{"cwd": cwd, "approvalPolicy": approval, "sandbox": sandbox}
-	params["developerInstructions"] = prompts.RenderCodexInstructions(n.assistantContext(id), codexMemoryPrompt(c.memDir))
+	// The same on every start of the thread, apart from the memory index: the live snapshot goes with each message.
+	params["developerInstructions"] = prompts.RenderCodexInstructions(codexMemoryPrompt(c.memDir))
 	var res struct {
 		Thread struct {
 			ID   string `json:"id"`
@@ -348,10 +351,14 @@ func codexSandboxPolicy(mode, memDir string) map[string]any {
 		"excludeTmpdirEnvVar": false, "excludeSlashTmp": false}
 }
 
-// deliver hands a user message to the thread: a new turn when idle, steered into the running turn otherwise.
-func (c *codexConn) deliver(ctx context.Context, text string, images []proto.Image) error {
+// deliver hands a user message to the thread: a new turn when idle, steered into the running turn otherwise. live is
+// the <jarvis-context> block it starts with ("" for none; assistant_context.go).
+func (c *codexConn) deliver(ctx context.Context, live, text string, images []proto.Image) error {
 	n := c.n
 	input := []map[string]any{}
+	if live != "" {
+		input = append(input, map[string]any{"type": "text", "text": live, "text_elements": []any{}})
+	}
 	if strings.TrimSpace(text) != "" || len(images) == 0 {
 		input = append(input, map[string]any{"type": "text", "text": text, "text_elements": []any{}})
 	}
@@ -572,10 +579,15 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 		if due {
 			n.emitDelta(p.id, text)
 		}
+	case "thread/compacted":
+		n.contextCompacted(p.id) // the snapshots it had seen were summarized away (assistant_context.go)
 	case "item/completed":
 		c.mu.Lock()
 		delete(c.files, ev.Item.ID)
 		c.mu.Unlock()
+		if ev.Item.Type == "contextCompaction" {
+			n.contextCompacted(p.id)
+		}
 		if ev.Item.Type == "agentMessage" {
 			n.emitDelta(p.id, ev.Item.Text) // until the item arrives from the rollout
 		}

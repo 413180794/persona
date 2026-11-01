@@ -113,9 +113,9 @@ func TestAssistantThinkingTextAndModel(t *testing.T) {
 }
 
 func TestCommandMessage(t *testing.T) {
-	items, _ := parse(t, `{"type":"user","uuid":"u4","message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}`)
+	items, _ := parse(t, `{"type":"user","uuid":"u4","message":{"role":"user","content":"<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>"}}`)
 	it := only(t, items)
-	if it.Kind != proto.KindText || it.Text != "/compact" {
+	if it.Kind != proto.KindText || it.Text != "/clear" {
 		t.Fatalf("unexpected item %+v", it)
 	}
 
@@ -142,6 +142,35 @@ func TestSystemReminderIsStrippedFromUserText(t *testing.T) {
 
 	if items, _ := parse(t, `{"type":"user","uuid":"u8","message":{"role":"user","content":"<system-reminder>only a reminder</system-reminder>"}}`); len(items) != 0 {
 		t.Fatalf("reminder-only message should produce nothing, got %+v", items)
+	}
+}
+
+// The live snapshot Jarvis starts an assistant message with (node/assistant_context.go) isn't what the user wrote:
+// neither as its own block nor inside the text.
+func TestJarvisContextIsStripped(t *testing.T) {
+	block := `<jarvis-context>\n实时快照（这条消息发出时的；之后的变化用工具查）：\n- 现在：2026-11-01 周日 15:04（Asia/Shanghai）\n</jarvis-context>`
+	items, meta := parse(t, `{"type":"user","uuid":"u1","message":{"role":"user","content":[{"type":"text","text":"`+block+`"},{"type":"text","text":"约周五吃饭"}]}}`)
+	it := only(t, items)
+	if it.Text != "约周五吃饭" || meta.FirstUser != "约周五吃饭" {
+		t.Fatalf("got %q (first %q)", it.Text, meta.FirstUser)
+	}
+	if items, _ := parse(t, `{"type":"user","uuid":"u2","message":{"role":"user","content":"`+block+`\n\n约周五吃饭"}}`); only(t, items).Text != "约周五吃饭" {
+		t.Fatalf("in the text: %+v", items)
+	}
+	codex := `{"timestamp":"2026-11-01T07:04:00Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u3","content":[` +
+		`{"type":"text","text":"` + block + `"},{"type":"text","text":"约周五吃饭"}]}}}`
+	if it := only(t, ParseLine(1, []byte(codex), &Meta{Codex: true})); it.Text != "约周五吃饭" {
+		t.Fatalf("codex: %q", it.Text)
+	}
+}
+
+// /compact (typed, or sent by Jarvis to an idle assistant conversation) is a notice, not a message: it must not count
+// as activity either, or a compacted conversation would turn up unread.
+func TestCompactCommandIsANotice(t *testing.T) {
+	items, meta := parse(t, `{"type":"user","uuid":"u1","timestamp":"2026-11-01T07:00:00Z","message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}`)
+	it := only(t, items)
+	if it.Role != "system" || it.Kind != proto.KindNotice || it.Text != "压缩上下文" || !meta.LastActivity.IsZero() {
+		t.Fatalf("got %+v, activity %v", it, meta.LastActivity)
 	}
 }
 

@@ -167,7 +167,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			cfg.Timezone = in.Timezone
 			h.mu.Lock()
 			h.userTZ = in.Timezone
-			h.snapAt = time.Time{}
+			h.forgetSnapshotLocked()
 			h.mu.Unlock()
 		}
 		if in.Notes != nil {

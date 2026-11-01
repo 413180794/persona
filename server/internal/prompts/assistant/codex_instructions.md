@@ -1,3 +1,1 @@
-{{with .Snapshot}}{{.}}
-
-{{end}}{{.Memory}}
+{{.Memory}}

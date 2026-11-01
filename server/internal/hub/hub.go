@@ -19,6 +19,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/lark"
 	"github.com/chyroc/jarvis/server/internal/mail"
+	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 	"github.com/chyroc/jarvis/server/internal/screen"
@@ -56,8 +57,9 @@ type Hub struct {
 	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
 	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
 	userTZ        string                  // the phone's time zone (assistant settings)
-	snap          string                  // the assistant's last live snapshot (assistant_snapshot.go)
+	snap          *prompts.Snapshot       // the assistant's last live snapshot (assistant_snapshot.go)
 	snapAt        time.Time
+	snapping      chan struct{}        // closed when the snapshot being taken is in
 	wokeAt        time.Time            // last silent push to wake the phone for a tool call
 	notified      map[string]time.Time // assistant conversation -> when it last pushed with notify_user
 	kbAgentLogged map[string]time.Time // agent -> when its result last went into a project timeline (kb.go)

@@ -4,7 +4,7 @@ jarvisd 写给模型的每一段提示词都在 `server/internal/prompts/`：一
 调用方只准备数据（机器列表、主人称呼、收集到的上下文……），调这个包里带类型的渲染函数拿到文字；Go 代码里不再用 `fmt` / `+` 拼提示词。
 `prompts` 不依赖 `hub`、`kb`、`node`，数据结构定义在 `prompts` 里，调用方把自己的类型转过来。
 
-什么算提示词：交给模型的 system / user 文字、写进助手目录的 CLAUDE.md、`--append-system-prompt` 的快照、发进对话的第一条消息，
+什么算提示词：交给模型的 system / user 文字、写进助手目录的 CLAUDE.md、每条消息开头的快照、发进对话的第一条消息，
 以及「把数据放进提示词的那段说明文字」（`<jarvis-context>` 块、「类型：飞书私聊」这类行）。用户的原话、收集到的聊天记录和文档正文是**数据**，不在模板里。
 MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见下面「MCP 工具」）。工具返回给模型的结果文字还在各自的代码里。
 
@@ -13,12 +13,13 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | 文件 | 是什么 | 谁用 |
 | --- | --- | --- |
 | `assistant/claude_md.md` | 助手目录 `~/.jarvis/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
-| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照（`--append-system-prompt`）：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进 | `hub/assistant_snapshot.go` |
+| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `hub/assistant_snapshot.go` |
+| `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | jarvisd 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
-| `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：实时快照 + 和 Claude 共用的记忆（目录、格式、当前索引） | `node/assistant_codex.go` |
+| `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
 | `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
@@ -102,5 +103,5 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞书、普通对话三种列表）和 `mail/mcp_golden_test.go`，比的是 `json.Marshal` 发出去的内容（golden 里缩进了方便看，缩进前后一一对应）。
 
 `hub/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
-system / user、临时目录的知识库），所以数据转换也一起测到。快照里的时钟两行换成 `HH:MM` 占位后再比。
+system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
 2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。

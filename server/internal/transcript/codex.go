@@ -343,10 +343,10 @@ var (
 	codexReplyRe   = regexp.MustCompile(`(?s)<send_user_message_question_reply>\s*(.*?)\s*</send_user_message_question_reply>`)
 )
 
-// codexUserText cleans what Codex records as the user's message: ambient context goes, and the answer to a question
+// codexUserText cleans what Codex records as the user's message: ambient context (and Jarvis's) goes, and the answer to a question
 // Codex asked (request_user_input, stored as JSON) reads as the answer itself ("question：answer" when several).
 func codexUserText(s string) string {
-	s = codexAmbientRe.ReplaceAllString(s, "")
+	s = ContextRe.ReplaceAllString(codexAmbientRe.ReplaceAllString(s, ""), "")
 	return strings.TrimSpace(codexReplyRe.ReplaceAllStringFunc(s, func(block string) string {
 		var replies []struct {
 			Question string `json:"question"`
