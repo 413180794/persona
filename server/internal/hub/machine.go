@@ -48,6 +48,8 @@ type Machine struct {
 	directFailed, switchedBack time.Time
 	flaps                      int
 	timings                    tailcatTimings
+	// engineMu: one engine.use to the node at a time (engine.go).
+	engineMu sync.Mutex
 	// nodeCmd replaces the node command (tests).
 	nodeCmd func(context.Context) *exec.Cmd
 	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).
@@ -61,6 +63,7 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 }
 
 func (m *Machine) snapshot() proto.Machine {
+	engine := m.hub.engineOf(m.cfg.ID) // before m.mu: it may read settings
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
@@ -79,7 +82,7 @@ func (m *Machine) snapshot() proto.Machine {
 		Deploying: m.deploying, DeployError: m.deployErr,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: m.hub.engineOf(m.cfg.ID), Engines: engines,
+		Engine: engine, Engines: engines,
 	}
 }
 
@@ -249,6 +252,8 @@ func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err 
 	go func() { served <- peer.Serve(ctx, l.r) }()
 
 	ictx, icancel := context.WithTimeout(ctx, 40*time.Second)
+	// The engine first, before anything else the node is asked: it then never lists or watches the wrong one.
+	m.useEngine(ictx, peer)
 	var info proto.NodeInfo
 	err = peer.Call(ictx, "node.info", map[string]any{}, &info)
 	icancel()

@@ -3,12 +3,19 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
@@ -152,8 +159,7 @@ func TestEnginePutOffline(t *testing.T) {
 	}
 }
 
-// Online: a PUT is sent to the node at once, the machine lists what the node found; on connect engine.use goes before
-// anything else (configureNode runs before the first session list).
+// Online: a PUT is sent to the node at once, the machine lists what the node found.
 func TestEngineOnline(t *testing.T) {
 	_, _, m, mux := engineHub(t)
 	f, peer := connectEngineNode(t, m)
@@ -168,12 +174,117 @@ func TestEngineOnline(t *testing.T) {
 	if len(engines) != 2 || engines[1].(map[string]any)["name"] != "Herdr App" {
 		t.Errorf("engines %v", out["engines"])
 	}
-
+	// configureNode no longer sends it: connect does, first (TestEngineConnectOrder).
 	f.mu.Lock()
 	f.calls = nil
 	f.mu.Unlock()
 	m.configureNode(context.Background(), peer)
-	if calls := f.seen(); len(calls) == 0 || calls[0] != `engine.use {"engine":"herdr-core"}` {
-		t.Errorf("on connect the node got %v", calls)
+	for _, c := range f.seen() {
+		if strings.HasPrefix(c, "engine.use") {
+			t.Errorf("configureNode sent %s", c)
+		}
+	}
+}
+
+// A machine never set gets no engine.use (its node starts on herdr; old nodes never see the method).
+func TestEngineNotSentWhenNeverChosen(t *testing.T) {
+	_, _, m, _ := engineHub(t)
+	f, peer := connectEngineNode(t, m)
+	m.useEngine(context.Background(), peer)
+	if calls := f.seen(); len(calls) != 0 {
+		t.Errorf("node got %v", calls)
+	}
+}
+
+// Settings that cannot be read are not read again on every machine list: herdr meanwhile, retried later.
+func TestEngineLoadBacksOff(t *testing.T) {
+	h := newTestHub(t)
+	st := &failingSettings{}
+	h.store = st
+	for range 5 {
+		if got := h.engineOf("m1"); got != "herdr" {
+			t.Fatalf("engineOf = %s", got)
+		}
+	}
+	if st.reads != 1 {
+		t.Errorf("%d reads", st.reads)
+	}
+}
+
+type failingSettings struct {
+	Store
+	reads int
+}
+
+func (s *failingSettings) Setting(context.Context, string, any) (bool, error) {
+	s.reads++
+	return false, errors.New("db down")
+}
+
+// TestEngineNodeHelper is a node for TestEngineConnectOrder: it writes every method it is called with to a file.
+func TestEngineNodeHelper(t *testing.T) {
+	path := os.Getenv("JARVIS_TEST_ENGINE_NODE")
+	if path == "" {
+		return
+	}
+	peer := rpc.New("n", os.Stdout)
+	peer.OnRequest = func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+		f, _ := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		fmt.Fprintln(f, method)
+		f.Close()
+		switch method {
+		case "node.info":
+			return proto.NodeInfo{Hostname: "test-node"}, nil
+		case "sessions.list":
+			return map[string]any{"sessions": []proto.Session{}}, nil
+		}
+		return map[string]any{}, nil
+	}
+	_ = peer.Serve(context.Background(), os.Stdin)
+	os.Exit(0)
+}
+
+// On connect a stored engine goes to the node before anything else, node.info included.
+func TestEngineConnectOrder(t *testing.T) {
+	for _, stored := range []bool{true, false} {
+		h, _, m, _ := engineHub(t)
+		if stored {
+			if err := h.setEngine(context.Background(), "m1", "herdr-core"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		bin, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		log := filepath.Join(t.TempDir(), "calls")
+		m.cfg.Kind = "local"
+		m.nodeCmd = func(ctx context.Context) *exec.Cmd {
+			cmd := exec.CommandContext(ctx, bin, "-test.run", "^TestEngineNodeHelper$")
+			cmd.Env = append(os.Environ(), "JARVIS_TEST_ENGINE_NODE="+log)
+			return cmd
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); m.run(ctx) }()
+		var calls []string
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			b, _ := os.ReadFile(log)
+			calls = strings.Fields(string(b))
+			if slices.Contains(calls, "sessions.list") {
+				break
+			}
+		}
+		cancel()
+		<-done
+		if stored && (len(calls) == 0 || calls[0] != "engine.use") {
+			t.Errorf("stored: calls %v", calls)
+		}
+		if !stored && slices.Contains(calls, "engine.use") {
+			t.Errorf("never chosen: calls %v", calls)
+		}
+		if !slices.Contains(calls, "sessions.list") {
+			t.Errorf("never listed: %v", calls)
+		}
 	}
 }

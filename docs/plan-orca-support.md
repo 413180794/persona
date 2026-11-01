@@ -153,7 +153,11 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
   herdr 被迫每秒轮询。只注册选中的那个，这些都不存在。
 - **选 herdr**：node 的宿主表、刷新、轮询、事件流和原来完全一样，不建 herdr-core 客户端、不订阅它的事件；唯一的例外是 `node.info`
   问一次 herdr-core 在不在（填 `engines`）。
-- **运行时切换**：`engine.use` 换掉宿主表，丢掉旧引擎的 Agent、空间名、进程缓存，停掉旧事件流、起新的，再推一次会话列表。
+- **连接时**：hub 对存过选择的机器第一个调用就发 `engine.use`；node 等引擎定下来（`engine.use`、或 hub 直接列会话、或最多 3 秒）
+  才开始轮询和订阅事件，所以 herdr-core 的机器连接时不会先闪一下 herdr 的会话。选 herdr 的机器（没选过）不收 `engine.use`。
+  选了 herdr-core 时 `node.info` 也不问 herdr，herdr 的版本取 `herdr --version`。
+- **运行时切换**：`engine.use` 换掉宿主表，丢掉旧引擎的 Agent、空间名、进程缓存（切换前开始的刷新结果作废），结束所有终端流
+  （推 `terminal.end`），停掉旧事件流、起新的，再推一次会话列表。每个事件流有自己的「在线」标记，停掉的旧流不会清掉新流的状态。
 - **嵌套的 herdr**：选了 herdr-core 时，前台是经典 herdr 客户端的终端不算 Agent，即使里面 claude 的 OSC 7501 透了出来。
 
 ### 连接方式

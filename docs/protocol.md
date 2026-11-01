@@ -32,7 +32,7 @@
  // 怎么连的（docs/server.md「tailcat 打洞」）：transport 是 local | ssh | tailcat（离线时没有）；tailcat：配了 tailcat 地址；
  // tailcat_path 只在走 tailcat 时有：direct（打洞成功，点对点）| relay（经 DERP 中继）。旧 hub 没有这几个字段
  "transport":"ssh","tailcat":true,
- // 引擎（下面「引擎」）：这台机器的 node 驱动哪个终端宿主，hub 总是给出（没选过是 herdr）；engines 是 node 在这台机器上
+ // 引擎（下面「引擎」）：用户给这台机器选的终端宿主（存下的选择，不是 node 回报的），hub 总是给出（没选过是 herdr）；engines 是 node 在这台机器上
  // 找到的（离线时为空数组）。旧 hub 没有这两个字段
  "engine":"herdr",
  "engines":[{"id":"herdr","name":"herdr","available":true,"version":"0.9.3"},
@@ -338,7 +338,11 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 
 - 用户在 App 里按机器选（配对时、设置 › 机器），`PUT /api/v1/machines/{mid}/engine`。hub 存在 Postgres 的 settings 里
   （一个键 `machine_engines`：机器 id → 引擎），不写 hub.json。
-- hub 每次连上 node，在第一次列会话之前发 `engine.use`；用户改了且机器在线时马上发。不认识 `engine.use` 的旧 node 照旧用 herdr。
+- hub 每次连上 node，**第一个调用**就是 `engine.use`（在 `node.info` 之前），但只对存过选择的机器发；没选过的机器不发，
+  node 照旧用 herdr，旧 node 也不会收到不认识的方法。用户改了且机器在线时马上发；同一台机器的 `engine.use` 排队发，每次发的是发送时存的值。
+- node 连上后先不轮询、不订阅任何引擎的事件，等到引擎定下来：收到 `engine.use`，或者 hub 不发它而直接 `sessions.list`（没选过 / 旧 hub），
+  最多等 3 秒，之后按 herdr 开始。所以选了 herdr-core 的机器连接时不会闪出 herdr 的会话，也不会去问 herdr。
+- `engine` 是存下的选择。node 拒绝 `engine.use`（太旧）时 hub 记一行日志，PUT 照样回 200，选择照样存着，等 node 更新后生效。
 - `engines` 来自 `node.info`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
   （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）。`version` 是各自报的版本，没有就不带。
 
@@ -353,7 +357,7 @@ hub → node 请求：
 | method | params → result |
 | --- | --- |
 | `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个） |
-| `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent、换事件流，并推一次 `sessions.changed` |
+| `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |

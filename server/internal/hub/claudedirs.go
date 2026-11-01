@@ -17,7 +17,6 @@ func claudeDirsKey(machine string) string { return "claude_dirs/" + machine }
 // configureNode hands the node its config directories, before the first session list. Older nodes do not know
 // node.configure; they keep looking in ~/.claude only.
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
-	m.useEngine(ctx, peer) // first: the session list that follows comes from the machine's engine
 	dirs := slices.Clone(m.cfg.ClaudeConfigDirs)
 	if m.hub.store != nil {
 		var seen []string

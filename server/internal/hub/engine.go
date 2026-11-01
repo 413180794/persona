@@ -22,14 +22,19 @@ const enginesKey = "machine_engines"
 
 // engineChoices is the engine of each machine, loaded from settings on first use.
 type engineChoices struct {
-	mu     sync.Mutex
-	loaded bool
-	byID   map[string]string
+	mu       sync.Mutex
+	loaded   bool
+	failedAt time.Time // the last load that failed: not tried again for engineRetry
+	byID     map[string]string
 }
+
+// engineRetry: after settings could not be read, how long engineOf answers from what it has (herdr) before trying
+// again — it is called while machine lists are built.
+const engineRetry = 30 * time.Second
 
 func (h *Hub) loadEnginesLocked(ctx context.Context) {
 	e := &h.engines
-	if e.loaded {
+	if e.loaded || !e.failedAt.IsZero() && time.Since(e.failedAt) < engineRetry {
 		return
 	}
 	e.byID = map[string]string{}
@@ -39,7 +44,8 @@ func (h *Hub) loadEnginesLocked(ctx context.Context) {
 	}
 	var m map[string]string
 	if _, err := h.store.Setting(ctx, enginesKey, &m); err != nil {
-		h.logf("engines: %v", err) // retried on the next use
+		h.logf("engines: %v (retried in %s)", err, engineRetry)
+		e.failedAt = time.Now()
 		return
 	}
 	for id, engine := range m {
@@ -50,15 +56,21 @@ func (h *Hub) loadEnginesLocked(ctx context.Context) {
 
 // engineOf is the machine's engine: what the user chose, else herdr.
 func (h *Hub) engineOf(machine string) string {
+	if engine, ok := h.storedEngine(machine); ok {
+		return engine
+	}
+	return proto.EngineHerdr
+}
+
+// storedEngine is the engine the user chose for the machine; false when never chosen (or settings unreadable).
+func (h *Hub) storedEngine(machine string) (string, bool) {
 	h.engines.mu.Lock()
 	defer h.engines.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	h.loadEnginesLocked(ctx)
-	if engine := h.engines.byID[machine]; engine != "" {
-		return engine
-	}
-	return proto.EngineHerdr
+	engine, ok := h.engines.byID[machine]
+	return engine, ok && engine != ""
 }
 
 // errUnknownEngine: not one of proto.EngineNames.
@@ -72,6 +84,7 @@ func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
 	e := &h.engines
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.failedAt = time.Time{} // the user is waiting: try now
 	h.loadEnginesLocked(ctx)
 	if !e.loaded {
 		return errors.New("engines: settings not readable")
@@ -90,11 +103,19 @@ func (h *Hub) setEngine(ctx context.Context, machine, engine string) error {
 	return nil
 }
 
-// useEngine tells a connected node which engine to drive. A node too old for engine.use keeps herdr, all it knows.
+// useEngine tells a connected node the engine the user chose, if any: a machine never set is left alone (its node
+// starts on herdr, and an old node never sees a method it does not know). Calls take turns per machine and each sends
+// the value stored when it runs, so the node ends on the latest choice. A node that refuses it (too old) keeps herdr:
+// logged, the stored choice stands.
 func (m *Machine) useEngine(ctx context.Context, peer *rpc.Peer) {
-	engine := m.hub.engineOf(m.cfg.ID)
+	m.engineMu.Lock()
+	defer m.engineMu.Unlock()
+	engine, ok := m.hub.storedEngine(m.cfg.ID)
+	if !ok {
+		return
+	}
 	if err := peer.Call(ctx, "engine.use", map[string]any{"engine": engine}, nil); err != nil {
-		m.hub.logf("[%s] engine.use %s: %v", m.cfg.ID, engine, err)
+		m.hub.logf("[%s] the node did not take engine %s (it stays on its own engine until updated): %v", m.cfg.ID, engine, err)
 	}
 }
 
