@@ -142,7 +142,8 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 | 窗格对应会话 | 进程表里这个窗格在前台的 claude 进程 pid → `sessions/<pid>.json`（公共的「进程说会话」路径）。macOS 两次 `ps`（见上）、Linux 读 `/proc`，环境里只取 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`（和用来排除嵌套的两个变量），不留、不记日志、不发 hub（环境里还有 Orca 的 hook token） | ✅ |
 | 空间 / 槽位 | 空间是工作区（`worktreeId`），名字取分支（去掉 `refs/heads/`），没有分支取路径的文件夹名，顺序按 `worktree.ps`（Orca 侧栏的顺序）；槽位是 `visualLayouts` 里的标签页，按布局树的阅读顺序（分屏先 `first` 后 `second`），名字取标签页标题，空的取序号 | ✅ |
 | 读屏 | `terminal.read {terminal, screen:true}`：纯文本、只有当前屏，按 `tailRows[].wrapped` 把软换行接回去；`source` 是 `screen-unavailable` 时报错。宿主声明 `host.PlainScreen`，`recent` 也只给当前屏 | ✅ 纯文本、无历史 |
-| 发消息 | Orca 只在认出前台是 Agent 时括号粘贴再回车，否则把文字原样写进去再写 `\r`（壳层会当命令执行）；`accepted:false` 的拒绝（`no-agent` / `permission`）只在带 `requireAgentStatus:"sendable"` 时才有，而它和「文字 + 回车」一起用时 Orca 一律拒绝，所以用不上。宿主自己先确认 Agent 在前台：进程表里有这个窗格在前台的 claude / codex，**并且** `terminal.agentStatus` 说 `isRunningAgent`；`status` 是 permission（权限对话框在等）回 `dialog_open`；进程表扫不了、Orca 答不上来、都算不在前台，回 `not_delivered`，什么都没输入。然后 `terminal.send {text, enter:true, agentPrompt:true, client:{id:"jarvis", type:"desktop"}}`（`client.id` 必填，缺了 Orca 回 `invalid_argument`）。回复里没有 `send.prompt` 回执（说明 Orca 原样写了）记一行日志。发送前检查只查对话框（没有颜色分不清草稿和灰字） | ✅ |
+| 发消息 | 不用 Orca 的 `agentPrompt`：它只给「见过在工作」的 Agent 括号粘贴，新开的 claude 收到的是原样的文字 + `\r`，多行消息会在第一个换行处被提交（2026-11-01 实测）。`accepted:false` 的拒绝（`no-agent` / `permission`）只在带 `requireAgentStatus:"sendable"` 时才有，而它和「文字 + 回车」一起用时 Orca 一律拒绝，也用不上。做法和 herdr 的 `agent.prompt` 一样：宿主先确认 Agent 在前台（进程表里有这个窗格在前台的 claude / codex，**并且** `terminal.agentStatus` 说 `isRunningAgent`；`status` 是 permission 回 `dialog_open`；进程表扫不了、Orca 答不上来都算不在前台，回 `not_delivered`，什么都没输入），再自己发一次括号粘贴 `terminal.send {text: ESC[200~ + 文字 + ESC[201~}`（不带 `enter`；文字里的 ESC 换成 `<ESC>`，和 Orca 自己的做法一样，免得提前结束粘贴），等 150 毫秒（每行加 10 毫秒，最多 1 秒），再确认一次 Agent 在前台，单独发 `\r` 提交。粘贴之后任何一步失败都回 `delivered:unknown`（文字可能留在输入框里）。`client` 一律带 `{id:"jarvis", type:"desktop"}`（`client.id` 必填，缺了 Orca 回 `invalid_argument`）。发送前检查只查对话框（没有颜色分不清草稿和灰字） | ✅ |
+| 会话不在运行 | 会话不再是 Agent 窗格（Agent 退出、被挂起、切到后台）时，herdr 会在新窗格里 resume 它再发；Orca（和 herdr-core）的引擎不能新建会话，所以直接拒绝、什么都不输入：它上次所在的窗格还在时回 `agent_not_in_front`（「Claude 不在前台（可能被挂起）」），窗格也没了回 `not_running`（「……Orca 里的会话要在电脑上重新打开」）。以前这里会去找启动器，报出让人看不懂的 `unsupported: orca cannot do this` | ✅ |
 | 只输入不回车 | `terminal.send {text}` 不带 `enter`：原样写字节，不粘贴，先做同样的「Agent 在前台」检查（不查 permission：对话框的自由填写要用）。Orca 不声明 `TextTyper` | ✅ |
 | 特殊按键 | 按键名 → xterm 的字节：`enter` `\r`、`esc` `\x1b`、`shift+tab` `\x1b[Z`、`backspace` `\x7f`、`ctrl+<字母>` 控制字符、`ctrl+space` `\x00`、`alt+<字符>` 前面加 ESC，方向键 / Home / End / Insert / Delete / PageUp / PageDown / F1–F12 带修饰键时用 xterm 的参数（1 + shift 1 + alt 2 + ctrl 4，如 `alt+left` `\x1b[1;3D`、`ctrl+left` `\x1b[1;5D`）。每个键单独一次 `terminal.send`，间隔 40 毫秒（按调用方的 ctx 取消；连在一起时 `esc` 会和后面的序列拼成 alt 键）。表里没有的键在按任何键之前拒绝；会打出字的键（字母、数字、空格）先做「Agent 在前台」检查，回车、esc、方向键、ctrl+c 不查（卡住的窗格也要能打断、关掉） | ✅ |
 | 什么都没输入 | 上面的前台检查不过；`terminal.send` 回 `accepted:false`（`permission` 回 `dialog_open`，其余 `not_delivered`）；`terminal_handle_stale`（含 incarnation 对不上）、`terminal_not_writable`、`terminal_gone`、`terminal_exited`、`invalid_argument`、`runtime_busy`、`request_too_large` 这类写之前就拒绝的错误也回 `not_delivered`（都是 `delivered:none`，可以重发）。`runtime_error` 之类不确定写没写的照常报错 | ✅ |
@@ -162,9 +163,9 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 - **`terminal.send` 的拒绝不是错误**：返回 `{send:{accepted:false, bytesWritten:0, refusedReason}}`，要看 `accepted`；但 `no-agent` / `permission`
   这两种只在带 `requireAgentStatus:"sendable"` 时出现，不带时 Orca 照写不误。`requireAgentStatus` 和「文字 + 回车」一起用时 Orca 直接拒绝
   （它要求分两步：先写文字、再回车），而分两步就没有括号粘贴，所以「Agent 在前台」只能由我们发之前用 `terminal.agentStatus` 查。
-- **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得的 Agent，五个都满足才粘贴，
-  回复带 `send.prompt` 回执；
-  否则原样写文字再写 `\r`。不带 `enter` 的文字原样写。`client` 要带 `id`（Jarvis 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
+- **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得**并且见过在工作**的 Agent，都满足才粘贴，
+  回复带 `send.prompt` 回执；新开、还没干过活的 claude 不算，Orca 原样写文字再写 `\r`。所以 Jarvis 自己做括号粘贴（见「发消息」）。
+  不带 `enter` 的文字原样写。`client` 要带 `id`（Jarvis 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
 - **默认读屏会换源**：不带 `screen` 的 `terminal.read` 读的是输出流的尾巴（`source: stream`），所以一律带 `screen:true`。
 
 ### 注意

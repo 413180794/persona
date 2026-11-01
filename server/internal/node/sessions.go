@@ -853,6 +853,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		return false
 	}
 	n.agents = m
+	if n.lastPanes == nil {
+		n.lastPanes = map[string]string{}
+	}
+	for id, a := range m {
+		n.lastPanes[id] = a.PaneID
+	}
 	return true
 }
 

@@ -44,6 +44,9 @@ type Node struct {
 	pathsAt  map[string]time.Time        // when a path not told by a hook was last chosen (transcriptPath)
 	watches  map[string]*watch
 	agents   map[string]host.Agent     // session id -> live agent
+	// lastPanes: the pane each session was last seen live in (it is no longer live when its agent exits or is
+	// suspended), to tell the two apart when a send finds it gone on a host that cannot resume it.
+	lastPanes map[string]string
 	panes    map[string]string         // pane id -> session id (learned from hooks)
 	layouts  map[string]layout         // host kind -> space / slot names from its last snapshot
 	procs    map[string]*assistantProc // headless assistant conversations (assistant.go)

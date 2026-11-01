@@ -326,6 +326,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			return err
 		}
 	} else {
+		if r := n.notRunningRefusal(ctx, id); r != nil {
+			return r
+		}
 		// Offline: resume with the launcher that started it (or plain claude) and then send.
 		st, _ := n.state.get(id)
 		launcher := st.Launcher

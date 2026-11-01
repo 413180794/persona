@@ -60,6 +60,7 @@
 - Orca 宿主（`docs/plan-orca-support.md`「Orca 来源」）：`terminal.send` 的 `client` 必须带 `id`，只给 `type` 时每次发送都回 `invalid_argument`
   （第一版就是这样，假 runtime 没校验参数所以测试全过；现在 `orcarttest` 按 Orca 的 schema 校验）。Orca 认不出前台的 Agent 时会把「提示」原样写进
   壳层再回车，`accepted:false` 只在带 `requireAgentStatus` 时才有：发之前自己用进程表 + `terminal.agentStatus` 确认 Agent 在前台；
+  Orca 的 `agentPrompt` 只给见过在工作的 Agent 粘贴，新开的 claude 收到原样文字，多行会在第一个换行处提交：Jarvis 自己发括号粘贴再单独回车；
   `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
   `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
   指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。

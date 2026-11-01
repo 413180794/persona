@@ -37,7 +37,6 @@ type orcaHost struct {
 	c *orcart.Client
 	// scan lists the agent processes in front in Orca's terminals, by pane key (scanOrcaProcs).
 	scan func() (map[string][]orcaProc, error)
-	logf func(format string, args ...any)
 
 	mu       sync.Mutex
 	terms    map[string]orcart.Terminal // pane key -> terminal, from the last terminal.list
@@ -65,7 +64,7 @@ var (
 	_ host.Organizer   = (*orcaHost)(nil)
 )
 
-func newOrcaHost(c *orcart.Client) *orcaHost { return &orcaHost{c: c, scan: orcaScan, logf: c.Log} }
+func newOrcaHost(c *orcart.Client) *orcaHost { return &orcaHost{c: c, scan: orcaScan} }
 
 // orcaScan is how a new Orca host lists agent processes (tests swap in a fake process table).
 var orcaScan = scanOrcaProcs
@@ -94,12 +93,6 @@ func (h *orcaHost) PaneEnv() string   { return orcaPaneEnv }
 func (h *orcaHost) PlainScreen() bool { return true }
 
 func (h *orcaHost) Version(ctx context.Context) string { return h.c.Version(ctx) }
-
-func (h *orcaHost) log(format string, args ...any) {
-	if h.logf != nil {
-		h.logf(format, args...)
-	}
-}
 
 // orcaErr marks Orca not running as host.ErrNotRunning: it then has no terminals.
 func orcaErr(err error) error {
@@ -568,25 +561,55 @@ func (h *orcaHost) SendKeys(ctx context.Context, pane host.PaneRef, keys ...stri
 	return nil
 }
 
-// Prompt is terminal.send as an agent prompt: Orca pastes the text into the agent and submits it. The agent must be
-// in front (front): Orca writes the text raw, followed by a carriage return, into whatever else is there. Orca's own
-// server-side guard (requireAgentStatus "sendable") cannot be used: it refuses text with enter outright. A reply
-// without a prompt receipt means Orca wrote the text raw: logged.
+// Bracketed paste markers, and what an ESC inside the text becomes (Orca's own sanitizeAgentPromptText): an ESC in the
+// text could end the paste early and turn the rest into keys.
+const (
+	pasteStart  = "\x1b[200~"
+	pasteEnd    = "\x1b[201~"
+	inertEscape = "<ESC>"
+)
+
+// orcaPasteGap is how long the agent gets to take a paste before the enter that submits it: a base, a little more per
+// line, capped.
+func orcaPasteGap(text string) time.Duration {
+	return min(orcaSubmitGap+time.Duration(strings.Count(text, "\n"))*10*time.Millisecond, time.Second)
+}
+
+// orcaSubmitGap is the base of orcaPasteGap.
+var orcaSubmitGap = 150 * time.Millisecond
+
+// Prompt submits text to the agent the way herdr's agent.prompt does: a bracketed paste of the whole text (newlines
+// stay in the input instead of each submitting), then a separate carriage return. Orca's own agentPrompt path is not
+// used: Orca pastes only for an agent it has seen working, and writes a fresh agent's prompt raw, so a multi-line
+// message would be submitted at its first newline.
+//
+// The agent must be in front (front) before each write: Orca writes whatever it is sent into whatever is there. A
+// refusal before the paste typed nothing (host.ErrNotDelivered); anything failing after it leaves the text possibly
+// sitting in the input (not marked: delivered unknown).
 func (h *orcaHost) Prompt(ctx context.Context, pane host.PaneRef, text string) error {
 	t, err := h.front(ctx, pane.ID, true)
 	if err != nil {
 		return err
 	}
-	var sent *orcart.Sent
-	err = h.onTerminal(ctx, t, true, func(tg orcart.Target) error {
-		var e error
-		sent, e = h.c.Prompt(ctx, tg, text)
-		return e
-	})
-	if err == nil && !sent.Prompt {
-		h.log("orca: the prompt to %s was written without a prompt receipt (Orca did not see an agent to paste into)", pane.ID)
+	paste := pasteStart + strings.ReplaceAll(text, "\x1b", inertEscape) + pasteEnd
+	if err := h.onTerminal(ctx, t, true, func(tg orcart.Target) error { return h.c.Send(ctx, tg, paste) }); err != nil {
+		return orcaInputErr(err)
 	}
-	return orcaInputErr(err)
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("orca: the text was pasted into %s but not submitted: %v", pane.ID, ctx.Err())
+	case <-time.After(orcaPasteGap(text)):
+	}
+	afterPaste := func(err error) error {
+		return fmt.Errorf("orca: the text was pasted into %s but not submitted: %v", pane.ID, err) // not marked: unknown
+	}
+	if t, err = h.front(ctx, pane.ID, false); err != nil {
+		return afterPaste(err)
+	}
+	if err := h.onTerminal(ctx, t, true, func(tg orcart.Target) error { return h.c.Send(ctx, tg, "\r") }); err != nil {
+		return afterPaste(err)
+	}
+	return nil
 }
 
 // orcaInputErr marks the refusals that typed nothing (host.ErrNotDelivered): Orca not running or incompatible, a

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/chyroc/jarvis/server/internal/proto"
 	"regexp"
 	"strings"
 	"sync"
@@ -338,4 +339,38 @@ func maybeDelivered(err error) bool {
 	}
 	_ = json.Unmarshal(e.Data, &d)
 	return d.Delivered == deliveredUnknown
+}
+
+// Refusals of a send to a session that is not running on an engine that cannot start one (herdr-core, Orca): herdr
+// resumes it in a new pane instead.
+const (
+	notRunning    = "not_running"
+	notInFront    = "agent_not_in_front"
+	inFrontReason = "Claude 不在前台（可能被挂起），没有发送：在电脑上把它切回前台再发。"
+)
+
+// notRunningRefusal refuses, with nothing typed, a send to a session that is not live when the machine's engine
+// cannot start sessions (no host.Launcher), instead of trying to resume it there: when the pane it was last seen in is
+// still there, its agent is not in front (suspended, in the background); otherwise it is gone. nil when the engine can
+// resume it (herdr: unchanged).
+func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
+	h := n.defaultHost()
+	if h == nil {
+		return nil
+	}
+	if _, ok := h.(host.Launcher); ok {
+		return nil
+	}
+	n.mu.Lock()
+	pane := n.lastPanes[id]
+	n.mu.Unlock()
+	if pane != "" {
+		if ph, ref := n.hosts.Pane(pane); ph != nil {
+			if _, err := ph.Agent(ctx, ref); err == nil {
+				return refusal(notInFront, inFrontReason, nil)
+			}
+		}
+	}
+	name := proto.EngineNames[n.engine()]
+	return refusal(notRunning, fmt.Sprintf("这个会话现在没有在运行（可能被挂起或已退出），%s 里的会话要在电脑上重新打开，这次没有发送。", name), nil)
 }

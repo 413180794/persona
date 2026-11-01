@@ -200,7 +200,8 @@ func orcaSession(t *testing.T) (*Node, *orcarttest.Fake, *fakeProcs) {
 }
 
 // A send reads the plain screen once (only a dialog refuses it: no colors to tell a draft from the placeholder),
-// checks the claude still runs in the pane, and goes as one agent prompt (Orca pastes and submits); nothing after.
+// checks the claude is in front, pastes the text (our own bracketed paste, no enter), checks again and submits with a
+// separate carriage return; nothing after.
 func TestOrcaSendChecksForADialogThenPrompts(t *testing.T) {
 	withSubmitGrace(t, 50*time.Millisecond)
 	n, o, _ := orcaSession(t)
@@ -212,9 +213,11 @@ func TestOrcaSendChecksForADialogThenPrompts(t *testing.T) {
 	assertTrace(t, o.Trace(), []string{
 		`terminal.read {"screen":true,"terminal":"term_1"}`,
 		`terminal.agentStatus {"terminal":"term_1"}`,
-		orcarttest.SendCall("term_1", map[string]any{"text": "hello", "enter": true, "agentPrompt": true}),
+		orcarttest.SendCall("term_1", map[string]any{"text": "\x1b[200~hello\x1b[201~"}),
+		`terminal.agentStatus {"terminal":"term_1"}`,
+		orcarttest.SendCall("term_1", map[string]any{"text": "\r"}),
 	})
-	if w := o.Writes(); len(w) != 1 || !w[0].Pasted || w[0].Text != "hello" {
+	if w := o.Writes(); len(w) != 2 || w[0].Enter || w[0].Pasted || w[1].Text != "\r" {
 		t.Errorf("writes %+v", w)
 	}
 	if inv := o.Invalid(); len(inv) != 0 {
@@ -703,27 +706,81 @@ func TestOrcaNewIncarnationRefusesWrites(t *testing.T) {
 	}
 }
 
-// Orca answering a prompt without its prompt receipt wrote it raw: logged.
-func TestOrcaPromptWithoutReceiptIsLogged(t *testing.T) {
+// A multi-line message goes in whole: one bracketed paste (its newlines stay in the input instead of each
+// submitting, which Orca's raw path for a fresh agent would do), an ESC inside it made inert, then one carriage return.
+func TestOrcaMultiLinePrompt(t *testing.T) {
 	n, o, _ := orcaSession(t)
-	var logged []string
-	var mu sync.Mutex
-	n.hosts.Get(host.Orca).(*orcaHost).logf = func(format string, args ...any) {
-		mu.Lock()
-		logged = append(logged, fmt.Sprintf(format, args...))
-		mu.Unlock()
-	}
 	o.SetScreen("term_1", "❯ \n")
-	o.Handle("terminal.send", func(map[string]any) any {
-		return map[string]any{"send": map[string]any{"handle": "term_1", "accepted": true, "bytesWritten": 6}}
-	})
-	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"}); err != nil {
+	text := "first line\nsecond \x1b[201~ line\nthird"
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": text}); err != nil {
 		t.Fatal(err)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(logged) != 1 || !strings.Contains(logged[0], "without a prompt receipt") {
-		t.Errorf("logged %q", logged)
+	w := o.Writes()
+	if len(w) != 2 || w[0].Text != "\x1b[200~first line\nsecond <ESC>[201~ line\nthird\x1b[201~" || w[0].Enter || w[1].Text != "\r" {
+		t.Errorf("writes %+v", w)
+	}
+	if strings.Count(w[0].Text, "\x1b") != 2 {
+		t.Errorf("an ESC from the text reached the terminal: %q", w[0].Text)
+	}
+	if inv := o.Invalid(); len(inv) != 0 {
+		t.Errorf("params Orca would refuse: %v", inv)
+	}
+}
+
+// Once the paste went in, a failure (the submit refused, the agent no longer in front) leaves the text possibly in
+// the input: delivered unknown, not a clean refusal.
+func TestOrcaPromptSubmitFails(t *testing.T) {
+	for _, name := range []string{"submit refused", "agent gone before the submit"} {
+		n, o, procs := orcaSession(t)
+		o.SetScreen("term_1", "❯ \n")
+		o.Handle("terminal.send", func(p map[string]any) any {
+			if p["text"] == "\r" {
+				return orcarttest.Fail{Code: "terminal_not_writable"}
+			}
+			if name == "agent gone before the submit" {
+				o.SetAgentStatus("term_1", false, "")
+				procs.set("tab1:leaf1")
+			}
+			return map[string]any{"send": map[string]any{"handle": "term_1", "accepted": true, "bytesWritten": 10}}
+		})
+		_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+		var re *rpc.Error
+		if !errors.As(err, &re) || !maybeDelivered(err) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// A session that is not running on an engine that cannot resume it (Orca, Herdr App) is refused, nothing typed, with a
+// reason: its claude not in front when its pane is still there (suspended), else not running — not "unsupported".
+func TestNotRunningOnAnEngineWithoutResume(t *testing.T) {
+	n, o, procs := orcaSession(t)
+	procs.set("tab1:leaf1") // suspended: no claude in front
+	time.Sleep(orcaProcsMaxAge)
+	listSessions(t, n)
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, data := refusalOf(t, err); code != "agent_not_in_front" || data["delivered"] != "none" {
+		t.Fatalf("suspended: %v", err)
+	}
+	if !strings.Contains(err.Error(), "不在前台") {
+		t.Errorf("message %q", err)
+	}
+	o.SetTerminals() // the terminal closed
+	_, err = request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, data := refusalOf(t, err); code != "not_running" || data["delivered"] != "none" || !strings.Contains(err.Error(), "Orca") {
+		t.Fatalf("gone: %v", err)
+	}
+	if w := o.Writes(); len(w) != 0 {
+		t.Errorf("wrote %+v", w)
+	}
+
+	hn, hc := hcSession(t)
+	hc.setTerminals()
+	time.Sleep(time.Second) // past the failed-list cache
+	listSessions(t, hn)
+	_, err = request(t, hn, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, _ := refusalOf(t, err); code != "not_running" || !strings.Contains(err.Error(), "Herdr App") {
+		t.Fatalf("herdr-core: %v", err)
 	}
 }
 

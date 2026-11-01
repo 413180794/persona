@@ -145,6 +145,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 	n.mu.Lock()
 	n.engEpoch++
 	n.hostAgents, n.layouts, n.agents, n.panePIDs, n.lastList = nil, nil, map[string]host.Agent{}, map[string]panePID{}, ""
+	n.lastPanes = nil
 	n.mu.Unlock()
 	n.endTermStreams("the machine's terminal engine changed")
 	traexCache.Lock()
