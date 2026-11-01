@@ -388,7 +388,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Preview cards in lists with quick buttons — InteractionViews.swift (InteractionPreviewCard, FlowButtons)
 - [ ] Phone-tool write confirmation card — AppModel.pendingConfirmation, PhoneTools/PhoneToolRegistry.swift
 - [ ] Resolve API — AppModel.resolve
-  Mac（2026-11-01 体验模式截图）：提问卡（编号选项、推荐、其他回答…）、计划卡（三个按钮）、列表里的预览卡都对；授权卡、「终端在问你」还没在 Mac 上看过。
+  Mac（2026-11-01 体验模式截图）：提问卡（编号选项、推荐、其他回答…）、计划卡（三个按钮）、列表里的预览卡都对；授权卡（`-showSamplePermission YES`）、「终端在问你」（`-showSampleScreen YES`）也看过：
+  「本会话总是允许」在 Mac 上原来是第三个推按钮，改成和 iOS 一样的文字链接；卡片标题栏的 ⋯ 原来是带边框、自带 ⌄ 的弹出按钮（旁边还有折叠的 ⌄），改成只有 ⋯。「查看终端」展开后、其他回答…的输入框要点击，没看。离屏截图里玻璃卡片的文字在深色下画成深色（换 `-ui.style lark` 就正常），属截图问题。
 
 ## 7. Terminal
 - [ ] Terminal cover (bottom-up full page, drag to dismiss, size/handle/settings bar) — Views/Chat/ChatView.swift (TerminalCover), Views/Session/SessionPanes.swift (TerminalPanel)
@@ -405,8 +406,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Shortcuts panel (single tap fill, double tap send), terminal settings (keys shown, auto-hide bar, theme, font, wrap), tips, completions from pane contents — Terminal/TerminalExtras.swift (ShortcutsPanel, TerminalSettingsView, TerminalPreview, ThemeRow, SuggestionStrip), SessionPanes.swift (TerminalTips)
   - 终端设置在 Mac 上是 grouped 表单（`macSheet`），「手机尺寸」相关的说法换成窗口（`TerminalSizeText`），截图看过（`-openTerminal YES -openTerminalSettings YES`，内层浮层存成 `<名字>.sheet2.png`）；快捷命令面板、补全没在 Mac 上试。
   - 终端设置 › 键盘 › 「将 Option 键用作 Meta 键」（2026-11-01，`TerminalPrefs.optionAsMeta`，只在 Mac 上有）：默认关，和「终端」App 一样，关着时 Option 照常打出 ™、é、德语布局的 @ [ ] 和走输入法。打开后 Option+可打印 ASCII 发 herdr 的 `alt+<键>`（herdr 编码成 ESC+键），Option+Shift+字母发 `alt+shift+<字母>`，符号的 Shift 已在字符里（`alt+>`）；组字时不管。映射是纯函数 `MacTerminalKeys.name`（有测试）。没拿真 herdr 试过 `alt+shift+a`（herdr 对带 shift 的组合可能编码成 CSI u，而「终端」App 发 ESC A）和 `alt++` 这类符号键名；真按键也没试（锁屏）。
+  - 大 sheet（2026-11-01，`Mac/Design/MacLargeSheet.swift`）：终端、图片查看 / 编辑（Compat 的 fullScreenCover）、文件查看器、Git 的改动 / 提交在 Mac 上按主窗口内容区减两边 xxl 打开，最小 640×520；原来终端 640×520、文件查看器 470×280。坑：sheet 只认最小尺寸不认 ideal；固定 frame 设在 NavigationStack 上栈会变矮，要设在栈的内容上。fullScreenCover 统一按有标题栏和工具栏算（`macSheetBars` 116pt），终端也被多减了这一截（够大，没分开处理）。
+  - 终端在 Mac 上的说法（`TerminalHelpText`，有测试）：上滑 → 往上滚动、左右滑 → 左右滚动；终端设置的「手势」在 Mac 上叫「操作」（点击、滚轮 / 触控板、拖选、⌘C / ⌘V、右键、⌘± / 捏合、三指轻扫），没有听写、长按、弹出键盘；「只看 · 接管」的图标是窗口。快捷命令在 Mac 上没有编辑模式，每条右键菜单里上移 / 下移 / 删除（`MacShortcutOrder`）。没修：深色截图里键栏的文字键几乎黑底黑字（⚡、粘贴是白的），分不清是不是截图的问题，要解锁看真窗口；链接状态条体验模式里不出现，没看。
 
 ## 8. Files / Git / code viewer
+- Mac（2026-11-01）：文件面板路径栏的 ⋯ 原来被 Mac 的弹出按钮挤成两个点，改成纯图标菜单；Git 的 diff / 提交 sheet 用大 sheet（`-macGitSheet diff|commit` 截图）。体验模式没有 /fs 和仓库，有数据时的列表、diff 正文没看到（`scripts/mock_hub.py` 有假数据，这次没连）。Files / Git 在 Mac 上没有下拉刷新，也没有别的刷新入口（没做，算新功能）。
 - [ ] Files pane: breadcrumbs, dirs first, size/mtime, git markers, hidden toggle, 拷贝路径, 2000 limit — Views/Session/FilesPane.swift
 - [ ] Git pane: branch, upstream ↑↓, stashes, changes (staged/unstaged switch), diff sheet, commit history paging, commit sheet, copy diff/path — Views/Session/GitPane.swift
 - [ ] FileViewer: code (syntax, line numbers, copy line/all), JSON outline (fold, copy value/path, expand/collapse all), Markdown rendered/source, images, PDF, directories, share — Views/Chat/FileViewer.swift
@@ -444,6 +448,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] 打标 editor (importance, relevance, tags, project type/status) — KnowledgeView.swift (KBTagEditor)
 - [ ] Models — Shared/Knowledge.swift
   Mac（2026-11-01 截图）：侧栏「知识库」整页，类型胶囊、项目分组、人列表、条目详情（问 Jarvis / 开 Agent、档案、目录）都对；体验模式的搜索固定回空（DemoHub），搜索命中、日视图还没在 Mac 上看过；打标 sheet 截图看过（见上面「表单」那段的 `-showKBEditor`）。
+  搜索命中、条目里的匹配、日视图后来补看了（DEBUG 的编造数据 `App/DemoKBSample.swift`：`-macSection knowledge -showKnowledgeSearch 小组件`，加 `-showKnowledgeEntry chats/weather-team`，再加 `-showKnowledgeDay YES`）；日视图在 Mac 上日期显示了两次，改成标题是日期、副标题是会话名。按天翻页要点击，没试。
 
 ## 13. Inbox (收件箱)
 - [x] Unified list (Feishu + mail + docs + waiting agents), filters (全部/飞书/each mailbox | @我/私聊/群聊/邮件/Agent), search, sections 需要你 / 知悉即可 (全部看过) / 已折叠 (全部清除) / 已处理, swipe = done, pull refresh — Views/Inbox/InboxView.swift (InboxView, InboxRow, InboxAgentRow)
@@ -478,6 +483,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Add account: manual IMAP/SMTP form, Sign in with Google (web auth session) — MailViews.swift (AddMailAccountView, GoogleSignInLabel), Views/Mail/MailAccountForm.swift
 
 ## 16. Model launchers
+- Mac（2026-11-01）：新增 / 编辑启动器是表单 sheet 大小（`-macLauncherEditor YES` 截图看过）；体验模式没有 /api/v1/launchers，列表、详情、额度、检测没看到。
 - [ ] Launcher list (Jarvis-managed + ~/.zshrc, sources, hidden) with search — Views/Settings/ModelLaunchersView.swift (ModelLaunchersView, LauncherRow)
 - [ ] Detail: per-machine params, function source (masked), 测试可用性, delete/hide with popover confirm, restore — ModelLaunchersView.swift (ModelLauncherDetailView, LauncherDetailSections, LauncherCheckRow)
 - [ ] Editor (name, base URL, API key, model, small model, args) — ModelLaunchersView.swift (LauncherEditor)
