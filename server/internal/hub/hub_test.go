@@ -182,6 +182,20 @@ func TestPairURLRoundTrips(t *testing.T) {
 	}
 }
 
+// The Mac has no camera to scan with: `jarvisd hub pair` prints the link too, to paste into 连接 hub.
+func TestPairPrintsTheLinkForTheMac(t *testing.T) {
+	cfg := &Config{PublicURL: "http://hub.example.com:18660", Token: "tok"}
+	var b strings.Builder
+	writePair(&b, cfg)
+	out := b.String()
+	if !strings.Contains(out, cfg.PairURL()) {
+		t.Fatalf("pair output has no link:\n%s", out)
+	}
+	if !strings.Contains(out, "Server: "+cfg.PublicURL) {
+		t.Fatalf("pair output lost the server line:\n%s", out)
+	}
+}
+
 // newTestHub builds a Hub with no machines, no clients and push disabled, so interaction logic can be exercised offline.
 func newTestHub(t *testing.T) *Hub {
 	t.Helper()

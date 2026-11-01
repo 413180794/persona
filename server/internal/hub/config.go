@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -174,8 +175,14 @@ func Pair() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Server: %s\nToken:  %s\n\n用 Jarvis App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
-	qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, os.Stdout)
-	fmt.Println()
+	writePair(os.Stdout, cfg)
 	return nil
+}
+
+// writePair prints the server, token, the pairing QR code for the iPhone and the same link for the Mac (no camera:
+// it pastes the link into 连接 hub).
+func writePair(w io.Writer, cfg *Config) {
+	fmt.Fprintf(w, "Server: %s\nToken:  %s\n\n用 Jarvis App 扫码配对：\n\n", cfg.PublicURL, cfg.Token)
+	qrterminal.GenerateHalfBlock(cfg.PairURL(), qrterminal.L, w)
+	fmt.Fprintf(w, "\nMac 上拷贝这条链接，在 Jarvis 的「连接 hub」里粘贴：\n%s\n", cfg.PairURL())
 }
