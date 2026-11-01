@@ -7,6 +7,9 @@ import SwiftUI
     func whenClosed(_ done: @escaping () -> Void) {
         DispatchQueue.main.async(execute: done)
     }
+
+    /// iOS starts the list with its search drawer folded away; a Mac's toolbar search field has nothing to fold.
+    func foldOnce() {}
 }
 
 /// Nothing to find on a Mac (see `SearchCloseWatcher`).
