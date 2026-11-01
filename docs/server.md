@@ -16,6 +16,9 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |
 | `internal/mcpserver` | `jarvisd mcp`：给 claude 的 stdio MCP server |
+| `internal/apns` | APNs 客户端（.p8 key、provider token、发一条推送）：hub 直连和推送中继共用 |
+| `internal/pushcrypto` | 推送正文用手机公钥加密（HPKE），`docs/push-relay.md` |
+| `internal/relay` | `jarvisd relay`：推送中继，发布方运行，`docs/push-relay.md` |
 | `internal/tunnel` | tailcat：node 的 key 文件和端点、hub 的拨号、经 tailcat 收发新二进制（下面「tailcat 打洞」） |
 
 ## 和 herdr 的连接
@@ -163,7 +166,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | --- | --- |
 | `hub.json` | `listen`、`token`、`public_url`、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`notify`（推送时机，`docs/config.md`） |
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
-| `apns.json`、`apns_key.p8` | 推送配置和 key；没有就关闭推送 |
+| `apns.json`、`apns_key.p8` | 推送配置和 key；有就直连 APNs，没有就经每台手机登记的推送中继（`docs/push-relay.md`），手机也没登记中继就不推 |
 
 每台机器 `~/.jarvis/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
 

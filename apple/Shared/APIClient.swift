@@ -692,9 +692,14 @@ nonisolated struct APIClient: Sendable {
         var apnsToken: String?
         var apnsEnv: String?
         var topic: String?
+        /// Push relay (docs/push-relay.md): this phone's public key, the relay and the grant it gave.
+        var pushKey: String?
+        var relayURL: String?
+        var relayGrant: String?
         enum CodingKeys: String, CodingKey {
             case name, kind, topic
             case deviceID = "device_id", apnsToken = "apns_token", apnsEnv = "apns_env"
+            case pushKey = "push_key", relayURL = "relay_url", relayGrant = "relay_grant"
         }
     }
     func register(device: DeviceBody) async throws { try await post("/api/v1/devices", body: device) }

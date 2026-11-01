@@ -92,7 +92,7 @@ func TestOrcaListsClaudeTerminals(t *testing.T) {
 	writeClaudePID(t, home, 4343, sidB)
 	writeClaudePID(t, home, 4444, sidC)
 	remote := orcaTerm("term_r", "tabR", "leafR", "claude")
-	remote["executionHostId"] = "ssh-example-machine"
+	remote["executionHostId"] = "ssh-test-host"
 	o.SetTerminals(
 		orcaTerm("term_1", "tab1", "leaf1", "claude"),
 		orcaTerm("term_2", "tab1", "leaf2", "claude"),

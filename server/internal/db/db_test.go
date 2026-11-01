@@ -41,11 +41,11 @@ func TestDevices(t *testing.T) {
 	if err := d.UpsertDevice(ctx, Device{DeviceID: "a", Name: "iPhone", APNSToken: "t1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.UpsertDevice(ctx, Device{DeviceID: "a", Name: "iPhone", APNSToken: "t2"}); err != nil {
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "a", Name: "iPhone", APNSToken: "t2", PushKey: "pk", RelayURL: "https://relay.example/relay", RelayGrant: "g"}); err != nil {
 		t.Fatal(err)
 	}
 	list, err := d.Devices(ctx)
-	if err != nil || len(list) != 1 || list[0].APNSToken != "t2" {
+	if err != nil || len(list) != 1 || list[0].APNSToken != "t2" || list[0].PushKey != "pk" || list[0].RelayURL != "https://relay.example/relay" || list[0].RelayGrant != "g" {
 		t.Fatalf("devices = %+v, %v", list, err)
 	}
 	if err := d.DeleteDevice(ctx, "a"); err != nil {

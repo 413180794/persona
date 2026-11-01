@@ -1,7 +1,8 @@
 {
   "app": {
     "bundle_id": "com.example.jarvis",
-    "team_id": "ABCDE12345"
+    "team_id": "ABCDE12345",
+    "push_relay": "https://jarvis.example.com/relay"
   },
   "app_store": {
     "app_id": "1234567890",

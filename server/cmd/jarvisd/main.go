@@ -17,6 +17,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/hub"
 	"github.com/chyroc/jarvis/server/internal/mcpserver"
 	"github.com/chyroc/jarvis/server/internal/node"
+	"github.com/chyroc/jarvis/server/internal/relay"
 	"github.com/chyroc/jarvis/server/internal/sysmon"
 	"github.com/chyroc/jarvis/server/internal/tunnel"
 )
@@ -40,6 +41,8 @@ const usage = `usage:
                            print this machine's tailcat address again
   jarvisd hook             Claude Code hook entry (reads hook JSON on stdin)
   jarvisd mcp              Claude Code MCP server (stdio)
+  jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
+                           key, payloads sealed to the phone (docs/push-relay.md)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
   jarvisd version`
 
@@ -103,6 +106,12 @@ func main() {
 			break
 		}
 		err = node.Launch(ctx, os.Args[2], os.Args[3:])
+	case "relay":
+		path := os.ExpandEnv("$HOME/.jarvis/relay.json")
+		if len(os.Args) > 2 {
+			path = os.Args[2]
+		}
+		err = relay.Run(ctx, path)
 	case "mcp":
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
 	case "sysmon":

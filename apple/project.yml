@@ -51,6 +51,7 @@ targets:
     dependencies:
       - target: JarvisWatch
       - target: JarvisWidgets
+      - target: JarvisNotify
       - package: MarkdownUI
       - package: BeautifulUI
     entitlements:
@@ -59,6 +60,9 @@ targets:
         aps-environment: development
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # The app's own group first (stays the default, where the existing items are), then the one the notification
+        # service extension shares for the push key (docs/push-relay.md).
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID)
@@ -105,6 +109,10 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
                                                 UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UIBackgroundModes: [remote-notification]
+        # Push relay (docs/push-relay.md): where the app registers for pushes from hubs without the app's APNs key
+        # (config.json app.push_relay; empty: none), and the keychain group it shares with JarvisNotify.
+        JarvisPushRelay: $(JARVIS_PUSH_RELAY)
+        JarvisPushKeychainGroup: $(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push
         # The Fleet activity on the lock screen / Dynamic Island (docs/live-activity.md).
         NSSupportsLiveActivities: true
         # The hub is usually reached over plain HTTP inside a private network (docs/config.md).
@@ -226,6 +234,30 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: YES
         # Code shared with the app that must not call into it (the intents run in the app process).
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+  # Opens pushes that came through the relay (docs/push-relay.md): decrypts the sealed payload before it is shown.
+  JarvisNotify:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: JarvisNotify
+        excludes: ["*.plist", "*.entitlements"]
+      - path: Shared/PushCrypto.swift
+    entitlements:
+      path: JarvisNotify/JarvisNotify.entitlements
+      properties:
+        keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(JARVIS_BUNDLE_ID).notify
+        PRODUCT_NAME: JarvisNotify
+        INFOPLIST_FILE: JarvisNotify/Info.plist
+        # The system calls the extension on its own queue; the project's MainActor default does not fit its base class.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
   JarvisWatch:
     type: application
     platform: watchOS

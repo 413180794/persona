@@ -120,35 +120,41 @@ func (d *DB) migrate(ctx context.Context) error {
 // ---- devices ----
 
 type Device struct {
-	DeviceID  string    `json:"device_id"`
-	Name      string    `json:"name"`
-	Kind      string    `json:"kind"`
-	APNSToken string    `json:"apns_token,omitempty"`
-	APNSEnv   string    `json:"apns_env,omitempty"`
-	Topic     string    `json:"topic,omitempty"`
-	UpdatedAt time.Time `json:"updated_at"`
+	DeviceID  string `json:"device_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	APNSToken string `json:"apns_token,omitempty"`
+	APNSEnv   string `json:"apns_env,omitempty"`
+	Topic     string `json:"topic,omitempty"`
+	// Pushing through the relay (docs/push-relay.md): the phone's public key (base64 X9.63), the relay's URL and the
+	// grant it gave the phone.
+	PushKey    string    `json:"push_key,omitempty"`
+	RelayURL   string    `json:"relay_url,omitempty"`
+	RelayGrant string    `json:"relay_grant,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
 	// Prefs is the device's notification settings as JSON (hub decodes it); empty = defaults. Registration
 	// (UpsertDevice) never touches it, only SetDevicePrefs does.
 	Prefs json.RawMessage `json:"-"`
 }
 
 func (d *DB) UpsertDevice(ctx context.Context, v Device) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, now())
-		ON CONFLICT (device_id) DO UPDATE SET name = $2, kind = $3, apns_token = $4, apns_env = $5, topic = $6, updated_at = now()`,
-		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic)
+	_, err := d.pool.Exec(ctx, `INSERT INTO devices (device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+		ON CONFLICT (device_id) DO UPDATE SET name = $2, kind = $3, apns_token = $4, apns_env = $5, topic = $6,
+			push_key = $7, relay_url = $8, relay_grant = $9, updated_at = now()`,
+		v.DeviceID, v.Name, v.Kind, v.APNSToken, v.APNSEnv, v.Topic, v.PushKey, v.RelayURL, v.RelayGrant)
 	return err
 }
 
 func (d *DB) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT device_id, name, kind, apns_token, apns_env, topic, push_key, relay_url, relay_grant, updated_at, prefs FROM devices ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Device, error) {
 		var v Device
 		var prefs []byte
-		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.UpdatedAt, &prefs)
+		err := r.Scan(&v.DeviceID, &v.Name, &v.Kind, &v.APNSToken, &v.APNSEnv, &v.Topic, &v.PushKey, &v.RelayURL, &v.RelayGrant, &v.UpdatedAt, &prefs)
 		if len(prefs) > 0 {
 			v.Prefs = prefs
 		}

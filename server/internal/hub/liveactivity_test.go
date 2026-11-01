@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/json"
+	"github.com/chyroc/jarvis/server/internal/apns"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -205,7 +206,8 @@ func testLive(t *testing.T) (*Hub, *fakeAPNs) {
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	h.push.cfg, h.push.key, h.push.base = &apnsConfig{KeyID: "K", TeamID: "T", Topic: "app.example"}, key, srv.URL
+	h.push.direct = apns.NewWithKey(apnsConfig{KeyID: "K", TeamID: "T", Topic: "app.example"}, key)
+	h.push.direct.Base = srv.URL
 	h.push.register(Device{DeviceID: "phone", Name: "phone", APNSToken: "devtok", Topic: "app.example"})
 	return h, f
 }
@@ -326,7 +328,7 @@ func TestManualLiveActivityPush(t *testing.T) {
 		t.Skip("set JARVIS_LA_TOKEN and JARVIS_LA_TOPIC")
 	}
 	p := newPusher(dataDir(), nil, t.Logf)
-	if p.key == nil {
+	if p.direct == nil {
 		t.Skip("no APNs key here")
 	}
 	now := time.Now()

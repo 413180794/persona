@@ -8,5 +8,10 @@
 	<true/>
 	<key>com.apple.developer.healthkit.access</key>
 	<array/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)</string>
+		<string>$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push</string>
+	</array>
 </dict>
 </plist>

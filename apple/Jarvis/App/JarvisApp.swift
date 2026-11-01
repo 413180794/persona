@@ -93,6 +93,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if let kind = d.string(forKey: "showTestNotification").flatMap(InteractionKind.init(rawValue:)) {
             Task { await AppDelegate.postTestNotification(kind) }
         }
+        // `-showPushKey YES`: asks for notifications and writes this phone's push public key to Caches/push-key.txt, so
+        // scripts/relay_sim_e2e.sh can seal a push to it and send it through a local relay (docs/push-relay.md).
+        if d.bool(forKey: "showPushKey") {
+            Task {
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                guard let key = PushCrypto.ensureKey(),
+                      let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+                try? Data(PushCrypto.publicKey(key).utf8).write(to: dir.appending(path: "push-key.txt"))
+            }
+        }
         if let phase = d.string(forKey: "showFleetSample") {
             LiveActivityController.shared.showSample(phase, details: d.bool(forKey: "fleetDetails"), island: d.string(forKey: "fleetIsland"))
         }
@@ -117,7 +127,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        guard userInfo["jarvis_wake"] != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
+        // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process.
+        let wake = PushCrypto.isSealed(userInfo) ? PushCrypto.payload(userInfo, key: PushCrypto.loadKey())?["jarvis_wake"] : userInfo["jarvis_wake"]
+        guard wake != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {
             completionHandler(.noData)
             return
         }
@@ -246,9 +258,22 @@ final class PushRegistrar {
         #else
         let env = "production"
         #endif
-        let body = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: "iphone", apnsToken: hex,
+        var body = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: "iphone", apnsToken: hex,
                                         apnsEnv: env, topic: Bundle.main.bundleIdentifier)
-        Task { try? await api.register(device: body) }
+        Task {
+            // A hub without the app's APNs key pushes through the relay, sealed to this key (docs/push-relay.md). The hub
+            // decides: with its own key it ignores these and pushes directly, as before.
+            if let relay = PushRelay.url, let key = PushCrypto.ensureKey(), let topic = body.topic {
+                do {
+                    body.relayGrant = try await PushRelay.grant(relay: relay, token: hex, env: env, topic: topic)
+                    body.relayURL = relay.absoluteString
+                    body.pushKey = PushCrypto.publicKey(key)
+                } catch {
+                    PushRelay.log.error("relay registration: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            try? await api.register(device: body)
+        }
     }
 
     /// This iPhone's id at the hub: its push token and its notification settings hang off it.

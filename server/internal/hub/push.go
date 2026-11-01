@@ -3,15 +3,15 @@ package hub
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,41 +19,41 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/apns"
 	"github.com/chyroc/jarvis/server/internal/db"
 	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/pushcrypto"
+	"github.com/chyroc/jarvis/server/internal/relayproto"
 )
 
 // Device is an iPhone or Watch that wants push notifications.
 type Device = db.Device
 
-// apnsConfig lives in ~/.jarvis/apns.json; without it push is disabled.
-type apnsConfig struct {
-	KeyID   string `json:"key_id"`
-	TeamID  string `json:"team_id"`
-	KeyPath string `json:"key_path"`
-	Topic   string `json:"topic"`
-}
+// apnsConfig lives in ~/.jarvis/apns.json; without it the hub pushes through the relay each phone registered with
+// (docs/push-relay.md), and with neither push is off.
+type apnsConfig = apns.Config
 
 type Pusher struct {
 	dir   string
 	store Store
 	logf  func(string, ...any)
-	cfg   *apnsConfig
-	key   *ecdsa.PrivateKey
-	http  *http.Client
-
-	base string // tests: APNs host instead of Apple's
+	// direct: the hub's own APNs key. Set, every push goes straight to APNs as before; nil, through the relay.
+	direct *apns.Client
+	relay  *http.Client
+	now    func() time.Time
 	// desktopOnline: a desktop app is connected (Hub.desktopOnline), for 手机静音.
 	desktopOnline func() bool
 
 	mu      sync.Mutex
 	devices map[string]Device
-	jwt     string
-	jwtAt   time.Time
+	// replaced: per device, the grant the hub renewed away from (renewGrant). The app keeps reporting the one it
+	// cached; that one must not undo the renewal.
+	replaced map[string]string
+	saveMu   sync.Mutex // one device row write at a time, always the latest state (save)
 }
 
 func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
-	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, http: &http.Client{Timeout: 15 * time.Second}}
+	p := &Pusher{dir: dir, store: store, logf: logf, devices: map[string]Device{}, replaced: map[string]string{}, relay: &http.Client{Timeout: 20 * time.Second}, now: time.Now}
 	if store != nil {
 		if list, err := store.Devices(context.Background()); err == nil {
 			for _, d := range list {
@@ -65,67 +65,88 @@ func newPusher(dir string, store Store, logf func(string, ...any)) *Pusher {
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "apns.json"))
 	if err != nil {
-		logf("push disabled: no %s", filepath.Join(dir, "apns.json"))
+		logf("push: no %s, pushing through each phone's relay (docs/push-relay.md)", filepath.Join(dir, "apns.json"))
 		return p
 	}
 	var cfg apnsConfig
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		logf("push disabled: %v", err)
+		logf("push: apns.json: %v; pushing through the relay", err)
 		return p
 	}
-	keyPEM, err := os.ReadFile(cfg.KeyPath)
+	c, err := apns.New(cfg)
 	if err != nil {
-		logf("push disabled: %v", err)
+		logf("push: apns key: %v; pushing through the relay", err)
 		return p
 	}
-	block, _ := pem.Decode(keyPEM)
-	if block == nil {
-		logf("push disabled: bad key file")
-		return p
-	}
-	k, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	ek, ok := k.(*ecdsa.PrivateKey)
-	if err != nil || !ok {
-		logf("push disabled: key is not an EC private key")
-		return p
-	}
-	p.cfg, p.key = &cfg, ek
+	p.direct = c
 	logf("push enabled (key %s, topic %s)", cfg.KeyID, cfg.Topic)
 	return p
 }
 
+// validRelayURL: an https URL (the phone's build config; the hub sends the grant and Live Activity contents there),
+// or http to this machine (the end-to-end script's local relay).
+func validRelayURL(s string) bool {
+	u, err := url.Parse(s)
+	if err != nil || u.Host == "" || u.RawQuery != "" {
+		return false
+	}
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		ip := net.ParseIP(u.Hostname())
+		return u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
+	}
+	return false
+}
+
 func (p *Pusher) register(d Device) {
 	d.UpdatedAt = time.Now().UTC()
+	d.RelayURL = strings.TrimRight(d.RelayURL, "/")
+	if d.RelayURL != "" && !validRelayURL(d.RelayURL) {
+		p.logf("device %s: ignoring relay url %q", d.Name, d.RelayURL)
+		d.RelayURL, d.RelayGrant = "", ""
+	}
 	p.mu.Lock()
-	d.Prefs = p.devices[d.DeviceID].Prefs // registration carries the token, not the settings
+	cur := p.devices[d.DeviceID]
+	d.Prefs = cur.Prefs // registration carries the token, not the settings
+	if d.RelayGrant != "" && d.RelayGrant == p.replaced[d.DeviceID] && d.RelayURL == cur.RelayURL && d.APNSToken == cur.APNSToken {
+		d.RelayGrant = cur.RelayGrant // the app's cached grant, which the hub already renewed
+	}
 	p.devices[d.DeviceID] = d
 	p.mu.Unlock()
-	if p.store != nil {
-		if err := p.store.UpsertDevice(context.Background(), d); err != nil {
-			p.logf("save device: %v", err)
-		}
+	p.save(d.DeviceID)
+}
+
+// save writes a device's current row (whatever the latest register / renewal left), one write at a time.
+func (p *Pusher) save(id string) {
+	if p.store == nil {
+		return
+	}
+	p.saveMu.Lock()
+	defer p.saveMu.Unlock()
+	p.mu.Lock()
+	d, ok := p.devices[id]
+	p.mu.Unlock()
+	if !ok {
+		return
+	}
+	if err := p.store.UpsertDevice(context.Background(), d); err != nil {
+		p.logf("save device: %v", err)
 	}
 }
 
-func (p *Pusher) token() (string, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.jwt != "" && time.Since(p.jwtAt) < 40*time.Minute {
-		return p.jwt, nil
+// relayed: this device can be pushed through its relay (the hub has no key of its own).
+func (p *Pusher) relayed(d Device) bool {
+	return p.direct == nil && d.RelayURL != "" && d.RelayGrant != "" && d.PushKey != ""
+}
+
+// reachable: a push to this device can go anywhere.
+func (p *Pusher) reachable(d Device) bool {
+	if p.direct != nil {
+		return d.APNSToken != ""
 	}
-	enc := base64.RawURLEncoding
-	header := enc.EncodeToString([]byte(fmt.Sprintf(`{"alg":"ES256","kid":%q}`, p.cfg.KeyID)))
-	claims := enc.EncodeToString([]byte(fmt.Sprintf(`{"iss":%q,"iat":%d}`, p.cfg.TeamID, time.Now().Unix())))
-	sum := sha256.Sum256([]byte(header + "." + claims))
-	r, s, err := ecdsa.Sign(rand.Reader, p.key, sum[:])
-	if err != nil {
-		return "", err
-	}
-	sig := make([]byte, 64)
-	r.FillBytes(sig[:32])
-	s.FillBytes(sig[32:])
-	p.jwt, p.jwtAt = header+"."+claims+"."+enc.EncodeToString(sig), time.Now()
-	return p.jwt, nil
+	return p.relayed(d)
 }
 
 // send alerts every device whose settings take it (nil: all of them).
@@ -135,13 +156,6 @@ func (p *Pusher) send(payload map[string]any, collapseID string, wants func(Noti
 	p.sendAs(payload, collapseID, "alert", "10", alertWanted(wants, online))
 }
 
-func apnsHost(d Device) string {
-	if d.APNSEnv == "sandbox" {
-		return "https://api.sandbox.push.apple.com"
-	}
-	return "https://api.push.apple.com"
-}
-
 func (p *Pusher) device(id string) (Device, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -149,50 +163,204 @@ func (p *Pusher) device(id string) (Device, bool) {
 	return d, ok
 }
 
+// forget drops a device whose token APNs says is dead.
+func (p *Pusher) forget(d Device) {
+	p.mu.Lock()
+	delete(p.devices, d.DeviceID)
+	p.mu.Unlock()
+	if p.store != nil {
+		_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
+	}
+}
+
 // sendLiveActivity pushes to a Live Activity token (an activity's own, or the push-to-start one): its own push type and
-// topic, the device's APNs environment. gone runs when APNs says the token is dead.
+// topic, the device's APNs environment. gone runs when APNs says the token is dead. Through the relay the payload is
+// not sealed: iOS reads a Live Activity's content-state itself (docs/push-relay.md「Live Activity 是明文」).
 func (p *Pusher) sendLiveActivity(d Device, token string, payload map[string]any, priority string, gone func()) {
-	if p == nil || p.key == nil || token == "" {
+	if p == nil || token == "" || !p.reachable(d) {
 		return
 	}
-	jwt, err := p.token()
-	if err != nil {
-		p.logf("apns jwt: %v", err)
+	if p.relayed(d) {
+		aps, _ := payload["aps"].(map[string]any)
+		go func() {
+			res, err := p.postRelay(d, relayproto.PushRequest{Type: "liveactivity", Priority: priority, Token: token, APS: aps})
+			if err != nil {
+				p.logf("relay live activity %s: %v", d.Name, err)
+			} else if res.gone {
+				gone()
+			}
+		}()
 		return
-	}
-	host := apnsHost(d)
-	if p.base != "" {
-		host = p.base
-	}
-	topic := d.Topic
-	if topic == "" {
-		topic = p.cfg.Topic
 	}
 	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", host+"/3/device/"+token, bytes.NewReader(body))
-	req.Header.Set("authorization", "bearer "+jwt)
-	req.Header.Set("apns-topic", topic+".push-type.liveactivity")
-	req.Header.Set("apns-push-type", "liveactivity")
-	req.Header.Set("apns-priority", priority)
 	go func() {
-		resp, err := p.http.Do(req)
+		res, err := p.direct.Send(context.Background(), apns.Request{Token: token, Env: d.APNSEnv, Topic: d.Topic, PushType: "liveactivity", Priority: priority, Body: body})
 		if err != nil {
 			p.logf("apns live activity %s: %v", d.Name, err)
-			p.http.CloseIdleConnections() // see the note in send
 			return
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			var e struct {
-				Reason string `json:"reason"`
-			}
-			_ = json.NewDecoder(resp.Body).Decode(&e)
-			p.logf("apns live activity %s: %d %s", d.Name, resp.StatusCode, e.Reason)
-			if resp.StatusCode == 410 || e.Reason == "BadDeviceToken" || e.Reason == "Unregistered" {
+		if res.Status != 200 {
+			p.logf("apns live activity %s: %d %s", d.Name, res.Status, res.Reason)
+			if res.Gone() {
 				gone()
 			}
 		}
 	}()
+}
+
+type relayResult struct{ gone bool }
+
+// postRelay hands one push to the device's relay (relayproto.PushRequest, docs/push-relay.md「接口」). A grant the relay
+// no longer takes (its secret was replaced) is renewed once with the device's token, which the hub already has.
+func (p *Pusher) postRelay(d Device, req relayproto.PushRequest) (relayResult, error) {
+	res, status, err := p.postRelayOnce(d, req)
+	if status != http.StatusUnauthorized {
+		return res, err
+	}
+	d, rerr := p.renewGrant(d)
+	if rerr != nil {
+		return res, fmt.Errorf("%w; renewing the grant: %v", err, rerr)
+	}
+	res, _, err = p.postRelayOnce(d, req)
+	return res, err
+}
+
+func (p *Pusher) postRelayOnce(d Device, req relayproto.PushRequest) (relayResult, int, error) {
+	body, _ := json.Marshal(req)
+	hr, err := http.NewRequest("POST", d.RelayURL+"/v1/push", bytes.NewReader(body))
+	if err != nil {
+		return relayResult{}, 0, err
+	}
+	hr.Header.Set("Authorization", "Bearer "+d.RelayGrant)
+	hr.Header.Set("Content-Type", "application/json")
+	sent := time.Now()
+	resp, err := p.relay.Do(hr)
+	if err != nil {
+		return relayResult{}, 0, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Error  string `json:"error"`
+		Reason string `json:"reason"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&out)
+	switch {
+	case resp.StatusCode == 200:
+		if req.Type != "liveactivity" { // when the relay (and APNs behind it) took it: wake-up latency (docs/assistant.md)
+			p.logf("relay %s: %s push accepted in %d ms", d.Name, req.Type, time.Since(sent).Milliseconds())
+		}
+		return relayResult{}, 200, nil
+	case resp.StatusCode == http.StatusGone:
+		p.logf("relay %s: %s token gone (%s)", d.Name, req.Type, out.Reason)
+		return relayResult{gone: true}, resp.StatusCode, nil
+	default:
+		return relayResult{}, resp.StatusCode, fmt.Errorf("%d %s %s", resp.StatusCode, out.Error, out.Reason)
+	}
+}
+
+// renewGrant registers the device's token with its relay again and keeps the new grant.
+func (p *Pusher) renewGrant(d Device) (Device, error) {
+	if d.APNSToken == "" || d.Topic == "" {
+		return d, fmt.Errorf("device has no token to register")
+	}
+	env := d.APNSEnv
+	if env != "sandbox" {
+		env = "production"
+	}
+	body, _ := json.Marshal(relayproto.RegisterRequest{APNSToken: d.APNSToken, Env: env, Topic: d.Topic})
+	resp, err := p.relay.Post(d.RelayURL+"/v1/register", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return d, err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Grant string `json:"grant"`
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&out)
+	if resp.StatusCode != 200 || out.Grant == "" {
+		return d, fmt.Errorf("register: %d %s", resp.StatusCode, out.Error)
+	}
+	p.mu.Lock()
+	cur, ok := p.devices[d.DeviceID]
+	kept := ok && cur.RelayURL == d.RelayURL && cur.APNSToken == d.APNSToken
+	if kept {
+		if cur.RelayGrant != out.Grant {
+			p.replaced[d.DeviceID] = cur.RelayGrant
+		}
+		cur.RelayGrant = out.Grant
+		p.devices[d.DeviceID] = cur
+	}
+	p.mu.Unlock()
+	if kept {
+		p.save(d.DeviceID)
+	}
+	p.logf("relay %s: grant renewed", d.Name)
+	d.RelayGrant = out.Grant
+	return d, nil
+}
+
+// sealFor seals a push's payload to the device's key, stamped with when it was sealed (the phone shows only
+// 「有新消息」 for one older than a day, so a replayed old one tells nothing new). Texts too long for one push (an
+// ask_user question, a long command) are shortened until it fits: the full text is in the app.
+func (p *Pusher) sealFor(d Device, payload map[string]any) (string, error) {
+	pub, err := pushcrypto.PublicKey(d.PushKey)
+	if err != nil {
+		return "", err
+	}
+	maxPlain := relayproto.MaxSealed/4*3 - pushcrypto.MinSealed
+	stamped := make(map[string]any, len(payload)+1)
+	for k, v := range payload {
+		stamped[k] = v
+	}
+	stamped["iat"] = p.now().Unix()
+	plain, _ := json.Marshal(stamped)
+	for limit := 1000; len(plain) > maxPlain; limit /= 2 {
+		if limit < 20 {
+			return "", fmt.Errorf("payload of %d bytes does not fit", len(plain))
+		}
+		stamped["aps"] = shortenAlert(stamped["aps"], limit)
+		plain, _ = json.Marshal(stamped)
+	}
+	sealed, err := pushcrypto.Seal(pub, plain)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// shortenAlert returns a copy of aps whose alert texts have at most n characters (the original is shared by all devices).
+func shortenAlert(v any, n int) any {
+	aps, ok := v.(map[string]any)
+	if !ok {
+		return v
+	}
+	alert, ok := aps["alert"].(map[string]any)
+	if !ok {
+		return v
+	}
+	a2 := make(map[string]any, len(alert))
+	for k, t := range alert {
+		if s, ok := t.(string); ok {
+			t = clip(s, n)
+		}
+		a2[k] = t
+	}
+	out := make(map[string]any, len(aps))
+	for k, t := range aps {
+		out[k] = t
+	}
+	out["alert"] = a2
+	return out
+}
+
+// relayCollapseID: the relay sees a hash of the collapse id (an interaction id), not the id.
+func relayCollapseID(id string) string {
+	if id == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:16])
 }
 
 // prefs is a device's notification settings (defaults when it never set any).
@@ -236,14 +404,19 @@ func (p *Pusher) mailTargets() []string {
 	return out
 }
 
-// ready reports whether pushes can go anywhere (APNs key loaded and a device registered).
+// ready reports whether pushes can go anywhere (a device that can be reached: the hub's own key, or its relay).
 func (p *Pusher) ready() bool {
-	if p == nil || p.key == nil {
+	if p == nil {
 		return false
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return len(p.devices) > 0
+	for _, d := range p.devices {
+		if p.reachable(d) {
+			return true
+		}
+	}
+	return false
 }
 
 // wake sends a silent background push: iOS gives the app ~30 s to connect and run a pending phone_* call.
@@ -253,13 +426,13 @@ func (p *Pusher) wake(reason string) {
 }
 
 func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority string, wants func(NotifyPrefs) bool) {
-	if p == nil || p.key == nil {
+	if p == nil {
 		return
 	}
 	p.mu.Lock()
 	devices := make([]Device, 0, len(p.devices))
 	for _, d := range p.devices {
-		if d.APNSToken != "" && (wants == nil || wants(devicePrefs(d.Prefs))) {
+		if p.reachable(d) && (wants == nil || wants(devicePrefs(d.Prefs))) {
 			devices = append(devices, d)
 		}
 	}
@@ -267,57 +440,38 @@ func (p *Pusher) sendAs(payload map[string]any, collapseID, pushType, priority s
 	if len(devices) == 0 {
 		return
 	}
-	jwt, err := p.token()
-	if err != nil {
-		p.logf("apns jwt: %v", err)
-		return
-	}
 	body, _ := json.Marshal(payload)
 	for _, d := range devices {
-		host := "https://api.push.apple.com"
-		if d.APNSEnv == "sandbox" {
-			host = "https://api.sandbox.push.apple.com"
-		}
-		topic := d.Topic
-		if topic == "" {
-			topic = p.cfg.Topic
-		}
-		req, _ := http.NewRequest("POST", host+"/3/device/"+d.APNSToken, bytes.NewReader(body))
-		req.Header.Set("authorization", "bearer "+jwt)
-		req.Header.Set("apns-topic", topic)
-		req.Header.Set("apns-push-type", pushType)
-		req.Header.Set("apns-priority", priority)
-		if collapseID != "" {
-			req.Header.Set("apns-collapse-id", collapseID)
+		if p.relayed(d) {
+			sealed, err := p.sealFor(d, payload)
+			if err != nil {
+				p.logf("relay %s: seal: %v", d.Name, err) // never falls back to sending it in the clear
+				continue
+			}
+			go func(d Device) {
+				res, err := p.postRelay(d, relayproto.PushRequest{Type: pushType, Priority: priority, CollapseID: relayCollapseID(collapseID), Sealed: sealed})
+				if err != nil {
+					p.logf("relay %s: %v", d.Name, err)
+				} else if res.gone {
+					p.forget(d)
+				}
+			}(d)
+			continue
 		}
 		go func(d Device) {
 			sent := time.Now()
-			resp, err := p.http.Do(req)
+			res, err := p.direct.Send(context.Background(), apns.Request{Token: d.APNSToken, Env: d.APNSEnv, Topic: d.Topic,
+				PushType: pushType, Priority: priority, CollapseID: collapseID, Body: body})
 			if err != nil {
 				p.logf("apns %s: %v", d.Name, err)
-				// The APNs connection is one long-lived HTTP/2 connection, and Go does not notice when it dies
-				// silently (no health pings before Go 1.24): after the hub's proxy routing broke and came back,
-				// every push still timed out on the dead connection until the hub restarted. Drop it so the next
-				// push dials a new one.
-				p.http.CloseIdleConnections()
 				return
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				var e struct {
-					Reason string `json:"reason"`
+			if res.Status != 200 {
+				p.logf("apns %s: %d %s", d.Name, res.Status, res.Reason)
+				if res.Gone() {
+					p.forget(d)
 				}
-				_ = json.NewDecoder(resp.Body).Decode(&e)
-				p.logf("apns %s: %d %s", d.Name, resp.StatusCode, e.Reason)
-				if resp.StatusCode == 410 || e.Reason == "BadDeviceToken" || e.Reason == "Unregistered" {
-					p.mu.Lock()
-					delete(p.devices, d.DeviceID)
-					p.mu.Unlock()
-					if p.store != nil {
-						_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
-					}
-				}
-			} else if pushType != "liveactivity" { // when APNs took it: for measuring wake-up latency (docs/assistant.md)
+			} else { // when APNs took it: for measuring wake-up latency (docs/assistant.md)
 				p.logf("apns %s: %s push accepted in %d ms", d.Name, pushType, time.Since(sent).Milliseconds())
 			}
 		}(d)

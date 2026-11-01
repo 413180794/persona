@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Prepares App Store signing through the App Store Connect API (idempotent).
 
-- registers the iPhone, Apple Watch and Live Activity extension bundle ids,
+- registers the iPhone, Apple Watch, Live Activity and notification service extension bundle ids,
 - enables PUSH_NOTIFICATIONS and HEALTHKIT on the iPhone App ID,
-- creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" profiles
+- creates (or rebuilds) the "Jarvis App Store" / "Jarvis Watch App Store" / "Jarvis Live Activity App Store" /
+  "Jarvis Notify App Store" profiles
   with the team's distribution certificate and installs them where Xcode looks.
 
 The API key's role (App Manager) can't use cloud-managed signing, so release builds sign manually with
@@ -24,11 +25,13 @@ from asc import BUNDLE_ID, APIError, create, get_all, request  # noqa: E402
 APP = BUNDLE_ID
 WATCH = APP + ".watchkitapp"
 LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / Dynamic Island activity
+NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
 # bundle identifier -> (App ID name, profile name, capabilities)
 TARGETS = {
     APP: ("Jarvis", "Jarvis App Store", ["PUSH_NOTIFICATIONS", "HEALTHKIT"]),
     WATCH: ("Jarvis Watch", "Jarvis Watch App Store", []),
     LIVE: ("Jarvis Live Activity", "Jarvis Live Activity App Store", []),
+    NOTIFY: ("Jarvis Notify", "Jarvis Notify App Store", []),
 }
 PROFILE_DIR = os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles")
 

@@ -79,6 +79,8 @@ def xcconfig(cfg: dict):
         f.write("// Generated from %s by scripts/jarvis_config.py; do not edit or commit.\n" % path())
         f.write("JARVIS_BUNDLE_ID = %s\n" % get(cfg, "app.bundle_id", ""))
         f.write("DEVELOPMENT_TEAM = %s\n" % get(cfg, "app.team_id", ""))
+        # The push relay the app registers with (docs/push-relay.md); "//" starts a comment in xcconfig, hence $().
+        f.write("JARVIS_PUSH_RELAY = %s\n" % get(cfg, "app.push_relay", "").rstrip("/").replace("//", "/$()/"))
 
 
 def export_options(cfg: dict, out: str, destination: str = "upload"):
@@ -103,6 +105,8 @@ def export_options(cfg: dict, out: str, destination: str = "upload"):
 		<string>Jarvis Watch App Store</string>
 		<key>{bid}.liveactivity</key>
 		<string>Jarvis Live Activity App Store</string>
+		<key>{bid}.notify</key>
+		<string>Jarvis Notify App Store</string>
 	</dict>
 	<key>teamID</key>
 	<string>{get(cfg, "app.team_id", "")}</string>

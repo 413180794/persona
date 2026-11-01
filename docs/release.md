@@ -9,7 +9,7 @@ TestFlight 内部测试（测试员在配置的 `app_store.testers`），以及�
 
 | 项目 | 说明 |
 | --- | --- |
-| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`，用 `scripts/asc_signing.py` 注册 |
+| Bundle ID | iOS `<bundle_id>`、手表 `<bundle_id>.watchkitapp`、Live Activity `<bundle_id>.liveactivity`、通知服务扩展 `<bundle_id>.notify`（推送中继，`docs/push-relay.md`），用 `scripts/asc_signing.py` 注册 |
 | App ID 能力 | iOS：`PUSH_NOTIFICATIONS`、`HEALTHKIT`；手表：无 |
 | 描述文件 | 「Jarvis App Store」「Jarvis Watch App Store」（`IOS_APP_STORE`）；`asc_signing.py` 会删了重建并装到 `~/Library/MobileDevice/Provisioning Profiles/` |
 | 签名身份 | 登录钥匙串里的 `Apple Distribution: …（team_id）` |
@@ -141,5 +141,5 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.jarvis/bin/jarvisd�
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
   报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION` 和 `dl/SHA256SUMS` 确认上去的就是刚编的。
 - 还没有的（别人能装但还不顺手，见 `docs/config.md`）：一键 `jarvisd setup`（现在 hub 要自己准备 Postgres、`hub.json`）、
-  推送中继（APNs key 是我们团队的，别人的 hub 发不了推送）、macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
+  推送中继的部署（代码已有：`jarvisd relay` + App 的通知服务扩展，见 `docs/push-relay.md`「部署」；要发布方跑起来、构建配置填上 `app.push_relay` 再发一版）、macOS 二进制的 Developer ID 公证（用浏览器下载会被 Gatekeeper 拦，`curl` 不会）。
 
