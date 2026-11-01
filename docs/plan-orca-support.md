@@ -32,32 +32,50 @@ Jarvis 目前只能驱动开在 herdr 里的 Agent。开在别处（Orca 的终�
 
 ## 宿主接口
 
-核心部分每个宿主都要实现；可选能力用 Go 的接口断言判断有没有。
+代码在 `server/internal/host`（接口、`PaneRef`、按类型存放宿主的 `Registry`），herdr 的实现是 `server/internal/node/hostherdr.go`
+（node 里唯一引用 herdr 客户端的文件）。核心部分每个宿主都要实现；可选能力用 Go 的接口断言判断有没有。方法按 node 实际的调用点定，
+herdr 实现里每个方法就是一个 herdr 调用（`Close` 是先数标签页里的窗格再关）。
 
 ```go
 type Host interface {
-    Kind() string                                  // "herdr" | "orca"
-    Snapshot(ctx) (Layout, error)                  // spaces, slots, panes (+ host status / session hint if known)
-    Read(ctx, PaneRef, ReadOpts) (Screen, error)   // visible | recent, plain | ansi
+    Kind() string                                        // "herdr" | "orca"
+    Version(ctx) string
+    Snapshot(ctx) (*Layout, error)                       // spaces, slots, agent panes, every pane
+    Agents(ctx) ([]Agent, error)                         // agent panes only (herdr without snapshot)
+    Agent(ctx, PaneRef) (*Agent, error)                  // one pane's agent + state
+    Read(ctx, PaneRef, ReadOpts) (string, error)         // visible | recent | recent-unwrapped, plain | ANSI
     SendText(ctx, PaneRef, text string) error
-    SendKeys(ctx, PaneRef, keys ...Key) error      // Jarvis-wide key names; each host translates
-    Prompt(ctx, PaneRef, text string) error        // paste + submit the way the host does it best
-    PaneEnv() string                               // env var naming the pane: "HERDR_PANE_ID" / "ORCA_PANE_KEY"
+    SendKeys(ctx, PaneRef, keys ...string) error         // Jarvis-wide key names; each host translates
+    Prompt(ctx, PaneRef, text string) error              // host's own submit; ErrNoAgent → caller types + enter
+    PaneProcesses(ctx, PaneRef) ([]int, error)           // foreground pids, claude first
+    PaneEnv() string                                     // env var naming the pane: "HERDR_PANE_ID" / "ORCA_PANE_KEY"
 }
 
 // Optional capabilities.
-type Watcher    interface { Events(ctx) <-chan struct{} }            // push changes; without it the node polls
-type Launcher   interface { CreatePane(ctx, Spec) (PaneRef, error) } // new tab / terminal running a command
-type Organizer  interface { Rename(ctx, ...) error; Close(ctx, PaneRef) error }
-type Streamer   interface { Observe(ctx, PaneRef, Size) (<-chan Frame, error) }
-type Controller interface { Control(ctx, PaneRef, Size) (Control, error) } // input / resize / scroll
+type Watcher    interface { Watch(ctx, panes []PaneRef, changed func()) error }
+type Launcher   interface { Spaces(ctx) ([]Space, error); CreateSpace(ctx, cwd, label) (*Created, error)
+                            CreateSlot(ctx, space, cwd, label) (*Created, error); Run(ctx, PaneRef, cmd) error
+                            NameAgent(ctx, PaneRef, name) error }
+type Organizer  interface { RenameSpace(ctx, space, name) error; RenameSlot(ctx, slot, name) error
+                            Close(ctx, PaneRef, space, slot string) error } // the whole slot when it is the last pane
+type Streamer   interface { CanObserve() bool; PaneSize(ctx, PaneRef) (cols, rows int, err error)
+                            Observe(ctx, PaneRef, cols, rows int, fn func(Frame)) error }
+type Controller interface { CanControl() bool
+                            Control(ctx, PaneRef, cols, rows int, takeover bool, fn func(Frame)) (Control, error) }
 ```
 
-- **窗格引用 `PaneRef`**：宿主类型 + 宿主自己的 id。存储和传输时写成 `orca:<id>`；没有前缀的当作 herdr，
-  所以 hub 数据库里已有的绑定不用迁移。
+- **窗格引用 `PaneRef`**：宿主类型 + 宿主自己的 id。存储和传输时写成 `<kind>:<id>`；herdr 的窗格不加前缀（herdr 的 id 本身带冒号，
+  如 `w1:p2`），前缀不是已注册的宿主类型的都当作 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
+  node 里的窗格一律存这个字符串（`n.panes`、`Agent.PaneID`），调用时由 `Registry.Pane` 解析出宿主和 id。
+- **会话模型**：node 内部是 `map[string]host.Agent`（字段和原来的 herdr Agent 一样，`PaneID` 是 `PaneRef` 字符串），宿主返回的
+  `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。
 - **按键名**：沿用 App 现在发的 herdr 写法（`shift+tab`、`ctrl+c`、`enter`……）作为 Jarvis 统一的按键名。herdr 原样转发，
   Orca 换成字节（如 `shift+tab` → `\x1b[Z`）。
-- **布局 `Layout`**：空间、槽位、窗格。宿主知道的话顺带给出 Agent 类型、状态、会话 id（herdr 集成的 `agent_session`）。
+- **错误**：宿主用 `host.Mark` 给自己的错误加上 `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver`（`errors.Is` 判断），错误文本不变。
+- **布局 `Layout`**：空间、槽位、能认出的 Agent 窗格、所有窗格。宿主知道的话顺带给出 Agent 类型、状态、会话 id（herdr 集成的 `agent_session`）。
+- **第 1 步还按 herdr 处理的地方**：新建会话、空间改名、`starts` 记下的标签页改名走默认宿主（herdr），因为空间 id 还不带宿主类型
+  （第 3 步）；事件流只订阅 herdr（`watchHerdr`，`herdrEvents` 只有一份）；`node.info` 的 `herdr_version` 取 herdr 宿主的版本。
+  列表时每个宿主各取一次快照合在一起，某个宿主没响应就沿用它上次的 Agent，全都没响应才算失败。
 
 ## 宿主之上的公共层
 
@@ -70,7 +88,7 @@ type Controller interface { Control(ctx, PaneRef, Size) (Control, error) } // in
 | 发送前检查 | 宿主能读带颜色的屏幕：完整的草稿 / 灰字判断和补回车（`checkPane`、`ensureSubmitted`）；只能读纯文本：按 Codex 现在的方式降级，只查对话框 |
 | 能力上报 | 每个会话带上宿主支持哪些能力（实时终端、接管、新建、改名、关闭），App 据此隐藏做不到的按钮 |
 
-node 里的 `n.herdr` 换成按类型存放的一组宿主：列表把每个宿主的窗格合在一起，每个操作按 `PaneRef` 的类型分发。
+node 里的 `n.herdr` 换成按类型存放的一组宿主（`n.hosts`）：列表把每个宿主的窗格合在一起，每个操作按 `PaneRef` 的类型分发。
 
 hub 和 App 要跟着改的：
 
@@ -136,7 +154,7 @@ hub 和 App 要跟着改的：
 补测试时发现、测试按现状固定下来的问题。现在修会改掉「重构前后行为不变」的基准，所以等第 1 步合并后再单独修，修的时候同时改对应的测试：
 
 - 切到 `bypassPermissions` 时，`tuiSetMode` 按 6 次 shift+tab 还没到就放弃，Claude 停在另一个模式上（不是原来的模式）。应该失败时回到原模式，或者先确认这个模式在循环里（`node/modes.go`）。
-- `close()` 在 `pane.list` 失败时直接关整个标签页，分屏里别的窗格一起被关（`node/control.go`）。应该失败时只关这个窗格或报错。
+- `close()` 在 `pane.list` 失败时直接关整个标签页，分屏里别的窗格一起被关（herdr 宿主的 `Close`，`node/hostherdr.go`）。应该失败时只关这个窗格或报错。
 - 原有的 `catchup_test.go` 里 4 条测试在设了 `CLAUDE_CONFIG_DIR` 的环境里失败：测试默认 Claude 配置目录在 HOME 下，应在测试里清掉这个变量（新测试的 `herdrNode` 已经这样做）。
 - 其余可疑行为（不一定要修）：herdr 快照失败退回 `agent.list` 时空间 / 槽位名是旧的；`editQueue` 清几行按 transcript 里的队列算，不按 TUI 实际拉回来的。
 
