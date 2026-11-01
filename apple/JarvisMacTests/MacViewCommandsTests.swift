@@ -12,6 +12,16 @@ struct MacViewCommandsTests {
         #expect(MacViewCommands.step(.small, by: -1) == .small)
     }
 
+    /// 显示 › 刷新 ⌘R: the iPhone pulls to refresh the list it is on; the Mac refreshes what the section shows.
+    @Test func refreshFollowsTheSection() {
+        #expect(MacViewCommands.refreshTarget(.inbox) == .inbox)
+        #expect(MacViewCommands.refreshTarget(.assistant) == .assistant)
+        #expect(MacViewCommands.refreshTarget(.agents) == .hub)
+        #expect(MacViewCommands.refreshTarget(.machines) == .hub)
+        #expect(MacViewCommands.refreshTarget(.knowledge) == .hub)
+        #expect(MacViewCommands.refreshTarget(.settings) == .hub)
+    }
+
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false) -> Session {
         try! JSON.decoder.decode(Session.self, from: Data("""
         {"machine_id":"m","session_id":"\(id)","title":"t","cwd":"/w","status":"idle","state":"\(state.rawValue)",

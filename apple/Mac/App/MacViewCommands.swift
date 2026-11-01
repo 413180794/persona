@@ -17,6 +17,17 @@ enum MacViewCommands {
         guard let key, let i = list.firstIndex(of: key) else { return list[0] }
         return list[((i + delta) % list.count + list.count) % list.count]
     }
+
+    /// What 显示 › 刷新 (⌘R, the iPhone's pull to refresh) asks the hub for again, by the section on screen.
+    enum RefreshTarget: Equatable { case hub, assistant, inbox }
+
+    static func refreshTarget(_ section: MacSection) -> RefreshTarget {
+        switch section {
+        case .inbox: .inbox
+        case .assistant: .assistant
+        case .agents, .knowledge, .machines, .settings: .hub
+        }
+    }
 }
 
 struct MacViewMenu: Commands {
@@ -57,6 +68,12 @@ struct MacViewMenu: Commands {
             Button("全部展开") { MacShellState.shared.agentsList?.expand() }
                 .disabled(MacShellState.shared.agentsList == nil)
             Divider()
+            // The iPhone's pull to refresh: a Mac list has no pull, so the menu asks the hub again (收件箱's toolbar
+            // button does the same for its list).
+            Button("刷新") { refresh() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!model.isPaired)
+            Divider()
             Button("上一个 Agent") { go(-1) }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!model.isPaired)
@@ -64,6 +81,17 @@ struct MacViewMenu: Commands {
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!model.isPaired)
             Divider()
+        }
+    }
+
+    private func refresh() {
+        let section = MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab)
+        Task {
+            switch MacViewCommands.refreshTarget(section) {
+            case .inbox: await InboxStore.shared.refresh()
+            case .assistant: await model.refreshAssistant(); await model.refresh()
+            case .hub: await model.refresh()
+            }
         }
     }
 

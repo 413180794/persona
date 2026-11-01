@@ -44,7 +44,7 @@ struct MacMenuShortcutTests {
             "快速打开…": "⌘k", "查找…": "⌘f", "交给 Jarvis": "⌘j", "显示会话信息": "⌥⌘i", "中断": "⌘.",
             "上一个 Agent": "⌘[", "下一个 Agent": "⌘]", "下一个需要你的": "⌃⌘n",
             "放大字号": "⌘+", "缩小字号": "⌘-", "标准字号": "⌘0",
-            "隐藏侧边栏": "⌃⌘s",
+            "隐藏侧边栏": "⌃⌘s", "刷新": "⌘r",
         ]
         for (title, shortcut) in promised {
             // The sidebar item says 显示侧边栏 while it is folded (remembered across launches, the tests run in the app).
