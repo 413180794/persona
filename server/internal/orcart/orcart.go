@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -43,7 +44,7 @@ type Client struct {
 	// logged. nil: silent. The auth token is never logged.
 	Log func(format string, args ...any)
 	// ReadOnly refuses, without sending, every method that could change Orca: only status.get, terminal.list,
-	// worktree.ps and terminal.read go out (live checks against the user's own Orca).
+	// worktree.ps, terminal.read and terminal.agentStatus go out (live checks against the user's own Orca).
 	ReadOnly bool
 
 	seq   atomic.Int64
@@ -119,7 +120,7 @@ func (e *Error) Error() string {
 }
 
 // Refused reports whether the runtime turned the request down before doing anything: bad or stale arguments, a
-// terminal that is gone or not writable, a method it does not have, too busy. Other errors (runtime_error…) leave
+// terminal that is gone, exited, replaced (its incarnation) or not writable, a method it does not have, too busy. Other errors (runtime_error…) leave
 // open whether it acted.
 func Refused(err error) bool {
 	var e *Error
@@ -128,10 +129,11 @@ func Refused(err error) bool {
 	}
 	switch e.Code {
 	case "bad_request", "unauthorized", "method_not_found", "method_not_supported", "invalid_argument",
-		"terminal_handle_stale", "terminal_not_writable", "runtime_busy", "request_too_large":
+		"terminal_handle_stale", "terminal_not_writable", "terminal_gone", "terminal_exited", "runtime_busy",
+		"request_too_large":
 		return true
 	}
-	return false
+	return strings.Contains(e.Code, "incarnation") // a fence (expectedIncarnationId) that did not hold
 }
 
 // IsCode: err is the runtime's error with that code.
@@ -240,7 +242,8 @@ func gaveUp(ctx context.Context) bool {
 }
 
 // readOnlyMethods are the calls a ReadOnly client makes.
-var readOnlyMethods = map[string]bool{"status.get": true, "terminal.list": true, "worktree.ps": true, "terminal.read": true}
+var readOnlyMethods = map[string]bool{"status.get": true, "terminal.list": true, "worktree.ps": true, "terminal.read": true,
+	"terminal.agentStatus": true}
 
 func (c *Client) call(ctx context.Context, timeout time.Duration, method string, params, out any, check bool) error {
 	if c.ReadOnly && !readOnlyMethods[method] {
@@ -389,6 +392,9 @@ func (c *Client) callOnce(ctx context.Context, m *runtimeMeta, timeout time.Dura
 				Code    string `json:"code"`
 				Message string `json:"message"`
 			} `json:"error"`
+			Meta struct {
+				RuntimeID string `json:"runtimeId"`
+			} `json:"_meta"`
 		}
 		if err := json.Unmarshal(line, &env); err != nil {
 			return fmt.Errorf("orca %s: decode: %v", method, err)
@@ -397,8 +403,15 @@ func (c *Client) callOnce(ctx context.Context, m *runtimeMeta, timeout time.Dura
 			continue
 		}
 		var gotID string
-		if json.Unmarshal(env.ID, &gotID) != nil || gotID != id {
+		_ = json.Unmarshal(env.ID, &gotID)
+		// A request Orca could not read (bad JSON, too large) is answered under the id "unknown": it is this one's.
+		if gotID != id && !(gotID == "unknown" && !env.OK) {
 			continue // not the answer to this request
+		}
+		if r := env.Meta.RuntimeID; r != "" && m.runtimeID != "" && r != m.runtimeID {
+			// Another runtime answered than the metadata names (Orca restarted between reading the file and now): the
+			// answer stands, the metadata is read again for the next call.
+			c.forget(m)
 		}
 		if !env.OK {
 			e := &Error{Method: method, Code: "error"}

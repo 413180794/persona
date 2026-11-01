@@ -4,7 +4,7 @@ package node
 
 // A read-only live check against the user's running Orca (go test -tags orcalive -run OrcaLive ./internal/node/ -v):
 // it lists Orca's sessions the way a node with engine orca does, through a read-only client (status.get,
-// terminal.list, worktree.ps only; anything else is refused before it is sent), and prints pane keys, agents, states,
+// terminal.list, worktree.ps, terminal.agentStatus only; anything else is refused before it is sent), and prints pane keys, agents, states,
 // pids and session ids — never screen text or tokens. Each session id is checked against the claude's own
 // sessions/<pid>.json.
 

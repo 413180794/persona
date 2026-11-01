@@ -57,7 +57,9 @@
 - Codex 生图（`scripts/persona/make_persona.py generate`）：`codex exec` 的内置 `image_gen` 用 Codex 自己的 ChatGPT 登录就能出透明背景的 PNG，
   但它的 HTTP 客户端不认 `socks5h://` 代理（对话请求认），要给 HTTP CONNECT 代理；`-i` 吃多个值，提示词从 stdin 给；ChatGPT 登录只能用部分模型。
   生图卡住（一张十几分钟、并行全停）先量代理隧道的吞吐，别先怪限流：2026-10-31 是 hub 机器外网只剩 11 KB/s，换一台外网快的机器开 `ssh -D` 后四个形象 6 分钟画完（`docs/persona.md`）。
-- Orca 宿主（`docs/plan-orca-support.md`「Orca 来源」）：`terminal.send` 被拒不是错误，回 `{send:{accepted:false, refusedReason}}`，不看 `accepted` 就当成发出去了；
+- Orca 宿主（`docs/plan-orca-support.md`「Orca 来源」）：`terminal.send` 的 `client` 必须带 `id`，只给 `type` 时每次发送都回 `invalid_argument`
+  （第一版就是这样，假 runtime 没校验参数所以测试全过；现在 `orcarttest` 按 Orca 的 schema 校验）。Orca 认不出前台的 Agent 时会把「提示」原样写进
+  壳层再回车，`accepted:false` 只在带 `requireAgentStatus` 时才有：发之前自己用进程表 + `terminal.agentStatus` 确认 Agent 在前台；
   `worktree.ps` 行上的 `state` 把子 Agent 合进去了（主 Agent 这轮结束、后台子 Agent 在跑时是 working），窗格自己的状态看 `mainAgent.state`；
   `agentIdentity` 在 Agent 退出后可能还在，「是不是 Agent」以 `ORCA_PANE_KEY` 对得上的 claude / codex 进程为准。node 的测试包把 `ORCA_USER_DATA_PATH`
   指到空目录，别让测试碰到正在用的 Orca（它的 socket 能完全控制 Orca）。

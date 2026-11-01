@@ -23,18 +23,22 @@ type Fake struct {
 	MetaPath string
 	Socket   string
 
-	mu        sync.Mutex
-	token     string
-	runtimeID string
-	log       []Call
-	terms     []map[string]any
-	layouts   []any
-	trees     []map[string]any
-	screens   map[string]map[string]any
-	status    map[string]any
-	on        map[string]func(params map[string]any) any
-	keepalive int
-	ln        net.Listener
+	mu          sync.Mutex
+	token       string
+	runtimeID   string
+	log         []Call
+	terms       []map[string]any
+	layouts     []any
+	trees       []map[string]any
+	screens     map[string]map[string]any
+	status      map[string]any
+	on          map[string]func(params map[string]any) any
+	keepalive   int
+	ln          net.Listener
+	agentStatus map[string]map[string]any
+	revisions   map[string]int
+	writes      []Write
+	invalid     []string
 }
 
 // Call is one request the fake got (status.get included).
@@ -43,11 +47,12 @@ type Call struct {
 	Params map[string]any
 }
 
-// String is "method {params}" with the params as sorted JSON (client left out: every send carries it).
+// String is "method {params}" with the params as sorted JSON (client and expectedIncarnationId left out: every
+// handle call carries them; Writes and the fake's validation check them).
 func (c Call) String() string {
 	p := map[string]any{}
 	for k, v := range c.Params {
-		if k != "client" {
+		if k != "client" && k != "expectedIncarnationId" {
 			p[k] = v
 		}
 	}
@@ -69,7 +74,7 @@ func New(t testing.TB) *Fake {
 	f := &Fake{
 		MetaPath: filepath.Join(dir, "orca-runtime.json"), Socket: filepath.Join(dir, "o.sock"),
 		token: "test-token-1", runtimeID: "rt-1", screens: map[string]map[string]any{},
-		on: map[string]func(map[string]any) any{},
+		on: map[string]func(map[string]any) any{}, agentStatus: map[string]map[string]any{}, revisions: map[string]int{},
 		status: map[string]any{"appVersion": "1.4.245", "runtimeProtocolVersion": 3, "minCompatibleRuntimeClientVersion": 2,
 			"protocolVersion": 3, "capabilities": []string{"terminal.prompt-delivery.v1"}},
 	}
@@ -158,15 +163,26 @@ func (f *Fake) serve(c net.Conn) {
 		f.mu.Lock()
 		authed := req.AuthToken == f.token
 		var result any
+		invalid := ""
 		if authed {
 			f.log = append(f.log, Call{Method: req.Method, Params: req.Params})
-			result = f.answerLocked(req.Method, req.Params)
+			if invalid = validate(req.Method, req.Params); invalid == "" {
+				result = f.answerLocked(req.Method, req.Params)
+			} else {
+				f.invalid = append(f.invalid, req.Method+": "+invalid)
+			}
 		}
-		h, keepalive := f.on[req.Method], f.keepalive
+		h, keepalive, rt := f.on[req.Method], f.keepalive, f.runtimeID
 		f.mu.Unlock()
 		if !authed {
 			f.write(c, map[string]any{"id": req.ID, "ok": false, "error": map[string]any{"code": "unauthorized",
 				"message": "Invalid auth token"}})
+			continue
+		}
+		if invalid != "" {
+			// Orca's dispatcher refuses params its schema rejects before any handler runs.
+			f.write(c, map[string]any{"id": req.ID, "ok": false, "error": map[string]any{"code": "invalid_argument",
+				"message": invalid}})
 			continue
 		}
 		if h != nil {
@@ -175,7 +191,7 @@ func (f *Fake) serve(c net.Conn) {
 		for range keepalive {
 			f.write(c, map[string]any{"_keepalive": true})
 		}
-		resp := map[string]any{"id": req.ID, "_meta": map[string]any{"runtimeId": "rt"}}
+		resp := map[string]any{"id": req.ID, "_meta": map[string]any{"runtimeId": rt}}
 		if e, ok := result.(Fail); ok {
 			resp["ok"] = false
 			resp["error"] = map[string]any{"code": e.Code, "message": e.Code}
@@ -187,19 +203,38 @@ func (f *Fake) serve(c net.Conn) {
 }
 
 func (f *Fake) answerLocked(method string, p map[string]any) any {
+	h, _ := p["terminal"].(string)
 	switch method {
 	case "status.get":
 		return f.status
 	case "terminal.list":
-		return map[string]any{"terminals": slices.Clone(f.terms), "visualLayouts": slices.Clone(f.layouts),
-			"hostScope": map[string]any{"hostIds": []string{"local"}}}
-	case "worktree.ps":
-		return map[string]any{"worktrees": slices.Clone(f.trees), "totalCount": len(f.trees), "truncated": false}
-	case "terminal.read":
-		h, _ := p["terminal"].(string)
-		if !f.hasHandleLocked(h) {
-			return Fail{"terminal_handle_stale"}
+		out := map[string]any{"terminals": slices.Clone(f.terms), "topologyRevisions": maps.Clone(f.revisions),
+			"hostScope": map[string]any{"hostIds": []string{"local"}}, "totalCount": len(f.terms), "truncated": false}
+		if p["includeVisualLayouts"] != false { // absent includes them, as for older clients
+			out["visualLayouts"] = slices.Clone(f.layouts)
 		}
+		return out
+	case "worktree.ps":
+		b, _ := json.Marshal(f.trees)
+		id := fmt.Sprintf("snap-%x", fnv32(b))
+		if _, ok := p["afterSnapshotId"]; !ok {
+			return map[string]any{"worktrees": slices.Clone(f.trees), "totalCount": len(f.trees), "truncated": false}
+		}
+		if p["afterSnapshotId"] == id {
+			return map[string]any{"unchanged": true, "snapshotId": id}
+		}
+		return map[string]any{"worktrees": slices.Clone(f.trees), "totalCount": len(f.trees), "truncated": false,
+			"snapshotId": id}
+	}
+	t := f.termLocked(h)
+	if t == nil {
+		return Fail{"terminal_handle_stale"}
+	}
+	if inc, ok := p["expectedIncarnationId"]; ok && inc != t["incarnationId"] {
+		return Fail{"terminal_handle_stale"} // the handle names another process now
+	}
+	switch method {
+	case "terminal.read":
 		s := f.screens[h]
 		if s == nil {
 			s = map[string]any{"tail": []string{}, "tailRows": []any{}}
@@ -207,21 +242,199 @@ func (f *Fake) answerLocked(method string, p map[string]any) any {
 		out := map[string]any{"handle": h, "status": "running", "truncated": false, "source": "screen"}
 		maps.Copy(out, s)
 		return map[string]any{"terminal": out}
-	case "terminal.send", "terminal.close":
-		h, _ := p["terminal"].(string)
-		if !f.hasHandleLocked(h) {
-			return Fail{"terminal_handle_stale"}
+	case "terminal.agentStatus":
+		st := f.agentStatus[h]
+		if st == nil {
+			st = map[string]any{"isRunningAgent": true, "status": nil}
 		}
-		if method == "terminal.close" {
-			return map[string]any{"close": map[string]any{"handle": h, "tabId": "t", "ptyKilled": true}}
+		out := map[string]any{"handle": h}
+		maps.Copy(out, st)
+		return map[string]any{"agentStatus": out}
+	case "terminal.close":
+		f.writes = append(f.writes, Write{Handle: h, Close: true})
+		return map[string]any{"close": map[string]any{"handle": h, "tabId": t["tabId"], "ptyKilled": true}}
+	case "terminal.send":
+		text, _ := p["text"].(string)
+		enter := p["enter"] == true
+		if p["requireAgentStatus"] == "sendable" && text != "" && enter {
+			// Guarded sends are two-phase in Orca: a combined text and submit is refused outright.
+			return map[string]any{"send": map[string]any{"handle": h, "accepted": false, "bytesWritten": 0}}
 		}
-		return map[string]any{"send": map[string]any{"handle": h, "accepted": true, "bytesWritten": 1}}
+		st := f.agentStatus[h]
+		running := st == nil || st["isRunningAgent"] == true
+		client, _ := p["client"].(map[string]any)
+		paste := p["agentPrompt"] == true && text != "" && enter && client["type"] == "desktop" && running
+		w := Write{Handle: h, Text: text, Enter: enter, Pasted: paste}
+		f.writes = append(f.writes, w)
+		send := map[string]any{"handle": h, "accepted": true, "bytesWritten": len(text)}
+		if paste {
+			send["prompt"] = map[string]any{"requestId": "r", "stages": []string{"input_accepted"}, "provider": "claude",
+				"observation": "supported", "processIncarnation": t["incarnationId"], "generation": 1,
+				"baselineWorkingSequence": 0}
+		}
+		return map[string]any{"send": send}
 	}
 	return Fail{"method_not_found"}
 }
 
-func (f *Fake) hasHandleLocked(h string) bool {
-	return slices.ContainsFunc(f.terms, func(t map[string]any) bool { return t["handle"] == h })
+func (f *Fake) termLocked(h string) map[string]any {
+	for _, t := range f.terms {
+		if t["handle"] == h {
+			return t
+		}
+	}
+	return nil
+}
+
+func fnv32(b []byte) uint32 {
+	h := uint32(2166136261)
+	for _, c := range b {
+		h ^= uint32(c)
+		h *= 16777619
+	}
+	return h
+}
+
+// validate checks a request's params the way Orca's zod schemas do (src/shared/rpc-contract), for the methods Jarvis
+// calls: "" when valid, else the reason (answered as invalid_argument). Unknown keys pass, as zod strips them.
+func validate(method string, p map[string]any) string {
+	str := func(k string, required bool) string {
+		v, ok := p[k]
+		if !ok || v == nil && !required {
+			if required {
+				return "Missing " + k
+			}
+			return ""
+		}
+		if s, isStr := v.(string); !isStr || s == "" {
+			return k + " must be a non-empty string"
+		}
+		return ""
+	}
+	boolean := func(k string) string {
+		if v, ok := p[k]; ok {
+			if _, isBool := v.(bool); !isBool {
+				return k + " must be a boolean"
+			}
+		}
+		return ""
+	}
+	literalTrue := func(k string) string {
+		if v, ok := p[k]; ok && v != true {
+			return k + " must be true"
+		}
+		return ""
+	}
+	first := func(reasons ...string) string {
+		for _, r := range reasons {
+			if r != "" {
+				return r
+			}
+		}
+		return ""
+	}
+	handle := func() string {
+		if v, ok := p["expectedIncarnationId"]; ok {
+			if s, isStr := v.(string); !isStr || s == "" {
+				return "Missing PTY incarnation"
+			}
+		}
+		return str("terminal", true)
+	}
+	switch method {
+	case "status.get":
+		return ""
+	case "terminal.list":
+		return first(boolean("includeVisualLayouts"), boolean("includePreview"), boolean("requireFreshPtyLiveness"))
+	case "worktree.ps":
+		if v, ok := p["afterSnapshotId"]; ok && v != nil {
+			if s, isStr := v.(string); !isStr || s == "" || len(s) > 128 {
+				return "afterSnapshotId must be a string of 1–128 characters or null"
+			}
+		}
+		return literalTrue("acceptRowDelta")
+	case "terminal.read":
+		if p["screen"] == true && p["cursor"] != nil {
+			return "Cursor cannot be combined with a screen read"
+		}
+		return first(handle(), literalTrue("screen"))
+	case "terminal.agentStatus", "terminal.close":
+		return handle()
+	case "terminal.send":
+		if r := first(handle(), literalTrue("agentPrompt"), literalTrue("requireWriteSettlement"),
+			literalTrue("claimViewport")); r != "" {
+			return r
+		}
+		if v, ok := p["text"]; ok && v != nil {
+			if _, isStr := v.(string); !isStr {
+				return "text must be a string"
+			}
+		}
+		if v, ok := p["requireAgentStatus"]; ok && v != "sendable" {
+			return "requireAgentStatus must be sendable"
+		}
+		if v, ok := p["client"]; ok {
+			c, isObj := v.(map[string]any)
+			if !isObj {
+				return "client must be an object"
+			}
+			if id, _ := c["id"].(string); id == "" {
+				return "Missing client ID"
+			}
+			if t, ok := c["type"]; ok && t != "mobile" && t != "desktop" {
+				return "client.type must be mobile or desktop"
+			}
+		}
+		_, hasText := p["text"]
+		if !hasText && p["enter"] != true && p["interrupt"] != true {
+			return "Missing terminal send payload"
+		}
+		return ""
+	}
+	return ""
+}
+
+// Write is one terminal.send or terminal.close the fake took: what reached the terminal.
+type Write struct {
+	Handle string
+	Text   string
+	Enter  bool
+	// Pasted: delivered as an agent prompt (bracketed paste); else written raw.
+	Pasted bool
+	Close  bool
+}
+
+// Writes are the sends and closes taken so far.
+func (f *Fake) Writes() []Write {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.writes)
+}
+
+// Invalid are the requests refused for their params so far ("method: reason").
+func (f *Fake) Invalid() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.invalid)
+}
+
+// SetAgentStatus sets terminal.agentStatus for a handle: whether Orca sees an agent running in front, and its state
+// ("" for unknown). Without it a terminal runs an agent of unknown state.
+func (f *Fake) SetAgentStatus(handle string, running bool, status string) {
+	var st any
+	if status != "" {
+		st = status
+	}
+	f.mu.Lock()
+	f.agentStatus[handle] = map[string]any{"isRunningAgent": running, "status": st}
+	f.mu.Unlock()
+}
+
+// SetRevision sets a worktree's topology revision (terminal.list's topologyRevisions).
+func (f *Fake) SetRevision(worktree string, rev int) {
+	f.mu.Lock()
+	f.revisions[worktree] = rev
+	f.mu.Unlock()
 }
 
 func (f *Fake) write(c net.Conn, msg any) {
@@ -245,7 +458,7 @@ func (f *Fake) Keepalives(n int) {
 
 // Terminal is a terminal.list entry on this machine.
 func Terminal(handle, tab, leaf, worktree, path, branch, title, identity string) map[string]any {
-	return map[string]any{"handle": handle, "ptyId": "pty-" + handle, "orphaned": false, "worktreeId": worktree,
+	return map[string]any{"handle": handle, "ptyId": "pty-" + handle, "incarnationId": "inc-" + handle, "orphaned": false, "worktreeId": worktree,
 		"worktreePath": path, "branch": branch, "tabId": tab, "leafId": leaf, "title": title, "connected": true,
 		"writable": true, "lastOutputAt": 1, "preview": "", "executionHostId": "local", "agentIdentity": identity}
 }
@@ -357,10 +570,10 @@ func (f *Fake) Count(method string) int {
 	return n
 }
 
-// Reset forgets the calls so far.
+// Reset forgets the calls and writes so far.
 func (f *Fake) Reset() {
 	f.mu.Lock()
-	f.log = nil
+	f.log, f.writes = nil, nil
 	f.mu.Unlock()
 }
 

@@ -116,34 +116,39 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 
 - **窗格 id**：Orca 的 pane key `<tabId>:<leafId>`（`worktree.ps` 按它报 Agent，终端里的进程环境变量 `ORCA_PANE_KEY` 也是它），存成
   `orca:<tabId>:<leafId>`。`terminal.*` 要的 handle（`term_<uuid>`）由宿主按 pane key 从最近一次 `terminal.list` 查；
-  handle 过期（`terminal_handle_stale`，终端换了一个新的 handle）时重新列一次再试一遍。
+  handle 过期（`terminal_handle_stale`）时重新列一次：读屏照常跟过去；写（发送、按键、关闭）只在终端还是同一个进程（`incarnationId` 没变）时重试，
+  换了进程就拒绝（什么都没输入）。读、写、关闭都带 `expectedIncarnationId`，Orca 发现 handle 背后换了进程会拒绝，写不会落到新进程里。
 - **连接**：每次调用新开一条连接（socket 允许一条连接多个请求，但不需要）。第一次调用前、Orca 换了 runtime（`runtimeId` 变了）后先
   `status.get`：`runtimeProtocolVersion` 低于 3，或 `minCompatibleRuntimeClientVersion` 高于 3，就不兼容，所有调用报错，
   `node.info` 里 Orca 不可用并带一句 `note`。元数据文件不在、没有 unix 传输、socket 不在或拒绝连接都算「没开」（`host.ErrNotRunning`）：
-  立刻答「没有终端」，从没连上过就不记日志；连不上或 `unauthorized` 时重读元数据文件再试一次（Orca 重启换了 socket 和 token）。
+  立刻答「没有终端」，从没连上过就不记日志；连不上或 `unauthorized` 时重读元数据文件再试一次（Orca 重启换了 socket 和 token）；
+  回复的 `_meta.runtimeId` 和元数据对不上时下次重读。Orca 读不懂的请求（坏 JSON、太大）以 id `unknown` 回错误，按这个请求的拒绝处理。
   元数据路径：`$ORCA_USER_DATA_PATH/orca-runtime.json`，否则 macOS `~/Library/Application Support/orca/`、Linux `$XDG_CONFIG_HOME/orca/`。
-- **超时**：`terminal.list`、`worktree.ps` 3 秒（每次刷新都调），`status.get`、`terminal.read` 5 秒，`terminal.send` 30 秒
+- **超时**：`terminal.list`、`worktree.ps` 3 秒（每次刷新都调），`status.get`、`terminal.read`、`terminal.agentStatus` 5 秒，`terminal.send` 30 秒
   （Agent 提示是 Orca 那边的长轮询，期间发 keepalive），`terminal.close` 10 秒。
-- **没有推送**：不实现 `Watcher`。选了 Orca 的机器没有事件流，node 的轮询每秒取一次快照（`terminal.list` + `worktree.ps`，
-  进程表最多 1.5 秒扫一次），不是 herdr 有事件流时的 10 秒慢快照。本机实测一次刷新约 0.3 秒（10 个终端）。
+- **没有推送**：不实现 `Watcher`。选了 Orca 的机器没有事件流，node 的轮询每秒取一次快照，不是 herdr 有事件流时的 10 秒慢快照。
+  为了轻：`terminal.list` 平时不要布局（`includeVisualLayouts:false`，Orca 说这个贵），终端集合或某个工作区的 `topologyRevisions` 变了、
+  或者距上次超过 30 秒才要一次；`worktree.ps` 带上次的 `afterSnapshotId`，没变时 Orca 只回 `unchanged`；进程表最多 1.5 秒扫一次，
+  分两步（先 `ps -o pid=,stat=,etime=,args=` 找 claude / codex，再只对它们 `ps -E`）；快照失败后的 `Agents` 复用刚才那次结果。
+  本机实测一次刷新约 0.2 秒（10 个终端）。
 
 ### 映射对照
 
 | Jarvis 要的 | Orca 怎么做 | 第一期 |
 | --- | --- | --- |
-| 列出窗格 | `terminal.list {includeVisualLayouts, includePreview:false}`：只取本机的（`executionHostId` 是 `local`，SSH 目标上的终端那边没有 node 能管）、不是 `orphaned` 的 | ✅ |
-| 是不是 Agent | 窗格里有 claude / codex 进程（进程环境变量 `ORCA_PANE_KEY` 等于这个 pane key，缺了看 `ORCA_AGENT_PANE`）才算。Orca 的 `agentIdentity` 和 Agent 行在 Agent 退出后可能还留着，所以单看它们不算；只有扫不了进程表时才退回「`agentIdentity` 和一条 `hasLivePty` 的同类 Agent 行都在」 | ✅ |
-| 状态 | `worktree.ps` 里这个 pane key 的 Agent 行（类型要对得上）：优先 `mainAgent.state`（窗格里主 Agent 自己的状态；行上的 `state` 把子 Agent 也算进去，主 Agent 这轮结束了、后台子 Agent 还在跑时是 working），working / blocked / done 原样，waiting 当 blocked；没有行（Orca 的 hook 还没报过）记 unknown | ✅ 轮询 |
-| 窗格对应会话 | 进程表里这个窗格的 claude 进程 pid → `sessions/<pid>.json`（公共的「进程说会话」路径）。macOS 一次 `ps -E -ww`、Linux 读 `/proc`，只取 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE` 两个变量，不留、不记日志、不发 hub（环境里还有 Orca 的 hook token） | ✅ |
-| 空间 / 槽位 | 空间是工作区（`worktreeId`），名字取分支（去掉 `refs/heads/`），没有分支取路径的文件夹名，顺序按 `worktree.ps`（Orca 侧栏的顺序）；槽位是 `visualLayouts` 里的标签页，名字取标签页标题，空的取序号 | ✅ |
+| 列出窗格 | `terminal.list {includeVisualLayouts, includePreview:false}`（布局按上面「没有推送」的规则才要）：只取本机的（`executionHostId` 是 `local`，SSH 目标上的终端那边没有 node 能管）、不是 `orphaned` 的 | ✅ |
+| 是不是 Agent | 窗格里有**在前台**的 claude / codex 进程（进程环境变量 `ORCA_PANE_KEY` 等于这个 pane key，缺了看 `ORCA_AGENT_PANE`）才算：没被挂起（`ps` 的 stat 不以 `T` 开头）、在终端的前台进程组（stat 带 `+`；Linux 比 `/proc/<pid>/stat` 的 pgrp 和 tpgid），不带 `HERDR_PANE_ID` / `HC_TERMINAL_ID`（套在 Orca 终端里的 herdr / herdr-core 里的 claude 继承了外面的 `ORCA_PANE_KEY`，但它归那个宿主）。Orca 的 `agentIdentity` 和 Agent 行在 Agent 退出后可能还留着，所以单看它们不算；只有扫不了进程表时列表才退回「`agentIdentity` 和一条 `hasLivePty` 的同类 Agent 行都在」（这时写一律拒绝） | ✅ |
+| 状态 | `worktree.ps` 里这个 pane key 的 Agent 行（类型要对得上，且 `updatedAt` 不早于这个 Agent 进程启动前 2 秒，否则是同一窗格里上一个 Agent 留下的）：优先 `mainAgent.state`（窗格里主 Agent 自己的状态；行上的 `state` 把子 Agent 也算进去，主 Agent 这轮结束了、后台子 Agent 还在跑时是 working），working / blocked / done 原样，waiting 当 blocked。没有可用的行时问 `terminal.agentStatus`（缓存 3 秒）：working 原样，permission 当 blocked，idle 当 done；它也不知道（`status` 为 null）记 unknown | ✅ 轮询 |
+| 窗格对应会话 | 进程表里这个窗格在前台的 claude 进程 pid → `sessions/<pid>.json`（公共的「进程说会话」路径）。macOS 两次 `ps`（见上）、Linux 读 `/proc`，环境里只取 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`（和用来排除嵌套的两个变量），不留、不记日志、不发 hub（环境里还有 Orca 的 hook token） | ✅ |
+| 空间 / 槽位 | 空间是工作区（`worktreeId`），名字取分支（去掉 `refs/heads/`），没有分支取路径的文件夹名，顺序按 `worktree.ps`（Orca 侧栏的顺序）；槽位是 `visualLayouts` 里的标签页，按布局树的阅读顺序（分屏先 `first` 后 `second`），名字取标签页标题，空的取序号 | ✅ |
 | 读屏 | `terminal.read {terminal, screen:true}`：纯文本、只有当前屏，按 `tailRows[].wrapped` 把软换行接回去；`source` 是 `screen-unavailable` 时报错。宿主声明 `host.PlainScreen`，`recent` 也只给当前屏 | ✅ 纯文本、无历史 |
-| 发消息 | 先扫一次进程表确认 claude / codex 还在这个窗格（退出了就拒绝，免得壳层把消息当命令跑），再 `terminal.send {text, enter:true, agentPrompt:true, client:{type:"desktop"}}`：Orca 认出前台的 Agent 时括号粘贴再回车。发送前检查只查对话框（没有颜色分不清草稿和灰字） | ✅ |
-| 只输入不回车 | `terminal.send {text}` 不带 `enter`：原样写字节，不粘贴。所以 Orca 不声明 `TextTyper`，对话框的自由填写照常 | ✅ |
-| 特殊按键 | 一张按键名 → 字节的表（`enter` `\r`、`esc` `\x1b`、`shift+tab` `\x1b[Z`、方向键、`ctrl+<字母>`、`backspace` `\x7f`……）和单个可打印字符；每个键单独一次 `terminal.send`，间隔 40 毫秒（连在一起时 `esc` 会和后面的序列拼成 alt 键）。表里没有的键在按任何键之前拒绝 | ✅ |
-| 什么都没输入 | `terminal.send` 回 `accepted:false` 时什么都没写：`refusedReason` 是 `permission` 回 `dialog_open`，其余（`no-agent`）回 `not_delivered`；`terminal_handle_stale`、`terminal_not_writable`、`invalid_argument` 这类请求前就拒绝的错误也回 `not_delivered`（都是 `delivered:none`，可以重发）。`runtime_error` 之类不确定写没写的照常报错 | ✅ |
+| 发消息 | Orca 只在认出前台是 Agent 时括号粘贴再回车，否则把文字原样写进去再写 `\r`（壳层会当命令执行）；`accepted:false` 的拒绝（`no-agent` / `permission`）只在带 `requireAgentStatus:"sendable"` 时才有，而它和「文字 + 回车」一起用时 Orca 一律拒绝，所以用不上。宿主自己先确认 Agent 在前台：进程表里有这个窗格在前台的 claude / codex，**并且** `terminal.agentStatus` 说 `isRunningAgent`；`status` 是 permission（权限对话框在等）回 `dialog_open`；进程表扫不了、Orca 答不上来、都算不在前台，回 `not_delivered`，什么都没输入。然后 `terminal.send {text, enter:true, agentPrompt:true, client:{id:"jarvis", type:"desktop"}}`（`client.id` 必填，缺了 Orca 回 `invalid_argument`）。回复里没有 `send.prompt` 回执（说明 Orca 原样写了）记一行日志。发送前检查只查对话框（没有颜色分不清草稿和灰字） | ✅ |
+| 只输入不回车 | `terminal.send {text}` 不带 `enter`：原样写字节，不粘贴，先做同样的「Agent 在前台」检查（不查 permission：对话框的自由填写要用）。Orca 不声明 `TextTyper` | ✅ |
+| 特殊按键 | 按键名 → xterm 的字节：`enter` `\r`、`esc` `\x1b`、`shift+tab` `\x1b[Z`、`backspace` `\x7f`、`ctrl+<字母>` 控制字符、`ctrl+space` `\x00`、`alt+<字符>` 前面加 ESC，方向键 / Home / End / Insert / Delete / PageUp / PageDown / F1–F12 带修饰键时用 xterm 的参数（1 + shift 1 + alt 2 + ctrl 4，如 `alt+left` `\x1b[1;3D`、`ctrl+left` `\x1b[1;5D`）。每个键单独一次 `terminal.send`，间隔 40 毫秒（按调用方的 ctx 取消；连在一起时 `esc` 会和后面的序列拼成 alt 键）。表里没有的键在按任何键之前拒绝；会打出字的键（字母、数字、空格）先做「Agent 在前台」检查，回车、esc、方向键、ctrl+c 不查（卡住的窗格也要能打断、关掉） | ✅ |
+| 什么都没输入 | 上面的前台检查不过；`terminal.send` 回 `accepted:false`（`permission` 回 `dialog_open`，其余 `not_delivered`）；`terminal_handle_stale`（含 incarnation 对不上）、`terminal_not_writable`、`terminal_gone`、`terminal_exited`、`invalid_argument`、`runtime_busy`、`request_too_large` 这类写之前就拒绝的错误也回 `not_delivered`（都是 `delivered:none`，可以重发）。`runtime_error` 之类不确定写没写的照常报错 | ✅ |
 | 关闭 | 和 herdr 一样先按两次 ctrl+c（`\x03`），再 `terminal.close`（Orca 关掉窗格，只剩它时关掉标签页）。已经不在的终端算关好了 | ✅ |
 | 改名 | 工作区和标签页的名字归 Orca 管：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Orca 里的工作区和标签页暂时不能从手机改名」） | ❌ |
-| 认 hook 的窗格 | `jarvisd hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`。Orca 里开的 claude 一般不带 Jarvis 的 hook（只有 Jarvis 自己启动时用 `--settings` 带上） | ✅ |
+| 认 hook 的窗格 | `jarvisd hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`；node 只在引擎是 Orca 的机器上记下这种窗格（herdr 机器和以前一样，不认 Orca 的窗格）。Orca 里开的 claude 一般不带 Jarvis 的 hook（只有 Jarvis 自己启动时用 `--settings` 带上） | ✅ |
 | 新建会话、切模式 / 思考强度 | `terminal.create` 普通路径忽略 `cwd`；模式菜单要先确认纯文本够不够认 | 第二期 |
 | 实时终端、带颜色读屏、接管尺寸 | 只在配对的加密 WebSocket 上有，hub 退回读屏 | 第三期 |
 | 推送变化 | socket 上没有（所有 `*.subscribe` 都是流式方法） | — |
@@ -154,9 +159,12 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
 
 - **状态行什么时候消失**：Agent 进程退出后 Orca 把它的行从 `worktree.ps` 删掉（只留恢复用的行，`worktree.ps` 不列）。但 `agentIdentity`
   和行的消失不一定和进程同步，所以「是不是 Agent」以进程为准。
-- **`terminal.send` 的拒绝不是错误**：返回 `{send:{accepted:false, bytesWritten:0, refusedReason}}`，要看 `accepted`。
-- **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得的 Agent，五个都满足才粘贴；
-  不带 `enter` 的文字原样写。
+- **`terminal.send` 的拒绝不是错误**：返回 `{send:{accepted:false, bytesWritten:0, refusedReason}}`，要看 `accepted`；但 `no-agent` / `permission`
+  这两种只在带 `requireAgentStatus:"sendable"` 时出现，不带时 Orca 照写不误。`requireAgentStatus` 和「文字 + 回车」一起用时 Orca 直接拒绝
+  （它要求分两步：先写文字、再回车），而分两步就没有括号粘贴，所以「Agent 在前台」只能由我们发之前用 `terminal.agentStatus` 查。
+- **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得的 Agent，五个都满足才粘贴，
+  回复带 `send.prompt` 回执；
+  否则原样写文字再写 `\r`。不带 `enter` 的文字原样写。`client` 要带 `id`（Jarvis 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
 - **默认读屏会换源**：不带 `screen` 的 `terminal.read` 读的是输出流的尾巴（`source: stream`），所以一律带 `screen:true`。
 
 ### 注意
@@ -170,8 +178,9 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
   但这是 Orca 的内部文件，不用。
 - TRAEX 开在 Orca 里：能列出来（按 `ORCA_PANE_KEY` 认窗格），但第一期发消息会被拒绝（宿主只给它认得进程的 claude / codex 发）。
 - 联调只做只读调用：`go test -tags orcalive -run OrcaLive ./internal/node/ -v` 用只读客户端（只放行 `status.get`、`terminal.list`、
-  `worktree.ps`、`terminal.read`，别的方法在发出前就拒绝）列一遍正在用的 Orca，打印窗格、状态、pid、会话 id，并和
-  `sessions/<pid>.json` 对一遍，不打印屏幕内容。会改动 Orca 的调用（发送、关闭、新建）只对假的 runtime 测。
+  `worktree.ps`、`terminal.read`、`terminal.agentStatus`，别的方法在发出前就拒绝）列一遍正在用的 Orca，打印窗格、状态、pid、会话 id，并和
+  `sessions/<pid>.json` 对一遍，不打印屏幕内容。会改动 Orca 的调用（发送、关闭、新建）只对假的 runtime 测：`orcarttest` 按 Orca 的
+  参数 schema（`src/shared/rpc-contract`）校验每个请求，不合格的回 `invalid_argument` 并记下来，测试检查没有这种请求。
   node 的测试包把 `ORCA_USER_DATA_PATH` 指到不存在的目录，任何测试都碰不到真的 Orca。
 
 ## herdr-core 宿主

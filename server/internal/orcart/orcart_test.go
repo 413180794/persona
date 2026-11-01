@@ -1,9 +1,12 @@
 package orcart_test
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +51,7 @@ func TestCallChecksCompatOnceAndSkipsKeepalives(t *testing.T) {
 	f.Keepalives(2)
 	c := client(f, nil)
 	for range 3 {
-		l, err := c.Terminals(context.Background())
+		l, err := c.Terminals(context.Background(), true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +65,8 @@ func TestCallChecksCompatOnceAndSkipsKeepalives(t *testing.T) {
 	if n := f.Count("status.get"); n != 1 {
 		t.Errorf("status.get %d times", n)
 	}
-	if tr := f.Trace("terminal.list"); len(tr) != 3 || !strings.Contains(tr[0], `"includePreview":false`) {
+	if tr := f.Trace("terminal.list"); len(tr) != 3 || !strings.Contains(tr[0], `"includePreview":false`) ||
+		!strings.Contains(tr[0], `"includeVisualLayouts":true`) {
 		t.Errorf("list calls: %v", tr)
 	}
 }
@@ -71,13 +75,13 @@ func TestCallChecksCompatOnceAndSkipsKeepalives(t *testing.T) {
 func TestNotRunning(t *testing.T) {
 	l := &logs{}
 	c := &orcart.Client{MetaPath: filepath.Join(t.TempDir(), "orca-runtime.json"), Log: l.logf}
-	if _, err := c.Terminals(context.Background()); !errors.Is(err, orcart.ErrNotRunning) {
+	if _, err := c.Terminals(context.Background(), true); !errors.Is(err, orcart.ErrNotRunning) {
 		t.Fatalf("no metadata: %v", err)
 	}
 	f := orcarttest.New(t)
 	f.Stop()
 	c = client(f, l)
-	if _, err := c.Terminals(context.Background()); !errors.Is(err, orcart.ErrNotRunning) {
+	if _, err := c.Terminals(context.Background(), true); !errors.Is(err, orcart.ErrNotRunning) {
 		t.Fatalf("socket gone: %v", err)
 	}
 	if got := l.all(); got != "" {
@@ -94,13 +98,13 @@ func TestRestartReadsTheMetadataAgain(t *testing.T) {
 	f := orcarttest.New(t)
 	l := &logs{}
 	c := client(f, l)
-	if _, err := c.Worktrees(context.Background()); err != nil {
+	if _, _, _, err := c.Worktrees(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.Restart("test-token-2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Worktrees(context.Background()); err != nil {
+	if _, _, _, err := c.Worktrees(context.Background(), ""); err != nil {
 		t.Fatalf("after restart: %v", err)
 	}
 	// The same socket, a new token (the metadata file rewritten in place).
@@ -108,7 +112,7 @@ func TestRestartReadsTheMetadataAgain(t *testing.T) {
 	if err := f.Restart("test-token-3"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Worktrees(context.Background()); err != nil {
+	if _, _, _, err := c.Worktrees(context.Background(), ""); err != nil {
 		t.Fatalf("after a token change: %v", err)
 	}
 	for _, tok := range []string{"test-token-1", "test-token-2", "test-token-3"} {
@@ -126,7 +130,7 @@ func TestUnauthorized(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := client(f, nil)
-	if _, err := c.Terminals(context.Background()); !orcart.IsCode(err, "unauthorized") {
+	if _, err := c.Terminals(context.Background(), true); !orcart.IsCode(err, "unauthorized") {
 		t.Fatalf("wrong token: %v", err)
 	}
 }
@@ -140,7 +144,7 @@ func TestIncompatible(t *testing.T) {
 		f := orcarttest.New(t)
 		f.SetStatus(st)
 		c := client(f, nil)
-		if _, err := c.Terminals(context.Background()); !errors.Is(err, orcart.ErrIncompatible) {
+		if _, err := c.Terminals(context.Background(), true); !errors.Is(err, orcart.ErrIncompatible) {
 			t.Fatalf("%v: %v", st, err)
 		}
 		if f.Count("terminal.list") != 0 {
@@ -163,11 +167,18 @@ func TestSend(t *testing.T) {
 	f.SetTerminals(orcarttest.Terminal("term_1", "tab1", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))
 	c := client(f, nil)
 	ctx := context.Background()
-	if err := c.Send(ctx, "term_1", "\x1b[Z"); err != nil {
+	tg := orcart.Target{Handle: "term_1", Incarnation: "inc-term_1"}
+	if err := c.Send(ctx, tg, "\x1b[Z"); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Prompt(ctx, "term_1", "hello"); err != nil {
-		t.Fatal(err)
+	if sent, err := c.Prompt(ctx, tg, "hello"); err != nil || !sent.Prompt {
+		t.Fatalf("prompt: %+v %v", sent, err)
+	}
+	if inv := f.Invalid(); len(inv) != 0 {
+		t.Errorf("params Orca would refuse: %v", inv)
+	}
+	if w := f.Writes(); len(w) != 2 || w[0].Text != "\x1b[Z" || w[0].Enter || w[0].Pasted || !w[1].Pasted || !w[1].Enter {
+		t.Errorf("writes %+v", w)
 	}
 	want := []string{
 		orcarttest.SendCall("term_1", map[string]any{"text": "\x1b[Z"}),
@@ -181,12 +192,12 @@ func TestSend(t *testing.T) {
 			"refusedReason": "permission"}}
 	})
 	var r *orcart.Refusal
-	if err := c.Prompt(ctx, "term_1", "hello"); !errors.As(err, &r) || r.Reason != "permission" ||
+	if _, err := c.Prompt(ctx, tg, "hello"); !errors.As(err, &r) || r.Reason != "permission" ||
 		!errors.Is(err, orcart.ErrRefused) {
 		t.Errorf("refused: %v", err)
 	}
 	f.Handle("terminal.send", nil)
-	if err := c.Send(ctx, "term_gone", "x"); !orcart.IsCode(err, "terminal_handle_stale") || !orcart.Refused(err) {
+	if err := c.Send(ctx, orcart.Target{Handle: "term_gone"}, "x"); !orcart.IsCode(err, "terminal_handle_stale") || !orcart.Refused(err) {
 		t.Errorf("stale handle: %v", err)
 	}
 }
@@ -197,7 +208,7 @@ func TestRead(t *testing.T) {
 	f.SetTerminals(orcarttest.Terminal("term_1", "tab1", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))
 	f.SetScreenRows("term_1", []string{"a long li", "ne", "❯ next"}, []bool{true, false, false})
 	c := client(f, nil)
-	s, err := c.Read(context.Background(), "term_1")
+	s, err := c.Read(context.Background(), orcart.Target{Handle: "term_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +221,7 @@ func TestRead(t *testing.T) {
 	f.Handle("terminal.read", func(map[string]any) any {
 		return map[string]any{"terminal": map[string]any{"handle": "term_1", "tail": []string{}, "source": "screen-unavailable"}}
 	})
-	if _, err := c.Read(context.Background(), "term_1"); !errors.Is(err, orcart.ErrNoScreen) {
+	if _, err := c.Read(context.Background(), orcart.Target{Handle: "term_1"}); !errors.Is(err, orcart.ErrNoScreen) {
 		t.Errorf("no screen: %v", err)
 	}
 }
@@ -220,7 +231,7 @@ func TestTimeoutAndEpisodeLog(t *testing.T) {
 	f := orcarttest.New(t)
 	l := &logs{}
 	c := client(f, l)
-	if _, err := c.Worktrees(context.Background()); err != nil {
+	if _, _, _, err := c.Worktrees(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	block := make(chan struct{})
@@ -229,7 +240,7 @@ func TestTimeoutAndEpisodeLog(t *testing.T) {
 	for range 2 {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		start := time.Now()
-		_, err := c.Worktrees(ctx)
+		_, _, _, err := c.Worktrees(ctx, "")
 		cancel()
 		if err == nil || time.Since(start) > 2*time.Second {
 			t.Fatalf("wedged: %v after %s", err, time.Since(start))
@@ -247,18 +258,145 @@ func TestReadOnly(t *testing.T) {
 	f.SetTerminals(orcarttest.Terminal("term_1", "tab1", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))
 	c := &orcart.Client{MetaPath: f.MetaPath, ReadOnly: true}
 	ctx := context.Background()
-	if _, err := c.Terminals(ctx); err != nil {
+	if _, err := c.Terminals(ctx, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Read(ctx, "term_1"); err != nil {
+	tg := orcart.Target{Handle: "term_1"}
+	if _, err := c.Read(ctx, tg); err != nil {
 		t.Fatal(err)
 	}
-	for _, err := range []error{c.Send(ctx, "term_1", "x"), c.Prompt(ctx, "term_1", "x"), c.Close(ctx, "term_1")} {
+	if _, err := c.AgentStatus(ctx, tg); err != nil {
+		t.Fatal(err)
+	}
+	_, perr := c.Prompt(ctx, tg, "x")
+	for _, err := range []error{c.Send(ctx, tg, "x"), perr, c.Close(ctx, tg)} {
 		if err == nil || !strings.Contains(err.Error(), "read-only") {
 			t.Errorf("read-only client: %v", err)
 		}
 	}
 	if n := f.Count("terminal.send") + f.Count("terminal.close"); n != 0 {
 		t.Errorf("%d writes reached Orca", n)
+	}
+}
+
+// The fake refuses what Orca's schemas refuse: a send naming a client without its id (Jarvis's first send bug).
+func TestFakeValidatesLikeOrca(t *testing.T) {
+	f := orcarttest.New(t)
+	f.SetTerminals(orcarttest.Terminal("term_1", "tab1", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))
+	c := client(f, nil)
+	if err := c.Call(context.Background(), time.Second, "terminal.send",
+		map[string]any{"terminal": "term_1", "text": "x", "client": map[string]any{"type": "desktop"}}, nil); !orcart.IsCode(err, "invalid_argument") {
+		t.Errorf("client without id: %v", err)
+	}
+	if err := c.Call(context.Background(), time.Second, "terminal.read",
+		map[string]any{"terminal": "term_1", "screen": 1}, nil); !orcart.IsCode(err, "invalid_argument") {
+		t.Errorf("screen not true: %v", err)
+	}
+	// A fenced call to a terminal that runs another process now is stale.
+	if err := c.Send(context.Background(), orcart.Target{Handle: "term_1", Incarnation: "inc-old"}, "x"); !orcart.IsCode(err, "terminal_handle_stale") {
+		t.Errorf("old incarnation: %v", err)
+	}
+}
+
+// worktree.ps after a snapshot id: unchanged when nothing changed, the worktrees again when something did.
+func TestWorktreeSnapshots(t *testing.T) {
+	f := orcarttest.New(t)
+	f.SetWorktrees(orcarttest.Worktree("wt1", "/tmp/p", "main", orcarttest.Agent("a:b", "claude", "working")))
+	c := client(f, nil)
+	ctx := context.Background()
+	trees, id, unchanged, err := c.Worktrees(ctx, "")
+	if err != nil || len(trees) != 1 || id == "" || unchanged {
+		t.Fatalf("first: %v %q %v %v", trees, id, unchanged, err)
+	}
+	trees, id2, unchanged, err := c.Worktrees(ctx, id)
+	if err != nil || !unchanged || id2 != id || len(trees) != 0 {
+		t.Fatalf("again: %v %q %v %v", trees, id2, unchanged, err)
+	}
+	f.SetWorktrees(orcarttest.Worktree("wt1", "/tmp/p", "main", orcarttest.Agent("a:b", "claude", "done")))
+	trees, id3, unchanged, err := c.Worktrees(ctx, id)
+	if err != nil || unchanged || id3 == id || len(trees) != 1 || trees[0].Agents[0].State != "done" {
+		t.Fatalf("changed: %v %q %v %v", trees, id3, unchanged, err)
+	}
+	if tr := f.Trace("worktree.ps"); len(tr) != 3 || tr[0] != `worktree.ps {"afterSnapshotId":null}` {
+		t.Errorf("calls %v", tr)
+	}
+}
+
+// Tabs come in the layout's reading order: a split's first side, then its second — the same every time.
+func TestTabsInLayoutOrder(t *testing.T) {
+	f := orcarttest.New(t)
+	f.SetTerminals(orcarttest.Terminal("term_1", "tabA", "leaf1", "wt1", "/tmp/p", "", "x", "claude"))
+	group := func(ids ...string) map[string]any {
+		var tabs []any
+		for _, id := range ids {
+			tabs = append(tabs, map[string]any{"tabId": id, "title": id, "activeLeafId": nil,
+				"panes": map[string]any{"type": "terminal", "handle": "h", "tabId": id, "leafId": "l", "title": nil,
+					"connected": true, "active": true}})
+		}
+		return map[string]any{"type": "group", "groupId": "g", "activeTabId": nil, "tabs": tabs}
+	}
+	f.Handle("terminal.list", func(map[string]any) any {
+		return map[string]any{"terminals": []any{}, "totalCount": 0, "truncated": false, "visualLayouts": []any{
+			map[string]any{"worktreeId": "wt1", "worktreePath": "/tmp/p", "root": map[string]any{"type": "split",
+				"direction": "horizontal", "first": group("tabA", "tabB"),
+				"second": map[string]any{"type": "split", "direction": "vertical", "first": group("tabC"), "second": group("tabD")}}}}}
+	})
+	c := client(f, nil)
+	for range 20 {
+		l, err := c.Terminals(context.Background(), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, tab := range l.Tabs {
+			got = append(got, tab.ID)
+		}
+		if strings.Join(got, ",") != "tabA,tabB,tabC,tabD" {
+			t.Fatalf("tabs %v", got)
+		}
+	}
+}
+
+// A request Orca could not read is answered under the id "unknown": that is this request's refusal, not a hang.
+func TestUnknownIDRefusal(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "orcau")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "o.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				line, _ := bufio.NewReader(conn).ReadString('\n')
+				if strings.Contains(line, `"status.get"`) {
+					fmt.Fprintln(conn, `{"id":"j1","ok":true,"result":{"runtimeProtocolVersion":3,"minCompatibleRuntimeClientVersion":2}}`)
+					return
+				}
+				fmt.Fprintln(conn, `{"id":"unknown","ok":false,"error":{"code":"request_too_large","message":"too large"}}`)
+			}()
+		}
+	}()
+	meta := filepath.Join(dir, "orca-runtime.json")
+	b, _ := json.Marshal(map[string]any{"runtimeId": "rt", "authToken": "t",
+		"transports": []any{map[string]any{"kind": "unix", "endpoint": sock}}})
+	if err := os.WriteFile(meta, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &orcart.Client{MetaPath: meta}
+	start := time.Now()
+	err = c.Send(context.Background(), orcart.Target{Handle: "term_1"}, "x")
+	if !orcart.IsCode(err, "request_too_large") || !orcart.Refused(err) || time.Since(start) > 2*time.Second {
+		t.Errorf("unknown id: %v after %s", err, time.Since(start))
 	}
 }

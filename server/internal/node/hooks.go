@@ -196,7 +196,11 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if json.Unmarshal(req.Input, &in) != nil || n.peer == nil {
 		return nil, nil
 	}
-	n.bindPane(req.Pane, in.SessionID)
+	// An Orca pane is bound only on a machine whose engine is Orca: elsewhere nothing could drive it, and the hook
+	// reported no pane for it before Orca was a host (a herdr machine behaves as it did).
+	if host.ParsePane(req.Pane).Kind != host.Orca || n.engine() == proto.EngineOrca {
+		n.bindPane(req.Pane, in.SessionID)
+	}
 	if in.TranscriptPath != "" && validID(in.SessionID) {
 		n.mu.Lock()
 		n.paths[in.SessionID] = in.TranscriptPath

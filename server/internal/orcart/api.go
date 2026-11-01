@@ -12,6 +12,9 @@ import (
 type Terminal struct {
 	// Handle is the runtime's id for the terminal ("term_<uuid>"), what terminal.read / send / close take.
 	Handle string `json:"handle"`
+	// IncarnationID names the process behind the handle; a call fenced with it (Target) fails instead of reaching a
+	// new process that took the same handle. "" from hosts that do not know it.
+	IncarnationID string `json:"incarnationId"`
 	// TabID and LeafID place it: a tab of a worktree, split into leaves (panes). PaneKey joins them.
 	TabID        string `json:"tabId"`
 	LeafID       string `json:"leafId"`
@@ -35,6 +38,23 @@ func (t Terminal) PaneKey() string { return t.TabID + ":" + t.LeafID }
 // Local: the terminal runs on this machine.
 func (t Terminal) Local() bool { return t.ExecutionHostID == "" || t.ExecutionHostID == "local" }
 
+// Target is the terminal a call acts on: its handle, fenced to the process it had when listed.
+func (t Terminal) Target() Target { return Target{Handle: t.Handle, Incarnation: t.IncarnationID} }
+
+// Target is a terminal handle and the incarnation it must still have.
+type Target struct {
+	Handle      string
+	Incarnation string
+}
+
+func (t Target) params() map[string]any {
+	p := map[string]any{"terminal": t.Handle}
+	if t.Incarnation != "" {
+		p["expectedIncarnationId"] = t.Incarnation
+	}
+	return p
+}
+
 // Tab is one tab as Orca's layout shows it.
 type Tab struct {
 	ID         string
@@ -42,60 +62,60 @@ type Tab struct {
 	WorktreeID string
 }
 
-// TerminalList is terminal.list: the terminals, and the tabs of each worktree's layout in order.
+// TerminalList is terminal.list: the terminals, the tabs of each worktree's layout in order (only when asked for),
+// and each worktree's layout revision (it changes when tabs or panes are added, moved, closed).
 type TerminalList struct {
 	Terminals []Terminal
 	Tabs      []Tab
+	// HasTabs: the layouts were asked for (Tabs is complete, possibly empty).
+	HasTabs           bool
+	TopologyRevisions map[string]int64
 }
 
-// Terminals is terminal.list.
-func (c *Client) Terminals(ctx context.Context) (*TerminalList, error) {
+// Terminals is terminal.list, with the layouts (costly for Orca to build) only when layouts is true.
+func (c *Client) Terminals(ctx context.Context, layouts bool) (*TerminalList, error) {
 	var res struct {
-		Terminals     []Terminal `json:"terminals"`
-		VisualLayouts []struct {
-			WorktreeID string          `json:"worktreeId"`
-			Root       json.RawMessage `json:"root"`
+		Terminals         []Terminal       `json:"terminals"`
+		TopologyRevisions map[string]int64 `json:"topologyRevisions"`
+		VisualLayouts     []struct {
+			WorktreeID string     `json:"worktreeId"`
+			Root       layoutNode `json:"root"`
 		} `json:"visualLayouts"`
 	}
-	params := map[string]any{"includeVisualLayouts": true, "includePreview": false}
+	params := map[string]any{"includeVisualLayouts": layouts, "includePreview": false}
 	if err := c.Call(ctx, ListTimeout, "terminal.list", params, &res); err != nil {
 		return nil, err
 	}
-	out := &TerminalList{Terminals: res.Terminals}
+	out := &TerminalList{Terminals: res.Terminals, HasTabs: layouts, TopologyRevisions: res.TopologyRevisions}
 	for _, l := range res.VisualLayouts {
-		var root any
-		if json.Unmarshal(l.Root, &root) == nil {
-			collectTabs(root, l.WorktreeID, &out.Tabs)
-		}
+		l.Root.tabs(l.WorktreeID, &out.Tabs)
 	}
 	return out, nil
 }
 
-// collectTabs walks a layout tree (groups split into groups, each with tabs) for its tabs, in order.
-func collectTabs(v any, worktree string, out *[]Tab) {
-	switch v := v.(type) {
-	case map[string]any:
-		if tabs, ok := v["tabs"].([]any); ok {
-			for _, t := range tabs {
-				if m, ok := t.(map[string]any); ok {
-					id, _ := m["tabId"].(string)
-					title, _ := m["title"].(string)
-					if id != "" {
-						*out = append(*out, Tab{ID: id, Title: title, WorktreeID: worktree})
-					}
-				}
-			}
-		}
-		for k, c := range v {
-			if k != "tabs" {
-				collectTabs(c, worktree, out)
-			}
-		}
-	case []any:
-		for _, c := range v {
-			collectTabs(c, worktree, out)
+// layoutNode is a node of a worktree's layout: a group of tabs, or a split of two nodes (first, then second).
+type layoutNode struct {
+	Type string `json:"type"`
+	Tabs []struct {
+		TabID string `json:"tabId"`
+		Title string `json:"title"`
+	} `json:"tabs"`
+	First  *layoutNode `json:"first"`
+	Second *layoutNode `json:"second"`
+}
+
+// tabs appends the node's tabs in reading order: a group's own, a split's first side, then its second.
+func (n *layoutNode) tabs(worktree string, out *[]Tab) {
+	if n == nil {
+		return
+	}
+	for _, t := range n.Tabs {
+		if t.TabID != "" {
+			*out = append(*out, Tab{ID: t.TabID, Title: t.Title, WorktreeID: worktree})
 		}
 	}
+	n.First.tabs(worktree, out)
+	n.Second.tabs(worktree, out)
 }
 
 // Worktree is one worktree of worktree.ps.
@@ -119,8 +139,10 @@ type AgentRow struct {
 	MainAgent *struct {
 		State string `json:"state"`
 	} `json:"mainAgent"`
-	HasLivePty bool  `json:"hasLivePty"`
-	UpdatedAt  int64 `json:"updatedAt"`
+	HasLivePty bool `json:"hasLivePty"`
+	// UpdatedAt and StateStartedAt are epoch milliseconds.
+	UpdatedAt      int64 `json:"updatedAt"`
+	StateStartedAt int64 `json:"stateStartedAt"`
 }
 
 // OwnState is the pane's agent's own state: its main agent's when known, else the row's (Orca's mainAgentState).
@@ -131,13 +153,21 @@ func (a AgentRow) OwnState() string {
 	return a.State
 }
 
-// Worktrees is worktree.ps.
-func (c *Client) Worktrees(ctx context.Context) ([]Worktree, error) {
+// Worktrees is worktree.ps. after is the snapshot id of the last answer ("" for none): when nothing changed since,
+// Orca says so (unchanged true, no worktrees) instead of sending them all again. snapshot is the id to pass next time
+// ("" from hosts without snapshots).
+func (c *Client) Worktrees(ctx context.Context, after string) (trees []Worktree, snapshot string, unchanged bool, err error) {
 	var res struct {
-		Worktrees []Worktree `json:"worktrees"`
+		Worktrees  []Worktree `json:"worktrees"`
+		SnapshotID string     `json:"snapshotId"`
+		Unchanged  bool       `json:"unchanged"`
 	}
-	err := c.Call(ctx, ListTimeout, "worktree.ps", nil, &res)
-	return res.Worktrees, err
+	var a any // null: the first poll of a snapshot series
+	if after != "" {
+		a = after
+	}
+	err = c.Call(ctx, ListTimeout, "worktree.ps", map[string]any{"afterSnapshotId": a}, &res)
+	return res.Worktrees, res.SnapshotID, res.Unchanged && after != "", err
 }
 
 // Screen is terminal.read with screen: the visible screen as plain text.
@@ -166,7 +196,7 @@ func (s Screen) Text() string {
 var ErrNoScreen = errors.New("orca has no screen for the terminal")
 
 // Read is terminal.read {screen: true}: the terminal's visible screen, plain text.
-func (c *Client) Read(ctx context.Context, handle string) (*Screen, error) {
+func (c *Client) Read(ctx context.Context, t Target) (*Screen, error) {
 	var res struct {
 		Terminal struct {
 			Tail     []string `json:"tail"`
@@ -176,7 +206,9 @@ func (c *Client) Read(ctx context.Context, handle string) (*Screen, error) {
 			Source string `json:"source"`
 		} `json:"terminal"`
 	}
-	if err := c.Call(ctx, CallTimeout, "terminal.read", map[string]any{"terminal": handle, "screen": true}, &res); err != nil {
+	p := t.params()
+	p["screen"] = true
+	if err := c.Call(ctx, CallTimeout, "terminal.read", p, &res); err != nil {
 		return nil, err
 	}
 	if res.Terminal.Source == "screen-unavailable" {
@@ -189,57 +221,94 @@ func (c *Client) Read(ctx context.Context, handle string) (*Screen, error) {
 	return s, nil
 }
 
-// desktop is the client Jarvis says it is in terminal.send: input from the user at their desktop (the only client
-// type Orca pastes agent prompts for).
-var desktop = map[string]any{"type": "desktop"}
+// AgentStatus is terminal.agentStatus: whether an agent Orca recognises is running in front in the terminal, and its
+// state when Orca knows it ("working", "permission", "idle"; "" unknown).
+type AgentStatus struct {
+	IsRunningAgent bool   `json:"isRunningAgent"`
+	Status         string `json:"status"`
+}
+
+// AgentStatus is terminal.agentStatus.
+func (c *Client) AgentStatus(ctx context.Context, t Target) (*AgentStatus, error) {
+	var res struct {
+		AgentStatus *AgentStatus `json:"agentStatus"`
+	}
+	if err := c.Call(ctx, CallTimeout, "terminal.agentStatus", t.params(), &res); err != nil {
+		return nil, err
+	}
+	if res.AgentStatus == nil {
+		return nil, fmt.Errorf("orca terminal.agentStatus: no status in the answer")
+	}
+	return res.AgentStatus, nil
+}
+
+// ClientID is how Jarvis names itself to Orca as the driver of its input (terminal.send's client.id, required).
+const ClientID = "jarvis"
+
+// client is the driver terminal.send names: Jarvis as a desktop client (the only type Orca pastes agent prompts for).
+func client() map[string]any { return map[string]any{"id": ClientID, "type": "desktop"} }
 
 // ErrRefused: Orca accepted the request but wrote nothing (terminal.send's accepted false); Reason says why.
 var ErrRefused = errors.New("orca refused the input")
 
 // Refusal is a terminal.send Orca turned down with nothing written: Reason "no-agent" (no prompt-ready agent in
-// front) or "permission" (the agent waits on a permission dialog).
+// front), "permission" (the agent waits on a permission dialog) or "not accepted" (input paused, a guard).
 type Refusal struct{ Reason string }
 
 func (r *Refusal) Error() string { return "orca: input refused: " + r.Reason }
 func (r *Refusal) Unwrap() error { return ErrRefused }
 
+// Sent is what terminal.send says it did.
+type Sent struct {
+	BytesWritten int
+	// Prompt: Orca delivered the text as an agent prompt (its receipt); false when it wrote it raw.
+	Prompt bool
+}
+
 // send is terminal.send; a refusal (nothing written) is a *Refusal.
-func (c *Client) send(ctx context.Context, params map[string]any) error {
-	params["client"] = desktop
+func (c *Client) send(ctx context.Context, params map[string]any) (*Sent, error) {
+	params["client"] = client()
 	var res struct {
 		Send struct {
-			Accepted      *bool  `json:"accepted"`
-			BytesWritten  int    `json:"bytesWritten"`
-			RefusedReason string `json:"refusedReason"`
+			Accepted      *bool           `json:"accepted"`
+			BytesWritten  int             `json:"bytesWritten"`
+			RefusedReason string          `json:"refusedReason"`
+			Prompt        json.RawMessage `json:"prompt"`
 		} `json:"send"`
 	}
 	if err := c.Call(ctx, SendTimeout, "terminal.send", params, &res); err != nil {
-		return err
+		return nil, err
 	}
 	if a := res.Send.Accepted; a != nil && !*a {
 		reason := res.Send.RefusedReason
 		if reason == "" {
 			reason = "not accepted"
 		}
-		return &Refusal{Reason: reason}
+		return nil, &Refusal{Reason: reason}
 	}
-	return nil
+	p := res.Send.Prompt
+	return &Sent{BytesWritten: res.Send.BytesWritten, Prompt: len(p) > 0 && string(p) != "null"}, nil
 }
 
 // Send is terminal.send of raw text, without enter: written to the terminal as is (key bytes too), no paste.
-func (c *Client) Send(ctx context.Context, handle, text string) error {
-	return c.send(ctx, map[string]any{"terminal": handle, "text": text})
+func (c *Client) Send(ctx context.Context, t Target, text string) error {
+	p := t.params()
+	p["text"] = text
+	_, err := c.send(ctx, p)
+	return err
 }
 
-// Prompt is terminal.send of text and enter as an agent prompt: Orca pastes it (bracketed) into the agent it
-// recognises in front and submits it.
-func (c *Client) Prompt(ctx context.Context, handle, text string) error {
-	return c.send(ctx, map[string]any{"terminal": handle, "text": text, "enter": true, "agentPrompt": true})
+// Prompt is terminal.send of text and enter as an agent prompt: Orca pastes it (bracketed) and submits it when the
+// agent it recognises is in front; otherwise it writes the text raw followed by a carriage return (Sent.Prompt false).
+func (c *Client) Prompt(ctx context.Context, t Target, text string) (*Sent, error) {
+	p := t.params()
+	p["text"], p["enter"], p["agentPrompt"] = text, true, true
+	return c.send(ctx, p)
 }
 
 // Close is terminal.close: Orca closes the terminal's pane (its tab when it was the only one).
-func (c *Client) Close(ctx context.Context, handle string) error {
-	return c.Call(ctx, CloseTimeout, "terminal.close", map[string]any{"terminal": handle}, nil)
+func (c *Client) Close(ctx context.Context, t Target) error {
+	return c.Call(ctx, CloseTimeout, "terminal.close", t.params(), nil)
 }
 
 // Probe is status.get without the compatibility gate: the runtime's status (nil when it did not answer) and whether

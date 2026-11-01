@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -133,9 +134,13 @@ func TestOrcaListsClaudeTerminals(t *testing.T) {
 	if live != 3 {
 		t.Errorf("%d live sessions: %v", live, ids(list))
 	}
-	// Listing reads; it neither types nor reads screens; herdr is not asked.
-	if tr := o.Trace(); len(tr) != 0 {
+	// Listing reads; it neither types nor reads screens: only the claude without a row is asked about (Orca's own
+	// reading of the terminal, the state when its hooks have none); herdr is not asked.
+	if tr := o.Trace(); strings.Join(tr, "|") != `terminal.agentStatus {"terminal":"term_3"}` {
 		t.Errorf("orca calls beyond listing: %v", tr)
+	}
+	if inv := o.Invalid(); len(inv) != 0 {
+		t.Errorf("params Orca would refuse: %v", inv)
 	}
 	if tr := f.trace(); len(tr) != 0 {
 		t.Errorf("herdr called: %v", tr)
@@ -206,8 +211,15 @@ func TestOrcaSendChecksForADialogThenPrompts(t *testing.T) {
 	time.Sleep(150 * time.Millisecond) // past the grace: nothing colored to check, no enter pressed after
 	assertTrace(t, o.Trace(), []string{
 		`terminal.read {"screen":true,"terminal":"term_1"}`,
+		`terminal.agentStatus {"terminal":"term_1"}`,
 		orcarttest.SendCall("term_1", map[string]any{"text": "hello", "enter": true, "agentPrompt": true}),
 	})
+	if w := o.Writes(); len(w) != 1 || !w[0].Pasted || w[0].Text != "hello" {
+		t.Errorf("writes %+v", w)
+	}
+	if inv := o.Invalid(); len(inv) != 0 {
+		t.Errorf("params Orca would refuse: %v", inv)
+	}
 
 	o.Reset()
 	o.SetScreen("term_1", "Do you want to proceed?\n❯ 1. Yes\n  2. No\n\nEsc to cancel\n")
@@ -285,6 +297,7 @@ func TestOrcaKeysAndText(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTrace(t, o.Trace(), []string{
+		`terminal.agentStatus {"terminal":"term_1"}`,
 		orcarttest.SendCall("term_1", map[string]any{"text": "yes please"}),
 		orcarttest.SendCall("term_1", map[string]any{"text": "\r"}),
 	})
@@ -509,29 +522,70 @@ func TestOrcaEngineUse(t *testing.T) {
 	}
 }
 
-// The process scan keeps only the pane key out of an environment listing (never the hook token), finds claude and
-// codex under node too, falls back on ORCA_AGENT_PANE, and lists claude first.
+// The process scan keeps the claude / codex processes in front (not suspended, not in the background), only the pane
+// key out of their environment (never the hook token), skips agents inside a herdr / herdr-core nested in an Orca
+// terminal, finds claude and codex under node too, falls back on ORCA_AGENT_PANE, and lists claude first.
 func TestOrcaProcessParsing(t *testing.T) {
-	ps := strings.Join([]string{
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	args := strings.Join([]string{
+		"  101 S+   01:00 /usr/local/bin/claude --resume x",
+		"  102 S+   1-02:03:04 node /opt/lib/node_modules/@anthropic-ai/claude-code/cli.js",
+		"  103 R+   00:05 /opt/bin/codex",
+		"  104 Ss+  00:05 -zsh",
+		"  105 T+   00:09 /usr/local/bin/claude", // suspended (ctrl+z)
+		"  106 S    00:09 /usr/local/bin/claude", // in the background (claude -p … &)
+		"  107 S+   00:09 /usr/local/bin/claude", // inside a herdr nested in the Orca terminal
+		"  108 S+   00:09 /usr/local/bin/claude", // inside herdr-core
+		"  100 S+   00:30 node /opt/lib/node_modules/@openai/codex/bin/codex.js",
+		"garbage",
+	}, "\n")
+	cands := parseOrcaPSArgs(args, now)
+	if _, ok := cands[105]; ok {
+		t.Error("a suspended claude counts")
+	}
+	if _, ok := cands[106]; ok {
+		t.Error("a background claude counts")
+	}
+	if p := cands[102]; p.start != now.Add(-(26*time.Hour + 3*time.Minute + 4*time.Second)) {
+		t.Errorf("start %v", p.start)
+	}
+	env := strings.Join([]string{
 		"  101 /usr/local/bin/claude --resume x TERM=xterm ORCA_AGENT_HOOK_TOKEN=secret ORCA_PANE_KEY=tab1:leaf1 HOME=/h",
 		"  102 node /opt/lib/node_modules/@anthropic-ai/claude-code/cli.js ORCA_AGENT_PANE=tab2:leaf2",
 		"  103 /opt/bin/codex ORCA_PANE_KEY=tab1:leaf1",
-		"  104 -zsh ORCA_PANE_KEY=tab3:leaf3",
-		"  105 /usr/local/bin/claude HOME=/h",
+		"  107 /usr/local/bin/claude ORCA_PANE_KEY=tab5:leaf5 HERDR_PANE_ID=w1:p1",
+		"  108 /usr/local/bin/claude ORCA_PANE_KEY=tab5:leaf5 HC_TERMINAL_ID=t3",
 		"  100 node /opt/lib/node_modules/@openai/codex/bin/codex.js ORCA_PANE_KEY=tab4:leaf4",
-		"garbage",
+		"  999 /usr/local/bin/claude ORCA_PANE_KEY=tab9:leaf9", // not a candidate
 	}, "\n")
-	got := parseOrcaPS(ps)
-	want := map[string][]orcaProc{
-		"tab1:leaf1": {{pid: 101, agent: "claude"}, {pid: 103, agent: "codex"}},
-		"tab2:leaf2": {{pid: 102, agent: "claude"}},
-		"tab4:leaf4": {{pid: 100, agent: "codex"}},
+	got := parseOrcaPSEnv(env, cands)
+	pids := map[string][]int{}
+	for pane, ps := range got {
+		for _, p := range ps {
+			pids[pane] = append(pids[pane], p.pid)
+		}
 	}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("parsed %v\nwant %v", got, want)
+	want := map[string][]int{"tab1:leaf1": {101, 103}, "tab2:leaf2": {102}, "tab4:leaf4": {100}}
+	if fmt.Sprint(pids) != fmt.Sprint(want) {
+		t.Errorf("parsed %v\nwant %v", pids, want)
 	}
 	if strings.Contains(fmt.Sprintf("%+v", got), "secret") {
 		t.Error("the hook token was kept")
+	}
+	for stat, front := range map[string]bool{
+		"42 (claude) S 1 42 42 34816 42 4194304":      true,
+		"42 (claude code) S 1 42 42 34816 77 4194304": false, // background: another group has the terminal
+		"42 (claude) T 1 42 42 34816 42 4194304":      false, // stopped
+	} {
+		if procInFront(stat) != front {
+			t.Errorf("procInFront(%q) = %v", stat, !front)
+		}
+	}
+	for s, want := range map[string]time.Duration{"00:05": 5 * time.Second, "01:02:03": time.Hour + 2*time.Minute + 3*time.Second,
+		"2-00:00:01": 48*time.Hour + time.Second} {
+		if d, ok := parseEtime(s); !ok || d != want {
+			t.Errorf("parseEtime(%q) = %v", s, d)
+		}
 	}
 }
 
@@ -552,5 +606,255 @@ func TestHookPaneOrca(t *testing.T) {
 	}
 	if r := host.ParsePane("orca:tab1:leaf1"); r != (host.PaneRef{Kind: host.Orca, ID: "tab1:leaf1"}) {
 		t.Errorf("ParsePane = %+v", r)
+	}
+}
+
+// Text goes in only when an agent is in front: Orca writes anything else raw into whatever is there (a shell would run
+// it). Not in front — Orca sees no agent (suspended, background, nested), our scan finds none, or the scan failed —
+// is refused before anything is typed, for prompts, typed text and keys that type; enter / esc / ctrl+c still go
+// (a stuck pane can be interrupted and closed).
+func TestOrcaRefusesTextWithoutAnAgentInFront(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(o *orcarttest.Fake, p *fakeProcs)
+	}{
+		{"Orca sees no agent in front (suspended, background, nested herdr)", func(o *orcarttest.Fake, _ *fakeProcs) {
+			o.SetAgentStatus("term_1", false, "")
+		}},
+		{"no agent process in front", func(_ *orcarttest.Fake, p *fakeProcs) { p.set("tab1:leaf1") }},
+		{"the process scan failed", func(_ *orcarttest.Fake, p *fakeProcs) {
+			p.mu.Lock()
+			p.err = errors.New("ps: exit status 1")
+			p.mu.Unlock()
+		}},
+	} {
+		n, o, procs := orcaSession(t)
+		o.SetScreen("term_1", "❯ \n")
+		c.setup(o, procs)
+		for _, req := range []map[string]any{
+			{"session_id": sidA, "text": "rm -rf build"},
+		} {
+			_, err := request(t, n, "session.send", req)
+			if code, data := refusalOf(t, err); code != "not_delivered" || data["delivered"] != "none" {
+				t.Errorf("%s: send: %v", c.name, err)
+			}
+		}
+		for _, req := range []map[string]any{
+			{"session_id": sidA, "text": "yes", "keys": []string{"enter"}},
+			{"session_id": sidA, "keys": []string{"y"}},
+		} {
+			if _, err := request(t, n, "session.keys", req); err == nil {
+				t.Errorf("%s: keys %v went in", c.name, req)
+			}
+		}
+		if w := o.Writes(); len(w) != 0 {
+			t.Errorf("%s: wrote %+v", c.name, w)
+		}
+		if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "keys": []string{"ctrl+c"}}); err != nil {
+			t.Errorf("%s: ctrl+c: %v", c.name, err)
+		}
+		if w := o.Writes(); len(w) != 1 || w[0].Text != "\x03" {
+			t.Errorf("%s: ctrl+c writes %+v", c.name, w)
+		}
+	}
+}
+
+// A permission dialog in front (Orca's agentStatus): a prompt would answer it — refused as dialog_open; the dialog's
+// own answer keys go through.
+func TestOrcaPermissionDialog(t *testing.T) {
+	n, o, _ := orcaSession(t)
+	o.SetScreen("term_1", "❯ \n") // our screen check sees nothing: Orca knows better
+	o.SetAgentStatus("term_1", true, "permission")
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, data := refusalOf(t, err); code != "dialog_open" || data["delivered"] != "none" {
+		t.Fatalf("prompt into a permission dialog: %v", err)
+	}
+	if _, err := request(t, n, "session.keys", map[string]any{"session_id": sidA, "keys": []string{"1"}}); err != nil {
+		t.Fatalf("answer key: %v", err)
+	}
+	if w := o.Writes(); len(w) != 1 || w[0].Text != "1" {
+		t.Errorf("writes %+v", w)
+	}
+}
+
+// The terminal behind the pane gets another process between the check that an agent is in front and the write (a new
+// incarnation): the write, fenced to the process that was checked, is refused, nothing typed — it is not retried
+// against the new one.
+func TestOrcaNewIncarnationRefusesWrites(t *testing.T) {
+	n, o, _ := orcaSession(t)
+	o.SetScreen("term_1", "❯ \n")
+	o.Handle("terminal.agentStatus", func(map[string]any) any {
+		t2 := orcaTerm("term_1", "tab1", "leaf1", "claude")
+		t2["incarnationId"] = "inc-new"
+		o.SetTerminals(t2)
+		return map[string]any{"agentStatus": map[string]any{"handle": "term_1", "isRunningAgent": true, "status": nil}}
+	})
+	_, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if code, _ := refusalOf(t, err); code != "not_delivered" {
+		t.Fatalf("send to a replaced process: %v", err)
+	}
+	if w := o.Writes(); len(w) != 0 {
+		t.Errorf("wrote %+v", w)
+	}
+	// A read follows the pane to its new process.
+	o.SetScreen("term_1", "new\n")
+	if res, err := request(t, n, "session.screen", map[string]any{"session_id": sidA}); err != nil || res["text"] != "new\n" {
+		t.Errorf("read after the change: %v %v", res, err)
+	}
+}
+
+// Orca answering a prompt without its prompt receipt wrote it raw: logged.
+func TestOrcaPromptWithoutReceiptIsLogged(t *testing.T) {
+	n, o, _ := orcaSession(t)
+	var logged []string
+	var mu sync.Mutex
+	n.hosts.Get(host.Orca).(*orcaHost).logf = func(format string, args ...any) {
+		mu.Lock()
+		logged = append(logged, fmt.Sprintf(format, args...))
+		mu.Unlock()
+	}
+	o.SetScreen("term_1", "❯ \n")
+	o.Handle("terminal.send", func(map[string]any) any {
+		return map[string]any{"send": map[string]any{"handle": "term_1", "accepted": true, "bytesWritten": 6}}
+	})
+	if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(logged) != 1 || !strings.Contains(logged[0], "without a prompt receipt") {
+		t.Errorf("logged %q", logged)
+	}
+}
+
+// States: a pane without a worktree.ps row takes Orca's agentStatus (working / permission → blocked / idle → done);
+// a row older than the pane's agent process is the previous agent's and does not count.
+func TestOrcaStatusFallbackAndStaleRows(t *testing.T) {
+	n, _, o, procs, home := orcaNode(t)
+	writeTranscript(t, home, orcaCwd, sidA, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	writeTranscript(t, home, orcaCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	writeClaudePID(t, home, 4242, sidA)
+	writeClaudePID(t, home, 4343, sidB)
+	o.SetTerminals(orcaTerm("term_1", "tab1", "leaf1", "claude"), orcaTerm("term_2", "tab2", "leaf2", "claude"))
+	old := orcarttest.Agent("tab2:leaf2", "claude", "working")
+	old["updatedAt"] = time.Now().Add(-time.Hour).UnixMilli()
+	o.SetWorktrees(orcarttest.Worktree("repo::"+orcaCwd, orcaCwd, "", old))
+	o.SetAgentStatus("term_1", true, "permission")
+	o.SetAgentStatus("term_2", true, "idle")
+	procs.set("tab1:leaf1", orcaProc{pid: 4242, agent: "claude", start: time.Now().Add(-time.Minute)})
+	procs.set("tab2:leaf2", orcaProc{pid: 4343, agent: "claude", start: time.Now().Add(-time.Minute)})
+	m := byID(listSessions(t, n))
+	if m[sidA].Status != proto.StatusBlocked || m[sidB].Status != proto.StatusDone {
+		t.Errorf("states %s %s", m[sidA].Status, m[sidB].Status)
+	}
+	// The fallback is cached: the next poll does not ask again.
+	o.Reset()
+	listSessions(t, n)
+	if c := o.Count("terminal.agentStatus"); c != 0 {
+		t.Errorf("asked again %d times", c)
+	}
+}
+
+// Polling is light: the layouts (costly for Orca) come only when the terminals or a topology changed; worktree.ps
+// answers "unchanged" to its snapshot; Agents after a Snapshot reuses its look.
+func TestOrcaPollingCost(t *testing.T) {
+	n, o, _ := orcaSession(t)
+	h := n.hosts.Get(host.Orca).(*orcaHost)
+	for range 3 {
+		listSessions(t, n)
+	}
+	layouts := func() int {
+		c := 0
+		for _, l := range o.Trace("terminal.list") {
+			if strings.Contains(l, `"includeVisualLayouts":true`) {
+				c++
+			}
+		}
+		return c
+	}
+	if c := layouts(); c != 0 {
+		t.Errorf("%d layout reads without a change", c)
+	}
+	if tr := o.Trace("worktree.ps"); len(tr) != 3 || strings.Contains(tr[1], "null") {
+		t.Errorf("worktree.ps %v", tr)
+	}
+	o.SetRevision("repo::"+orcaCwd, 2)
+	listSessions(t, n)
+	if c := layouts(); c != 1 {
+		t.Errorf("%d layout reads after a topology change", c)
+	}
+	o.Reset()
+	if _, err := h.Snapshot(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Agents(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if c := o.Count("terminal.list"); c != 1 {
+		t.Errorf("Snapshot then Agents listed %d times", c)
+	}
+}
+
+// Keys become xterm bytes, modifiers included; keys that only move or interrupt do not count as typing.
+func TestOrcaKeyBytes(t *testing.T) {
+	for k, want := range map[string]string{
+		"enter": "\r", "backspace": "\x7f", "ctrl+c": "\x03", "tab": "\t", "1": "1", "y": "y", "down": "\x1b[B",
+		"space": " ", "ctrl+space": "\x00", "alt+b": "\x1bb", "alt+left": "\x1b[1;3D", "ctrl+left": "\x1b[1;5D",
+		"shift+right": "\x1b[1;2C", "ctrl+up": "\x1b[1;5A", "f1": "\x1bOP", "f5": "\x1b[15~", "f12": "\x1b[24~",
+		"shift+f1": "\x1b[1;2P", "delete": "\x1b[3~", "insert": "\x1b[2~", "pageup": "\x1b[5~", "home": "\x1b[H",
+		"alt+backspace": "\x1b\x7f", "alt+space": "\x1b ", "alt+tab": "\x1b\t", "shift+a": "A", "alt+2": "\x1b2",
+		"shift+enter": "\x1b\r", "ctrl+a": "\x01", "esc": "\x1b",
+	} {
+		if got, ok := orcaKeyBytes(k); !ok || got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	for _, k := range []string{"hyper+q", "f0", "ctrl+tab", ""} {
+		if b, ok := orcaKeyBytes(k); ok {
+			t.Errorf("%q has bytes %q", k, b)
+		}
+	}
+	for b, typing := range map[string]bool{"\r": false, "\x1b": false, "\x1b[1;3D": false, "\x1bOP": false, "\x03": false,
+		"y": true, " ": true, "\x1bb": true, "\x1b[15~": false} {
+		if orcaTypes(b) != typing {
+			t.Errorf("orcaTypes(%q) = %v", b, !typing)
+		}
+	}
+}
+
+// Pressing keys stops between keys when the caller gives up.
+func TestOrcaKeysHonourContext(t *testing.T) {
+	_, o, _ := orcaSession(t)
+	h := newOrcaHost(&orcart.Client{MetaPath: o.MetaPath})
+	if _, _, err := h.terminals(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := h.SendKeys(ctx, host.PaneRef{Kind: host.Orca, ID: "tab1:leaf1"}, "esc", "esc", "esc")
+	if err == nil || len(o.Writes()) > 1 {
+		t.Errorf("keys after cancel: %v, %d writes", err, len(o.Writes()))
+	}
+}
+
+// A hook reporting an Orca pane is bound only on a machine whose engine is Orca; a herdr machine stays as it was.
+func TestOrcaHookPaneBinding(t *testing.T) {
+	n, _, _ := herdrNode(t)
+	_, _ = hubPipe(t, n), 0
+	in, _ := json.Marshal(map[string]any{"session_id": sidA, "hook_event_name": "Notification"})
+	_, _ = n.handleHook(context.Background(), sockRequest{Kind: "hook", Input: in, Pane: "orca:tab1:leaf1"})
+	n.mu.Lock()
+	_, bound := n.panes["orca:tab1:leaf1"]
+	n.mu.Unlock()
+	if bound {
+		t.Error("an Orca pane bound on a herdr machine")
+	}
+	n.eng.name = proto.EngineOrca
+	_, _ = n.handleHook(context.Background(), sockRequest{Kind: "hook", Input: in, Pane: "orca:tab1:leaf1"})
+	n.mu.Lock()
+	_, bound = n.panes["orca:tab1:leaf1"]
+	n.mu.Unlock()
+	if !bound {
+		t.Error("an Orca pane not bound on an Orca machine")
 	}
 }
