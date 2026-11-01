@@ -9,6 +9,21 @@ struct CodeFindTests {
         CodeFind.matches(of: q, lineCount: lines.count) { lines[$0] }
     }
 
+    /// The find field takes Esc, ⏎ and ⇧⏎ before the window does: the file viewer's 完成 holds Esc as its shortcut and
+    /// would close the whole sheet. Other keys, and these keys while the field is not focused, stay the window's.
+    @Test func theFieldTakesEscReturnAndShiftReturn() {
+        #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: true) == .close)
+        #expect(CodeFind.barKey(keyCode: 36, shift: false, fieldFocused: true) == .next)
+        #expect(CodeFind.barKey(keyCode: 76, shift: false, fieldFocused: true) == .next) // keypad enter
+        #expect(CodeFind.barKey(keyCode: 36, shift: true, fieldFocused: true) == .previous)
+        #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: false) == nil)
+        #expect(CodeFind.barKey(keyCode: 36, shift: true, fieldFocused: false) == nil)
+        #expect(CodeFind.barKey(keyCode: 0, shift: false, fieldFocused: true) == nil) // "a" is typed
+        // Composing (拼音 in the field): ⏎ and Esc belong to the input method.
+        #expect(CodeFind.barKey(keyCode: 36, shift: false, fieldFocused: true, composing: true) == nil)
+        #expect(CodeFind.barKey(keyCode: 53, shift: false, fieldFocused: true, composing: true) == nil)
+    }
+
     @Test func caseInsensitiveByDefault() {
         #expect(CodeFind.ranges(of: "foo", in: "let Foo = foo()") == [NSRange(location: 4, length: 3), NSRange(location: 10, length: 3)])
         #expect(CodeFind.ranges(of: "FOO", in: "foo") == [NSRange(location: 0, length: 3)])

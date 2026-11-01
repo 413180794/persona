@@ -136,7 +136,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Jarvis.app   # 或直接跑
     iPhone 那边：Agents 列表最上面一行「Mac 上的 Jarvis 已登录」，点开能开「手机静音」（Mac 在线时手机不推「需要你处理」「Agent 做完」，
     由 Mac 提醒；助手按你的要求发的提醒照推）、看登录时间、退出那台 Mac（吊销它的设备凭据，要重新配对）。协议见 `docs/protocol.md` 的 `desktops` / `register_desktop`。
 - 临时实现，等后面打磨：外层侧栏和页面自己的分栏是两层（应做成真正的三栏）；分页的 `TabView(.page)` 换成了默认样式 / 箭头翻页；
-  `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；终端的 option 键不当 meta；代码行只有整行选择、没有 ⌘F；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
+  `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体（`UIFontMetrics` 按 iOS 的 body 表换算）。
 
 ## 菜单栏、Dock 角标、通知（Mac）
@@ -208,6 +208,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 循环，不含 Jarvis 对话；没开着 Agent 时从第一个开始。
 编辑 › 查找… ⌘F（`apple/Mac/App/MacFind.swift`，有测试）：当前窗口的搜索框获焦（工具栏的搜索项优先，再是页面里的；Agents、知识库用 `-macFind YES` 验过），
 没有搜索框的页面什么都不做；焦点在自带查找栏的文本视图（diff、输出）里时打开它的查找栏。
+文件查看器里的代码也走这个 ⌘F（2026-11-01，`Mac/Code/CodeFindBar.swift`，匹配逻辑 `CodeFind.swift`，有测试）：顺序是 自带查找栏的文本视图 → 响应链上的
+`MacFindable`（代码视图）→ 窗口里的搜索框 → 窗口里看得见的 `MacFindable`（文件刚打开、还没点过代码）。代码上方出查找栏：不区分大小写，所有匹配浅黄、
+当前的系统查找黄并滚到看得见，「3 / 14」或红色「没有找到」；⏎ 下一个、⇧⏎ 上一个（两头循环），Esc / ✕ 关闭、焦点回到代码。这三个键用本地按键监听在窗口之前接住
+（文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFile <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
+没做：⌘G / ⇧⌘G、区分大小写 / 整词 / 正则、行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
 显示 › 紧凑列表、分组方式（按项目 / 状态 / 机器）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
 会话信息在 Mac 上是对话右侧的一栏（Agent › 显示会话信息 ⌥⌘I，或点标题；`apple/Mac/Chat/MacInspector.swift`），宽度可拖、记在 `mac.inspector.width`，
 窗口太窄时盖在对话上。没用 SwiftUI 的 `.inspector`：放在 Agents 分栏的详情页里整栏是空的；`SessionInfoSheet` 在 Mac 上也不再包 NavigationStack（会接管详情栏的导航、对话页消失）。
@@ -399,6 +404,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Gestures: 2-finger swipe sibling agent / adjacent space, double-tap paste (multi-line confirm), scroll in-terminal — TerminalView.swift
 - [ ] Shortcuts panel (single tap fill, double tap send), terminal settings (keys shown, auto-hide bar, theme, font, wrap), tips, completions from pane contents — Terminal/TerminalExtras.swift (ShortcutsPanel, TerminalSettingsView, TerminalPreview, ThemeRow, SuggestionStrip), SessionPanes.swift (TerminalTips)
   - 终端设置在 Mac 上是 grouped 表单（`macSheet`），「手机尺寸」相关的说法换成窗口（`TerminalSizeText`），截图看过（`-openTerminal YES -openTerminalSettings YES`，内层浮层存成 `<名字>.sheet2.png`）；快捷命令面板、补全没在 Mac 上试。
+  - 终端设置 › 键盘 › 「将 Option 键用作 Meta 键」（2026-11-01，`TerminalPrefs.optionAsMeta`，只在 Mac 上有）：默认关，和「终端」App 一样，关着时 Option 照常打出 ™、é、德语布局的 @ [ ] 和走输入法。打开后 Option+可打印 ASCII 发 herdr 的 `alt+<键>`（herdr 编码成 ESC+键），Option+Shift+字母发 `alt+shift+<字母>`，符号的 Shift 已在字符里（`alt+>`）；组字时不管。映射是纯函数 `MacTerminalKeys.name`（有测试）。没拿真 herdr 试过 `alt+shift+a`（herdr 对带 shift 的组合可能编码成 CSI u，而「终端」App 发 ESC A）和 `alt++` 这类符号键名；真按键也没试（锁屏）。
 
 ## 8. Files / Git / code viewer
 - [ ] Files pane: breadcrumbs, dirs first, size/mtime, git markers, hidden toggle, 拷贝路径, 2000 limit — Views/Session/FilesPane.swift

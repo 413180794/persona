@@ -171,6 +171,9 @@ extension Theme {
         static let safari = "safari"
         /// Something opened in a window of its own (Mac).
         static let newWindow = "macwindow.badge.plus"
+        /// The Mac code viewer's find bar: the previous / next match.
+        static let findPrevious = collapse
+        static let findNext = expand
         /// Picked text or a page going along with the next message (作为上下文).
         static let addContext = "text.badge.plus"
         static let person = "person.crop.circle"

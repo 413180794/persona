@@ -49,9 +49,3 @@ extension Theme.Fill {
     static let macFindMatch = Color(nsColor: .findHighlightColor).opacity(0.35)
     static let macFindCurrent = Color(nsColor: .findHighlightColor)
 }
-
-extension Theme.Icon {
-    /// The code viewer's find bar: previous / next match.
-    static let findPrevious = collapse
-    static let findNext = expand
-}

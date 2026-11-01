@@ -10,6 +10,19 @@ nonisolated enum CodeFind {
         var range: NSRange
     }
 
+    /// What a key does in the find field.
+    enum BarKey: Equatable, Sendable { case close, next, previous }
+
+    /// Esc closes the bar, ⏎ goes to the next match, ⇧⏎ to the one before; only while the field has the keyboard.
+    static func barKey(keyCode: UInt16, shift: Bool, fieldFocused: Bool, composing: Bool = false) -> BarKey? {
+        guard fieldFocused, !composing else { return nil } // composing: the input method's ⏎ / Esc
+        switch keyCode {
+        case 53: return .close // esc
+        case 36, 76: return shift ? .previous : .next // return, keypad enter
+        default: return nil
+        }
+    }
+
     /// Where `query` is in `text`, case-insensitive, left to right, not overlapping (as Xcode and Safari count).
     static func ranges(of query: String, in text: String) -> [NSRange] {
         guard !query.isEmpty, !text.isEmpty else { return [] }

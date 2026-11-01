@@ -85,12 +85,6 @@ struct CodeFindBar: View {
                 TextField("在文件中查找", text: $find.query)
                     .textFieldStyle(.plain)
                     .focused($focused)
-                    // ⏎ the next match, ⇧⏎ the one before (the field editor sends both as its action).
-                    .onSubmit { find.step(forward: !(NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)) }
-                    .onKeyPress(.escape) {
-                        find.close()
-                        return .handled
-                    }
                     .accessibilityLabel("在文件中查找")
                 if !find.query.isEmpty {
                     Text(count)
@@ -127,8 +121,37 @@ struct CodeFindBar: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.sm)
         .background(.bar)
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            startKeys()
+        }
+        .onDisappear(perform: stopKeys)
         .onChange(of: find.focusRequest) { focused = true }
+    }
+
+    /// Esc / ⏎ / ⇧⏎ are caught before the window sees them (`CodeFind.barKey`): the file viewer's 完成 holds Esc as
+    /// its shortcut, so the field's own handlers came too late and Esc closed the whole sheet.
+    @State private var keys: Any?
+
+    private func startKeys() {
+        guard keys == nil else { return }
+        keys = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [find] event in
+            let shift = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .shift
+            let composing = (event.window?.firstResponder as? NSTextView)?.hasMarkedText() ?? false
+            guard let key = CodeFind.barKey(keyCode: event.keyCode, shift: shift, fieldFocused: focused, composing: composing)
+            else { return event }
+            switch key {
+            case .close: find.close()
+            case .next: find.step(forward: true)
+            case .previous: find.step(forward: false)
+            }
+            return nil
+        }
+    }
+
+    private func stopKeys() {
+        if let keys { NSEvent.removeMonitor(keys) }
+        keys = nil
     }
 
     private var count: String {
