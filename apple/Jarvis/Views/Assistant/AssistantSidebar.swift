@@ -49,9 +49,12 @@ import UIKit
             tabBar.accessibilityElementsHidden = progress > 0
         }
         if let sidebarView {
-            sidebarView.transform = CGAffineTransform(translationX: -(1 - progress) * width * 0.3, y: 0)
+            // Joined to the page's left edge, opaque, like ChatGPT (2026-11-01 user request): the page and the
+            // sidebar are one strip under the finger. It used to come out at 30% of the page's speed while fading
+            // in from 40%, so the sidebar trailed the finger and a gap opened between it and the card.
+            sidebarView.transform = CGAffineTransform(translationX: -(1 - progress) * width, y: 0)
             let hidden = progress == 0 && !settling
-            sidebarView.alpha = hidden ? 0 : 0.4 + 0.6 * progress
+            sidebarView.alpha = hidden ? 0 : 1
             sidebarView.isHidden = hidden
             sidebarView.accessibilityElementsHidden = hidden
         }
@@ -314,7 +317,8 @@ private struct DrawerPageMotion: ViewModifier {
                         .accessibilityIdentifier("assistant-drawer-close")
                 }
             }
-            .scaleEffect(1 - 0.06 * p, anchor: .leading)
+            // Slid aside whole, like ChatGPT (2026-11-01 user request): it used to shrink 6% too, which left gaps above
+            // and below the card and dropped its top bar below the sidebar's, and moved every point of it each frame.
             .offset(x: p * width)
     }
 }

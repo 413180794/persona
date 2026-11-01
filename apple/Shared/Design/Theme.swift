@@ -105,8 +105,9 @@ nonisolated enum Theme {
         static let bubble: CGFloat = 20
         /// Floating panels over the chat (interactions, strips, the key bar), the terminal card, the composer's field.
         static let panel: CGFloat = 22
-        /// A whole page pushed aside as a card (the Jarvis tab's page beside its sidebar).
-        static let page: CGFloat = 34
+        /// A whole page pushed aside as a card (the Jarvis tab's page beside its sidebar): about the screen's own
+        /// corners on a current iPhone, so the card reads as the screen slid over, not a smaller box.
+        static let page: CGFloat = 55
     }
 
     /// Spacing on a 4 pt grid, BeautifulUI's (`BUISpacing`): 2 4 6 8 12 16 24 32, nothing in between. Pages and the
