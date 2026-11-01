@@ -256,9 +256,10 @@ fun AssistantScreen(
         TwoPanes(
             panes, Modifier.fillMaxSize(),
             list = {
-                androidx.compose.foundation.layout.Column(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).statusBarsPadding(),
-                ) { conversationList {} }
+                // A Surface (as the drawer's sheet) so the list's text gets the right colour in dark mode.
+                androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().statusBarsPadding()) { conversationList {} }
+                }
             },
             detail = content,
         )
