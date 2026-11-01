@@ -241,6 +241,7 @@ hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储�
 - 切到 `bypassPermissions` 时，`tuiSetMode` 按 6 次 shift+tab 还没到就放弃，Claude 停在另一个模式上（不是原来的模式）。应该失败时回到原模式，或者先确认这个模式在循环里（`node/modes.go`）。
 - `close()` 在 `pane.list` 失败时直接关整个标签页，分屏里别的窗格一起被关（herdr 宿主的 `Close`，`node/hostherdr.go`）。应该失败时只关这个窗格或报错。
 - 原有的 `catchup_test.go` 里 4 条测试在设了 `CLAUDE_CONFIG_DIR` 的环境里失败：测试默认 Claude 配置目录在 HOME 下，应在测试里清掉这个变量（新测试的 `herdrNode` 已经这样做）。
+- `terminal_test.go` 的 `TestTerminalControlEndsWhenTakenOrForgotten` 改全局的 `termLease`，同时还有没退出的 `controlLoop` 在读它：`-race` 下偶发报竞争（引擎选择那轮的 worker 跑 `-count=10` 时见过一次，复核时分支和 master 各跑 30 次没复现）。测试结束前要等 `controlLoop` 退出，或把租期改成实例字段。
 - 其余可疑行为（不一定要修）：herdr 快照失败退回 `agent.list` 时空间 / 槽位名是旧的；`editQueue` 清几行按 transcript 里的队列算，不按 TUI 实际拉回来的。
 
 ## 还没定的
