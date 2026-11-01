@@ -70,6 +70,42 @@ CLAUDE.md「链接在 App 内打开」的安卓版（`ui/web/`，对应 iOS `Vie
 
 hub 拒绝这台手机的 token（401：在别的设备上撤销了、换了 hub）时不再无限重连，直接回到配对页并说明原因；已配对时打开配对链接也会回到配对页重新配。
 
+## 折叠屏 / 宽屏
+
+iOS「iPhone Duo」「iPad」（`docs/ios.md`，`SplitNavigation.swift`）的安卓版，目标是书本式折叠屏（合上是手机宽的外屏，打开是接近方形的内屏，还能半折）。
+纯逻辑在 `ui/SplitLayout.kt`（`SplitTest`），Compose 部分在 `ui/SplitPane.kt`，接线在 `ui/Root.kt`。
+
+- **按窗口宽度分，不看机型、不读物理屏幕**：宽度取 Root 的 `BoxWithConstraints`（就是窗口），按 Material 的窗口尺寸档：600 dp 以下 compact，
+  还是原来的单栏栈，行为一点不变（手机、折叠屏合上）；600 dp 及以上（medium / expanded）左右两栏：左边是列表，右边是它打开的东西，像邮件 App。
+  手机横过来超过 600 dp 也会分栏，这是按宽度分的本意。
+- **哪些页面分栏**：Agents（列表 ‖ 空间页 / 对话）、收件箱（列表 ‖ 详情，单栏时详情仍是底部浮层）、设置（菜单 ‖ 子页面）、
+  Jarvis（历史对话列表 ‖ 对话 / 首页，单栏时仍是抽屉；宽屏时没有「历史对话」按钮）。
+- **同一份导航状态**（`NavState`：tab、设置和它的栈、空间、打开的对话、收件箱打开的那件），两种布局都从它画：单栏是栈顶，双栏是左栏列表 + 右栏栈顶。
+  所以开合时正在看的页面不丢：打开着的对话还开着，合上后变成单栏栈，返回是列表。页面自己的保存状态（草稿、滚动位置、Jarvis 正在看的对话）
+  用 `SaveableStateHolder` 按页面带过去；不再画的页面照旧丢掉，和原来一样。
+- **左栏打开的替换右栏，右栏里打开的照常压栈**：从列表点对话 / 空间替换右栏（单栏时列表在栈底、上面没东西，替换和压栈是一回事）；
+  空间页里点的对话、机器页里点的对话、设置子页面里再进的页面压栈，返回回到原来那页。设置菜单点一项是 `settingsStack = [这一项]`。
+- **右栏第一页没有返回键**（旁边就是列表）：顶栏的返回键用 `PaneBackButton`，看 `LocalSplitDetail`；压栈的页面、对话上面再开的文件 / 终端照常有。
+  系统返回手势在双栏时一层层退右栏（对话 → 空间 / 设置子页面 → 占位），退到底再离开设置；列表本身不拦返回。
+- **右栏空着**时是一个安静的占位：图标 +「选一个 Agent」/「选一件事」/「选一项设置」和一行说明。
+- **底部 tab 栏在双栏时一直显示**，横跨两栏，打字或开着链接卡片时让开（和 Jarvis tab 一样，输入框贴着键盘 / 卡片）。设置不是 tab，双栏时 tab 栏也在，
+  点任何 tab 离开设置。tab 栏在对话旁边，所以对话开着时可以切到别的 tab：对话留在 Agents，回到 Agents 还在（`NavState.chatShown`）；
+  从通知、收件箱、Jarvis、链接打开的对话照旧切到 Agents。
+- **左栏宽度**：没有折痕决定时取窗口的 40%，夹在 300～400 dp；中间一条细线。
+- **半折 / 折痕**：Jetpack WindowManager（`androidx.window`）的 `FoldingFeature`，只认 `isSeparating` 且竖着的折痕（书本式半折）：
+  左栏到折痕左边，右栏从折痕右边开始，折痕本身有宽度时留空，什么都不放在上面。折痕离边太近（一侧不到 240 dp）时不按它分。
+  横着的折痕（桌面模式）不管，左右两栏照常，内容会跨过折痕（还没做上下分）。
+- **可读宽度**：对话和 Jarvis 首页的内容最宽 760 dp（`Modifier.readableWidth()`，iOS `readableWidth`），更宽时居中，顶栏仍然铺满；收件箱详情也是。
+  手机宽度都不到 760，所以单栏时和原来一样宽。
+- **开合不重建 Activity**：`MainActivity` 声明 `configChanges="screenSize|smallestScreenSize|screenLayout|orientation"`，开合 / 旋转只是窗口变了，
+  对话的订阅、滚动位置、WebView 都还在；系统真的重建时，打开着的对话也写进 `onSaveInstanceState`。
+- **为什么不用 `ListDetailPaneScaffold`**：Material 3 adaptive 的 `ListDetailPaneScaffold` / `rememberListDetailPaneScaffoldNavigator` 自己管一个导航栈，
+  而这个 App 的导航是 Root 里几个状态（通知、小组件、快捷方式、链接都直接改它们），没有 NavHost；接进去要么两套栈同步，要么把所有入口改成 navigator。
+  这里要的只是「按宽度二选一 + 折痕位置」，自己写一个两栏容器（`TwoPanes`）不到 50 行，判断都是纯函数、能单测，只多一个 `androidx.window` 依赖。
+  宽度档按 Material 的 window size class 定义（600 / 840），折痕用的就是 adaptive 库底下同一个 WindowManager。
+- 还没做：左栏里高亮右栏正在看的那一行；桌面模式（横折痕）上下分栏；链接卡片双栏时盖住整个窗口（不是只盖右栏）；Jarvis 的资料页、知识库在右栏里仍带返回键（返回到对话）。
+  真机（OPPO Find N5）开合、半折还没测。
+
 ## 通知（不用推送服务）
 
 国内卖的安卓手机大多没有 Google 服务（FCM 收不到），各家厂商推送又要开发者账号和实名认证，所以第一版不接推送：
@@ -164,6 +200,7 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏�
 | `fleet/`、`widget/`、`shortcuts/` | 常驻汇总通知和它的按钮、主屏幕小组件、快速设置磁贴、长按图标的快捷方式 |
 | `settings/` | 设置和机器的线上类型、REST（`SettingsApi.kt`，`ApiClient.raw` 上的扩展）、图表的数学（`ChartMath`：刻度、按字节的整数刻度、单调曲线）、通知设置（`SettingsPrefs`）、存储空间统计（`Storage.kt`） |
 | `ui/settings/`、`ui/machines/` | 设置的子页面和它们共用的分组、行（`SettingsKit.kt`，颜色取自 MaterialTheme）；机器列表、机器页、监控页和曲线（`MetricCharts.kt`） |
+| `ui/SplitLayout.kt`、`ui/SplitPane.kt` | 折叠屏 / 宽屏：按宽度选单栏还是双栏、折痕、两种布局共用的 `NavState`（左栏替换 / 右栏压栈 / 返回，`SplitTest`）；两栏容器、占位、`PaneBackButton`、`readableWidth` |
 | `ui/web/` | 链接卡片：`LinkSheet`（`Links`、`LinkHost`、卡片、上下文小条）、`WebViewPool`（预加载、选中菜单、`externalIntent`）、`LinkRules`（纯逻辑，`LinksTest` 覆盖） |
 | `ui/chat/` | 对话的行（`ChatViews`、`ToolViews`：工作行、工具详情、diff、待办）、消息菜单、`ChatEnv`（行要用的：打开文件 / 图片、当前目录、整段对话的图片） |
 | `ui/media/` | 图片：按需加载和缓存（`ChatImageLoader`）、全屏查看器、编辑器、保存 / 分享 / 拷贝（`MediaShare`，分享走自己的 `ChatFileProvider`） |
@@ -203,6 +240,11 @@ hub 有在跑的语音插件（`docs/plugins.md`）时，「Jarvis」tab 顶栏�
 
 ## 经验
 
+- 折叠屏开合会改 `screenSize` / `smallestScreenSize`，没声明 `configChanges` 时 Activity 整个重建：Compose 的 `rememberSaveable` 能恢复，
+  但放在 Activity 字段里的状态（`MainActivity.openSession`，通知打开的对话）不会，开合一次对话就关了；重建时还会把启动 intent 再处理一遍，
+  重新打开用户已经关掉的通知会话。现在声明了 `configChanges`，打开的对话也写进 `onSaveInstanceState`，启动 intent 只在第一次 `onCreate` 处理。
+- 同一个页面在两种布局里处在 Compose 树的不同位置，位置决定的 `rememberSaveable` 会丢（草稿、Jarvis 正在看的对话）：按页面用 `SaveableStateHolder.SaveableStateProvider(key)` 包住，
+  不再画的页面 `removeState`，否则关掉再开的对话会回到上次的滚动位置，而不是最新处。
 - 全屏看图别放进 Compose 的 `Dialog`：对话框窗口停在状态栏和导航栏之间（`decorFitsSystemWindows = false`、`FLAG_LAYOUT_NO_LIMITS` 都试过，上下照样露出底下的页面），
   直接画在对话页上面（`ImageViewerOverlay`），状态栏图标打开时改成浅色、关掉时还原。
 - `Markdown` 默认包在 `SelectionContainer` 里，长按会变成系统的选中文字，消息菜单弹不出来：对话里的回复传 `selectable = false`，要选文字用菜单的「选择」。

@@ -51,10 +51,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Jarvis">
 
+        <!-- configChanges: folding / unfolding (and rotating) resizes the window without recreating the activity, so an
+             open chat, its scroll and its live subscription stay as they were (docs/android.md「折叠屏 / 宽屏」). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

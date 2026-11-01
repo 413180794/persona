@@ -61,6 +61,8 @@ dependencies {
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     // The home-screen widget (widget/JarvisWidget.kt); the last version that builds against compileSdk 34.
     implementation("androidx.glance:glance-appwidget:1.1.1")
+    // Folds (FoldingFeature) for the two-pane layout on foldables (docs/android.md「折叠屏 / 宽屏」).
+    implementation("androidx.window:window:1.2.0")
 
     testImplementation("junit:junit:4.13.2")
     // REST calls against a local HTTP server (same version as okhttp).

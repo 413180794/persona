@@ -1,6 +1,21 @@
 package jarvis.android.ui
 
 import androidx.activity.compose.BackHandler
+import jarvis.android.ui.settings.SettingsRoute
+import jarvis.android.ui.settings.SettingsPage
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Computer
@@ -61,9 +76,15 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     var settings by rememberSaveable { mutableStateOf(false) }
     val settingsStack = rememberSaveable { mutableStateOf(emptyList<String>()) } // 设置's sub-pages (SettingsRoute)
     var space by rememberSaveable { mutableStateOf<String?>(null) }
+    var inboxOpen by rememberSaveable { mutableStateOf<String?>(null) } // the inbox item whose detail is open
     var handoff by remember { mutableStateOf<String?>(null) } // inbox → Jarvis
-    val open = openSession.value
-    if (open != null) tab = Tab.Agents
+    // A chat opened from anywhere shows in Agents. Only when it opens: two panes the tab bar stays beside an open chat,
+    // so another tab can be chosen and the chat waits in Agents (single pane the bar is never beside a chat).
+    var lastOpen by rememberSaveable { mutableStateOf<String?>(null) }
+    if (openSession.value?.path != lastOpen) {
+        if (openSession.value != null) tab = Tab.Agents
+        lastOpen = openSession.value?.path
+    }
     var askFocus by remember { mutableStateOf(false) } // 「问 Jarvis」 shortcut: focus the Jarvis composer
     openTab.value?.let {
         when (it) {
@@ -73,6 +94,20 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
         }
         openTab.value = null
     }
+    // One state for both layouts (docs/android.md「折叠屏 / 宽屏」): folding or unfolding keeps the page that was open.
+    val nav = NavState(tab, settings, settingsStack.value, space, openSession.value, inboxOpen)
+    val go: (NavState) -> Unit = { n ->
+        tab = n.tab; settings = n.settings; settingsStack.value = n.settingsStack; space = n.space; inboxOpen = n.inbox
+        if (openSession.value != n.chat) openSession.value = n.chat
+        lastOpen = openSession.value?.path
+    }
+    val open = nav.chatShown
+    // Pages keep their saved state (scroll, drafts, the Jarvis conversation) when folding / unfolding moves them
+    // between the panes and the stack; a page that is no longer drawn drops it, as it always did.
+    val keep = rememberSaveableStateHolder()
+    val wasDrawn = remember { mutableSetOf<String>() }
+    // The inbox detail belongs to the inbox: leaving the tab closes it (as when the sheet went with the screen).
+    if (tab != Tab.Inbox && inboxOpen != null) inboxOpen = null
 
     val pending by hub.interactions.collectAsState()
     val byMachine by hub.sessions.collectAsState()
@@ -86,19 +121,19 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     val bar: @Composable () -> Unit = {
         NavigationBar {
             NavigationBarItem(
-                selected = tab == Tab.Jarvis, onClick = { tab = Tab.Jarvis },
+                selected = tab == Tab.Jarvis && !settings, onClick = { go(nav.selectTab(Tab.Jarvis)) },
                 icon = { BadgedBox(badge = { if (assistantWaiting) Badge() }) { Icon(Icons.AutoMirrored.Filled.Chat, null) } },
                 label = { Text(Tab.Jarvis.title, maxLines = 1) },
             )
             NavigationBarItem(
-                selected = tab == Tab.Agents, onClick = { tab = Tab.Agents },
+                selected = tab == Tab.Agents && !settings, onClick = { go(nav.selectTab(Tab.Agents)) },
                 icon = {
                     BadgedBox(badge = { if (needsYou + unread > 0) Badge { Text("${needsYou + unread}") } }) { Icon(Icons.Default.Computer, null) }
                 },
                 label = { Text(Tab.Agents.title, maxLines = 1) },
             )
             NavigationBarItem(
-                selected = tab == Tab.Inbox, onClick = { tab = Tab.Inbox },
+                selected = tab == Tab.Inbox && !settings, onClick = { go(nav.selectTab(Tab.Inbox)) },
                 icon = { BadgedBox(badge = { if (inboxAction > 0) Badge { Text("$inboxAction") } }) { Icon(Icons.Default.Inbox, null) } },
                 label = { Text(Tab.Inbox.title, maxLines = 1) },
             )
@@ -131,51 +166,186 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
     }
     Links.handToJarvis = { prompt -> handoff = prompt; settings = false; tab = Tab.Jarvis }
 
-    LinkHost {
-        when {
-            // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
-            open != null -> {
-                BackHandler { openSession.value = null }
-                ChatScreen(
-                    hub, open, onBack = { openSession.value = null },
-                    // As the inbox's 交给 Jarvis: a new assistant conversation about the message.
-                    onHandToJarvis = { handoff = it; openSession.value = null; settings = false; tab = Tab.Jarvis },
-                    onCleared = { openSession.value = it },
-                )
+    val onHandOffFromInbox: (HandOff) -> Unit = { h ->
+        val to = h.to
+        if (to == null) { handoff = h.prompt; tab = Tab.Jarvis }
+        else {
+            // To a running agent: its chat opens and the message goes out as if typed there.
+            val app = JarvisApp.instance
+            app.scope.launch {
+                runCatching { hub.api.send(to, h.prompt, java.util.UUID.randomUUID().toString()) }.onFailure { e ->
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        android.widget.Toast.makeText(app, "没交过去：${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
             }
-            settings -> {
-                BackHandler { settings = false }
-                SettingsScreen(hub, onBack = { settings = false }, stack = settingsStack, onOpenSession = { openSession.value = it })
-            }
-            tab == Tab.Jarvis -> AssistantScreen(
-                hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
-                focusComposer = askFocus, onFocusTaken = { askFocus = false },
-            )
-            tab == Tab.Inbox -> InboxScreen(hub, bottomBar = bar, onHandOff = { h ->
-                val to = h.to
-                if (to == null) { handoff = h.prompt; tab = Tab.Jarvis }
-                else {
-                    // To a running agent: its chat opens and the message goes out as if typed there.
-                    val app = JarvisApp.instance
-                    app.scope.launch {
-                        runCatching { hub.api.send(to, h.prompt, java.util.UUID.randomUUID().toString()) }.onFailure { e ->
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                android.widget.Toast.makeText(app, "没交过去：${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                            }
+            tab = Tab.Agents
+            openSession.value = to
+        }
+    }
+    val chatHandToJarvis: (String) -> Unit = { handoff = it; openSession.value = null; settings = false; tab = Tab.Jarvis }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // By the window's width only, never the device (docs/android.md「折叠屏 / 宽屏」); a half-open fold splits on itself.
+        val panes = SplitLayout.panes(maxWidth.value, rememberHinge())
+        val drawn = if (panes == null) setOf(nav.singleTop.saveKey) else setOfNotNull(nav.list.saveKey, nav.detail?.saveKey)
+        SideEffect {
+            (wasDrawn - drawn).forEach(keep::removeState)
+            wasDrawn.clear(); wasDrawn.addAll(drawn)
+        }
+        LinkHost {
+            if (panes == null) {
+                // One pane: the stack as it always was.
+                when {
+                    // A chat goes over 设置 too (opened from a machine's page, or a notification): back returns to where it was.
+                    open != null -> {
+                        BackHandler { openSession.value = null }
+                        keep.SaveableStateProvider("chat/${open.path}") {
+                            ChatScreen(
+                                hub, open, onBack = { openSession.value = null },
+                                // As the inbox's 交给 Jarvis: a new assistant conversation about the message.
+                                onHandToJarvis = chatHandToJarvis,
+                                onCleared = { openSession.value = it },
+                            )
                         }
                     }
-                    tab = Tab.Agents
-                    openSession.value = to
+                    settings -> {
+                        BackHandler { settings = false }
+                        keep.SaveableStateProvider("settings") {
+                            SettingsScreen(hub, onBack = { settings = false }, stack = settingsStack, onOpenSession = { openSession.value = it })
+                        }
+                    }
+                    tab == Tab.Jarvis -> keep.SaveableStateProvider("jarvis") {
+                        AssistantScreen(
+                            hub, bottomBar = bar, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
+                            focusComposer = askFocus, onFocusTaken = { askFocus = false },
+                        )
+                    }
+                    tab == Tab.Inbox -> keep.SaveableStateProvider("inbox") {
+                        InboxScreen(hub, bottomBar = bar, onHandOff = onHandOffFromInbox, openedId = inboxOpen, onOpen = { inboxOpen = it })
+                    }
+                    space != null -> {
+                        BackHandler { space = null }
+                        keep.SaveableStateProvider("space/$space") {
+                            SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
+                        }
+                    }
+                    else -> keep.SaveableStateProvider("agents") {
+                        AgentsScreen(
+                            hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settingsStack.value = emptyList(); settings = true },
+                            bottomBar = bar,
+                        )
+                    }
                 }
-            })
-            space != null -> {
-                BackHandler { space = null }
-                SpaceScreen(hub, space!!, onOpen = { openSession.value = it }, onBack = { space = null })
+            } else {
+                TwoPaneRoot(
+                    hub, nav, go, panes, keep, bar,
+                    jarvis = {
+                        AssistantScreen(
+                            hub, bottomBar = {}, incoming = handoff, onIncomingTaken = { handoff = null }, onOpenSession = { openSession.value = it },
+                            focusComposer = askFocus, onFocusTaken = { askFocus = false }, panes = panes,
+                        )
+                    },
+                    settingsStack = settingsStack,
+                    onHandOffFromInbox = onHandOffFromInbox,
+                    chatHandToJarvis = chatHandToJarvis,
+                )
             }
-            else -> AgentsScreen(
-                hub, onOpen = { openSession.value = it }, onOpenSpace = { space = it }, onSettings = { settingsStack.value = emptyList(); settings = true },
-                bottomBar = bar,
+        }
+    }
+}
+
+/** The key a page keeps its saved state under (Root's `keep`). */
+private val Page.saveKey: String get() = when (this) {
+    is Page.Chat -> "chat/${key.path}"
+    is Page.Space -> "space/$id"
+    Page.SettingsMenu, is Page.Settings -> "settings"
+    Page.Jarvis -> "jarvis"
+    Page.InboxList, is Page.InboxItem -> "inbox"
+    Page.AgentsList -> "agents"
+}
+
+/**
+ * Two panes (a wide window, the Find N5 open): the list on the left, what it opened on the right, the tab bar under
+ * both (docs/android.md「折叠屏 / 宽屏」, iOS `SplitNavigation`). Items from the list replace the right pane; pages
+ * opened inside it push, and its first page has no back button.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun TwoPaneRoot(
+    hub: Hub, nav: NavState, go: (NavState) -> Unit, panes: Panes,
+    keep: androidx.compose.runtime.saveable.SaveableStateHolder,
+    bar: @Composable () -> Unit,
+    jarvis: @Composable () -> Unit,
+    settingsStack: MutableState<List<String>>,
+    onHandOffFromInbox: (HandOff) -> Unit,
+    chatHandToJarvis: (String) -> Unit,
+) {
+    // Back pops the right pane (a chat, a 设置 page, the inbox item, the space), then leaves 设置.
+    val back = nav.back()
+    BackHandler(enabled = back != null) { back?.let(go) }
+    // The bar steps aside while typing or with a link open, as in the Jarvis tab: the composer sits on the keyboard / the sheet.
+    val barShown = !WindowInsets.isImeVisible && Links.current.value == null
+    Column(Modifier.fillMaxSize()) {
+        val body = Modifier.weight(1f).fillMaxWidth().then(
+            if (barShown) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier,
+        )
+        if (!nav.settings && nav.tab == Tab.Jarvis) {
+            Box(body) { keep.SaveableStateProvider("jarvis") { jarvis() } }
+        } else {
+            TwoPanes(
+                panes, body,
+                list = {
+                    when (nav.list) {
+                        Page.SettingsMenu -> keep.SaveableStateProvider("settings") {
+                            SettingsScreen(hub, onBack = { go(nav.copy(settings = false)) }, stack = settingsStack, menuOnly = true)
+                        }
+                        Page.InboxList -> keep.SaveableStateProvider("inbox") {
+                            InboxScreen(
+                                hub, bottomBar = {}, onHandOff = onHandOffFromInbox, openedId = nav.inbox,
+                                onOpen = { id -> go(if (id == null) nav.copy(inbox = null) else nav.openInboxFromList(id)) },
+                                detailInPane = true,
+                            )
+                        }
+                        else -> keep.SaveableStateProvider("agents") {
+                            AgentsScreen(
+                                hub, onOpen = { go(nav.openChatFromList(it)) }, onOpenSpace = { go(nav.openSpaceFromList(it)) },
+                                onSettings = { go(nav.copy(settings = true, settingsStack = emptyList(), chat = null)) },
+                            )
+                        }
+                    }
+                },
+                detail = {
+                    CompositionLocalProvider(LocalSplitDetail provides SplitDetail(isFirstPage = nav.detailIsFirst)) {
+                        when (val d = nav.detail) {
+                            is Page.Chat -> keep.SaveableStateProvider("chat/${d.key.path}") {
+                                ChatScreen(
+                                    hub, d.key, onBack = { go(nav.copy(chat = null)) }, embedded = barShown,
+                                    onHandToJarvis = chatHandToJarvis,
+                                    onCleared = { go(nav.copy(chat = it)) },
+                                )
+                            }
+                            is Page.Settings -> {
+                                val route = SettingsRoute.of(d.path)
+                                if (route == null) SplitPlaceholder(EmptyDetail.Settings)
+                                else SettingsPage(
+                                    hub, route, push = { go(nav.pushSettings(it.path)) },
+                                    pop = { go(nav.copy(settingsStack = nav.settingsStack.dropLast(1))) },
+                                    onOpenSession = { go(nav.openChatFromDetail(it)) },
+                                )
+                            }
+                            is Page.InboxItem -> InboxDetailPane(
+                                hub, d.id, onClose = { go(nav.copy(inbox = null)) }, onHandOff = onHandOffFromInbox,
+                            )
+                            is Page.Space -> keep.SaveableStateProvider("space/${d.id}") {
+                                SpaceScreen(hub, d.id, onOpen = { go(nav.openChatFromDetail(it)) }, onBack = { go(nav.copy(space = null)) })
+                            }
+                            else -> SplitPlaceholder(nav.emptyDetail)
+                        }
+                    }
+                },
             )
         }
+        if (barShown) bar()
     }
 }

@@ -1,5 +1,7 @@
 package jarvis.android.ui
 
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -77,7 +79,13 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff) -> Unit) {
+fun InboxScreen(
+    hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff) -> Unit,
+    /** The item whose detail is open (its id, kept by Root so folding / unfolding keeps it) and how to open / close one. */
+    openedId: String? = null, onOpen: (String?) -> Unit = {},
+    /** Two panes: the detail is the right pane (Root draws [InboxDetailPane]), not a sheet over the list. */
+    detailInPane: Boolean = false,
+) {
     val items by hub.inbox.collectAsState()
     var filter by remember { mutableStateOf<InboxFilter>(InboxFilter.All) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -85,7 +93,11 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff
     // 已折叠 and 已处理 start closed, the other two open (iOS).
     var open by rememberSaveable { mutableStateOf(setOf(InboxBucket.Action.name, InboxBucket.Fyi.name)) }
     var refreshing by remember { mutableStateOf(false) }
-    var opened by remember { mutableStateOf<InboxItem?>(null) }
+    // The open item as last seen in the list (it can leave the list while the sheet is up).
+    var openedItem by remember { mutableStateOf<InboxItem?>(null) }
+    if (openedId == null) openedItem = null
+    else items.firstOrNull { it.id == openedId }?.let { openedItem = it }
+    val opened = openedItem?.takeIf { it.id == openedId }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { hub.loadInbox() }
@@ -151,7 +163,7 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff
                         }
                         if (isOpen) items(list, key = { it.id }) { item ->
                             if (bucket == InboxBucket.Done) {
-                                InboxRow(item, onClick = { opened = item }, trailing = { TextButton({ done(item, false) }) { Text("移回", maxLines = 1) } })
+                                InboxRow(item, onClick = { onOpen(item.id) }, trailing = { TextButton({ done(item, false) }) { Text("移回", maxLines = 1) } })
                             } else {
                                 val swipe = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
                                     if (v == SwipeToDismissBoxValue.EndToStart) done(item, true)
@@ -164,7 +176,7 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff
                                             Text("已处理", color = MaterialTheme.colorScheme.onPrimaryContainer)
                                         }
                                     },
-                                ) { InboxRow(item, onClick = { opened = item }) }
+                                ) { InboxRow(item, onClick = { onOpen(item.id) }) }
                             }
                         }
                     }
@@ -175,12 +187,36 @@ fun InboxScreen(hub: Hub, bottomBar: @Composable () -> Unit, onHandOff: (HandOff
     // A link tapped in the detail opens the link sheet, which can't float over this modal sheet: the detail steps
     // aside while the page is open and comes back, with what was typed, when it closes.
     val details = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
-    opened?.takeIf { jarvis.android.ui.web.Links.current.value == null }?.let { item ->
+    if (!detailInPane) opened?.takeIf { jarvis.android.ui.web.Links.current.value == null }?.let { item ->
         details.SaveableStateProvider(item.id) {
             InboxDetail(
-                hub, item, onDismiss = { opened = null },
-                onDone = { done(item, true); opened = null },
-                onHandOff = { h -> if (h.markDone) done(item, true); opened = null; onHandOff(h) },
+                hub, item, onDismiss = { onOpen(null) },
+                onDone = { done(item, true); onOpen(null) },
+                onHandOff = { h -> if (h.markDone) done(item, true); onOpen(null); onHandOff(h) },
+            )
+        }
+    }
+}
+
+/**
+ * Two panes: the open item's detail as the right pane (the same content as the sheet). Links open in the link sheet
+ * over it, so it doesn't need to step aside.
+ */
+@Composable
+fun InboxDetailPane(hub: Hub, id: String, onClose: () -> Unit, onHandOff: (HandOff) -> Unit) {
+    val items by hub.inbox.collectAsState()
+    var last by remember(id) { mutableStateOf<InboxItem?>(null) }
+    items.firstOrNull { it.id == id }?.let { last = it }
+    val item = last ?: return SplitPlaceholder(EmptyDetail.Inbox)
+    fun done() {
+        JarvisApp.instance.scope.launch { runCatching { hub.setInboxDone(item, true) } }
+    }
+    androidx.compose.runtime.key(item.id) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding(), contentAlignment = Alignment.TopCenter) {
+            InboxDetailBody(
+                hub, item, Modifier.widthIn(max = SplitLayout.READABLE_DP.dp).padding(top = 16.dp),
+                onDismiss = onClose, onDone = { done(); onClose() },
+                onHandOff = { h -> if (h.markDone) done(); onClose(); onHandOff(h) },
             )
         }
     }
@@ -249,6 +285,14 @@ private fun InboxRow(item: InboxItem, onClick: () -> Unit, trailing: (@Composabl
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone: () -> Unit, onHandOff: (HandOff) -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        InboxDetailBody(hub, item, Modifier, onDismiss, onDone, onHandOff)
+    }
+}
+
+/** The detail's content: in the sheet (one pane) or as the right pane (two panes). */
+@Composable
+private fun InboxDetailBody(hub: Hub, item: InboxItem, modifier: Modifier, onDismiss: () -> Unit, onDone: () -> Unit, onHandOff: (HandOff) -> Unit) {
     var full by remember { mutableStateOf<InboxItem?>(null) }
     var draft by rememberSaveable { mutableStateOf(item.agent?.draft.orEmpty()) }
     var instruction by rememberSaveable { mutableStateOf("") }
@@ -259,8 +303,8 @@ private fun InboxDetail(hub: Hub, item: InboxItem, onDismiss: () -> Unit, onDone
     val scope = rememberCoroutineScope()
     LaunchedEffect(item.id) { runCatching { full = hub.api.inboxItem(item.id) } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    run {
+        Column(modifier.navigationBarsPadding().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.title, style = MaterialTheme.typography.titleLarge)
             Text(listOf(item.sourceLabel, item.kindLabel, ago(item.updated)).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             item.summary?.takeIf { it.isNotBlank() }?.let {

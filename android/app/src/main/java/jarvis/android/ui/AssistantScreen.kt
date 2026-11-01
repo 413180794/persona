@@ -1,5 +1,7 @@
 package jarvis.android.ui
 
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -81,6 +83,8 @@ fun AssistantScreen(
     onOpenSession: (SessionKey) -> Unit = {},
     /** The 「问 Jarvis」 shortcut: put the cursor in the composer (conversation or home), then cleared. */
     focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
+    /** Two panes (a wide window): the conversation list on the left instead of a drawer. */
+    panes: Panes? = null,
 ) {
     val byMachine by hub.sessions.collectAsState()
     var state by remember { mutableStateOf<ApiClient.AssistantState?>(null) }
@@ -149,52 +153,51 @@ fun AssistantScreen(
         if (incoming != null && state != null) { profile = false; knowledge = false; start(incoming); onIncomingTaken() }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawer,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text("Jarvis", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 8.dp))
+    // The drawer's list (one pane) or the left pane (two panes, docs/android.md「折叠屏 / 宽屏」); [close] closes the drawer.
+    val conversationList: @Composable (close: () -> Unit) -> Unit = { close ->
+        Text("Jarvis", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 8.dp))
+        NavigationDrawerItem(
+            label = { Text("新对话") }, icon = { Icon(Icons.Default.Edit, null) }, selected = current == null,
+            onClick = { current = null; chose = true; close() },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text("定时任务、记忆、关于我") }, icon = { Icon(Icons.Default.Person, null) }, selected = false,
+            onClick = { profile = true; close() },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text("知识库") }, icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, selected = false,
+            onClick = { knowledge = true; profile = false; close() },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text("历史对话", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, bottom = 4.dp))
+        LazyColumn {
+            items(conversations, key = { it.sessionId }) { c ->
+                val isMain = c.sessionId == state?.main
                 NavigationDrawerItem(
-                    label = { Text("新对话") }, icon = { Icon(Icons.Default.Edit, null) }, selected = current == null,
-                    onClick = { current = null; chose = true; scope.launch { drawer.close() } },
+                    label = {
+                        Column {
+                            Text(c.conversationTitle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                listOfNotNull("主对话".takeIf { isMain }, ago(c.updated).ifEmpty { null }).joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    icon = if (isMain) ({ Icon(Icons.Default.Star, "主对话", Modifier.size(18.dp)) }) else null,
+                    selected = c.sessionId == current,
+                    onClick = { current = c.sessionId; chose = true; close() },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
-                NavigationDrawerItem(
-                    label = { Text("定时任务、记忆、关于我") }, icon = { Icon(Icons.Default.Person, null) }, selected = false,
-                    onClick = { profile = true; scope.launch { drawer.close() } },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                NavigationDrawerItem(
-                    label = { Text("知识库") }, icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, selected = false,
-                    onClick = { knowledge = true; profile = false; scope.launch { drawer.close() } },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text("历史对话", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, bottom = 4.dp))
-                LazyColumn {
-                    items(conversations, key = { it.sessionId }) { c ->
-                        val isMain = c.sessionId == state?.main
-                        NavigationDrawerItem(
-                            label = {
-                                Column {
-                                    Text(c.conversationTitle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        listOfNotNull("主对话".takeIf { isMain }, ago(c.updated).ifEmpty { null }).joinToString(" · "),
-                                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            icon = if (isMain) ({ Icon(Icons.Default.Star, "主对话", Modifier.size(18.dp)) }) else null,
-                            selected = c.sessionId == current,
-                            onClick = { current = c.sessionId; chose = true; scope.launch { drawer.close() } },
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                        )
-                    }
-                }
             }
-        },
-    ) {
-        val historyButton: @Composable () -> Unit = { IconButton({ scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "历史对话") } }
+        }
+    }
+    val content: @Composable () -> Unit = {
+        // Two panes the conversation list is the left pane: no button for it.
+        val historyButton: @Composable () -> Unit =
+            if (panes == null) ({ IconButton({ scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "历史对话") } }) else ({})
         val voiceButton: @Composable () -> Unit = {
             if (voicePlugin != null) IconButton({ talking = true }) { Icon(Icons.Default.Mic, "语音对话") }
         }
@@ -234,7 +237,7 @@ fun AssistantScreen(
                 bottomBar = bottomBar,
             ) { pad ->
                 AssistantHome(
-                    Modifier.padding(pad), pending = pending, error = startError ?: loadError,
+                    Modifier.padding(pad).readableWidth(), pending = pending, error = startError ?: loadError,
                     ready = state != null, onSend = ::start,
                     // Only once the home screen is where the tab stays (not while the main conversation is being picked).
                     focusComposer = focusComposer && pending == null && state != null && (chose || state?.conversations.isNullOrEmpty()),
@@ -242,6 +245,23 @@ fun AssistantScreen(
                 )
             }
         }
+    }
+    if (panes == null) {
+        ModalNavigationDrawer(
+            drawerState = drawer,
+            drawerContent = { ModalDrawerSheet { conversationList { scope.launch { drawer.close() } } } },
+            content = content,
+        )
+    } else {
+        TwoPanes(
+            panes, Modifier.fillMaxSize(),
+            list = {
+                androidx.compose.foundation.layout.Column(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLow).statusBarsPadding(),
+                ) { conversationList {} }
+            },
+            detail = content,
+        )
     }
 }
 

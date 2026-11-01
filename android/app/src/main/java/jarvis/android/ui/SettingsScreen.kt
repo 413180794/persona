@@ -68,10 +68,13 @@ fun SettingsScreen(
     onBack: () -> Unit,
     stack: MutableState<List<String>> = remember { mutableStateOf(emptyList()) },
     onOpenSession: (SessionKey) -> Unit = {},
+    /** Two panes: only the menu (the left pane); a page it opens replaces the right pane's stack, which Root draws. */
+    menuOnly: Boolean = false,
 ) {
-    val push: (SettingsRoute) -> Unit = { stack.value = stack.value + it.path }
+    val push: (SettingsRoute) -> Unit =
+        if (menuOnly) ({ stack.value = listOf(it.path) }) else ({ stack.value = stack.value + it.path })
     val top = stack.value.lastOrNull()?.let(SettingsRoute::of)
-    if (top != null) {
+    if (top != null && !menuOnly) {
         val pop = { stack.value = stack.value.dropLast(1) }
         BackHandler(onBack = pop)
         SettingsPage(hub, top, push, pop, onOpenSession)

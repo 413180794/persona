@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -76,7 +75,7 @@ fun SpaceScreen(hub: Hub, spaceId: String, onOpen: (SessionKey) -> Unit, onBack:
     Scaffold(
         topBar = {
             TopAppBar(
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                navigationIcon = { PaneBackButton(onBack) },
                 title = {
                     Column {
                         Text(space?.name ?: "空间", maxLines = 1, overflow = TextOverflow.Ellipsis)

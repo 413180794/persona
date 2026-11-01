@@ -30,7 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Mic
@@ -444,7 +443,7 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    navigationIcon = navigation ?: { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+                    navigationIcon = navigation ?: { PaneBackButton(onBack) },
                     title = {
                         // Tapping the title shows 会话信息 (iOS: the title opens SessionInfoSheet).
                         Column(Modifier.clickable(enabled = session != null) { showInfo = true }) {
@@ -500,7 +499,7 @@ fun ChatScreen(
                 )
             },
         ) { pad ->
-            Column(Modifier.padding(pad).fillMaxSize().imePadding()) {
+            Column(Modifier.padding(pad).readableWidth().imePadding()) {
                 Box(Modifier.weight(1f)) {
                     if (state.loading && rows.isEmpty()) {
                         CircularProgressIndicator(Modifier.align(Alignment.Center))

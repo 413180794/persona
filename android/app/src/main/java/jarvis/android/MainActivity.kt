@@ -27,7 +27,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handle(intent)
+        // The open chat lives here, not in Compose's saved state: carry it over if the system recreates the activity.
+        // The launch intent was handled the first time; handling it again would reopen a notification's chat the user closed.
+        if (savedInstanceState == null) handle(intent)
+        else savedInstanceState.getString(STATE_SESSION)?.let(::sessionOf)?.let { openSession.value = it }
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         val app = application as JarvisApp
         setContent {
@@ -36,6 +39,16 @@ class MainActivity : ComponentActivity() {
                 JarvisRoot(hub = hub, openSession = openSession, openTab = openTab)
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        openSession.value?.let { outState.putString(STATE_SESSION, it.path) }
+    }
+
+    private fun sessionOf(s: String): SessionKey? {
+        val i = s.indexOf('/')
+        return if (i > 0) SessionKey(s.substring(0, i), s.substring(i + 1)) else null
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -53,16 +66,14 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         intent?.getStringExtra(EXTRA_TAB)?.let { openTab.value = it }
-        intent?.getStringExtra(EXTRA_SESSION)?.let { s ->
-            val i = s.indexOf('/')
-            if (i > 0) openSession.value = SessionKey(s.substring(0, i), s.substring(i + 1))
-        }
+        intent?.getStringExtra(EXTRA_SESSION)?.let(::sessionOf)?.let { openSession.value = it }
         intent?.data?.toString()?.let { PairingStore.parse(it) }?.let { pendingPair.value = it }
     }
 
     companion object {
         const val EXTRA_SESSION = "session"
         const val EXTRA_TAB = "tab"
+        private const val STATE_SESSION = "open_session"
         /** A pairing link the activity was opened with, for the pairing screen to confirm. */
         val pendingPair = mutableStateOf<jarvis.android.data.Pairing?>(null)
     }
