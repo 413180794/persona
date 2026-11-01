@@ -346,6 +346,15 @@ private struct AgentsList: View {
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
 
         List {
+            // On a phone the filter bar is the list's first row: it scrolls with the list, so the search field can
+            // fold away and come back on a pull (a bar pinned in the safe area stayed put under a folded search field,
+            // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
+            if widthClass != .regular {
+                Section { filterBar }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
             #if os(iOS)
             if !model.desktops.isEmpty && query.isEmpty {
                 Section { DesktopPresenceRow() } // 「Mac 上的 Jarvis 已登录」, WeChat's line over its chats
@@ -464,22 +473,20 @@ private struct AgentsList: View {
         .environment(\.compactList, compact)
         .listSectionSpacing(compact ? .compact : .default)
         .themedPage()
-        // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone in its safe area.
-        .modifier(TopBar(abovePage: widthClass == .regular) {
-            // Equal while the counts are: the bar is not drawn again for pushes that change none of them. The
-            // tap reads the list as it is then.
-            QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
-        })
+        // In the split's sidebar column (iPhone Duo open) the bar sits above the list; on a phone it is the list's
+        // first row (above).
+        .modifier(TopBar(abovePage: widthClass == .regular) { filterBar })
         .navigationTitle("Agents")
         // No title over the list (the tab says it); the name stays for the back button. The principal item (ChatsView)
         // takes the title's place: empty while all is well, 连接中… and the like while the hub is out of reach
         // (toolbar(removing: .title) would hide that too).
         .navigationBarTitleDisplayMode(.inline)
         .background { SearchCloseProbe(watcher: searchClose) }
-        // The search field always shows: when scrolling folded it away, the filter bar (safeAreaBar) stayed where
-        // it sat under the open field on device (TestFlight 35), ~120 pt of blurred list between it and the bar.
+        // The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user request: the
+        // always-shown field crowded the top). Safe only because the filter bar is no longer pinned in the safe area
+        // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
         // On the list itself, before the alerts, as it always was.
-        .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
+        .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
                     prompt: "搜索空间、标签、会话、内容")
         .refreshable { await model.refresh() }
         .renameSpaceAlert($renamingSpace)
@@ -487,6 +494,12 @@ private struct AgentsList: View {
         .confirmClose($closingSession)
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: machineFilter) { _, _ in kept = [] }
+    }
+
+    /// The quick filter bar. Equal while the counts are: the bar is not drawn again for pushes that change none of
+    /// them. The tap reads the list as it is then.
+    private var filterBar: some View {
+        QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
     }
 
     /// Each quick filter's count. Out of the body's modifier chain: closures in a long chain are type-checked with all
@@ -1267,7 +1280,8 @@ private struct AgentsDestinations: ViewModifier {
     }
 }
 
-/// A bar at the top of a list: in its safe area (the list scrolls under it), or above it in a stack.
+/// A bar above a list in a stack (the split's sidebar column). Otherwise nothing: on a phone the bar is the list's
+/// first row, so the folding search field leaves no gap above it.
 private struct TopBar<Bar: View>: ViewModifier {
     var abovePage: Bool
     @ViewBuilder var bar: Bar
@@ -1280,7 +1294,7 @@ private struct TopBar<Bar: View>: ViewModifier {
             }
             .background(Theme.pageBackground)
         } else {
-            content.safeAreaBar(edge: .top) { bar }
+            content
         }
     }
 }

@@ -121,7 +121,9 @@
   （标题当普通行，`listRowBackground(.clear)`，`listSectionSpacing(.custom(0))`，`ChatsView.spaceSection`）。
 - `.safeAreaBar(edge: .top)`（Agents 列表的快速筛选条）别和会随滚动收起的 `.searchable`（导航栏抽屉默认 `.automatic`）一起用：
   真机（TestFlight 35）上滚动收起搜索框后，筛选条还停在搜索框展开时的位置，中间空出约 120pt 雾化的列表（「顶部一大坨」）；
-  现在搜索框 `.navigationBarDrawer(displayMode: .always)` 常显，顶部高度不随滚动变。同样的「一大坨」还有一个来源，见下面横向 `ScrollView` 那条。
+  当时改成搜索框 `.navigationBarDrawer(displayMode: .always)` 常显；2026-11-01 用户嫌顶部太挤，改回 `.automatic`（滚动收起、下拉出现），
+  手机上筛选条不再放 safeAreaBar，而是列表的第一行、跟着列表滚（`ChatsView` 的 `filterBar`），宽屏分栏里照旧在列表上方。
+  再改这里要在真机上来回滚动、下拉看顶部有没有空白。同样的「一大坨」还有一个来源，见下面横向 `ScrollView` 那条。
 - 列表上方的横向 `ScrollView`（Agents 的筛选条，放在 safeAreaBar 或 VStack 里都一样）可能被导航栏当成这一页的滚动视图，内容整体下移
   整个顶部（状态栏 + 导航栏 + 搜索框，约 170pt），中间露出雾化的列表：`NavigationSplitView` 左栏（Duo 打开 / 半折）一定出；普通 iPhone 上
   冷启动恢复上次打开的对话、列表第一次布局在对话下面时也出，返回列表就是 TestFlight 35 / 38 截图的「顶部一大坨」。**XCUITest 读到的 frame
