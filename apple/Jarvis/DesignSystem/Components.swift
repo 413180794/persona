@@ -149,6 +149,30 @@ struct Chip: View {
     }
 }
 
+/// Something a message names that a tap opens — a file (`FileChips`), a machine's port (`PortChips`) — as a badge
+/// under it: its icon and name in the accent on a soft accent capsule, then a detail (a page's title) a step quieter.
+/// `dimmed`: it is not there any more (a stopped server), in secondary words on the gray chip fill.
+struct LinkBadge: View {
+    var symbol: String
+    var text: String
+    var detail: String? = nil
+    var dimmed = false
+
+    var body: some View {
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: symbol).font(Theme.Font.label)
+            Text(text).font(Theme.Font.labelMedium).lineLimit(1)
+            if let detail, !detail.isEmpty {
+                Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.sm)
+        .background(dimmed ? Theme.Fill.chip : Theme.accent.opacity(0.1), in: .capsule)
+        .foregroundStyle(dimmed ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.accent))
+    }
+}
+
 /// A count on a row or a section header: bold digits on a capsule, "99+" past 99. `.solid` is white on a color —
 /// `Theme.countBadge` gray, the accent when it is about you (@我); `.tone` is a state's words on its tint.
 struct CountBadge: View {

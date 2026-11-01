@@ -151,6 +151,8 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        # A machine's port forwarded to this Mac's loopback for the in-app browser (docs/ports.md).
+        com.apple.security.network.server: true
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.personal-information.addressbook: true
         com.apple.security.personal-information.calendars: true

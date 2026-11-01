@@ -63,6 +63,8 @@
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
                 "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
+ // Agent 的进程在监听、回 HTTP 的 TCP 端口（docs/ports.md）：一个端口一条；title 是它首页的 <title>（没有就缺省）。旧 node 没有这个字段
+ "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
  "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
                 "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}]}
 
@@ -169,6 +171,9 @@
 | GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.jarvis/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
 | GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
 | GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?}]}`，`status` 是 `starting / running / error / disabled`（`docs/plugins.md`）；`features` 带 `plugins` 时才有 |
+| GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
+| POST | `/api/v1/machines/{mid}/ports/{port}/open` | 用户在 App 里点开一个不在任何 Agent 名下的端口：有东西在听就放行 24 小时、回同上；没有 404；只读设备 403 |
+| GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
 | 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/plugins.md`「语音」 |
 
 邮件见下文「邮件 API」。错误统一 `{"error":"…"}` + 4xx/5xx。
@@ -381,6 +386,11 @@ hub → node 请求：
 | `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |
 | `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |
 | `interaction.resolve` | `{id, resolution}` |
+| `port.probe` | `{port}` → `{port, listening, http, title?}`：GET / 一次（Host 是 `localhost:端口`） |
+| `port.dial` | `{id, port}` → `{}`：连上本机这个端口（扫描时它绑的地址，否则 127.0.0.1 再 ::1，只连本机），开一条流 `id`；没在听时报错 `code: port_gone`。之后两边用下面的 `stream.*` 事件传字节 |
+
+流（`internal/streams`，两个方向都有）：`stream.data {id, data}`（data 是 base64，一次最多 32 KB）、`stream.ack {id, n}`（写出去了 n 字节；
+每个方向没确认的最多 512 KB，发的一方到了就停下等）、`stream.close {id, error?}`（这一端的连接断了；对方把已收到的写完再关）。hub 先登记流再发 `port.dial`，node 连上、登记好才回包，所以字节不会先于流到达。
 
 hub → node 事件（按发出顺序处理）：`terminal.input {session_id, text}`、`terminal.resize {session_id, cols, rows}`、`terminal.scroll {session_id, lines, up, column?, row?}`（滚轮：herdr 交给接鼠标的程序，比如 Claude Code 的全屏渲染、Codex，否则滚 herdr 自己的历史；
 node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没给就落在屏幕正中间，`docs/terminal.md` 第十六节）、`terminal.click {session_id, column, row}`（左键按下 + 松开）、`terminal.keepalive {session_ids}`（每 20 s，接管中的终端；node 75 s 没听到就放手）。

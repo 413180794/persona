@@ -171,6 +171,8 @@ extension Theme {
         static let handoff = "iphone.and.arrow.forward"
         /// The default web browser (open a link outside the app).
         static let safari = "safari"
+        /// A web page a machine serves on one of its ports (an agent's dev server, docs/ports.md).
+        static let servedPage = "globe"
         /// Something opened in a window of its own (Mac).
         static let newWindow = "macwindow.badge.plus"
         /// The Mac code viewer's find bar: the previous / next match.

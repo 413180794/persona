@@ -90,16 +90,8 @@ struct FileChips: View {
                 HStack(spacing: Theme.Space.sm) {
                     ForEach(shown, id: \.self) { p in
                         Button { open(p) } label: {
-                            HStack(spacing: Theme.Space.xs) {
-                                Image(systemName: FileViewer.symbol(for: p)).font(Theme.Font.label)
-                                Text((p as NSString).lastPathComponent.isEmpty ? p : (p as NSString).lastPathComponent)
-                                    .font(Theme.Font.labelMedium)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, Theme.Space.s)
-                            .padding(.vertical, Theme.Space.sm)
-                            .background(Theme.accent.opacity(0.1), in: .capsule)
-                            .foregroundStyle(Theme.accent)
+                            LinkBadge(symbol: FileViewer.symbol(for: p),
+                                      text: (p as NSString).lastPathComponent.isEmpty ? p : (p as NSString).lastPathComponent)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("file-chip-" + p)

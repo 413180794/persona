@@ -28,3 +28,12 @@
 - 新加了大依赖（#167 的 tailscale / gvisor，单个 zip 21 MB）后第一次在 hub 机器上 `go test`：那台机器出网慢，`go` 在下载上挂了二十多分钟，
   最后报 `unexpected EOF`（2026-11-01）。办法：按 `server/go.sum` 列出 hub 的 `~/go/pkg/mod/cache/download` 里缺的文件，在开发机上从
   proxy.golang.org 下好（.zip / .mod / .info），rsync 到 hub 的一个目录，测试时 `GOPROXY=file://<那个目录>,https://proxy.golang.org`。
+
+## 临时的测试 hub
+
+- 要在真实机器上验证、又不能动生产 hub：在 hub 机器上用另一个 HOME（`HOME=/tmp/x jarvisd hub`，hub.json 里换 listen 端口、
+  单独建一个库）起一份，`kind: local` 的机器就是同一份二进制起的 node，HOME 不同所以碰不到生产 node 的 socket 和配置。用完删库、删目录。
+- `ssh -L` 前先看本地端口有没有被占：别的车道可能已经在同一个端口上开着到生产 hub 的隧道，`ExitOnForwardFailure` 报错之前的请求会打到生产 hub。
+  连上后先看 `/api/v1/health` 的 `version` 是不是自己那份。
+- 远程 `pkill -f <模式>` 会匹配到执行它的那条 ssh 命令本身（命令行里也有这个模式），把自己的会话杀掉、后面的清理不跑：用 `pgrep` 拿到 pid 再 kill，或者用不会出现在命令行里的写法。
+- 远程用 `nohup … &` 起的后台进程会让 ssh 一直不返回（继承了会话），工具调用就卡到超时：重定向输出之外再加 `setsid`，或者起完单独一条 ssh 去查。

@@ -52,3 +52,12 @@
 - 锁文件先按完整 JSON 检查，再走普通文本扫描；不要被 NUL/二进制判断跳过，重复键和 JSON 转义也不能绕过检查。错误只输出位置和类型，不能让被拦截的地址进入日志。
 - hooks 文件存在不等于启用：`core.hooksPath` 是克隆本地配置，启用后用隔离临时仓库验证真实 `git commit`，不拿主工作区做拒绝测试。网页构建前也检查，避免未启用钩子的克隆直接发布。
 - 测试递归失败要明确控制或模拟递归限制，不要假定固定嵌套层数在所有 Python 版本都会报错；Python 回归测试单独运行，`npm test` 不会自动覆盖它。
+
+## 新加的 UI 测试
+
+- 新建的测试文件要先 `xcodegen` 再跑，否则 `-only-testing:` 选中的是空集，xcodebuild 照样 `** TEST SUCCEEDED **`（`Executed 0 tests`）。
+  看结果要 grep `Executed N tests`，N 不能是 0（2026-11-01，端口转发的 UI 测试第一次「通过」其实一个都没跑）。
+- 启动一律 `app.launchPinned()`（钉住风格），不是 `launchJarvis()`：`UITestStyleTests` 扫源码拦这个。
+- 在 zsh 里写 `for v in "dark shell" …; do set -- $v` 不会按空格拆开（zsh 默认不分词），`$1` 是整串、`$2` 为空：外观、布局参数全错，
+  测试还是绿的。这种循环放进 `bash -c '…'` 跑。
+- 模拟器和 Mac 共用回环：App 在模拟器里监听 `127.0.0.1:<端口>` 时，Mac 上已有程序占着这个号就会冲突（端口转发会退到随机端口，正好测到这条路径）。

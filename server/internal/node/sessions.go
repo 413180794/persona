@@ -448,6 +448,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Title = n.traexTitle(id) // the thread's name; the terminal title adds " | <directory>"
 		}
 		n.placeIn(&s, a)
+		s.Ports = n.portsOf(a.PaneID)
 		if a.Agent == "codex" && s.Status == proto.StatusWorking && n.codexTurnOver(id, time.Now()) {
 			s.Status = proto.StatusDone
 		}
@@ -1007,6 +1008,9 @@ func (n *Node) pollAgents(ctx context.Context) {
 		if n.peer == nil {
 			continue
 		}
+		if len(revs) > 0 {
+			n.kickPorts() // a tool call ran: it may have started (or stopped) a server (ports.go)
+		}
 		if changed {
 			_ = n.peer.Notify("sessions.changed", map[string]any{"sessions": list})
 		} else if len(revs) > 0 {
@@ -1047,6 +1051,9 @@ func listKey(list []proto.Session) string {
 		}
 		for _, a := range s.Subagents {
 			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
+		}
+		for _, p := range s.Ports {
+			fmt.Fprintf(&b, "port%d/%d/%s,", p.Port, p.PID, p.Title)
 		}
 	}
 	return b.String()

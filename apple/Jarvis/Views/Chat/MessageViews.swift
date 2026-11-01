@@ -435,6 +435,7 @@ struct AssistantText: View, Equatable {
                 .contentShape(.rect)
                 .messageLongPress(id: item.id)
             if let openFile { FileChips(paths: d.files, open: openFile) }
+            PortChips(text: item.text ?? "")
         }
         .lookUpFiles(d.files)
         .messageActionBar(id: item.id, text: item.text ?? "", isUser: false, date: item.ts)
@@ -444,7 +445,8 @@ struct AssistantText: View, Equatable {
     /// old one scrolling past used to create web views on the main thread, and those were the long freezes.
     private static func preloadLinks(_ item: Item) async {
         guard let ts = item.ts, Date.now.timeIntervalSince(ts) < 15 * 60, let text = item.text else { return }
-        let links = await Task.detached(priority: .utility) { WebLinks.find(in: text) }.value // data detection is slow
+        // Not a machine's localhost (it is opened through the hub, docs/ports.md).
+        let links = await Task.detached(priority: .utility) { WebLinks.find(in: text).filter { PortLinks.link($0) == nil } }.value
         if !links.isEmpty, !Task.isCancelled { WebViewPool.shared.preload(links) }
     }
 }

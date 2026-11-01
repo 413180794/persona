@@ -117,6 +117,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 测试带 `-openAgentsFresh YES`，不受别的测试留下的折叠影响）连普通 mock：
 `PORT=18793 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:JarvisUITests/SearchOpenTests`。
 
+端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
+`…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
+`MOCK_PORTS=1 PORT=18791 python3 scripts/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:JarvisUITests/PortForwardTests`；
+深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
+
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock_hub.py &`，再
 `TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:JarvisUITests/SendSafetyTests`：

@@ -17,6 +17,8 @@ final class AppModel {
     let personas = PersonaStore()
     /// Which paths conversations mention are there on their machines (only those are linked).
     let filePresence = FilePresence()
+    /// Which machine ports links point at are listening (docs/ports.md).
+    let portPresence = PortPresence()
     let live: LiveConnection
     /// What the titles say about the link (等待网络 / 连接中… / 更新中…).
     let connection: ConnectionStatus

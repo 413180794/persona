@@ -53,3 +53,10 @@
   家目录 `/dev/null`，挂进来的 `~/.ssh` 就没用了）：镜像的入口脚本按 PUID / PGID 改 `jarvis` 用户本身并删掉撞号的条目，而不是
   `docker run --user <uid>`；`docker compose exec` 默认是 root，镜像里的 `jarvisd` 包一层降到 `jarvis`，否则建出来的 tailcat key 归 root，hub 读不了。
 
+## 端口转发（docs/ports.md）
+
+- RPC 的 `OnEvent` 跑在读循环里：在里面阻塞（比如把收到的字节直接写给一个读得慢的 WebSocket）会卡住这台机器的所有 RPC。
+  转发的字节先进每条流自己的队列，由单独的 goroutine 写出；队列的上限靠窗口（发送方等 ack）保证，不靠丢数据。
+- coder/websocket 默认一条消息最多读 32 KB（`read limited at 32769 bytes`，对方收到 `StatusMessageTooBig`）：转发的连接要 `SetReadLimit`，
+  测试里自己写的 WebSocket 客户端 / 服务端也一样，否则大一点的 HMR 消息报的错像是转发坏了。
+- dev server 第一次请求可能要编译好几秒（next dev）：探测「是不是 HTTP」时，连上了却超时没回话的不能当成「不是 HTTP」，先列出来再问。

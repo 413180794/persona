@@ -210,6 +210,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var loop: LoopInfo?
     /// Agents it launched (the Agent tool); each reads like a session ("<id>@<agent id>").
     var subagents: [Subagent]?
+    /// The ports its processes listen on that answer HTTP (docs/ports.md): its dev servers, opened through the hub.
+    var ports: [ListeningPort]? = nil
     var updatedAt: Date?
     var lastText: String?
     var pendingInteractions: Int
@@ -242,7 +244,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error"
     }
@@ -278,6 +280,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
         subagents = try c.decodeIfPresent([Subagent].self, forKey: .subagents)
+        ports = try c.decodeIfPresent([ListeningPort].self, forKey: .ports)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
@@ -287,6 +290,18 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         starting = try c.decodeIfPresent(Bool.self, forKey: .starting)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
     }
+}
+
+/// A TCP port an agent's processes listen on (docs/ports.md).
+nonisolated struct ListeningPort: Codable, Identifiable, Hashable, Sendable {
+    var port: Int
+    var addr: String?
+    var pid: Int?
+    var process: String?
+    /// The <title> of its page.
+    var title: String?
+
+    var id: Int { port }
 }
 
 /// An agent a session launched (the Agent tool), with its own transcript under the session id "<parent>@<id>".

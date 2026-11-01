@@ -1097,6 +1097,58 @@ if os.environ.get("MOCK_RICH") == "1":
 参考：https://en.wikipedia.org/wiki/Weather_(disambiguation)。"""
     ITEMS[RICH] = [it("user", "text", 5, text="还有哪些要我拍板？"), it("assistant", "text", 2, text=_rich)]
 
+# MOCK_PORTS=1: an agent running a dev server (docs/ports.md): its session lists the port, its reply links it (and a
+# server it has stopped), and …/ports/{port}/connect forwards a WebSocket's bytes to a real page served here on
+# another port (PortForwardTests). GET /mock/ports lists the connects.
+LANDING = "a1f3c2d4-0000-4000-8000-00000000000d"
+PORT_LOG = []
+if os.environ.get("MOCK_PORTS") == "1":
+    import socket
+    from http.server import SimpleHTTPRequestHandler
+
+    _page = """<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>天气 · 落地页</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{color-scheme:light dark;--bg:#f7f7fb;--fg:#15151a;--card:#fff;--muted:#6b6b76}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f2f2f7;--card:#1c1c24;--muted:#9a9aa6}}
+body{margin:0;font:17px -apple-system,system-ui;background:var(--bg);color:var(--fg)}
+header{padding:56px 24px 24px}h1{font-size:34px;margin:0 0 8px}p{color:var(--muted);margin:0}
+.card{margin:16px 24px;padding:20px;border-radius:16px;background:var(--card)}
+.big{font-size:56px;font-weight:700}</style></head><body>
+<header><h1 id="headline">明天有雨</h1><p>本地开发服务器 · 热更新已连接</p></header>
+<div class="card"><div class="big">18℃</div><p>降雨概率 70%，记得带伞</p></div>
+<div class="card"><p>这是 Agent 在电脑上起的页面，通过 hub 转发到手机。</p></div>
+</body></html>"""
+
+    class _Dev(BaseHTTPRequestHandler):
+        def do_GET(self):
+            b = _page.encode()
+            self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        def log_message(self, *a): pass
+
+    _dev = ThreadingHTTPServer(("127.0.0.1", 0), _Dev)
+    threading.Thread(target=_dev.serve_forever, daemon=True).start()
+    DEV_PORT = _dev.server_address[1]
+    _s = socket.socket(); _s.bind(("127.0.0.1", 0)); GONE_PORT = _s.getsockname()[1]; _s.close()
+    SESSIONS.insert(0, sess("macbook", LANDING, "天气 App 的落地页", "/Users/me/code/weather-site", "idle", "unread", "weather", 1,
+                            "site", 6, 1, "落地页起好了，在 :%d。" % DEV_PORT,
+                            ports=[{"port": DEV_PORT, "addr": "127.0.0.1", "pid": 4242, "process": "node", "title": "天气 · 落地页"}]))
+    ITEMS[LANDING] = [it("user", "text", 6, text="把落地页跑起来给我看看"),
+                      it("assistant", "text", 1, text=(
+                          "落地页起好了：http://localhost:%d/ ，改动会热更新。\n\n"
+                          "之前那版预览（http://127.0.0.1:%d/preview）已经停掉了。" % (DEV_PORT, GONE_PORT)))]
+
+
+def port_listening(port):
+    import socket
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        return True
+    except OSError:
+        return False
+
+
 # MOCK_LINKS=1: links in the Jarvis tab's main conversation and in an inbox item, to open in the link sheet
 # (docs/android.md「链接」): a plain web page, a jarvis:// link that only navigates, and a javascript: link that is dropped.
 if os.environ.get("MOCK_LINKS") == "1":
@@ -1738,6 +1790,12 @@ class H(BaseHTTPRequestHandler):
         if not p.startswith("/mock/") and self.bad_network(): return
         if p == "/api/v1/ws":
             return self.websocket()
+        if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
+        if p.startswith("/api/v1/machines/") and "/ports/" in p:
+            parts = p.split("/")  # ['', 'api', 'v1', 'machines', mid, 'ports', port, ('connect')]
+            port = int(parts[6]) if parts[6].isdigit() else 0
+            if len(parts) == 8 and parts[7] == "connect": return self.port_connect(parts[4], port)
+            return self.send_json({"port": port, "listening": port_listening(port), "http": port_listening(port)})
         if p == "/api/v1/health": return self.send_json({"ok": True, "version": "mock"})
         if p == "/api/v1/machines": return self.send_json({"machines": MACHINES})
         if p == "/api/v1/metrics":
@@ -1977,6 +2035,10 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if self.bad_network(): return
+        if p.startswith("/api/v1/machines/") and p.endswith("/open") and "/ports/" in p:
+            port = int(p.split("/")[6])
+            if not port_listening(port): return self.send_json({"error": "nothing is listening on port %d" % port}, 404)
+            return self.send_json({"port": port, "listening": True, "http": True})
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
             mid = p.split("/")[4]
             machine = next((m for m in MACHINES if m["id"] == mid), None)
@@ -2199,6 +2261,63 @@ class H(BaseHTTPRequestHandler):
     do_DELETE = do_POST
 
     # ---------- minimal WebSocket ----------
+    def port_connect(self, mid, port):
+        """…/ports/{port}/connect: the WebSocket's binary messages are one TCP connection to the port (docs/ports.md)."""
+        import socket
+        listed = any(pp.get("port") == port for x in all_sessions() for pp in (x.get("ports") or []))
+        if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
+        try:
+            tcp = socket.create_connection(("127.0.0.1", port), timeout=3)
+        except OSError:
+            return self.send_json({"error": "nothing is listening on port %d" % port}, 404)
+        PORT_LOG.append({"machine_id": mid, "port": port})
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket"); self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept); self.end_headers(); self.wfile.flush()
+        lock = threading.Lock()
+
+        def frame(op, data):
+            n = len(data)
+            hdr = bytes([0x80 | op]) + (bytes([n]) if n < 126 else bytes([126]) + struct.pack(">H", n) if n < 65536 else bytes([127]) + struct.pack(">Q", n))
+            with lock:
+                self.wfile.write(hdr + data); self.wfile.flush()
+
+        def machine_to_phone():
+            try:
+                while True:
+                    b = tcp.recv(32768)
+                    if not b: break
+                    frame(0x2, b)
+            except OSError:
+                pass
+            try: frame(0x8, struct.pack(">H", 1000))
+            except OSError: pass
+
+        threading.Thread(target=machine_to_phone, daemon=True).start()
+        r = self.rfile
+        try:
+            while True:
+                h = r.read(2)
+                if len(h) < 2: break
+                op = h[0] & 0x0F; n = h[1] & 0x7F
+                if n == 126: n = struct.unpack(">H", r.read(2))[0]
+                elif n == 127: n = struct.unpack(">Q", r.read(8))[0]
+                mask = r.read(4) if h[1] & 0x80 else b"\0\0\0\0"
+                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(r.read(n)))
+                if op == 8: break
+                if op == 9:
+                    frame(0xA, payload); continue
+                if op in (0, 1, 2): tcp.sendall(payload)
+        except OSError:
+            pass
+        finally:
+            try: tcp.shutdown(socket.SHUT_RDWR)
+            except OSError: pass
+            tcp.close()
+        self.close_connection = True
+
     def websocket(self):
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()

@@ -55,6 +55,9 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable {
 
 struct LinkTarget: Identifiable, Hashable {
     var url: URL
+    /// A machine's port forwarded to the phone (docs/ports.md): what to call it ("机器名 :5173"); the url is the
+    /// phone's loopback, which only this app serves.
+    var forwarded: String? = nil
     var id: String { url.absoluteString }
 }
 
@@ -115,9 +118,9 @@ struct LinkSheet: View {
     private var header: some View {
         HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : target.url.host ?? "网页") : title)
+                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : (target.forwarded != nil ? nil : target.url.host) ?? "网页") : title)
                     .font(Theme.Font.secondaryStrong).lineLimit(1)
-                Text(target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text(target.forwarded ?? target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 6)
             if isFeishuDoc {
@@ -127,12 +130,7 @@ struct LinkSheet: View {
             }
             Menu {
                 Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
-                #if os(iOS)
-                Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: Theme.Icon.safari) }
-                #else
-                Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
-                #endif
-                ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
+                if target.forwarded == nil { browserItems } // the phone's loopback means nothing to another app
             } label: { Image(systemName: Theme.Icon.moreMenu) }
             Button { dismiss() } label: { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
                 .accessibilityLabel("关闭")
@@ -141,6 +139,15 @@ struct LinkSheet: View {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.l)
         .padding(.bottom, Theme.Space.s)
+    }
+
+    @ViewBuilder private var browserItems: some View {
+        #if os(iOS)
+        Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: Theme.Icon.safari) }
+        #else
+        Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
+        #endif
+        ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
     }
 
     private func pick(_ text: String, kind: String) {
@@ -195,7 +202,9 @@ final class WebViewPool {
         #endif
         v.allowsBackForwardNavigationGestures = true
         var req = URLRequest(url: url)
-        req.cachePolicy = .returnCacheDataElseLoad // a page seen before paints from disk at once
+        // A page seen before paints from disk at once; a machine's dev server (the phone's loopback) is always asked:
+        // its page changes as the agent works.
+        req.cachePolicy = ["localhost", "127.0.0.1"].contains(url.host() ?? "") ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
         v.load(req)
         views[key] = v
         touch(key)

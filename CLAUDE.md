@@ -114,6 +114,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/knowledge.md` | 知识库 `~/.jarvis/data`：会话全量归档、压缩上下文、人 / 群 / 项目、打标，Jarvis / AI 分身 / Agents 怎么共用 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |
+| `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.jarvis/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/engines.md` | 终端引擎（herdr / Herdr App / Orca）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |

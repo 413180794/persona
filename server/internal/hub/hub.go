@@ -72,6 +72,7 @@ type Hub struct {
 
 	sched  schedule  // the assistant's scheduled tasks (assistant_schedule.go)
 	titles titleBook // assistant conversations' titles (assistant_titles.go)
+	ports  portOpens // ports the user opened in the app (ports.go)
 	inbox  inbox     // the unified inbox (inbox.go)
 	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).

@@ -320,7 +320,10 @@ type Session struct {
 	// Subagents the agent launched (Agent / Task tool); each one's transcript is the session "<id>@<agent id>".
 	Subagents []Subagent `json:"subagents,omitempty"`
 	// Loop is the /loop driving this agent, when there is one (it wakes itself up on a schedule).
-	Loop      *LoopInfo `json:"loop,omitempty"`
+	Loop *LoopInfo `json:"loop,omitempty"`
+	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/ports.md): the dev servers
+	// it started, which the apps open through the hub.
+	Ports     []Port    `json:"ports,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
 	// Rev changes whenever the transcript does (its size): the app pulls new items for every session whose rev
@@ -337,6 +340,16 @@ type Session struct {
 	// ready. StartError: the start failed (shown in the chat for a while).
 	Starting   bool   `json:"starting,omitempty"`
 	StartError string `json:"start_error,omitempty"`
+}
+
+// Port is a listening TCP port on a machine (docs/ports.md).
+type Port struct {
+	Port int `json:"port"`
+	// Addr is what it is bound to: 127.0.0.1, 0.0.0.0, ::, ::1 or one of the machine's addresses.
+	Addr    string `json:"addr,omitempty"`
+	PID     int    `json:"pid,omitempty"`
+	Process string `json:"process,omitempty"` // the command, as ps / lsof name it (node, python3.12…)
+	Title   string `json:"title,omitempty"`   // the <title> of its page at /
 }
 
 // Item kinds.

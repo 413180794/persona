@@ -466,6 +466,7 @@ struct ToolDetail: View {
             }
             if let result = call.result, base != "Edit" || result.isError == true {
                 ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
+                if base == "Bash" { PortChips(text: result.cutText) } // a dev server saying where it listens
             } else if call.isRunning {
                 HStack(spacing: Theme.Space.sm) {
                     ProgressView().controlSize(.mini)

@@ -19,6 +19,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/prompts"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/streams"
 )
 
 var errOffline = errors.New("machine is offline")
@@ -30,6 +31,7 @@ type Machine struct {
 
 	mu       sync.Mutex
 	peer     *rpc.Peer
+	streams  *streams.Mux // the forwarded ports' connections on peer (ports.go)
 	info     proto.NodeInfo
 	online   bool
 	err      string
@@ -254,7 +256,13 @@ func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err 
 	defer cancel()
 
 	peer := rpc.New("h", l.w)
-	peer.OnEvent = m.onEvent
+	mux := streams.New(peer.Notify) // forwarded ports (ports.go)
+	defer mux.CloseAll()
+	peer.OnEvent = func(event string, params json.RawMessage) {
+		if !mux.Event(event, params) {
+			m.onEvent(event, params)
+		}
+	}
 	peer.OnRequest = m.onRequest
 	served := make(chan error, 1)
 	go func() { served <- peer.Serve(ctx, l.r) }()
@@ -278,6 +286,7 @@ func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err 
 
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = peer, info, true, "", time.Now().UTC()
+	m.streams = mux
 	m.via, m.path = via, ""
 	if via == "ssh" {
 		m.directFailed = time.Time{}
@@ -341,7 +350,7 @@ func (m *Machine) connectVia(ctx context.Context, via string) (online bool, err 
 func (m *Machine) setOffline(err error) {
 	m.hub.terminalsOffline(m.cfg.ID)
 	m.mu.Lock()
-	m.peer = nil
+	m.peer, m.streams = nil, nil
 	m.online = false
 	m.via, m.path = "", ""
 	if err != nil {

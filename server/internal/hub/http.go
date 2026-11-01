@@ -199,6 +199,7 @@ func (h *Hub) routes() http.Handler {
 		api.Handle("/api/v1/mail/", h.mail.Handler())
 	}
 	h.tokenRoutes(api)
+	h.portRoutes(api)
 	mux.Handle("/api/", h.auth(api))
 	mux.Handle("/", webApp(filepath.Join(h.cfg.dir, "web")))
 	return logRequests(h, mux)
@@ -247,7 +248,8 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		w.Header().Set("X-Request-Id", id)
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
-		long := strings.HasPrefix(r.URL.Path, "/api/v1/plugins/") // a plugin's sockets and streams
+		// A plugin's sockets and streams, a forwarded port's connections (ports.go).
+		long := strings.HasPrefix(r.URL.Path, "/api/v1/plugins/") || strings.HasSuffix(r.URL.Path, "/connect")
 		if r.URL.Path != "/api/v1/ws" && (sw.status >= 400 || (!long && time.Since(start) > 2*time.Second)) {
 			h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
 		}

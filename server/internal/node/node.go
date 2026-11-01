@@ -19,6 +19,7 @@ import (
 	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
+	"github.com/chyroc/jarvis/server/internal/streams"
 	"github.com/chyroc/jarvis/server/internal/transcript"
 )
 
@@ -75,6 +76,10 @@ type Node struct {
 	// started with (assistant_context.go).
 	ctxSent  map[string]map[string]string
 	ctxTools map[string][]string
+
+	// ports: the agents' listening ports (ports.go); streams: the forwarded connections to them (streams.Mux).
+	ports   portState
+	streams *streams.Mux
 
 	// hostAgents: each host's agents in its last answer (refreshHosts), kept for a host that does not answer.
 	hostAgents map[string][]host.Agent
@@ -133,6 +138,7 @@ func New(version string) (*Node, error) {
 	}
 	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
 	n.state = newState()
+	n.ports.kick = make(chan struct{}, 1)
 	return n, nil
 }
 
@@ -151,7 +157,13 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	}
 	n.peer = rpc.New("n", w)
 	n.peer.OnRequest = n.handle
-	n.peer.OnEvent = n.onTerminalEvent
+	n.streams = streams.New(n.peer.Notify)
+	defer n.streams.CloseAll()
+	n.peer.OnEvent = func(event string, params json.RawMessage) {
+		if !n.streams.Event(event, params) {
+			n.onTerminalEvent(event, params)
+		}
+	}
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
 	go n.loadState(ctx)
 	ln, err := n.listenHookSocket(ctx)
@@ -165,6 +177,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
 	go n.sampleMetrics(ctx)
+	go n.watchPorts(ctx)
 	return n.peer.Serve(ctx, r)
 }
 
@@ -532,6 +545,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.uploadCall(method, params)
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd, p.Offset)
+	case "port.dial":
+		return n.portDial(ctx, params)
+	case "port.probe":
+		return n.portProbeRPC(ctx, params)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

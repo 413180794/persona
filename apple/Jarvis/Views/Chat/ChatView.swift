@@ -243,6 +243,7 @@ struct ChatView: View {
             .navigationTransition(.zoom(sourceID: v.source, in: imageZoom))
         }
         .environment(\.openLink, actions.openLink)
+        .environment(\.openPort, actions.openPort)
         // Web links open in the in-app sheet (Feishu docs in the native reader); anything else as before.
         .environment(\.openURL, actions.openURL)
         #if os(macOS)
@@ -419,11 +420,30 @@ struct ChatView: View {
     }
     #endif
 
+    /// Opens a port of this conversation's machine: the phone listens for it and the sheet loads it from there; a
+    /// port nothing listens on any more says so (its badge turns gray).
+    private func openPort(_ l: PortLink) {
+        let machine = key.machineID
+        Task {
+            do {
+                let url = try await model.forwardedURL(l, machine: machine)
+                let name = model.machine(machine)?.name ?? machine
+                link = LinkTarget(url: url, forwarded: "\(name) :\(l.port)")
+            } catch {
+                model.toast = Toast(error.localizedDescription, style: .error)
+            }
+        }
+    }
+
     /// What this render's actions do (`ChatActions`).
     private var handlers: ChatActions.Handlers {
         ChatActions.Handlers(
             openFile: { [key, session] path in file = FileRef(machineID: key.machineID, path: path, cwd: session?.cwd) },
-            openLink: { link = LinkTarget(url: $0) },
+            // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
+            openLink: { [model, key] url in
+                if let l = PortLinks.link(url, hostnames: model.hostnames(of: key.machineID)) { openPort(l) } else { link = LinkTarget(url: url) }
+            },
+            openPort: { openPort($0) },
             viewImages: { viewingImages = $0 },
             attachImage: { [model, key] img in model.composerInbox[key, default: []].append(img) },
             loadImage: { [model, key] path in
@@ -1492,6 +1512,12 @@ struct ChatView: View {
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.bottom, Theme.Space.s)
                 }
+                // The ports it listens on (its dev servers, docs/ports.md): a tap opens the page.
+                if let ports = session?.ports, !ports.isEmpty {
+                    SessionPortChips(machine: key.machineID, ports: ports)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.bottom, Theme.Space.s)
+                }
                 // Only while subagents run (plus the one being read): finished ones stay reachable from their
                 // Agent call ("查看子 Agent") without taking a row here.
                 let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
@@ -1555,6 +1581,7 @@ struct ChatView: View {
                     }
                 }
             }
+            if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineID, ports: ports) }
             let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
             if pane == .chat, !agents.isEmpty {
                 AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
@@ -1742,7 +1769,7 @@ struct ChatView: View {
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
             }
             if let u = UserDefaults.standard.string(forKey: "openLinkURL").flatMap(URL.init(string:)) { // `-openLinkURL <url>`
-                Task { try? await Task.sleep(for: .seconds(3)); link = LinkTarget(url: u) }
+                Task { try? await Task.sleep(for: .seconds(3)); actions.openLink(u) } // as a tap would: localhost is the machine's
             }
             if UserDefaults.standard.bool(forKey: "openFirstImage") {
                 Task {
@@ -2792,6 +2819,7 @@ struct WorkStepView: View, Equatable {
     struct Handlers {
         var openFile: (String) -> Void = { _ in }
         var openLink: (URL) -> Void = { _ in }
+        var openPort: (PortLink) -> Void = { _ in }
         var viewImages: (ImageViewing) -> Void = { _ in }
         var attachImage: (UIImage) -> Void = { _ in }
         var loadImage: (String) async -> ImagePayload? = { _ in nil }
@@ -2807,6 +2835,7 @@ struct WorkStepView: View, Equatable {
 
     private(set) lazy var openFile: (String) -> Void = { [weak self] in self?.handlers.openFile($0) }
     private(set) lazy var openLink: (URL) -> Void = { [weak self] in self?.handlers.openLink($0) }
+    private(set) lazy var openPort: (PortLink) -> Void = { [weak self] in self?.handlers.openPort($0) }
     private(set) lazy var viewImages: (ImageViewing) -> Void = { [weak self] in self?.handlers.viewImages($0) }
     private(set) lazy var attachImage: (UIImage) -> Void = { [weak self] in self?.handlers.attachImage($0) }
     // The async ones run on the main actor, where the handlers are.
