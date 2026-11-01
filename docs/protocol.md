@@ -64,6 +64,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 
 // Launcher（来自 zsh：_claude_launchers 列出的函数，以及调用 claude 的 alias；docs/launchers.md）
 {"name":"cc_ds","base_url":"http://<模型网关>","model":"<模型名>"}
+// Codex 的启动器（PATH 上的 codex、跑 codex 的 alias）带 agent，新建时必须带 prompt、不能 async（docs/codex.md「从手机新建」）
+{"name":"codex","model":"默认","agent":"codex"}
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
 {"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"/home/x/code/foo",
@@ -273,6 +275,9 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 - 启动期间发来的消息（`session.send`）在 node 上等它就绪再按顺序打进去；hub 给这种发送 3 分钟（平时 90 秒）。启动失败时这些发送拿到同一个错误，App 的气泡变成「重发」。
 - App 的第一条消息不放在 `prompt` 里，而是进对话后当普通消息发（马上上屏、带发送状态），起名用 `name_hint`。对话页输入框上方显示「正在启动 Claude…」或失败原因（`StartingNote`）。
 - node 重启会丢掉还在启动的记录：这时会话既不在列表里也没有 transcript，App 那边的发送会失败、可以重发。
+- Codex 的启动器（`agent: "codex"`）不走 `async`：Codex 收到第一条消息才建 thread、定下会话 id，所以 App 把第一条消息放在 `prompt` 里同步新建，
+  node 等到这个 thread 出现才回（最多 60 秒），回的就是它的会话。拒绝的 `code`：`codex_needs_prompt`（没带 `prompt`，或带了 `async`）、
+  `codex_launcher`（跑 Codex 的 shell 函数）、`codex_resume`（想用 Codex 启动器恢复会话）。见 `docs/codex.md`「从手机新建」。
 
 ### 发消息
 
@@ -392,7 +397,7 @@ hub → node 请求：
 | `launchers.list` | → `{launchers}` |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
-| `session.start` | `{cwd, launcher, prompt?, resume_session_id?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`） |
+| `session.start` | `{cwd, launcher, prompt?, resume_session_id?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
 | `session.send` | `{session_id, text, images?}` |
 | `session.keys` | `{session_id, keys, text}` |
 | `session.interrupt` | `{session_id}` |

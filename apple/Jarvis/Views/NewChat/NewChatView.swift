@@ -34,14 +34,27 @@ struct NewChatView: View {
 
     private var machine: Machine? { model.machine(machineID) }
 
+    /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
+    private var codex: Bool { launchers.first(where: { $0.name == launcher })?.isCodex == true }
+
+    private var promptHint: String { codex ? "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）" : "想让 Claude 做什么？（可以留空）" }
+
+    /// Nothing missing for 开始对话.
+    private var ready: Bool {
+        machine?.online == true && !cwd.isEmpty && !launcher.isEmpty
+            && !(codex && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private var startingLabel: String { "正在 \(machine?.name ?? "") 上启动\(codex ? " Codex" : "")…" }
+
     @ViewBuilder private var promptField: some View {
         #if os(macOS)
         // A grouped Mac form shows a titled field as label + trailing value: the prompt took the right half.
-        TextField("想让 Claude 做什么？（可以留空）", text: $prompt, prompt: Text("想让 Claude 做什么？（可以留空）"), axis: .vertical)
+        TextField(promptHint, text: $prompt, prompt: Text(promptHint), axis: .vertical)
             .labelsHidden()
             .lineLimit(3...10)
         #else
-        TextField("想让 Claude 做什么？（可以留空）", text: $prompt, axis: .vertical)
+        TextField(promptHint, text: $prompt, axis: .vertical)
             .lineLimit(3...10)
         #endif
     }
@@ -123,23 +136,25 @@ struct NewChatView: View {
                     }
                     .accessibilityIdentifier("newChat.launcher")
                 } header: { Text("启动器（模型）") } footer: {
-                    Text("来自这台机器 ~/.zshrc 里的 claude 启动函数，会在 herdr 里新开一个标签页运行。")
+                    Text("来自这台机器 ~/.zshrc 里的 claude 启动函数、跑 claude 或 codex 的 alias，以及 codex 本身，会在 herdr 里新开一个标签页运行。")
                 }
 
-                Section {
-                    Picker(selection: $mode) {
-                        Text("跟随启动器").tag("")
-                        ForEach(SessionModes.permissionModes) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
-                    } label: { Label { Text("权限模式") } icon: { Image(systemName: "lock.shield").foregroundStyle(Theme.accent) } }
-                    Picker(selection: $effort) {
-                        Text("跟随启动器").tag("")
-                        ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
-                    } label: { Label { Text("思考强度") } icon: { Image(systemName: Theme.Icon.effort).foregroundStyle(Theme.accent) } }
-                } header: { Text("权限与思考") } footer: {
-                    Text(SessionModes.mode(mode)?.detail ?? "权限模式和思考强度在对话里也能随时改。")
+                if !codex { // Claude Code's modes; a Codex keeps its own
+                    Section {
+                        Picker(selection: $mode) {
+                            Text("跟随启动器").tag("")
+                            ForEach(SessionModes.permissionModes) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
+                        } label: { Label { Text("权限模式") } icon: { Image(systemName: "lock.shield").foregroundStyle(Theme.accent) } }
+                        Picker(selection: $effort) {
+                            Text("跟随启动器").tag("")
+                            ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
+                        } label: { Label { Text("思考强度") } icon: { Image(systemName: Theme.Icon.effort).foregroundStyle(Theme.accent) } }
+                    } header: { Text("权限与思考") } footer: {
+                        Text(SessionModes.mode(mode)?.detail ?? "权限模式和思考强度在对话里也能随时改。")
+                    }
+                    .pickerStyle(.menu)
+                    .tint(Theme.accent)
                 }
-                .pickerStyle(.menu)
-                .tint(Theme.accent)
 
                 Section {
                     promptField
@@ -166,8 +181,8 @@ struct NewChatView: View {
                 #if os(macOS)
                 // A Mac sheet's primary button sits beside 取消 and answers ⏎ (docs/mac.md「和 iOS 的对应」).
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话") { Task { await start() } }
-                        .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
+                    Button(starting ? startingLabel : "开始对话") { Task { await start() } }
+                        .disabled(starting || !ready)
                 }
                 #endif
             }
@@ -189,14 +204,14 @@ struct NewChatView: View {
                 } label: {
                     HStack(spacing: Theme.Space.s) {
                         if starting { ProgressView().tint(.white) }
-                        Text(starting ? "正在 \(machine?.name ?? "") 上启动…" : "开始对话").font(Theme.Font.heading)
+                        Text(starting ? startingLabel : "开始对话").font(Theme.Font.heading)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton(prominent: true)
                 .controlSize(.large)
-                .disabled(starting || machine?.online != true || cwd.isEmpty || launcher.isEmpty)
+                .disabled(starting || !ready)
                 #endif
                 }
                 .padding(.horizontal, Theme.Space.xl)
@@ -283,6 +298,18 @@ struct NewChatView: View {
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             let name = tabName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if codex {
+                // Codex picks its thread's id once it has the first message: it goes with the start, which answers
+                // with that thread (one session, already working on it).
+                let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: prompt,
+                                                  workspaceID: preset?.workspaceID, tabName: name.isEmpty ? nil : name))
+                UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
+                UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
+                Haptics.success()
+                model.adopt(s)
+                onStarted(s)
+                return
+            }
             // The hub answers at once and starts claude in the background; the first message goes out as an ordinary
             // message (on screen right away, typed in once claude is ready).
             let s = try await api.start(.init(machineID: machineID, cwd: cwd, launcher: launcher, prompt: nil,
@@ -322,6 +349,7 @@ struct LauncherPicker: View {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text(l.name).font(Theme.Font.heading.monospaced()).foregroundStyle(.primary)
                             HStack(spacing: Theme.Space.sm) {
+                                if l.isCodex { Chip(text: "Codex") }
                                 if let m = l.model, !m.isEmpty { Chip(text: m) }
                                 if let host = l.baseURL.flatMap({ URL(string: $0)?.host() }) {
                                     Text(host).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)

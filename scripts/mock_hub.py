@@ -249,6 +249,7 @@ def mark_seen(sid):
 HITS = {}  # "GET /api/v1/machines" -> how many (GET /mock/hits): pull to refresh and reloads
 RECONNECTS = []  # machine ids of POST …/reconnect (GET /mock/reconnects)
 STARTED = []  # bodies of POST /api/v1/sessions (GET /mock/started)
+START_IDS = [int(time.time()) % 10**8 * 1000]  # new sessions' ids: never reused, across runs too (the app caches chats by id)
 
 
 def mock_dirs(mid, path):
@@ -1957,7 +1958,8 @@ class H(BaseHTTPRequestHandler):
             l = next((x for x in LAUNCHERS if x["name"] == n), None)
             if l: return self.send_json({"launcher": l})
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
-            return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}]})
+            return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "sonnetcc", "model": "sonnet"},
+                                                 {"name": "codex", "model": "gpt-5.5", "agent": "codex"}]})  # Codex: 从手机新建
         if p.startswith("/api/v1/machines/") and p.endswith("/claude-settings"):
             return self.send_json({"settings": CLAUDE_SETTINGS.setdefault(p.split("/")[4], _claude_settings())})
         if p.startswith("/api/v1/sessions/") and p.endswith("/items"):
@@ -2239,9 +2241,17 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "machine is offline"}, 503)
             if body.get("cwd", "").endswith("/broken"):  # a launcher that never gets ready
                 return self.send_json({"error": "claude did not become ready within 1m0s\nzsh: command not found: claude"}, 502)
+            codex = body.get("launcher") == "codex"  # the node starts Codex with its first message and answers with its thread
+            if codex and (body.get("async") or not (body.get("prompt") or "").strip()):
+                return self.send_json({"error": "新建 Codex 会话要连第一条消息一起发：Codex 收到第一条消息才建会话。", "code": "codex_needs_prompt"}, 400)
             n = len(STARTED)
-            s = sess(body["machine_id"], "d4e6f8a0-0000-4000-8000-%012d" % n, body.get("prompt") or "新会话", body.get("cwd", ""),
-                     "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "")
+            START_IDS[0] += 1
+            s = sess(body["machine_id"], "d4e6f8a0-0000-4000-8000-%012d" % START_IDS[0], (body.get("prompt") or "新会话").split("\n")[0], body.get("cwd", ""),
+                     "working", "working", body.get("cwd", "").rsplit("/", 1)[-1] or "new", 9, body.get("tab_name") or "agent-%d" % n, n, 0, "",
+                     agent="codex" if codex else "claude")
+            s["launcher"] = body.get("launcher") or "claude"
+            if codex:  # the node answers once the first message is in the thread's rollout
+                ITEMS[s["session_id"]] = [it("user", "text", 0, text=body["prompt"])]
             if body.get("async"):  # answered at once, claude still starting (node/starting.go); MOCK_START_SECONDS later it is up
                 s.update(status="idle", state="idle", starting=True, title=body.get("name_hint") or s["title"])
                 def started(s=s):

@@ -24,8 +24,10 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   前面可以有变量（`alias dmcc="ANTHROPIC_BASE_URL=… ANTHROPIC_AUTH_TOKEN=… claude --dangerously-skip-permissions"`）、经过
   `env`（含 `-u` / `-i`）/ `command` / `exec` / `noglob`、写绝对路径，或者同一个 alias 里先 `export …;`。网关取 `ANTHROPIC_BASE_URL`，
   模型取 `ANTHROPIC_MODEL`，没有就看 `--model`。按名字排序（shell 不保留定义顺序）；`_claude_launchers` 已经列出的同名 alias 不重复。
-- 不算启动器的：名字就叫 `claude` 的 alias、跑 `codex` / `traex` 的 alias（从 Jarvis 新建会话只支持 claude，`docs/codex.md`）、
-  跟 Agent 无关的（`ll`、`gst`…）。两样都没有时只有默认的 `claude`。
+- **Codex**（2026-11-02 起）：PATH 上有 `codex` 时多一个 `codex`，再加上只跑一条 `codex` 命令的 alias，排在 Claude 的后面，带 `agent: "codex"`；
+  从手机新建 Codex 会话见 `docs/codex.md`「从手机新建」。
+- 不算启动器的：名字就叫 `claude` 的 alias、跑 `traex` 的 alias、做了别的事的 Codex alias（`cd x && codex`）、
+  跟 Agent 无关的（`ll`、`gst`…）。都没有时只有默认的 `claude`。
 - 列表里只有名字、网关、模型；alias 里的 Key / Token 不出 node。「查看定义」对 alias 显示的是 `whence -f` 给的原文，Key 照样打码。
 - 函数写的启动器还是要靠 `_claude_launchers` 列出来：函数体里最后跑什么，不真跑一遍看不出来（见下「启动器页面上的参数」）。
 

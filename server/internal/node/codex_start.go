@@ -1,0 +1,327 @@
+package node
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/chyroc/jarvis/server/internal/proto"
+	"github.com/chyroc/jarvis/server/internal/screen"
+)
+
+// Starting a Codex from the phone (docs/codex.md「从手机新建」). A Codex launcher (plain `codex`, or an alias whose
+// command is codex) runs in a new herdr tab with the first message as its prompt argument: Codex makes the thread
+// itself — on the shared app-server daemon for a plain 0.163, where #220 joins it (codex_daemon.go); in its own process
+// for 0.153 or a launcher with -c, on the terminal route. Neither the message nor the launcher's words (an alias can
+// carry a key) go through a shell or onto the screen: they are written to a file only the user can read, the tab runs
+// `jarvisd codex-start <file>`, and that execs the words with the message as one argument after "--". The start answers once the new thread is known — the rollout in that directory, begun after the
+// launch, whose first message is exactly this one — with that thread's id, so the phone opens the session that is
+// there; it fails, with what the tab shows, when none comes in time.
+
+// codexStartWait is how long a start waits for Codex's thread (a trust dialog, a slow ~/.zshrc, the first turn).
+var codexStartWait = 60 * time.Second
+
+// codexArgv is how a Codex launcher runs: plain codex, or an alias's words; ok false when the launcher is not Codex's.
+func (n *Node) codexArgv(launcher string) ([]string, bool) {
+	launcherCache.Lock()
+	words, ok := launcherCache.codex[launcher]
+	launcherCache.Unlock()
+	if ok {
+		return append([]string(nil), words...), true
+	}
+	if launcher == "codex" {
+		return []string{"codex"}, true
+	}
+	return nil, false
+}
+
+// codexLauncher is codexArgv for a start: the node reads its launcher list first when it has not since it started
+// (the app keeps the list it got across a node restart, so a start can come before any launchers.list).
+func (n *Node) codexLauncher(ctx context.Context, launcher string) ([]string, bool) {
+	launcherCache.Lock()
+	loaded := !launcherCache.at.IsZero()
+	launcherCache.Unlock()
+	if !loaded && launcher != "claude" {
+		_, _ = n.launchers(ctx)
+	}
+	return n.codexArgv(launcher)
+}
+
+// codexFunctionLauncher refuses a launcher that is a shell function running Codex (what the launcher probe found):
+// from the phone a Codex starts only as plain codex or an alias running it, whose words codex-start can run without a
+// shell; as a Claude it would only fail. nil for any other launcher. probe false: only what an earlier probe found
+// (a probe sources ~/.zshrc, and startAsync answers at once; the start after it probes).
+func (n *Node) codexFunctionLauncher(ctx context.Context, launcher string, probe bool) error {
+	if launcher == "claude" {
+		return nil
+	}
+	if _, ok := n.codexArgv(launcher); ok {
+		return nil
+	}
+	var d proto.LauncherDetail
+	if probe {
+		d = n.launcherProbeCached(ctx, launcher)
+	} else {
+		probeCache.Lock()
+		if at, ok := probeCache.at[launcher]; ok && time.Since(at) < 10*time.Minute {
+			d = probeCache.got[launcher]
+		}
+		probeCache.Unlock()
+	}
+	if d.Agent == "codex" {
+		return refusal("codex_launcher", "启动器「"+launcher+"」是个跑 Codex 的 shell 函数：从手机新建 Codex 会话只支持 codex 本身和直接跑 codex 的 alias，换一个启动器再试。", nil)
+	}
+	return nil
+}
+
+// codexConfigFlags are the flags that make a 0.163 Codex run its thread in its own process instead of on the shared
+// daemon (codex-rs tui daemon_startup.rs).
+var codexConfigFlags = []string{"-c", "--config", "-p", "--profile", "--enable", "--disable", "--oss", "--strict-config", "--no-daemon"}
+
+// codexOwnProcess names the launcher flag that keeps a Codex off the shared app-server, "" for none (and for a
+// launcher on an app-server of its own, --remote, whatever else it says).
+func codexOwnProcess(argv []string) string {
+	if codexOnRemote(argv) {
+		return ""
+	}
+	for _, w := range argv {
+		flag, _, _ := strings.Cut(w, "=")
+		for _, f := range codexConfigFlags {
+			if flag == f {
+				return f
+			}
+		}
+	}
+	return ""
+}
+
+// startCodex starts a Codex launcher in a new tab with the first message and returns its session once the thread is
+// known.
+func (n *Node) startCodex(ctx context.Context, launch host.Launcher, cwd, launcher string, argv []string, prompt, ws, tabName string) (*proto.Session, error) {
+	if strings.TrimSpace(prompt) == "" {
+		return nil, refusal("codex_needs_prompt", "新建 Codex 会话要连第一条消息一起发：Codex 收到第一条消息才建会话。", nil)
+	}
+	if codexOnRemote(argv) {
+		// A launcher on an explicit app-server (--remote) sends no directory unless told one.
+		argv = append(argv, "-C", cwd)
+	}
+	dir, err := os.MkdirTemp(n.dir, "codex-start-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir) // codex-start removes the file once read; the directory goes when the start ends
+	file := filepath.Join(dir, "start.json")
+	b, _ := json.Marshal(codexStartFile{Argv: argv, Prompt: prompt})
+	if err := os.WriteFile(file, b, 0o600); err != nil {
+		return nil, err
+	}
+	var created *host.Created
+	if ws == "" {
+		if created, err = launch.CreateSpace(ctx, cwd, filepath.Base(cwd)); err == nil && created.SlotID != "" {
+			_ = renameSlot(ctx, launch, created.SlotID, tabLabel(tabName, nil))
+		}
+	} else {
+		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("create herdr tab: %w", err)
+	}
+	pane := created.Pane.String()
+	n.mu.Lock()
+	if n.codexStarting == nil {
+		n.codexStarting = map[string]bool{}
+	}
+	n.codexStarting[pane] = true // no guessing a thread for it meanwhile (setAgentsAt)
+	n.mu.Unlock()
+	defer func() {
+		n.mu.Lock()
+		delete(n.codexStarting, pane)
+		n.mu.Unlock()
+	}()
+	cmd := shellQuote(n.bin) + " codex-start " + shellQuote(file)
+	began := time.Now()
+	time.Sleep(300 * time.Millisecond) // the fresh shell loads ~/.zshrc; typed input is buffered either way
+	if err := launch.Run(ctx, created.Pane, cmd); err != nil {
+		return nil, fmt.Errorf("run launcher: %w", err)
+	}
+	id, err := n.waitCodexThread(ctx, pane, cwd, prompt, began)
+	if err != nil {
+		screen, _ := n.readPane(ctx, pane, "recent-unwrapped", 30)
+		return nil, fmt.Errorf("%v\n%s", err, lastLines(screen, 12))
+	}
+	n.bindPane(pane, id)
+	n.state.put(id, sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: began.UTC()})
+	_ = n.refreshHosts(ctx)
+	a, ok := n.agent(id)
+	if !ok {
+		a = host.Agent{Agent: "codex", PaneID: pane, Cwd: cwd, AgentStatus: proto.StatusWorking}
+	}
+	s := n.sessionFor(id, a)
+	s.Agent = "codex"
+	return s, nil
+}
+
+// codexOnRemote: the launcher attaches to an app-server of its own (--remote).
+func codexOnRemote(argv []string) bool {
+	for _, w := range argv {
+		if w == "--remote" || strings.HasPrefix(w, "--remote=") {
+			return true
+		}
+	}
+	return false
+}
+
+// waitCodexThread waits for the thread a start made: a rollout in the directory (as given, or resolved: Codex records
+// the shell's resolved working directory, or -C as given), begun after the launch, whose first user message is the
+// prompt. Codex's own dialogs on the way are answered as the user would for a start they asked
+// for: the folder is trusted (they chose it), an update is skipped. A launcher that fails ends the wait at once.
+func (n *Node) waitCodexThread(ctx context.Context, pane, cwd, prompt string, began time.Time) (string, error) {
+	deadline := time.Now().Add(codexStartWait)
+	resolved := cwd
+	if r, err := filepath.EvalSymlinks(cwd); err == nil {
+		resolved = r
+	}
+	homes := []string{n.codexHome()}
+	for _, h := range n.codexInventory().Homes {
+		if h != homes[0] {
+			homes = append(homes, h)
+		}
+	}
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+		for _, home := range homes {
+			for _, r := range rollouts(home) {
+				if (r.cwd != cwd && r.cwd != resolved) || r.mtime.Before(began.Add(-time.Second)) {
+					continue
+				}
+				// A thread begun by this launch (not one resumed in the same directory) whose first message is ours.
+				if at, first := codexThreadStart(r.path); !at.Before(began.Add(-2*time.Second)) && strings.TrimSpace(first) == strings.TrimSpace(prompt) {
+					return n.codexPublicID(home, r.id), nil
+				}
+			}
+		}
+		text, err := n.readPane(ctx, pane, "recent", 40)
+		if err != nil {
+			continue
+		}
+		if i := strings.LastIndex(text, codexStartError); i >= 0 {
+			return "", errors.New(strings.TrimSpace(strings.SplitN(text[i:], "\n", 2)[0]))
+		}
+		switch {
+		case codexTrustRE.MatchString(text):
+			_ = n.sendKeys(ctx, pane, "enter") // the selected option is trust and continue
+		case strings.Contains(text, "Update available") && strings.Contains(text, "Skip"):
+			if d := screen.ParseDialog(text); d != nil {
+				for _, o := range d.Options {
+					if o.Label == "Skip" {
+						_ = n.sendKeys(ctx, pane, o.Keys...)
+					}
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("Codex 已经在电脑上的新标签里打开了，但 %d 秒内没认出它这次的会话（第一条消息还没进它的会话记录）：在电脑上看看那个标签", int(codexStartWait.Seconds()))
+}
+
+// codexTrustRE is Codex's folder trust dialog with "trust and continue" selected (0.163: "› 1. Trust and continue";
+// 0.153: "› 1. Yes, continue"): enter picks it.
+var codexTrustRE = regexp.MustCompile(`(?m)^\s*›\s*1\.\s+(?:Trust and continue|Yes, continue)\s*$`)
+
+// codexThreadStart is when a rollout's thread began (its session_meta) and the text of its first user message ("" when
+// there is none yet).
+func codexThreadStart(path string) (time.Time, string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return time.Time{}, ""
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64<<10), 8<<20)
+	var began time.Time
+	for lines := 0; sc.Scan() && lines < 200; lines++ {
+		line := sc.Bytes()
+		if lines == 0 {
+			began = lineTime(line)
+		}
+		if !strings.Contains(string(line), `"UserMessage"`) {
+			continue
+		}
+		var l struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type string `json:"type"`
+				Item struct {
+					Type    string `json:"type"`
+					Content []struct {
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"item"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(line, &l) != nil || l.Payload.Type != "item_completed" || l.Payload.Item.Type != "UserMessage" {
+			continue
+		}
+		var b strings.Builder
+		for _, c := range l.Payload.Item.Content {
+			b.WriteString(c.Text)
+		}
+		return began, b.String()
+	}
+	return began, ""
+}
+
+// codexStartError starts what `jarvisd codex-start` prints when it cannot run the launcher.
+const codexStartError = "jarvisd codex-start:"
+
+// codexStartFile is what `jarvisd codex-start` runs: the launcher's words (variables set in front, `A=1 codex …`,
+// then the command and its arguments) and the first message.
+type codexStartFile struct {
+	Argv   []string `json:"argv"`
+	Prompt string   `json:"prompt"`
+}
+
+// CodexStart is `jarvisd codex-start <file>`: it reads a codexStartFile (and removes it), then runs its words with the
+// message as one more argument after "--", in place of itself. No shell sees either.
+func CodexStart(args []string) error {
+	if len(args) != 1 {
+		return errors.New(codexStartError + " usage: jarvisd codex-start <file>")
+	}
+	b, err := os.ReadFile(args[0])
+	_ = os.Remove(args[0])
+	var f codexStartFile
+	if err == nil {
+		err = json.Unmarshal(b, &f)
+	}
+	if err != nil {
+		return fmt.Errorf("%s the first message is gone: %v", codexStartError, err)
+	}
+	words := f.Argv
+	env := os.Environ()
+	for len(words) > 0 && assignRe.MatchString(words[0]) {
+		env = append(env, words[0])
+		words = words[1:]
+	}
+	if len(words) == 0 {
+		return errors.New(codexStartError + " no command")
+	}
+	path, err := exec.LookPath(words[0])
+	if err != nil {
+		return fmt.Errorf("%s %s not found in PATH", codexStartError, words[0])
+	}
+	argv := append(append(append([]string(nil), words...), "--"), f.Prompt)
+	return syscall.Exec(path, argv, env)
+}

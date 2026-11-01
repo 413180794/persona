@@ -121,7 +121,7 @@ type liveOptions struct {
 // liveNode is a node on the isolated herdr that knows no app-server.
 func liveNode(c *herdr.Client) *Node {
 	home, _ := os.UserHomeDir()
-	return &Node{home: home, hosts: herdrHosts(c), agents: map[string]host.Agent{}, paths: map[string]string{},
+	return &Node{home: home, hosts: herdrHosts(c), agents: map[string]host.Agent{}, paths: map[string]string{}, panes: map[string]string{},
 		files: map[string]*transcript.File{}, procs: map[string]*assistantProc{}, watches: map[string]*watch{},
 		state: &stateFile{Sessions: map[string]sessionState{}}}
 }

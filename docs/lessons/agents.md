@@ -90,3 +90,7 @@
   会再起一个原生进程：测试里停 app-server 要杀整个进程组。
 - `request_user_input_async` 的 `function_call` 不等于问了：参数解析失败（模型把 `title` 写成 `question`）时 output 是错误、模型马上重试，
   只有被接受的调用才写 `delivery: "async"` 的 AgentMessage。#214 按 `function_call` 开卡，留下过一张永远答不掉的卡，3 轮实测第 1 轮才暴露（2026-11-02）。
+- 按目录认 Codex 的 rollout 时，`session_meta` 的 `cwd` 可能是解析过符号链接的路径（Codex 用 shell 的工作目录），也可能是 `-C` 原样传的；
+  两种都要认。macOS 的临时目录 `/var/…` 其实是 `/private/var/…`：只认解析后的，在 Linux 上测都过、到 Mac 上就 60 秒超时（2026-11-02 从手机新建 Codex）。
+- 往 herdr 窗格里打命令起 Codex 时，别把 alias 展开后的词打进去：alias 里可能带 Key，会上屏、进 shell 历史。启动器的词和第一条消息一起写进 0600 文件，
+  窗格里只打 `jarvisd codex-start <文件>`（`codex_start.go`）。

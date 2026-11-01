@@ -124,10 +124,14 @@ nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var baseURL: String?
     var model: String?
+    /// "codex" for plain codex or an alias running it (docs/codex.md「从手机新建」); nil: Claude Code.
+    var agent: String? = nil
     var id: String { name }
+    /// A Codex start sends its first message with it and waits for the thread Codex makes.
+    var isCodex: Bool { agent == "codex" }
 
     enum CodingKeys: String, CodingKey {
-        case name, model
+        case name, model, agent
         case baseURL = "base_url"
     }
 }

@@ -37,7 +37,8 @@ func asNode(t *testing.T, defs, script string) string {
 // listFrom is the node's launcher list for a ~/.zshrc made of defs.
 func listFrom(t *testing.T, defs string) []proto.Launcher {
 	t.Helper()
-	return mergeLaunchers(asNode(t, defs, launcherScript))
+	list, _ := mergeLaunchers(asNode(t, defs, launcherScript))
+	return list
 }
 
 func fixture(t *testing.T, name string) string {
@@ -57,16 +58,20 @@ func byName(list []proto.Launcher) map[string]proto.Launcher {
 	return m
 }
 
-// Aliases that start claude are launchers, with the gateway and model they set; the others are not.
+// Aliases that start claude are launchers, with the gateway and model they set; the others are not. An alias that
+// runs codex is a Codex launcher, after Claude's (codex_start.go).
 func TestAliasLaunchers(t *testing.T) {
 	list := listFrom(t, fixture(t, "aliases.zsh"))
 	var names []string
 	for _, l := range list {
 		names = append(names, l.Name)
 	}
-	want := []string{"dmcc", "envcc", "expcc", "kcc", "mycc", "ncc", "pathcc", "spaced"}
+	want := []string{"dmcc", "envcc", "expcc", "kcc", "mycc", "ncc", "pathcc", "spaced", "ncodex"}
 	if !slices.Equal(names, want) {
-		t.Fatalf("launchers %v, want %v (sorted; no codex alias, no alias named claude, no ls / git)", names, want)
+		t.Fatalf("launchers %v, want %v (Claude's sorted, then Codex's; no alias named claude, no ls / git)", names, want)
+	}
+	if l := list[len(list)-1]; l.Agent != "codex" {
+		t.Errorf("ncodex: %+v", l)
 	}
 	m := byName(list)
 	for name, w := range map[string][2]string{

@@ -109,6 +109,13 @@ func (n *Node) codexRoute(id string) (route, note string) {
 		}
 		return codexRouteTerminal, "正在接入它所在的 app-server"
 	case errors.Is(err, errCodexNoOwner):
+		if st, ok := n.state.get(id); ok && st.Launcher != "" {
+			if argv, ok := n.codexArgv(st.Launcher); ok {
+				if flag := codexOwnProcess(argv); flag != "" {
+					return codexRouteTerminal, "用启动器「" + st.Launcher + "」起的：它带了 " + flag + "，Codex 这时在自己的进程里跑，不在共享的 app-server 上"
+				}
+			}
+		}
 		return codexRouteTerminal, "不在共享的 app-server 上（带 -c 的启动器、在自己进程里跑的会话、没有守护进程的 0.153）"
 	}
 	return codexRouteTerminal, err.Error()

@@ -1,7 +1,7 @@
 # Codex 支持
 
-herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab：列表、对话、实时状态、发消息、终端、关闭都能用。
-2026-10-26 起支持，`server/internal/node/codex.go` + `server/internal/transcript/codex.go`。
+herdr 里跑的 Codex（`codex` CLI）和 Claude 一样出现在「Agents」tab：列表、对话、实时状态、发消息、终端、关闭都能用，
+也能从手机新建（「从手机新建」）。2026-10-26 起支持，`server/internal/node/codex.go` + `server/internal/transcript/codex.go`。
 
 ## 识别
 
@@ -87,6 +87,36 @@ Jarvis 助手（「Jarvis」tab）也能用 Codex 的启动器，走的是 `code
   真实 Codex：`scripts/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
   （不碰正在用的守护进程，node 关掉发现、只认它），TUI 用 `--remote` 挂上去。
 
+## 从手机新建
+
+2026-11-02 起，手机上的「新对话」选一个 Codex 启动器，就在那台电脑的 herdr 里新开一个标签跑 Codex，第一条消息就是它的第一条消息。
+入口和 Claude 的一样（选机器、目录、启动器）；之后的事交给上面「守护进程上的会话」（0.163 的裸 `codex` 自动接入）或下面的终端路线。
+
+- **哪些启动器是 Codex 的**：PATH 上有 `codex` 就多一个叫 `codex` 的启动器；`~/.zshrc` 里只跑一条 `codex` 命令的 alias（前面可以有
+  `export A=1;`、`VAR=… codex`、`env` / `command` 这类包装，参数照原样，模型取 `-m` / `--model` / `-c model=…`），排在 Claude 的后面。
+  启动器列表里它们带 `agent: "codex"`，App 的启动器页标「Codex」（`sessions.go` 的 `parseCodexAliases`）。不支持的：跑 Codex 的
+  shell 函数（拒绝并说明，`codex_launcher`：函数只能在 shell 里跑，第一条消息就得经过 shell）、做了别的事的 alias（`cd x && codex`，不列出来）、TRAEX。
+- **第一条消息原样过去**：Codex 收到第一条消息才建 thread，所以新建 Codex 必须带它（App 里必填；没带的回 `codex_needs_prompt`，
+  老版本 App 走后台启动也是这个错，提示更新）。启动器的词和消息一起写进 node 目录下只有自己能读的临时文件（0600），窗格里打的只有
+  `jarvisd codex-start <文件>`：它读出来、删掉文件，把启动器的词（前面的 `VAR=…` 进环境）、`--`、消息作为参数数组 `exec` 出去，
+  消息不经过任何 shell——引号、换行、`$`、反引号、中文、几千字都原样到 Codex（`codex_start.go`）。启动器的词也不上屏、不进 shell 历史
+  （alias 里可能带着 Key）。启动器带 `--remote` 时补上 `-C <目录>`（连到别的 app-server 时 TUI 不会自己带目录）。
+- **对上这次请求**：新建是同步的，node 等 Codex 的 thread 出现才回答，回答里就是这个 thread 的会话，所以 App 打开的就是 Agents 里
+  那一条，不会多出一条「启动中」的占位再换成另一条。认法：这个目录下、启动之后才开始（`session_meta` 的时间）、第一条用户消息和发出去的
+  一字不差的 rollout。等的这段时间这个窗格不参与「同目录最新 rollout」的猜测（`codexStarting`），免得先被认成目录里旧的 thread。
+  路上遇到 Codex 自己的对话框照用户的意思答：信任这个目录（目录是用户选的）、跳过更新提示。
+- **对不上**：node 最多等 60 秒（hub 100 秒、App 110 秒），超时回「Codex 已经在电脑上的新标签里打开了，但 60 秒内没认出它这次的会话……」，
+  后面附上那个标签最后几行屏幕；启动器跑不起来（找不到命令）时 `jarvisd codex-start:` 开头的那行一出现就失败，不用等满。
+  标签留在电脑上，不替用户关。
+- **走哪条路**：0.163 的裸 `codex`（或不带下面这些参数的 alias）跑在共享守护进程上，几秒内自动接入，「会话信息」的「连接」是 app-server；
+  带 `-c` / `--profile` / `--enable` / `--disable` / `--oss` / `--strict-config` / `--no-daemon` 的启动器在自己进程里跑，走终端路线（#214），
+  「连接」那行写「用启动器「X」起的：它带了 -c，Codex 这时在自己的进程里跑，不在共享的 app-server 上」；0.153 没有守护进程，也是终端路线。
+- **不提供的**：Claude 的权限模式、思考强度（Codex 按启动器的参数和 `~/.codex/config.toml`）；从手机恢复已有的 Codex 会话（`codex_resume`，在电脑上 `codex resume`）。
+- **测试**：`node/codex_start_test.go`（假 herdr：窗格里的命令只有 `codex-start <文件>`、文件里是启动器的词和消息、只有一条会话、路由说明、拒绝、超时和启动失败的报错、信任对话框、
+  `codex-start` 子进程逐字节收到消息、`~/.zshrc` 里的 Codex alias）；真实 Codex：`scripts/test-codex.sh` 的 `TestLiveCodexStart`
+  （0.163 经 `--remote` 挂在测试自己的 app-server 上、0.153、带 `-c` 的 0.163，各连跑多轮：消息带引号 / 换行 / `$` / 反引号 / 中文 / 长文本，
+  原样进 rollout，一个窗格一条会话，路由对，手机再发一条也收到）；App：`MachinePagesTests.testNewCodexSessionStartsWithItsFirstMessage`。
+
 ## 提问和审批（结构化卡片）
 
 2026-11-02 起，Agents 里的 Codex / TRAEX 提问和审批是和 Claude 一样的提问卡片、授权卡片，不再是通用的「终端在问你」。
@@ -141,7 +171,9 @@ herdr 在 Codex 有没答的 async 提问时报 blocked，于是 `agent prompt` 
 
 ## 还不支持
 
-- 从手机新建外部 Codex 会话尚未开放；已知 Codex home 的近期离线/归档历史进入列表，但不能偷偷启动另一个 app-server 续聊。
+- 从手机恢复已有的 Codex 会话：只能新建（「从手机新建」）；外部 app-server 实例上的离线 / 归档历史只读，不会偷偷另起一个 app-server 续聊。
+- 从手机新建 Codex 必须带第一条消息；跑 Codex 的 shell 函数、做了别的事的 alias、TRAEX 不能用来新建；新建时没有 Claude 的权限模式和思考强度。
+- 带 `-c` 等参数的启动器新建的会话不在共享守护进程上，只能走终端路线（读屏幕、打字）。
 - 认不出来的 Codex 对话框（不是上面「提问和审批」里的格式）照旧走通用的「终端等你处理」屏幕交互。
 - 排队消息、子 Agent、后台任务这些 Claude transcript 才有的信息，Codex 会话里都是空的。
 
@@ -192,7 +224,8 @@ TRAEX（`traex`，公司内部基于 Codex 的分支）2026-10-28 起支持，�
 - **顺带「从手机新建 Codex 会话」可行**：守护进程上 `thread/start`，再在 herdr 窗格里跑 `codex resume <id>`（0.163 自动连守护进程；否则
   `--remote unix:// -C <cwd>`），之后电脑和手机都能看到、都能答。推断：rollout 在第一条用户消息之后才写，空 thread 可能 resume 不了，
   要先发第一条 `turn/start` 再开窗格；更简单的是直接在窗格里 `codex "<第一条消息>"`，从 `thread/started` 认出 thread。
-- **结论**：值得做，但只做 0.163、只管守护进程上的窗格，屏幕卡片留作其余情况的后备。**已做第一步**，见「守护进程上的会话」。
+- **结论**：值得做，但只做 0.163、只管守护进程上的窗格，屏幕卡片留作其余情况的后备。**已做第一步**，见「守护进程上的会话」；
+  第二步（从手机新建）没用 `thread/start`，直接在窗格里跑 `codex -- <第一条消息>`，见「从手机新建」。
 - **和已有实现的关系**：`codex-app-server.md`（dd83e7b0）已经接入了提供 Unix / 回环 WebSocket 入口的外部实例，0.163 的共享守护进程就是这种入口；
   但 herdr 里活着的 Codex 窗格优先按终端会话处理（`externalCodex` 为假），不会去 join 它在守护进程上的 thread。下一步可以是：herdr 窗格里的
   0.163 Codex 先找守护进程上的 owner（`codexOwner`），有就 join，提问和审批走 app-server（两边谁先答都行，`serverRequest/resolved` 撤卡），

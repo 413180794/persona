@@ -55,6 +55,15 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 			return nil, err
 		}
 	}
+	if argv, ok := n.codexLauncher(ctx, launcher); ok { // codex_start.go
+		if resume != "" {
+			return nil, refusal("codex_resume", "Codex 会话请在电脑上恢复（codex resume）：从手机只能新建。", nil)
+		}
+		return n.startCodex(ctx, launch, cwd, launcher, argv, prompt, ws, tabName)
+	}
+	if err := n.codexFunctionLauncher(ctx, launcher, true); err != nil {
+		return nil, err
+	}
 	id := resume
 	if id == "" {
 		id = newID

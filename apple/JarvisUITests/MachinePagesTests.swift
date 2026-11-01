@@ -266,8 +266,8 @@ final class MachinePagesTests: XCTestCase {
         see(app.buttons["newChat.launcher"], "launcher row").tap()
         see(app.navigationBars["启动器"], "launcher picker")
         shot("launcher-picker")
-        see(button("codex"), "codex launcher").tap()
-        see(text("codex"), "launcher picked")
+        see(button("sonnetcc"), "a Claude launcher").tap()
+        see(text("sonnetcc"), "launcher picked")
 
         // 标签名 (optional, below the fold): what is typed names the herdr tab.
         let tabName = app.textFields["newChat.tabName"]
@@ -290,7 +290,7 @@ final class MachinePagesTests: XCTestCase {
         let body = ((mock("started")["started"] as? [[String: Any]]) ?? []).last ?? [:]
         XCTAssertEqual(body["machine_id"] as? String, "macbook")
         XCTAssertEqual(body["cwd"] as? String, "/Users/me/code/blog")
-        XCTAssertEqual(body["launcher"] as? String, "codex")
+        XCTAssertEqual(body["launcher"] as? String, "sonnetcc")
         XCTAssertEqual(body["tab_name"] as? String, "blog-astro")
         XCTAssertEqual(body["async"] as? Bool, true, "the hub answers at once and starts claude in the background")
         XCTAssertNil(body["prompt"], "the first message is not part of the start")
@@ -305,5 +305,42 @@ final class MachinePagesTests: XCTestCase {
         // The new chat knows its session at once (not 「对话 · 对话」 until the hub's next list).
         see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blog")).firstMatch, "the new chat's place in its header")
         shot("new-chat-started")
+    }
+
+    /// A Codex launcher (docs/codex.md「从手机新建」): marked Codex in the picker; picked, Claude's modes go, the first
+    /// message is required and goes with the start as typed (Codex makes its thread from it), and the chat that opens
+    /// is that session.
+    @MainActor func testNewCodexSessionStartsWithItsFirstMessage() throws {
+        launch(["-tab", "dev", "-cwd.macbook", "/Users/me/code/blog"])
+        see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
+        see(button("MacBook"), "MacBook card").tap()
+        see(app.buttons["newChat.launcher"], "launcher row").tap()
+        see(app.navigationBars["启动器"], "launcher picker")
+        see(text("Codex"), "the Codex mark on its launcher")
+        shot("launcher-picker-codex")
+        see(button("codex"), "codex launcher").tap()
+        see(text("codex"), "launcher picked")
+        XCTAssertFalse(app.staticTexts["权限与思考"].exists, "Claude Code's modes are not offered for Codex")
+
+        let start = see(button("开始对话"), "开始对话")
+        XCTAssertFalse(start.isEnabled, "no first message, no Codex session")
+        let prompt = app.textViews["newChat.prompt"].exists ? app.textViews["newChat.prompt"] : app.textFields["newChat.prompt"]
+        for _ in 0..<4 where !prompt.isHittable { app.swipeDown() }
+        see(prompt, "the first message field").tap()
+        let typed = #"把 "README" 里的 $HOME 和 `make` 改成中文说明"#
+        prompt.typeText(typed)
+        shot("new-chat-codex")
+        XCTAssertTrue(start.isEnabled)
+        start.tap()
+        wait("POST /api/v1/sessions sent") { !((mock("started")["started"] as? [[String: Any]]) ?? []).isEmpty }
+        let body = ((mock("started")["started"] as? [[String: Any]]) ?? []).last ?? [:]
+        XCTAssertEqual(body["launcher"] as? String, "codex")
+        XCTAssertEqual(body["prompt"] as? String, typed, "the first message goes with the start, as typed")
+        XCTAssertNil(body["async"], "the start waits for the thread Codex makes")
+        XCTAssertNil(body["permission_mode"])
+        XCTAssertFalse(app.navigationBars["新对话"].waitForExistence(timeout: 3), "the sheet closes on start")
+        see(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "blog")).firstMatch, "the new chat's place in its header")
+        see(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "README")).firstMatch, "the first message, already in the thread")
+        shot("new-chat-codex-started")
     }
 }

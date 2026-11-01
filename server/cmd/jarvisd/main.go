@@ -41,6 +41,9 @@ const usage = `usage:
                            print this machine's tailcat address again
   jarvisd hook             Claude Code hook entry (reads hook JSON on stdin)
   jarvisd mcp              Claude Code MCP server (stdio)
+  jarvisd codex-start <file>
+                           run the Codex launcher in file (written by the node, removed once read) with the first
+                           message as its last argument, no shell in between (docs/codex.md「从手机新建」)
   jarvisd relay [config]   run the push relay (config ~/.jarvis/relay.json): pushes for hubs without the app's APNs
                            key, payloads sealed to the phone (docs/push-relay.md)
   jarvisd sysmon [n]       print this machine's system info and n metric samples, with what they cost
@@ -106,6 +109,8 @@ func main() {
 			break
 		}
 		err = node.Launch(ctx, os.Args[2], os.Args[3:])
+	case "codex-start": // a Codex launcher with the phone's first message, read from a file (node/codex_start.go)
+		err = node.CodexStart(os.Args[2:])
 	case "relay":
 		path := os.ExpandEnv("$HOME/.jarvis/relay.json")
 		if len(os.Args) > 2 {

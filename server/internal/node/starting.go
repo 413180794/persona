@@ -148,6 +148,14 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	if err != nil {
 		return nil, err
 	}
+	if err := n.codexFunctionLauncher(context.Background(), launcher, false); err != nil {
+		return nil, err
+	}
+	if _, ok := n.codexLauncher(context.Background(), launcher); ok {
+		// Codex picks its thread's id when it gets the first message: there is no id to answer with yet. The app
+		// starts a Codex with its first message and waits (codex_start.go).
+		return nil, refusal("codex_needs_prompt", "新建 Codex 会话要连第一条消息一起发（更新 App 后再试）。", nil)
+	}
 	now := time.Now().UTC()
 	r := &startRec{done: make(chan struct{}), session: proto.Session{
 		SessionID: id, Cwd: cwd, Launcher: launcher, Agent: "claude", Status: proto.StatusIdle, Starting: true,

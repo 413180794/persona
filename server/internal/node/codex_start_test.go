@@ -1,0 +1,278 @@
+package node
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/chyroc/jarvis/server/internal/proto"
+)
+
+// Starting a Codex from the phone (codex_start.go) against a fake herdr: the launcher runs through codex-start with the
+// first message in a file, the start answers with the thread that message began, and the pane lists as that one
+// session.
+
+// specialPrompt has what a shell would take apart: quotes, a newline, $, backticks, Chinese, and a lot of it.
+var specialPrompt = "fix \"the\" 'build' $HOME `whoami` \\n;\n第二行：中文 && rm -rf / # " + strings.Repeat("长", 3000)
+
+const startThread = "01a19a00-0000-7000-8000-00000000c0de"
+
+var startFileRE = regexp.MustCompile(` codex-start '?([^' ]+?)'?$`)
+
+// ran is the launcher's words the last start's file held.
+var ran []string
+
+// codexStartHerdr is a node on a fake herdr whose new tab's launcher "runs" Codex: once the command comes in, a rollout
+// for a new thread with the file's message appears in ~/.codex (after delay).
+func codexStartHerdr(t *testing.T, delay time.Duration) (*Node, *fakeHerdr, string, *[]string) {
+	t.Helper()
+	n, f, home := herdrNode(t)
+	cwd := mkdir(t, filepath.Join(home, "proj"))
+	f.reply("workspace.list", map[string]any{"workspaces": []any{map[string]any{"workspace_id": "w1", "label": "proj"}}})
+	f.reply("session.snapshot", snapshot(nil, nil, []any{agentOf("codex", "", proto.StatusWorking, "w1:p2", "w1:t2", "w1", cwd, "")}, nil))
+	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
+	f.setScreen("w1:p2", "")
+	var mu sync.Mutex
+	var cmds []string
+	ran = nil
+	f.after(func(c herdrCall) {
+		if c.Method != "pane.send_input" || str(c.Params["pane_id"]) != "w1:p2" {
+			return
+		}
+		cmd := str(c.Params["text"])
+		mu.Lock()
+		cmds = append(cmds, cmd)
+		mu.Unlock()
+		m := startFileRE.FindStringSubmatch(cmd)
+		if m == nil {
+			return
+		}
+		var file codexStartFile
+		if b, err := os.ReadFile(m[1]); err != nil || json.Unmarshal(b, &file) != nil {
+			return
+		}
+		mu.Lock()
+		ran = file.Argv
+		mu.Unlock()
+		prompt := file.Prompt
+		go func() {
+			time.Sleep(delay)
+			day := time.Now()
+			dir := mkdir(t, filepath.Join(home, ".codex", "sessions", day.Format("2006"), day.Format("01"), day.Format("02")))
+			now := time.Now().UTC().Format(time.RFC3339Nano)
+			resolved, _ := filepath.EvalSymlinks(cwd) // Codex records the shell's working directory, resolved
+			meta, _ := json.Marshal(map[string]any{"timestamp": now, "type": "session_meta", "payload": map[string]any{"id": startThread, "cwd": resolved}})
+			user, _ := json.Marshal(map[string]any{"timestamp": now, "type": "event_msg", "payload": map[string]any{"type": "item_completed",
+				"item": map[string]any{"type": "UserMessage", "id": "u1", "content": []any{map[string]any{"type": "text", "text": prompt}}}}})
+			_ = os.WriteFile(filepath.Join(dir, "rollout-2026-11-02T10-00-00-"+startThread+".jsonl"), []byte(string(meta)+"\n"+string(user)+"\n"), 0o600)
+		}()
+	})
+	return n, f, cwd, &cmds
+}
+
+func withCodexLaunchers(t *testing.T, launchers map[string][]string) {
+	t.Helper()
+	launcherCache.Lock()
+	old, oldAt := launcherCache.codex, launcherCache.at
+	launcherCache.codex, launcherCache.at = launchers, time.Now()
+	launcherCache.Unlock()
+	t.Cleanup(func() {
+		launcherCache.Lock()
+		launcherCache.codex, launcherCache.at = old, oldAt
+		launcherCache.Unlock()
+	})
+}
+
+func TestCodexStartAnswersWithTheThread(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"cx": {"OPENAI_BASE_URL=http://127.0.0.1:9", "codex", "-m", "gpt-6", "-c", "model_reasoning_effort=low"}})
+	n, f, cwd, cmds := codexStartHerdr(t, 300*time.Millisecond)
+	res, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "cx", "prompt": specialPrompt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := decodeSessions(t, []any{res["session"]})[0]
+	if s.SessionID != startThread || s.Agent != "codex" || s.Cwd != cwd {
+		t.Fatalf("answered %+v", s)
+	}
+	if len(*cmds) != 1 {
+		t.Fatalf("commands %q", *cmds)
+	}
+	// On the screen (and in the shell's history) only codex-start and its file: not the message, not the launcher's
+	// words (an alias can carry a key).
+	cmd := (*cmds)[0]
+	if m := startFileRE.FindStringSubmatch(cmd); m == nil || cmd != shellQuote(n.bin)+" codex-start "+shellQuote(m[1]) {
+		t.Errorf("command %q", cmd)
+	} else if _, err := os.Stat(filepath.Dir(m[1])); !os.IsNotExist(err) {
+		t.Error("the file's directory outlived the start")
+	}
+	if want := []string{"OPENAI_BASE_URL=http://127.0.0.1:9", "codex", "-m", "gpt-6", "-c", "model_reasoning_effort=low"}; strings.Join(ran, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("runs %q, want %q", ran, want)
+	}
+	// One session for the pane, the thread's, and it says why it is on the terminal route.
+	f.reply("session.snapshot", snapshot(nil, nil, []any{agentOf("codex", "", proto.StatusIdle, "w1:p2", "w1:t2", "w1", cwd, "")}, nil))
+	list := listSessions(t, n)
+	live := 0
+	for _, x := range list {
+		if x.PaneID == "w1:p2" {
+			live++
+			if x.SessionID != startThread || x.CodexRoute != codexRouteTerminal || !strings.Contains(x.CodexRouteNote, "「cx」") ||
+				!strings.Contains(x.CodexRouteNote, "-c") {
+				t.Errorf("listed %+v", x)
+			}
+		}
+	}
+	if live != 1 {
+		t.Errorf("%d sessions for the pane: %+v", live, list)
+	}
+}
+
+func TestCodexStartRefusals(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"codex": {"codex"}})
+	n, _, _, cmds := codexStartHerdr(t, 0)
+	_, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "codex", "prompt": "hi", "async": true})
+	if code, _ := refusalOf(t, err); code != "codex_needs_prompt" {
+		t.Errorf("async: %v", err)
+	}
+	_, err = request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "codex", "prompt": "  "})
+	if code, _ := refusalOf(t, err); code != "codex_needs_prompt" {
+		t.Errorf("no message: %v", err)
+	}
+	if len(*cmds) != 0 {
+		t.Errorf("ran %q", *cmds)
+	}
+}
+
+// The launcher cannot run (the helper says so on the pane): the start fails at once with that line; nothing comes:
+// it fails after codexStartWait saying what to look at.
+func TestCodexStartFailures(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"nocodex": {"codex-not-installed"}})
+	n, f, _, _ := codexStartHerdr(t, time.Hour)
+	f.setScreen("w1:p2", "% jarvisd codex-start: codex-not-installed not found in PATH\n% \n")
+	start := time.Now()
+	_, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "nocodex", "prompt": "hi"})
+	if err == nil || !strings.Contains(err.Error(), "codex-not-installed not found in PATH") || time.Since(start) > 5*time.Second {
+		t.Errorf("err %v after %s", err, time.Since(start))
+	}
+	old := codexStartWait
+	codexStartWait = 1500 * time.Millisecond
+	t.Cleanup(func() { codexStartWait = old })
+	f.setScreen("w1:p2", "› Ask Codex to do anything\n")
+	_, err = request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "nocodex", "prompt": "hi"})
+	if err == nil || !strings.Contains(err.Error(), "没认出它这次的会话") {
+		t.Errorf("timeout: %v", err)
+	}
+}
+
+// Codex's trust dialog for the folder the user chose is answered (enter: the selected trust option).
+func TestCodexStartTrustsTheFolder(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"codex": {"codex"}})
+	n, f, _, _ := codexStartHerdr(t, 2*time.Second)
+	f.screenSteps("w1:p2", isKeys("enter"), "  Trust this folder? Codex can read, edit, and run files here.\n\n› 1. Trust and continue\n  2. Quit\n\n  enter continue · esc quit\n",
+		"› Ask Codex to do anything\n")
+	res, err := request(t, n, "session.start", map[string]any{"cwd": "~/proj", "launcher": "codex", "prompt": "hello"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := decodeSessions(t, []any{res["session"]})[0]; s.SessionID != startThread {
+		t.Errorf("answered %+v", s)
+	}
+	if keys := f.trace("pane.send_keys"); len(keys) == 0 || !strings.Contains(keys[0], `"enter"`) {
+		t.Errorf("keys %v", keys)
+	}
+}
+
+// A directory picked through a symlink: Codex's rollout has where it really is, and that is still this start's.
+func TestCodexStartThroughASymlink(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"codex": {"codex"}})
+	n, _, cwd, _ := codexStartHerdr(t, 300*time.Millisecond)
+	if err := os.Symlink(cwd, filepath.Join(filepath.Dir(cwd), "link")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := request(t, n, "session.start", map[string]any{"cwd": "~/link", "launcher": "codex", "prompt": "hello", "workspace_id": "w1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := decodeSessions(t, []any{res["session"]})[0]; s.SessionID != startThread {
+		t.Errorf("answered %+v", s)
+	}
+}
+
+// codex-start passes the message on byte for byte, as one argument after "--", with the launcher's variables set.
+func TestCodexStartHelper(t *testing.T) {
+	if os.Getenv("JARVIS_CODEX_START_HELPER") == "1" {
+		var args []string
+		_ = json.Unmarshal([]byte(os.Getenv("JARVIS_CODEX_START_ARGS")), &args)
+		err := CodexStart(args)
+		fmt.Println(err)
+		os.Exit(3)
+	}
+	dir := t.TempDir()
+	file, out := filepath.Join(dir, "start.json"), filepath.Join(dir, "out")
+	sh, _ := exec.LookPath("sh")
+	b, _ := json.Marshal(codexStartFile{Argv: []string{"OUT=" + out, sh, "-c", `printf '%s|%s' "$1" "$2" > "$OUT"`, "sh"}, Prompt: specialPrompt})
+	if err := os.WriteFile(file, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal([]string{file})
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCodexStartHelper$")
+	cmd.Env = append(os.Environ(), "JARVIS_CODEX_START_HELPER=1", "JARVIS_CODEX_START_ARGS="+string(args))
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, b)
+	}
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "--|"+specialPrompt {
+		t.Errorf("passed %q", got)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Error("the file was left behind")
+	}
+}
+
+// Codex's launchers from ~/.zshrc: aliases whose one command is codex, with their words; one that does more is not.
+func TestCodexAliasLaunchers(t *testing.T) {
+	out := asNode(t, `alias cx='codex -m gpt-6 -c model_reasoning_effort=low'
+alias cxr="CODEX_HOME=/tmp/codex-two codex --remote unix:///tmp/s.sock"
+alias cxe='export OPENAI_BASE_URL=http://127.0.0.1:9; codex -c model="gpt-6-mini"'
+alias cdcx='cd /tmp && codex'
+alias dmcc='ANTHROPIC_BASE_URL=http://127.0.0.1:8 claude'
+`, launcherScript)
+	list, codex := mergeLaunchers(out)
+	got := map[string]proto.Launcher{}
+	for _, l := range list {
+		got[l.Name] = l
+	}
+	if got["cx"].Agent != "codex" || got["cx"].Model != "gpt-6" || got["cxe"].Model != "gpt-6-mini" || got["dmcc"].Agent != "" {
+		t.Errorf("launchers %+v", list)
+	}
+	if _, ok := got["cdcx"]; ok {
+		t.Error("an alias that does more than run codex became a launcher")
+	}
+	want := map[string][]string{
+		"cx":  {"codex", "-m", "gpt-6", "-c", "model_reasoning_effort=low"},
+		"cxr": {"CODEX_HOME=/tmp/codex-two", "codex", "--remote", "unix:///tmp/s.sock"},
+		"cxe": {"OPENAI_BASE_URL=http://127.0.0.1:9", "codex", "-c", "model=gpt-6-mini"},
+	}
+	for name, w := range want {
+		if strings.Join(codex[name], "\x00") != strings.Join(w, "\x00") {
+			t.Errorf("%s runs as %q, want %q", name, codex[name], w)
+		}
+	}
+	if codexOwnProcess(codex["cx"]) != "-c" || codexOwnProcess(codex["cxr"]) != "" || codexOwnProcess([]string{"codex", "-c", "a=1", "--remote", "unix:///s"}) != "" {
+		t.Errorf("own process: %q %q", codexOwnProcess(codex["cx"]), codexOwnProcess(codex["cxr"]))
+	}
+	// Plain codex on the PATH is a launcher of its own.
+	list, codex = mergeLaunchers("\x1d\x1d/usr/local/bin/codex\n")
+	if len(list) != 2 || list[1].Name != "codex" || list[1].Agent != "codex" || len(codex["codex"]) != 1 {
+		t.Errorf("plain codex: %+v %v", list, codex)
+	}
+}

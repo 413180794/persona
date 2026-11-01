@@ -75,6 +75,9 @@ type Node struct {
 	sysOnce   sync.Once       // system: read once (metrics.go)
 	sys       proto.System
 
+	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
+	codexStarting map[string]bool
+
 	// ctxSent: assistant conversation → the snapshot sections it has seen; ctxTools: the tools its process last
 	// started with (assistant_context.go).
 	ctxSent  map[string]map[string]string

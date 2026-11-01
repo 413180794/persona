@@ -872,6 +872,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		m[id] = a
 	}
 	for _, a := range unnamed {
+		n.mu.Lock()
+		starting := n.codexStarting[a.PaneID]
+		n.mu.Unlock()
+		if starting {
+			continue // a start of ours: its thread is not on disk yet, and an older one in the directory is not it
+		}
 		if id := n.codexSession(a, m); id != "" {
 			m[id] = a
 		}
@@ -1092,6 +1098,8 @@ var launcherCache struct {
 	list     []proto.Launcher
 	fetch    sync.Mutex // one login shell at a time
 	fetching bool       // a background refresh (cachedLaunchers) is running
+	// codex: how each Codex launcher runs (codex_start.go), its words as the shell would run them.
+	codex map[string][]string
 }
 
 // launcherScript lists the login shell's launchers in one go (sourcing ~/.zshrc takes a while): what the
@@ -1105,7 +1113,9 @@ if [ -n "$ZSH_VERSION" ]; then
     for __w in "${(@Q)${(z)__v}}"; do print -rn -- "$__w"$'\x1f'; done
     print -rn -- $'\x1e'
   done
-fi`
+fi
+printf '\035'
+if [ -n "$ZSH_VERSION" ]; then whence -p codex 2>/dev/null; else command -v codex 2>/dev/null; fi`
 
 // launchers lists the launchers of this machine's login shell: the `_claude_launchers` helper's (claude wrapper
 // functions), then every alias that runs claude (`alias dmcc="ANTHROPIC_BASE_URL=… claude …"`), by name. A name
@@ -1126,18 +1136,20 @@ func (n *Node) launchers(ctx context.Context) ([]proto.Launcher, error) {
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("list launchers: %w", err)
 	}
-	list := mergeLaunchers(string(out))
+	list, codex := mergeLaunchers(string(out))
 	launcherCache.Lock()
-	launcherCache.at, launcherCache.list = time.Now(), list
+	launcherCache.at, launcherCache.list, launcherCache.codex = time.Now(), list, codex
 	launcherCache.Unlock()
 	return list, nil
 }
 
-// mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name;
-// nothing at all: plain claude.
-func mergeLaunchers(out string) []proto.Launcher {
-	helper, aliases, _ := strings.Cut(out, "\x1d")
-	list := parseLaunchers(helper)
+// mergeLaunchers is launcherScript's output as the launcher list: the helper's, then the aliases it does not name
+// (nothing at all: plain claude), then Codex's — plain codex when it is on the PATH, and the aliases that run it (how
+// each runs: codex).
+func mergeLaunchers(out string) (list []proto.Launcher, codex map[string][]string) {
+	helper, rest, _ := strings.Cut(out, "\x1d")
+	aliases, codexPath, _ := strings.Cut(rest, "\x1d")
+	list = parseLaunchers(helper)
 	seen := map[string]bool{}
 	for _, l := range list {
 		seen[l.Name] = true
@@ -1150,7 +1162,19 @@ func mergeLaunchers(out string) []proto.Launcher {
 	if len(list) == 0 {
 		list = []proto.Launcher{{Name: "claude", Model: "默认"}}
 	}
-	return list
+	codex = map[string][]string{}
+	ls, words := parseCodexAliases(aliases)
+	if strings.TrimSpace(codexPath) != "" && words["codex"] == nil {
+		list = append(list, proto.Launcher{Name: "codex", Model: "默认", Agent: "codex", Source: "zshrc"})
+		codex["codex"] = []string{"codex"}
+	}
+	for _, l := range ls {
+		if !seen[l.Name] {
+			list = append(list, l)
+			codex[l.Name] = words[l.Name]
+		}
+	}
+	return list, codex
 }
 
 // cachedLaunchers never waits for the login shell: it returns the last list (possibly stale, nil before the first
@@ -1213,8 +1237,7 @@ var assignRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 // parseAliasLaunchers reads launcherScript's alias records and keeps the aliases that start claude: after the
 // variables set in front of it (`A=1 B=2 claude …`), through env / command / exec / noglob, by path or not, with
 // `export A=1;` before it in the same alias. Their gateway and model come from ANTHROPIC_BASE_URL and ANTHROPIC_MODEL
-// (or --model). Aliases of Codex / TRAEX are left out: a new session can only start claude (docs/codex.md). Sorted
-// by name: the shell keeps no order.
+// (or --model). Codex's are parseCodexAliases'. Sorted by name: the shell keeps no order.
 func parseAliasLaunchers(out string) []proto.Launcher {
 	var list []proto.Launcher
 	for _, rec := range strings.Split(out, "\x1e") {
@@ -1233,6 +1256,91 @@ func parseAliasLaunchers(out string) []proto.Launcher {
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	return list
+}
+
+// parseCodexAliases keeps the aliases that run Codex: `export` statements and one codex command (through env /
+// command / exec / noglob, with variables set in front). How each runs is its words for codex-start: the variables,
+// then the command and its arguments. Its model is -m / --model or -c model=…; an alias that does more (`cd x && codex`)
+// is left out.
+func parseCodexAliases(out string) ([]proto.Launcher, map[string][]string) {
+	var list []proto.Launcher
+	words := map[string][]string{}
+	for _, rec := range strings.Split(out, "\x1e") {
+		w := strings.Split(rec, "\x1f")
+		if len(w) < 2 || !nameRe.MatchString(w[0]) {
+			continue
+		}
+		argv, model, ok := codexAliasArgv(w[1 : len(w)-1])
+		if !ok {
+			continue
+		}
+		if model == "" {
+			model = "默认"
+		}
+		list = append(list, proto.Launcher{Name: w[0], Model: model, Agent: "codex", Source: "zshrc"})
+		words[w[0]] = argv
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
+	return list, words
+}
+
+// codexAliasArgv reads an alias's words as one codex command; ok false when it is anything else.
+func codexAliasArgv(words []string) (argv []string, model string, ok bool) {
+	var exported []string
+	found := false
+	for len(words) > 0 {
+		end := len(words)
+		for i, w := range words {
+			if w == ";" || w == "&&" || w == "||" || w == "|" || w == "&" {
+				end = i
+				break
+			}
+		}
+		cmd := words[:end]
+		if end < len(words) {
+			words = words[end+1:]
+		} else {
+			words = nil
+		}
+		if len(cmd) == 0 {
+			continue
+		}
+		if cmd[0] == "export" {
+			for _, w := range cmd[1:] {
+				if assignRe.MatchString(w) {
+					exported = append(exported, w)
+				}
+			}
+			continue
+		}
+		if found {
+			return nil, "", false // more than one command
+		}
+		env := map[string]string{}
+		i := commandIndex(cmd, env)
+		if i < 0 || filepath.Base(cmd[i]) != "codex" {
+			return nil, "", false
+		}
+		found = true
+		argv = append([]string(nil), exported...)
+		for _, w := range cmd[:i] {
+			if assignRe.MatchString(w) {
+				argv = append(argv, w)
+			}
+		}
+		argv = append(argv, cmd[i:]...)
+		for j := i + 1; j < len(cmd); j++ {
+			switch {
+			case (cmd[j] == "-m" || cmd[j] == "--model") && j+1 < len(cmd):
+				model = cmd[j+1]
+			case strings.HasPrefix(cmd[j], "--model="):
+				model = strings.TrimPrefix(cmd[j], "--model=")
+			case (cmd[j] == "-c" || cmd[j] == "--config") && j+1 < len(cmd) && strings.HasPrefix(cmd[j+1], "model="):
+				model = strings.Trim(strings.TrimPrefix(cmd[j+1], "model="), `"'`)
+			}
+		}
+	}
+	return argv, model, found
 }
 
 // commandIndex is where the command of one simple command starts, past the variables set for it (put in env) and

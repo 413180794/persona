@@ -186,6 +186,9 @@ type Launcher struct {
 	// Source: "zshrc" (a function in the machine's ~/.zshrc) or "jarvis" (managed in 设置 › 模型, launchers.go). Empty
 	// from an older node: zshrc.
 	Source string `json:"source,omitempty"`
+	// Agent is what it starts when not Claude Code: "codex" (plain codex, or an alias running it; docs/codex.md
+	// 「从手机新建」). A Codex start needs its first message with it.
+	Agent string `json:"agent,omitempty"`
 }
 
 // LauncherDetail is what a ~/.zshrc launcher really sets (the node runs it with the agent stubbed out,
