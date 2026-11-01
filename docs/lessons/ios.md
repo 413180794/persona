@@ -178,6 +178,11 @@
   （`DrawerSidebarHost.Container`）；整套环境用 `.environment(\.self, context.environment)` 带进去。
 - 量拖动 / 动画每帧的主线程耗时别在 XCUITest 下量：它打开无障碍，SwiftUI 每帧多做很多事。App 里用脚本按显示帧驱动同一条代码路径，
   `simctl launch` 启动后量（`DrawerAutoDrag`，`docs/testing.md`「侧边栏拖动」）。
+- 行要有系统的左滑（`.swipeActions`）就得是 `List`，`ScrollView` + `LazyVStack` 里没有（2026-11-01 侧边栏的「归档」）。换成 `List` 时要外观不变：
+  `listStyle(.plain)`、每行 `listRowInsets` / `listRowSeparator(.hidden)` / `listRowBackground(.clear)`、`scrollContentBackground(.hidden)`、
+  `defaultMinListRowHeight` 设 0。**单独一个 `Divider()` 当一行会竖着画**（一根小竖线）：包一层 `VStack`。
+- 抽屉开着时左拖本来是关抽屉；行的左滑要先赢：`DrawerPan` 在 `shouldBeRequiredToFailBy` 里让列表（UICollectionView）的 pan 等它，
+  它在 `gestureRecognizerShouldBegin` 里看手指下的 cell 有没有 `SwipeRowMark`（一个空的 UIView 标记）再放手。
 
 ## Swift 与编译
 

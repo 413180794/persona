@@ -516,3 +516,8 @@ func TestGoldenTranslateMail(t *testing.T) {
 	}
 	goldenCall(t, "translate_mail", onlyCall(t, calls()))
 }
+
+func TestGoldenRelay(t *testing.T) {
+	golden(t, "relay", relayText(relayMsg{From: "b2e4d6f8-0000-4000-8000-000000000002", FromTitle: `1101 | 研究 | "示例"<主题>`,
+		Tool: "conversation_send", Text: "示例消息：把结果整理一下", Hop: 2}))
+}

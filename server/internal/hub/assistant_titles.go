@@ -43,6 +43,8 @@ const (
 	titleAuto    = "auto"
 	titleByTask  = "task"
 	titleByUser  = "user"
+	// The assistant renamed it (conversation_rename): not replaced by the automatic title, the user's rename wins.
+	titleByAssistant = "assistant"
 )
 
 type convTitle struct {
@@ -123,7 +125,24 @@ func (h *Hub) titleNew(machine, id string, started time.Time, task string) {
 }
 
 // titleRenamed records the user's own title (the app's 重命名) so it is shown as it is and never replaced.
-func (h *Hub) titleRenamed(machine, id, title string) {
+func (h *Hub) titleRenamed(machine, id, title string) { h.titleSet(machine, id, title, titleByUser) }
+
+// titleOf is who named a conversation ("" when the hub never noted it) and when it started.
+func (h *Hub) titleOf(id string) (by string, started time.Time) {
+	b := &h.titles
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !h.titlesLocked(context.Background()) {
+		return "", time.Time{}
+	}
+	if t := b.m[id]; t != nil {
+		return t.By, t.Started
+	}
+	return "", time.Time{}
+}
+
+// titleSet records a title someone gave (by: user or assistant); a pending automatic one is not made any more.
+func (h *Hub) titleSet(machine, id, title, by string) {
 	title = strings.Join(strings.Fields(title), " ")
 	if title == "" {
 		return
@@ -139,7 +158,7 @@ func (h *Hub) titleRenamed(machine, id, title string) {
 		t = &convTitle{MachineID: machine}
 		b.m[id] = t
 	}
-	t.Title, t.By = title, titleByUser
+	t.Title, t.By = title, by
 	h.saveTitlesLocked()
 	b.mu.Unlock()
 	h.retitled(machine)
@@ -159,8 +178,7 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	s, _ := m.session(sid)
 	assistant := isAssistant(s.Cwd, m.assistantCwd())
 	if assistant && s.Agent == "codex" {
-		// The node would write Claude's custom-title line into the Codex rollout: the hub's title is enough.
-		delete(p, "title")
+		delete(p, "title") // only the hub's title for Codex (renameConversation)
 	}
 	out := json.RawMessage(`{"ok":true}`)
 	if p["title"] != nil || p["tab_name"] != nil {
@@ -176,6 +194,21 @@ func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, _ = w.Write(out)
+}
+
+// renameConversation names an assistant conversation for the assistant's conversation_rename: like the app's 重命名,
+// Claude's transcript gets the title too (its own lists show it); a Codex conversation's title is only the hub's
+// (the node would write Claude's custom-title line into the Codex rollout).
+func (h *Hub) renameConversation(ctx context.Context, m *Machine, s proto.Session, title, by string) error {
+	if s.Agent != "codex" {
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if err := m.call(cctx, "session.rename", map[string]any{"session_id": s.SessionID, "title": title}, nil); err != nil {
+			return err
+		}
+	}
+	h.titleSet(m.cfg.ID, s.SessionID, title, by)
+	return nil
 }
 
 // conversationTitles are the titles to show, by session id.
@@ -263,6 +296,8 @@ func (h *Hub) firstExchange(ctx context.Context, m *Machine, id string) (first, 
 			first = s.Title
 		}
 	}
+	// A conversation another one started (conversation_new) opens with a note on where it comes from: not its topic.
+	first = strings.TrimSpace(contextBlock.ReplaceAllString(first, ""))
 	return cutRunes(first, 1500), cutRunes(reply, 1500)
 }
 
@@ -329,6 +364,8 @@ func parseTitle(out string) (kind, topic string, ok bool) {
 	n := utf8.RuneCountInString(topic)
 	return kind, topic, kind != "" && n > 0 && n <= maxTitleTopic
 }
+
+var contextBlock = regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`)
 
 var titleNoise = regexp.MustCompile(`(?s)<[a-zA-Z][\w-]*[^>]*>.*?</[a-zA-Z][\w-]*>|[⏰#*>` + "`" + `]`)
 

@@ -108,6 +108,9 @@ extension Theme {
         static let id = "number"
         static let pin = "pin"
         static let unpin = "pin.slash"
+        /// Archive a conversation (out of the list, kept under 已归档) and bring it back.
+        static let archive = "archivebox"
+        static let unarchive = "tray.and.arrow.up"
         static let mute = "bell.slash"
         static let unmute = "bell"
         static let collapseAll = "rectangle.compress.vertical"

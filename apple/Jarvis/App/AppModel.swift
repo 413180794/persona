@@ -276,7 +276,12 @@ final class AppModel {
     }
 
     var assistantConversations: [Session] {
-        allSessions.filter(\.assistant).sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        allSessions.filter { $0.assistant && $0.archived != true }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+    }
+
+    /// The archived ones (已归档), newest first.
+    var archivedConversations: [Session] {
+        allSessions.filter { $0.assistant && $0.archived == true }.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
     }
 
     /// Loads the assistant config; with no remembered conversation, picks up the newest one.
@@ -1154,6 +1159,21 @@ final class AppModel {
             toast = Toast("已重命名", style: .success)
         } catch { show(error) }
         await refresh()
+    }
+
+    /// Archives an assistant conversation or brings it back: shown at once, the hub's push confirms it.
+    func archiveConversation(_ k: SessionKey, _ archived: Bool) async {
+        guard let api else { return }
+        guard !archived || k != assistantMain else { return } // the hub refuses the main one too
+        edit(machine: k.machineID) { s in if s.sessionID == k.sessionID { s.archived = archived } }
+        Haptics.tap()
+        do {
+            try await api.archiveConversation(k.sessionID, archived: archived)
+            toast = Toast(archived ? "已归档" : "已取消归档", style: .success)
+        } catch {
+            edit(machine: k.machineID) { s in if s.sessionID == k.sessionID { s.archived = !archived } }
+            show(error)
+        }
     }
 
     private func edit(machine: String, _ change: (inout Session) -> Void) {

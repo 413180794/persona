@@ -209,6 +209,40 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
 - 已有的旧对话不补（没有「待命名」那一笔）。
 - App：抽屉的对话行里 `MMDD | 类型 | ` 用次要色、主题用主色，窄的时候从主题末尾截断（`ConversationTitle`）；别的标题照旧。
 
+## 管理自己的对话（2026-11-01）
+
+用户要求：「jarvis 助手是否支持操作助手本身的会话历史，比如 rename title，delete（archive），new，send message to session/thread」。
+助手的 MCP 工具（`hub/assistant_conversations.go`，描述在 `prompts/mcp/assistant/conversation*.md`），Claude 和 Codex 两种对话一样：
+
+| 工具 | 做什么 |
+| --- | --- |
+| `conversations_list` | 对话列表（侧边栏那些）：id、标题、最后活动时间、是不是主对话 / 这段对话 / 在跑 / Codex、最后一句话；`query` 按标题和最后一句过滤；默认不含已归档的（`include_archived`） |
+| `conversation_read` | 读另一段对话最近 N 轮（默认 2，最多 10），和 `agent_read` 同一套截断（`transcriptText`：工具调用一行、只列失败的结果、整体最后 4 万字节） |
+| `conversation_rename` | 改标题：给 `kind` + `topic`，hub 拼成「MMDD \| 类型 \| 主题」（MMDD 是对话开始那天，上一节）。用户起的标题不动，除非用户明说要改（`user_asked`，改完算用户的）；助手起的记成 `assistant`，自动命名不再覆盖，用户在 App 里改名照样优先。主对话没有标题可改 |
+| `conversation_archive` / `conversation_unarchive` | 归档 / 取消归档（下面） |
+| `conversation_new` | 带一条开场消息新开一段对话，立刻返回 id，不等它跑完；第一轮结束后照常自动起标题（开场消息里的来源说明不算） |
+| `conversation_send` | 给另一段对话发消息；不能发给自己 |
+
+- **归档只是不显示**：hub 的 settings `assistant.archived`（会话 id → 机器、时间、谁归档的），会话列表里带 `archived: true`；
+  `GET /api/v1/assistant` 默认不列，`?archived=1` 才列。不删 transcript，不做硬删除。主对话不能归档（接口 400，工具报错）。
+  - **归档自己**：允许（用户在一段支线对话里说「聊完了，归档吧」是最自然的用法）。这一轮照常跑完，App 里开着的对话不会被关掉，只是不在列表里了；
+    用户再在里面发消息就自动回到列表（`sendMessage` 里 `unarchiveOnSend`），别的对话 `conversation_send` 给它也一样。
+  - node 只列最近的会话：很久以前归档的对话会从「已归档」里消失（和不归档时从列表里消失一样），归档记录还在，`conversation_unarchive` 给 id 就能取回。
+- **对话之间发消息**（`conversation_send`、`conversation_new` 的开场消息）：
+  - 消息前面带一段 `<jarvis-context kind="context" title="来自对话「…」">`（`prompts/assistant/relay.md`）：说明不是用户本人说的、从哪段对话来、第几跳，
+    要回话就 `conversation_send` 发回去，只是确认收到就别回。App 里显示成一张「上下文 · 来自对话「…」」卡片。
+  - **在跑就排队**：对方正在跑（或已经有排着的）时，消息存在 hub（settings `assistant.relay`，重启不丢），在 App 里像打字排队一样显示在它的输入框上方
+    （会话的 `queued`）；它这一轮结束（会话列表里不再是 working）时 hub 发进去，一次一条。不直接写进正在跑的进程：Codex 会把它并进当前这一轮（`turn/steer`），不是排队。
+  - **防循环**：每段对话记着它正在处理的消息离用户本人那条有几跳（用户自己发的是 0，转一次 +1，1 小时后作废）；超过 3 跳不发。
+    同一段对话 10 分钟内最多给同一段对话发 3 条、一共发 10 条（只在内存里计数，hub 重启清零）。用户在一段对话里发消息，它就回到 0 跳。
+  - 发给已归档的对话会把它取回列表。
+- **App**：侧边栏的对话左滑「归档」（主对话没有；长按菜单里也有「归档」）。侧边栏从 `ScrollView` + `LazyVStack` 换成 `List`（行的 inset、分隔线、背景都清掉，
+  外观不变），这样行有系统的左滑。抽屉开着时，从**有左滑的对话行**上开始的左拖交给行（`SwipeRowMark` 标记行，`DrawerPan` 让行的滑动手势等它先放弃），
+  其余地方左拖照旧关抽屉。列表最后有「已归档（N）」（没有就不显示），「最近」的 ⋯ 菜单里也有；点开是 `ArchivedConversationsView`：点一下打开对话，
+  左滑或长按「取消归档」。Mac 版用同一份代码（触控板双指左滑）。
+- 这些工具的调用在对话里照常是工具卡片，名字是中文（`ToolPresentation`：新开对话、发到对话、重命名对话、归档对话……）。
+- 实测（2026-11-01，hub 机器上的测试 hub：假 HOME、独立端口和库、启动器拷贝指向假 HOME 里的 Claude 配置目录）：让助手依次新开对话 → 列表 → 改名 → 发消息 → 归档 → 带归档的列表 → 取消归档 → 读回，8 步都成功；新对话两条消息都带来源说明、第 1 跳，它只回了「OK」、没有回发。第一轮还没起名的对话原来在列表和来源说明里叫「assistant」（node 用目录名当标题），改成「新对话」。
+
 ## Codex（2026-11-01，`codex app-server`）
 
 设置 › 助手（或顶栏菜单、定时任务）选一个启动 Codex 的启动器时，助手不再是 `claude -p`，而是 Codex 给 IDE 用的常驻 JSON-RPC 服务

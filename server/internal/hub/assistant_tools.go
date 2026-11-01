@@ -25,7 +25,9 @@ import (
 func assistantTools(withLark, withMail bool) []proto.Tool {
 	names := []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
 		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
-		"kb_search", "kb_list", "kb_get", "kb_update"}
+		"kb_search", "kb_list", "kb_get", "kb_update",
+		"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
+		"conversation_new", "conversation_send"}
 	if withMail {
 		names = append(names, "mail_account_add") // Jarvis adds a mail account for the user (assistant_mail.go)
 	}
@@ -51,7 +53,7 @@ func isAssistantTool(name string) bool {
 		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "mail_account_add":
 		return true
 	}
-	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_")
+	return strings.HasPrefix(name, "lark_") || strings.HasPrefix(name, "kb_") || strings.HasPrefix(name, "conversation")
 }
 
 // callAssistantTool runs one assistant tool for the conversation sessionID on machine m.
@@ -108,6 +110,18 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return h.toolLarkAgentReply(ctx, sessionID, args)
 	case "kb_search", "kb_list", "kb_get", "kb_update":
 		return h.runKBTool(name, args)
+	case "conversations_list":
+		return h.toolConversationsList(ctx, sessionID, args)
+	case "conversation_read":
+		return h.toolConversationRead(ctx, args)
+	case "conversation_rename":
+		return h.toolConversationRename(ctx, sessionID, args)
+	case "conversation_archive", "conversation_unarchive":
+		return h.toolConversationArchive(ctx, sessionID, args, name == "conversation_archive")
+	case "conversation_new":
+		return h.toolConversationNew(ctx, sessionID, args)
+	case "conversation_send":
+		return h.toolConversationSend(ctx, sessionID, args)
 	case "agents_list":
 		var a struct{ State, Machine, Query string }
 		_ = json.Unmarshal(args, &a)
@@ -389,9 +403,15 @@ func (h *Hub) toolAgentRead(ctx context.Context, machine, id string, turns int) 
 	if err := m.call(ctx, "session.items", map[string]any{"session_id": s.SessionID, "turns": min(turns, 10)}, &res); err != nil {
 		return "", err
 	}
+	return transcriptText(fmt.Sprintf("%s on %s (%s, %s)", agentLabel(s), m.cfg.Name, stateNames[s.State], s.Cwd), res.Items), nil
+}
+
+// transcriptText is a conversation's recent items for a model to read (agent_read, conversation_read): the
+// messages, tool calls in one line each, failed results, cut to the last 40 000 bytes.
+func transcriptText(head string, items []proto.Item) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s on %s (%s, %s)\n\n", agentLabel(s), m.cfg.Name, stateNames[s.State], s.Cwd)
-	for _, it := range res.Items {
+	b.WriteString(head + "\n\n")
+	for _, it := range items {
 		switch it.Kind {
 		case proto.KindText:
 			who := "Agent"
@@ -424,7 +444,7 @@ func (h *Hub) toolAgentRead(ctx context.Context, machine, id string, turns int) 
 	if len(out) > 40000 {
 		out = "…(earlier part cut)\n" + out[len(out)-40000:]
 	}
-	return out, nil
+	return out
 }
 
 // toolSummary is the one-line gist of a tool call (command, file, url…).

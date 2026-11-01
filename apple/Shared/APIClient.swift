@@ -840,6 +840,11 @@ extension APIClient {
         var title: String?
         enum CodingKeys: String, CodingKey { case title; case tabName = "tab_name" }
     }
+    /// Archives an assistant conversation (out of the sidebar, under 已归档) or brings it back.
+    func archiveConversation(_ id: String, archived: Bool) async throws {
+        try await post("/api/v1/assistant/conversations/\(id)/" + (archived ? "archive" : "unarchive"), body: [String: String]())
+    }
+
     /// Renames the session's herdr tab and / or the Claude session (`/rename`).
     func renameSession(_ k: SessionKey, tabName: String?, title: String?) async throws {
         try await post("/api/v1/sessions/\(k.machineID)/\(k.sessionID)/rename", body: RenameBody(tabName: tabName, title: title))

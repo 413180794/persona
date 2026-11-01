@@ -7,6 +7,7 @@
 - mock hub 的端口也会撞（2026-10-31：别的车道的 `mock_hub.py` 占着 18794，自己带 `MOCK_DRAWER=1` 的 mock 起不来，测试连到别人的 mock 上，
   报「对话没加载」）：起 mock 前 `lsof -nP -iTCP:<端口> -sTCP:LISTEN` 看一眼，失败要看 mock 的日志，别只看测试报错。
   停自己的 mock 按端口停（`kill $(lsof -t -iTCP:<端口> -sTCP:LISTEN)`），别 `pkill -f mock_hub.py`：会把别的车道正在用的 mock 一起杀掉（2026-10-31 踩过）。
+  经 ssh 远程 `pkill -f <路径>` 也会匹配到 ssh 起的那个 `bash -c '…'` 自己（命令行里有同一个路径），把这次 ssh 连同后面的命令一起杀掉：按记下的 pid / 进程组停。
 - 多个 agent 同时往 master 推：rebase 冲突时不要用自己的旧副本整文件覆盖别人的改动（2026-10-25 一次 rebase 把浅蓝气泡、通知跳转修复整个盖回去了）；
   解决冲突只改冲突块，push 前 `git diff origin/master...HEAD --stat` 看看有没有动到不是自己的文件。打 TestFlight 前确认 master 是修好的那一版。
 - 多个 agent 并行改同一仓库（飞书工作台 6 个 worker，见 `docs/feishu.md`）：每人独立 worktree + 独立克隆模拟器；新增类型带领域前缀

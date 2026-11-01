@@ -1,0 +1,5 @@
+<jarvis-context kind="context" title="来自对话「1101 | 研究 | &quot;示例&quot;&lt;主题&gt;」" url="">
+这条消息不是用户本人发的，是 Jarvis 的另一段对话（b2e4d6f8-0000-4000-8000-000000000002）用 conversation_send 发来的，第 2 跳（最多 3 跳）。
+按里面说的做。要把结果告诉那段对话就用 conversation_send 发回 b2e4d6f8-0000-4000-8000-000000000002；只是确认收到就不要回，免得两段对话来回发。
+</jarvis-context>
+示例消息：把结果整理一下

@@ -1,0 +1,14 @@
+Bring an archived Jarvis conversation back into the sidebar's list (find it with conversations_list and include_archived).
+
+```json
+{
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "full id or its first 8 characters"
+    }
+  }
+}
+```

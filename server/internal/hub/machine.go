@@ -418,6 +418,7 @@ func (m *Machine) setSessions(list []proto.Session) {
 	m.lastSeen = time.Now().UTC()
 	m.mu.Unlock()
 	m.hub.sessionsChanged(m)
+	m.hub.drainRelays(m, list) // messages from other conversations, for those no longer running
 }
 
 func (m *Machine) sessionList() []proto.Session {

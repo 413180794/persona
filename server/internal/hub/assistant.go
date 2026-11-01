@@ -105,13 +105,14 @@ type assistantView struct {
 	NotesEffective string          `json:"notes_effective"` // what the assistant is told about the user
 }
 
-func (h *Hub) assistantState(ctx context.Context) assistantView {
+// assistantState is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`).
+func (h *Hub) assistantState(ctx context.Context, withArchived bool) assistantView {
 	cfg := h.assistantConfig(ctx)
 	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}, NotesEffective: h.assistantNotes(ctx)}
 	if m := h.byID[cfg.MachineID]; m != nil {
 		v.Cwd = m.assistantCwd()
 		for _, s := range h.decorated(m) {
-			if s.Assistant {
+			if s.Assistant && (withArchived || !s.Archived) {
 				v.Conversations = append(v.Conversations, s)
 			}
 		}
@@ -121,7 +122,8 @@ func (h *Hub) assistantState(ctx context.Context) assistantView {
 
 func (h *Hub) assistantRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/assistant", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, h.assistantState(r.Context()))
+		archived := r.URL.Query().Get("archived")
+		writeJSON(w, h.assistantState(r.Context(), archived == "1" || archived == "true"))
 	})
 	api.HandleFunc("PUT /api/v1/assistant", func(w http.ResponseWriter, r *http.Request) {
 		var in AssistantConfig
@@ -184,7 +186,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		if in.Main != "" {
 			h.keepMain(r.Context())
 		}
-		writeJSON(w, h.assistantState(r.Context()))
+		writeJSON(w, h.assistantState(r.Context(), false))
 	})
 	// warm: the app opened the 对话 tab; get a process ready so the first message skips claude's startup.
 	api.HandleFunc("POST /api/v1/assistant/warm", func(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +228,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	h.scheduleRoutes(api)
+	h.archiveRoutes(api)
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Prompt         string        `json:"prompt"`

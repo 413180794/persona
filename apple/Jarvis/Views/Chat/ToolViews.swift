@@ -14,6 +14,10 @@ enum ToolPresentation {
         if n.hasPrefix("phone_") { return "iphone" }
         if n.hasPrefix("mail_") { return "envelope" }
         switch n {
+        case "conversation_rename": return Theme.Icon.edit
+        case "conversation_archive": return Theme.Icon.archive
+        case "conversation_unarchive": return Theme.Icon.unarchive
+        case "conversations_list", "conversation_read", "conversation_new", "conversation_send": return Theme.Icon.conversation
         case "Bash", "BashOutput", "KillShell", "KillBash": return "terminal"
         case "Read": return "doc.text"
         case "Edit", "MultiEdit", "NotebookEdit": return "pencil.line"
@@ -38,6 +42,14 @@ enum ToolPresentation {
         if n.hasPrefix("phone_") { return "iPhone" }
         if n.hasPrefix("mail_") { return "邮件" }
         switch n {
+        // Jarvis managing its own conversations (docs/assistant.md「管理自己的对话」).
+        case "conversations_list": return "查看对话列表"
+        case "conversation_read": return "读对话"
+        case "conversation_rename": return "重命名对话"
+        case "conversation_archive": return "归档对话"
+        case "conversation_unarchive": return "取消归档"
+        case "conversation_new": return "新开对话"
+        case "conversation_send": return "发到对话"
         case "Bash": return "运行"
         case "Read": return "读取"
         case "Edit", "MultiEdit": return "编辑"
@@ -73,6 +85,10 @@ enum ToolPresentation {
         case "Task", "Agent": return s("description") ?? ""
         case "Monitor": return s("description") ?? firstLine(s("command") ?? "")
         case "Skill": return s("skill") ?? s("command") ?? ""
+        case "conversations_list": return s("query") ?? ""
+        case "conversation_rename": return [s("kind"), s("topic")].compactMap { $0 }.joined(separator: " | ")
+        case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
+        case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
         case "AskUserQuestion": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")

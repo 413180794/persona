@@ -134,6 +134,18 @@ func RenderLostTasks(tasks []string) string {
 	return render("assistant/lost_tasks", struct{ Tasks []string }{tasks})
 }
 
+// Relay is a message one assistant conversation sends another (conversation_send / conversation_new): what was
+// written, behind a note saying where it comes from and how many hops it is from the user's own message.
+type Relay struct {
+	FromID, FromTitle string
+	Tool              string // conversation_send | conversation_new
+	Hop, MaxHops      int
+	Text              string
+}
+
+// RenderRelay is the message the other conversation gets (assistant/relay).
+func RenderRelay(r Relay) string { return render("assistant/relay", r) }
+
 // RenderRefused is passed into a running Codex turn when a tool call was refused (assistant/refused).
 func RenderRefused(reason string) string { return render("assistant/refused", reason) }
 

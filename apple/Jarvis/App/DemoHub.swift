@@ -308,6 +308,10 @@ final class DemoHub {
             return prefs
         case ("devices", 3): return ["ok": true] // live-activity reports
         case ("assistant", 4) where p[1] == "tasks": throw refuse() // 立即运行
+        case ("assistant", 4) where p[1] == "conversations" && (p[3] == "archive" || p[3] == "unarchive"):
+            edit(p[2]) { $0["archived"] = .bool(p[3] == "archive") }
+            broadcastSessions("server")
+            return ["ok": true, "archived": .bool(p[3] == "archive")]
         case ("assistant", 3) where p[1] == "tasks" && method == "DELETE":
             tasks.removeAll { $0["id"]?.string == p[2] }
             return ["ok": true]

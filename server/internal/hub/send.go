@@ -77,6 +77,10 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	}
 	sid := r.PathValue("sid")
 	p["session_id"] = sid
+	if s, ok := m.session(sid); ok && isAssistant(s.Cwd, m.assistantCwd()) {
+		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list
+		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
+	}
 	// Jarvis' main conversation follows 设置 › 助手's launcher (the next message resumes it on that one) unless the
 	// app picked one for this send; side conversations keep the launcher they started with.
 	if l, _ := p["launcher"].(string); l == "" {

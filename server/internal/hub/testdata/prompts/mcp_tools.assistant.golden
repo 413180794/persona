@@ -668,6 +668,155 @@
     }
   },
   {
+    "name": "conversations_list",
+    "description": "List Jarvis's own conversations (the 对话 sidebar), newest activity first: id, title, last activity, whether it is the main conversation, whether it is running now, and the gist of its last message. Archived ones are left out unless `include_archived`. This conversation is marked. Use it to find a conversation the user means (\"the one about the trip\") before reading, renaming, archiving or messaging it.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "only conversations whose title or last message contains this (case-insensitive)"
+        },
+        "include_archived": {
+          "type": "boolean",
+          "description": "also list archived conversations (marked as such)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "how many (default 30, max 100)"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_read",
+    "description": "Read the recent part of another Jarvis conversation (an id from conversations_list): the user's messages, what was answered, tool calls in short form, cut like agent_read. `turns` = how many recent exchanges (default 2, max 10).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "full id or its first 8 characters"
+        },
+        "turns": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_rename",
+    "description": "Rename a Jarvis conversation. Titles read 「MMDD | 类型 | 主题」: give `kind` and `topic` and the hub puts the day the conversation started in front. A title the user gave stays: renaming one fails unless the user asked for this rename in so many words (then pass `user_asked`). The main conversation has no title to change.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "topic"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "full id or its first 8 characters; this conversation's own id renames it"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "功能",
+            "设计",
+            "修复",
+            "优化",
+            "发布",
+            "探索",
+            "文档",
+            "研究",
+            "评审",
+            "定时"
+          ]
+        },
+        "topic": {
+          "type": "string",
+          "description": "what it is about, at most 14 characters"
+        },
+        "user_asked": {
+          "type": "boolean",
+          "description": "the user asked for this rename; needed to replace a title they gave"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_archive",
+    "description": "Archive a Jarvis conversation: it leaves the sidebar's list (it is kept, and listed under 已归档), nothing is deleted. Only when the user asks to tidy up or archive. The main conversation can't be archived. Archiving this conversation itself is allowed: the current turn finishes, and a new message from the user brings it back.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "full id or its first 8 characters"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_unarchive",
+    "description": "Bring an archived Jarvis conversation back into the sidebar's list (find it with conversations_list and include_archived).",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "full id or its first 8 characters"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_new",
+    "description": "Start a new Jarvis conversation with an opening message and return its id at once (it does not wait for the answer). For work that deserves its own thread, when the user asks for one. The message arrives marked as coming from this conversation; it is named after its first turn like any new conversation.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "the opening message: everything the new conversation needs, it does not see this one"
+        }
+      }
+    }
+  },
+  {
+    "name": "conversation_send",
+    "description": "Send a message to another Jarvis conversation (not this one). If it is running, the message waits until its current turn ends. The message arrives marked as coming from this conversation, so the other side can answer with conversation_send. Conversations passing messages back and forth are limited (a few hops from the user's message, a few messages per pair in ten minutes): don't reply just to acknowledge.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "full id or its first 8 characters"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
     "name": "mail_account_add",
     "description": "Add a mail account to Jarvis for the user (Jarvis then reads it in the inbox and you can use mail_* on it). The user approves it on their phone first, then the hub connects with the settings and saves the account only when IMAP and SMTP both work; the password is stored encrypted on the hub. Most providers need only email and password: QQ, 163, Outlook, iCloud and others fill their servers by themselves, and provider \"feishu\" uses Feishu mail's fixed servers. Many providers want an app password / 授权码 rather than the login password: tell the user so when it fails to log in. Gmail cannot be added here (Google sign-in happens in the app): the tool says so. Never repeat the password back in your replies.",
     "input_schema": {

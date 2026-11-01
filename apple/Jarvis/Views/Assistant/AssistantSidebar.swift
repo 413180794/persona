@@ -364,6 +364,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             #endif
             if drawer.isOpen {
                 mode = .drawer
+                // A conversation in the sidebar swipes left to 归档: from its row the drag is the row's.
+                if dx < 0, abs(dx) > abs(dy), Self.onSwipeRow(at: start, in: view) { return refused("a row's swipe") }
                 return AssistantDrawer.takes(dx: dx, dy: dy, isOpen: true) ? true : refused("direction")
             }
             // Within 45° of horizontal: steeper is the page's own scrolling.
@@ -395,7 +397,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard let s = other.view as? UIScrollView else { return false }
             if other === s.panGestureRecognizer { return true }
-            return pager != nil && other is UIPanGestureRecognizer && (s is UICollectionView || s is UITableView)
+            // The open drawer's own list (a conversation's 归档) waits too.
+            return (pager != nil || drawer.isOpen) && other is UIPanGestureRecognizer && (s is UICollectionView || s is UITableView)
         }
 
         /// Something under the finger scrolls sideways and has room to go the way the finger pulls it: back towards its
@@ -419,6 +422,16 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
                 if v.isFirstResponder, v is UITextInput { return true }
+                hit = v.superview
+            }
+            return false
+        }
+
+        /// The finger is on a row that has a swipe of its own (`SwipeRowMark`): the sidebar's conversations.
+        static func onSwipeRow(at point: CGPoint, in view: UIView) -> Bool {
+            var hit = view.hitTest(point, with: nil)
+            while let v = hit, v !== view {
+                if v is UICollectionViewCell || v is UITableViewCell { return SwipeRowMark.marks(v) }
                 hit = v.superview
             }
             return false
@@ -542,6 +555,32 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 
 #endif
 
+#if os(iOS)
+/// Marks a list row whose swipe the drawer leaves alone (a sidebar conversation's 归档): the drawer looks for it in
+/// the cell under the finger.
+struct SwipeRowMark: UIViewRepresentable {
+    final class Marker: UIView {}
+
+    func makeUIView(context: Context) -> Marker {
+        let v = Marker()
+        v.isUserInteractionEnabled = false
+        return v
+    }
+
+    func updateUIView(_ uiView: Marker, context: Context) {}
+
+    /// Whether a cell has the mark somewhere inside.
+    static func marks(_ cell: UIView) -> Bool {
+        var stack = [cell]
+        while let v = stack.popLast() {
+            if v is Marker { return true }
+            stack.append(contentsOf: v.subviews)
+        }
+        return false
+    }
+}
+#endif
+
 /// Calls `closed` when the drawer is back in: only this empty view reads whether it is out, so the sidebar itself is
 /// not redrawn when it comes out.
 private struct SidebarClosed: View {
@@ -577,6 +616,7 @@ struct AssistantSidebar: View {
     @State private var showAll = false
     @State private var ending: Session?
     @State private var renaming: Session?
+    @State private var showArchived = false
     @State private var feed = SidebarFeed()
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
@@ -602,24 +642,36 @@ struct AssistantSidebar: View {
                 .padding(.horizontal, Theme.Space.xl)
                 .padding(.top, Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
+            // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档.
+            List {
+                Group {
                     if query.isEmpty {
                         actions
-                        Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
+                        VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
                         conversations(all)
                     } else {
                         results(AssistantSidebarSearch.filter(all, query))
                     }
                 }
-                .padding(.horizontal, Theme.Space.s)
-                .padding(.bottom, Theme.Space.l)
+                .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.s, bottom: 0, trailing: Theme.Space.s))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+            .contentMargins(.bottom, Theme.Space.l, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             footer
         }
         .confirmClose($ending)
         .renameSessionAlert($renaming)
+        .sheet(isPresented: $showArchived) {
+            ArchivedConversationsView { key in
+                showArchived = false
+                open(key)
+            }
+        }
         .background {
             if let drawer {
                 SidebarClosed(drawer: drawer) {
@@ -754,6 +806,7 @@ struct AssistantSidebar: View {
         } else {
             heading("最近") {
                 Button { newConversation() } label: { Label("新对话", systemImage: Theme.Icon.compose) }
+                Button { showArchived = true } label: { Label("已归档", systemImage: Theme.Icon.archive) }
                 if rest.count > Self.recentCount {
                     Button { withAnimation(Theme.Motion.standard) { showAll.toggle() } } label: {
                         Label(showAll ? "只看最近 \(Self.recentCount) 个" : "查看全部（\(rest.count)）", systemImage: Theme.Icon.list)
@@ -776,6 +829,26 @@ struct AssistantSidebar: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+        archivedRow
+    }
+
+    /// 已归档 (N) at the end of the list when there are any: where swiped-away conversations are.
+    @ViewBuilder private var archivedRow: some View {
+        let n = model.archivedConversations.count
+        if n > 0 {
+            Button { showArchived = true } label: {
+                Label("已归档（\(n)）", systemImage: Theme.Icon.archive)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.m)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sidebar-archived")
         }
     }
 
@@ -859,6 +932,18 @@ struct AssistantSidebar: View {
         .accessibilityLabel([title, isMain && s.title != title ? s.title : nil, stateWord(s), preview.isEmpty ? nil : preview]
             .compactMap { $0 }.joined(separator: "，"))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("sidebar-conversation")
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if !isMain {
+                Button { Task { await model.archiveConversation(s.key, true) } } label: {
+                    Label("归档", systemImage: Theme.Icon.archive)
+                }
+                .tint(Theme.accent)
+            }
+        }
+        #if os(iOS)
+        .background { if !isMain { SwipeRowMark() } } // the drawer leaves a drag to the left on it to the row
+        #endif
         .contextMenu {
             if !isMain {
                 Button { togglePin(s) } label: {
@@ -867,6 +952,7 @@ struct AssistantSidebar: View {
             }
             if !isMain {
                 Button { renaming = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
+                Button { Task { await model.archiveConversation(s.key, true) } } label: { Label("归档", systemImage: Theme.Icon.archive) }
             }
             Button {
                 UIPasteboard.general.string = s.sessionID

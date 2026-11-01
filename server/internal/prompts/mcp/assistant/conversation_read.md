@@ -1,0 +1,17 @@
+Read the recent part of another Jarvis conversation (an id from conversations_list): the user's messages, what was answered, tool calls in short form, cut like agent_read. `turns` = how many recent exchanges (default 2, max 10).
+
+```json
+{
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "full id or its first 8 characters"
+    },
+    "turns": {
+      "type": "integer"
+    }
+  }
+}
+```

@@ -192,6 +192,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var effort: String? = nil
     var startedByJarvis: Bool
     var assistant: Bool
+    /// An assistant conversation moved out of the sidebar (listed under 已归档; nothing is deleted).
+    var archived: Bool? = nil
     var spaceKind: String?
     var spaceID: String?
     var spaceName: String?
@@ -242,7 +244,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case title, cwd, status, launcher, model, agent, effort
         case permissionMode = "permission_mode"
         case machineID = "machine_id", sessionID = "session_id", paneID = "pane_id", tabID = "tab_id",
-             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, state,
+             workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion,
@@ -267,6 +269,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         effort = try c.decodeIfPresent(String.self, forKey: .effort)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
+        archived = try c.decodeIfPresent(Bool.self, forKey: .archived)
         spaceKind = try c.decodeIfPresent(String.self, forKey: .spaceKind)
         spaceID = try c.decodeIfPresent(String.self, forKey: .spaceID)
         spaceName = try c.decodeIfPresent(String.self, forKey: .spaceName)

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -73,8 +74,11 @@ type Hub struct {
 	sched  schedule  // the assistant's scheduled tasks (assistant_schedule.go)
 	titles titleBook // assistant conversations' titles (assistant_titles.go)
 	ports  portOpens // ports the user opened in the app (ports.go)
-	inbox  inbox     // the unified inbox (inbox.go)
-	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
+	// archived and relays: archived assistant conversations, and messages between them (assistant_conversations.go).
+	archived archiveBook
+	relays   relayBook
+	inbox    inbox   // the unified inbox (inbox.go)
+	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
@@ -267,6 +271,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	}
 	h.mu.Unlock()
 	titles, named := h.agentConversationTitles(), h.conversationTitles()
+	archived, relayed := h.archivedIDs(), h.queuedRelays()
 	for i := range list {
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i].Cwd, dir)
@@ -274,6 +279,13 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 			list[i].Title = t // not the first line of the prompt the hub wrote for it
 		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)
+		}
+		if list[i].Assistant {
+			list[i].Archived = archived[list[i].SessionID]
+			// Messages from other conversations wait in the hub while it runs: shown like typed-ahead input.
+			if q := relayed[list[i].SessionID]; len(q) > 0 {
+				list[i].Queued = append(slices.Clip(list[i].Queued), q...) // the node's slice is shared: never write into it
+			}
 		}
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)

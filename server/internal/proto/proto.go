@@ -296,6 +296,9 @@ type Session struct {
 	Effort          string `json:"effort,omitempty"`
 	StartedByJarvis bool   `json:"started_by_jarvis"`
 	Assistant       bool   `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
+	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
+	// assistant_conversations.go).
+	Archived bool `json:"archived,omitempty"`
 	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab
 	// (docs/agent-states.md). Agents sharing a space are shown together as one collaborating group.
 	SpaceKind  string `json:"space_kind,omitempty"` // herdr
