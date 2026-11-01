@@ -10,6 +10,7 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 | `internal/rpc` | hub↔node 的双向 JSON-lines RPC |
 | `internal/transcript` | Claude Code JSONL → `proto.Item`，增量读取、分页 |
 | `internal/herdr` | herdr 的 socket API 客户端（CLI 兜底）和事件订阅 |
+| `internal/herdrcore` | herdr-core（Herdr 桌面版背后的 `hc`）的 JSON-RPC 客户端和事件订阅，见 `docs/plan-orca-support.md`「herdr-core 宿主」 |
 | `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket |
 | `internal/hub` | hub：HTTP / WebSocket、机器连接、交互队列、手机工具转发、APNs |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
@@ -32,6 +33,12 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
   订阅时的类型用点（`tab.created`）。
 - 本机实测（herdr 0.9.3，7 个 Agent）：稳定时 30 秒内零事件；tab 改名到 `sessions.changed` 发出 80–140ms（原来最多 1 秒）。
   联调：`./scripts/test-herdr.sh`（独立的 herdr 会话，见 `docs/testing.md`「herdr 联调」）。
+
+## 和 herdr-core 的连接
+
+herdr-core 是第二个宿主（`node/hostherdrcore.go`），和 herdr 并列：每次刷新两边同时取快照，herdr-core 没开时立刻答「没有终端」，
+不拨号、不记日志；卡住时最多拖 2 秒，不拖 herdr。socket 位置、方法、映射和第一期不支持的部分见 `docs/plan-orca-support.md`「herdr-core 宿主」。
+联调：`go test -tags hclive -run HerdrCoreLive ./internal/node/ -v`（自己起一个独立的 herdr-core，再只读地列一遍默认实例）。
 
 ## 部署
 

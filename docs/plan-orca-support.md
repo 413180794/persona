@@ -1,6 +1,6 @@
 # 计划：支持 Orca
 
-状态：进行中。第 0、1 步已完成，第 2 步还没开始。做完的步骤在下面「实施顺序」里打勾，全部做完后把设计部分并进
+状态：进行中。第 0、1 步已完成，第 2 步还没开始；herdr-core 宿主第一期已写完（「herdr-core 宿主」）。做完的步骤在下面「实施顺序」里打勾，全部做完后把设计部分并进
 `docs/architecture.md` / `docs/server.md`，删掉这份计划。
 
 ## 背景
@@ -65,7 +65,7 @@ type Controller interface { CanControl() bool
 ```
 
 - **窗格引用 `PaneRef`**：宿主类型 + 宿主自己的 id。存储和传输时写成 `<kind>:<id>`；herdr 的窗格不加前缀（herdr 的 id 本身带冒号，
-  如 `w1:p2`），前缀不在 `host.Kinds`（固定的已知类型：herdr、orca，不看本机注册了哪些）里的都当作 herdr；已知类型但本机没有这个宿主的，查找时报「no <kind> host on this machine」，不会发给 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
+  如 `w1:p2`），前缀不在 `host.Kinds`（固定的已知类型：herdr、orca、herdr-core，不看本机注册了哪些）里的都当作 herdr；已知类型但本机没有这个宿主的，查找时报「no <kind> host on this machine」，不会发给 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
   node 里的窗格一律存这个字符串（`n.panes`、`Agent.PaneID`），调用时由 `Registry.Pane` 解析出宿主和 id。
 - **会话模型**：node 内部是 `map[string]host.Agent`（字段和原来的 herdr Agent 一样，`PaneID` 是 `PaneRef` 字符串），宿主返回的
   `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。
@@ -137,6 +137,66 @@ hub 和 App 要跟着改的：
 - `~/Library/Application Support/orca/agent-hooks/last-status.json` 里也有每个窗格的会话 id（`entries[paneKey].providerSession.id`），
   但这是 Orca 的内部文件，只在进程环境变量读不到时考虑。
 
+## herdr-core 宿主
+
+herdr-core（命令 `hc`）是 Herdr 桌面版背后的终端运行时，和 herdr 同一个作者，但是重写的、不兼容：socket、方法（`terminal.*`）、
+环境变量都不同。所以 herdr-core 是一个独立的宿主，类型名 `herdr-core`，窗格存成 `herdr-core:<地址>`（如 `herdr-core:t7`）。
+代码：客户端 `server/internal/herdrcore`，宿主 `server/internal/node/hostherdrcore.go`。以 herdr-core 0.1.16 的源码和 `hc schema` 为准核实过。
+
+### 连接方式
+
+- socket 位置和 `hc` 自己的规则一样：`$HC_SOCKET`，否则 `$XDG_CONFIG_HOME/herdr-core/config.toml` 顶层的 `socket`，否则运行目录
+  （`$XDG_RUNTIME_DIR/herdr-core`，没有时 `/run/user/<uid>/herdr-core` 存在就用它）下的 `<会话>.sock`，再否则状态目录
+  `$XDG_STATE_HOME/herdr-core/<会话>/<会话>.sock`（macOS 一般是 `~/.local/state/herdr-core/default/default.sock`）。会话名 `$HC_SESSION`，默认 `default`。
+- 协议是 JSON-RPC 2.0，一行一条。普通调用每次新开一条连接；`terminal.list`、`doc.get` 限 2 秒（每次刷新都调），发送和按键限 20 秒
+  （`terminal.send` 要等电脑上 3 秒没人打字），其余 5 秒。错误带稳定的 `data.kind`（`not_found`、`blocked`……）。
+- `events.subscribe` 不用分帧模式：普通连接收到回复后只推通知（`event`、每 15 秒一次 `heartbeat`、跟不上时 `missed` 加新快照）。
+  45 秒没有任何消息就当连接断了，退避重连。只有 `terminal.attach` 需要 `hello {framed:true}`。
+- herdr-core 没开（没有 socket 文件）时立刻报「没在运行」（`host.ErrNotRunning`）：不拨号、不记日志，这台机器上它的会话清空。
+  曾经连上过、后来连不上，才按 herdr 的方式每 30 秒最多记一行。宿主一直注册着，之后打开 Herdr 不用重启 node。
+- 刷新时各宿主同时取快照，herdr-core 卡住最多拖 2 秒，不累加到 herdr 上；卡住时沿用它上次的会话，和 herdr 一样。
+
+### 映射对照
+
+| Jarvis 要的 | herdr-core 怎么做 | 第一期 |
+| --- | --- | --- |
+| 列出窗格 | `terminal.list`：只取本机（地址不带 `/`）、`state` 为 `live` 的终端 | ✅ |
+| Agent 类型 | `status.app`（程序自己用 OSC 7501 报的词，原样）：`claude-code` → claude，`codex` → codex，其余原样带上（node 不认就不列）。还没报过状态时看前台进程 `argv[0]` 是不是 `claude` / `codex` | ✅ |
+| 状态 | `status.state`：working / blocked / done / idle 原样；`error` 和「是 claude 但还没报」记 unknown（error 只说出过错，不说现在在干什么） | ✅ |
+| 窗格对应会话 | 前台进程 `foreground.pid` 就是 claude 自己的 pid，读 `sessions/<pid>.json`；herdr-core 不报会话 id | ✅ |
+| 空间 / 槽位 | Herdr 打开的终端带标签 `herdr.space`、`herdr.tab`（就是布局文档 `doc.get {name:"herdr-app"}` 里空间和标签页的 id）和 `where`（「空间 / 标签页」显示名）。名字取文档里的名字，空的取 `where`，再空取文件夹名 / 序号；序号按文档顺序。不是 Herdr 开的（`hc run`）按目录归成一个空间 `dir:<目录>`，槽位留空 | ✅ |
+| 读屏 | `terminal.read {terminal, lines}`：只有纯文本，软换行已接回；`visible` 传 `lines:0`，`recent` 传要的行数再截最后几行 | ✅ 纯文本 |
+| 发消息 | `terminal.send {terminal, text}`：粘贴再回车（程序开了括号粘贴就用），等电脑上 3 秒没人打字；程序报 blocked 时它自己拒绝（`blocked`） | ✅ |
+| 特殊按键 | `terminal.keys`：按键名和 Jarvis 的写法一样（`enter`、`esc`、`shift+tab`、`ctrl+u`、`up`……），原样转发 | ✅ |
+| 只输入不回车 | 做不到，见下 | ❌ `unsupported` |
+| 认 hook 的窗格 | 终端里的进程都有 `HC_TERMINAL_ID`（就是地址）；`jarvisd hook` 在没有 `HERDR_PANE_ID` 时报 `herdr-core:<地址>` | ✅ |
+| 推送变化 | `events.subscribe` 一条连接管所有终端，任何变化（大小、keep 和别的机器的除外）都马上取一次快照 | ✅ |
+| 实时终端 | 不做，见下；hub 退回读屏 | ❌ |
+| 新建、改名、关闭、接管 | 第一期不做（没有 Launcher / Organizer / Controller） | 之后 |
+
+### 查清的几件事
+
+- **地址会不会复用**：不会。地址是一个只增不减的计数（`t1`…`t9`、`t10`、`t1b`……），删掉终端也不回收，计数存在状态目录里，重启照旧；
+  只有清空状态目录（或它认出是克隆的磁盘）才从 `t1` 重来。所以窗格 id 直接用地址，不加 `created_ms`：清状态是极少的人为操作，
+  而且认会话先看进程的 `sessions/<pid>.json`，旧绑定只在进程认不出时才用。
+- **能不能读颜色**：不能。`terminal.read` 只有纯文本，带颜色的只有 `terminal.attach` 的首帧。宿主声明 `host.PlainScreen`：
+  要颜色的读屏报 `unsupported`；App 要带颜色的屏幕时 node 改给纯文本（行尾换成 `\r\n`）；Claude 的发送前检查只查对话框
+  （`screen.Choosing`），不查草稿，因为没有颜色分不清草稿和灰色的提示语。herdr 的路径不变（它不声明 `PlainScreen`）。
+  补回车（`ensureSubmitted`）和建议回复（`suggestion.go`）读不到颜色就不做，也用不着：`terminal.send` 自己回车。
+- **能不能只粘贴不回车**：不能。`terminal.send` 一定回车，`terminal.keys` 只认按键名（单个字母数字和少数标点，没有任意文本）；
+  原始输入只在 `terminal.attach` 的分帧流上有，不带 `observe` 的 attach 会按我们的尺寸改终端大小。所以 `SendText` 报 `unsupported`：
+  App 的「输入文字」和改思考强度（要先打 `/effort`）在 herdr-core 里不可用；发消息走 `Prompt`（`terminal.send`），不受影响。
+- **流是什么格式**：`terminal.attach {observe:true}` 先发一帧完整重绘（`0x18` 后跟 VT 序列），之后是程序原样的 PTY 输出，没有差量帧，
+  只有积压超过 4 MB 才重绘。node 现在的帧是 herdr 按网格重画的子集，App 自写的 VT 子集不一定吃得下程序的原始输出，
+  所以第一期不实现 `Streamer`，hub 退回读屏。
+
+### 注意
+
+- herdr-core 没有 hook，状态只来自程序自己发的 OSC 7501（Claude Code 会发）；不发的程序没有状态。
+- `terminal.list` 也会列出连到这个 core 的别的机器（地址带 `/`），那些机器有自己的 node，这里跳过。
+- 联调只用自己起的实例：`HC_SOCKET`、`HC_SESSION`、`XDG_STATE_HOME`、`XDG_CONFIG_HOME` 都指向 `/tmp`，用完 `hc server stop`；
+  对默认实例只做只读调用（`terminal.list`、`terminal.get`、`doc.get`）。见 `server/internal/node/hostherdrcore_live_test.go`（`-tags hclive`）。
+
 ## 实施顺序
 
 0. [x] **补测试**（2026-11-01 完成，`server/internal/node/herdr_*_test.go`、`herdrfake_test.go`）：给 node 和 herdr 之间的交互补「特征测试」：一个共用的假 herdr socket，按顺序记下 node 发出的每个调用；
@@ -147,6 +207,7 @@ hub 和 App 要跟着改的：
    第 0 步的测试只许改 `herdrfake_test.go` 里的「Node adapters」块，三个 `herdr_*_test.go` 一行不动，否则就不算证明了行为没变。
    部署后用 `scripts/live_panes_check.py` 对比真实窗格，确认认会话的结果没变。单独合并、部署，跑一两天再做下一步。
 2. [ ] **Orca 第一期**：发现、状态、发消息、纯文本读屏、读屏回答对话框。用一个假的 Orca socket 写测试。
+   另一个宿主：[ ] **herdr-core 第一期**（2026-11-01 写完，未合并）：见上面「herdr-core 宿主」。之后：只粘贴不回车（等上游加方法）、实时终端、新建 / 改名 / 关闭。
 3. [ ] **App**：分组键带宿主类型、按能力隐藏按钮、通用文案。
 4. [ ] 之后：Orca 第二期（新建、模式）、第三期（实时终端）。
 
