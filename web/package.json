@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:privacy": "python3 ../scripts/privacy_check.py",
+    "prebuild": "npm run check:privacy",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run"

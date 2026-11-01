@@ -15,6 +15,7 @@ CLAUDE.local.md spans that only name repo files, commands or config keys, and in
 the App Store and the OAuth consent screen publish anyway.
 """
 import ipaddress, json, os, re, subprocess, sys
+from urllib.parse import unquote, urlsplit
 
 ROOT = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
 HOME = os.path.expanduser("~")
@@ -163,6 +164,90 @@ def problems(text, words, emails=True):
     return found
 
 
+def private_kind(value):
+    return "private IP" if IPV4.fullmatch(value) else "email" if "@" in value else "private value (%d chars)" % len(value)
+
+
+NPM_LOCK_FILES = {"package-lock.json", "npm-shrinkwrap.json"}
+NPM_REGISTRY_HOST = "registry.npmjs.org"
+
+
+def npm_source_allowed(source, link=False):
+    if not isinstance(source, str) or not source or any(ord(c) < 32 or ord(c) == 127 or c == "\\" for c in source):
+        return False
+    try:
+        url = urlsplit(source)
+        if url.query or url.fragment or url.username is not None or url.password is not None:
+            return False
+        if url.scheme == "https":
+            return url.hostname == NPM_REGISTRY_HOST and url.port in (None, 443)
+        if url.scheme != "file" and not (link and not url.scheme):
+            return False
+        path = unquote(url.path)
+        return (not url.netloc and bool(path) and not path.startswith("/")
+                and not any(ord(c) < 32 or ord(c) == 127 or c in "\\:%?#" for c in path))
+    except ValueError:
+        return False
+
+
+def unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def npm_resolutions(node):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "resolved":
+                yield value, node.get("link") is True
+            yield from npm_resolutions(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from npm_resolutions(value)
+
+
+def json_field_lines(text, key):
+    decoder = json.JSONDecoder()
+    cursor = 0
+    while True:
+        start = text.find('"', cursor)
+        if start < 0:
+            return
+        value, cursor = decoder.raw_decode(text, start)
+        colon = cursor
+        while colon < len(text) and text[colon].isspace():
+            colon += 1
+        if value == key and colon < len(text) and text[colon] == ":":
+            yield text.count("\n", 0, start) + 1
+
+
+def invalid_json_constant(value):
+    raise ValueError("invalid JSON constant")
+
+
+def npm_lock_problems(text):
+    try:
+        lock = json.loads(text, object_pairs_hook=unique_json_object, parse_constant=invalid_json_constant)
+    except (ValueError, RecursionError):
+        return [(1, "invalid npm lockfile")]
+    if not isinstance(lock, dict):
+        return [(1, "invalid npm lockfile")]
+    try:
+        found = []
+        for line, (source, link) in zip(json_field_lines(text, "resolved"), npm_resolutions(lock)):
+            if not isinstance(source, str):
+                found.append((line, "invalid npm resolved field"))
+            elif not npm_source_allowed(source, link):
+                found.append((line, "unapproved npm source"))
+        return found
+    except (ValueError, RecursionError):
+        return [(1, "invalid npm lockfile")]
+
+
 def git(*args):
     return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, check=True).stdout
 
@@ -181,29 +266,35 @@ def main():
         public = f.startswith(PUBLIC_DIRS)
         allowed = [w for w in words if w not in public_words] if public else words
         for w in problems(f, words):
-            bad.append((f, "path", w))
+            bad.append((f, "path", private_kind(w)))
         if f in SKIP_FILES:
             continue
         try:
             data = git("show", ":" + f) if staged else open(os.path.join(ROOT, f), "rb").read()
         except (OSError, subprocess.CalledProcessError):
             continue
-        if b"\0" in data[:4096]:
+        npm_lock = os.path.basename(f) in NPM_LOCK_FILES
+        if b"\0" in data[:4096] and not npm_lock:
             continue  # binary
         text = data.decode("utf-8", "replace")
+        if npm_lock:
+            try:
+                lock_text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                bad.append((f, 1, "invalid npm lockfile"))
+            else:
+                bad.extend((f, n, kind) for n, kind in npm_lock_problems(lock_text))
         if modules:
             text = modules.sub("", text)
         for n, line in enumerate(text.splitlines(), 1):
             for w in problems(line, allowed, emails=not public):
-                bad.append((f, n, w))
+                bad.append((f, n, private_kind(w)))
     if message and os.path.exists(message):
         for n, line in enumerate(open(message).read().splitlines(), 1):
             if not line.startswith("#"):
                 for w in problems(line, words):
-                    bad.append(("commit message", n, w))
-    for f, where, w in bad:
-        # The value itself would end up in logs and transcripts: say which kind, not what.
-        kind = "private IP" if IPV4.fullmatch(w) else "email" if "@" in w else "private value (%d chars)" % len(w)
+                    bad.append(("commit message", n, private_kind(w)))
+    for f, where, kind in bad:
         print("%s:%s: %s" % (f, where, kind))
     if bad:
         print("privacy_check: %d hit(s). Use placeholders (<hub 地址>, me@example.com); see CLAUDE.md." % len(bad), file=sys.stderr)

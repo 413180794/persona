@@ -222,6 +222,20 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 示例里的机器 id 用 `server` / `laptop` 这类占位符。`release.sh` 打包前跑一遍；
 提交前跑：`git config core.hooksPath scripts/hooks`（`pre-commit` 查暂存的内容，`commit-msg` 查提交信息）。
 
+### npm 下载源拦截
+
+所有目录下的 `package-lock.json` 和 `npm-shrinkwrap.json` 还会单独解析完整 JSON，检查 v1 的嵌套 `dependencies` 和 v2/v3 的
+`packages` 中每个 `resolved`。远程下载只接受 npm 官方公开 registry（`https://registry.npmjs.org`，缺省端口或 443），
+其他主机、HTTP、URL 用户名/密码、query/fragment、控制字符、反斜杠都拒绝；合法相对 `file:` 依赖和 workspace link 可以通过，
+绝对路径、远程 authority 及编码后伪装成远程路径的形式不行。损坏 JSON、重复键、非字符串 `resolved` 都报错，不能用 NUL 让锁文件被当成二进制跳过。
+这一项**不依赖本机配置或私词表**，报错只显示文件、行号、问题类型，不输出下载地址。`.invalid` 占位域名用于拒绝测试，不把真实内部域名写进规则或测试。
+
+- 网页手动检查：`cd web && npm run check:privacy`。
+- `npm run build` 的 `prebuild` 自动运行全仓隐私扫描，网页部署和公开发布都经过这个入口。
+- Python 回归测试：`python3 -B -m unittest discover -s scripts -p 'test_privacy_check.py'`；`npm test` 不包含它。
+  测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
+- hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
+
 ## 卡顿测量（掉帧统计）
 
 xctrace 在这台 Mac 上会卡在授权上，改用 App 自己统计：`-showAutoScroll YES`（DEBUG）打开后 12 秒开始，
