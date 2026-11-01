@@ -99,6 +99,7 @@ private struct TabPage<Page: View>: View, Equatable {
         Tab("Jarvis", systemImage: Theme.Icon.ai, value: AppTab.assistant) {
             TabPage {
                 AssistantView()
+                    .modifier(TabActivityScope(tab: .assistant))
                 #if PERF_SIGNPOST
                     .modifier(PerfTabMount("assistant"))
                 #endif
@@ -119,6 +120,7 @@ private struct TabPage<Page: View>: View, Equatable {
         Tab("Agents", systemImage: Theme.Icon.agents, value: AppTab.chats) {
             TabPage {
                 ChatsView()
+                    .modifier(TabActivityScope(tab: .chats))
                 #if PERF_SIGNPOST
                     .modifier(PerfTabMount("agents"))
                 #endif
@@ -139,6 +141,7 @@ private struct TabPage<Page: View>: View, Equatable {
         Tab("收件箱", systemImage: Theme.Icon.inbox, value: AppTab.mail) {
             TabPage {
                 InboxView()
+                    .modifier(TabActivityScope(tab: .mail))
                 #if PERF_SIGNPOST
                     .modifier(PerfTabMount("inbox"))
                 #endif
@@ -159,6 +162,7 @@ private struct TabPage<Page: View>: View, Equatable {
         Tab("设置", systemImage: Theme.Icon.settings, value: AppTab.settings) {
             TabPage {
                 SettingsView()
+                    .modifier(TabActivityScope(tab: .settings))
                 #if PERF_SIGNPOST
                     .modifier(PerfTabMount("settings"))
                 #endif

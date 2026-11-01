@@ -92,7 +92,7 @@ struct MachineDetailView: View {
             await loadLaunchers(refresh: true)
         }
         #endif
-        .task(id: Poll(range: range, active: phase == .active)) {
+        .tabActiveTask(id: Poll(range: range, active: phase == .active)) { // stops in the background and in another tab
             guard phase == .active else { return }
             while !Task.isCancelled {
                 await load()
@@ -103,7 +103,7 @@ struct MachineDetailView: View {
         .task(id: machine?.online == true) { await loadLaunchers(refresh: false) }
     }
 
-    private struct Poll: Hashable { var range: MetricRange; var active: Bool }
+    nonisolated private struct Poll: Hashable, Sendable { var range: MetricRange; var active: Bool }
 
     private func heading(_ title: String, count: Int? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {

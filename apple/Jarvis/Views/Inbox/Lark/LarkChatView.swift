@@ -22,6 +22,8 @@ nonisolated enum LarkPosition {
 /// 回到最新 / 有人@你 jumps.
 struct LarkChatView: View {
     @Environment(AppModel.self) private var model
+    /// Polled and reported only while its page is in front: a hidden chat reports nothing to Feishu (TabActivity.swift).
+    @Environment(\.tabIsActive) private var tabActive
     var conversation: LarkConversation
     @State private var pager = LarkPager()
     @State private var loadingOlder = false
@@ -128,7 +130,10 @@ struct LarkChatView: View {
                 if opensAtMessage, let first = cached.first(where: { LarkPosition.less(read, $0.position) }) { await scroll(to: first.id) }
             }
             await load()
-            while !Task.isCancelled { // a fallback: changes arrive as pushes (below)
+        }
+        // A fallback: changes arrive as pushes (below). It polls only while the chat's page is in front.
+        .tabActiveTask {
+            while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await refreshLatest()
             }
@@ -136,7 +141,8 @@ struct LarkChatView: View {
         .task {
             for await _ in LarkSync.shared.changes(of: conversation.id) { await refreshLatest() }
         }
-        .onDisappear { flushRead() }
+        // Back in front: what came on screen while it was in the back is reported now.
+        .onTabVisibility(appear: reportSoon, disappear: flushRead)
     }
 
     private var composer: some View {
@@ -365,7 +371,12 @@ struct LarkChatView: View {
     /// A message reached the screen: once rows stop arriving, report everything up to the newest one seen.
     private func markSeen(_ m: LarkMessage) {
         guard pager.see(m) else { return }
-        guard !isTopic else { return }
+        reportSoon()
+    }
+
+    /// Read state goes to Feishu 400 ms after the last row came on screen, and only while the chat's tab is in front.
+    private func reportSoon() {
+        guard tabActive, !isTopic else { return }
         reportTask?.cancel()
         reportTask = Task {
             try? await Task.sleep(for: .milliseconds(400))

@@ -133,6 +133,10 @@ struct ShellPageSlide: ViewModifier {
         let shown = pager.moving ? abs(CGFloat(index) - p) < 1 : index == pager.page
         let resting = !pager.moving && index == pager.page
         content
+            // The page behind is never taken out of the window, so `onDisappear` does not fire for it: `tabIsActive`
+            // tells its polling and read reports to stop (docs/ios.md「只在前台做的事」). The selected page, so a drag
+            // that does not settle on the other page does not restart them.
+            .environment(\.tabIsActive, index == pager.page)
             .offset(x: pager.moving ? (CGFloat(index) - p) * pager.width : 0)
             .opacity(shown ? 1 : 0)
             .allowsHitTesting(resting)

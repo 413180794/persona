@@ -110,8 +110,8 @@ struct MachinesView: View {
             await loadMetrics()
         }
         #endif
-        .task(id: phase == .active) {
-            guard phase == .active else { return } // in the background: nothing to draw, nothing to fetch
+        .tabActiveTask(id: phase == .active) {
+            guard phase == .active else { return } // in the background or another tab: nothing to draw, nothing to fetch
             while !Task.isCancelled {
                 await loadMetrics()
                 try? await Task.sleep(for: .seconds(10))

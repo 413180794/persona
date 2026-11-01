@@ -250,6 +250,19 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 UI 测试：原来按 tab 栏写的测试一律用 `launchJarvis()` 启动（`JarvisUITests/LaunchLayout.swift`，默认带 `-ui.oldLayout YES`）；
 壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图；`-showHomeState empty|error`（新对话页：什么都不用你处理 / 一条开始失败的提示，截图用）。
 
+## 只在前台做的事（轮询和上报已读）
+
+只有两类后台工作在「视图在窗口里，而且它所在的页在前台」时才做（`Views/TabActivity.swift`）：**轮询**和**上报已读**。
+以前靠的是系统 `TabView` 切走时把旧 tab 摘下窗口（`onDisappear` 触发、`.task` 取消）。新外壳的两页（助手、Agents）是一个 ZStack，
+藏起来的一页只是透明、不接触摸，**不摘窗**，`onDisappear` 不会触发：不加信号，藏着的那页会一直轮询、替用户标已读。
+
+- 往下给 `tabIsActive`（不在任何页里时为真）：新外壳是 `ShellPageVisibility` 按这页是否显示设；旧布局、iPad、iPhone Duo 打开的 `TabView` 是每个 tab 内容上的 `TabActivityScope`。
+- `.tabActiveTask` / `.tabActiveTask(id:)`：页到后面就取消，回到前面从头再跑。`.onTabVisibility(appear:disappear:)` 代替成对的
+  `onAppear` / `onDisappear`，两边各只调一次；系统在切走途中把旧 tab 短暂放回窗口时不算出现。
+- 用到的地方：飞书会话的 60 秒兜底轮询和已读上报（回到前面时补报）；「机器」页（`MachinesView`）和机器详情（`MachineDetailView`）的轮询。
+- **不用在**：对话的消息订阅、正在生成的回复、Agent 的任务、听写、计时（工作行的秒表、终端的 250ms tick、页头自动收起）。这些不管哪一页在前台都照常跑。
+- 系统 `TabView` 下这些和摘窗的时机一致，界面和行为不变。新写的轮询和上报已读用上面这两个，别直接写 `onDisappear` / `.task`。
+
 ## Jarvis 顶栏和侧边栏（2026-10-30）
 
 参考 dot 和 ChatGPT App（用户给的截图）。代码在 `Jarvis/Views/Assistant/AssistantTopBar.swift`、`AssistantSidebar.swift`。
