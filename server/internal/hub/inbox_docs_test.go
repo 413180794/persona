@@ -118,7 +118,7 @@ func TestBaseRowsAboutMe(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &tbl); err != nil {
 		t.Fatal(err)
 	}
-	rows := baseRows(tbl, testMe)
+	rows := baseRows(tbl, testMe, testUserZone)
 	if len(rows) != 2 {
 		t.Fatalf("want 2, got %+v", rows)
 	}

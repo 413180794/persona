@@ -257,6 +257,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		ThroughSeq      int             `json:"through_seq"`
 		Name            string          `json:"name"`
 		TabName         *string         `json:"tab_name"`
+		TZ              string          `json:"tz"` // the user's time zone (launchers.quota)
 		Async           bool            `json:"async"`
 		Title           *string         `json:"title"`
 		PermissionMode  string          `json:"permission_mode"`
@@ -310,7 +311,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.probe":
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
 	case "launchers.quota":
-		r, err := n.launcherQuota(ctx, p.Name)
+		r, err := n.launcherQuota(ctx, p.Name, p.TZ)
 		return map[string]any{"quota": r}, err
 	case "dirs.list":
 		return n.dirs(p.Path)

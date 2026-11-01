@@ -63,11 +63,11 @@ func (s *Store) PutMomentPost(p *MomentPost, comments []MomentComment) error {
 	}
 	md := filepath.Join(dir, SafeID(p.ID)+".md")
 	if comments != nil {
-		if err := writeFile(md, []byte(momentMarkdown(p, comments))); err != nil {
+		if err := writeFile(md, []byte(momentMarkdown(p, comments, s.Zone()))); err != nil {
 			return err
 		}
 	} else if _, err := os.Stat(md); os.IsNotExist(err) {
-		if err := writeFile(md, []byte(momentMarkdown(p, nil))); err != nil {
+		if err := writeFile(md, []byte(momentMarkdown(p, nil, s.Zone()))); err != nil {
 			return err
 		}
 	}
@@ -121,7 +121,7 @@ func (s *Store) PruneMoments(cutoff time.Time) int {
 	return n
 }
 
-func momentMarkdown(p *MomentPost, comments []MomentComment) string {
+func momentMarkdown(p *MomentPost, comments []MomentComment, zone *time.Location) string {
 	var b strings.Builder
 	title := clip(oneLine(p.Text), 40)
 	if title == "" {
@@ -132,7 +132,7 @@ func momentMarkdown(p *MomentPost, comments []MomentComment) string {
 	if p.Anonymous || who == "" {
 		who = "匿名"
 	}
-	meta := []string{who, p.At.Local().Format("2006-01-02 15:04")}
+	meta := []string{who, p.At.In(zone).Format("2006-01-02 15:04")}
 	if len(p.Categories) > 0 {
 		meta = append(meta, strings.Join(p.Categories, "、"))
 	}
@@ -157,7 +157,7 @@ func momentMarkdown(p *MomentPost, comments []MomentComment) string {
 		if c.ReplyTo != "" {
 			to = "（回复 " + c.ReplyTo + "）"
 		}
-		fmt.Fprintf(&b, "- %s %s: %s%s\n", c.At.Local().Format("01-02 15:04"), who, to, strings.Join(strings.Fields(c.Text), " "))
+		fmt.Fprintf(&b, "- %s %s: %s%s\n", c.At.In(zone).Format("01-02 15:04"), who, to, strings.Join(strings.Fields(c.Text), " "))
 	}
 	return b.String()
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -329,18 +330,8 @@ func rank(p string) int {
 
 // mergeLogs rewrites keep's timeline with drop's lines in it, by time (the lines start with "- 2006-01-02 15:04").
 func (e *Engine) mergeLogs(keepSlug, dropSlug string) error {
-	read := func(slug string) []string {
-		raw, _ := os.ReadFile(e.Store.path(KindProject, slug, "log.md"))
-		var lines []string
-		for _, l := range strings.Split(string(raw), "\n") {
-			if strings.HasPrefix(l, "- ") {
-				lines = append(lines, l)
-			}
-		}
-		return lines
-	}
-	lines := read(keepSlug)
-	other := read(dropSlug)
+	lines := e.Store.Log(keepSlug, math.MaxInt) // both in the archive's zone
+	other := e.Store.Log(dropSlug, math.MaxInt)
 	if len(other) == 0 {
 		return nil
 	}
@@ -354,7 +345,7 @@ func (e *Engine) mergeLogs(keepSlug, dropSlug string) error {
 		}
 	}
 	sort.SliceStable(lines, func(i, j int) bool { return logTime(lines[i]) < logTime(lines[j]) })
-	return writeFile(e.Store.path(KindProject, keepSlug, "log.md"), []byte("# 时间线\n\n"+strings.Join(lines, "\n")+"\n"))
+	return e.Store.WriteLog(keepSlug, lines)
 }
 
 func logTime(l string) string {

@@ -470,6 +470,23 @@ func TestGoldenTabName(t *testing.T) {
 	goldenCall(t, "tab_name", onlyCall(t, calls()))
 }
 
+func TestGoldenSessionTitle(t *testing.T) {
+	h := newTestHub(t)
+	h.userTZ = "Asia/Shanghai"
+	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)
+	model, calls := replies(t, "改个名字", "修复 | 搜索框和顶栏重叠")
+	h.ai = model
+	if got := h.makeTitle(context.Background(), started, "搜索的时候搜索框和顶栏叠在一起了", "是两个组件一起用导致的。"); got != "1101 | 修复 | 搜索框和顶栏重叠" {
+		t.Fatalf("%q", got)
+	}
+	c := calls()
+	if len(c) != 2 {
+		t.Fatalf("%d calls", len(c))
+	}
+	goldenCall(t, "session_title", c[0])
+	golden(t, "session_title.retry", c[1].User)
+}
+
 func TestGoldenTranslateTexts(t *testing.T) {
 	h := newTestHub(t)
 	model, calls := captureModel(t, `{"texts":["你好","明天见"]}`)

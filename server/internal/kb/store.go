@@ -132,8 +132,11 @@ type Item struct {
 
 // Store reads and writes the data dir. Writes of one entity are serialized; files are replaced atomically.
 type Store struct {
-	Dir string
-	mu  sync.Mutex
+	Dir  string
+	mu   sync.Mutex
+	zone *time.Location // the user's zone, the archive's days and times are written in (zone.go); nil: time.Local
+	// settled: the zone every file was last moved into without an error (Rezone skips the walk while it holds).
+	settled string
 }
 
 func NewStore(dir string) (*Store, error) {
@@ -323,14 +326,23 @@ func (s *Store) PutSummary(kind, id, text string) error {
 	return writeFile(s.path(kind, id, "summary.md"), []byte(strings.TrimSpace(text)+"\n"))
 }
 
-// AppendLog adds a line to a project's timeline.
+// AppendLog adds a line to a project's timeline (its time in the archive's zone).
 func (s *Store) AppendLog(slug string, at time.Time, source, line string) error {
-	return appendFile(s.path(KindProject, slug, "log.md"), "# 时间线\n\n",
-		fmt.Sprintf("- %s · %s · %s\n", at.Local().Format("2006-01-02 15:04"), source, oneLine(line)))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.settleLogLocked(slug); err != nil {
+		return err
+	}
+	zone := s.zoneLocked()
+	return appendFile(s.path(KindProject, slug, "log.md"), logHeader(zone),
+		fmt.Sprintf("- %s · %s · %s\n", at.In(zone).Format("2006-01-02 15:04"), source, oneLine(line)))
 }
 
 // Log returns the last n lines of a project's timeline.
 func (s *Store) Log(slug string, n int) []string {
+	s.mu.Lock()
+	_, _ = s.settleLogLocked(slug)
+	s.mu.Unlock()
 	raw, _ := os.ReadFile(s.path(KindProject, slug, "log.md"))
 	var lines []string
 	for _, l := range strings.Split(string(raw), "\n") {
@@ -369,21 +381,25 @@ type Line struct {
 	Text   string
 }
 
-// Format renders a message line: "- 14:03 张三: text", continuation lines indented.
-func (l Line) Format() string {
+// Format renders a message line: "- 14:03 张三: text" (the time in zone), continuation lines indented.
+func (l Line) Format(zone *time.Location) string {
 	text := strings.TrimSpace(l.Text)
 	text = strings.ReplaceAll(text, "\n", "\n  ")
-	return fmt.Sprintf("- %s %s: %s\n", l.At.Local().Format("15:04"), l.Sender, text)
+	return fmt.Sprintf("- %s %s: %s\n", l.At.In(zone).Format("15:04"), l.Sender, text)
 }
 
-// AppendMessages writes lines to their day files (messages/YYYY-MM-DD.md, local time).
+// AppendMessages writes lines to their day files (messages/YYYY-MM-DD.md, in the archive's zone).
 func (s *Store) AppendMessages(c *Chat, lines []Line) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, err := s.settleChatLocked(c.ID); err != nil {
+		return err
+	}
+	zone := s.zoneLocked()
 	for _, l := range lines {
-		day := l.At.Local().Format("2006-01-02")
+		day := l.At.In(zone).Format("2006-01-02")
 		header := fmt.Sprintf("# %s · %s\n\n", c.Name, day)
-		if err := appendFile(s.path(KindChat, c.ID, "messages", day+".md"), header, l.Format()); err != nil {
+		if err := appendFile(s.path(KindChat, c.ID, "messages", day+".md"), header, l.Format(zone)); err != nil {
 			return err
 		}
 	}
@@ -406,7 +422,11 @@ func (s *Store) Days(chatID string) []string {
 // Since returns the message lines written at or after t (minute precision, as stored), at most max characters,
 // the newest kept when it has to cut.
 func (s *Store) Since(chatID string, t time.Time, max int) string {
-	from := t.Local().Format("2006-01-02")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, _ = s.settleChatLocked(chatID)
+	zone := s.zoneLocked()
+	from := t.In(zone).Format("2006-01-02")
 	var b strings.Builder
 	for _, d := range s.Days(chatID) {
 		if d < from {
@@ -426,7 +446,7 @@ func (s *Store) Since(chatID string, t time.Time, max int) string {
 			case strings.HasPrefix(l, "- "):
 				flush()
 				if len(l) >= 7 {
-					if at, err := time.ParseInLocation("2006-01-02 15:04", d+" "+l[2:7], time.Local); err == nil && at.Before(t.Truncate(time.Minute)) {
+					if at, err := time.ParseInLocation("2006-01-02 15:04", d+" "+l[2:7], zone); err == nil && at.Before(t.Truncate(time.Minute)) {
 						continue
 					}
 				}
@@ -451,8 +471,9 @@ func (s *Store) Since(chatID string, t time.Time, max int) string {
 
 // Prune deletes message days older than textDays and attachment days older than attachmentDays.
 func (s *Store) Prune(now time.Time, textDays, attachmentDays int) (removed int) {
-	textCut := now.AddDate(0, 0, -textDays).Local().Format("2006-01-02")
-	attCut := now.AddDate(0, 0, -attachmentDays).Local().Format("2006-01-02")
+	zone := s.Zone()
+	textCut := now.AddDate(0, 0, -textDays).In(zone).Format("2006-01-02")
+	attCut := now.AddDate(0, 0, -attachmentDays).In(zone).Format("2006-01-02")
 	for _, id := range s.IDs(KindChat) {
 		for _, d := range s.Days(id) {
 			if d < textCut && os.Remove(s.path(KindChat, id, "messages", d+".md")) == nil {
@@ -501,10 +522,14 @@ func addUnique(list []string, v ...string) []string {
 func (s *Store) PrependMessages(c *Chat, lines []Line) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, err := s.settleChatLocked(c.ID); err != nil {
+		return err
+	}
+	zone := s.zoneLocked()
 	byDay := map[string][]Line{}
 	var days []string
 	for _, l := range lines {
-		d := l.At.Local().Format("2006-01-02")
+		d := l.At.In(zone).Format("2006-01-02")
 		if _, ok := byDay[d]; !ok {
 			days = append(days, d)
 		}
@@ -523,7 +548,7 @@ func (s *Store) PrependMessages(c *Chat, lines []Line) error {
 		var b strings.Builder
 		b.WriteString(header)
 		for _, l := range ls {
-			b.WriteString(l.Format())
+			b.WriteString(l.Format(zone))
 		}
 		b.WriteString(body)
 		if err := writeFile(p, []byte(b.String())); err != nil {
@@ -535,6 +560,9 @@ func (s *Store) PrependMessages(c *Chat, lines []Line) error {
 
 // FirstAt is the time of a chat's oldest archived line (zero when there is none).
 func (s *Store) FirstAt(chatID string) time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, _ = s.settleChatLocked(chatID)
 	days := s.Days(chatID)
 	if len(days) == 0 {
 		return time.Time{}
@@ -542,7 +570,7 @@ func (s *Store) FirstAt(chatID string) time.Time {
 	raw, _ := os.ReadFile(s.path(KindChat, chatID, "messages", days[0]+".md"))
 	for _, l := range strings.Split(string(raw), "\n") {
 		if strings.HasPrefix(l, "- ") && len(l) >= 7 {
-			if t, err := time.ParseInLocation("2006-01-02 15:04", days[0]+" "+l[2:7], time.Local); err == nil {
+			if t, err := time.ParseInLocation("2006-01-02 15:04", days[0]+" "+l[2:7], s.zoneLocked()); err == nil {
 				return t
 			}
 		}

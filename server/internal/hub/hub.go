@@ -66,9 +66,10 @@ type Hub struct {
 	usage         usageBook            // token usage of every machine (usage.go)
 	metrics       metricsBook          // OS and load of every machine (metrics.go)
 
-	sched schedule // the assistant's scheduled tasks (assistant_schedule.go)
-	inbox inbox    // the unified inbox (inbox.go)
-	kb    kbState  // the knowledge base under ~/.jarvis/data (kb.go)
+	sched  schedule  // the assistant's scheduled tasks (assistant_schedule.go)
+	titles titleBook // assistant conversations' titles (assistant_titles.go)
+	inbox  inbox     // the unified inbox (inbox.go)
+	kb     kbState   // the knowledge base under ~/.jarvis/data (kb.go)
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
@@ -257,12 +258,14 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.mu.Unlock()
-	titles := h.agentConversationTitles()
+	titles, named := h.agentConversationTitles(), h.conversationTitles()
 	for i := range list {
 		list[i].PendingInteractions = counts[list[i].SessionID]
 		list[i].Assistant = isAssistant(list[i].Cwd, dir)
 		if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // not the first line of the prompt the hub wrote for it
+		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
+			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)
 		}
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)

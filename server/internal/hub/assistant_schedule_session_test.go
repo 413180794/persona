@@ -26,7 +26,8 @@ type assistantNode struct {
 	known map[string]bool
 	made  int // conversations started, for the next id
 	sends []map[string]any
-	kept  []string // the last node.configure keep_sessions
+	kept  []string     // the last node.configure keep_sessions
+	items []proto.Item // session.items answers this (assistant_titles_test.go)
 }
 
 func newAssistantNode(t *testing.T, h *Hub) *assistantNode {
@@ -51,6 +52,11 @@ func newAssistantNode(t *testing.T, h *Hub) *assistantNode {
 				n.kept = append(n.kept, k.(string))
 			}
 			return map[string]any{}, nil
+		case "session.items":
+			return map[string]any{"items": n.items}, nil
+		case "session.rename":
+			n.sends = append(n.sends, map[string]any{"rename": p})
+			return map[string]any{"ok": true}, nil
 		case "assistant.send":
 			n.sends = append(n.sends, p)
 			id, _ := p["session_id"].(string)

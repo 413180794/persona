@@ -18,3 +18,13 @@ func RenderTranslateMailInput(subject, text string) string {
 
 // RenderLauncherCheck is the one-word prompt 设置 › 模型's 测试可用性 runs a launcher with (tools/launcher_check).
 func RenderLauncherCheck() string { return render("tools/launcher_check", nil) }
+
+// RenderSessionTitle names an assistant conversation after its first turn (tools/session_title): "类型 | 主题".
+func RenderSessionTitle() string { return render("tools/session_title", nil) }
+
+// SessionTitleInput is what the title model reads: the first exchange, and its last answer when that broke the format.
+type SessionTitleInput struct{ First, Reply, Retry string }
+
+func RenderSessionTitleInput(in SessionTitleInput) string {
+	return render("tools/session_title_input", in)
+}

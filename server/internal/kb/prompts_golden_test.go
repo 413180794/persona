@@ -58,10 +58,23 @@ func (m *captureModel) golden(t *testing.T, name string) {
 	m.calls = nil
 }
 
+// goldenZone is the user's time zone in the golden tests: the archive is written in it, and the times below are built in
+// it, so the goldens read the same on a hub in UTC and on a laptop in Shanghai.
+var goldenZone = func() *time.Location {
+	l, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		panic(err)
+	}
+	return l
+}()
+
 func goldenEngine(t *testing.T, m Model) *Engine {
 	t.Helper()
 	st, err := NewStore(t.TempDir())
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Rezone(goldenZone); err != nil { // the user's zone, whatever the machine's
 		t.Fatal(err)
 	}
 	return &Engine{Store: st, Model: m, Owner: "示例用户", Logf: func(string, ...any) {}}
@@ -78,7 +91,7 @@ func TestGoldenReadme(t *testing.T) {
 
 func TestGoldenCompress(t *testing.T) {
 	ctx := context.Background()
-	at := time.Date(2026, 10, 30, 10, 0, 0, 0, time.Local)
+	at := time.Date(2026, 10, 30, 10, 0, 0, 0, goldenZone)
 	for _, c := range []struct {
 		name string
 		chat Chat
@@ -116,7 +129,7 @@ func TestGoldenCompress(t *testing.T) {
 
 func TestGoldenProject(t *testing.T) {
 	ctx := context.Background()
-	at := time.Date(2026, 10, 30, 10, 0, 0, 0, time.Local)
+	at := time.Date(2026, 10, 30, 10, 0, 0, 0, goldenZone)
 	for _, c := range []struct {
 		name string
 		full bool
@@ -165,7 +178,7 @@ func TestGoldenItems(t *testing.T) {
 	e := goldenEngine(t, m)
 	_ = e.Store.PutProject(&Project{Slug: "demo-release", Name: "示例发布", Status: "active", Tagging: Tagging{Tags: []string{"发布"}}})
 	_ = e.Store.PutChat(&Chat{ID: "lark-f1", Source: "lark", SourceID: "f1", Kind: "group", Name: "发布群"})
-	at := time.Date(2026, 10, 30, 10, 0, 0, 0, time.Local)
+	at := time.Date(2026, 10, 30, 10, 0, 0, 0, goldenZone)
 	for _, it := range []*Item{
 		{Kind: KindEvent, ID: "e1", Title: "周会", At: at, Where: "calendar"},
 		{Kind: KindMeeting, ID: "m1", Title: "评审会", Where: "lark-f1"},
@@ -233,7 +246,7 @@ func TestGoldenMomentsLink(t *testing.T) {
 	}
 	if len(m.calls) == 1 {
 		// The post dates move with the clock: put a fixed one in the golden.
-		m.calls[0][1] = strings.ReplaceAll(m.calls[0][1], at.Local().Format("2006-01-02"), "2026-10-30")
+		m.calls[0][1] = strings.ReplaceAll(m.calls[0][1], at.In(goldenZone).Format("2006-01-02"), "2026-10-30")
 	}
 	m.golden(t, "moments_link")
 }

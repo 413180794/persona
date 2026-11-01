@@ -1021,6 +1021,13 @@ if os.environ.get("MOCK_DRAWER") == "1":
             "```\n\n同一秒拍的会自动加上 -1、-2。")),
     ]
 
+# MOCK_TITLES=1: the assistant's conversations have the hub's titles (docs/assistant.md「对话标题」), one with a topic
+# too long for a narrow drawer; 重命名 is recorded at /mock/renamed (AssistantTitlesTests).
+RENAMED = []
+if os.environ.get("MOCK_TITLES") == "1":
+    for s, title in zip(ASSISTANT[1:], ("1029 | 定时 | 早报", "1031 | 功能 | 约周五和韩梅梅吃饭", "1028 | 研究 | 这个季度读书笔记的主题和书单整理")):
+        s["title"] = title
+
 # MOCK_LONG_ASSISTANT=1: the Jarvis tab's main conversation is a long one, like the one a user keeps for weeks: sixty
 # exchanges, each with a few tool calls and a long Markdown reply (headings, lists, a table, a code block), for measuring
 # the Jarvis page's frames (docs/testing.md「卡顿测量」).
@@ -1789,6 +1796,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"runs": [r for r in RUNS if not ref or r["ref_id"] == ref]})
         if p == "/api/v1/assistant/memory": return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
+        if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox": return self.send_json({"items": INBOX})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
@@ -2051,6 +2059,13 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             SCHEDULE[i] = save_task(SCHEDULE[i], json.loads(self.last_body or b"{}"))
             return self.send_json({"task": SCHEDULE[i]})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/rename"):  # the hub keeps an assistant conversation's title
+            body = json.loads(self.last_body or b"{}")
+            sid = p.split("/")[5]
+            RENAMED.append({"session_id": sid, **body})
+            for s in ASSISTANT + SESSIONS:
+                if s["session_id"] == sid and body.get("title"): s["title"] = body["title"]
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/seen"):
             mark_seen(p.split("/")[5])
             return self.send_json({"ok": True})

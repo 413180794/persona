@@ -156,12 +156,12 @@ func momentCandidatesFor(p *Project, posts []*MomentPost, judged map[string]bool
 	return out
 }
 
-func momentForPrompt(m *MomentPost, note string, chars int) prompts.KBMoment {
+func momentForPrompt(m *MomentPost, note string, chars int, zone *time.Location) prompts.KBMoment {
 	who := m.Author
 	if m.Anonymous || who == "" {
 		who = "匿名"
 	}
-	return prompts.KBMoment{ID: m.ID, Author: who, At: m.At.Local().Format("2006-01-02"), Comments: m.CommentCount,
+	return prompts.KBMoment{ID: m.ID, Author: who, At: m.At.In(zone).Format("2006-01-02"), Comments: m.CommentCount,
 		Text: clip(oneLine(m.Text), chars), Note: note}
 }
 
@@ -170,7 +170,7 @@ func (e *Engine) judgeMoments(ctx context.Context, p *Project, cands []*MomentPo
 	in := prompts.KBMomentsLinkInput{Name: p.Name, Aliases: p.Aliases, Keywords: p.Keywords, OneLine: p.OneLine, Goal: p.Goal,
 		Summary: clip(e.Store.Summary(KindProject, p.Slug), 1500)}
 	for _, m := range cands {
-		in.Posts = append(in.Posts, momentForPrompt(m, "", 300))
+		in.Posts = append(in.Posts, momentForPrompt(m, "", 300, e.Store.Zone()))
 	}
 	var d struct {
 		Posts []struct {
@@ -215,7 +215,7 @@ func (e *Engine) judgeMoments(ctx context.Context, p *Project, cands []*MomentPo
 	for _, m := range added {
 		if time.Since(m.At) < 14*24*time.Hour {
 			post := byID[m.ID]
-			_ = e.Store.AppendLog(cur.Slug, m.At, "removed · "+momentForPrompt(post, "", 0).Author,
+			_ = e.Store.AppendLog(cur.Slug, m.At, "removed · "+momentForPrompt(post, "", 0, e.Store.Zone()).Author,
 				firstNonEmpty(m.Note, clip(oneLine(post.Text), 60)))
 			cur.Dirty = true
 		}
@@ -241,7 +241,7 @@ func (e *Engine) projectMomentsForPrompt(p *Project, n int) []prompts.KBMoment {
 	sort.SliceStable(list, func(i, j int) bool { return list[i].m.CommentCount > list[j].m.CommentCount })
 	var out []prompts.KBMoment
 	for i := 0; i < len(list) && i < n; i++ {
-		out = append(out, momentForPrompt(list[i].m, list[i].note, 400))
+		out = append(out, momentForPrompt(list[i].m, list[i].note, 400, e.Store.Zone()))
 	}
 	return out
 }

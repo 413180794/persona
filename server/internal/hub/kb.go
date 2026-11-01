@@ -75,6 +75,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		h.logf("kb disabled: %v", err)
 		return
 	}
+	h.rezoneKB(st)
 	model := h.triageModel()
 	if cfg.AI != nil {
 		model = ai.New(cfg.AI.Over(h.cfg.AI))
@@ -120,6 +121,19 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	}
 }
 
+// rezoneKB keeps the archive in the user's time zone (kb/zone.go): the days and times written before (the hub's own
+// zone, UTC) or before the user moved are moved into it.
+func (h *Hub) rezoneKB(st *kb.Store) {
+	loc := h.userLocation()
+	n, err := st.Rezone(loc)
+	if n > 0 {
+		h.logf("kb: %d chat(s) / timeline(s) moved into %s", n, loc)
+	}
+	if err != nil {
+		h.logf("kb: %v", err)
+	}
+}
+
 func (h *Hub) kbLoop(ctx context.Context) {
 	e := h.kb.eng
 	textDays, attDays := h.kb.cfg.TextDays, h.kb.cfg.AttachmentDays
@@ -134,6 +148,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 	defer t.Stop()
 	for {
 		run(ctx, func() {
+			h.rezoneKB(e.Store)
 			if _, err := e.Archive(ctx); err != nil {
 				h.logf("kb: archive: %v", err)
 			}
@@ -172,7 +187,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 		})
 		if h.lark != nil && time.Since(lastItems) >= kbItemsPoll {
 			lastItems = time.Now()
-			if err := e.CollectItems(ctx, &larkItems{c: h.lark}); err != nil {
+			if err := e.CollectItems(ctx, &larkItems{c: h.lark, loc: h.userLocation()}); err != nil {
 				h.logf("kb: items: %v", err)
 			}
 			if err := e.TagItems(ctx); err != nil {
@@ -344,12 +359,24 @@ func (w *fileResponse) Write(p []byte) (int, error) {
 	return w.f.Write(p)
 }
 
-type larkItems struct{ c *lark.Client }
+// calendarWindow is what the knowledge base reads of the calendar: from the user's yesterday to a week after their
+// today, midnight to midnight where they are, as UTC instants (it was the hub's UTC date with a Z: up to a day off).
+func calendarWindow(now time.Time, loc *time.Location) (start, end string) {
+	y, m, d := now.In(loc).Date()
+	today := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	return today.AddDate(0, 0, -1).UTC().Format(time.RFC3339), today.AddDate(0, 0, 8).UTC().Format(time.RFC3339)
+}
+
+// loc is the user's time zone (calendarWindow).
+type larkItems struct {
+	c   *lark.Client
+	loc *time.Location
+}
 
 func (s *larkItems) Items(ctx context.Context) ([]kb.Item, error) {
 	var out []kb.Item
-	now := time.Now().UTC()
-	q := url.Values{"start": {now.AddDate(0, 0, -1).Format("2006-01-02T00:00:00Z")}, "end": {now.AddDate(0, 0, 8).Format("2006-01-02T00:00:00Z")}}
+	start, end := calendarWindow(time.Now(), s.loc)
+	q := url.Values{"start": {start}, "end": {end}}
 	if raw, err := s.c.Read(ctx, "GET", "/calendar/week", q, nil); err == nil {
 		var cal struct {
 			Events []struct {
@@ -562,7 +589,7 @@ func (h *Hub) runKBTool(name string, args json.RawMessage) (string, error) {
 		if len(d.Moments) > 0 {
 			b.WriteString("\nremoved posts about it (full text: moments/posts/<id>.md):\n")
 			for _, m := range d.Moments {
-				fmt.Fprintf(&b, "- %s %s · %d comments · %s — %s\n", m.ID, m.At.Local().Format("2006-01-02"), m.Comments, m.Note, m.Text)
+				fmt.Fprintf(&b, "- %s %s · %d comments · %s — %s\n", m.ID, m.At.In(h.userLocation()).Format("2006-01-02"), m.Comments, m.Note, m.Text)
 			}
 		}
 		if d.Recent != "" {

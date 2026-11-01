@@ -69,7 +69,9 @@ type Window struct {
 // Fetch reads the quota of key at the gateway behind baseURL (an Anthropic / OpenAI base URL, with or without /v1).
 // It tries relay-history's self-usage first (it answers with service "relay-history"), then FAKEMODEL's key login for
 // FAKEMODEL keys (fm_…). ErrUnsupported: the gateway is neither.
-func Fetch(ctx context.Context, client *http.Client, baseURL, key string) (Report, error) {
+// tz is the user's time zone (IANA name): the gateway counts its daily windows in it and the report gives times in it.
+// "" when it is not known: the gateway's own default, this machine's zone.
+func Fetch(ctx context.Context, client *http.Client, baseURL, key, tz string) (Report, error) {
 	root, err := root(baseURL)
 	if err != nil {
 		return Report{}, err
@@ -83,7 +85,7 @@ func Fetch(ctx context.Context, client *http.Client, baseURL, key string) (Repor
 	if strings.HasPrefix(key, "fm_") {
 		return fetchFakemodel(ctx, client, root, key)
 	}
-	r, err := fetchrelay-history(ctx, client, root, key)
+	r, err := fetchrelay-history(ctx, client, root, key, tz)
 	if errors.Is(err, errNotrelay-history) {
 		return Report{}, ErrUnsupported
 	}
@@ -196,8 +198,14 @@ type asterReport struct {
 	} `json:"accounts"`
 }
 
-func fetchrelay-history(ctx context.Context, client *http.Client, root *url.URL, key string) (Report, error) {
-	req, _ := http.NewRequest("GET", endpoint(root, "/me/usage", url.Values{"timezone": {"Asia/Shanghai"}}), nil)
+func fetchrelay-history(ctx context.Context, client *http.Client, root *url.URL, key, tz string) (Report, error) {
+	q := url.Values{}
+	loc := time.Local
+	if l, err := time.LoadLocation(tz); tz != "" && err == nil {
+		q.Set("timezone", tz)
+		loc = l
+	}
+	req, _ := http.NewRequest("GET", endpoint(root, "/me/usage", q), nil)
 	req.Header.Set("Authorization", "Bearer "+key)
 	var a asterReport
 	code, err := getJSON(ctx, client, req, &a)
@@ -214,11 +222,11 @@ func fetchrelay-history(ctx context.Context, client *http.Client, root *url.URL,
 	if a.Service != "relay-history" {
 		return Report{}, errNotrelay-history
 	}
-	return relay-historyReport(a, time.Now()), nil
+	return relay-historyReport(a, time.Now(), loc), nil
 }
 
-// relay-historyReport folds a /me/usage document into a Report.
-func relay-historyReport(a asterReport, now time.Time) Report {
+// relay-historyReport folds a /me/usage document into a Report; times the user reads (when a pool is back) are in loc.
+func relay-historyReport(a asterReport, now time.Time, loc *time.Location) Report {
 	r := Report{Gateway: "relay-history", KeyName: a.APIKey, CheckedAt: now.UTC()}
 	for _, b := range []struct {
 		label string
@@ -245,7 +253,7 @@ func relay-historyReport(a asterReport, now time.Time) Report {
 		if acc.Plan != "" && acc.Plan != "unknown" {
 			name += " · " + acc.Plan
 		}
-		p := Pool{Name: name, State: acc.State, Detail: asterState(acc.State, acc.AvailableAt)}
+		p := Pool{Name: name, State: acc.State, Detail: asterState(acc.State, acc.AvailableAt, loc)}
 		for _, w := range acc.Windows {
 			if w.Scope == "model" {
 				continue // per-model windows are many and small; the account's own are what tells
@@ -297,14 +305,14 @@ func asterWindowOf(w asterWindow) Window {
 	return out
 }
 
-func asterState(state string, at *time.Time) string {
+func asterState(state string, at *time.Time, loc *time.Location) string {
 	s := map[string]string{"available": "可用", "cooldown": "冷却中", "exhausted": "额度用完", "restricted": "暂不可用（额度闸）",
 		"unavailable": "不可用"}[state]
 	if s == "" {
 		s = state
 	}
 	if at != nil && state != "available" {
-		s += "，" + at.In(shanghai).Format("01-02 15:04") + " 恢复"
+		s += "，" + at.In(loc).Format("01-02 15:04") + " 恢复"
 	}
 	return s
 }
@@ -313,13 +321,6 @@ func usdWindow(label string, spent, limit float64, resets *time.Time, exhausted 
 	ratio := spent / limit
 	return Window{Label: label, UsedRatio: &ratio, Used: &spent, Limit: &limit, Unit: "usd", ResetsAt: resets, Exhausted: exhausted}
 }
-
-var shanghai = func() *time.Location {
-	if l, err := time.LoadLocation("Asia/Shanghai"); err == nil {
-		return l
-	}
-	return time.FixedZone("CST", 8*3600)
-}()
 
 // ---- FAKEMODEL ----
 

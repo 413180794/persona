@@ -384,6 +384,7 @@ func (m *Machine) setSessions(list []proto.Session) {
 			m.hub.turns.working(key, now)
 		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
+			go m.hub.titleAfterTurn(m, s.SessionID) // a new assistant conversation is named after its first turn
 		}
 	}
 	m.sessions = list

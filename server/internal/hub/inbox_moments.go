@@ -182,7 +182,7 @@ func (h *Hub) readMoment(ctx context.Context, it *InboxItem, myID string) {
 		return
 	}
 	it.Moment.ReadAt = &now
-	it.Context = momentContext(it, cs, myID, err)
+	it.Context = momentContext(it, cs, myID, err, h.userLocation())
 	if err == nil && len(notices) > 0 {
 		if mine := lastMine(cs, myID); !mine.IsZero() && !mine.Before(it.UpdatedAt) {
 			it.done(now, "replied")
@@ -209,7 +209,8 @@ func lastMine(cs []lark.MomentComment, myID string) time.Time {
 
 // momentContext is the item as text for triage, drafts and 交给 AI: the post, then its newest comments (mine marked,
 // the one to reply to marked).
-func momentContext(it *InboxItem, cs []lark.MomentComment, myID string, err error) string {
+// The comments' times are in loc, the user's time zone.
+func momentContext(it *InboxItem, cs []lark.MomentComment, myID string, err error, loc *time.Location) string {
 	m := it.Moment
 	var b strings.Builder
 	whose := "别人的帖子"
@@ -252,7 +253,7 @@ func momentContext(it *InboxItem, cs []lark.MomentComment, myID string, err erro
 		if c.ID == m.ReplyTo && m.ReplyTo != "" {
 			mark = "  ← 要回复的这条"
 		}
-		fmt.Fprintf(&b, "- %s %s%s：%s%s\n", c.At.Local().Format("01-02 15:04"), who, to, clip(oneLine(c.Text), inboxText), mark)
+		fmt.Fprintf(&b, "- %s %s%s：%s%s\n", c.At.In(loc).Format("01-02 15:04"), who, to, clip(oneLine(c.Text), inboxText), mark)
 	}
 	return b.String()
 }

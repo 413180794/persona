@@ -246,6 +246,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			callErr(w, err)
 			return
 		}
+		h.titleNew(s.MachineID, s.SessionID, time.Now(), "")
 		if in.Main && h.store != nil {
 			cfg := h.assistantConfig(ctx)
 			cfg.Main = s.SessionID

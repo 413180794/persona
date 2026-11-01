@@ -73,7 +73,7 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 				return quotaEntry{}, kerr
 			}
 			e.machine = h.localMachineID()
-			e.report, err = quota.Fetch(ctx, &http.Client{Timeout: 25 * time.Second}, s.BaseURL, key)
+			e.report, err = quota.Fetch(ctx, &http.Client{Timeout: 25 * time.Second}, s.BaseURL, key, h.userTZName())
 		}
 	} else {
 		m := h.quotaMachine(ctx, view.Machines, machine)
@@ -84,7 +84,7 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 		var res struct {
 			Quota quota.Report `json:"quota"`
 		}
-		err = m.call(ctx, "launchers.quota", map[string]any{"name": name}, &res)
+		err = m.call(ctx, "launchers.quota", map[string]any{"name": name, "tz": h.userTZName()}, &res)
 		e.report = res.Quota
 	}
 	if err != nil {

@@ -327,7 +327,7 @@ func (h *Hub) collectLark(ctx context.Context) ([]*InboxItem, error) {
 		p, err := h.lark.Messages(ctx, c.ID, lark.Window{}, n, c.IsTopic)
 		return p.Messages, err
 	}
-	changed := h.inbox.applyLark(convs, fetch, time.Now())
+	changed := h.inbox.applyLark(convs, fetch, time.Now(), h.userLocation())
 	// Open items whose chat is no longer unread: read in Feishu (or here). An item that needs the user stays
 	// until they reply or tick it off; the rest are done.
 	changed = append(changed, h.inbox.settleLark(convs, func(feed string, topic bool) (*lark.Message, error) {
@@ -386,7 +386,8 @@ func (b *inbox) openFor(match func(*InboxItem) bool) (open, done *InboxItem) {
 
 // applyLark turns the unread chats into items: one open item per chat collects its new messages until it is done;
 // messages after that start a new one.
-func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversation, int) ([]lark.Message, error), now time.Time) []*InboxItem {
+// loc is the user's time zone: the context gives each message's time in it.
+func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversation, int) ([]lark.Message, error), now time.Time, loc *time.Location) []*InboxItem {
 	var changed []*InboxItem
 	for _, c := range convs {
 		if c.Unread == 0 && !c.MarkedUnread {
@@ -464,7 +465,7 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 		}
 		it.Read = false
 		it.Last = last.Position
-		it.Context = larkContext(c, others)
+		it.Context = larkContext(c, others, loc)
 		changed = append(changed, it)
 		b.mu.Unlock()
 	}
@@ -514,7 +515,7 @@ func (it *InboxItem) done(at time.Time, by string) {
 	it.DoneAt, it.DoneBy = &t, by
 }
 
-func larkContext(c lark.Conversation, msgs []lark.Message) string {
+func larkContext(c lark.Conversation, msgs []lark.Message, loc *time.Location) string {
 	var b strings.Builder
 	if c.IsGroup {
 		fmt.Fprintf(&b, "飞书群「%s」的新消息：\n", c.Name)
@@ -526,7 +527,7 @@ func larkContext(c lark.Conversation, msgs []lark.Message) string {
 		if m.AtMe {
 			at = "（@了我）"
 		}
-		fmt.Fprintf(&b, "[%s] %s%s：%s\n", m.CreatedAt.Local().Format("01-02 15:04"), m.SenderName, at, clip(oneLine(m.Text), inboxText))
+		fmt.Fprintf(&b, "[%s] %s%s：%s\n", m.CreatedAt.In(loc).Format("01-02 15:04"), m.SenderName, at, clip(oneLine(m.Text), inboxText))
 	}
 	return strings.TrimSpace(b.String())
 }

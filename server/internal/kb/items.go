@@ -91,7 +91,7 @@ func (e *Engine) TagItems(ctx context.Context) error {
 			byID[key] = it
 			var at time.Time
 			if !it.At.IsZero() {
-				at = it.At.Local()
+				at = it.At.In(e.Store.Zone())
 			}
 			where := it.Where
 			if c, ok := e.Store.Chat(it.Where); ok {

@@ -100,7 +100,7 @@ func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
 		if p, ok := e.Store.Project(id); ok {
 			for _, x := range p.Moments {
 				if m, ok := e.Store.MomentPost(x.ID); ok {
-					f := momentForPrompt(m, x.Note, 200)
+					f := momentForPrompt(m, x.Note, 200, e.Store.Zone())
 					d.Moments = append(d.Moments, MomentRef{ID: m.ID, Author: f.Author, Text: f.Text, At: m.At, Comments: m.CommentCount, Note: x.Note})
 				}
 			}

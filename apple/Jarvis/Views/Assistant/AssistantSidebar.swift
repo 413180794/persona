@@ -498,6 +498,7 @@ struct AssistantSidebar: View {
     @State private var searchOpen = false
     @State private var showAll = false
     @State private var ending: Session?
+    @State private var renaming: Session?
     @State private var feed = SidebarFeed()
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
@@ -540,6 +541,7 @@ struct AssistantSidebar: View {
             footer
         }
         .confirmClose($ending)
+        .renameSessionAlert($renaming)
         .background {
             if let drawer {
                 SidebarClosed(drawer: drawer) {
@@ -734,6 +736,17 @@ struct AssistantSidebar: View {
         .padding(.bottom, Theme.Space.xs)
     }
 
+    /// A conversation's title on one line. A 「1101 | 修复 | 主题」 title (docs/assistant.md「对话标题」) has its day and
+    /// kind in the secondary color: the topic is what the eye finds, and what a narrow drawer cuts at the end.
+    @ViewBuilder private func titleText(_ title: String, named: Bool) -> some View {
+        if named, let t = ConversationTitle(title) {
+            Text("\(Text(t.head).foregroundStyle(Color.secondary))\(t.topic)")
+                .font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+        } else {
+            Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+        }
+    }
+
     /// A conversation: a round mark (Jarvis's face for the main one), its title on one line, its state on the right.
     private func row(_ s: Session) -> some View {
         let selected = s.key == current
@@ -750,7 +763,7 @@ struct AssistantSidebar: View {
                 } else {
                     ConversationMark(id: s.sessionID)
                 }
-                Text(title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                titleText(title, named: !isMain)
                 Spacer(minLength: Theme.Space.xs)
                 mark(s)
             }
@@ -773,6 +786,9 @@ struct AssistantSidebar: View {
                 Button { togglePin(s) } label: {
                     isPinned(s) ? Label("取消置顶", systemImage: Theme.Icon.unpin) : Label("置顶", systemImage: Theme.Icon.pin)
                 }
+            }
+            if !isMain {
+                Button { renaming = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
             }
             Button {
                 UIPasteboard.general.string = s.sessionID

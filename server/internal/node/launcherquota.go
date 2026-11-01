@@ -12,7 +12,8 @@ import (
 // launcherQuota reads a ~/.zshrc launcher's quota at its gateway (relay-history, FAKEMODEL): the probe gives the base URL
 // and the key it sets, this machine asks the gateway (the address is the one this machine reaches it by), and only
 // the report leaves the machine, never the key.
-func (n *Node) launcherQuota(ctx context.Context, name string) (quota.Report, error) {
+// tz: the user's time zone, from the hub ("" when it does not know it).
+func (n *Node) launcherQuota(ctx context.Context, name, tz string) (quota.Report, error) {
 	p, err := n.launcherProbe(ctx, name)
 	if err != nil {
 		return quota.Report{}, err
@@ -24,5 +25,5 @@ func (n *Node) launcherQuota(ctx context.Context, name string) (quota.Report, er
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	return quota.Fetch(ctx, &http.Client{Timeout: 25 * time.Second}, base, key)
+	return quota.Fetch(ctx, &http.Client{Timeout: 25 * time.Second}, base, key, tz)
 }

@@ -79,8 +79,8 @@ func TestMomentContextAndMyReply(t *testing.T) {
 		{ID: "c1", UserID: "me", UserName: "我自己", Text: "用雷电线", At: t0},
 		{ID: "c2", UserID: "u5", UserName: "王五", ReplyCommentID: "c1", Text: "那用什么线", At: t0.Add(2 * time.Minute)},
 	}
-	ctx := momentContext(it, cs, "me", nil)
-	for _, want := range []string{"我发的帖子", "全公司可见", "换电脑怎么迁移数据", "我：用雷电线", "王五 回复 我自己：那用什么线  ← 要回复的这条"} {
+	ctx := momentContext(it, cs, "me", nil, testUserZone)
+	for _, want := range []string{"我发的帖子", "全公司可见", "换电脑怎么迁移数据", "11-01 18:00 我：用雷电线", "王五 回复 我自己：那用什么线  ← 要回复的这条"} {
 		if !strings.Contains(ctx, want) {
 			t.Errorf("context lacks %q:\n%s", want, ctx)
 		}

@@ -303,6 +303,15 @@ func (h *Hub) userLocation() *time.Location {
 	return time.Local
 }
 
+// userTZName is the user's time zone by name ("Asia/Shanghai"), "" when only the hub's own is known: for what goes to
+// another program (a gateway's daily windows).
+func (h *Hub) userTZName() string {
+	if loc := h.userLocation(); loc != time.Local {
+		return loc.String()
+	}
+	return ""
+}
+
 var hhmm = regexp.MustCompile(`^([01]?\d|2[0-3]):([0-5]\d)$`)
 
 // nextRun is a daily task's first run strictly after `after`.
@@ -951,6 +960,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
 	h.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
 	h.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
+	h.titleNew(sess.MachineID, sess.SessionID, time.Now(), t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
 	h.recordRun(run)
 	return *sess, nil
 }

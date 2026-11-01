@@ -95,7 +95,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/keys", h.proxyBody("session.keys"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/close", h.proxyBody("session.close"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.proxyBody("session.rename"))
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withMachine(h.renameSession))
 	// {"dry_run": true, "all": false}: rename the tabs of running agents nobody named after their task (tabname.go).
 	api.HandleFunc("POST /api/v1/tabs/autoname", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {

@@ -206,7 +206,7 @@ func (e *Engine) line(ctx context.Context, src Source, c *Chat, m SourceMessage)
 	if m.Type == "SYSTEM" && text == "" {
 		return Line{}
 	}
-	day := m.At.Local().Format("2006-01-02")
+	day := m.At.In(e.Store.Zone()).Format("2006-01-02")
 	if time.Since(m.At) > time.Duration(or(e.AttachmentDays, 30))*24*time.Hour {
 		if len(m.Media) > 0 {
 			text += " [附件]"

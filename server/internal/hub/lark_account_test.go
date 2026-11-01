@@ -74,7 +74,7 @@ func TestInboxAccountIsolation(t *testing.T) {
 		rows := b.applyLark([]lark.Conversation{{ID: "same-feed", Unread: 1, UpdatedAt: now}},
 			func(lark.Conversation, int) ([]lark.Message, error) {
 				return []lark.Message{{ID: "test-message", Position: "1", CreatedAt: now}}, nil
-			}, now)
+			}, now, testUserZone)
 		if len(rows) != 1 || rows[0].Lark.AccountID != account {
 			t.Fatalf("account %d: missing account metadata", account)
 		}

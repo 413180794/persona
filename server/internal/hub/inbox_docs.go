@@ -205,7 +205,7 @@ func (h *Hub) readDoc(ctx context.Context, it *InboxItem, me lark.Me) {
 	d := *it.Doc
 	title, summary := it.Title, it.Preview
 	h.inbox.mu.Unlock()
-	rd := docRead{me: me}
+	rd := docRead{me: me, loc: h.userLocation()}
 	err := h.readDocInto(ctx, &d, &rd)
 	now := time.Now().UTC()
 	h.inbox.mu.Lock()
@@ -224,6 +224,7 @@ func (h *Hub) readDoc(ctx context.Context, it *InboxItem, me lark.Me) {
 // docRead is what readDocInto found.
 type docRead struct {
 	me      lark.Me
+	loc     *time.Location // the user's time zone: a 多维表格 date is the day there
 	rows    []DocRow
 	threads []lark.CommentThread // unresolved, mentioning me, newest last
 	text    string               // docx / doc: the text around the mention
@@ -547,7 +548,7 @@ func (h *Hub) readBaseRows(ctx context.Context, link string, rd *docRead) error 
 			records, next = append(records, more...), n
 		}
 		tbl.Records = records
-		rd.rows = append(rd.rows, baseRows(tbl, rd.me)...)
+		rd.rows = append(rd.rows, baseRows(tbl, rd.me, rd.loc)...)
 	}
 	rd.rows = pickRows(rd.rows)
 	return nil
@@ -557,7 +558,7 @@ func (h *Hub) readBaseRows(ctx context.Context, link string, rd *docRead) error 
 var baseColors = []string{"#bacefd", "#fed4a4", "#b1e8fc", "#c5f2bb", "#f9c8de", "#d7c8f8", "#fbe39a", "#c8e4c2", "#f7b8b0", "#dee0e3"}
 
 // baseRows finds a table's records that mention me (an @me in a text cell, or me in a person field).
-func baseRows(tbl lark.BaseTable, me lark.Me) []DocRow {
+func baseRows(tbl lark.BaseTable, me lark.Me, loc *time.Location) []DocRow {
 	var out []DocRow
 	for _, rec := range tbl.Records {
 		mine := false
@@ -605,7 +606,7 @@ func baseRows(tbl lark.BaseTable, me lark.Me) []DocRow {
 				row.Status = append(row.Status, st)
 				continue
 			}
-			v := baseCellText(f, c)
+			v := baseCellText(f, c, loc)
 			if v == "" {
 				continue
 			}
@@ -627,7 +628,7 @@ func baseRows(tbl lark.BaseTable, me lark.Me) []DocRow {
 	return out
 }
 
-func baseCellText(f lark.BaseField, c *lark.BaseCell) string {
+func baseCellText(f lark.BaseField, c *lark.BaseCell, loc *time.Location) string {
 	if c == nil {
 		return ""
 	}
@@ -663,7 +664,7 @@ func baseCellText(f lark.BaseField, c *lark.BaseCell) string {
 		}
 	case "date":
 		if ms, err := strconv.ParseInt(strings.Trim(string(c.Value), `"`), 10, 64); err == nil && ms > 0 {
-			return time.UnixMilli(ms).Local().Format("2006-01-02")
+			return time.UnixMilli(ms).In(loc).Format("2006-01-02")
 		}
 	case "checkbox":
 		if c.Checked != nil && *c.Checked {

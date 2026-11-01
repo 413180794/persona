@@ -46,7 +46,7 @@ func TestInboxLarkOneItemPerChatUntilDone(t *testing.T) {
 	fetch := func(c lark.Conversation, n int) ([]lark.Message, error) { return chat[max(0, len(chat)-n):], nil }
 	conv := lark.Conversation{ID: "f1", Name: "张三", Unread: 2, UpdatedAt: now.Add(-time.Minute)}
 
-	changed := b.applyLark([]lark.Conversation{conv}, fetch, now)
+	changed := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
 	if len(changed) != 1 {
 		t.Fatalf("changed = %d", len(changed))
 	}
@@ -58,25 +58,25 @@ func TestInboxLarkOneItemPerChatUntilDone(t *testing.T) {
 	if ch := b.applyLark([]lark.Conversation{conv}, func(lark.Conversation, int) ([]lark.Message, error) {
 		t.Fatal("fetched an unchanged chat")
 		return nil, nil
-	}, now); len(ch) != 0 {
+	}, now, testUserZone); len(ch) != 0 {
 		t.Fatalf("unchanged chat changed %d items", len(ch))
 	}
 	// A new message joins the open item.
 	chat = append(chat, larkMsg("13", "张三", false, now))
 	conv.Unread, conv.UpdatedAt = 3, now
-	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now); len(ch) != 1 || ch[0] != it || it.Count != 3 || it.Last != "13" {
+	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone); len(ch) != 1 || ch[0] != it || it.Count != 3 || it.Last != "13" {
 		t.Fatalf("follow-up: %+v", it)
 	}
 	// Done, still unread in Feishu: the same messages don't come back...
 	it.done(now, "user")
 	conv.UpdatedAt = now.Add(time.Second) // a reaction or edit touches the chat
-	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now); len(ch) != 0 {
+	if ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone); len(ch) != 0 {
 		t.Fatalf("done messages came back: %+v", ch[0])
 	}
 	// ...but a newer one starts a new item.
 	chat = append(chat, larkMsg("14", "张三", false, now.Add(time.Minute)))
 	conv.Unread, conv.UpdatedAt = 4, now.Add(time.Minute)
-	ch := b.applyLark([]lark.Conversation{conv}, fetch, now)
+	ch := b.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
 	if len(ch) != 1 || ch[0].ID != "lark:f1:14" || ch[0].Count != 4 {
 		t.Fatalf("new item: %+v", ch)
 	}
@@ -93,7 +93,7 @@ func TestInboxLarkSkipsOldAndMuted(t *testing.T) {
 		{ID: "muted", IsGroup: true, Muted: true, Unread: 5, UpdatedAt: now},
 		{ID: "read", Unread: 0, UpdatedAt: now},
 	}
-	if ch := b.applyLark(convs, fetch, now); len(ch) != 0 {
+	if ch := b.applyLark(convs, fetch, now, testUserZone); len(ch) != 0 {
 		t.Fatalf("got %+v", ch[0])
 	}
 }
