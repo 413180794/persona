@@ -93,6 +93,8 @@ extension Theme {
         /// What follows from something before it: a follow-up, the next row of a table.
         static let followOn = "arrow.turn.down.right"
         static let enlarge = "arrow.up.left.and.arrow.down.right"
+        /// The text size setting.
+        static let textSize = "textformat.size"
         static let upDown = "arrow.up.arrow.down"
         static let select = "selection.pin.in.out"
         static let insert = "text.cursor"

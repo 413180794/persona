@@ -261,11 +261,7 @@ struct GitDiffSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if target.file.isStaged && target.file.hasUnstaged {
-                    Picker("", selection: $target.staged) {
-                        Text("未暂存").tag(false)
-                        Text("已暂存").tag(true)
-                    }
-                    .pickerStyle(.segmented)
+                    SegmentedChoice("", [(false, "未暂存"), (true, "已暂存")], selection: $target.staged)
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                 }

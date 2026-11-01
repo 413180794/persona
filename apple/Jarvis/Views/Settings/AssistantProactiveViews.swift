@@ -1,3 +1,4 @@
+import BeautifulUI
 import MarkdownUI
 import SwiftUI
 
@@ -251,6 +252,7 @@ struct AssistantRoutinesView: View {
             Haptics.tap()
             Task { _ = await page.save(changed) }
         }
+        .modifier(AssistantTaskRowLook())
         .swipeActions(edge: .trailing, allowsFullSwipe: t.repeats == .once) {
             Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
         }
@@ -283,6 +285,41 @@ struct AssistantTaskRow: View {
     var toggle: (Bool) -> Void
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { capsule } else { plain }
+    }
+
+    /// The BeautifulUI style: its task capsule. Its mark (red when it runs with 全部放行), the title over the rule in
+    /// words, the next run, what it runs with and the last run under that, its switch; a tap opens the editor, as the
+    /// plain row does.
+    private var capsule: some View {
+        let t = task
+        let with = AssistantScheduleText.runsWith(t)
+        let next = t.enabled ? (t.nextRun ?? t.at) : nil
+        let notes = [t.enabled ? next.map { "下次 \(AssistantScheduleText.moment($0))" } : "已关闭",
+                     with?.text, AssistantScheduleText.lastRun(t)?.text,
+                     t.createdBy == "assistant" && t.repeats != .once ? "Jarvis 建的" : nil].compactMap { $0 }
+        return TaskRow(TaskItem(id: t.id, title: AssistantScheduleText.title(t),
+                                subtitle: t.repeats == .once ? (t.sessionID == nil ? "一次 · 新对话" : "一次 · 接着原来的对话") : AssistantScheduleText.sentence(t),
+                                footnote: notes.joined(separator: " · "), status: .pending(step: 0)),
+                       accessory: .disclosure, subtitleLines: 2,
+                       action: {
+                           Haptics.tap()
+                           open()
+                       }) {
+            BUIIconTile(AssistantScheduleText.symbol(t), tint: with?.danger == true ? Theme.danger : t.enabled ? Theme.accent : Theme.Hue.gray, size: 24)
+        } trailing: {
+            Toggle(AssistantScheduleText.title(t), isOn: Binding(get: { t.enabled }, set: toggle))
+                .labelsHidden()
+                .accessibilityIdentifier("task-switch-\(t.id)")
+        } detail: {
+            EmptyView()
+        }
+        .opacity(t.enabled ? 1 : 0.75)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("task-\(t.id)")
+    }
+
+    @ViewBuilder private var plain: some View {
         let t = task
         HStack(spacing: Theme.Space.m) {
             Image(systemName: AssistantScheduleText.symbol(t))
@@ -579,12 +616,19 @@ struct AssistantTaskEditor: View {
 
     @ViewBuilder private var whenSection: some View {
         Section {
-            Picker("重复", selection: repeats) {
-                Text("一次").tag(APIClient.ScheduledTask.Repeat.once)
-                Text("每天").tag(APIClient.ScheduledTask.Repeat.daily)
-                Text("每隔").tag(APIClient.ScheduledTask.Repeat.interval)
+            Group {
+                if AppStyle.current.usesBeautifulUI {
+                    BUISegmented([.init(APIClient.ScheduledTask.Repeat.once, "一次"), .init(.daily, "每天"), .init(.interval, "每隔")],
+                                 selection: repeats, fills: true)
+                } else {
+                    Picker("重复", selection: repeats) {
+                        Text("一次").tag(APIClient.ScheduledTask.Repeat.once)
+                        Text("每天").tag(APIClient.ScheduledTask.Repeat.daily)
+                        Text("每隔").tag(APIClient.ScheduledTask.Repeat.interval)
+                    }
+                    .pickerStyle(.segmented)
+                }
             }
-            .pickerStyle(.segmented)
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
             switch draft.repeats {
             case .once:
@@ -1027,13 +1071,17 @@ struct AssistantMemoryTag: View {
     var color: Color
 
     var body: some View {
-        Text(title)
-            .font(Theme.Font.labelStrong)
-            .lineLimit(1)
-            .foregroundStyle(color)
-            .padding(.horizontal, Theme.Space.s)
-            .padding(.vertical, Theme.Space.xxs)
-            .background(Capsule().fill(color.opacity(0.14)))
+        if AppStyle.current.usesBeautifulUI {
+            BUIHueTag(title, base: color) // the kind's words on its own tint
+        } else {
+            Text(title)
+                .font(Theme.Font.labelStrong)
+                .lineLimit(1)
+                .foregroundStyle(color)
+                .padding(.horizontal, Theme.Space.s)
+                .padding(.vertical, Theme.Space.xxs)
+                .background(Capsule().fill(color.opacity(0.14)))
+        }
     }
 }
 
@@ -1205,6 +1253,21 @@ struct AssistantNotesView: View {
             model.toast = Toast("已保存，新对话生效", style: .success)
         } catch {
             model.show(error)
+        }
+    }
+}
+
+/// A task on 定时任务's list: in the BeautifulUI style its capsule stands on the page (no list background or line);
+/// otherwise the list's row.
+private struct AssistantTaskRowLook: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            content
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.l, bottom: Theme.Space.xs, trailing: Theme.Space.l))
+        } else {
+            content
         }
     }
 }

@@ -189,3 +189,13 @@ class DictationTest {
         org.junit.Assert.assertEquals("改 README然后提交", f("改 README ", "然后提交"))
     }
 }
+
+class RecentShortcutsTest {
+    @Test fun theMostRecentLiveAgentsNotJarvis() {
+        fun s(id: String, at: String, assistant: Boolean = false, status: String = "idle") =
+            jarvis.android.data.Session(sessionId = id, machineId = "m", updatedAt = at, assistant = assistant, status = status)
+        val list = listOf(s("old", "2026-10-30T08:00:00Z"), s("jarvis", "2026-11-01T09:00:00Z", assistant = true),
+            s("new", "2026-11-01T08:00:00Z"), s("gone", "2026-11-01T10:00:00Z", status = "offline"), s("mid", "2026-10-31T08:00:00Z"))
+        org.junit.Assert.assertEquals(listOf("new", "mid"), jarvis.android.shortcuts.Shortcuts.recent(list).map { it.sessionId })
+    }
+}

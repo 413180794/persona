@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// Jarvis's profile, opened from its avatar on the Jarvis tab (and from 设置 › 助手): who it is and where it runs, what
@@ -25,6 +26,44 @@ struct AssistantProfileView: View {
     }
 
     var body: some View {
+        Group { if AppStyle.current.usesBeautifulUI { cards } else { list } }
+        .navigationTitle("Jarvis")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            selection = model.assistantConfig?.launcher ?? "claude"
+            launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant)
+        }
+        .sheet(isPresented: $showLaunchers, onDismiss: {
+            Task { launchers = ((try? await model.launchers(machineID, refresh: true)) ?? launchers).filter(\.runsAssistant) }
+        }) {
+            NavigationStack {
+                ModelLaunchersView()
+                    .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name) }
+            }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+        .onChange(of: selection) { old, new in
+            guard !old.isEmpty, old != new else { return }
+            Task { await model.setAssistantLauncher(new) }
+        }
+        #if DEBUG
+        .onAppear {
+            if debugPage == nil, let p = UserDefaults.standard.string(forKey: "openAssistantPage"),
+               !["profile", "assistant", "avatars"].contains(p) { debugPage = p }
+        }
+        .navigationDestination(item: $debugPage) { p in
+            switch p {
+            case "routines", "routine", "newRoutine", "followups", "followup", "intervalTask", "bypassTask": AssistantRoutinesView()
+            case "runs": AssistantRunsView()
+            case "memory", "memoryFile", "memoryEdit": AssistantMemoryView()
+            default: AssistantNotesView()
+            }
+        }
+        #endif
+    }
+
+    private var list: some View {
         List {
             Section { header }
                 .listRowBackground(Color.clear)
@@ -96,40 +135,64 @@ struct AssistantProfileView: View {
             }
         }
         .themedPage()
-        .navigationTitle("Jarvis")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            selection = model.assistantConfig?.launcher ?? "claude"
-            launchers = ((try? await model.launchers(machineID)) ?? []).filter(\.runsAssistant)
-        }
-        .sheet(isPresented: $showLaunchers, onDismiss: {
-            Task { launchers = ((try? await model.launchers(machineID, refresh: true)) ?? launchers).filter(\.runsAssistant) }
-        }) {
-            NavigationStack {
-                ModelLaunchersView()
-                    .navigationDestination(for: ModelLauncherRoute.self) { r in ModelLauncherDetailView(name: r.name) }
+    }
+
+    /// The BeautifulUI style: its list cards, a heading over each and a note under it.
+    private var cards: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                header
+                if !upcoming.isEmpty {
+                    BUIListSection("接下来") {
+                        ForEach(upcoming) { u in AssistantUpcomingRow(item: u) }
+                    }
+                }
+                BUIListSection("主动做事", footer: "到点自己开始工作、跟进答应你的事，跑完推送到手机。在对话里说「每天 9 点给我早报」「一小时后提醒我」就会加到这里。") {
+                    NavigationLink { AssistantRoutinesView() } label: {
+                        buiRow("定时任务", Theme.Icon.schedule, detail: tasks.map { t in
+                            let on = t.filter(\.enabled).count
+                            return on == 0 ? "未开启" : "\(on) 个开启"
+                        })
+                    }
+                    NavigationLink { AssistantRunsView() } label: {
+                        buiRow("运行记录", "clock.arrow.circlepath", detail: runs.flatMap(\.first).map { AssistantRunText.statusWord($0) + " · " + Fmt.relative($0.at) })
+                    }
+                }
+                BUIListSection("了解你", footer: "「关于我」是你告诉 Jarvis 的；「记忆」是它在对话里自己记下的，都可以改。") {
+                    NavigationLink { AssistantNotesView() } label: {
+                        buiRow("关于我", "person.text.rectangle", detail: nil)
+                    }
+                    NavigationLink { AssistantMemoryView() } label: {
+                        buiRow("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? "\($0) 条" : nil })
+                    }
+                }
+                BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。") {
+                    NavigationLink {
+                        LauncherPicker(launchers: launchers, selection: $selection)
+                    } label: {
+                        buiRow("启动器（模型）", Theme.Icon.model, detail: selection)
+                    }
+                    // A sheet: this page is pushed by view in the Jarvis tab and by value in 设置 (value links mix badly).
+                    Button { showLaunchers = true } label: {
+                        BUIListRow("管理启动器") { BUIIconTile(Theme.Icon.cpu, tint: Theme.accent) }
+                    }
+                    .buttonStyle(.plain)
+                    BUIListRow("运行在", value: machineName)
+                    BUIListRow("工作目录", value: "~/.jarvis/assistant")
+                }
+                BUIListSection("能访问", footer: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。") {
+                    buiReach(machinesLine, Theme.Icon.machines)
+                    buiReach("各台电脑上的 Agent：看状态、读对话、发消息、开新的", "rectangle.stack.badge.person.crop")
+                    buiReach("飞书：消息、日历、文档、会议纪要、任务、邮件", "building.2")
+                    buiReach("iPhone：通讯录、日历、提醒、位置、健康、照片", Theme.Icon.phone)
+                    buiReach("你添加的所有邮箱", Theme.Icon.mail)
+                    buiReach("在手机上问你、给你推送", Theme.Icon.notifications)
+                }
             }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.bottom, Theme.Space.xxl)
         }
-        .task { await load() }
-        .refreshable { await load() }
-        .onChange(of: selection) { old, new in
-            guard !old.isEmpty, old != new else { return }
-            Task { await model.setAssistantLauncher(new) }
-        }
-        #if DEBUG
-        .onAppear {
-            if debugPage == nil, let p = UserDefaults.standard.string(forKey: "openAssistantPage"),
-               !["profile", "assistant", "avatars"].contains(p) { debugPage = p }
-        }
-        .navigationDestination(item: $debugPage) { p in
-            switch p {
-            case "routines", "routine", "newRoutine", "followups", "followup", "intervalTask", "bypassTask": AssistantRoutinesView()
-            case "runs": AssistantRunsView()
-            case "memory", "memoryFile", "memoryEdit": AssistantMemoryView()
-            default: AssistantNotesView()
-            }
-        }
-        #endif
+        .themedGroupedPage()
     }
 
     private var header: some View {
@@ -152,8 +215,18 @@ struct AssistantProfileView: View {
         }
         .frame(maxWidth: .infinity)
         // Room above for the face's glow (radius 16): the list row clips what sticks out, as a hard square edge.
-        .padding(.top, 28)
-        .padding(.bottom, Theme.Space.m)
+        .modifier(HeaderRoom())
+    }
+
+    /// The header's room: in the BeautifulUI style on the token grid, in every other style what it always had.
+    private struct HeaderRoom: ViewModifier {
+        @ViewBuilder func body(content: Content) -> some View {
+            if AppStyle.current.usesBeautifulUI {
+                content.padding(.top, Theme.Space.xl)
+            } else {
+                content.padding(.top, 28).padding(.bottom, Theme.Space.m)
+            }
+        }
     }
 
     /// Any assistant conversation running a turn right now.
@@ -171,6 +244,16 @@ struct AssistantProfileView: View {
         } label: {
             Label(title, systemImage: symbol).lineLimit(1)
         }
+    }
+
+    /// The BeautifulUI style's row that opens a page: its mark, its name, what is there now.
+    private func buiRow(_ title: String, _ symbol: String, detail: String?) -> some View {
+        BUIListRow(title, value: detail, accessory: .disclosure) { BUIIconTile(symbol, tint: Theme.accent) }
+    }
+
+    /// The BeautifulUI style's row for what Jarvis can reach.
+    private func buiReach(_ text: String, _ symbol: String) -> some View {
+        BUIListRow(text) { BUIIconTile(symbol, tint: Theme.Hue.gray) }
     }
 
     /// Reloaded each time the page shows (coming back from a sub-page included).
@@ -217,6 +300,19 @@ struct AssistantUpcomingRow: View {
     var item: AssistantUpcoming
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
+    }
+
+    /// The BeautifulUI style: its list row, the kind's mark, what and when, the time on the right.
+    private var beautiful: some View {
+        BUIListRow(item.title, detail: "\(item.detail) · \(AssistantScheduleText.until(item.at))",
+                   value: "\(AssistantScheduleText.day(item.at)) \(AssistantScheduleText.hm(item.at))") {
+            BUIIconTile(item.routine ? Theme.Icon.recurring : Theme.Icon.followOn, tint: Theme.accent)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var plain: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(AssistantScheduleText.hm(item.at))
@@ -333,6 +429,39 @@ struct AssistantRunRow: View {
     var showTitle = true
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { beautiful } else { plain }
+    }
+
+    /// BeautifulUI's task row: the green check, the red cross, or an empty ring for a skipped run; what ran and how
+    /// (准时 / 晚了 21 秒 / the error) under it; the chevron when it has a conversation to open.
+    @ViewBuilder private var beautiful: some View {
+        let row = TaskRow(TaskItem(id: run.id, title: showTitle ? run.title : AssistantScheduleText.moment(run.at),
+                                   subtitle: showTitle ? "\(AssistantScheduleText.hm(run.at)) · \(AssistantRunText.detail(run))" : AssistantRunText.detail(run),
+                                   status: run.status == "ok" ? .completed : .failed),
+                          shape: .plain, accessory: run.key != nil ? .disclosure : .none, subtitleLines: 2) {
+            if run.status == "skipped" {
+                Circle().strokeBorder(Theme.cardStroke, lineWidth: Theme.Size.rule).frame(width: Theme.Size.badge, height: Theme.Size.badge)
+            } else {
+                TaskBadge(run.status == "ok" ? .completed : .failed)
+            }
+        } trailing: {
+            EmptyView()
+        } detail: {
+            EmptyView()
+        }
+        if let key = run.key {
+            Button {
+                model.selectedTab = .assistant
+                model.assistantCurrent = key
+            } label: { row }
+            .buttonStyle(.plain)
+            .accessibilityHint("打开这次运行的对话")
+        } else {
+            row
+        }
+    }
+
+    @ViewBuilder private var plain: some View {
         let (symbol, tint) = AssistantRunText.symbol(run)
         let content = HStack(spacing: Theme.Space.m) {
             Image(systemName: symbol).font(Theme.Font.title).foregroundStyle(tint)

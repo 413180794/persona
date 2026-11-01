@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Holds the one hub connection for the process: the activity and the foreground service share it. */
 class JarvisApp : Application() {
@@ -61,9 +63,24 @@ class JarvisApp : Application() {
         HubService.start(this)
         // The ongoing notification, widget and tile follow the same summary (fleet/).
         jarvis.android.fleet.FleetStore.follow(this, hub) { refreshFleetViews() }
+        // Long-press shortcuts to the recently active agents follow the session list (only when the pick changes).
+        recentShortcuts?.cancel()
+        recentShortcuts = scope.launch {
+            hub.sessions
+                .map { m -> jarvis.android.shortcuts.Shortcuts.recent(m.values.flatten()).map { Triple(it.key, it.displayTitle, it.isLive) } }
+                .distinctUntilChanged()
+                .collect { picks ->
+                    val all = hub.sessions.value.values.flatten()
+                    jarvis.android.shortcuts.Shortcuts.publish(this@JarvisApp, picks.mapNotNull { (k, _, _) -> all.firstOrNull { it.key == k } })
+                }
+        }
     }
 
+    private var recentShortcuts: kotlinx.coroutines.Job? = null
+
     fun unpair() {
+        recentShortcuts?.cancel(); recentShortcuts = null
+        jarvis.android.shortcuts.Shortcuts.publish(this, emptyList()) // the agents' shortcuts go with the hub
         _hub.value?.stop()
         _hub.value = null
         jarvis.android.chat.ConnectionWatch.detach()

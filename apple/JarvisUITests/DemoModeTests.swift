@@ -222,7 +222,7 @@ final class DemoModeTests: XCTestCase {
         noErrors("machines")
         shot("machines")
         app.staticTexts["服务器"].tap()
-        let range = see(app.segmentedControls["metric-range"], "the machine page")
+        let range = see(app.descendants(matching: .any)["metric-range"].firstMatch, "the machine page") // either style's segmented control
         if !range.isHittable { app.swipeUp() }
         range.buttons["24 小时"].tap()
         see(app.descendants(matching: .any)["chart-CPU"], "the CPU chart")

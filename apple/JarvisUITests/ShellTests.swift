@@ -79,7 +79,7 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "个 Agent 工作中")).firstMatch.exists,
                       "the agents counted on the card")
         server.tap()
-        see(app.segmentedControls["metric-range"], "the machine's charts on its page")
+        see(app.descendants(matching: .any)["metric-range"].firstMatch, "the machine's charts on its page")
         XCTAssertTrue(app.navigationBars["服务器"].exists)
     }
 

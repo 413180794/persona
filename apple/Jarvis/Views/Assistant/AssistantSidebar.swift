@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -688,21 +689,7 @@ struct AssistantSidebar: View {
     @ViewBuilder private var topBar: some View {
         if searchOpen {
             HStack(spacing: Theme.Space.m) {
-                HStack(spacing: Theme.Space.s) {
-                    Image(systemName: Theme.Icon.search).font(Theme.Font.secondaryMedium).foregroundStyle(.secondary)
-                    TextField("搜索对话", text: $query)
-                        .focused($searching)
-                        .submitLabel(.search)
-                        .autocorrectionDisabled()
-                    if !query.isEmpty {
-                        Button { query = "" } label: { Image(systemName: Theme.Icon.clear).foregroundStyle(.tertiary) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("清除搜索")
-                    }
-                }
-                .padding(.horizontal, Theme.Space.m)
-                .scaledFrame(height: Theme.Size.avatar)
-                .background(Theme.Fill.chip, in: .capsule)
+                searchField
                 Button("取消") {
                     withAnimation(Theme.Motion.state) {
                         query = ""
@@ -730,6 +717,30 @@ struct AssistantSidebar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("搜索对话")
             }
+        }
+    }
+
+    /// The open search field; in the BeautifulUI style SidebarNav's.
+    @ViewBuilder private var searchField: some View {
+        if AppStyle.current.usesBeautifulUI {
+            BUISearchField("搜索对话", text: $query, focused: $searching, clearLabel: "清除搜索")
+                .autocorrectionDisabled()
+        } else {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: Theme.Icon.search).font(Theme.Font.secondaryMedium).foregroundStyle(.secondary)
+                TextField("搜索对话", text: $query)
+                    .focused($searching)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: Theme.Icon.clear).foregroundStyle(.tertiary) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("清除搜索")
+                }
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(height: Theme.Size.avatar)
+            .background(Theme.Fill.chip, in: .capsule)
         }
     }
 
@@ -766,7 +777,19 @@ struct AssistantSidebar: View {
         }
     }
 
-    private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
+    @ViewBuilder private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            // SidebarNav's primary items.
+            BUISidebarRow(title, symbol: symbol, action: run) {
+                if count > 0 { CountBadge(count: count, look: .solid(Theme.needsYou)) }
+            }
+            .accessibilityIdentifier(id ?? "sidebar-" + title)
+        } else {
+            plainAction(title, symbol, id: id, count: count, run: run)
+        }
+    }
+
+    private func plainAction(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             HStack(spacing: Theme.Space.l) {
                 // One box for every symbol: a wide one (知识库's books) scales down into it instead of pushing its words.
@@ -867,7 +890,28 @@ struct AssistantSidebar: View {
     }
 
     /// A section's name, small and gray, with its ⋯ menu on the right when it has one.
-    private func heading<Menu: View>(_ text: String, @ViewBuilder menu: () -> Menu) -> some View {
+    @ViewBuilder private func heading<Menu: View>(_ text: String, @ViewBuilder menu: () -> Menu) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            let items = menu()
+            BUISidebarHeading(text) {
+                if !(items is EmptyView) {
+                    SwiftUI.Menu { items } label: {
+                        Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong)
+                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellXS)
+                            .contentShape(.rect)
+                    }
+                    .tint(Color.secondary)
+                    .accessibilityLabel(text + "的更多操作")
+                }
+            }
+            .padding(.top, Theme.Space.l)
+            .padding(.bottom, Theme.Space.xs)
+        } else {
+            plainHeading(text, menu: menu)
+        }
+    }
+
+    private func plainHeading<Menu: View>(_ text: String, @ViewBuilder menu: () -> Menu) -> some View {
         let items = menu()
         return HStack {
             Text(text).font(Theme.Font.caption).foregroundStyle(Color.secondary).accessibilityAddTraits(.isHeader)

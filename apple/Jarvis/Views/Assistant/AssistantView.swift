@@ -280,22 +280,39 @@ struct AssistantHome: View {
                             .font(Theme.Font.caption)
                             .foregroundStyle(Theme.danger)
                     }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        ForEach(suggestions, id: \.title) { s in
-                            Button {
-                                Haptics.tap()
-                                send(s.prompt, [])
-                            } label: {
-                                VStack(alignment: .leading, spacing: Theme.Space.m) {
-                                    Image(systemName: s.symbol)
-                                        .font(Theme.Font.title)
-                                        .foregroundStyle(Theme.accent)
-                                    Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                    if AppStyle.current.usesBeautifulUI {
+                        // BeautifulUI's list card: one row per thing to ask, its mark, what it is and how it is put.
+                        BUIListSection("可以问我") {
+                            ForEach(suggestions, id: \.title) { s in
+                                Button {
+                                    Haptics.tap()
+                                    send(s.prompt, [])
+                                } label: {
+                                    BUIListRow(s.title, detail: s.prompt, accessory: .disclosure, detailLines: 1) {
+                                        BUIIconTile(s.symbol, tint: Theme.accent)
+                                    }
                                 }
-                                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box72, alignment: .topLeading)
-                                .card(padding: 14)
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                            ForEach(suggestions, id: \.title) { s in
+                                Button {
+                                    Haptics.tap()
+                                    send(s.prompt, [])
+                                } label: {
+                                    VStack(alignment: .leading, spacing: Theme.Space.m) {
+                                        Image(systemName: s.symbol)
+                                            .font(Theme.Font.title)
+                                            .foregroundStyle(Theme.accent)
+                                        Text(s.title).font(Theme.Font.heading).foregroundStyle(Color.primary)
+                                    }
+                                    .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box72, alignment: .topLeading)
+                                    .card(padding: 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
@@ -379,6 +396,22 @@ struct TypingIndicator: View {
     @State private var phase = 0.0
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { shimmer } else { dots }
+    }
+
+    /// The BeautifulUI style: its thinking header while it works, the sparkle and the words with the shimmer across them.
+    private var shimmer: some View {
+        HStack(spacing: Theme.Space.sm) {
+            BUIIcon(.sparkle, size: 13)
+                .foregroundStyle(Theme.ai)
+            Text(text)
+                .font(Theme.Font.secondary)
+                .buiShimmer()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var dots: some View {
         HStack(spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.xs) {
                 ForEach(0..<3) { i in
@@ -598,30 +631,43 @@ struct AssistantToolsRow: View {
         let count = steps.reduce(0) { $0 + $1.tools } // a fold counts the calls it stands for
         let running = calls.last.map(\.isRunning) ?? false
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Button {
-                withAnimation(Theme.Motion.standard) { open.toggle() }
-            } label: {
-                HStack(spacing: Theme.Space.sm) {
-                    if running {
-                        ProgressView().controlSize(.mini)
-                        if let last = calls.last {
-                            Text("\(ToolPresentation.verb(last.name)) \(ToolPresentation.subject(last))").lineLimit(1)
-                        }
-                    } else {
-                        Image(systemName: Theme.Icon.unknownTool)
-                        Text("工具 \(count)")
-                        Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).rotationEffect(.degrees(open ? 90 : 0))
+            if AppStyle.current.usesBeautifulUI {
+                // BeautifulUI's chip run, as in an agent's chat: one chip per kind of tool (a spinner while one runs).
+                Button {
+                    withAnimation(Theme.Motion.standard) { open.toggle() }
+                } label: {
+                    ToolChipGroup(ToolRunSummary.chips(calls), isOpen: open, isRunning: running)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
                 }
-                .font(Theme.Font.label)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, Theme.Space.m)
-                .padding(.vertical, Theme.Space.s)
-                .background(Theme.Fill.well, in: .capsule)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(count) 次工具调用：\(sources(calls))")
+            } else {
+                Button {
+                    withAnimation(Theme.Motion.standard) { open.toggle() }
+                } label: {
+                    HStack(spacing: Theme.Space.sm) {
+                        if running {
+                            ProgressView().controlSize(.mini)
+                            if let last = calls.last {
+                                Text("\(ToolPresentation.verb(last.name)) \(ToolPresentation.subject(last))").lineLimit(1)
+                            }
+                        } else {
+                            Image(systemName: Theme.Icon.unknownTool)
+                            Text("工具 \(count)")
+                            Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).rotationEffect(.degrees(open ? 90 : 0))
+                    }
+                    .font(Theme.Font.label)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.s)
+                    .background(Theme.Fill.well, in: .capsule)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             if open {
                 ForEach(steps) { step in
                     switch step {

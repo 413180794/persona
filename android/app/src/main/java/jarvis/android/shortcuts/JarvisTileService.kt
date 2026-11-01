@@ -79,6 +79,37 @@ class JarvisTileService : TileService() {
  * id, which is personal configuration (docs/config.md).
  */
 object Shortcuts {
+    /** How many recent agents follow the fixed shortcuts (launchers show about four in all). */
+    const val RECENT = 2
+
+    /**
+     * The agents to offer after 问 Jarvis / 批准待处理: the most recently active live ones, not Jarvis itself (iOS
+     * `OpenSessionIntent` opens one of these from Siri; here it is a long-press shortcut).
+     */
+    fun recent(sessions: Collection<jarvis.android.data.Session>): List<jarvis.android.data.Session> =
+        sessions.filter { !it.assistant && it.isLive }.sortedByDescending { it.updated ?: java.time.Instant.EPOCH }.take(RECENT)
+
+    /** Republishes with these recent agents; called when the session list changes (cheap: the system dedupes). */
+    fun publish(ctx: Context, recent: List<jarvis.android.data.Session>) {
+        publish(ctx)
+        val shortcuts = recent.mapIndexed { i, s ->
+            ShortcutInfoCompat.Builder(ctx, "session:${s.machineId}/${s.sessionId}")
+                .setShortLabel(s.displayTitle.take(24))
+                .setLongLabel("打开 ${s.displayTitle}".take(48))
+                .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_ask))
+                .setIntent(jarvis.android.fleet.FleetNotification.openSession(ctx, s.key).setAction(Intent.ACTION_VIEW))
+                .setRank(10 + i)
+                .build()
+        }
+        runCatching { shortcuts.forEach { ShortcutManagerCompat.pushDynamicShortcut(ctx, it) } }
+        // Ones no longer among the recent go, so the list never fills with old sessions.
+        runCatching {
+            val keep = shortcuts.map { it.id }.toSet()
+            val stale = ShortcutManagerCompat.getDynamicShortcuts(ctx).map { it.id }.filter { it.startsWith("session:") && it !in keep }
+            if (stale.isNotEmpty()) ShortcutManagerCompat.removeDynamicShortcuts(ctx, stale)
+        }
+    }
+
     fun publish(ctx: Context) {
         fun shortcut(id: String, short: String, long: String, intent: Intent, icon: Int) =
             ShortcutInfoCompat.Builder(ctx, id)
@@ -86,17 +117,14 @@ object Shortcuts {
                 .setLongLabel(long)
                 .setIcon(IconCompat.createWithResource(ctx, icon))
                 .setIntent(intent)
+                .setRank(if (id == "ask") 0 else 1)
                 .build()
         val ask = FleetNotification.openTab(ctx, "ask").setAction(Intent.ACTION_VIEW)
         val approve = Intent(ctx, ShortcutActivity::class.java).setAction(ShortcutActivity.ACTION_APPROVE)
+        // pushDynamicShortcut (not setDynamicShortcuts, which would drop the recent agents' ones).
         runCatching {
-            ShortcutManagerCompat.setDynamicShortcuts(
-                ctx,
-                listOf(
-                    shortcut("ask", "问 Jarvis", "问 Jarvis", ask, R.drawable.ic_shortcut_ask),
-                    shortcut("approve", "批准待处理", "批准第一个待处理", approve, R.drawable.ic_shortcut_approve),
-                ),
-            )
+            ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut("ask", "问 Jarvis", "问 Jarvis", ask, R.drawable.ic_shortcut_ask))
+            ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut("approve", "批准待处理", "批准第一个待处理", approve, R.drawable.ic_shortcut_approve))
         }
     }
 }

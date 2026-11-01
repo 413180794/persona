@@ -76,7 +76,7 @@ final class IPadLayoutTests: XCTestCase {
         XCTAssertLessThan(nas.frame.minX, server.frame.minX, "the offline NAS first")
         shot("machines")
         server.tap()
-        XCTAssertTrue(app.segmentedControls["metric-range"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["metric-range"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.searchFields.firstMatch.exists, "still split")
         sleep(1)
         shot("machine")

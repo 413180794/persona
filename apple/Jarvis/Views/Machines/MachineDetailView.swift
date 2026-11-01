@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// One machine (docs/machines.md「机器详情」), most used first: how it is (the card of 机器, without its numbers), its
@@ -50,11 +51,8 @@ struct MachineDetailView: View {
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         heading("监控")
                         if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }
-                        Picker("时间范围", selection: $range) {
-                            ForEach(MetricRange.allCases) { Text($0.title).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .accessibilityIdentifier("metric-range")
+                        SegmentedChoice("时间范围", MetricRange.allCases.map { ($0, $0.title) }, selection: $range)
+                            .accessibilityIdentifier("metric-range")
                         charts(system: system)
                         if let cores = data?.latest?.cores, online, cores.count > 1 { CoreBars(cores: cores) }
                     }
@@ -363,7 +361,18 @@ private struct NowGrid: View {
         }
     }
 
-    private func tile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
+    @ViewBuilder private func tile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            // Its stat tile: what it is (偏高 / 过高 after it), the number, the line under it, a meter for what has a
+            // share; a high reading colors the number and its meter.
+            BUIStatTile(level > .normal ? "\(title) · \(level == .critical ? "过高" : "偏高")" : title, value: value, detail: detail ?? " ",
+                        tone: level == .critical ? .red : level > .normal ? .orange : .neutral, progress: fraction)
+        } else {
+            plainTile(title, value, detail: detail, fraction: fraction, color: color, level: level)
+        }
+    }
+
+    private func plainTile(_ title: String, _ value: String, detail: String?, fraction: Double?, color: Color, level: MetricLevel) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.xs) {
                 Text(title).font(Theme.Font.label).foregroundStyle(.secondary)

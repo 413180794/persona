@@ -116,7 +116,7 @@ final class MachinePagesTests: XCTestCase {
         text("MacBook").tap()
         see(app.navigationBars["MacBook"], "MacBook details")
         see(app.staticTexts["Agent"], "the agents' header")
-        see(app.segmentedControls["metric-range"], "its charts on the same page")
+        see(app.descendants(matching: .any)["metric-range"].firstMatch, "its charts on the same page")
         shot("machine-detail")
         for _ in 0..<6 where !app.staticTexts["启动器"].isHittable { app.swipeUp() }
         see(app.staticTexts["启动器"], "launchers header")
@@ -205,7 +205,7 @@ final class MachinePagesTests: XCTestCase {
         machineLink.tap()
         see(app.navigationBars["Mac Studio"], "machine projects again from the project page")
         app.buttons["机器详情"].tap()
-        see(app.segmentedControls["metric-range"], "details from the info button, with the charts")
+        see(app.descendants(matching: .any)["metric-range"].firstMatch, "details from the info button, with the charts")
         // Needs-you first, five of them; the rest behind 显示全部 so the charts stay near.
         XCTAssertFalse(button("infra 的第 1 个任务").exists, "a working agent behind the ones needing you")
         shot("machine-detail-many")

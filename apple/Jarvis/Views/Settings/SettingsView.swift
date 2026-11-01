@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 import VisionKit
 
@@ -47,17 +48,13 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink(value: ModelLaunchersRoute()) {
-                        Label("模型", systemImage: Theme.Icon.cpu)
+                        SettingsRow(title: "模型", symbol: Theme.Icon.cpu, tint: Theme.Hue.purple)
                     }
                     NavigationLink(value: SettingsPage.assistant) {
-                        LabeledContent {
-                            Text(model.assistantConfig?.launcher ?? "").font(Theme.Font.body.monospaced())
-                        } label: {
-                            Label("助手", systemImage: Theme.Icon.ai)
-                        }
+                        SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai, value: model.assistantConfig?.launcher ?? "", look: .code)
                     }
                     NavigationLink(value: SettingsPage.claude) {
-                        Label("Claude Code 设置", systemImage: Theme.Icon.options)
+                        SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)
                     }
                 }
 
@@ -65,31 +62,20 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink(value: MachineListRoute()) {
-                        LabeledContent {
-                            Text("\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
-                        } label: {
-                            Label("机器", systemImage: Theme.Icon.machines)
-                        }
+                        SettingsRow(title: "机器", symbol: Theme.Icon.machines, tint: Theme.Hue.blue,
+                                    value: "\(model.machines.filter(\.online).count) / \(model.machines.count) 在线")
                     }
                     NavigationLink(value: SettingsPage.devices) {
-                        Label("设备", systemImage: Theme.Icon.credentials)
+                        SettingsRow(title: "设备", symbol: Theme.Icon.credentials, tint: Theme.Hue.gray)
                     }
                     NavigationLink(value: SettingsPage.notifications) {
-                        Label("通知", systemImage: Theme.Icon.notifications)
+                        SettingsRow(title: "通知", symbol: Theme.Icon.notifications, tint: Theme.danger)
                     }
                     NavigationLink(value: SettingsPage.translation) {
-                        LabeledContent {
-                            Text(translationSummary).lineLimit(1)
-                        } label: {
-                            Label("翻译", systemImage: Theme.Icon.translate)
-                        }
+                        SettingsRow(title: "翻译", symbol: Theme.Icon.translate, tint: Theme.accent, value: translationSummary, look: .oneLine)
                     }
                     NavigationLink(value: SettingsPage.storage) {
-                        LabeledContent {
-                            Text(storage?.storageText ?? "").monospacedDigit()
-                        } label: {
-                            Label("存储空间", systemImage: "internaldrive")
-                        }
+                        SettingsRow(title: "存储空间", symbol: "internaldrive", tint: Theme.Hue.gray, value: storage?.storageText ?? "", look: .digits)
                     }
                 }
 
@@ -99,20 +85,37 @@ struct SettingsView: View {
                 #endif
 
                 if !model.isDemo {
-                    Section("服务器") {
-                        Button { showPair = true } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
-                        Button(role: .destructive) { confirmUnpair = true } label: { Label("断开并忘记服务器", systemImage: Theme.Icon.end) }
+                    Section {
+                        Button { showPair = true } label: { SettingsRow(title: "重新配对", symbol: "qrcode.viewfinder", tint: Theme.accent) }
+                            .modifier(SettingsButtonLook())
+                        Button(role: .destructive) { confirmUnpair = true } label: {
+                            SettingsRow(title: "断开并忘记服务器", symbol: Theme.Icon.end, tint: Theme.danger)
+                        }
+                        .modifier(SettingsButtonLook())
+                    } header: {
+                        SettingsHeading("服务器")
                     }
                 }
 
-                Section("关于") {
-                    LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+                Section {
+                    let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
                     // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
-                    LabeledContent("构建") {
-                        Text(Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知")
-                            .font(Theme.Font.code)
-                            .textSelection(.enabled)
+                    let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"
+                    if AppStyle.current.usesBeautifulUI {
+                        BUIListRow("版本", value: version)
+                        BUIListRow("构建") { EmptyView() } trailing: {
+                            Text(commit).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    } else {
+                        LabeledContent("版本", value: version)
+                        LabeledContent("构建") {
+                            Text(commit)
+                                .font(Theme.Font.code)
+                                .textSelection(.enabled)
+                        }
                     }
+                } header: {
+                    SettingsHeading("关于")
                 }
             }
             .themedPage()
@@ -689,3 +692,49 @@ struct ClaudeSettingsView: View {
     }
 }
 
+/// A row of 设置's list: the system's label, with what it is set to on the right; in the BeautifulUI style its list
+/// row (a tinted tile, the name, the value).
+struct SettingsRow: View {
+    enum ValueLook { case plain, code, oneLine, digits }
+    var title: String
+    var symbol: String
+    var tint: Color
+    var value: String? = nil
+    var look: ValueLook = .plain
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            BUIListRow(title, value: value.flatMap { $0.isEmpty ? nil : $0 }) { BUIIconTile(symbol, tint: tint) }
+        } else if let value {
+            LabeledContent {
+                switch look {
+                case .plain: Text(value)
+                case .code: Text(value).font(Theme.Font.body.monospaced())
+                case .oneLine: Text(value).lineLimit(1)
+                case .digits: Text(value).monospacedDigit()
+                }
+            } label: {
+                Label(title, systemImage: symbol)
+            }
+        } else {
+            Label(title, systemImage: symbol)
+        }
+    }
+}
+
+/// A section's title in 设置: the list's own; in the BeautifulUI style its heading.
+struct SettingsHeading: View {
+    var text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI { BUISectionHeading(text).textCase(nil) } else { Text(text) }
+    }
+}
+
+/// 设置's buttons that are rows: the list's tinted button; in the BeautifulUI style a plain row (its tile carries the color).
+private struct SettingsButtonLook: ViewModifier {
+    func body(content: Content) -> some View {
+        if AppStyle.current.usesBeautifulUI { content.buttonStyle(.plain) } else { content }
+    }
+}

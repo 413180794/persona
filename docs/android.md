@@ -143,7 +143,7 @@ iPhone 的实时活动（`docs/live-activity.md`）和 App Intents（`docs/inten
   再多是「+N 个」。点 Agent 进它，点别处进 Agents；只导航，不能在小组件上批准。数据在 `provideContent` 里面读（`collectAsState`）：
   Glance 保留会话时 `updateAll()` 只重组，在外面读到的值会原样再画一遍。浅色 / 深色跟随系统。
 - 快速设置磁贴（`JarvisTileService`）：「Jarvis · 2 个需要你」，有需要你或工作中时亮；点了和点通知一样。没配对时不可用。
-- 长按图标的快捷方式（运行时发布，静态的 res/xml 要写死 application id）：「问 Jarvis」进 Jarvis tab 并把光标放进输入框、弹出键盘
+- 长按图标的快捷方式（运行时发布，静态的 res/xml 要写死 application id）：问 Jarvis、批准待处理，后面跟着最近活跃的 2 个在线 Agent（点了直接进它的对话，对应 iOS 的 `OpenSessionIntent`；会话列表变了才重新发布，断开 hub 时一起去掉）。「问 Jarvis」进 Jarvis tab 并把光标放进输入框、弹出键盘
   （主对话或首页，等 tab 选好了对话再聚焦）；「批准第一个待处理」弹一个对话框，先从 hub 现拉待处理列表、取最早的一条，
   授权「允许」/ 计划「批准并自动执行」（`bypassPermissions`，和 iOS 的 intent 一样），提问和终端对话框说明要打开 App。
   这个对话框的 Activity 不导出，只有启动器代我们启动的快捷方式能进来。

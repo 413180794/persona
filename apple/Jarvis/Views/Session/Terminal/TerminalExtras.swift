@@ -110,11 +110,7 @@ struct TerminalSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("终端尺寸", selection: $size) {
-                        Text(TerminalSizeText.own).tag("phone")
-                        Text("电脑尺寸").tag("mirror")
-                    }
-                    .pickerStyle(.segmented)
+                    SegmentedChoice("终端尺寸", [("phone", TerminalSizeText.own), ("mirror", "电脑尺寸")], selection: $size)
                 } header: {
                     Text("尺寸")
                 } footer: {
@@ -148,11 +144,7 @@ struct TerminalSettingsView: View {
                     Text(TerminalHelpText.textFooter)
                 }
                 Section {
-                    Picker("输入方式", selection: $inputMode) {
-                        Text("直接打字").tag("direct")
-                        Text("输入框").tag("field")
-                    }
-                    .pickerStyle(.segmented)
+                    SegmentedChoice("输入方式", [("direct", "直接打字"), ("field", "输入框")], selection: $inputMode)
                 } header: {
                     Text("输入")
                 } footer: {

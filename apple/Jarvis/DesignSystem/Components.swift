@@ -248,6 +248,30 @@ struct StatusLabel: View {
     }
 }
 
+/// A few options side by side, one chosen: the system's segmented control; in the BeautifulUI style its segmented switch.
+struct SegmentedChoice<Value: Hashable>: View {
+    var title: String
+    var options: [(value: Value, label: String)]
+    @Binding var selection: Value
+
+    init(_ title: String, _ options: [(value: Value, label: String)], selection: Binding<Value>) {
+        self.title = title
+        self.options = options
+        _selection = selection
+    }
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            BUISegmented(options.map { .init($0.value, $0.label) }, selection: $selection, fills: true)
+        } else {
+            Picker(title, selection: $selection) {
+                ForEach(options.indices, id: \.self) { i in Text(options[i].label).tag(options[i].value) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+}
+
 struct EmptyStateView: View {
     var symbol: String
     var title: String

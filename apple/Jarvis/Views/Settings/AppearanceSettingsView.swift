@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 // 设置 › 外观 (2026-11-01): laid out like 连接器, one row per thing that changes how the app looks (形象, 主题色, 界面风格,
@@ -12,43 +13,28 @@ struct AppearanceSection: View {
     var body: some View {
         Section {
             NavigationLink(value: SettingsPage.persona) {
-                LabeledContent {
-                    Text(model.persona.name).lineLimit(1)
-                } label: {
-                    Label("形象", systemImage: Theme.Icon.persona)
-                }
+                SettingsRow(title: "形象", symbol: Theme.Icon.persona, tint: Theme.persona, value: model.persona.name, look: .oneLine)
             }
             .accessibilityIdentifier("settings-persona")
             NavigationLink(value: SettingsPage.themeColor) {
-                LabeledContent {
-                    Text(model.themeColor.title).lineLimit(1)
-                } label: {
-                    Label("主题色", systemImage: Theme.Icon.themeColor)
-                }
+                SettingsRow(title: "主题色", symbol: Theme.Icon.themeColor, tint: Theme.accent, value: model.themeColor.title, look: .oneLine)
             }
             .accessibilityIdentifier("settings-color")
             NavigationLink(value: SettingsPage.style) {
-                LabeledContent {
-                    Text(styleSummary).lineLimit(1)
-                } label: {
-                    Label("界面风格", systemImage: Theme.Icon.style)
-                }
+                SettingsRow(title: "界面风格", symbol: Theme.Icon.style, tint: Theme.Hue.purple, value: styleSummary, look: .oneLine)
             }
             .accessibilityIdentifier("settings-style")
             #if os(iOS)
             if UIDevice.current.userInterfaceIdiom == .phone {
                 NavigationLink(value: SettingsPage.layout) {
-                    LabeledContent {
-                        Text(model.oldLayout ? "旧布局" : "新布局").lineLimit(1)
-                    } label: {
-                        Label("布局", systemImage: Theme.Icon.layout)
-                    }
+                    SettingsRow(title: "布局", symbol: Theme.Icon.layout, tint: Theme.Hue.blue,
+                                value: model.oldLayout ? "旧布局" : "新布局", look: .oneLine)
                 }
                 .accessibilityIdentifier("settings-layout")
             }
             #endif
         } header: {
-            Text("外观")
+            SettingsHeading("外观")
         }
     }
 
@@ -113,12 +99,24 @@ struct StyleSettingsPage: View {
                 Text("浮层和卡片的画法、按钮、字体和对话里的组件，整个 App 一起换，包括收件箱里的飞书页面。")
             }
             Section {
-                LabeledContent("字号") {
-                    Picker("字号", selection: Binding(get: { model.textSize }, set: { model.textSize = $0 })) {
-                        ForEach(TextSize.allCases) { Text($0.title).tag($0) }
+                Group {
+                    if AppStyle.current.usesBeautifulUI {
+                        BUIListRow("字号") {
+                            BUIIconTile(Theme.Icon.textSize, tint: Theme.Hue.gray)
+                        } trailing: {
+                            BUISegmented(TextSize.allCases.map { .init($0, $0.title) },
+                                         selection: Binding(get: { model.textSize }, set: { model.textSize = $0 }))
+                                .fixedSize()
+                        }
+                    } else {
+                        LabeledContent("字号") {
+                            Picker("字号", selection: Binding(get: { model.textSize }, set: { model.textSize = $0 })) {
+                                ForEach(TextSize.allCases) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
                     }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
                 }
                 .accessibilityIdentifier("text-size")
             } footer: {

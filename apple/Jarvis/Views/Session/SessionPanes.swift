@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 /// The tabs of a dev session page: the conversation, its terminal, the project's git state and its files.
@@ -818,26 +819,41 @@ struct BackgroundTasksStrip: View {
                 Haptics.tap()
                 withAnimation(Theme.Motion.standard) { expanded.toggle() }
             } label: {
-                HStack(spacing: Theme.Space.s) {
-                    Image(systemName: Theme.Icon.backgroundTask)
-                        .font(Theme.Font.captionStrong)
-                        .foregroundStyle(Theme.busy)
-                    Text("\(tasks.count) 个后台任务").font(Theme.Font.captionStrong).lineLimit(1)
-                    if !expanded, let first = tasks.first {
-                        Text(first.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                if AppStyle.current.usesBeautifulUI {
+                    // Its tool run header over its task rows.
+                    ToolRunTitle(isOpen: expanded) {
+                        Text(!expanded && tasks.first != nil ? "\(tasks.count) 个后台任务 · \(tasks[0].title)" : "\(tasks.count) 个后台任务")
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: Theme.Icon.collapse)
-                        .font(Theme.Font.labelHeavy)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(expanded ? 0 : 180))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                } else {
+                    HStack(spacing: Theme.Space.s) {
+                        Image(systemName: Theme.Icon.backgroundTask)
+                            .font(Theme.Font.captionStrong)
+                            .foregroundStyle(Theme.busy)
+                        Text("\(tasks.count) 个后台任务").font(Theme.Font.captionStrong).lineLimit(1)
+                        if !expanded, let first = tasks.first {
+                            Text(first.title).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: Theme.Icon.collapse)
+                            .font(Theme.Font.labelHeavy)
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(expanded ? 0 : 180))
+                    }
+                    .contentShape(.rect)
                 }
-                .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(tasks.count) 个后台任务，\(expanded ? "收起" : "展开")")
             if expanded {
-                ForEach(tasks) { t in row(t) }
+                if AppStyle.current.usesBeautifulUI {
+                    VStack(spacing: 0) {
+                        ForEach(Array(tasks.enumerated()), id: \.element.id) { n, t in taskRow(t, n: n) }
+                    }
+                } else {
+                    ForEach(tasks) { t in row(t) }
+                }
             }
         }
         .padding(.horizontal, Theme.Space.l)
@@ -877,6 +893,33 @@ struct BackgroundTasksStrip: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let cmd = t.command { Button { UIPasteboard.general.string = cmd } label: { Label("拷贝命令", systemImage: Theme.Icon.copy) } }
+        }
+    }
+
+    /// The BeautifulUI style: its task row, a numbered ring turning while it runs, its command under it, how long it
+    /// has been running on the right; a tap opens its output.
+    private func taskRow(_ t: BackgroundTask, n: Int) -> some View {
+        let cmd = t.command.flatMap { $0.isEmpty || $0 == t.title ? nil : $0 }
+        return TaskRow(TaskItem(id: t.id, title: t.title, subtitle: cmd, status: .running(step: n + 1)),
+                       shape: .list(first: n == 0, last: n == tasks.count - 1),
+                       accessory: t.outputFile != nil ? .disclosure : .none, subtitleLines: 2,
+                       action: t.outputFile != nil ? { openOutput(t) } : nil) {
+            TaskBadge(.running(step: n + 1))
+        } trailing: {
+            if let start = t.startedAt {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text(Self.elapsed(from: start, to: ctx.date))
+                        .font(Theme.Font.label.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        } detail: {
+            EmptyView()
+        }
+        .accessibilityHint(t.outputFile != nil ? "看输出" : "")
         .contextMenu {
             if let cmd = t.command { Button { UIPasteboard.general.string = cmd } label: { Label("拷贝命令", systemImage: Theme.Icon.copy) } }
         }
@@ -1099,7 +1142,17 @@ struct AgentStrip: View {
         }
     }
 
-    private func chip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
+    @ViewBuilder private func chip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
+        if AppStyle.current.usesBeautifulUI {
+            // Its filter chip: a dot in the working color while the subagent runs, green once it is done.
+            BUIFilterChip(title, dot: running ? Theme.busy : done ? Theme.positive : nil, isActive: on, action: action)
+                .accessibilityLabel(title + (running ? "，运行中" : done ? "，已完成" : ""))
+        } else {
+            plainChip(title: title, symbol: symbol, running: running, done: done, on: on, action: action)
+        }
+    }
+
+    private func plainChip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Theme.Space.sm) {
                 if running {

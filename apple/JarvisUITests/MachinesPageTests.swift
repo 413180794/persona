@@ -86,7 +86,7 @@ final class MachinesPageTests: XCTestCase {
         }
 
         server.tap()
-        let range = app.segmentedControls["metric-range"]
+        let range = app.descendants(matching: .any)["metric-range"].firstMatch
         XCTAssertTrue(range.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.navigationBars["服务器"].exists)
         // Its agent on top, the charts and the system on the same page.

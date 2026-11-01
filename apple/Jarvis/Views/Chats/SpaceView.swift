@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 
 extension EnvironmentValues {
@@ -47,7 +48,24 @@ struct SiblingTabs: View {
         let on = s.key == current
         let tone = s.state.tone
         let quiet = s.state == .idle || s.state == .unknown || s.state == .offline
-        return Button { if !on { Haptics.tap(); select(s.key) } } label: {
+        return Group {
+            if AppStyle.current.usesBeautifulUI {
+                // Its filter chip: the state's dot (none for a quiet, seen or idle one) and the tab's name; the current
+                // one is the raised capsule.
+                BUIFilterChip(s.slotLabel ?? s.displayTitle, dot: quiet ? nil : tone.dot, isActive: on) {
+                    if !on { Haptics.tap(); select(s.key) }
+                }
+            } else {
+                plainTab(s, on: on, tone: tone, quiet: quiet)
+            }
+        }
+        .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .id(s.key)
+    }
+
+    private func plainTab(_ s: Session, on: Bool, tone: StatusTone, quiet: Bool) -> some View {
+        Button { if !on { Haptics.tap(); select(s.key) } } label: {
             Text(s.slotLabel ?? s.displayTitle)
                 .lineLimit(1)
                 .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
@@ -60,9 +78,6 @@ struct SiblingTabs: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(s.slotLabel ?? s.displayTitle)，\(s.state.label)")
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .id(s.key)
     }
 
     /// ⋯: a sheet with every tab, its state and the space's page.

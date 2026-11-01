@@ -1,3 +1,4 @@
+import BeautifulUI
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -294,6 +295,23 @@ struct ContextCards: View {
     @Environment(\.openLink) private var openLink
 
     var body: some View {
+        if AppStyle.current.usesBeautifulUI { cards } else { plain }
+    }
+
+    /// The BeautifulUI style: its context cards, one per quote — what it is (上下文 / 要改的内容) and its page's title on
+    /// top, three lines of the text, the site as the source chip. A tap on the chip opens the page.
+    private var cards: some View {
+        BeautifulUI.ContextCards(title: nil, chunks: refs.map { r in
+            ContextChunk(id: r.id.uuidString, title: r.title, size: r.kind == "edit" ? "要改的内容" : "上下文", body: r.text, source: r.host,
+                         badge: "", badgeTint: r.kind == "edit" ? Theme.ai : Theme.accent, url: URL(string: r.url))
+        }, maxWidth: nil, bodyLines: 3) { chunk in
+            if let u = chunk.url { openLink?(u) }
+        }
+        .scaledFrame(maxWidth: Theme.Size.box300, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var plain: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.sm) {
             ForEach(refs) { r in
                 Button { if let u = URL(string: r.url) { openLink?(u) } } label: {
