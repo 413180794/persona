@@ -248,6 +248,7 @@ hub → node 新方法（旧 node 回 `unknown method`，hub 当它没有本地�
 | `connector.older` | `{id, chat, before, limit}` → `{messages, before, more}` |
 | `connector.media` | `{id, path, offset}` → 分块读（同 `file.read` 的分块方式，单个 20 MB 封顶） |
 | `connector.action` | `{id, name, args, approval}` → `{result}`：只在 hub 闸门放行后发，`approval` 是那张卡片的 id（node 记日志用） |
+| `credential.gh_token` | `{host}` → `{token}`：跑 `gh auth token`，给 GitHub 连接器的 `from_machine` 用（「四 · 凭据」）；只回给 hub，不写日志 |
 
 node → hub 事件：`connector.changed {id, scope}`。
 
@@ -333,15 +334,26 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 
 ### 凭据
 
-**不自己去拿用户的 token**（不读 hub 机器上 `gh` 的登录、不读环境变量里别的 token）。用户在 App 设置 › 连接器 › GitHub 里粘贴，或写 `github.token_file`。
+**已定（2026-11-01 用户）：从某台机器的 `gh` 登录读。** 用户原话：「github 能不能支持自动从 gh cli 读，从某台机器上读取来授权登录」。
 
-关键限制（2026-11-01 查 GitHub 文档）：通知接口**只支持经典 PAT**（`notifications` 或 `repo` scope），细粒度 PAT 和 GitHub App 的 token 都不行。所以两种给法：
+- **配置**：hub.json `"github": {"auth": {"from_machine": "<机器 id>", "host": "github.com"}}`（`host` 可省，默认 github.com；自建的 GitHub Enterprise 写它的主机名，只在配置里）。
+- **取 token**：node 加一个 RPC `credential.gh_token {host}` → `{token}`：在那台机器上非交互地跑 `gh auth token [-h <host>]`。
+  - 只有 hub 能调：它是 hub → node 的 RPC，走 hub 和 node 之间的 ssh 通道；不开 REST 接口，hook / MCP 的 `node.sock` 不认这个方法，助手和 Agent 拿不到。
+  - `gh` 把登录存在 `~/.config/gh/hosts.yml` 时 ssh 里能读；存在钥匙串里时，ssh 会话打不开钥匙串，报「那台机器的 gh 登录在钥匙串里，经 ssh 读不到」，
+    给出两条路：那台机器上 `gh auth login --insecure-storage`，或者改用手动粘贴。旧 node 不认这个方法，报「<机器> 的 jarvisd 太旧」。
+- **token 只在 hub 的内存里**：不落库、不写日志、不进任何响应和错误信息（错误里出现 token 样式的串先抹掉）；也不放进助手 / Agent 的环境变量。
+  - 请求回 401：重新向那台机器取一次（那边可能刚重新登录过），还是 401 就是 `not_signed_in`：「<机器> 上的 gh 登录失效了，在那台机器上运行 gh auth login」。
+  - 那台机器离线：用内存里上次取到的；hub 重启后它还离线、内存里又没有，状态是「GitHub 未授权（<机器> 离线）」，它连上时自动再取。
+- **App**：设置 › 连接器 › GitHub 显示「来自 <机器> 的 gh 登录 · <账号>」（账号来自 `GET /user`）。
+- **备选：手动粘贴 token**（加密存 hub，同「一、账号与健康」）。没配 `from_machine` 时用它；两个都配了以 `from_machine` 为准。
+- **权限要说清**：gh 的 token 权限大（实测 scopes 是 `gist`、`read:org`、`repo`、`workflow`：能推代码、改 CI 配置）。连接器自己只调读接口；
+  写操作只有 `github_comment`、`github_review` 两个，照旧过闸门；不拿它做 git 推送、不碰 workflow、不给别的连接器用。
+- **主会话实测（2026-11-01，不打印 token）**：两台 Mac 上的 gh 都登录了 github.com、是同一个账号，token 在 `hosts.yml` 里，经 ssh 非交互 `gh auth token`
+  拿得到（40 个字符）；另一台 Mac 的 gh 登录已过期（具体哪台记在车道报告里）。用这个 token 调 `/notifications` 回 200，
+  `X-Accepted-OAuth-Scopes` 是 `notifications, repo`（有 `repo` 就够），`X-Poll-Interval` 是 60；搜索 `review-requested:@me` 也是 200。
 
-- **A 一个经典 PAT**（`repo` + `notifications`）：最简单；代价是这个 token 能写你所有能写的仓库（写操作都过闸门，但 token 本身权限大）。
-- **B 两个 token**：经典 PAT 只勾 `notifications`（只能看通知标题和链接）+ 一个细粒度 PAT（选定的仓库：Pull requests、Issues 读写，Contents、Actions、Checks 只读）。
-  权限最小，多一步配置；没给细粒度 token 的仓库只有通知、读不到内容。
-
-公司自建的 GitHub Enterprise：`base_url` 写在凭据里（不进代码、不进 App）。
+为什么之前写的两种给法不用了：通知接口只支持经典 PAT 和 OAuth 的 token（细粒度 PAT、GitHub App 的 token 不行），gh 登录拿到的就是 OAuth token，
+带 `repo` 已经够用，用户也不用再去生成 token。
 
 ## 五、iMessage 连接器（第二个，Mac 本地）
 
@@ -455,7 +467,7 @@ node 用 kqueue 盯 `chat.db-wal` 的写入（不轮询数据库），防抖 3 �
 | --- | --- | --- |
 | P0 | 本计划 | 用户点头；拍板项有结论 |
 | M0–M6 | 迁移（第三节） | 每步：现有测试 + golden 逐字节 + 合成对照 + 真实数据对照一致；部署后一天日志同量级 |
-| G1 | GitHub：凭据、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 粘贴假 token 报错、真 token（用户自己粘）显示账号；token 不出现在任何响应、日志里；设置页深浅色截图 |
+| G1 | GitHub：`credential.gh_token` RPC、`from_machine` 取 token（内存）、粘贴备选、状态、`/api/v1/connectors`、设置页的 GitHub 行 | 设置页显示「来自 <机器> 的 gh 登录 · 账号」；那台机器离线时用内存里的、hub 重启后离线报「未授权（<机器> 离线）」、连上自动恢复；401 重新取一次；旧 node 报太旧；token 不出现在数据库、日志、响应、助手环境里（grep 验证）；粘贴假 token 报错；设置页深浅色截图 |
 | G2 | 只读工具 `github_search/read/diff/checks` | golden；对 mock GitHub（合成 JSON）的单元测试；用户的真 token 在 hub 上读一个自己的 PR（只看结果条数和截断是否生效） |
 | G3 | 通知轮询 + 收件箱（四种情形）+ `?sources=all` + App 的通用行和详情 | 合成通知的单元测试覆盖每种 `reason`、并入 / 另开、`done_by`；304 和 `X-Poll-Interval` 被遵守（测试里的假服务器计数）；旧 App 列表不变；新 App 截图 |
 | G4 | 知识库：PR / issue 会话、`remotes` 对项目、链接成条目 | 合成数据的归档 golden；一个真实 PR 归档后行数和评论数对得上（只看数字） |
@@ -472,7 +484,7 @@ GitHub 和迁移可以并行（G1、G2 只依赖 M1、M4）；iMessage 依赖 M1
 
 ## 需要用户拍板
 
-1. **GitHub token**：A 一个经典 PAT（`repo` + `notifications`，简单、权限大）还是 B 经典（只 `notifications`）+ 细粒度（选定仓库）两个？推荐 B。
+1. ~~**GitHub token 怎么给**~~：已定（2026-11-01）——从 `github.auth.from_machine` 那台机器的 gh 登录读，只留在 hub 内存；手动粘贴作备选（见「四 · 凭据」）。
 2. **GitHub 是 github.com 还是公司自建的 GHE**（或者两个都要）？自建的地址只写配置。
 3. **GitHub 进知识库的范围**：只收和我有关的线程（推荐），还是指定仓库全部 PR / issue？
 4. **已处理要不要回写 GitHub 的已读**：现在飞书、邮件都不回写（推荐保持一致）。
@@ -487,7 +499,8 @@ GitHub 和迁移可以并行（G1、G2 只依赖 M1、M4）；iMessage 依赖 M1
 
 ## 需要用户做的事
 
-- GitHub：按拍板 1 的结果在 GitHub 上生成 token，在 App 设置 › 连接器 › GitHub 里粘贴（或放进 hub 机器上的 `token_file`）；自建 GHE 给地址。
+- GitHub：在 hub.json 写 `github.auth.from_machine`（用哪台机器的 gh 登录，选 gh 登录有效、常开的那台）；那台机器保持 `gh` 登录，
+  过期了就在那台机器上 `gh auth login`（登录要存在 `hosts.yml`，不要只存钥匙串）。用自建 GHE 的话写上 `host`。不想用 gh 的登录，再在 App 里粘贴 token。
 - iMessage：选定的那台 Mac 保持登录「信息」、开着 iCloud 信息同步；第一期确认「远程登录 › 允许远程用户完全访问磁盘」保持打开；
   做帮手那一步时在那台 Mac 的图形界面里给帮手授权一次（完全磁盘访问 + 控制「信息」）。
 - 写操作的实测（G5、I5）用你自己的测试仓库 / 发给自己的号码，测试内容只用合成的话。
