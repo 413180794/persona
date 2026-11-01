@@ -29,13 +29,20 @@ struct EngineSelectionView: View {
                     }
                 }
                 Section {
-                    ForEach(MachineEngine.allCases) { engine in
+                    ForEach(EngineSelectionModel.options(machine)) { found in
+                        let engine = MachineEngine(rawValue: found.id)
                         Button { selection.choose(engine) } label: {
                             HStack(spacing: Theme.Space.m) {
                                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                                    Text(engine.name).font(Theme.Font.heading).foregroundStyle(.primary).lineLimit(1)
-                                    Text(engine.detail).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(found.name).font(Theme.Font.heading).foregroundStyle(.primary).lineLimit(1)
+                                    if let detail = engine.detail {
+                                        Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                                    }
                                     Text(detection(engine, machine)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    if let note = found.note, !note.isEmpty {
+                                        Text(note).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            .minimumScaleFactor(0.8)
+                                    }
                                 }
                                 Spacer(minLength: Theme.Space.s)
                                 Image(systemName: selection.selected == engine ? Theme.Icon.successFilled : Theme.Icon.unchecked)
@@ -49,7 +56,7 @@ struct EngineSelectionView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("engine.option.\(engine.rawValue)")
                         .accessibilityAddTraits(selection.selected == engine ? .isSelected : [])
-                        .disabled(selection.saving)
+                        .disabled(selection.saving || !EngineSelectionModel.canSelect(engine, on: machine))
                     }
                 } header: {
                     Text("引擎")
@@ -70,7 +77,7 @@ struct EngineSelectionView: View {
                             if selection.saving { ProgressView() }
                         }
                     }
-                    .disabled(selection.saving)
+                    .disabled(selection.saving || !EngineSelectionModel.canSelect(selection.selected, on: machine))
                     .accessibilityIdentifier("engine.save")
                     if pairing {
                         Button { finish() } label: { Text(selection.error == nil ? "暂时跳过" : "先继续").lineLimit(1) }

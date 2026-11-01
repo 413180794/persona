@@ -24,8 +24,18 @@ import Observation
     }
 
     static func initialChoice(_ machine: Machine, pairing: Bool) -> MachineEngine {
-        let available = Set(machine.engines.filter(\.available).compactMap { MachineEngine(rawValue: $0.id) })
+        let available = Set(machine.engines.filter(\.available).map { MachineEngine(rawValue: $0.id) })
         return pairing && available.count == 1 ? available.first! : machine.engine
+    }
+
+    /// Older hubs and offline machines may not report detection; their known engines can still be configured.
+    static func options(_ machine: Machine) -> [DetectedEngine] {
+        guard machine.engines.isEmpty else { return machine.engines }
+        return MachineEngine.allCases.map { .init(id: $0.rawValue, name: $0.name, available: false) }
+    }
+
+    static func canSelect(_ engine: MachineEngine, on machine: Machine) -> Bool {
+        MachineEngine.allCases.contains(engine) || machine.engines.contains { $0.id == engine.rawValue && $0.available }
     }
 
     func choose(_ engine: MachineEngine) {

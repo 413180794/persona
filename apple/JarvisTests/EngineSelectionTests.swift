@@ -11,11 +11,28 @@ import Testing
         let old = try machine()
         #expect(old.engine == .herdr && old.engines.isEmpty)
         let unknown = try machine(",\"engine\":\"future\",\"engines\":[{\"id\":\"herdr\",\"name\":\"herdr\",\"available\":true}]")
-        #expect(unknown.engine == .herdr && unknown.engines.isEmpty)
+        #expect(unknown.engine.rawValue == "future" && unknown.engines.count == 1)
+        #expect(try JSON.decoder.decode(Machine.self, from: JSON.encoder.encode(unknown)) == unknown)
         let current = try machine(",\"engine\":\"herdr-core\",\"engines\":[{\"id\":\"herdr-core\",\"name\":\"Herdr App\",\"available\":true,\"version\":\"1.2\"}]")
         #expect(current.engine == .herdrApp)
         #expect(current.engines.first?.version == "1.2")
         #expect(try JSON.decoder.decode(Machine.self, from: JSON.encoder.encode(current)) == current)
+    }
+
+    @Test func hubOptionsKeepNamesNotesAndFutureEngines() throws {
+        var m = try machine(",\"engine\":\"orca\",\"engines\":[{\"id\":\"orca\",\"name\":\"Orca Desktop\",\"available\":false,\"note\":\"请先更新 Orca\"},{\"id\":\"future\",\"name\":\"新引擎\",\"available\":true}]")
+        #expect(m.engine == .orca && m.engineName == "Orca Desktop")
+        #expect(EngineSelectionModel.options(m) == m.engines)
+        #expect(m.engines.first?.note == "请先更新 Orca")
+        let future = MachineEngine(rawValue: "future")
+        #expect(EngineSelectionModel.canSelect(.orca, on: m))
+        #expect(EngineSelectionModel.canSelect(future, on: m))
+        #expect(EngineSelectionModel.initialChoice(m, pairing: true) == future)
+        m.engines[1].available = false
+        #expect(!EngineSelectionModel.canSelect(future, on: m))
+        m.engines = []
+        #expect(!EngineSelectionModel.canSelect(future, on: m))
+        #expect(EngineSelectionModel.options(m).map(\.id) == ["herdr", "herdr-core", "orca"])
     }
 
     @Test func pairingTargetAndPreselection() throws {
@@ -81,6 +98,8 @@ import Testing
         let saved = try await api.setEngine(machine: original.id, engine: .herdrApp)
         #expect(saved.engine == .herdrApp && !saved.online && saved.engines.isEmpty)
         #expect(try await api.machines().first { $0.id == original.id }?.engine == .herdrApp)
+        let orca = try await api.setEngine(machine: original.id, engine: .orca)
+        #expect(orca.engine == .orca)
         do {
             _ = try await api.request("PUT", "/api/v1/machines/\(original.id)/engine", body: ["engine": "unknown"])
             Issue.record("unknown engine accepted")

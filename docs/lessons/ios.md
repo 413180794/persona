@@ -213,6 +213,8 @@
 - 体验模式（`docs/ios.md`「体验模式」）挂在 `APIClient` / `LiveConnection` 下面（`DemoHub`），页面代码不写 `if demo`：新页面要的接口在
   `DemoHub` 里没有就是 404「体验模式里没有这项数据」，加接口时顺手在 `DemoHub` 回一份、跑 `DemoModeTests` 看 `DemoHub miss` 日志。
   演示数据改 `scripts/mock_hub.py` 后重跑 `scripts/make_demo_data.py`。会碰到电脑 / 飞书 / 邮件的操作一律不真的做（`DemoText.notSent`）。
+- 引擎选项来自 hub 的 `engines`，名称和 `note` 原样保留；客户端不能用固定枚举筛掉 Orca 或后续引擎，也不能因为不认识当前 `engine` 就丢掉检测列表。
+  已知引擎允许离线配置；未知引擎只有 hub 回报 `available: true` 才能选择。重新生成演示数据时检查结构差异，只保留当前任务的变化，避免顺带改动收件箱和定时任务。
 - 弱网 / 断网不弹横幅，标题位换成「转圈 + 等待网络 / 连接中… / 更新中…」（`docs/ios.md`「连接状态」）。`.toolbar(removing: .title)`
   会连 `.principal` 的工具栏项一起藏掉：没有标题的页面要显示状态，就去掉它、只放一个平时为空的 principal 项（不会露出 navigationTitle）。
   大标题页面的 principal 项平时也要留空，否则标题出现两遍。弱网判断只认及时回来的 pong（晚到的 pong 也算慢），不然标题每次 ping 都闪一下。

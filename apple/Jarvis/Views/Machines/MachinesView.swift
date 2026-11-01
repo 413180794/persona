@@ -176,7 +176,7 @@ struct MachineDetailView: View {
                         HStack {
                             Text("引擎").lineLimit(1)
                             Spacer()
-                            Text(machine.engine.name).foregroundStyle(.secondary).lineLimit(1)
+                            Text(machine.engineName).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     .accessibilityIdentifier("machine.engine")

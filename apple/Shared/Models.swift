@@ -68,26 +68,56 @@ extension Machine {
         deploying = try c.decodeIfPresent(Bool.self, forKey: .deploying)
         deployError = try c.decodeIfPresent(String.self, forKey: .deployError)
         system = try c.decodeIfPresent(MachineSystem.self, forKey: .system)
-        let raw = try c.decodeIfPresent(String.self, forKey: .engine)
-        engine = raw.flatMap(MachineEngine.init(rawValue:)) ?? .herdr
-        engines = raw.flatMap(MachineEngine.init(rawValue:)) == nil ? [] :
-            (try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? [])
+        engine = try c.decodeIfPresent(MachineEngine.self, forKey: .engine) ?? .herdr
+        engines = try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? []
     }
 }
 
-nonisolated enum MachineEngine: String, Codable, CaseIterable, Identifiable, Sendable {
-    case herdr
-    case herdrApp = "herdr-core"
+nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseIterable, Identifiable, Sendable {
+    var rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static let herdr = Self(rawValue: "herdr")
+    static let herdrApp = Self(rawValue: "herdr-core")
+    static let orca = Self(rawValue: "orca")
+    static let allCases: [Self] = [.herdr, .herdrApp, .orca]
     var id: String { rawValue }
-    var name: String { self == .herdr ? "herdr" : "Herdr App" }
-    var detail: String { self == .herdr ? "终端里的 herdr" : "桌面 App 里开的终端" }
+    var name: String {
+        switch self {
+        case .herdr: "herdr"
+        case .herdrApp: "Herdr App"
+        case .orca: "Orca"
+        default: rawValue
+        }
+    }
+    var detail: String? {
+        switch self {
+        case .herdr: "终端里的 herdr"
+        case .herdrApp: "桌面 App 里开的终端"
+        case .orca: "Orca 里的终端"
+        default: nil
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
 }
 
-nonisolated struct DetectedEngine: Codable, Hashable, Sendable {
+nonisolated struct DetectedEngine: Codable, Hashable, Identifiable, Sendable {
     var id: String
     var name: String
     var available: Bool
     var version: String?
+    var note: String?
+}
+
+extension Machine {
+    var engineName: String { engines.first { $0.id == engine.rawValue }?.name ?? engine.name }
 }
 
 nonisolated struct Launcher: Codable, Identifiable, Hashable, Sendable {

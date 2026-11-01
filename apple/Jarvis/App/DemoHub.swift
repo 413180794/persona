@@ -350,7 +350,9 @@ final class DemoHub {
             return ["ok": true]
         case ("machines", 3) where p[2] == "engine" && method == "PUT":
             guard let i = machines.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var machine) = machines[i] else { throw notFound() }
-            guard let raw = body["engine"]?.string, MachineEngine(rawValue: raw) != nil else {
+            guard let raw = body["engine"]?.string,
+                  MachineEngine.allCases.contains(MachineEngine(rawValue: raw)) ||
+                    machine["engines"]?.array?.contains(where: { $0["id"]?.string == raw && $0["available"]?.bool == true }) == true else {
                 throw APIError(status: 400, message: "未知引擎")
             }
             machine["engine"] = .string(raw)
