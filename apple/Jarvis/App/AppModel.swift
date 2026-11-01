@@ -288,6 +288,15 @@ final class AppModel {
         return SessionKey(machineID: st.machineID, sessionID: id)
     }
 
+    /// Shows a Jarvis conversation from another page (定时任务's 立即运行 / its own conversation): the Jarvis tab or the
+    /// shell's 助手, back at the conversation even from a page pushed on it or the shell's 设置 sheet.
+    func openAssistantConversation(_ key: SessionKey) {
+        shellSettings = false
+        selectedTab = .assistant
+        assistantCurrent = key
+        assistantReveal += 1
+    }
+
     /// Sends text to Jarvis' main conversation (starting it when there is none) and opens the Jarvis tab: how other
     /// pages hand something to Jarvis with its context.
     func askJarvis(_ text: String) async {

@@ -284,6 +284,7 @@ def next_at(hhmm, weekdays):
 SCHEDULE = [
     {"id": "morning", "title": "早报", "prompt": "给我今天的早报，一屏以内，结论先行。", "repeat": "daily", "time": "09:00",
      "weekdays": [1, 2, 3, 4, 5], "enabled": True, "last_run": ago(hours=3), "last_session_id": ASK2, "last_status": "ok",
+     "run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude",  # its own conversation (早报 · 周三)
      "next_run": next_at("09:00", [1, 2, 3, 4, 5])},
     {"id": "fu_patrol", "title": "Agent 巡检", "prompt": "看看各台电脑上的 Agent：哪些在等我、哪些卡住了，有要我处理的就列出来；都正常就回一句。",
      "repeat": "interval", "every_minutes": 30, "at": later(minutes=12), "enabled": True, "created_by": "assistant",
@@ -2001,12 +2002,19 @@ class H(BaseHTTPRequestHandler):
             t = save_task({"id": "task_" + uuid.uuid4().hex[:8], "created_at": ago()}, json.loads(self.last_body or b"{}"))
             SCHEDULE.append(t)
             return self.send_json({"task": t})
+        if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/fresh"):  # 下次开新对话
+            t = next((t for t in SCHEDULE if t["id"] == p.split("/")[5]), None)
+            if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
+            for k in ("run_machine_id", "run_session_id", "run_launcher"): t.pop(k, None)
+            return self.send_json({"task": t})
         if p.startswith("/api/v1/assistant/tasks/") and p.endswith("/run"):
             tid = p.split("/")[5]
             SCHEDULE_RAN.append(tid)
             t = next((t for t in SCHEDULE if t["id"] == tid), {})
             if t.get("repeat") == "once": SCHEDULE[:] = [x for x in SCHEDULE if x["id"] != tid]
-            return self.send_json({"session_id": t.get("session_id") or ASK2, "machine_id": "server"})
+            elif not t.get("session_id") and not t.get("run_session_id"):  # the run starts the task's own conversation
+                t.update({"run_machine_id": "server", "run_session_id": ASK2, "run_launcher": "claude"})
+            return self.send_json({"session_id": t.get("session_id") or t.get("run_session_id") or ASK2, "machine_id": "server"})
         if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
             l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
             if l is None: return self.send_json({"error": "没有这个启动器"}, 404)

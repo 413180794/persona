@@ -1,7 +1,8 @@
 ⏰ {{.Label}}{{if .Once}}（你之前安排的跟进）{{else if .Interval}}（定时任务，每 {{.Every}}）{{else}}（定时任务）{{end}}{{if .Late}}
-（本该 {{.Due.Format "01-02 15:04"}} 运行，Jarvis 当时没在运行，晚了 {{.Late}}；看看还有没有必要按原计划做。）{{end}}{{if .Interval}}
+（本该 {{.Due.Format "01-02 15:04"}} 运行，Jarvis 当时没在运行，晚了 {{.Late}}；看看还有没有必要按原计划做。）{{end}}{{if .Continued}}
+（又到时间了，还是这个任务自己的对话：前几次的结果都在上面，接着做，和上次比有变化的地方说清楚。）{{else if .Interval}}
 （Jarvis 会按时再运行它，不用再用 schedule_followup 安排下一次。）{{end}}
 
-{{.Prompt}}{{if .KBHint}}
+{{.Prompt}}{{if and .KBHint (not .Continued)}}
 
 {{template "assistant/routine_kb_hint" .}}{{end}}

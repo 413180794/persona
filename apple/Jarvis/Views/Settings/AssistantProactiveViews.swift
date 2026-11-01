@@ -376,6 +376,7 @@ struct AssistantTaskEditor: View {
     /// What the hub has; nil until a new task is first saved.
     @State private var saved: APIClient.ScheduledTask?
     @State private var running = false
+    @State private var resetting = false
     @State private var confirmDelete = false
     @State private var confirmBypass = false
     @State private var deleted = false
@@ -428,13 +429,7 @@ struct AssistantTaskEditor: View {
                 Text("像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。")
             }
             runsWithSection
-            if conversation != nil {
-                Section {
-                    Toggle("接着原来的对话", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
-                } footer: {
-                    Text(draft.sessionID != nil ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。" : "每次运行都开一段新对话。")
-                }
-            }
+            conversationSection
             Section {
                 Button { Task { await runNow() } } label: {
                     HStack {
@@ -444,7 +439,8 @@ struct AssistantTaskEditor: View {
                     }
                 }
                 .disabled(running || !isValid)
-                if let last = saved?.lastSessionID, !last.isEmpty {
+                // The task's own conversation has its own row above.
+                if let last = saved?.lastSessionID, !last.isEmpty, last != saved?.runSessionID {
                     Button { open(SessionKey(machineID: machineID, sessionID: last)) } label: {
                         HStack {
                             Label("查看上次结果", systemImage: Theme.Icon.conversation).lineLimit(1)
@@ -519,6 +515,61 @@ struct AssistantTaskEditor: View {
         #if DEBUG
         .onAppear { if UserDefaults.standard.string(forKey: "openAssistantPage") == "bypassTask" { confirmBypass = true } }
         #endif
+    }
+
+    /// Where runs go (docs/assistant.md「定时任务」): the conversation it came from (接着原来的对话), else the task's own
+    /// one, which the first run starts and the next ones continue; 下次开新对话 lets the next run start over.
+    private var conversationSection: some View {
+        Section {
+            if conversation != nil {
+                Toggle("接着原来的对话", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
+            }
+            if draft.sessionID == nil {
+                if let own = saved?.ownConversation {
+                    Button { open(own) } label: {
+                        HStack {
+                            Label("在同一个对话里运行", systemImage: Theme.Icon.conversation).lineLimit(1)
+                            Spacer()
+                            Image(systemName: Theme.Icon.disclosure).font(Theme.Font.caption).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .accessibilityIdentifier("task.ownConversation")
+                    Button { Task { await startOver() } } label: {
+                        HStack {
+                            Label("下次开新对话", systemImage: Theme.Icon.newConversation).lineLimit(1)
+                            Spacer()
+                            if resetting { ProgressView() }
+                        }
+                    }
+                    .disabled(resetting)
+                    .accessibilityIdentifier("task.freshConversation")
+                } else {
+                    Label("在同一个对话里运行", systemImage: Theme.Icon.conversation).lineLimit(1)
+                        .accessibilityIdentifier("task.ownConversation")
+                }
+            }
+        } header: {
+            Text("对话")
+        } footer: {
+            Text(draft.sessionID != nil ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。"
+                 : saved?.ownConversation != nil ? "每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。"
+                 : "第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。")
+        }
+    }
+
+    private func startOver() async {
+        guard let id = saved?.id, let api = model.api else { return }
+        resetting = true
+        defer { resetting = false }
+        do {
+            let t = try await api.freshTaskConversation(id)
+            saved?.runMachineID = t.runMachineID
+            saved?.runSessionID = t.runSessionID
+            Haptics.success()
+            model.toast = Toast("下次运行会开一段新对话", style: .success)
+        } catch {
+            model.show(error)
+        }
     }
 
     @ViewBuilder private var whenSection: some View {
@@ -716,8 +767,7 @@ struct AssistantTaskEditor: View {
 
     private func open(_ key: SessionKey) {
         if creating { dismiss() }
-        model.selectedTab = .assistant
-        model.assistantCurrent = key
+        model.openAssistantConversation(key)
     }
 }
 

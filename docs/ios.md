@@ -231,7 +231,7 @@ Bundle ID 来自配置（`app.bundle_id`，手表 `<id>.watchkitapp`，`docs/con
 | 部分 | 做法 |
 | --- | --- |
 | 底部 | 没有 tab 栏 |
-| 顶栏 | ☰（收件箱有「需要你」时带红点）· 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
+| 顶栏 | ☰（收件箱有「需要你」时带红点）· 助手 \| Agents（工作带等你的 Agent 数）· 右边按钮。助手页的是浮在对话上的 `AssistantTopBar`（壳里换成 `shellBar`）；Agents 页是 `AgentsTopBar`，盖在系统导航栏上（导航栏留着给搜索框用），两页的按钮位置一像素不差。点了搜索，系统把搜索框升进导航栏那一行（带「取消」）：这时 `AgentsTopBar` 淡出让位、侧边栏也拉不出来，取消后再回来（从搜索结果打开会话时也不闪回来）；搜不到时写「没有找到「…」」，不再是「开始第一个开发会话」（`ShellSearchTests`）。助手页再点一下「助手」打开原来头像菜单里的东西（知识库、详细信息、启动器、会话信息、中断…） |
 | 两页 | `ShellView` 里一个 ZStack：助手（`AssistantView`）一直在，Agents（`ChatsView`）第一次切过去时建好，之后都留着（和 TabView 一样，切换不丢位置）；藏起来的一页透明、不接触摸 |
 | 侧边栏 | 从 Jarvis tab 提到壳上（`ShellState.drawer`），两页都能滑出。助手页在根部时全页右滑打开；Agents 页只从左边缘（24pt）滑，列表行自己有右滑的「置顶 / 中断」（`DrawerPan.edgeOnly`）。内容：认识 Jarvis、收件箱（带数）、定时任务、知识库、机器，下面是对话历史，底部「新对话」药丸 + 设置 |
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |

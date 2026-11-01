@@ -329,6 +329,21 @@ class Hub(val api: ApiClient, private val scope: CoroutineScope, private val dev
 
     fun session(k: SessionKey): Session? = _sessions.value[k.machineId]?.firstOrNull { it.sessionId == k.sessionId }
 
+    /**
+     * Sends /clear to a herdr pane's claude and waits for the pane to show up under its new session id (Claude Code
+     * starts a new transcript; the node follows the pane). The new session, or null if it did not appear in 20 s.
+     */
+    suspend fun clearContext(k: SessionKey): SessionKey? {
+        val pane = session(k)?.paneId ?: return null
+        runCatching { api.send(k, "/clear", java.util.UUID.randomUUID().toString()) }.getOrElse { return null }
+        repeat(40) {
+            delay(500)
+            _sessions.value[k.machineId]?.firstOrNull { it.paneId == pane && it.sessionId != k.sessionId && it.isLive }
+                ?.let { return SessionKey(k.machineId, it.sessionId) }
+        }
+        return null
+    }
+
     /** Changes a running session's modes and shows them at once (the next `sessions` push confirms them). */
     suspend fun setModes(k: SessionKey, permissionMode: String? = null, effort: String? = null) {
         api.setModes(k, permissionMode, effort)

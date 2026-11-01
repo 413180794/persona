@@ -97,6 +97,20 @@ func (n *Node) isAssistantSession(id string) bool {
 	return false
 }
 
+// assistantResumable: conversation id can be continued, its process is running or its transcript is still on disk.
+// A scheduled task's own conversation is sent with resume_only, so one that is gone (cleaned up after 30 days, or
+// never written) starts a new conversation at the hub instead of a blank one under the old id (docs/assistant.md
+// 「定时任务」).
+func (n *Node) assistantResumable(id string) bool {
+	if id == "" || !validID(id) {
+		return false
+	}
+	n.mu.Lock()
+	p := n.procs[id]
+	n.mu.Unlock()
+	return (p != nil && p.alive()) || n.transcriptPath(id) != ""
+}
+
 // assistantSend delivers a user message, starting or restarting the headless claude when needed.
 // id == "" starts a new conversation and returns its id.
 func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string, images []proto.Image, mode, effort string) (string, error) {

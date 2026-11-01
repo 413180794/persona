@@ -259,6 +259,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Title           *string         `json:"title"`
 		PermissionMode  string          `json:"permission_mode"`
 		Effort          string          `json:"effort"`
+		ResumeOnly      bool            `json:"resume_only"`
 		Raw             json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -325,6 +326,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "")
 		return map[string]any{"session": s}, err
 	case "assistant.send":
+		if p.ResumeOnly && !n.assistantResumable(p.SessionID) {
+			return nil, fmt.Errorf("conversation %s is gone", p.SessionID)
+		}
 		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort)
 		return map[string]any{"session_id": id}, err
 	case "session.modes":

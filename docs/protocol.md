@@ -137,11 +137,12 @@
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?}`，存 Postgres settings（`docs/assistant.md`） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话 |
 | POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 |
-| GET | `/api/v1/assistant/tasks` | 定时任务（一张表，`docs/assistant.md`「定时任务」）：`{"tasks":[Task]}`，已经跑过的一次性跟进不列。`Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run}`：`once` 用 `at`，`daily` 用 `time` + `weekdays`（空 = 每天），`interval` 每 `every_minutes`（5 分钟到 7 天）跑一次、`at` 是下一次；`session_id` 有值时发进那段对话，空 = 每次新开；`launcher` / `permission_mode`（`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`）/ `effort`（`low`…`max`）空 = 助手的默认，只能在 App 里改；`created_by: "assistant"` 是助手在对话里建的 |
-| POST | `/api/v1/assistant/tasks` | 新建 `Task`（`session_id` 忽略，总是新对话）→ `{"task"}`；不合法 400，消息是给用户看的中文 |
-| PUT | `/api/v1/assistant/tasks/{id}` | 保存用户能改的字段（`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort`，`""` = 默认）→ `{"task"}`；`session_id` 只能清空（改成每次新对话）；`interval` 的下一次在间隔或规则变了、或重新开启时从现在算起 |
+| GET | `/api/v1/assistant/tasks` | 定时任务（一张表，`docs/assistant.md`「定时任务」）：`{"tasks":[Task]}`，已经跑过的一次性跟进不列。`Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher}`：`once` 用 `at`，`daily` 用 `time` + `weekdays`（空 = 每天），`interval` 每 `every_minutes`（5 分钟到 7 天）跑一次、`at` 是下一次；`session_id` 有值时发进那段对话，空 = 任务自己的对话（`run_session_id`，hub 记的：第一次运行开，之后接着用；空 = 下一次开）；`launcher` / `permission_mode`（`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`）/ `effort`（`low`…`max`）空 = 助手的默认，只能在 App 里改；`created_by: "assistant"` 是助手在对话里建的 |
+| POST | `/api/v1/assistant/tasks` | 新建 `Task`（`session_id` 忽略，用任务自己的对话）→ `{"task"}`；不合法 400，消息是给用户看的中文 |
+| PUT | `/api/v1/assistant/tasks/{id}` | 保存用户能改的字段（`title,prompt,repeat,at,time,weekdays,every_minutes,enabled,launcher,permission_mode,effort`，`""` = 默认）→ `{"task"}`；`session_id` 只能清空（改成用任务自己的对话）；`run_*` 只由 hub 写；`interval` 的下一次在间隔或规则变了、或重新开启时从现在算起 |
 | DELETE | `/api/v1/assistant/tasks/{id}` | 删除 |
-| POST | `/api/v1/assistant/tasks/{id}/run` | 立即运行 → `{"session_id","machine_id"}`；一次性的跑完就结束，重复的不改时间 |
+| POST | `/api/v1/assistant/tasks/{id}/run` | 立即运行 → `{"session_id","machine_id"}`；一次性的跑完就结束，重复的不改时间；上一轮还在跑时 409（记一条跳过） |
+| POST | `/api/v1/assistant/tasks/{id}/fresh` | 下次开新对话：清掉 `run_*`，下一次运行开一段新对话并记下 → `{"task"}` |
 | GET / PUT | `/api/v1/assistant/routines` | 旧版 App 用（2026-10-31 前）：`daily` 的任务，形状同 `Task`；PUT 整表替换 `daily` 的那些，别的任务和各任务的启动器 / 权限模式不动 |
 | GET / DELETE | `/api/v1/assistant/followups[/{id}]` | 旧版 App 用：开着的 `once` 和 `interval` 任务（`at` = 下一次）；DELETE 删任务 |
 | POST | `/api/v1/assistant/routines/{id}/run`、`/api/v1/assistant/followups/{id}/run` | 旧版 App 用，同 `tasks/{id}/run` |

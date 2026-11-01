@@ -25,3 +25,6 @@
   不单独放行的话每次读记忆都在手机上弹卡片（2026-11-01 实测）；记忆目录在助手目录外，不加进 `writableRoots` 写不进去。
   Codex 自己的 `~/.codex/memories` 是整台机器共用的，别给助手打开。
 - 在 hub 机器上用假 HOME 起测试 hub 时，`~/.local/bin/codex` 包装脚本按 `$HOME/.npm-global` 找安装目录，假 HOME 里要软链过去，否则 app-server 一启动就退出。
+- node 的 `assistant.send` 带一个它不认识的 session id 时不报错：找不到 transcript 就用这个 id 起一段**空白**的新对话。要「续上，续不上就告诉我」的调用
+  （定时任务自己的对话，2026-11-01）带 `resume_only`：node 找不到进程也找不到 transcript 就报错，由 hub 开新对话并记下（`docs/assistant.md`「定时任务」）。
+  判断对话忙不忙看 hub 里的会话状态（working / needs_you），只有在 node 列表里的会话才有：要长期续的对话放进 `keptSessions`，否则一台忙机器上 80 个新 transcript 就把它挤出列表。

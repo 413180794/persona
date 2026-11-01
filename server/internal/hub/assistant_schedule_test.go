@@ -157,7 +157,7 @@ func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 		p.PermissionMode != "acceptEdits" || p.Launcher != "claude-fast" {
 		t.Fatalf("one repeating task with the user's settings and the prompt without the ⏰ line: %+v", p)
 	}
-	if got := taskPrompt(p, p.At, p.At, time.UTC, false, false); !strings.Contains(got, "不用再用 schedule_followup") ||
+	if got := taskPrompt(p, p.At, p.At, time.UTC, false, false, false); !strings.Contains(got, "不用再用 schedule_followup") ||
 		strings.Count(got, "⏰") != 1 {
 		t.Fatalf("a repeating run is told it repeats by itself: %q", got)
 	}
@@ -497,10 +497,10 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 		t.Fatalf("the missed follow-up still runs: %+v", r)
 	}
 	late := Task{Repeat: repeatOnce, Title: "看部署", Prompt: "z"}
-	if p := taskPrompt(late, at(10, 0), at(11, 45), loc, false, false); !strings.Contains(p, "晚了 1 小时") || !strings.Contains(p, "10-26 10:00") {
+	if p := taskPrompt(late, at(10, 0), at(11, 45), loc, false, false, false); !strings.Contains(p, "晚了 1 小时") || !strings.Contains(p, "10-26 10:00") {
 		t.Fatalf("a late follow-up is told so: %q", p)
 	}
-	if p := taskPrompt(late, at(10, 0), at(10, 0).Add(30*time.Second), loc, false, false); strings.Contains(p, "晚了") {
+	if p := taskPrompt(late, at(10, 0), at(10, 0).Add(30*time.Second), loc, false, false, false); strings.Contains(p, "晚了") {
 		t.Fatalf("an on-time follow-up is not: %q", p)
 	}
 

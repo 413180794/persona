@@ -14,10 +14,10 @@ final class AssistantProfileTests: XCTestCase {
         self.hub = hub
     }
 
-    @MainActor private func launch() -> XCUIApplication {
+    @MainActor private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "assistant", "-newAssistant", "YES"] + extra
         app.launchJarvis()
         return app
     }
@@ -100,6 +100,73 @@ final class AssistantProfileTests: XCTestCase {
         let deadline = Date().addingTimeInterval(10)
         while try !ran().contains("fu_ci"), Date() < deadline { usleep(200_000) }
         XCTAssertTrue(try ran().contains("fu_ci"), "the follow-up was not run")
+    }
+
+    /// A task with no conversation of its own to go into runs in its own one (docs/assistant.md「定时任务」): its page
+    /// says 在同一个对话里运行 and opens it; 下次开新对话 lets the next run start over, and that run's conversation is the
+    /// task's again. Reached from the shell's drawer and from the old layout's profile.
+    @MainActor func testATaskOpensItsOwnConversationInTheShell() throws { try ownConversation(shell: true) }
+    @MainActor func testATaskOpensItsOwnConversationInTheOldLayout() throws { try ownConversation(shell: false) }
+
+    @MainActor private func ownConversation(shell: Bool) throws {
+        let app = launch(shell ? ["-ui.oldLayout", "NO"] : ["-ui.oldLayout", "YES"])
+        let name = shell ? "shell" : "old"
+        func openMorning() {
+            if shell {
+                let menu = app.buttons["assistant-sidebar-button"].firstMatch
+                XCTAssertTrue(menu.waitForExistence(timeout: 15), "no ☰:\n\(app.debugDescription)")
+                menu.tapCenter()
+                let routines = app.buttons.matching(NSPredicate(format: "label == '定时任务'")).firstMatch
+                XCTAssertTrue(routines.waitForExistence(timeout: 5), "no 定时任务 in the drawer:\n\(app.debugDescription)")
+                routines.tap()
+            } else {
+                openProfile(app)
+                app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "定时任务")).firstMatch.tap()
+            }
+            let morning = app.descendants(matching: .any)["task-morning"]
+            XCTAssertTrue(morning.waitForExistence(timeout: 5), "no 早报:\n\(app.debugDescription)")
+            morning.tap()
+            XCTAssertTrue(app.staticTexts["什么时候"].waitForExistence(timeout: 5), "the task's page did not open")
+        }
+        func reach(_ e: XCUIElement) {
+            for _ in 0..<5 where !(e.exists && e.isHittable) { app.swipeUp() }
+            XCTAssertTrue(e.exists && e.isHittable, "\(e) is not on the page:\n\(app.debugDescription)")
+        }
+
+        openMorning()
+        let own = app.buttons["task.ownConversation"]
+        reach(own)
+        XCTAssertTrue(app.buttons["task.freshConversation"].exists, "no 下次开新对话")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "查看上次结果")).firstMatch.exists,
+                       "the task's own conversation is listed twice")
+        shot(app, "own-\(name)")
+        own.tap()
+        // The conversation it runs in, on 助手 / the Jarvis tab, with the task's page gone.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 封邮件需要回复")).firstMatch.waitForExistence(timeout: 8),
+                      "the task's conversation did not open:\n\(app.debugDescription)")
+        XCTAssertFalse(app.staticTexts["什么时候"].exists, "still on the task's page")
+
+        openMorning()
+        let fresh = app.buttons["task.freshConversation"]
+        reach(fresh)
+        fresh.tap()
+        let deadline = Date().addingTimeInterval(5)
+        while try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"] != nil, Date() < deadline { usleep(200_000) }
+        XCTAssertNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "下次开新对话 did not reach the hub")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "第一次运行时开一段新对话")).firstMatch.waitForExistence(timeout: 5),
+                      "the page doesn't say the next run starts over:\n\(app.debugDescription)")
+        XCTAssertFalse(fresh.exists, "下次开新对话 is still offered")
+        XCTAssertFalse(app.buttons["task.ownConversation"].exists, "nothing to open until the next run")
+        shot(app, "fresh-\(name)")
+
+        // The next run starts a conversation, and it is the task's own again.
+        let runNow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "立即运行")).firstMatch
+        reach(runNow)
+        runNow.tap()
+        // The shell's top bar has the 助手 | Agents switch where the old one has Jarvis's face.
+        XCTAssertTrue(app.buttons[shell ? "shell-assistant" : "jarvis-avatar"].waitForExistence(timeout: 8), "not back on the conversation")
+        XCTAssertTrue(app.staticTexts["什么时候"].waitForNonExistence(timeout: 5), "still on the task's page")
+        XCTAssertNotNil(try tasks().first(where: { $0["id"] as? String == "morning" })?["run_session_id"], "the run's conversation is not the task's")
     }
 
     /// The tasks the mock hub has now.

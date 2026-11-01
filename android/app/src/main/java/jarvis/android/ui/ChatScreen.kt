@@ -46,6 +46,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -134,8 +135,10 @@ private sealed interface ChatLine {
     data class Pending(val p: PendingMessage) : ChatLine { override val key get() = "p:" + p.clientMsgId }
     data class Live(val text: String) : ChatLine { override val key get() = "live" }
     data class Working(val label: String) : ChatLine { override val key get() = "working" }
-    data class Queued(val text: String) : ChatLine { override val key get() = "queued" }
+    data class Queued(val items: List<String>) : ChatLine { override val key get() = "queued" }
     data class Line(val row: FoldedRow) : ChatLine { override val key get() = row.key }
+    /** An API error answer or notice (and its repeats), drawn as a card. */
+    data class Error(val e: jarvis.android.ui.chat.ApiErrorLine, val latest: Boolean) : ChatLine { override val key get() = "e:" + e.row.key }
     data object Older : ChatLine { override val key get() = "older" }
 }
 
@@ -159,6 +162,8 @@ fun ChatScreen(
     onHandToJarvis: ((String) -> Unit)? = null,
     /** Put the cursor in the composer once (the 「问 Jarvis」 shortcut), then [onFocusTaken]. */
     focusComposer: Boolean = false, onFocusTaken: () -> Unit = {},
+    /** /clear made a new session in the same pane: open it (null: stay; the list shows it). */
+    onCleared: ((SessionKey) -> Unit)? = null,
 ) {
     val store = remember(key) { hub.chat(key) }
     DisposableEffect(key) {
@@ -228,8 +233,12 @@ fun ChatScreen(
                 working && !runningWork -> add(ChatLine.Working(if (assistant) "Jarvis 正在思考…" else "${session?.agentLabel ?: "Claude"} 正在工作…"))
             }
             for (i in outbox.indices.reversed()) add(ChatLine.Pending(outbox[i]))
-            session?.queued?.takeIf { it.isNotEmpty() }?.let { add(ChatLine.Queued("排队中：" + it.joinToString(" / "))) }
-            for (i in folded.indices.reversed()) add(ChatLine.Line(folded[i]))
+            session?.queued?.takeIf { it.isNotEmpty() }?.let { add(ChatLine.Queued(it)) }
+            val items = jarvis.android.ui.chat.foldApiErrors(folded)
+            for (i in items.indices.reversed()) when (val it = items[i]) {
+                is jarvis.android.ui.chat.ChatItem.Row -> add(ChatLine.Line(it.row))
+                is jarvis.android.ui.chat.ChatItem.Error -> add(ChatLine.Error(it.error, latest = i == items.lastIndex))
+            }
             if (state.loadingOlder) add(ChatLine.Older)
         }
     }
@@ -322,6 +331,27 @@ fun ChatScreen(
 
     // The message leaves the input box at once: the outbox draws it, sends it (or keeps it until connected) with one
     // client_msg_id, and puts a refusal or failure on the bubble (重发 / 删除 there).
+    // /clear only for Claude in a herdr pane (iOS canClear): not Jarvis, not Codex / TRAEX.
+    val canClear = !assistant && session?.paneId != null && (session.agent == null || session.agent == "claude")
+    var confirmClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+    if (confirmClear) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmClear = false },
+        title = { Text("清空上下文？") },
+        text = { Text("${session?.agentLabel ?: "Claude"} 会开一个新会话，这段对话留在历史里，页面会跳到新会话。") },
+        confirmButton = {
+            TextButton({
+                confirmClear = false; clearing = true
+                scope.launch {
+                    val next = hub.clearContext(key)
+                    clearing = false
+                    if (next != null) onCleared?.invoke(next) else Toasts.show("已发送 /clear，新会话出现后在列表里打开")
+                }
+            }) { Text("清空", color = MaterialTheme.colorScheme.error, maxLines = 1) }
+        },
+        dismissButton = { TextButton({ confirmClear = false }) { Text("取消", maxLines = 1) } },
+    )
+
     fun send() {
         val sentContexts = contexts
         val text = composeMessage(draft, images.isNotEmpty(), sentContexts) ?: return
@@ -439,8 +469,26 @@ fun ChatScreen(
                                     is ChatLine.Pending -> PendingBubble(line.p, key)
                                     is ChatLine.Live -> Markdown(line.text, Modifier.fillMaxWidth().padding(vertical = 2.dp))
                                     is ChatLine.Working -> WorkingIndicator(line.label)
-                                    is ChatLine.Queued -> Text(line.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    is ChatLine.Queued -> QueueStrip(line.items) { i, delete ->
+                                        scope.launch {
+                                            // Pull everything back and re-queue the rest, as iOS (session.queue.edit).
+                                            runCatching { hub.api.editQueue(key, line.items.indices.filter { it != i }) }
+                                                .onSuccess { pulled ->
+                                                    if (!delete && i in pulled.indices) draft = if (draft.isEmpty()) pulled[i] else draft + "\n" + pulled[i]
+                                                    Toasts.show(if (delete) "已从队列删除" else "已撤回到输入框，改好再发送", ToastStyle.SUCCESS)
+                                                }
+                                                .onFailure { notice = "没改成：${it.message}" }
+                                        }
+                                    }
                                     is ChatLine.Line -> FoldedRowView(line.row, key, working, toggleWork, openTerminal)
+                                    // 重试 only when the error is the last thing, the agent is not working (someone may have
+                                    // retried already) and trying again can help (not a login or a bad request), as iOS.
+                                    is ChatLine.Error -> jarvis.android.ui.chat.ApiErrorCard(
+                                        line.e,
+                                        retry = if (line.latest && !working && line.e.info.transient != false) {
+                                            { jarvis.android.chat.Outbox.send(hub, key, "继续") }
+                                        } else null,
+                                    )
                                     ChatLine.Older -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
                                         CircularProgressIndicator(Modifier.size(20.dp))
                                     }
@@ -498,6 +546,25 @@ fun ChatScreen(
                         Text("  正在传「$name」到电脑上…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                // Typed "/": the quick messages over the box; picking one puts its message in (/clear asks first).
+                jarvis.android.ui.chat.SlashCommand.matching(draft, canClear && !working && !clearing).takeIf { it.isNotEmpty() }?.let { cmds ->
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp)).padding(vertical = 4.dp),
+                    ) {
+                        cmds.forEach { cmd ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    if (cmd.word == jarvis.android.ui.chat.SlashCommand.CLEAR) { draft = ""; confirmClear = true } else draft = cmd.text
+                                }.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(cmd.word, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.widthIn(min = 88.dp))
+                                Text(cmd.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth().then(if (embedded) Modifier else Modifier.navigationBarsPadding()).padding(8.dp), verticalAlignment = Alignment.Bottom) {
                     Box {
                         IconButton({ attachMenu = true }, enabled = uploading == null) { Icon(Icons.Default.Add, "添加照片或文件") }
@@ -507,6 +574,14 @@ fun ChatScreen(
                                 pickPhotos.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
                             }, enabled = images.size < jarvis.android.data.MAX_IMAGES)
                             DropdownMenuItem({ Text("文件（传到电脑上）") }, { attachMenu = false; pickFiles.launch(arrayOf("*/*")) })
+                            HorizontalDivider()
+                            jarvis.android.ui.chat.SlashCommand.all.forEach { cmd ->
+                                DropdownMenuItem({ Text(cmd.title) }, { attachMenu = false; Outbox.send(hub, key, cmd.text) })
+                            }
+                            if (canClear) DropdownMenuItem(
+                                { Text("清空上下文 /clear", color = MaterialTheme.colorScheme.error) },
+                                { attachMenu = false; confirmClear = true }, enabled = !working && !clearing,
+                            )
                         }
                     }
                     OutlinedTextField(
@@ -650,5 +725,41 @@ internal fun StartingNote(error: String?, agent: String) {
             if (error == null) "正在启动 $agent，消息会在它就绪后发出" else "没有启动起来：$error",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3,
         )
+    }
+}
+
+/**
+ * Messages typed while Claude works and not taken yet (iOS QueueStrip): numbered, each with 撤回编辑 (back into the
+ * box), 拷贝 and 删除. Editing goes through session.queue.edit, which pulls the queue out of claude and puts the rest back.
+ */
+@Composable
+internal fun QueueStrip(items: List<String>, onAct: (index: Int, delete: Boolean) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("排队中 ${items.size} 条 · Claude 忙完会依次处理", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        items.forEachIndexed { i, q ->
+            var open by remember { mutableStateOf(false) }
+            Box {
+                Row(
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                        .clickable { open = true }.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("${i + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(q, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+                androidx.compose.material3.DropdownMenu(open, onDismissRequest = { open = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("撤回编辑") }, onClick = { open = false; onAct(i, false) })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("拷贝") }, onClick = {
+                        open = false; jarvis.android.ui.media.MediaShare.copyText(ctx, q, "消息"); Toasts.show("已拷贝", ToastStyle.SUCCESS)
+                    })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("删除", color = MaterialTheme.colorScheme.error) }, onClick = { open = false; onAct(i, true) })
+                }
+            }
+        }
     }
 }

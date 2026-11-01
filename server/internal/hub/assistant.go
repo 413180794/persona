@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -325,14 +326,25 @@ func (h *Hub) assistantMemory(ctx context.Context, op map[string]any, out any) e
 }
 
 // keptSessions are the sessions machine id's node lists however long they have been quiet: the assistant's main
-// conversation, on the assistant's machine. Otherwise a busy machine's 80 newest transcripts crowd it out of the
-// list and the Jarvis tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone).
+// conversation and scheduled tasks' own ones, on the assistant's machine. Otherwise a busy machine's 80 newest
+// transcripts crowd it out of the list and the Jarvis tab has no 主对话 (2026-11-01: the main one, quiet for two days, was gone).
 func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
 	cfg := h.assistantConfig(ctx)
-	if cfg.Main == "" || cfg.MachineID != machine {
-		return []string{}
+	out := []string{}
+	if cfg.Main != "" && cfg.MachineID == machine {
+		out = append(out, cfg.Main)
 	}
-	return []string{cfg.Main}
+	// Scheduled tasks' own conversations too: a weekly one would drop out of the list in between, and with it the
+	// app's link to it and the check that its last run is still going (runTask).
+	s := h.loadSchedule(ctx)
+	s.mu.Lock()
+	for _, t := range s.tasks {
+		if t.RunSessionID != "" && t.RunMachineID == machine && !slices.Contains(out, t.RunSessionID) {
+			out = append(out, t.RunSessionID)
+		}
+	}
+	s.mu.Unlock()
+	return out
 }
 
 // keepMain tells the assistant's node the main conversation changed.

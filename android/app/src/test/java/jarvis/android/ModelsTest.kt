@@ -131,3 +131,21 @@ class SessionModesTest {
         org.junit.Assert.assertEquals("plan", s.permissionMode); org.junit.Assert.assertEquals("max", s.effort)
     }
 }
+
+class SlashCommandsTest {
+    private fun words(d: String, clear: Boolean = true) = jarvis.android.ui.chat.SlashCommand.matching(d, clear).map { it.word }
+
+    @Test fun aSlashListsThemAndMoreLettersNarrow() {
+        org.junit.Assert.assertEquals(listOf("/继续", "/compact", "/context", "/提交", "/汇报", "/clear"), words("/"))
+        org.junit.Assert.assertEquals(listOf("/compact", "/context", "/clear"), words("/c"))
+        org.junit.Assert.assertEquals(listOf("/compact", "/context"), words("/co"))
+        org.junit.Assert.assertEquals(listOf("/汇报"), words("/汇"))
+    }
+
+    @Test fun onlyWhileTheDraftIsOneSlashWord() {
+        org.junit.Assert.assertEquals(emptyList<String>(), words("帮我看下"))
+        org.junit.Assert.assertEquals(emptyList<String>(), words("/compact 一下"))
+        org.junit.Assert.assertEquals(emptyList<String>(), words("/tmp/a\n"))
+        org.junit.Assert.assertEquals(listOf("/继续", "/compact", "/context", "/提交", "/汇报"), words("/", clear = false)) // Jarvis, Codex
+    }
+}

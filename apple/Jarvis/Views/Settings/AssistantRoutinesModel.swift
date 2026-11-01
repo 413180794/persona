@@ -12,7 +12,7 @@ struct AssistantDeps {
     static var live: AssistantDeps {
         let model = AppModel.shared
         return AssistantDeps(api: { model.api }, report: { model.show($0) }, toast: { model.toast = $0 },
-                             open: { key in model.selectedTab = .assistant; model.assistantCurrent = key })
+                             open: { model.openAssistantConversation($0) })
     }
 }
 

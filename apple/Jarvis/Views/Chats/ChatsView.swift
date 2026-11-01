@@ -170,7 +170,8 @@ struct ChatsView: View {
                         openFromList(session.key)
                     }
                 }
-                .onChange(of: path.isEmpty, initial: true) { _, root in shell?.workAtRoot = root }
+                // Searching is not the root either: the drawer would slide the page with the keyboard up and the field open.
+                .onChange(of: path.isEmpty && !searching, initial: true) { _, root in shell?.workAtRoot = root }
                 .onChange(of: path) { _, p in
                     spaceAt = spaceAt.filter { $0.key < p.count }
                     if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
@@ -196,11 +197,18 @@ struct ChatsView: View {
             SplitPlaceholder(symbol: Theme.Icon.agents, title: "选一个 Agent",
                              message: "左边列表里点一个 Agent，对话会在这里打开。")
         }
+        // While searching the field rises into the bar the shell's floats over: the bar makes way (the field has its
+        // own 取消), as a system search takes the navigation bar, and comes back when the search closes (TestFlight 70:
+        // the field was drawn under ☰, the switch and 新建会话). A result opened closes the search before the push
+        // (`searchedBeforePush` set): the bar stays away rather than flash back for that moment.
         .overlay(alignment: .top) {
-            if let shell, path.isEmpty {
-                AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
-                    .transition(.opacity)
+            ZStack {
+                if let shell, path.isEmpty, !searching, searchedBeforePush == nil {
+                    AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
+                        .transition(.opacity)
+                }
             }
+            .animation(Theme.Motion.state, value: searching) // the bar only: not the list under it
         }
         .animation(Theme.Motion.state, value: path.isEmpty)
         .environment(\.openSpace) { space in
@@ -421,7 +429,14 @@ private struct AgentsList: View {
                 }
             }
 
-            if base.isEmpty {
+            if base.isEmpty, !query.isEmpty {
+                // Nothing matches the search: not 开始第一个开发会话 with its 新建会话, which read as if the agents were gone.
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.search, title: "没有找到「\(query)」",
+                                   message: "空间、标签、会话的标题和内容都能搜，换个词试试。")
+                }
+                .listRowBackground(Color.clear)
+            } else if base.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.agents,
                                    title: machineFilter.isEmpty ? "开始第一个开发会话" : "这台机器上没有会话",

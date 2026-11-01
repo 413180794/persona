@@ -22,8 +22,9 @@ import (
 //   - once: a follow-up the assistant scheduled from a conversation (schedule_followup), or the user in the app;
 //   - daily: at a time on some weekdays (早报 on weekdays at 09:00…), set up in the app or with schedule_routine;
 //   - interval: every N minutes (a 30-minute patrol), from schedule_followup's `every` or the app.
-// A run goes into the conversation the task came from (SessionID) or a new one, with the task's own launcher,
-// permission mode and effort ("" = the assistant's defaults). A finished run pushes its answer like any agent turn
+// A run goes into the conversation the task came from (SessionID), else into the task's own conversation
+// (RunSessionID: the first run starts it, later ones continue it so each run sees the ones before), with the task's
+// own launcher, permission mode and effort ("" = the assistant's defaults). A finished run pushes its answer like any agent turn
 // (Machine.notifyFinished). The list and the history of runs live in Postgres settings, so they outlive a hub
 // restart: a run is marked before it starts (no repeats), a once / interval task missed while the hub was down runs
 // once when it is back (and is told how late it is), a daily one missed by more than 30 minutes is skipped and the
@@ -44,9 +45,16 @@ type Task struct {
 	Weekdays     []int     `json:"weekdays,omitempty"` // daily: 1 = Monday … 7 = Sunday; empty = every day
 	EveryMinutes int       `json:"every_minutes,omitempty"`
 	Enabled      bool      `json:"enabled"`
-	// The conversation runs go into (on MachineID); empty = a new conversation each run.
+	// The conversation it came from (on MachineID), runs go into it; empty = the task's own conversation.
 	MachineID string `json:"machine_id,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
+	// The task's own conversation, set by the hub (2026-11-01: each run used to start a new one, so 「和昨天比」 had
+	// nothing to compare with): the first run starts it on the assistant's machine with RunLauncher, later runs are
+	// sent into it. Empty = the next run starts one (the app's 下次开新对话); so does a conversation that is gone or
+	// can't be continued (another launcher or machine), and the new one is kept.
+	RunMachineID string `json:"run_machine_id,omitempty"`
+	RunSessionID string `json:"run_session_id,omitempty"`
+	RunLauncher  string `json:"run_launcher,omitempty"`
 	// How claude runs, chosen in the app only (the assistant can't raise its own permissions): "" = the assistant's
 	// launcher, Claude Code's default mode, the launcher's effort.
 	Launcher       string `json:"launcher,omitempty"`
@@ -170,6 +178,8 @@ type schedule struct {
 	tasks  []Task
 	runs   []ScheduleRun // newest last
 	wake   chan struct{} // the list changed: scheduleLoop recomputes when to wake up
+	// sending: tasks whose run is being sent right now (runTask), so two can't go into one conversation at once.
+	sending map[string]bool
 }
 
 func defaultRoutines() []Routine {
@@ -554,10 +564,13 @@ func (h *Hub) describeSchedule(ctx context.Context) string {
 		} else if next := t.next(now, loc); !next.IsZero() && t.Repeat != repeatOnce {
 			b.WriteString(", next " + next.In(loc).Format("01-02 15:04 Mon"))
 		}
-		if t.SessionID == "" {
-			b.WriteString(", new conversation each run")
-		} else {
+		switch {
+		case t.SessionID != "":
 			b.WriteString(", into conversation " + short(t.SessionID))
+		case t.RunSessionID != "":
+			b.WriteString(", in its own conversation " + short(t.RunSessionID))
+		default:
+			b.WriteString(", its own conversation starts on the next run")
 		}
 		if t.LastStatus != "" {
 			fmt.Fprintf(&b, ", last run %s %s", t.LastRun.In(loc).Format("01-02 15:04"), t.LastStatus)
@@ -867,18 +880,30 @@ func (h *Hub) recordRun(r ScheduleRun) {
 	h.broadcastSchedule()
 }
 
-// runTask sends the task's message into its conversation, or a new one when there is none or that fails, with the
-// task's launcher / mode / effort. due: when it was meant to run; now: when the scheduler noticed (a run that waited
-// for the hub to come back is told how late it is); manual is 立即运行 in the app.
+// errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.
+var errTaskBusy = errors.New("上一轮还在运行，这次跳过")
+
+// runTask sends the task's message into the conversation it came from, else into its own conversation, else (none
+// yet, or that one is gone, busy elsewhere, or on another launcher / machine) a new one that becomes its own; with
+// the task's launcher / mode / effort. due: when it was meant to run; now: when the scheduler noticed (a run that
+// waited for the hub to come back is told how late it is); manual is 立即运行 in the app.
+//
+// A repeating task whose own conversation is still on its last run (working, or waiting on the user) is skipped,
+// not queued: two runs stacked in one conversation answer twice in a row, and the second one only sees the first
+// half done. The skip is in the history like a missed one. A one-off still goes in (it would be lost otherwise).
 func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	prompt := taskPrompt(t, due, now, h.userLocation(), manual, h.kb.eng != nil)
+	loc, kb := h.userLocation(), h.kb.eng != nil
 	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK}
+	if !h.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
+		return proto.Session{}, h.skipRun(run, errTaskBusy)
+	}
+	defer h.sched.end(t.ID)
 	if t.SessionID != "" {
 		if m := h.byID[t.MachineID]; m != nil {
-			err := m.call(ctx, "assistant.send", map[string]any{"session_id": t.SessionID, "text": prompt, "launcher": t.Launcher,
-				"permission_mode": t.PermissionMode, "effort": t.Effort}, nil)
+			err := m.call(ctx, "assistant.send", map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false),
+				"launcher": t.Launcher, "permission_mode": t.PermissionMode, "effort": t.Effort}, nil)
 			if err == nil {
 				run.MachineID, run.SessionID = t.MachineID, t.SessionID
 				h.logf("task %s ran %s after its time", t.ID, lateness(due, time.Now()))
@@ -888,7 +913,35 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			h.logf("task %s into %s: %v; starting a new conversation", t.ID, t.SessionID, err)
 		}
 	}
-	sess, err := h.startAssistant(ctx, prompt, nil, t.Launcher, t.PermissionMode, t.Effort)
+	cfg := h.assistantConfig(ctx)
+	launcher := t.Launcher
+	if launcher == "" {
+		launcher = cfg.Launcher
+	}
+	if t.RunSessionID != "" {
+		m := h.byID[t.RunMachineID]
+		switch {
+		case t.RunLauncher != launcher:
+			h.logf("task %s: launcher %s → %s, its conversation %s can't go on; starting a new one", t.ID, t.RunLauncher, launcher, short(t.RunSessionID))
+		case t.RunMachineID != cfg.MachineID || m == nil:
+			h.logf("task %s: the assistant moved off %s, its conversation %s stays there; starting a new one", t.ID, t.RunMachineID, short(t.RunSessionID))
+		case t.Repeat != repeatOnce && sessionBusy(m, t.RunSessionID):
+			h.logf("task %s: its conversation %s is still on the last run; skipped", t.ID, short(t.RunSessionID))
+			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
+			return proto.Session{}, h.skipRun(run, errTaskBusy)
+		default:
+			err := m.call(ctx, "assistant.send", map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true),
+				"launcher": t.Launcher, "permission_mode": t.PermissionMode, "effort": t.Effort, "resume_only": true}, nil)
+			if err == nil {
+				run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
+				h.logf("task %s ran %s after its time (its conversation %s)", t.ID, lateness(due, time.Now()), short(t.RunSessionID))
+				h.recordRun(run)
+				return proto.Session{MachineID: t.RunMachineID, SessionID: t.RunSessionID}, nil
+			}
+			h.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
+		}
+	}
+	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, t.Launcher, t.PermissionMode, t.Effort)
 	if err != nil {
 		h.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
@@ -896,16 +949,83 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 		return proto.Session{}, err
 	}
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
-	h.logf("task %s ran %s after its time (new conversation %s)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
+	h.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
+	h.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
 	h.recordRun(run)
 	return *sess, nil
 }
 
+// sessionBusy: the conversation is on a turn or waiting for the user (an approval, a question).
+func sessionBusy(m *Machine, id string) bool {
+	s, ok := m.session(id)
+	return ok && (s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou)
+}
+
+func (h *Hub) skipRun(run ScheduleRun, why error) error {
+	run.Status, run.Error = runSkipped, why.Error()
+	h.recordRun(run)
+	return why
+}
+
+// begin marks task id as being sent; false when it already is. end clears the mark.
+func (s *schedule) begin(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sending[id] {
+		return false
+	}
+	if s.sending == nil {
+		s.sending = map[string]bool{}
+	}
+	s.sending[id] = true
+	return true
+}
+
+func (s *schedule) end(id string) {
+	s.mu.Lock()
+	delete(s.sending, id)
+	s.mu.Unlock()
+}
+
+// adoptConversation makes a new conversation task id's own (saved with the next recordRun), and keeps it listed on
+// its machine however quiet it gets (keptSessions), so the app can open it and the next run can see it is busy.
+func (h *Hub) adoptConversation(id, machine, session, launcher string) {
+	s := h.loadSchedule(context.Background())
+	s.mu.Lock()
+	if i := s.indexLocked(id); i >= 0 {
+		t := &s.tasks[i]
+		t.RunMachineID, t.RunSessionID, t.RunLauncher = machine, session, launcher
+	}
+	s.mu.Unlock()
+	go h.keepMain(context.Background())
+}
+
+// forgetConversation is 下次开新对话: the next run starts a new conversation (the old one stays in 对话).
+func (h *Hub) forgetConversation(ctx context.Context, id string) (Task, bool) {
+	s := h.loadSchedule(ctx)
+	s.mu.Lock()
+	i := s.indexLocked(id)
+	if i >= 0 {
+		t := &s.tasks[i]
+		t.RunMachineID, t.RunSessionID, t.RunLauncher = "", "", ""
+		h.saveLocked(s)
+	}
+	s.mu.Unlock()
+	if i < 0 {
+		return Task{}, false
+	}
+	h.broadcastSchedule()
+	go h.keepMain(context.WithoutCancel(ctx))
+	return h.taskView(ctx, id)
+}
+
 // taskPrompt is what the conversation gets: a ⏰ line saying what this is, how late when the hub was down, and for a
-// repeating one that it repeats by itself (so the run doesn't schedule the next one too).
-func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb bool) string {
+// repeating one that it repeats by itself (so the run doesn't schedule the next one too). continued: it goes into the
+// task's own conversation, which has had all that (and the knowledge-base hint) already; it is told the earlier
+// runs are above instead. The task's prompt is always there: it may have been edited, or compacted away.
+func taskPrompt(t Task, due, now time.Time, loc *time.Location, manual, kb, continued bool) string {
 	r := prompts.TaskRun{Label: t.label(), Once: t.Repeat == repeatOnce, Interval: t.Repeat == repeatInterval, Due: due.In(loc),
-		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily}
+		Prompt: t.Prompt, KBHint: kb && t.Repeat == repeatDaily, Continued: continued}
 	if r.Interval {
 		r.Every = everyText(t.EveryMinutes)
 	}
@@ -1051,6 +1171,14 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("DELETE /api/v1/assistant/tasks/{id}", h.deleteTaskRoute)
 	api.HandleFunc("POST /api/v1/assistant/tasks/{id}/run", h.runTaskRoute)
+	api.HandleFunc("POST /api/v1/assistant/tasks/{id}/fresh", func(w http.ResponseWriter, r *http.Request) {
+		t, ok := h.forgetConversation(r.Context(), r.PathValue("id"))
+		if !ok {
+			writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+			return
+		}
+		writeJSON(w, map[string]any{"task": t})
+	})
 	api.HandleFunc("GET /api/v1/assistant/runs", func(w http.ResponseWriter, r *http.Request) {
 		s := h.loadSchedule(r.Context())
 		s.mu.Lock()
@@ -1151,6 +1279,10 @@ func (h *Hub) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	h.broadcastSchedule()
 	sess, err := h.runTask(t, now, now, true)
+	if errors.Is(err, errTaskBusy) {
+		writeErr(w, http.StatusConflict, errors.New("上一轮还在运行，等它跑完再试"))
+		return
+	}
 	if err != nil {
 		callErr(w, err)
 		return

@@ -104,6 +104,8 @@ type TaskRun struct {
 	Due            time.Time
 	Prompt         string
 	KBHint         bool // daily runs with the knowledge base on
+	// Continued: it goes into the task's own conversation, which got the background on the first run.
+	Continued bool
 }
 
 func RenderTaskRun(t TaskRun) string { return render("assistant/task_run", t) }

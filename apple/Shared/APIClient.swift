@@ -495,8 +495,9 @@ nonisolated struct APIClient: Sendable {
     // MARK: Assistant schedule, memory (docs/assistant.md)
 
     /// Something the assistant does on its own (docs/assistant.md「定时任务」): once (a follow-up it scheduled), every
-    /// day at a time (早报), or every N minutes (a patrol). Runs go into the conversation it came from or a new one,
-    /// with its own launcher / permission mode / effort (nil = the assistant's defaults); pushed when done.
+    /// day at a time (早报), or every N minutes (a patrol). Runs go into the conversation it came from, else into the
+    /// task's own one (the first run starts it, the next ones continue it), with its own launcher / permission mode /
+    /// effort (nil = the assistant's defaults); pushed when done.
     struct ScheduledTask: Codable, Identifiable, Hashable, Sendable {
         enum Repeat: String, Codable, Sendable, CaseIterable { case once, daily, interval }
         var id: String
@@ -509,7 +510,9 @@ nonisolated struct APIClient: Sendable {
         var everyMinutes: Int     // interval
         var enabled: Bool
         var machineID: String?
-        var sessionID: String?    // the conversation runs go into; nil = a new one each run
+        var sessionID: String?    // the conversation it came from, runs go into it; nil = the task's own one
+        var runMachineID: String? // read-only: the task's own conversation; nil = the next run starts one
+        var runSessionID: String?
         var launcher: String?
         var permissionMode: String?
         var effort: String?
@@ -525,6 +528,12 @@ nonisolated struct APIClient: Sendable {
             case permissionMode = "permission_mode", createdBy = "created_by"
             case lastRun = "last_run", lastSessionID = "last_session_id", nextRun = "next_run"
             case lastStatus = "last_status", lastError = "last_error"
+            case runMachineID = "run_machine_id", runSessionID = "run_session_id"
+        }
+        /// Where the next run goes when the task isn't continuing the conversation it came from.
+        var ownConversation: SessionKey? {
+            guard let m = runMachineID, let s = runSessionID else { return nil }
+            return SessionKey(machineID: m, sessionID: s)
         }
         init(id: String = "", title: String, prompt: String, repeats: Repeat = .daily, at: Date? = nil, time: String = "09:00",
              weekdays: [Int] = [], everyMinutes: Int = 30, enabled: Bool = true) {
@@ -549,6 +558,7 @@ nonisolated struct APIClient: Sendable {
             createdBy = text(.createdBy)
             lastRun = date(.lastRun); lastSessionID = text(.lastSessionID); lastStatus = text(.lastStatus); lastError = text(.lastError)
             nextRun = date(.nextRun)
+            runMachineID = text(.runMachineID); runSessionID = text(.runSessionID)
         }
         func encode(to e: Encoder) throws { // only what the user edits; "" = the default
             var c = e.container(keyedBy: CodingKeys.self)
@@ -574,6 +584,10 @@ nonisolated struct APIClient: Sendable {
         var sessionID: String
         var machineID: String
         enum CodingKeys: String, CodingKey { case sessionID = "session_id", machineID = "machine_id" }
+    }
+    /// 下次开新对话: the task's next run starts a new conversation of its own (the old one stays in 对话).
+    func freshTaskConversation(_ id: String) async throws -> ScheduledTask {
+        try await post("/api/v1/assistant/tasks/\(id)/fresh", body: [String: String](), as: TaskBody.self).task
     }
     /// Runs a task now instead of at its time; returns the conversation it went to.
     func runTask(_ id: String) async throws -> SessionKey {

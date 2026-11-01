@@ -208,6 +208,12 @@ class ApiClient(val baseUrl: String, val token: String) {
     suspend fun start(machine: String, cwd: String, launcher: String, nameHint: String?, mode: String? = null, workspaceId: String? = null): Session =
         JsonCodec.decodeFromString<SessionResp>(post("/api/v1/sessions", StartBody(machine, cwd, launcher, null, mode, workspaceId, async = true, nameHint = nameHint))).session
 
+    @Serializable private data class QueueEdit(val keep: List<Int>)
+    @Serializable private data class QueueResp(val queue: List<String> = emptyList())
+    /** Pulls the queued input back out of claude and re-queues the indexes in `keep`; returns what was queued. */
+    suspend fun editQueue(k: SessionKey, keep: List<Int>): List<String> =
+        JsonCodec.decodeFromString<QueueResp>(post(sp(k) + "/queue", QueueEdit(keep))).queue
+
     @Serializable private data class ModesBody(
         @SerialName("permission_mode") val permissionMode: String? = null,
         val effort: String? = null,

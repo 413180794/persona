@@ -131,6 +131,7 @@ fun JarvisRoot(hub: Hub?, openSession: MutableState<SessionKey?>, openTab: Mutab
                     hub, open, onBack = { openSession.value = null },
                     // As the inbox's 交给 Jarvis: a new assistant conversation about the message.
                     onHandToJarvis = { handoff = it; openSession.value = null; settings = false; tab = Tab.Jarvis },
+                    onCleared = { openSession.value = it },
                 )
             }
             settings -> {
