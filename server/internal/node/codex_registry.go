@@ -356,7 +356,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	n.codices.mu.Unlock()
 	var out []proto.Session
 	for id, src := range sources {
-		if seen[id] || n.isAssistantSession(id) {
+		if seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
 			continue
 		}
 		s := proto.Session{SessionID: id, Agent: "codex", SourceKind: "codex_history", SourceThreadID: src.thread, Status: proto.StatusOffline,
@@ -364,6 +364,9 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		if src.path != "" {
 			if st, err := os.Stat(src.path); err == nil {
 				m := n.meta(src.path, st)
+				if strings.HasSuffix(m.cwd, "/.jarvis/assistant") {
+					continue
+				}
 				s.Cwd, s.Model, s.LastText, s.UpdatedAt, s.Rev = m.cwd, m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
 				s.Title = threadTitle(src.home, src.thread)
 				untitled(&s, m)
