@@ -207,14 +207,31 @@ private struct MacShell: View {
         case .agents: ChatsView()
         case .inbox: MacInboxPage()
         case .knowledge: NavigationStack { KnowledgeView() }
-        case .machines:
-            NavigationStack {
-                MachineDashboardView()
-                    .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
-                    .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
-            }
+        case .machines: MacMachinesPage()
         case .settings: SettingsView()
         }
+    }
+}
+
+/// The sidebar's 机器: the dashboard, pushing a machine's charts or its details.
+struct MacMachinesPage: View {
+    @State private var path = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            MachineDashboardView()
+                .navigationDestination(for: MachineMonitorRoute.self) { r in MachineMonitorView(machineID: r.id) }
+                .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(machineID: r.id) }
+        }
+        #if DEBUG
+        // `-macSection machines -openMonitor <machine id>`: that machine's charts (`-openMachineDetail <id>`: its details).
+        .onAppear {
+            guard path.isEmpty else { return }
+            let d = UserDefaults.standard
+            if let m = d.string(forKey: "openMonitor"), m != "all" { path.append(MachineMonitorRoute(id: m)) }
+            else if let m = d.string(forKey: "openMachineDetail") { path.append(MachineDetailRoute(id: m)) }
+        }
+        #endif
     }
 }
 

@@ -273,6 +273,12 @@ targets:
     platform: macOS
     sources:
       - path: JarvisMacTests
+      # Shared logic the Mac runs as is: the same tests, run against the Mac build (docs/mac.md 验收清单).
+      - path: JarvisTests/IntentsTests.swift
+      - path: JarvisTests/KnowledgeTests.swift
+      - path: JarvisTests/MachineMetricsTests.swift
+      - path: JarvisTests/NotificationActionsTests.swift
+      - path: JarvisTests/NotifyPrefsTests.swift
     dependencies:
       - target: JarvisMac
     settings:

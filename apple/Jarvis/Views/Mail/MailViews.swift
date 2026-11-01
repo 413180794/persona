@@ -156,6 +156,10 @@ struct MailDetailView: View {
         .sheet(isPresented: $askClaude) {
             NewChatPrefilled(prompt: "请用 mail_read 读取邮件（account_id: \(summary.accountID)，mailbox: \(summary.mailbox)，uid: \(summary.uid)，主题：\(summary.subject ?? "")），总结要点，并给出建议的回复草稿。")
         }
+        #if DEBUG && os(macOS)
+        // `-showMailAskClaude YES` (with an inbox mail open): the 「让 Claude 处理」 sheet.
+        .onAppear { if UserDefaults.standard.bool(forKey: "showMailAskClaude") { askClaude = true } }
+        #endif
         .task {
             guard let api = model.api else { return }
             do {
