@@ -36,8 +36,10 @@ Go，单一二进制，`server/cmd/jarvisd`。模式见 `docs/architecture.md`�
 
 ## 和 herdr-core 的连接
 
-herdr-core 是第二个宿主（`node/hostherdrcore.go`），和 herdr 并列：每次刷新两边同时取快照，herdr-core 没开时立刻答「没有终端」，
-不拨号、不记日志；卡住时最多拖 2 秒，不拖 herdr。socket 位置、方法、映射和第一期不支持的部分见 `docs/plan-orca-support.md`「herdr-core 宿主」。
+每台机器的 node 只用一个引擎（`node/engine.go`）：herdr（默认）或 herdr-core（`node/hostherdrcore.go`），用户在 App 里按机器选，
+hub 连上时用 `engine.use` 告诉 node（`docs/protocol.md`「引擎」）。用 herdr 时 node 和原来完全一样，不碰 herdr-core（只有 `node.info`
+问一次它在不在）。选了 herdr-core 而它没开时，立刻答「没有终端」，不拨号、不记日志。socket 位置、方法、映射和第一期不支持的部分见
+`docs/plan-orca-support.md`「herdr-core 宿主」。
 联调：`go test -tags hclive -run HerdrCoreLive ./internal/node/ -v`（自己起一个独立的 herdr-core，再只读地列一遍默认实例）。
 
 ## 部署

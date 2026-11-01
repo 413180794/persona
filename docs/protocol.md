@@ -32,6 +32,11 @@
  // 怎么连的（docs/server.md「tailcat 打洞」）：transport 是 local | ssh | tailcat（离线时没有）；tailcat：配了 tailcat 地址；
  // tailcat_path 只在走 tailcat 时有：direct（打洞成功，点对点）| relay（经 DERP 中继）。旧 hub 没有这几个字段
  "transport":"ssh","tailcat":true,
+ // 引擎（下面「引擎」）：这台机器的 node 驱动哪个终端宿主，hub 总是给出（没选过是 herdr）；engines 是 node 在这台机器上
+ // 找到的（离线时为空数组）。旧 hub 没有这两个字段
+ "engine":"herdr",
+ "engines":[{"id":"herdr","name":"herdr","available":true,"version":"0.9.3"},
+            {"id":"herdr-core","name":"Herdr App","available":false}],
  // 系统信息（docs/machines.md）：node 最近一次连上时报的，存在 hub 的数据库里，离线也有；旧 node 没有这个字段
  "system":{"os":"darwin","distro":"macos","like":"","name":"macOS 26.1","version":"26.1","build":"25B78",
            "kernel":"Darwin 25.1.0","arch":"arm64","model":"MacBook Pro","cpu":"Apple M4 Pro","cores":14,
@@ -107,6 +112,7 @@
 | --- | --- | --- |
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
@@ -325,6 +331,17 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 - 手机接管（`features` 有 `terminal_control`，`docs/terminal.md` 第十一节）：订阅带 `control` 时网格是手机的尺寸，帧格式不变；
   键和新尺寸走 `terminal_input`；离开（退订 / 断开）后窗格回到电脑上的尺寸，还有别人在看就改回镜像（新 epoch）。
 
+## 引擎
+
+每台机器的 node 只驱动一个终端宿主，叫这台机器的「引擎」：`herdr`（经典的 herdr 命令行，默认，原来的机器不受影响）或
+`herdr-core`（Herdr 桌面版背后的运行时，显示名「Herdr App」）。两个不同时用：同时跑会互相拖慢刷新（见 `docs/plan-orca-support.md`「herdr-core 宿主」）。
+
+- 用户在 App 里按机器选（配对时、设置 › 机器），`PUT /api/v1/machines/{mid}/engine`。hub 存在 Postgres 的 settings 里
+  （一个键 `machine_engines`：机器 id → 引擎），不写 hub.json。
+- hub 每次连上 node，在第一次列会话之前发 `engine.use`；用户改了且机器在线时马上发。不认识 `engine.use` 的旧 node 照旧用 herdr。
+- `engines` 来自 `node.info`：herdr 能用 = 它答话，或者 socket 文件在，或者 PATH 上有 `herdr`；herdr-core 能用 = 它的 socket 答 `hello`
+  （用 herdr 的 node 只在 `node.info` 时这样问一次 herdr-core，别的时候不碰它）。`version` 是各自报的版本，没有就不带。
+
 ## hub ↔ node RPC
 
 `ssh <host> ~/.jarvis/bin/jarvisd node --stdio`（hub 机器本机直接起子进程）。stdin/stdout 每行一个 JSON。
@@ -335,7 +352,8 @@ hub → node 请求：
 
 | method | params → result |
 | --- | --- |
-| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system}`（`system` 见 Machine，node 启动时读一次） |
+| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个） |
+| `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent、换事件流，并推一次 `sessions.changed` |
 | `launchers.list` | → `{launchers}` |
 | `dirs.list` | `{path}` → 同 REST |
 | `sessions.list` | → `{sessions}` |
