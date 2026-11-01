@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/herdrcore"
 	"github.com/chyroc/jarvis/server/internal/host"
+	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
 // fakeHC is a scriptable herdr-core socket (JSON-RPC 2.0, one message per line): it serves connections at once (an
@@ -204,12 +204,14 @@ func hcTerminal(addr, app, state string, fgPid int, fgArgv0, cwd, space, tab, wh
 	return t
 }
 
-// hcNode is a Node with two hosts: a fresh fake herdr (empty unless told otherwise) and a fake herdr-core.
+// hcNode is a Node whose engine is herdr-core, on a fake herdr-core; the fake herdr it also gets (herdrNode's) is not
+// registered, so a call to it would show in its trace.
 func hcNode(t *testing.T) (*Node, *fakeHerdr, *fakeHC, string) {
 	t.Helper()
 	n, f, home := herdrNode(t)
 	hc := newFakeHC(t)
-	n.hosts = host.NewRegistry(&herdrHost{c: &herdr.Client{Socket: f.sock}}, &herdrCoreHost{c: &herdrcore.Client{Socket: hc.sock}})
+	n.hosts = host.NewRegistry(&herdrCoreHost{c: &herdrcore.Client{Socket: hc.sock}})
+	n.eng.name = proto.EngineHerdrCore
 	return n, f, hc, home
 }
 

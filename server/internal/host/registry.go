@@ -3,6 +3,7 @@ package host
 import (
 	"slices"
 	"strings"
+	"sync"
 )
 
 // PaneRef is a pane of some host: the host's kind and the host's own id for it.
@@ -22,20 +23,31 @@ func (p PaneRef) String() string {
 	return p.Kind + ":" + p.ID
 }
 
-// Registry holds the hosts a node drives, by kind, in the order added.
+// Registry holds the hosts a node drives, by kind, in the order added. Set replaces them all at once (the node
+// switching engines); the slices it hands out are never changed afterwards.
 type Registry struct {
+	mu    sync.RWMutex
 	hosts []Host
 }
 
 // NewRegistry holds hosts; the first one of a kind wins.
 func NewRegistry(hosts ...Host) *Registry {
 	r := &Registry{}
+	r.Set(hosts...)
+	return r
+}
+
+// Set replaces the hosts; the first one of a kind wins.
+func (r *Registry) Set(hosts ...Host) {
+	var out []Host
 	for _, h := range hosts {
-		if h != nil && r.Get(h.Kind()) == nil {
-			r.hosts = append(r.hosts, h)
+		if h != nil && !slices.ContainsFunc(out, func(o Host) bool { return o.Kind() == h.Kind() }) {
+			out = append(out, h)
 		}
 	}
-	return r
+	r.mu.Lock()
+	r.hosts = out
+	r.mu.Unlock()
 }
 
 // All are the hosts in the order added.
@@ -43,15 +55,14 @@ func (r *Registry) All() []Host {
 	if r == nil {
 		return nil
 	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.hosts
 }
 
 // Get is the host of a kind, nil when none is registered.
 func (r *Registry) Get(kind string) Host {
-	if r == nil {
-		return nil
-	}
-	for _, h := range r.hosts {
+	for _, h := range r.All() {
 		if h.Kind() == kind {
 			return h
 		}

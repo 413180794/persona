@@ -30,7 +30,8 @@ type Node struct {
 	bin  string // absolute path of this executable
 	// managed: launchers kept by the hub (managed.go)
 	managed managedLaunchers
-	hosts   *host.Registry // the terminal hosts, by kind (hosts.go)
+	hosts   *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
+	eng     engineState    // which engine, and its change stream (engine.go)
 	peer    *rpc.Peer
 	logger  *log.Logger
 
@@ -125,7 +126,7 @@ func New(version string) (*Node, error) {
 		events:   newHerdrEvents(),
 		cdirs:    newClaudeDirs(),
 	}
-	n.hosts = machineHosts(n.logger.Printf)
+	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
 	n.state = newState()
 	return n, nil
 }
@@ -155,12 +156,7 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		defer ln.Close()
 	}
 	go n.pollAgents(ctx)
-	go n.watchHerdr(ctx)
-	for _, h := range n.hosts.All() {
-		if w, ok := h.(host.Watcher); ok && h.Kind() != host.Herdr {
-			go n.watchHost(ctx, w)
-		}
-	}
+	n.watchEngine(ctx) // herdr's event stream until the hub picks another engine (engine.go)
 	go n.warmTranscripts(ctx)
 	go n.reapAssistants(ctx)
 	go n.meterUsage(ctx)
@@ -285,6 +281,17 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
+	case "engine.use": // the engine the user chose for this machine (engine.go)
+		var e struct {
+			Engine string `json:"engine"`
+		}
+		if err := json.Unmarshal(params, &e); err != nil {
+			return nil, err
+		}
+		if err := n.useEngine(ctx, e.Engine); err != nil {
+			return nil, err
+		}
+		return map[string]any{"engine": n.engine()}, nil
 	case "node.configure":
 		var c struct {
 			ClaudeDirs []string `json:"claude_dirs"`
@@ -621,15 +628,18 @@ func nonNil(items []proto.Item) []proto.Item {
 
 func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	host, _ := os.Hostname()
+	hv := n.herdrVersion(ctx)
 	return proto.NodeInfo{
 		Hostname:      host,
 		OS:            runtime.GOOS,
 		Arch:          runtime.GOARCH,
 		Home:          n.home,
-		HerdrVersion:  n.herdrVersion(ctx),
+		HerdrVersion:  hv,
 		ClaudeVersion: claudeVersion(ctx),
 		Version:       n.Version,
 		System:        n.system(ctx),
+		Engine:        n.engine(),
+		Engines:       n.engines(ctx, hv),
 	}
 }
 

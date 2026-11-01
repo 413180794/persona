@@ -132,15 +132,21 @@ func (n *Node) snapshotDue(last time.Time) bool {
 	return false
 }
 
-// watchHost keeps the change stream of a host other than herdr open (host.Watcher: herdr-core), reopening it with a
-// backoff when it ends: each change takes a snapshot at once. Such a stream covers every pane of its host, so it is
-// not reopened when the panes change; it does not count as herdr's stream being live (snapshotDue still polls herdr).
-// A host that is not running fails at once and is tried again after the backoff, without logging (its client logs).
+// watchHost keeps the change stream of an engine other than herdr open (host.Watcher: herdr-core), reopening it with
+// a backoff when it ends: each change takes a snapshot at once, and while it is live pollAgents snapshots only every
+// slowSnapshot, as with herdr's. Such a stream covers every pane of its host, so it is not reopened when the panes
+// change. A host that is not running fails at once and is tried again after the backoff, without logging (its client
+// logs).
 func (n *Node) watchHost(ctx context.Context, w host.Watcher) {
+	e := n.events
 	backoff := time.Second
 	for ctx.Err() == nil {
 		started := time.Now()
-		_ = w.Watch(ctx, nil, n.events.poke)
+		_ = w.Watch(ctx, nil, func() {
+			e.live.Store(true) // the first one is the stream starting: snapshot to cover the gap before it
+			e.poke()
+		})
+		e.live.Store(false)
 		if ctx.Err() != nil {
 			return
 		}

@@ -43,6 +43,27 @@ type Machine struct {
 	Transport   string `json:"transport,omitempty"`
 	Tailcat     bool   `json:"tailcat,omitempty"`
 	TailcatPath string `json:"tailcat_path,omitempty"`
+	// Engine is the terminal host the machine's node drives (EngineHerdr when never chosen); Engines, what the node
+	// found on the machine (empty while offline). docs/protocol.md「引擎」.
+	Engine  string   `json:"engine"`
+	Engines []Engine `json:"engines"`
+}
+
+// Terminal engines: the one terminal host a machine's node drives, chosen per machine.
+const (
+	EngineHerdr     = "herdr"      // the classic herdr CLI
+	EngineHerdrCore = "herdr-core" // the runtime of the Herdr desktop app
+)
+
+// EngineNames are the engines a machine may use, with the names the app shows.
+var EngineNames = map[string]string{EngineHerdr: "herdr", EngineHerdrCore: "Herdr App"}
+
+// Engine is one engine as found on a machine: Available when its socket is reachable (herdr: or its binary is there).
+type Engine struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+	Version   string `json:"version,omitempty"`
 }
 
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
@@ -88,6 +109,10 @@ type NodeInfo struct {
 	ClaudeVersion string  `json:"claude_version"`
 	Version       string  `json:"version"`
 	System        *System `json:"system,omitempty"`
+	// Engine is the engine the node drives now; Engines, what it found (proto.Machine.Engines). Older nodes leave
+	// both out.
+	Engine  string   `json:"engine,omitempty"`
+	Engines []Engine `json:"engines,omitempty"`
 }
 
 // System is what a machine is: OS, hardware, since when it runs (sysmon; docs/machines.md). Read once when the node

@@ -666,51 +666,32 @@ type layout struct {
 }
 
 // refreshHosts takes one snapshot of every host: agents plus the space / slot names shown as space / slot. It fails
-// only when no host answered; a host that did not answer keeps the agents it gave last, except one that is not
-// running (host.ErrNotRunning), which has none. Hosts are asked at once, so a slow one does not hold the others.
+// only when no host answered; a host that did not answer keeps the agents it gave last. A host that is not running
+// (host.ErrNotRunning: herdr-core without its socket) answered: it has no agents. A node registers one host, its engine
+// (engine.go), so hosts are asked in turn.
 func (n *Node) refreshHosts(ctx context.Context) error {
-	hosts := n.hosts.All()
-	if len(hosts) == 0 {
+	if len(n.hosts.All()) == 0 {
 		return errNoHost
-	}
-	type look struct {
-		agents []host.Agent
-		full   bool
-		err    error
-	}
-	looks := make([]look, len(hosts))
-	if len(hosts) == 1 {
-		looks[0].agents, looks[0].full, looks[0].err = n.lookAt(ctx, hosts[0])
-	} else {
-		var wg sync.WaitGroup
-		for i, h := range hosts {
-			wg.Go(func() { looks[i].agents, looks[i].full, looks[i].err = n.lookAt(ctx, h) })
-		}
-		wg.Wait()
 	}
 	var all []host.Agent
 	var firstErr error
 	answered, snapped := false, false
-	for i, h := range hosts {
-		agents, err := looks[i].agents, looks[i].err
+	for _, h := range n.hosts.All() {
+		agents, full, err := n.lookAt(ctx, h)
 		n.mu.Lock()
 		if n.hostAgents == nil {
 			n.hostAgents = map[string][]host.Agent{}
 		}
-		switch {
-		case err != nil && errors.Is(err, host.ErrNotRunning):
-			if firstErr == nil {
-				firstErr = err
-			}
-			agents = nil
-			delete(n.hostAgents, h.Kind())
-		case err != nil:
+		if err != nil && errors.Is(err, host.ErrNotRunning) {
+			err, agents = nil, nil // an answer: nothing runs there
+		}
+		if err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
 			agents = n.hostAgents[h.Kind()]
-		default:
-			answered, snapped = true, snapped || looks[i].full
+		} else {
+			answered, snapped = true, snapped || full
 			n.hostAgents[h.Kind()] = agents
 		}
 		n.mu.Unlock()

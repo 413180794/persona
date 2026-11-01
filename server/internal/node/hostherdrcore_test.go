@@ -10,14 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chyroc/jarvis/server/internal/herdr"
 	"github.com/chyroc/jarvis/server/internal/herdrcore"
 	"github.com/chyroc/jarvis/server/internal/host"
 	"github.com/chyroc/jarvis/server/internal/proto"
 )
 
-// herdr-core as a second host (hostherdrcore.go), driven through the node's requests against a fake herdr-core
-// socket, next to a fake herdr that keeps answering as before.
+// herdr-core as the machine's engine (hostherdrcore.go, engine.go), driven through the node's requests against a fake
+// herdr-core socket.
 
 const hcCwd = "/tmp/hcproj"
 
@@ -60,13 +59,15 @@ func TestHerdrCoreListsClaudeTerminals(t *testing.T) {
 	if c.PaneID != "herdr-core:t3" || c.Status != proto.StatusUnknown || c.SlotName != "review" || c.SlotIndex != 2 {
 		t.Errorf("t3: %+v", c)
 	}
-	// Only the terminals that could be claude's are asked about, and only for their processes; herdr as before.
+	// Only the terminals that could be claude's are asked about, and only for their processes; herdr is not asked.
 	for _, call := range hc.trace() {
 		if !strings.HasPrefix(call, "terminal.get ") || strings.Contains(call, "m/t7") || strings.Contains(call, `"t6"`) {
 			t.Errorf("herdr-core call %s", call)
 		}
 	}
-	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
+	if tr := f.trace(); len(tr) != 0 {
+		t.Errorf("herdr called: %v", tr)
+	}
 }
 
 func TestHerdrCoreStatusAndAgent(t *testing.T) {
@@ -243,71 +244,18 @@ func TestHerdrCoreEventsKickARefresh(t *testing.T) {
 	}
 }
 
-// herdr-core not running: herdr's sessions as before, at once, nothing logged; with herdr down too the refresh fails
-// as it did.
-func TestHerdrCoreAbsentIsQuietAndFast(t *testing.T) {
-	n, f, _ := herdrNode(t)
-	var logged []string
-	var mu sync.Mutex
-	hc := &herdrcore.Client{Socket: "/tmp/jarvis-no-such-dir/c.sock", Log: func(format string, args ...any) {
-		mu.Lock()
-		logged = append(logged, fmt.Sprintf(format, args...))
-		mu.Unlock()
-	}}
-	n.hosts = host.NewRegistry(&herdrHost{c: &herdr.Client{Socket: f.sock}}, &herdrCoreHost{c: hc})
-	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", "")}, nil))
-	start := time.Now()
-	for range 3 {
-		if err := n.refreshHosts(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if took := time.Since(start); took > time.Second {
-		t.Errorf("3 refreshes took %s", took)
-	}
-	if a, ok := n.agent(sidA); !ok || a.PaneID != "w1:p1" {
-		t.Errorf("herdr's session: %+v %v", a, ok)
-	}
-	f.reply("session.snapshot", herdrFail{"server_error", "down"})
-	f.reply("agent.list", herdrFail{"server_error", "down"})
-	if err := n.refreshHosts(context.Background()); err == nil || !strings.Contains(err.Error(), "down") {
-		t.Errorf("both down: %v", err)
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(logged) != 0 {
-		t.Errorf("logged %q", logged)
-	}
-}
-
-// A herdr-core that does not answer holds a refresh at most its short list timeout, not herdr's; one that went away
-// takes its sessions with it.
-func TestHerdrCoreSlowOrGone(t *testing.T) {
-	n, f, hc, home := hcNode(t)
+// herdr-core not running: no sessions, at once, nothing logged (and the refresh succeeds: nothing runs there); one
+// that went away takes its sessions with it.
+func TestHerdrCoreAbsentOrGone(t *testing.T) {
+	n, _, hc, home := hcNode(t)
 	writeClaudePID(t, home, 4242, sidB)
-	f.reply("session.snapshot", snapshot(nil, nil, []any{claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/s", "")}, nil))
+	writeTranscript(t, home, hcCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
 	hc.setTerminals(hcTerminal("t1", "claude-code", "idle", 4242, "claude", hcCwd, "", "", ""))
 	if err := n.refreshHosts(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := n.agent(sidB); !ok {
 		t.Fatal("herdr-core's session not found")
-	}
-	hc.mu.Lock()
-	hc.listDelay = 4 * time.Second
-	hc.mu.Unlock()
-	start := time.Now()
-	if err := n.refreshHosts(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if took := time.Since(start); took > 3*time.Second {
-		t.Errorf("a wedged herdr-core held the refresh %s", took)
-	}
-	if _, ok := n.agent(sidB); !ok {
-		t.Error("a slow herdr-core lost its sessions") // kept, like a herdr that did not answer
-	}
-	if _, ok := n.agent(sidA); !ok {
-		t.Error("herdr's session lost")
 	}
 	if err := os.Remove(hc.sock); err != nil {
 		t.Fatal(err)
@@ -318,6 +266,51 @@ func TestHerdrCoreSlowOrGone(t *testing.T) {
 	}
 	if _, ok := n.agent(sidB); ok {
 		t.Error("herdr-core stopped, its session is still live")
+	}
+
+	var logged []string
+	var mu sync.Mutex
+	c := &herdrcore.Client{Socket: "/tmp/jarvis-no-such-dir/c.sock", Log: func(format string, args ...any) {
+		mu.Lock()
+		logged = append(logged, fmt.Sprintf(format, args...))
+		mu.Unlock()
+	}}
+	n.hosts.Set(&herdrCoreHost{c: c})
+	start := time.Now()
+	for range 3 {
+		if err := n.refreshHosts(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("3 refreshes took %s", took)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(logged) != 0 {
+		t.Errorf("logged %q", logged)
+	}
+}
+
+// With herdr-core as the engine, a terminal running classic herdr's client is not claude's, whatever state passes
+// through it.
+func TestHerdrCoreSkipsANestedHerdr(t *testing.T) {
+	n, _, hc, home := hcNode(t)
+	writeClaudePID(t, home, 4242, sidA)
+	writeTranscript(t, home, hcCwd, sidA, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
+	nested := hcTerminal("t1", "claude-code", "working", 4242, "/usr/local/bin/herdr", hcCwd, "", "", "")
+	hc.setTerminals(nested)
+	if list := listSessions(t, n); len(byID(list)) != 0 && byID(list)[sidA].Status != proto.StatusOffline {
+		t.Errorf("a nested herdr became a session: %+v", byID(list)[sidA])
+	}
+	if _, ok := n.agent(sidA); ok {
+		t.Error("a nested herdr is an agent")
+	}
+	for _, fg := range []herdrcore.Foreground{{Pid: 1, Name: "herdr"}, {Pid: 1, Name: "x", Argv: []string{"herdr"}}} {
+		tm := herdrcore.Terminal{Address: "t2", Status: &herdrcore.Status{App: "claude-code", State: "idle"}, Foreground: &fg}
+		if a := fromTerminal(tm); a.Agent != "" {
+			t.Errorf("%+v: agent %q", fg, a.Agent)
+		}
 	}
 }
 

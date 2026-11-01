@@ -271,6 +271,9 @@ func fromTerminal(t herdrcore.Terminal) host.Agent {
 	}
 	if t.Foreground != nil {
 		a.ForegroundCwd = t.Foreground.Cwd
+		if nestedHerdr(t.Foreground) {
+			return a // classic herdr's client: whatever runs inside belongs to herdr, not to this terminal
+		}
 	}
 	if t.Status != nil && t.Status.App != "" {
 		a.Agent = t.Status.App
@@ -289,6 +292,15 @@ func fromTerminal(t herdrcore.Terminal) host.Agent {
 		}
 	}
 	return a
+}
+
+// nestedHerdr: the terminal's foreground program is classic herdr's client. The claude in one of herdr's panes may
+// report its OSC 7501 state through it, so this terminal would look like claude's own; it is not an agent here.
+func nestedHerdr(fg *herdrcore.Foreground) bool {
+	if fg.Name == "herdr" {
+		return true
+	}
+	return len(fg.Argv) > 0 && filepath.Base(fg.Argv[0]) == "herdr"
 }
 
 // stripSpinner drops the glyph a busy TUI puts before its title ("✳ fix the build", "⠸ fix the build").
