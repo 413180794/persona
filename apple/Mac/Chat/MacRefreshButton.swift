@@ -1,14 +1,14 @@
 #if os(macOS)
 import SwiftUI
 
-/// 刷新 ⌘R in the window's toolbar for a page iOS refreshes by pulling down (a Mac list has no pull to refresh): the
-/// session's 文件 and Git panes. Only one pane is shown at a time, so ⌘R is never on two buttons (收件箱 has its own,
-/// in another column of the sidebar).
+/// 刷新 in the window's toolbar for a page iOS refreshes by pulling down (a Mac list has no pull to refresh): the
+/// session's 文件 and Git panes. ⌘R is 显示 › 刷新's (one shortcut for the whole app); the pane registers its load with
+/// it (`macRefreshes`), so ⌘R and this button do the same.
 struct MacRefreshItem: ToolbarContent {
     let action: () async -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) { MacRefreshButton(action: action) }
+        ToolbarItem(placement: .primaryAction) { MacRefreshButton(action: action).macRefreshes(action) }
     }
 }
 
@@ -26,7 +26,6 @@ private struct MacRefreshButton: View {
         } label: {
             Label("刷新", systemImage: Theme.Icon.retry)
         }
-        .keyboardShortcut("r", modifiers: .command)
         .disabled(busy)
         .help("刷新（⌘R）")
     }

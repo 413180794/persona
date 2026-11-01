@@ -1,0 +1,70 @@
+import SwiftUI
+
+/// The pages on screen that refresh themselves (iOS pulls them: 知识库, 机器, a chat's 文件 / Git pane), per window.
+/// 显示 › 刷新 ⌘R asks the key window's latest one; when it goes, the one under it answers again.
+struct MacPageRefreshes {
+    private var entries: [(id: UUID, window: Int)] = []
+
+    mutating func add(_ id: UUID, window: Int) {
+        entries.removeAll { $0.id == id }
+        entries.append((id, window))
+    }
+
+    /// Its window number changed (or arrived): it moves there, on top.
+    mutating func move(_ id: UUID, to window: Int) { add(id, window: window) }
+
+    mutating func remove(_ id: UUID) { entries.removeAll { $0.id == id } }
+
+    func top(window: Int?) -> UUID? {
+        guard let window else { return nil }
+        return entries.last { $0.window == window }?.id
+    }
+}
+
+/// The registered pages and their refresh actions.
+@MainActor final class MacPageRefreshRegistry {
+    static let shared = MacPageRefreshRegistry()
+    private var stack = MacPageRefreshes()
+    private var actions: [UUID: () async -> Void] = [:]
+
+    func set(_ id: UUID, window: Int, action: @escaping () async -> Void) {
+        stack.move(id, to: window)
+        actions[id] = action
+    }
+
+    func remove(_ id: UUID) {
+        stack.remove(id)
+        actions[id] = nil
+    }
+
+    /// The key window's page refresh, if a page there has one.
+    func action(window: Int?) -> (() async -> Void)? {
+        stack.top(window: window).flatMap { actions[$0] }
+    }
+}
+
+extension View {
+    /// This page refreshes itself on ⌘R (显示 › 刷新) while it is on screen in the key window: the Mac's pull to refresh.
+    func macRefreshes(_ action: @escaping () async -> Void) -> some View {
+        modifier(MacRefreshesModifier(action: action))
+    }
+}
+
+private struct MacRefreshesModifier: ViewModifier {
+    let action: () async -> Void
+    @State private var id = UUID()
+    @State private var window: Int?
+
+    func body(content: Content) -> some View {
+        content
+            .macWindowNumber($window)
+            .onChange(of: window, initial: true) { _, w in
+                if let w { MacPageRefreshRegistry.shared.set(id, window: w, action: action) }
+            }
+            .onAppear {
+                // Back on screen in the same window (a pushed page popped): on top again.
+                if let window { MacPageRefreshRegistry.shared.set(id, window: window, action: action) }
+            }
+            .onDisappear { MacPageRefreshRegistry.shared.remove(id) }
+    }
+}

@@ -47,6 +47,9 @@ struct MachineMonitorView: View {
         .navigationTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
+        #if os(macOS)
+        .macRefreshes { await load() }
+        #endif
         .task(id: Poll(range: range, active: phase == .active)) {
             guard phase == .active else { return }
             while !Task.isCancelled {

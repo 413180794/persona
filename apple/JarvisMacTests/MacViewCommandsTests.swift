@@ -14,12 +14,34 @@ struct MacViewCommandsTests {
 
     /// 显示 › 刷新 ⌘R: the iPhone pulls to refresh the list it is on; the Mac refreshes what the section shows.
     @Test func refreshFollowsTheSection() {
-        #expect(MacViewCommands.refreshTarget(.inbox) == .inbox)
-        #expect(MacViewCommands.refreshTarget(.assistant) == .assistant)
-        #expect(MacViewCommands.refreshTarget(.agents) == .hub)
-        #expect(MacViewCommands.refreshTarget(.machines) == .hub)
-        #expect(MacViewCommands.refreshTarget(.knowledge) == .hub)
-        #expect(MacViewCommands.refreshTarget(.settings) == .hub)
+        #expect(MacViewCommands.refreshTarget(.inbox, page: false) == .inbox)
+        #expect(MacViewCommands.refreshTarget(.assistant, page: false) == .assistant)
+        #expect(MacViewCommands.refreshTarget(.agents, page: false) == .hub)
+        #expect(MacViewCommands.refreshTarget(.settings, page: false) == .hub)
+        // A page that loads its own data (知识库, 机器, a chat's 文件 / Git pane) refreshes itself, as its pull does on iOS.
+        for s in [MacSection.knowledge, .machines, .agents, .inbox, .assistant] {
+            #expect(MacViewCommands.refreshTarget(s, page: true) == .page)
+        }
+    }
+
+    /// The pages that refresh themselves, per window: the latest one on screen answers ⌘R; when it goes, the one under it.
+    @Test func pageRefreshesStackPerWindow() {
+        var r = MacPageRefreshes()
+        let kb = UUID(), entry = UUID(), files = UUID()
+        r.add(kb, window: 1)
+        r.add(entry, window: 1)
+        r.add(files, window: 2)
+        #expect(r.top(window: 1) == entry)
+        #expect(r.top(window: 2) == files)
+        #expect(r.top(window: 3) == nil)
+        #expect(r.top(window: nil) == nil)
+        r.remove(entry)
+        #expect(r.top(window: 1) == kb)
+        r.move(files, to: 1) // a pane whose window number arrived late or changed
+        #expect(r.top(window: 1) == files)
+        #expect(r.top(window: 2) == nil)
+        r.remove(files); r.remove(kb)
+        #expect(r.top(window: 1) == nil)
     }
 
     private func session(_ id: String, _ state: AgentState, assistant: Bool = false) -> Session {

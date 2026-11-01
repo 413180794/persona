@@ -38,6 +38,9 @@ struct MachineDashboardView: View {
         .navigationTitle("机器监控")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
+        #if os(macOS)
+        .macRefreshes { await load() } // ⌘R: no pull to refresh on the Mac
+        #endif
         .task(id: phase == .active) {
             guard phase == .active else { return } // in the background: nothing to draw, nothing to fetch
             while !Task.isCancelled {

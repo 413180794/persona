@@ -18,11 +18,13 @@ enum MacViewCommands {
         return list[((i + delta) % list.count + list.count) % list.count]
     }
 
-    /// What 显示 › 刷新 (⌘R, the iPhone's pull to refresh) asks the hub for again, by the section on screen.
-    enum RefreshTarget: Equatable { case hub, assistant, inbox }
+    /// What 显示 › 刷新 (⌘R, the iPhone's pull to refresh) loads again: the key window's page when it loads its own
+    /// data (`macRefreshes`: 知识库, 机器, a chat's 文件 / Git pane), else what the section shows from the hub.
+    enum RefreshTarget: Equatable { case page, hub, assistant, inbox }
 
-    static func refreshTarget(_ section: MacSection) -> RefreshTarget {
-        switch section {
+    static func refreshTarget(_ section: MacSection, page: Bool) -> RefreshTarget {
+        if page { return .page }
+        return switch section {
         case .inbox: .inbox
         case .assistant: .assistant
         case .agents, .knowledge, .machines, .settings: .hub
@@ -68,8 +70,8 @@ struct MacViewMenu: Commands {
             Button("全部展开") { MacShellState.shared.agentsList?.expand() }
                 .disabled(MacShellState.shared.agentsList == nil)
             Divider()
-            // The iPhone's pull to refresh: a Mac list has no pull, so the menu asks the hub again (收件箱's toolbar
-            // button does the same for its list).
+            // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' 刷新 buttons
+            // have none, so two never claim it).
             Button("刷新") { refresh() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!model.isPaired)
@@ -86,8 +88,10 @@ struct MacViewMenu: Commands {
 
     private func refresh() {
         let section = MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab)
+        let page = MacPageRefreshRegistry.shared.action(window: NSApp.keyWindow?.windowNumber)
         Task {
-            switch MacViewCommands.refreshTarget(section) {
+            switch MacViewCommands.refreshTarget(section, page: page != nil) {
+            case .page: await page?()
             case .inbox: await InboxStore.shared.refresh()
             case .assistant: await model.refreshAssistant(); await model.refresh()
             case .hub: await model.refresh()

@@ -60,6 +60,9 @@ struct KnowledgeView: View {
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
         .onChange(of: kind) { showIgnored = false }
         .refreshable { await load() }
+        #if os(macOS)
+        .macRefreshes { await load() } // ⌘R: no pull to refresh on the Mac
+        #endif
         // Entries open with view-based links, not `navigationDestination(for:)`: this page is itself pushed with
         // `navigationDestination(isPresented:)`, and a value-pushed page on top of that lands *under* it (docs/lessons/ios.md):
         // a hit seemed not to open, and back showed the entry's ⚠️ placeholder (2026-10-31).
@@ -576,6 +579,9 @@ struct KnowledgeDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        #if os(macOS)
+        .macRefreshes { await load() }
+        #endif
     }
 
     // MARK: Header
