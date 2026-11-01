@@ -14,7 +14,7 @@ import (
 func (n *Node) paneHost(pane string) (host.Host, host.PaneRef, error) {
 	h, ref := n.hosts.Pane(pane)
 	if h == nil {
-		return nil, ref, fmt.Errorf("no %s host on this machine for pane %s", ref.Kind, pane)
+		return nil, ref, fmt.Errorf("no %s host on this machine", ref.Kind)
 	}
 	return h, ref, nil
 }
@@ -28,7 +28,7 @@ func paneCap[C any](n *Node, pane string) (C, host.PaneRef, error) {
 	}
 	c, ok := h.(C)
 	if !ok {
-		return none, ref, fmt.Errorf("%s cannot do this", h.Kind())
+		return none, ref, unsupported(h)
 	}
 	return c, ref, nil
 }
@@ -88,7 +88,7 @@ func hostCap[C any](n *Node) (C, error) {
 	}
 	c, ok := h.(C)
 	if !ok {
-		return none, fmt.Errorf("%s cannot do this", h.Kind())
+		return none, unsupported(h)
 	}
 	return c, nil
 }
@@ -114,7 +114,12 @@ func (n *Node) paneAgent(ctx context.Context, pane string) (*host.Agent, error) 
 func renameSlot(ctx context.Context, launch host.Launcher, slot, name string) error {
 	org, ok := launch.(host.Organizer)
 	if !ok {
-		return fmt.Errorf("cannot rename %s", slot)
+		return fmt.Errorf("%w: cannot rename %s", host.ErrUnsupported, slot)
 	}
 	return org.RenameSlot(ctx, slot, name)
+}
+
+// unsupported: the host lacks the capability asked for ("unsupported: …", errors.Is host.ErrUnsupported).
+func unsupported(h host.Host) error {
+	return fmt.Errorf("%w: %s cannot do this", host.ErrUnsupported, h.Kind())
 }

@@ -107,6 +107,9 @@ func (n *Node) paneOfPID(pid int) string {
 	if ok {
 		return p
 	}
+	if len(n.hosts.All()) == 0 {
+		return "" // nothing to look for; not cached, the pid's pane is not known to be none
+	}
 	var env []byte
 	if runtime.GOOS == "linux" {
 		env, _ = os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")

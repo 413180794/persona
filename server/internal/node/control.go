@@ -472,14 +472,14 @@ func (n *Node) close(ctx context.Context, id string) error {
 		}
 		return fmt.Errorf("这个 Agent 不在 herdr 里运行，没法从手机关闭")
 	}
+	org, ref, err := paneCap[host.Organizer](n, a.PaneID) // a host that cannot close it is not interrupted first
+	if err != nil {
+		return err
+	}
 	_ = n.sendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(200 * time.Millisecond)
 	_ = n.sendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(500 * time.Millisecond)
-	org, ref, err := paneCap[host.Organizer](n, a.PaneID)
-	if err != nil {
-		return err
-	}
 	return org.Close(ctx, ref, a.WorkspaceID, a.TabID)
 }
 

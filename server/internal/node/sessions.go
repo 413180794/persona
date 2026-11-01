@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -655,6 +656,9 @@ func snippet(s string) string {
 	return s
 }
 
+// errNoHost: the node has no terminal host to look at.
+var errNoHost = errors.New("no terminal host")
+
 // layout remembers a host's space and slot names from its last snapshot.
 type layout struct {
 	spaces map[string]host.Space
@@ -664,6 +668,9 @@ type layout struct {
 // refreshHosts takes one snapshot of every host: agents plus the space / slot names shown as space / slot. It fails
 // only when no host answered; a host that did not answer keeps the agents it gave last.
 func (n *Node) refreshHosts(ctx context.Context) error {
+	if len(n.hosts.All()) == 0 {
+		return errNoHost
+	}
 	var all []host.Agent
 	var firstErr error
 	answered, snapped := false, false

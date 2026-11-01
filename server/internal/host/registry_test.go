@@ -32,7 +32,11 @@ func TestPaneRefStoredForm(t *testing.T) {
 		{"", PaneRef{Herdr, ""}},
 		{"herdr:w1:p2", PaneRef{Herdr, "herdr:w1:p2"}}, // herdr is never a prefix
 		{"orca:tab1:leaf2", PaneRef{"orca", "tab1:leaf2"}},
-		{"tmux:%3", PaneRef{Herdr, "tmux:%3"}}, // not a registered host
+		{"tmux:%3", PaneRef{Herdr, "tmux:%3"}}, // not a known host kind
+		{"orca:a:b", PaneRef{Orca, "a:b"}},
+		// An Orca pane key without the prefix is not an Orca pane: unprefixed means herdr.
+		{"0b0e2c1a-0000-4000-8000-000000000001:0b0e2c1a-0000-4000-8000-000000000002",
+			PaneRef{Herdr, "0b0e2c1a-0000-4000-8000-000000000001:0b0e2c1a-0000-4000-8000-000000000002"}},
 	} {
 		got := r.Ref(c.stored)
 		if got != c.want {
@@ -47,6 +51,22 @@ func TestPaneRefStoredForm(t *testing.T) {
 	}
 	if h, _ := NewRegistry(stub{"orca"}).Pane("w1:p1"); h != nil {
 		t.Errorf("a herdr pane without a herdr host has no host, got %v", h)
+	}
+	// Parsing does not depend on what is registered: an Orca pane on a machine without Orca stays an Orca pane (no
+	// host), never a herdr pane.
+	herdrOnly := NewRegistry(stub{Herdr})
+	if h, ref := herdrOnly.Pane("orca:a:b"); h != nil || ref != (PaneRef{Orca, "a:b"}) || ref.String() != "orca:a:b" {
+		t.Errorf("Pane(orca:a:b) without orca = %v, %+v", h, ref)
+	}
+	if ParsePane("w79:p2") != (PaneRef{Herdr, "w79:p2"}) {
+		t.Error("herdr ids stay herdr")
+	}
+}
+
+func TestErrUnsupported(t *testing.T) {
+	err := Mark(errors.New("unsupported: orca cannot do this"), ErrUnsupported)
+	if !errors.Is(err, ErrUnsupported) || ErrUnsupported.Error() != "unsupported" {
+		t.Fatalf("ErrUnsupported = %v", err)
 	}
 }
 

@@ -1,6 +1,9 @@
 package host
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // PaneRef is a pane of some host: the host's kind and the host's own id for it.
 //
@@ -56,16 +59,19 @@ func (r *Registry) Get(kind string) Host {
 	return nil
 }
 
-// Ref parses a stored pane: "<kind>:<id>" for a registered host other than herdr, anything else is a herdr pane
-// (herdr's own ids hold a colon too: "w1:p2").
-func (r *Registry) Ref(pane string) PaneRef {
-	if kind, id, ok := strings.Cut(pane, ":"); ok && kind != Herdr && r.Get(kind) != nil {
+// Ref parses a stored pane (ParsePane); it does not depend on which hosts are registered.
+func (r *Registry) Ref(pane string) PaneRef { return ParsePane(pane) }
+
+// ParsePane parses a stored pane: "<kind>:<id>" for a known host kind other than herdr (Kinds), anything else is a
+// herdr pane — herdr's own ids hold a colon too ("w79:p2"), and so does an unprefixed "<uuid>:<uuid>".
+func ParsePane(pane string) PaneRef {
+	if kind, id, ok := strings.Cut(pane, ":"); ok && kind != Herdr && slices.Contains(Kinds, kind) {
 		return PaneRef{Kind: kind, ID: id}
 	}
 	return PaneRef{Kind: Herdr, ID: pane}
 }
 
-// Pane is the host a stored pane belongs to (nil when that host is not registered) and its ref.
+// Pane is the host a stored pane belongs to (nil when that host is not registered on this machine) and its ref.
 func (r *Registry) Pane(pane string) (Host, PaneRef) {
 	ref := r.Ref(pane)
 	return r.Get(ref.Kind), ref

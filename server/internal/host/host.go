@@ -11,8 +11,15 @@ import (
 	"errors"
 )
 
-// Herdr is the kind of the herdr host. Its panes are stored and sent without a prefix (see PaneRef).
-const Herdr = "herdr"
+// Host kinds. Herdr panes are stored and sent without a prefix (see PaneRef).
+const (
+	Herdr = "herdr"
+	Orca  = "orca" // not implemented yet (docs/plan-orca-support.md)
+)
+
+// Kinds are the host kinds a stored pane may be prefixed with; the list is fixed, not what a machine registers, so
+// a stored pane means the same everywhere.
+var Kinds = []string{Herdr, Orca}
 
 // Host is what every terminal host provides. Pane ids in what it returns (Agent.PaneID, Created.Pane) are PaneRefs
 // of its own kind; the PaneRefs it is given are always of its kind.
@@ -113,6 +120,9 @@ var (
 	ErrAttachBusy = errors.New("attach_busy")
 	// ErrTakenOver: the terminal being driven was taken by another client.
 	ErrTakenOver = errors.New("taken_over")
+	// ErrUnsupported: the host cannot do this (a capability it lacks). Errors carrying it start with "unsupported",
+	// the prefix the hub falls back on.
+	ErrUnsupported = errors.New("unsupported")
 )
 
 // Mark makes err also match kind with errors.Is, keeping its text and what it already matches.
