@@ -4,7 +4,7 @@
 // the "who answers first" policy. A runtime supplies a driver with what only it knows: its sessions, their pages, and
 // how to send to them; it calls back append / stream / ask / sessionsChanged as things happen.
 
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +18,10 @@ const RESUME_WAIT = 2 * 60 * 1000 // how long a pending ask waits for the next n
 const APPEND_WINDOW = 80 // ms: committed content within this window goes out as one batch
 const STREAM_EVERY = 120 // ms: live text at most this often (the whole text so far each time)
 const RETRY_PRESENT = 1000 // ms: retry this often while the socket file is there (a node is, or is restarting)
+const TOUCHED = 50 // the sessions the phone sent to or started last, listed whatever a runtime's limits say
 const RETRY_MAX = 30_000 // ms: the longest wait while there is no socket file (no node on this machine yet)
+const NEW_NODE_EVERY = 5000 // ms: after an older node, look this often for a new one (the socket file replaced)
+const NEW_NODE_MAX = 10 * 60_000 // ms: …and connect again after this long anyway
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
@@ -49,7 +52,9 @@ export function defaultSocketPath() {
  * @param {{ runtime: string, name?: string, agent?: string, version?: string, launcher?: string, launcherModel?: string,
  *   socketPath?: string, answerFirst?: 'auto'|'phone'|'local', log?: (msg: string) => void,
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
- *   refreshMs?: number }} options
+ *   refreshMs?: number, requires?: string[] }} options - requires: node features (runtime.hello's features) this
+ *   runtime cannot do without; on a node lacking one it does not stay connected, and tries again once the node
+ *   restarts (its socket file is replaced) or after 10 minutes.
  */
 export function createRuntime(driver, options) {
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
@@ -72,11 +77,46 @@ export function createRuntime(driver, options) {
   const watched = new Map() // session id -> { last, catchingUp, held: [], batch, timer }
   const streams = new Map() // session id -> { text, timer, sentAt }
   const pending = new Map() // session id -> interactions waiting on the phone
-  const phoneDriven = new Map() // session id -> when the phone last sent to it or started it
+  const phoneDriven = new Map() // session id -> when the phone last sent to it or started it (oldest first)
+  const sends = new Map() // client_msg_id -> the send's promise: a retry gets the first one's answer (oldest first)
+  const drivenBy = (id) => {
+    phoneDriven.delete(id)
+    phoneDriven.set(id, Date.now())
+    while (phoneDriven.size > 200) phoneDriven.delete(phoneDriven.keys().next().value)
+  }
   // Whether the node has a hub connected (runtime.hello's hub, then runtime.hub). Older nodes do not say: assume so.
   let hubConnected = true
+  // What the node does beyond the first protocol (runtime.hello's features; empty from older nodes).
+  let nodeFeatures = []
+  // Features this runtime cannot do without (options.requires): it does not stay on a node lacking one.
+  const requires = Array.isArray(options.requires) ? options.requires : []
+  let warnedRequires = false
 
   // ---- connection ----
+
+  // After an older node: try again when the socket file is replaced (a node restarting re-creates it: an update), or
+  // after NEW_NODE_MAX anyway — not every few seconds, which would fill the node's log with connects and leaves.
+  function awaitNewNode() {
+    const id = () => {
+      try {
+        const st = statSync(socketPath)
+        return `${st.ino}:${st.mtimeMs}`
+      } catch {
+        return ''
+      }
+    }
+    const was = id()
+    const since = Date.now()
+    const look = () => {
+      if (stopped) return
+      if (id() !== was || Date.now() - since >= NEW_NODE_MAX) return open()
+      retryTimer = setTimeout(look, NEW_NODE_EVERY)
+      retryTimer.unref?.()
+    }
+    clearTimeout(retryTimer)
+    retryTimer = setTimeout(look, NEW_NODE_EVERY)
+    retryTimer.unref?.()
+  }
 
   function scheduleConnect(delay) {
     if (stopped) return
@@ -131,6 +171,7 @@ export function createRuntime(driver, options) {
       scheduleConnect(backoff())
       return
     }
+    let heldOff = false // left an older node on purpose: awaitNewNode decides when to come back
     socket.once('error', () => {}) // handled by close
     socket.once('connect', async () => {
       const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
@@ -143,6 +184,19 @@ export function createRuntime(driver, options) {
       try {
         const res = await p.call('runtime.hello', hello(), { timeoutMs: 10_000 })
         setHub(res?.hub !== false)
+        nodeFeatures = Array.isArray(res?.features) ? res.features.filter((f) => typeof f === 'string') : []
+        const missing = requires.filter((f) => !nodeFeatures.includes(f))
+        if (missing.length > 0) {
+          // An older node: stay off it, and look again now and then (an updated node restarts and is found).
+          if (!warnedRequires) log(`jarvis: this jarvisd node lacks ${missing.join(', ')}; update jarvisd (connecting again once it restarts)`)
+          warnedRequires = true
+          if (peer === p) peer = undefined
+          heldOff = true
+          p.close(new Error('node too old'))
+          awaitNewNode()
+          return
+        }
+        warnedRequires = false
       } catch (err) {
         log(`jarvis: hello failed: ${err.message}`)
         if (peer === p) peer = undefined
@@ -159,6 +213,7 @@ export function createRuntime(driver, options) {
       scheduleConnect(baseRetry)
     })
     socket.once('close', () => {
+      if (heldOff) return
       if (!peer || peer.socket !== socket) scheduleConnect(backoff())
     })
   }
@@ -410,12 +465,25 @@ export function createRuntime(driver, options) {
         return watch(params)
       case 'session.unwatch':
         return unwatch(params)
-      case 'session.send':
+      case 'session.send': {
         need(driver.send, 'send')
-        phoneDriven.set(params.session_id, Date.now())
-        await driver.send(params)
-        schedulePush() // what the phone sends to is active now: the list may change (a runtime keeps it listed)
-        return { ok: true }
+        drivenBy(params.session_id)
+        // Once per client_msg_id: a retry (the app's, the node's after a reconnect) answers as the first did, or waits for
+        // it; a failed one may be sent again.
+        const key = typeof params.client_msg_id === 'string' && params.client_msg_id ? params.client_msg_id : undefined
+        if (key && sends.has(key)) return sends.get(key)
+        const p = (async () => {
+          await driver.send(params)
+          schedulePush() // what the phone sends to is active now: the list may change (a runtime keeps it listed)
+          return { ok: true }
+        })()
+        if (key) {
+          sends.set(key, p)
+          p.catch(() => sends.delete(key))
+          while (sends.size > 500) sends.delete(sends.keys().next().value)
+        }
+        return p
+      }
       case 'session.interrupt':
         await need(driver.interrupt, 'interrupt')(params)
         return { ok: true }
@@ -430,7 +498,7 @@ export function createRuntime(driver, options) {
       case 'session.start': {
         const res = await need(driver.start, 'start')(params)
         const id = res?.session?.session_id
-        if (id) phoneDriven.set(id, Date.now())
+        if (id) drivenBy(id)
         schedulePush()
         return res
       }
@@ -468,10 +536,45 @@ export function createRuntime(driver, options) {
     phoneFirst,
     /** Whether the phone is watching a session (no need to compute what nobody gets). */
     watching: (sessionId) => watched.has(sessionId),
+    /**
+     * Whether the phone sent to or started session id lately (the latest 50): such a session stays listed past a
+     * runtime's age and count limits — a chat open on the phone must stay in the list, or the node no longer knows
+     * whose it is.
+     */
+    touched(id) {
+      return [...phoneDriven.keys()].slice(-TOUCHED).includes(id)
+    },
+    /**
+     * Which of a runtime's sessions to list (docs/runtimes.md「列表」): those pinned (running, waiting for an answer) and
+     * those the phone touched always; the rest updated within `days`, newest first, until `max` in all. Rows are
+     * anything; `id(row)` and `updatedAt(row)` (ms) read them (by default a runtime.sessions row). Newest first.
+     * @template T
+     * @param {T[]} rows
+     * @param {{ days?: number, max?: number, pinned?: (row: T) => boolean, id?: (row: T) => string, updatedAt?: (row: T) => number }} [o]
+     * @returns {T[]}
+     */
+    recent(rows, o = {}) {
+      const days = o.days ?? 7
+      const max = o.max ?? 80
+      const id = o.id ?? ((r) => r.session_id)
+      const at = o.updatedAt ?? ((r) => Date.parse(r.updated_at) || 0)
+      const pinned = o.pinned ?? (() => false)
+      const touched = new Set([...phoneDriven.keys()].slice(-TOUCHED))
+      const since = Date.now() - days * 24 * 60 * 60 * 1000
+      const sorted = [...rows].sort((a, b) => at(b) - at(a))
+      const always = sorted.filter((r) => pinned(r) || touched.has(id(r)))
+      const rest = sorted.filter((r) => !pinned(r) && !touched.has(id(r)) && at(r) >= since).slice(0, Math.max(0, max - always.length))
+      return [...always, ...rest].sort((a, b) => at(b) - at(a))
+    },
     /** Whether a node is connected. */
     get connected() {
       return peer !== undefined
     },
+    /**
+     * Whether the connected node does this (runtime.hello's features): "prefer_running" — when two runtimes list one
+     * session, the one running it answers, so listing sessions only on disk (status offline) is safe.
+     */
+    nodeHas: (feature) => peer !== undefined && nodeFeatures.includes(feature),
     /** Whether that node has a hub connected (the phone can be asked). */
     get hubConnected() {
       return peer !== undefined && hubConnected

@@ -2,32 +2,20 @@
 // DSH and hands the events to these functions; the tests feed them recorded event shapes. The generic item helpers
 // (page limits, clipping, one-line summaries) are the runtime SDK's.
 
-import { clipInput, light, snippet } from '../../runtime-sdk/index.js'
+import { appToolName, clipInput, light, snippet } from '../../runtime-sdk/index.js'
 
 /** Jarvis seq of a DSH event: DSH counts from 0, Jarvis treats 0 as "nothing yet". */
 export const jarvisSeq = (dshSeq) => dshSeq + 1
 /** DSH seq of a Jarvis seq. */
 export const dshSeq = (seq) => seq - 1
 
-// DSH tool names as the apps know them (the same argument names: command, file_path, old_string, pattern…), so the
-// chat draws a command, a diff or a file read the way it does for Claude.
-const TOOL_NAMES = {
-  bash: 'Bash',
-  read: 'Read',
-  read_image: 'Read',
-  edit: 'Edit',
-  write: 'Write',
-  grep: 'Grep',
-  glob: 'Glob',
-  web_fetch: 'WebFetch',
-  web_search: 'WebSearch',
-  todo_write: 'TodoWrite',
-  ask_user_question: 'AskUserQuestion',
-}
+// DSH's tools under the names the apps draw (the SDK's common ones, plus DSH's own); DSH's arguments are already the
+// apps' (command, file_path, old_string, pattern…), so the chat draws a command, a diff or a file read as for Claude.
+const OWN_TOOLS = { read_image: 'Read', ask_user_question: 'AskUserQuestion' }
 
 /** Tool name the apps render. */
 export function toolName(name) {
-  return TOOL_NAMES[name] ?? name
+  return appToolName(name, OWN_TOOLS)
 }
 
 /** Parse a tool call's arguments (a JSON string in DSH), clipping very long strings as transcripts do. */

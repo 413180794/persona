@@ -9,14 +9,15 @@ import { Peer } from '../lib/wire.js'
 import { until } from './fake-node.js'
 
 /**
- * @param {{ jarvisd: string, keep?: boolean, home?: string }} opts - home: an existing HOME to use (a resident node's,
- *   startResident): `jarvisd node --stdio` then relays to the resident node, as the hub's ssh does. Left in place.
+ * @param {{ jarvisd: string, keep?: boolean, home?: string, env?: Record<string, string> }} opts - home: an existing
+ *   HOME to use (a resident node's, startResident): `jarvisd node --stdio` then relays to the resident node, as the
+ *   hub's ssh does. Left in place. env: more of the node's environment (HERDR_SOCKET_PATH for a herdr of the run's own).
  */
-export async function startNode({ jarvisd, keep = false, home: given }) {
+export async function startNode({ jarvisd, keep = false, home: given, env = {} }) {
   const root = given ? undefined : mkdtempSync(join('/tmp', 'jrt-e2e-'))
   const home = given ?? join(root, 'home')
   mkdirSync(home, { recursive: true })
-  const child = spawn(jarvisd, ['node', '--stdio'], { env: { PATH: '/usr/bin:/bin', HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] })
+  const child = spawn(jarvisd, ['node', '--stdio'], { env: { PATH: '/usr/bin:/bin', ...env, HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] })
   const log = []
   child.stderr.on('data', (d) => log.push(String(d)))
   const stdio = {

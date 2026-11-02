@@ -16,7 +16,7 @@ import { Peer } from '../lib/wire.js'
 export async function startFakeNode(t, opts = {}) {
   const dir = opts.path ? undefined : mkdtempSync('/tmp/jrt-') // unix socket paths are short on macOS: not under $TMPDIR
   const path = opts.path ?? join(dir, 'runtime.sock')
-  const n = { path, events: [], hello: undefined, peer: undefined, asked: [], resolve: () => ({ dismiss: true }), hub: opts.hub ?? true }
+  const n = { path, events: [], hello: undefined, peer: undefined, asked: [], resolve: () => ({ dismiss: true }), hub: opts.hub ?? true, hellos: 0 }
   let connected
   n.ready = new Promise((r) => { connected = r })
   const server = createServer((socket) => {
@@ -25,9 +25,10 @@ export async function startFakeNode(t, opts = {}) {
       onRequest: async (method, params) => {
         if (method === 'runtime.hello') {
           n.hello = params
+          n.hellos++
           n.peer = p
           setImmediate(connected)
-          return { protocol: 1, node_version: 'fake', hub: n.hub }
+          return { protocol: 1, node_version: 'fake', hub: n.hub, features: opts.features ?? ['prefer_running', 'resume_argv'] }
         }
         if (method === 'interaction.create') {
           n.asked.push(params.interaction)

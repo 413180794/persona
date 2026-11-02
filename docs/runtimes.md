@@ -59,7 +59,19 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 
 SDK 负责的（每个 runtime 不用再写）：连接 / 重连 / `runtime.hello`、列表推送、watch 的补发和连续性（`from_seq` / `to_seq` 对不上时如实标出，
 手机会补洞）、逐字节流、问手机时会话变「需要你」、node 重启时同一个交互用同一个 id 再问（`interactionId(...)`，最多等 2 分钟）、
-被撤回的交互从手机上撤掉、「谁先回答」的策略（node 说没有 hub 时一律先给本地界面，`rt.hubConnected`）、断了以后尽快连回来（socket 文件在就每秒试一次）。
+被撤回的交互从手机上撤掉、同一个 `client_msg_id` 只交给 driver 一次（重试拿第一次的结果，失败的可以再发）、「谁先回答」的策略（node 说没有 hub 时一律先给本地界面，`rt.hubConnected`）、断了以后尽快连回来（socket 文件在就每秒试一次）。
+
+runtime 之间共用、但不属于协议的，也在 SDK 里，各 runtime 直接用：
+
+| 用什么 | 干什么 |
+| --- | --- |
+| `rt.recent(rows, {days, max, pinned})`、`rt.touched(id)` | 挑要列的会话：正在跑 / 在等回答的（`pinned`）和手机碰过的（最近 50 个）一定列，其余 `days` 天内的按新旧补到 `max`。手机开着的会话必须一直列着 |
+| `page(items, params, {history, toSeq})` | `session.items` 的分页（从最后按回合 / 条数、往前、往后补、按区间） |
+| `appToolName(name, own)` | 工具名换成 App 画的那套（`bash`→`Bash`、`read`→`Read`…），runtime 补自己的（DSH 的 `ask_user_question`、pi 的 `find`）；参数名各自转 |
+| `testing/model.mjs` 的 `scriptedModel()` | 端到端用的可编排假模型（DSH 的 llm-mock-server，按阶段换剧本） |
+| `testing/conformance.mjs` 的 `conformance()` | 端到端的通用验收：文字回合（思考、回复、回合结束、翻页）、批准、带理由的拒绝、提问、逐字、中断、推送连续；runtime 只传自己的工具参数，再查自己特有的 |
+
+没放进 SDK 的（只有一个 runtime 用，或两边读的是两种东西）：各自的会话存储读法、伴随进程的保活。
 
 ## 内容
 
@@ -125,14 +137,25 @@ rt.start()
 - [ ] 授权 / 提问 / 计划到手机，回答回到 Agent；手机交回时本地界面照常弹
 - [ ] 终端类调用回 `unsupported`；runtime 退出后它的会话从列表里消失
 
-DSH 的端到端（`integrations/dsh/e2e/run.mjs`，真的 `dsh web` + 假模型）是同一套检查加上 DSH 自己的部分。
+这些检查就是 `testing/conformance.mjs`：DSH（`integrations/dsh/e2e/run.mjs`，真的 `dsh web`）、pi（`integrations/pi/e2e/run.mjs`、
+`herdr.mjs`）的端到端都是「起宿主 + 开会话 + `conformance()` + 自己特有的几项」。
 
 ## 现有的 runtime
 
 | runtime | 在哪 | 文档 |
 | --- | --- | --- |
 | DSH（`dsh`） | `integrations/dsh`：`dsh web` 的 Cordis 插件 | `docs/dsh.md` |
+| pi（`pi-<pid>`、`pi-web`、`pi-files`） | `integrations/pi`：pi 扩展（每个 pi 进程一条连接）+ pi-web 伴随进程 | `docs/pi.md` |
 | echo（例子） | `integrations/runtime-sdk/examples/echo-runtime.mjs` | 本文「最小例子」 |
 
-计划中：pi 扩展（issue #170 第 2 步）；基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，
+两个 runtime 列出同一个会话时（pi 的伴随进程从磁盘列、pi-web 或 pi 终端正在跑它），node 让正在跑它的那个负责（列成 `offline` 的排后面），
+同等时新连接优先。会话列成 `offline` 就是告诉 node「我能打开它，但它没在我这儿跑」。
+
+分页用 SDK 的 `page(items, params, {history, toSeq})`：runtime 只要按 seq 排好自己的 item。
+
+依赖 node 新能力的 runtime 用 `createRuntime(…, {requires: ['prefer_running']})`：遇到不支持的旧 node 就不连（记一行日志），
+等 socket 文件被换掉（常驻 node 重启，比如升级）或 10 分钟后再试；`rt.nodeHas(feature)` 查当前 node。由 node 启动、跑在别处的会话（pi 的伴随进程在 pi-web 里新建）报成 `offline`，
+`session.start` 返回的是正在跑它的那个 runtime 的行。
+
+计划中：基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，
 直接复用 SDK 和 `integrations/dsh/lib/map.js`，Jarvis 这边不用加代码。

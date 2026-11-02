@@ -169,3 +169,83 @@ test('while the socket file is there (a node restarting) it retries every second
   await n.ready
   assert.ok(Date.now() - started < 2000, `reconnected after ${Date.now() - started} ms`)
 })
+
+test('page: from the end by turns or limit, back from a seq, forward with a cut, and a span', async () => {
+  const { page } = await import('../index.js')
+  const it = (seq, role, kind = 'text', text = `${role}${seq}`) => ({ id: `${seq}#0`, seq, role, kind, text })
+  const all = [it(1, 'user'), it(2, 'assistant'), it(3, 'user'), it(4, 'assistant'), { ...it(4, 'assistant', 'tool_use'), id: '4#1' }, it(5, 'user'), it(6, 'assistant')]
+  const at = { history: 'h', toSeq: 9 }
+  const last = page(all, { turns: 2 }, at)
+  assert.deepEqual(last.items.map((i) => i.seq), [3, 4, 4, 5, 6])
+  assert.equal(last.has_more, true)
+  assert.equal(last.to_seq, 9)
+  const back = page(all, { before_seq: 5, limit: 1 }, at)
+  assert.deepEqual(back.items.map((i) => i.id), ['4#0', '4#1'], 'a record is not split')
+  assert.equal(back.to_seq, 4)
+  const fwd = page(all, { after_seq: 4 }, at)
+  assert.deepEqual([fwd.from_seq, fwd.to_seq, fwd.more_after, fwd.items.length], [4, 9, false, 2])
+  const span = page(all, { from_seq: 2, through_seq: 3 }, at)
+  assert.deepEqual(span.items.map((i) => i.seq), [2, 3])
+  const many = Array.from({ length: 600 }, (_, i) => it(i + 1, 'assistant'))
+  const cut = page(many, { after_seq: 0 }, { history: 'h', toSeq: 600 })
+  assert.deepEqual([cut.items.length, cut.more_after, cut.to_seq], [500, true, 500])
+})
+
+test('a runtime that requires a node feature stays off an older node until a new one replaces the socket', async (t) => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync('/tmp/jrt-')
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const path = join(dir, 'runtime.sock')
+  const old = await startFakeNode(t, { path, features: [] })
+  const rt = createRuntime(minimal(), { runtime: 'toy', socketPath: path, retryMs: 20, pushDelayMs: 5, requires: ['prefer_running'] })
+  t.after(() => rt.stop())
+  rt.start()
+  await old.ready
+  await new Promise((r) => setTimeout(r, 1500))
+  assert.equal(rt.connected, false)
+  assert.equal(old.all('runtime.sessions').length, 0, 'nothing listed to an older node')
+  assert.equal(old.hellos, 1, 'not reconnecting to the older node meanwhile')
+  old.close() // the node restarts as a newer one: a new socket file at the same path
+  rmSync(path, { force: true })
+  const fresh = await startFakeNode(t, { path })
+  await fresh.ready
+  await until('listed to the new node', () => fresh.last('runtime.sessions'), 10_000)
+  assert.equal(rt.connected, true)
+})
+
+test('a send is made once per client_msg_id: a retry gets the first answer, a failed one may go again', async (t) => {
+  const n = await startFakeNode(t)
+  let calls = 0
+  let fail = false
+  const rt = createRuntime({ ...minimal(), send: async () => { calls++; if (fail) throw new Error('down') } }, { runtime: 'toy', socketPath: n.path, retryMs: 20, pushDelayMs: 5 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await Promise.all([n.peer.call('session.send', { session_id: 's1', text: 'a', client_msg_id: 'm1' }), n.peer.call('session.send', { session_id: 's1', text: 'a', client_msg_id: 'm1' })])
+  await n.peer.call('session.send', { session_id: 's1', text: 'a', client_msg_id: 'm1' })
+  assert.equal(calls, 1)
+  fail = true
+  await assert.rejects(n.peer.call('session.send', { session_id: 's1', text: 'b', client_msg_id: 'm2' }))
+  fail = false
+  await n.peer.call('session.send', { session_id: 's1', text: 'b', client_msg_id: 'm2' })
+  assert.equal(calls, 3)
+  assert.equal(rt.touched('s1'), true)
+  assert.equal(rt.touched('s2'), false)
+})
+
+test('recent: pinned and phone-touched sessions always, the rest by age up to the limit, newest first', async (t) => {
+  const n = await startFakeNode(t)
+  const rt = createRuntime(minimal({ send: async () => {} }), { runtime: 'toy', socketPath: n.path, retryMs: 20, pushDelayMs: 5 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await n.peer.call('session.send', { session_id: 'old-touched', text: 'x', client_msg_id: 'r1' })
+  const day = 86400_000
+  const row = (id, ago, running = false) => ({ session_id: id, updated_at: new Date(Date.now() - ago).toISOString(), running })
+  const rows = [row('a', 1000), row('b', 2000), row('c', 3000), row('ancient', 30 * day), row('old-running', 40 * day, true), row('old-touched', 50 * day)]
+  const got = rt.recent(rows, { days: 7, max: 4, pinned: (r) => r.running })
+  assert.deepEqual(got.map((r) => r.session_id), ['a', 'b', 'old-running', 'old-touched'])
+  const { appToolName } = await import('../index.js')
+  assert.deepEqual([appToolName('bash'), appToolName('find', { find: 'Glob' }), appToolName('mystery')], ['Bash', 'Glob', 'mystery'])
+})

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chyroc/jarvis/server/internal/proto"
 	"github.com/chyroc/jarvis/server/internal/rpc"
 )
 
@@ -103,4 +104,75 @@ func TestRuntimeAwaySessionIsRefusedNotResumed(t *testing.T) {
 		t.Fatalf("unwatch: %v", err)
 	}
 	time.Sleep(10 * time.Millisecond)
+}
+
+// Two runtimes list one session: pi's web server from disk (offline), a pi in a terminal running it. The one running
+// it gets the calls, whichever connected last — a send to the other would make a second writer of a file pi does
+// not lock. When it stops running the session, the one that can open it from disk takes over.
+func TestRuntimeRunningBeatsOnDisk(t *testing.T) {
+	n, _ := runtimeNode(t)
+	const id = "01a19a53-0cab-7122-bec6-6f326bf6e73d"
+	tui := dialRuntime(t, n, map[string]any{"runtime": "pi-4242", "agent": "pi", "caps": map[string]any{"send": true}})
+	_ = tui.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": id, "status": "working"}}})
+	waitFor(t, "listed by the terminal", func() bool { _, ok := listed(t, n)[id]; return ok })
+	web := dialRuntime(t, n, map[string]any{"runtime": "pi-web", "agent": "pi", "caps": map[string]any{"send": true}}) // newer
+	_ = web.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": id, "status": "offline"}}})
+	waitFor(t, "the web server's list taken", func() bool { return len(n.runtimes.sessions()) == 1 && n.runtimes.ownerOf(id) != nil })
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": id, "text": "one", "client_msg_id": "m-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(tui.got("session.send")) != 1 || len(web.got("session.send")) != 0 {
+		t.Fatalf("sends: terminal %d, web %d (want the running one)", len(tui.got("session.send")), len(web.got("session.send")))
+	}
+	if s := listed(t, n)[id]; s.Status != "working" {
+		t.Fatalf("listed as %q, want the running runtime's row", s.Status)
+	}
+	_ = tui.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{}}) // the terminal closed it
+	waitFor(t, "the web server takes over", func() bool { return n.runtimes.ownerOf(id) != nil && listed(t, n)[id].Status == "offline" })
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": id, "text": "two", "client_msg_id": "m-b"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(web.got("session.send")) != 1 {
+		t.Fatal("the web server did not get the send once the terminal let go")
+	}
+}
+
+// A runtime that starts sessions somewhere else (pi's companion starts them in pi-web) reports them offline; the
+// runtime already running it keeps it, and the start answers with that runtime's row.
+func TestRuntimeStartLeavesTheSessionToTheOneRunningIt(t *testing.T) {
+	n, _ := runtimeNode(t)
+	const id = "01a19a6d-3f4f-711a-892d-f86bcccb2477"
+	web := dialRuntime(t, n, map[string]any{"runtime": "pi-web", "agent": "pi", "caps": map[string]any{"send": true}})
+	files := dialRuntime(t, n, map[string]any{"runtime": "pi-files", "agent": "pi", "launcher": "pi-web", "caps": map[string]any{"start": true, "send": true}})
+	files.answer = func(method string, params json.RawMessage) (any, error) {
+		if method == "session.start" {
+			// pi-web made the session and its extension listed it as running before the companion answered.
+			_ = web.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": id, "status": "working", "title": "in pi-web"}}})
+			waitFor(t, "listed by pi-web", func() bool { return n.runtimes.ownerOf(id) != nil })
+			return map[string]any{"session": map[string]any{"session_id": id, "cwd": "/w", "status": "offline"}}, nil
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	raw, err := nodeCall(t, n, "session.start", map[string]any{"cwd": "/w", "launcher": "pi-web", "async": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var started struct {
+		Session proto.Session `json:"session"`
+	}
+	_ = json.Unmarshal(raw, &started)
+	if started.Session.Status != proto.StatusWorking || started.Session.SourceInstanceID != "pi-web" {
+		t.Fatalf("started %s (want pi-web's running row)", raw)
+	}
+	_ = files.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{}}) // its next list: not on disk yet
+	time.Sleep(100 * time.Millisecond)
+	if s, ok := listed(t, n)[id]; !ok || s.Status != proto.StatusWorking {
+		t.Fatalf("lost after the starter's next list: %+v %v", s, ok)
+	}
+	if _, err := nodeCall(t, n, "session.send", map[string]any{"session_id": id, "text": "hi", "client_msg_id": "m-s"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(web.got("session.send")) != 1 || len(files.got("session.send")) != 0 {
+		t.Fatal("the send did not go to pi-web, which runs it")
+	}
 }

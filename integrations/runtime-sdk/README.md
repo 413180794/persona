@@ -5,12 +5,14 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `index.js` | 入口：`createRuntime`（driver + 选项）和 item 的工具（`light`、`clipInput`、`snippet`、`summaryOf`、`interactionId`） |
+| `index.js` | 入口：`createRuntime`（driver + 选项；返回的 `rt` 还有 `recent()` / `touched()` 挑要列的会话）和 item 的工具（`page` 分页、`appToolName` 工具名、`light`、`clipInput`、`snippet`、`summaryOf`、`interactionId`） |
 | `lib/runtime.js` | 连接 / 重连 / `runtime.hello`、列表推送、watch 补发和连续性、逐字节流、问手机、「谁先回答」 |
 | `lib/items.js` | 页里的长度上限、截断说明、稳定的交互 id |
 | `lib/wire.js` | 和 `server/internal/rpc` 同一种 JSON 行 RPC |
 | `testing/fake-node.js` | 单元测试用的假 node（临时 socket，记录 runtime 说了什么，像 node 一样调它） |
 | `testing/node-harness.mjs` | 端到端用：起一个真的 `jarvisd node --stdio`（隔离的 HOME），脚本当 hub |
+| `testing/model.mjs` | 端到端用的可编排假模型（`scriptedModel(DSH_CHECKOUT)`：DSH 的 llm-mock-server，按阶段换剧本） |
+| `testing/conformance.mjs` | 端到端的通用验收（`conformance({...})`：文字回合、批准、带理由的拒绝、提问、逐字、中断、推送连续） |
 | `examples/echo-runtime.mjs` | 最小的完整 runtime，新 runtime 的骨架 |
 | `e2e/echo.mjs` | 验收模板：`JARVISD=<jarvisd> node e2e/echo.mjs` |
 

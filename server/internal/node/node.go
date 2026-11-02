@@ -347,6 +347,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if res, err, handled := n.runtimeHandle(ctx, h, method, params); handled {
 			return res, err
 		}
+	} else if n.piInPane(p.SessionID) { // a pi in herdr without the extension (pi.go)
+		if res, err, handled := n.piWithoutExtension(ctx, method, p.SessionID); handled {
+			return res, err
+		}
 	}
 	switch method {
 	case "session.attach":

@@ -47,6 +47,9 @@ func TestRuntimeStaysAcrossHubConnections(t *testing.T) {
 	if hub, _ := rt.helloR["hub"].(bool); hub {
 		t.Fatal("hello said a hub is connected before one was")
 	}
+	if f, _ := rt.helloR["features"].([]any); len(f) != 2 || f[0] != "prefer_running" || f[1] != "resume_argv" {
+		t.Fatalf("features %v", rt.helloR["features"])
+	}
 	_ = rt.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "session-1", "status": "done"}}})
 	waitFor(t, "the list kept without a hub", func() bool { return len(rh.reg.sessions()) == 1 })
 

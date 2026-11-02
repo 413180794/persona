@@ -36,4 +36,18 @@
   也跟着它建、跟着它没。node 重启或 hub 重连时：launchd 约 10 秒拉起 node，hub 经 tailcat 重连几十秒，插件要等 hub 连上 socket 才出现，
   它的重试又退避到 30 秒，合计一分半，期间打开 DSH 会话报 transcript not found。现在 socket 和 runtime 连接归常驻 node 进程（`RuntimeHost`），
   hub 换连接时不断；SDK 在 socket 文件还在时每秒重试。端到端 `runtime-sdk/e2e/resident.mjs`（真的 `--attach`，断开再连 hub、重启常驻 node）。
+- **pi-web 只在有会话打开时才加载扩展**（2026-11-01，接 pi 时实测）：一个 pi-web 进程跑所有会话，扩展模块加载一次、每个会话调一次工厂函数，
+  但第一个会话打开之前一次都不加载。只靠扩展的话，pi-web 重启后 Jarvis 一个 pi 会话都看不到。所以 pi 另有一个伴随进程负责磁盘上的会话
+  （`docs/pi.md`），两个 runtime 列同一个会话时 node 选正在跑它的那个：pi 的会话文件没有锁，「后连上的说了算」会让手机的消息落到第二个写它的进程上。
+- **SDK 的定时器不撑进程，独立跑的 runtime 要自己撑**（2026-11-01，pi 伴随进程）：SDK 的重连、推送定时器都 `unref()`，因为它一般寄生在 DSH、pi 的进程里，
+  不该替宿主拖住退出。pi-web 伴随进程是只有 runtime 的独立进程，一断开（node 还没起、在重启、太旧）事件循环就空了，进程 `exit 0`，launchd 反复拉起。
+  独立进程自己留一个 `setInterval`（`companion.mjs`）。
+- **主动断开要拦住 socket 的 close 回调**（同一天）：遇到太旧的 node 主动断开后，`close` 回调看到没有 peer，又安排了 1 秒后的重连，把「等 node 重启」的计时器盖掉了：
+  常驻 node 的日志每秒两行 connected / left。单元测试碰巧过了（只看了某一刻没连上），要数旧 node 收到的 hello 次数才测得出（`fake-node.js` 的 `hellos`）。
+- **herdr 里的 pi**（2026-11-01，本机装 herdr 0.9.5 实测）：pi 窗格的 `HERDR_PANE_ID` 就是 `agent list` 里的 `pane_id`（`w1:p1`）；herdr 的 pi 集成报
+  `agent_session {kind: "path"}`，值是会话文件，文件名末尾的 uuid 是 pi 的会话 id（以前 node 只认 `kind: "id"`，pi 一直被丢掉）。herdr 的命令行在没有 server 时只回
+  `server_not_running`，不会自己起一个；node 会把 `/opt/homebrew/bin` 加进 PATH，所以 brew 装上 herdr 后旧 node 也找得到它的命令行。`herdr integration install claude`
+  会改 `~/.claude` 的 hooks，在别人正在用 Claude 的机器上别顺手装。真机验证用 `XDG_CONFIG_HOME=<临时目录> herdr --session <名字> server`，按名字停。
+- **测试卡住要看是不是忘了启动**（同一天）：伴随进程的单元测试没调 `host.start()`，`await n.ready` 永远等不到，`npm test` 挂了三分钟，杀掉后留下临时目录。
+  跑单测也套一层超时（`perl -e 'alarm 300; exec @ARGV' npm test`）。
 

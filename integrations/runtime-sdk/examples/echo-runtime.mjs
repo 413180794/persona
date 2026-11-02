@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createRuntime, interactionId, light, RpcError } from '../index.js'
+import { createRuntime, interactionId, light, page, RpcError } from '../index.js'
 
 /** An echo runtime; options are createRuntime's (socketPath, answerFirst…). */
 export function createEchoRuntime(options = {}) {
@@ -54,21 +54,8 @@ export function createEchoRuntime(options = {}) {
     rt.sessionsChanged(0)
   }
 
-  function page(s, params) {
-    const all = s.items
-    const history = `echo:${s.id}`
-    if (typeof params.through_seq === 'number' && params.through_seq > 0) {
-      return { items: all.filter((i) => i.seq >= (params.from_seq ?? 1) && i.seq <= params.through_seq).map(light), more: false }
-    }
-    if (params.after_seq !== undefined && params.after_seq !== null) {
-      const after = all.filter((i) => i.seq > params.after_seq)
-      return { items: after.map(light), has_more: false, more_after: false, history, from_seq: params.after_seq, to_seq: Math.max(toSeq(s), params.after_seq) }
-    }
-    const before = params.before_seq > 0 ? all.filter((i) => i.seq < params.before_seq) : all
-    const limit = params.limit > 0 ? params.limit : 80
-    const out = before.slice(-limit)
-    return { items: out.map(light), has_more: out.length < before.length, history, to_seq: params.before_seq > 0 ? out.at(-1)?.seq ?? 0 : toSeq(s) }
-  }
+  // Paging is the SDK's (page): a runtime only says what its items are, in seq order.
+  const pageOf = (s, params) => page(s.items, params, { history: `echo:${s.id}`, toSeq: toSeq(s) })
 
   const get = (id) => {
     const s = sessions.get(id)
@@ -85,7 +72,7 @@ export function createEchoRuntime(options = {}) {
       }))
     },
     async items(params) {
-      return page(get(params.session_id), params)
+      return pageOf(get(params.session_id), params)
     },
     async cursor(id) {
       return toSeq(get(id))

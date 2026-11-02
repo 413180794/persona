@@ -509,6 +509,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 				s.Subagents = n.subagents(id)
 			}
 		}
+		if a.Agent == piAgent {
+			n.mergePiRow(&s) // its conversation is the extension's (pi.go)
+		}
 		if n.codexBlocked(id) {
 			markCodexConflict(&s)
 		}
@@ -815,11 +818,15 @@ func (n *Node) setAgents(agents []host.Agent) {
 // setAgentsAt is setAgents for a refresh of engine epoch: false (nothing set) when the engine changed since.
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m := map[string]host.Agent{}
-	var unknown, codex []host.Agent
+	var unknown, codex, pi []host.Agent
 	n.mu.Lock()
 	for _, a := range agents {
 		if a.Agent == "codex" {
 			codex = append(codex, a)
+			continue
+		}
+		if a.Agent == piAgent { // its session: herdr's pi integration, or the extension in it (pi.go)
+			pi = append(pi, a)
 			continue
 		}
 		if a.Agent == traexAgent { // found by its process, which names its session (traex.go)
@@ -838,6 +845,13 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		unknown = append(unknown, a)
 	}
 	n.mu.Unlock()
+	for _, a := range pi {
+		if id := n.piSession(a); id != "" {
+			if _, taken := m[id]; !taken {
+				m[id] = a
+			}
+		}
+	}
 	for _, a := range unknown {
 		// Without herdr's claude integration the pane's claude process says which session it runs. A pane binding
 		// (our start, a hook) comes after it: the bindings of sessions Jarvis started are kept in the hub's

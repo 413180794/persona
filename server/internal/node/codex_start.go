@@ -322,6 +322,9 @@ func CodexStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s %s not found in PATH", codexStartError, words[0])
 	}
-	argv := append(append(append([]string(nil), words...), "--"), f.Prompt)
+	argv := append([]string(nil), words...)
+	if f.Prompt != "" { // a resume without a message (`jarvisd tab-start`, pi.go) runs the words alone
+		argv = append(argv, "--", f.Prompt)
+	}
 	return syscall.Exec(path, argv, env)
 }

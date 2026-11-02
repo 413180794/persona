@@ -9,6 +9,8 @@ package host
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"strings"
 )
 
 // Host kinds. Herdr panes are stored and sent without a prefix (see PaneRef).
@@ -177,7 +179,7 @@ type ReadOpts struct {
 }
 
 // AgentSession is what an agent integration in the host reported about the pane's session (Kind "id": Value is the
-// session id).
+// session id; Kind "path": Value is the session's file, as herdr's pi integration reports it).
 type AgentSession struct {
 	Kind  string
 	Value string
@@ -205,9 +207,31 @@ type Agent struct {
 	RawTitle string
 }
 
-// SessionID is the session id the host reported, "" when none.
+// SessionID is the session id the host reported, "" when none. A reported file names its session: pi's are
+// <time>_<session id>.jsonl, so the id is what follows the last "_" of the file's name (the whole name without one).
 func (a Agent) SessionID() string {
-	if a.AgentSession != nil && a.AgentSession.Kind == "id" {
+	if a.AgentSession == nil {
+		return ""
+	}
+	switch a.AgentSession.Kind {
+	case "id":
+		return a.AgentSession.Value
+	case "path":
+		name := strings.TrimSuffix(filepath.Base(a.AgentSession.Value), filepath.Ext(a.AgentSession.Value))
+		if i := strings.LastIndexByte(name, '_'); i >= 0 {
+			name = name[i+1:]
+		}
+		if name == "." || name == "/" {
+			return ""
+		}
+		return name
+	}
+	return ""
+}
+
+// SessionPath is the session file the host reported (Kind "path"), "" when it reported none.
+func (a Agent) SessionPath() string {
+	if a.AgentSession != nil && a.AgentSession.Kind == "path" {
 		return a.AgentSession.Value
 	}
 	return ""

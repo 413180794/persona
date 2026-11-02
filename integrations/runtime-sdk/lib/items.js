@@ -72,3 +72,75 @@ export function summaryOf(name, input) {
 export function interactionId(runtime, sessionId, kind, key) {
   return `${runtime}-` + createHash('sha256').update(`${sessionId}\0${kind}\0${key}`).digest('hex').slice(0, 16)
 }
+
+// The tools the apps draw as tools (a command, a diff, a file read, a search, a to-do list), under Claude Code's names;
+// their arguments are Claude's too (command, file_path, old_string / new_string, pattern, url, query, todos).
+const APP_TOOLS = {
+  bash: 'Bash', read: 'Read', write: 'Write', edit: 'Edit', multi_edit: 'MultiEdit', grep: 'Grep', glob: 'Glob', ls: 'LS',
+  web_fetch: 'WebFetch', web_search: 'WebSearch', todo_write: 'TodoWrite',
+}
+
+/**
+ * The name the apps know a runtime's tool by: `own` (the runtime's names for the rest: DSH's ask_user_question, pi's
+ * find), then the common ones (bash → Bash, read → Read…), else as it is.
+ * @param {string} name
+ * @param {Record<string, string>} [own]
+ */
+export function appToolName(name, own = {}) {
+  return own[name] ?? APP_TOOLS[name] ?? name
+}
+
+/**
+ * One session.items page over items a runtime has in memory (sorted by seq; several may share a seq), with the
+ * paging every runtime needs (docs/protocol.md「session.items」): from the end by `turns` (a turn starts at a user's
+ * message) or `limit`, back from `before_seq`, forward from `after_seq` (at most 500 items, `more_after` when cut),
+ * or the span `from_seq` … `through_seq`. Texts are cut with light(). toSeq is the session's current to_seq.
+ * @param {object[]} all
+ * @param {object} params
+ * @param {{ history: string, toSeq: number }} at
+ */
+export function page(all, params = {}, { history, toSeq }) {
+  if (typeof params.through_seq === 'number' && params.through_seq > 0) {
+    const from = typeof params.from_seq === 'number' ? params.from_seq : 1
+    return { items: all.filter((i) => i.seq >= from && i.seq <= params.through_seq).map(light), more: false }
+  }
+  if (params.after_seq !== undefined && params.after_seq !== null) {
+    const after = all.filter((i) => i.seq > params.after_seq)
+    let out = after
+    let to = Math.max(toSeq, params.after_seq)
+    let cut = false
+    if (after.length > 500) {
+      let n = 500
+      while (n < after.length && after[n].seq === after[n - 1].seq) n++ // a record's items stay together
+      out = after.slice(0, n)
+      cut = n < after.length
+      if (cut) to = out.at(-1).seq
+    }
+    return { items: out.map(light), has_more: false, more_after: cut, history, from_seq: params.after_seq, to_seq: to }
+  }
+  const before = params.before_seq > 0 ? all.filter((i) => i.seq < params.before_seq) : all
+  let start
+  if (params.turns > 0) {
+    let turns = 0
+    start = 0
+    for (let i = before.length - 1; i >= 0; i--) {
+      const it = before[i]
+      const opens = it.role === 'user' && (it.kind === 'text' || it.kind === 'image') && !(before[i - 1]?.role === 'user' && before[i - 1]?.seq === it.seq)
+      if (opens && ++turns === Math.min(params.turns, 10)) {
+        start = i
+        break
+      }
+    }
+  } else {
+    const limit = params.limit > 0 ? Math.min(params.limit, 500) : 80
+    start = Math.max(0, before.length - limit)
+    while (start > 0 && before[start].seq === before[start - 1].seq) start-- // not half a record
+  }
+  const out = before.slice(start)
+  return {
+    items: out.map(light),
+    has_more: start > 0,
+    history,
+    to_seq: params.before_seq > 0 ? (out.at(-1)?.seq ?? 0) : toSeq,
+  }
+}

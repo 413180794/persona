@@ -3,4 +3,4 @@
 
 export { createRuntime, defaultSocketPath, PROTOCOL } from './lib/runtime.js'
 export { Peer, RpcError } from './lib/wire.js'
-export { PAGE_TEXT, PAGE_OUTPUT, MAX_INPUT, clipTo, clipInput, light, snippet, summaryOf, interactionId } from './lib/items.js'
+export { PAGE_TEXT, PAGE_OUTPUT, MAX_INPUT, appToolName, clipTo, clipInput, light, page, snippet, summaryOf, interactionId } from './lib/items.js'

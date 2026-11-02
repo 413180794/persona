@@ -178,7 +178,11 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		h.hello, h.ready = hello, true
 		h.mu.Unlock()
 		rh.logger.Printf("runtime %s %s #%d connected", hello.Runtime, hello.Version, h.serial)
-		return map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil}, nil
+		// features: what this node does beyond the first protocol. prefer_running: when two runtimes list a session, the
+		// one running it answers for it (runtimes.go recomputeOwners), so a runtime may list sessions it only has on disk.
+		// resume_argv: a session listed offline with resume_argv is resumed in the terminal engine (pi.go).
+		return map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil,
+			"features": []string{"prefer_running", "resume_argv"}}, nil
 	case "interaction.create":
 		n := rh.current()
 		if n == nil { // no hub to put it in front of the phone: ask again (same id) once one is connected
@@ -222,6 +226,7 @@ func (rh *RuntimeHost) event(h *runtimeConn, event string, params json.RawMessag
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
+		h.setResume(resumeArgvs(params))
 		rewatch := rh.reg.setSessions(h, normalizeRuntimeSessions(h, p.Sessions))
 		if n == nil {
 			return
@@ -235,4 +240,35 @@ func (rh *RuntimeHost) event(h *runtimeConn, event string, params json.RawMessag
 	if n != nil {
 		n.runtimeEvent(h, event, params)
 	}
+}
+
+// resumeArgvs reads the resume_argv of a runtime.sessions push: how the terminal engine resumes a session the runtime
+// lists offline (a pi that ran in herdr, pi.go). A command, then its arguments; bounded, no empty words.
+func resumeArgvs(params json.RawMessage) map[string][]string {
+	var p struct {
+		Sessions []struct {
+			SessionID  string   `json:"session_id"`
+			ResumeArgv []string `json:"resume_argv"`
+		} `json:"sessions"`
+	}
+	if json.Unmarshal(params, &p) != nil {
+		return nil
+	}
+	out := map[string][]string{}
+	for _, s := range p.Sessions {
+		if len(s.ResumeArgv) == 0 || len(s.ResumeArgv) > 16 || !runtimeIDRe.MatchString(s.SessionID) {
+			continue
+		}
+		ok, size := true, 0
+		for _, w := range s.ResumeArgv {
+			size += len(w)
+			if w == "" || strings.ContainsAny(w, "\x00\n\r") {
+				ok = false
+			}
+		}
+		if ok && size <= 4096 {
+			out[s.SessionID] = s.ResumeArgv
+		}
+	}
+	return out
 }

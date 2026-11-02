@@ -98,7 +98,7 @@ func TestHerdrListPlacesAgentsInSpacesAndSlots(t *testing.T) {
 		[]any{
 			claudeAgent(sidA, proto.StatusWorking, "w1:p1", "w1:t1", "w1", "/tmp/repo", "fix the build"),
 			claudeAgent(sidB, proto.StatusIdle, "w1:p2", "w1:t9", "w1", "/tmp/repo", "Claude Code"),
-			agentOf("pi", sidC, proto.StatusIdle, "w1:p3", "w1:t2", "w1", "/tmp/repo", ""),
+			agentOf("gemini", sidC, proto.StatusIdle, "w1:p3", "w1:t2", "w1", "/tmp/repo", ""), // herdr knows it, Jarvis does not
 		},
 		nil))
 

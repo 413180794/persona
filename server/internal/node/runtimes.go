@@ -76,6 +76,10 @@ type runtimeConn struct {
 	ready    bool            // runtime.hello arrived
 	sessions []proto.Session // its last runtime.sessions
 	watched  map[string]bool // sessions this connection was asked to watch
+	// What its list said beyond the rows the apps see: the terminal pane a session runs in (pane_id: the extension of a
+	// pi in a herdr pane, pi.go) and how the terminal engine resumes one it lists offline (resume_argv).
+	panes  map[string]string
+	resume map[string][]string
 }
 
 // id is the runtime's id ("" before hello).
@@ -282,10 +286,33 @@ func (b *runtimeRegistry) remove(h *runtimeConn) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.conns, h.serial)
-	for id, o := range b.owner {
-		if o == h {
-			delete(b.owner, id)
+	b.recomputeOwners()
+}
+
+// recomputeOwners picks, for every listed session, the connection that answers for it. Two runtimes can list the
+// same session: pi's web server lists sessions it can open from disk (status offline) while a pi in a terminal has
+// one of them running. The one running it wins — a send must not reach a second writer of a file pi does not lock —
+// and among equals the newest connection (a runtime that reconnected). Callers hold b.mu.
+func (b *runtimeRegistry) recomputeOwners() {
+	type claim struct {
+		h    *runtimeConn
+		live bool
+	}
+	best := map[string]claim{}
+	for _, h := range b.conns {
+		h.mu.Lock()
+		for _, s := range h.sessions {
+			c := claim{h: h, live: s.Status != proto.StatusOffline}
+			o, seen := best[s.SessionID]
+			if !seen || c.live && !o.live || c.live == o.live && h.serial > o.h.serial {
+				best[s.SessionID] = c
+			}
 		}
+		h.mu.Unlock()
+	}
+	b.owner = make(map[string]*runtimeConn, len(best))
+	for id, c := range best {
+		b.owner[id] = c.h
 	}
 }
 
@@ -294,17 +321,17 @@ func (b *runtimeRegistry) remove(h *runtimeConn) {
 func (b *runtimeRegistry) setSessions(h *runtimeConn, list []proto.Session) map[string]int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for id, o := range b.owner {
-		if o == h {
-			delete(b.owner, id)
-		}
-	}
+	h.mu.Lock()
+	h.sessions = list
+	h.mu.Unlock()
+	b.recomputeOwners()
 	rewatch := map[string]int{}
 	now := time.Now()
 	h.mu.Lock()
-	h.sessions = list
 	for _, s := range list {
-		b.owner[s.SessionID] = h
+		if b.owner[s.SessionID] != h {
+			continue // another runtime has it running (recomputeOwners)
+		}
 		b.remember(h, s.SessionID, now)
 		if since, ok := b.watching[s.SessionID]; ok && !h.watched[s.SessionID] {
 			h.watched[s.SessionID] = true
@@ -514,6 +541,17 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 		readOnly = label + " 没有开放从手机发消息"
 	}
 	seen := map[string]bool{}
+	panes := map[string]string{}
+	defer func() {
+		h.mu.Lock()
+		if h.panes == nil {
+			h.panes = map[string]string{}
+		}
+		for id, pane := range panes {
+			h.panes[id] = pane
+		}
+		h.mu.Unlock()
+	}()
 	out := make([]proto.Session, 0, len(list))
 	for _, s := range list {
 		if !runtimeIDRe.MatchString(s.SessionID) || seen[s.SessionID] {
@@ -537,6 +575,10 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 		s.SourceKind, s.SourceInstanceID, s.SourceThreadID, s.ParentThreadID = proto.SourceRuntime, rt, "", ""
 		s.Capabilities = &proto.SessionCapabilities{Read: true, Send: caps.Send, Interrupt: caps.Interrupt, Approve: true}
 		s.ReadOnlyReason, s.Attached, s.CodexRoute, s.CodexRouteNote = readOnly, false, "", ""
+		// The pane is the engine's to show (pi.go joins it with the engine's pane), not part of the runtime's row.
+		if s.PaneID != "" && validPane(s.PaneID) {
+			panes[s.SessionID] = s.PaneID
+		}
 		s.PaneID, s.TabID, s.WorkspaceID = "", "", ""
 		switch s.Status {
 		case proto.StatusWorking, proto.StatusBlocked, proto.StatusDone, proto.StatusIdle, proto.StatusOffline:
@@ -641,6 +683,63 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 		return proto.Resolution{Dismiss: true}, nil
 	}
 	return res, nil
+}
+
+// setResume records how the engine resumes the sessions this runtime lists (resume_argv), replacing the last list's.
+func (h *runtimeConn) setResume(m map[string][]string) {
+	h.mu.Lock()
+	h.resume = m
+	h.mu.Unlock()
+}
+
+// resumeArgv is how the terminal engine resumes session id, as this runtime said; nil when it did not.
+func (h *runtimeConn) resumeArgv(id string) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]string(nil), h.resume[id]...)
+}
+
+// row is this runtime's row for session id.
+func (h *runtimeConn) row(id string) (proto.Session, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, s := range h.sessions {
+		if s.SessionID == id {
+			return s, true
+		}
+	}
+	return proto.Session{}, false
+}
+
+// sessionInPane is the session a runtime runs in the terminal pane (its list's pane_id), "" when none says so. Only
+// sessions it lists as running: a pane outlives the pi that told it.
+func (b *runtimeRegistry) sessionInPane(pane string) string {
+	if b == nil || pane == "" {
+		return ""
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, h := range b.conns {
+		h.mu.Lock()
+		for _, s := range h.sessions {
+			if h.panes[s.SessionID] == pane && s.Status != proto.StatusOffline {
+				h.mu.Unlock()
+				return s.SessionID
+			}
+		}
+		h.mu.Unlock()
+	}
+	return ""
+}
+
+// rowOf is the row of the runtime that answers for session id (ownerOf), with that runtime.
+func (b *runtimeRegistry) rowOf(id string) (proto.Session, *runtimeConn, bool) {
+	h := b.ownerOf(id)
+	if h == nil {
+		return proto.Session{}, nil, false
+	}
+	s, ok := h.row(id)
+	return s, h, ok
 }
 
 func (h *runtimeConn) sessionsCopy() []proto.Session {
@@ -759,6 +858,18 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		Raw        json.RawMessage `json:"-"`
 	}
 	_ = json.Unmarshal(params, &p)
+	// A session in a terminal pane (a pi in herdr, pi.go): the pane is the engine's — the screen, the keys, closing
+	// it, its tab's name — and the rest is the runtime's.
+	if a, inPane := n.agent(p.SessionID); inPane && a.PaneID != "" {
+		switch method {
+		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "terminal.unwatch", "session.close":
+			return nil, nil, false
+		case "session.rename":
+			if p.Title == nil || strings.TrimSpace(*p.Title) == "" {
+				return nil, nil, false
+			}
+		}
+	}
 	switch method {
 	case "session.items":
 		out, err := call("session.items", params)
@@ -794,6 +905,11 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 	case "session.send":
 		if !caps.Send {
 			return nil, errRuntimeUnsupported(label, "从手机发消息"), true
+		}
+		// A session that ran in the terminal engine and has stopped: resumed there, then sent to (pi.go).
+		if argv := h.resumeArgv(p.SessionID); len(argv) > 0 && n.runtimeStatus(h, p.SessionID) == proto.StatusOffline {
+			res, err := n.resumeInEngine(ctx, h, p.SessionID, argv, params)
+			return res, err, true
 		}
 		var opts sendOpts
 		_ = json.Unmarshal(params, &opts)
@@ -873,10 +989,11 @@ func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (
 		return nil, fmt.Errorf("%s started a session without a valid id", h.label()), true
 	}
 	s := list[0]
-	// Listed right away, before the runtime's next runtime.sessions, so the chat that opens next finds it.
-	n.runtimes.mu.Lock()
-	n.runtimes.owner[s.SessionID] = h
-	n.runtimes.mu.Unlock()
+	// Listed right away, before the runtime's next runtime.sessions, so the chat that opens next finds it. Who answers
+	// for it is decided as for any list (recomputeOwners): a runtime that starts sessions elsewhere (pi's companion
+	// starts them in pi-web) reports them offline, and the one running it, if it has listed it already, keeps it.
+	b := n.runtimes
+	b.mu.Lock()
 	h.mu.Lock()
 	found := false
 	for i := range h.sessions {
@@ -888,6 +1005,18 @@ func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (
 		h.sessions = append(h.sessions, s)
 	}
 	h.mu.Unlock()
+	b.recomputeOwners()
+	b.remember(h, s.SessionID, time.Now())
+	if o := b.owner[s.SessionID]; o != nil && o != h {
+		o.mu.Lock()
+		for _, r := range o.sessions {
+			if r.SessionID == s.SessionID {
+				s = r // the running one's row: its status, title, agent
+			}
+		}
+		o.mu.Unlock()
+	}
+	b.mu.Unlock()
 	n.publish(n.sessionList(ctx, false))
 	return &s, nil, true
 }

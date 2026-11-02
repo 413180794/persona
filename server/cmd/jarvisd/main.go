@@ -111,6 +111,8 @@ func main() {
 		err = node.Launch(ctx, os.Args[2], os.Args[3:])
 	case "codex-start": // a Codex launcher with the phone's first message, read from a file (node/codex_start.go)
 		err = node.CodexStart(os.Args[2:])
+	case "tab-start": // a command a runtime gave to resume its session in a new tab (`pi --session …`, node/pi.go)
+		err = node.CodexStart(os.Args[2:])
 	case "relay":
 		path := os.ExpandEnv("$HOME/.jarvis/relay.json")
 		if len(os.Args) > 2 {
