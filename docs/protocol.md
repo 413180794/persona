@@ -514,7 +514,7 @@ node → hub 请求：
   pending 的 `resumable` 交互重新载入（同样等 3 分钟），其余标 cancelled。旧 node 不带 `resumable`，行为不变。
 - 本机实测（假 hub + 沙箱 node + 真 `jarvisd hook`）：提问时杀掉 node、2 秒后起新 node，hook 3.1 秒后拿到手机的回答，hub 只看到一个 id。
 
-## Runtime ↔ node（unix socket `~/.jarvis/runtime.sock`）
+## Runtime ↔ node（unix socket `~/.jarvis/runtime.sock`，或 node 去连的 daemon）
 
 **Runtime** 是没有终端、自己管会话的 Agent 运行时（目前是 DSH，`docs/dsh.md`）。它不是「宿主」：宿主是终端开在哪（herdr / Herdr App / Orca，
 见「引擎」），node 从窗格和 transcript 认会话；runtime 自己报会话、自己给内容，和这台机器选的引擎并存。怎么接一个新的 runtime、
@@ -558,6 +558,22 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 
 终端相关的调用（`session.keys`、`session.screen.before`、`terminal.watch`）对 runtime 的会话回 `unsupported`，`session.screen` 回空屏；
 这些会话没有 `pane_id`，App 本来就不显示终端。
+
+**daemon**（`docs/daemons.md`，`server/internal/node/daemons.go`）：自己是常驻服务、连不上本机 socket 的 runtime，由 node 去连。
+
+- **连法**：
+  - node 按 `runtime.sock` 旁边的 `daemons.json` 去连 daemon 的 WebSocket 端点，请求带 `Authorization: Bearer <token>` 和子协议 `jarvis-runtime.v1`；daemon 必须回这个子协议。
+  - 连上以后，一条文本消息就是上面的一行，协议和本机 socket 上完全一样。
+- **node 在中间改写的东西**：
+  - hello 里的 `runtime`、`name`、`launcher` 换成配置里的值，`agent` 也一样（配置填了的话）；`instance` 由 node 定成 `daemon:<id>`（它重连时旧连接被关掉）；`caps` 只留 start / send / interrupt / rename / close，没有 `assistant`。
+  - 会话 id 加上 `<id>.`，`space_id` 加上 `<id>:`，交互 id 换成稳定的哈希；回给 daemon 时再去掉前缀。
+  - 会话行里的 `pane_id`、`resume_argv`、`agent_label` 丢掉，`features` 里不告诉它有 `resume_argv` 和 `handover`；它对 `session.send` 回 `code: handover` 时，node 改成 `not_running`，不转给别的 runtime。
+- **daemon 看不到、用不了的**：
+  - 调用的会话 id 不带它的前缀时（node 在问「这个会话是谁的」），node 自己回 `not_found`，不发给 daemon；
+  - `mcp.tools` 回空，`mcp.call` 回 `unsupported`。
+- **id 冲突**：
+  - 本机 socket 上的 runtime 用 `daemons.json` 里的 id 说 hello，回错误 `code: runtime_conflict`；
+  - 某个 id 已被连着的 runtime 占用时，同 id 的 daemon 的 hello 也回 `runtime_conflict`，node 随后断开它，稍后再连。
 
 ## MCP 工具（`jarvisd mcp`）
 

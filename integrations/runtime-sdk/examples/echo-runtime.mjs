@@ -4,6 +4,10 @@
 //
 //   node integrations/runtime-sdk/examples/echo-runtime.mjs [--socket <path>]
 //
+// or as a daemon the node dials (docs/daemons.md), the token in JARVIS_DAEMON_TOKEN:
+//
+//   JARVIS_DAEMON_TOKEN=<token> node integrations/runtime-sdk/examples/echo-runtime.mjs --listen <port>
+//
 // What a real runtime replaces: `sessions` with its own session store, `reply` with its agent, and the item mapping
 // with its own (see integrations/dsh/lib/map.js).
 
@@ -105,10 +109,21 @@ export function createEchoRuntime(options = {}) {
   return { runtime: rt, sessions }
 }
 
-// Run it: node examples/echo-runtime.mjs [--socket <path>]
+// Run it: node examples/echo-runtime.mjs [--socket <path> | --listen <port>]
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const i = process.argv.indexOf('--socket')
-  const { runtime } = createEchoRuntime({ answerFirst: 'phone', log: (m) => console.error(m), ...(i > 0 ? { socketPath: process.argv[i + 1] } : {}) })
-  runtime.start()
-  console.error('echo runtime: waiting for the jarvisd node; Ctrl-C to stop')
+  const l = process.argv.indexOf('--listen')
+  const opts = { answerFirst: 'phone', log: (m) => console.error(m) }
+  if (i > 0) opts.socketPath = process.argv[i + 1]
+  if (l > 0) {
+    const token = process.env.JARVIS_DAEMON_TOKEN
+    if (!token) {
+      console.error('set JARVIS_DAEMON_TOKEN (the token daemons.json gives for this daemon)')
+      process.exit(2)
+    }
+    opts.listen = { port: Number(process.argv[l + 1]), token }
+  }
+  const { runtime } = createEchoRuntime(opts)
+  const addr = await runtime.start()
+  console.error(addr ? `echo daemon: ws://${addr.address}:${addr.port}/jarvis/runtime; Ctrl-C to stop` : 'echo runtime: waiting for the jarvisd node; Ctrl-C to stop')
 }

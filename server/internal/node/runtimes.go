@@ -88,6 +88,15 @@ type runtimeConn struct {
 	// pi in a herdr pane, pi.go) and how the terminal engine resumes one it lists offline (resume_argv).
 	panes  map[string]string
 	resume map[string][]string
+	// daemon is its id in daemons.json when the node dialed it (daemons.go), "" for a runtime on the socket.
+	daemon string
+}
+
+// isDaemon: the node dialed it (a daemon in daemons.json), it did not connect to the socket.
+func (h *runtimeConn) isDaemon() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.daemon != ""
 }
 
 // id is the runtime's id ("" before hello).
@@ -206,9 +215,23 @@ func shellLauncherNames() map[string]bool {
 // id). One with the same instance is this process's earlier connection — it reconnected before the node saw the old
 // socket close — returned as stale for the caller to close. A runtime that sends no instance (an older SDK) is let in
 // as before: the newest connection answers for the id.
-func (b *runtimeRegistry) hello(h *runtimeConn, hello runtimeHello) (stale []*runtimeConn, err error) {
+//
+// The ids in daemons.json (reserved) are the daemons' (daemons.go): a runtime on the socket may not take one, and a
+// daemon whose id a runtime on the socket already has stays out until that one leaves (it is dialed again). A daemon's
+// link says hello with the config's id and an instance of its own, so its next connection is its own again.
+func (b *runtimeRegistry) hello(h *runtimeConn, hello runtimeHello, reserved func(string) bool) (stale []*runtimeConn, err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	h.mu.Lock()
+	daemon := h.daemon
+	h.mu.Unlock()
+	switch {
+	case daemon != "" && hello.Runtime != daemon:
+		return nil, &rpc.Error{Code: "runtime_conflict", Message: fmt.Sprintf("daemon %s said hello as %q", daemon, hello.Runtime)}
+	case daemon == "" && reserved != nil && reserved(hello.Runtime):
+		return nil, &rpc.Error{Code: "runtime_conflict",
+			Message: fmt.Sprintf("runtime id %q is reserved by a daemon in daemons.json; give this runtime another id", hello.Runtime)}
+	}
 	for _, o := range b.conns {
 		if o == h {
 			continue
@@ -216,8 +239,16 @@ func (b *runtimeRegistry) hello(h *runtimeConn, hello runtimeHello) (stale []*ru
 		o.mu.Lock()
 		same := o.ready && o.hello.Runtime == hello.Runtime
 		instance := o.hello.Instance
+		onSocket := o.daemon == ""
 		o.mu.Unlock()
-		if !same || instance == "" || hello.Instance == "" {
+		if !same {
+			continue
+		}
+		if daemon != "" && onSocket {
+			return nil, &rpc.Error{Code: "runtime_conflict",
+				Message: fmt.Sprintf("runtime id %q is in use by a runtime on this machine's socket", hello.Runtime)}
+		}
+		if instance == "" || hello.Instance == "" {
 			continue
 		}
 		if instance != hello.Instance {
@@ -638,7 +669,7 @@ func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage
 // the agent and its label, the space kind (the runtime's id).
 func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Session {
 	h.mu.Lock()
-	rt, agent, label, caps := h.hello.Runtime, h.hello.Agent, h.hello.Name, h.hello.Caps
+	rt, agent, label, caps, daemon := h.hello.Runtime, h.hello.Agent, h.hello.Name, h.hello.Caps, h.daemon != ""
 	h.mu.Unlock()
 	if agent == "" {
 		agent = rt
@@ -673,8 +704,10 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 		if s.Agent == "" {
 			s.Agent = agent
 		}
-		if s.AgentLabel == "" && s.Agent == rt {
-			s.AgentLabel = label // the runtime runs its own agent (DSH): the apps call it by the runtime's name
+		if s.AgentLabel == "" && (s.Agent == rt || daemon && s.Agent != "claude") {
+			// The runtime runs its own agent (DSH): the apps call it by the runtime's name. A daemon is called by the
+			// name its config gives, whatever agent it runs (a platform running DSH), unless that is Claude Code.
+			s.AgentLabel = label
 		}
 		if s.SpaceKind == "" {
 			s.SpaceKind = rt

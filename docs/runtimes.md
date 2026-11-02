@@ -27,6 +27,10 @@ runtime 只连**本机**的 jarvisd node（`~/.jarvis/runtime.sock`）。多台�
 所以「十台机器上的 DSH」= 十台机器各有一个 node、各自的 DSH 插件连自己的 node，hub 把它们合成一个列表（按机器 → 空间分组）。
 runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系统用户的 0600 socket），网络（NAT、打洞）全由 node ↔ hub 那一段解决。
 
+连不上本机 socket 的 runtime（自己是常驻服务：别的系统用户、容器里、别的机器上）反过来接，叫 **daemon**（`docs/daemons.md`）：
+它开一个 WebSocket 端点，node 按 `~/.jarvis/daemons.json` 去连，带 token；连上以后说的还是这套协议，SDK 的 driver 一行不改
+（`createRuntime(driver, {listen: {port, token}})`）。名字以配置为准、会话 id 加命名空间，daemon 碰不到本机别的会话，也没有 `mcp.*`。
+
 ## 要实现什么
 
 用 SDK（`integrations/runtime-sdk`，Node 22+，没有依赖）就只写一个 driver。必须的两个：
@@ -180,7 +184,7 @@ runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定�
 | --- | --- | --- |
 | DSH（`dsh`，可配置） | `integrations/dsh`：`dsh web` 的 Cordis 插件；DSH 没在运行时的伴随进程 `companion.mjs`（`dsh-files`） | `docs/dsh.md` |
 | pi（`pi-<pid>`、`pi-web`、`pi-files`） | `integrations/pi`：pi 扩展（每个 pi 进程一条连接）+ pi-web 伴随进程 | `docs/pi.md` |
-| echo（例子） | `integrations/runtime-sdk/examples/echo-runtime.mjs` | 本文「最小例子」 |
+| echo（例子） | `integrations/runtime-sdk/examples/echo-runtime.mjs`（`--listen <端口>` 就是 daemon） | 本文「最小例子」、`docs/daemons.md` |
 
 两个 runtime 列出同一个会话时（pi 的伴随进程从磁盘列、pi-web 或 pi 终端正在跑它），node 让正在跑它的那个负责（列成 `offline` 的排后面），
 同等时新连接优先。会话列成 `offline` 就是告诉 node「我能打开它，但它没在我这儿跑」。
@@ -191,5 +195,5 @@ runtime 可以当「Jarvis」tab 的助手、AI 分身、飞书 `/agent`、定�
 等 socket 文件被换掉（常驻 node 重启，比如升级）或 10 分钟后再试；`rt.nodeHas(feature)` 查当前 node。由 node 启动、跑在别处的会话（pi 的伴随进程在 pi-web 里新建）报成 `offline`，
 `session.start` 返回的是正在跑它的那个 runtime 的行。
 
-计划中：基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，
+基于 DSH 二次开发、不跑 `dsh web` 的平台（多租户、容器里跑 DSH 的那种）在平台侧实现同一协议，当 daemon 接进来（`docs/daemons.md`），
 直接复用 SDK 和 `integrations/dsh/lib/map.js`，Jarvis 这边不用加代码。

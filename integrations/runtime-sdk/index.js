@@ -1,6 +1,8 @@
 // Jarvis runtime SDK: what a runtime without a terminal (DSH, a pi extension, a platform built on DSH…) needs to plug
-// into Jarvis the standard way (docs/runtimes.md). Testing helpers are under ./testing.
+// into Jarvis the standard way (docs/runtimes.md), dialing the node's runtime.sock or, as a daemon the node dials,
+// serving a WebSocket endpoint (docs/daemons.md). Testing helpers are under ./testing.
 
-export { createRuntime, defaultSocketPath, PROTOCOL } from './lib/runtime.js'
+export { createRuntime, defaultSocketPath, DEFAULT_LISTEN_PATH, PROTOCOL } from './lib/runtime.js'
+export { SUBPROTOCOL, tokenMatches, upgrade } from './lib/listen.js'
 export { Peer, RpcError } from './lib/wire.js'
 export { PAGE_TEXT, PAGE_OUTPUT, MAX_INPUT, appToolName, clipTo, clipInput, light, page, snippet, summaryOf, interactionId } from './lib/items.js'

@@ -151,7 +151,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `apple/` | XcodeGen 工程：iOS App `Jarvis`、macOS App `JarvisMac`（`Mac/`，`docs/mac.md`）、手表 App `JarvisWatch`、共享代码 `Shared/`、单元测试 |
 | `android/` | Android App（Kotlin + Compose），见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
-| `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/dsh.md`、`docs/pi.md` |
+| `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
 | `scripts/` | 部署（`deploy.sh`）、发布 TestFlight（`release.sh`、`asc_*.py`）和公开的 jarvisd（`publish.sh`、`install.sh`）、读配置（`jarvis_config.py`）、截图用的假 hub（`mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
@@ -190,6 +190,7 @@ Jarvis：给自己用的 iPhone + Apple Watch 助手。「Jarvis」tab 是能访
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、提问和审批卡片（读 rollout 和屏幕、各种界面状态下怎么作答）、改走 app-server 和审批 hook 的调研、还不支持什么 |
 | `docs/runtimes.md` | 接入 Agent 运行时（runtime）的规范：和宿主的区别、多机怎么汇总、driver 要实现什么、内容和交互的约定、命名、SDK、验收清单 |
 | `docs/dsh.md` | DSH（DeepSeek Harness）支持：第一个 runtime，DSH Web 插件的安装、事件映射、授权 / 提问怎么到手机、限制、端到端验证 |
+| `docs/daemons.md` | daemon：自己是常驻服务、连不上本机 runtime.sock 的 runtime（别的用户、容器、别的机器），node 按 `daemons.json` 去连它的 WebSocket 端点（token + `jarvis-runtime.v1`）：规范、配置、名字和会话 id 不撞车、隔离、SDK 的监听模式、验收 |
 | `docs/pi.md` | pi 和 pi-web 支持：herdr 里的 pi 是 herdr 会话（窗格归 herdr、内容和控制归扩展），pi-web 的走 pi-web；扩展 + 伴随进程，离线后去哪接着，安装、配置、映射、端到端验证 |
 | `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
 | `docs/engines.md` | 终端引擎（herdr / Herdr App / Orca）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |

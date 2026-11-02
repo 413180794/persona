@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -34,6 +35,12 @@ type RuntimeHost struct {
 
 	mu   sync.Mutex
 	node *Node // the Node serving a hub connection now; nil between connections
+
+	// The daemons it dials (daemons.go), by id: their ids are reserved against runtimes on the socket.
+	dmu        sync.Mutex
+	daemons    map[string]*daemonRun
+	daemonsSum [32]byte      // daemons.json as last applied
+	dtimes     daemonTimings // zero: defaultDaemonTimings (tests make them quick)
 }
 
 // NewRuntimeHost is a runtime socket at path (RuntimeSocketPath when empty) for a resident node; Attach starts it.
@@ -87,11 +94,12 @@ func (rh *RuntimeHost) notifyHub(connected bool) {
 }
 
 // Listen serves runtimes on the socket until ctx ends, re-creating the socket file if something removes it (an older
-// node shutting down), as the hook socket does.
+// node shutting down), as the hook socket does. It dials the daemons in daemons.json beside the socket too.
 func (rh *RuntimeHost) Listen(ctx context.Context) error {
 	if _, err := rh.listenOnce(ctx); err != nil {
 		return err
 	}
+	rh.startDaemons(ctx)
 	go func() {
 		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
@@ -138,6 +146,11 @@ func (rh *RuntimeHost) listenOnce(ctx context.Context) (net.Listener, error) {
 
 // serve runs one runtime's connection until it ends; its sessions leave the list with it.
 func (rh *RuntimeHost) serve(ctx context.Context, c net.Conn) {
+	rh.serveConn(ctx, c, "")
+}
+
+// serveConn is serve for any stream: a socket connection, or a daemon's link (daemon: its id in daemons.json).
+func (rh *RuntimeHost) serveConn(ctx context.Context, c io.ReadWriteCloser, daemon string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
@@ -147,6 +160,7 @@ func (rh *RuntimeHost) serve(ctx context.Context, c net.Conn) {
 	h := rh.reg.add(peer)
 	h.mu.Lock()
 	h.drop = cancel
+	h.daemon = daemon
 	h.mu.Unlock()
 	peer.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		return rh.request(ctx, h, method, params)
@@ -180,7 +194,7 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 			return nil, fmt.Errorf("runtime.hello: bad agent %q", hello.Agent)
 		}
 		hello.Instance = strings.TrimSpace(hello.Instance)
-		stale, err := rh.reg.hello(h, hello)
+		stale, err := rh.reg.hello(h, hello, rh.reservedID)
 		if err != nil {
 			rh.logger.Printf("runtime %s #%d refused: %v", hello.Runtime, h.serial, err)
 			return nil, err
@@ -208,6 +222,9 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		}
 		return n.runtimeAsk(ctx, h, params)
 	case "mcp.tools":
+		if h.isDaemon() { // its link answers these itself; a daemon gets no phone or Jarvis tools
+			return nil, errUnsupportedForDaemons("Jarvis tools")
+		}
 		n := rh.current()
 		if n == nil || n.peer == nil {
 			return map[string]any{"tools": []proto.Tool{}}, nil
@@ -233,6 +250,9 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		}
 		return res, nil
 	case "mcp.call":
+		if h.isDaemon() {
+			return nil, errUnsupportedForDaemons("Jarvis tools")
+		}
 		n := rh.current()
 		if n == nil || n.peer == nil {
 			return proto.TextResult("Jarvis hub is not connected", true), nil
@@ -275,7 +295,9 @@ func (rh *RuntimeHost) event(h *runtimeConn, event string, params json.RawMessag
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
-		h.setResume(resumeArgvs(params))
+		if !h.isDaemon() { // a daemon's offline sessions are not resumed in this machine's terminal engine
+			h.setResume(resumeArgvs(params))
+		}
 		rewatch := rh.reg.setSessions(h, normalizeRuntimeSessions(h, p.Sessions))
 		if n == nil {
 			return

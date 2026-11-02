@@ -6,9 +6,11 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { createConnection } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { upgrade } from './listen.js'
 import { Peer, RpcError } from './wire.js'
 
 /** Version of the protocol this SDK speaks (runtime.hello answers the node's). */
@@ -24,6 +26,9 @@ const RETRY_MAX = 30_000 // ms: the longest wait while there is no socket file (
 const NEW_NODE_EVERY = 5000 // ms: after an older node, look this often for a new one (the socket file replaced)
 const NEW_NODE_MAX = 10 * 60_000 // ms: …and connect again after this long anyway
 const CONFLICT_RETRY = 30_000 // ms: another process holds this runtime id on the node: try again this often
+
+/** Where a listening runtime takes the node's connection when it serves the endpoint itself (options.listen.path). */
+export const DEFAULT_LISTEN_PATH = '/jarvis/runtime'
 
 /** The node's runtime socket for the user this process runs as. */
 export function defaultSocketPath() {
@@ -54,14 +59,25 @@ export function defaultSocketPath() {
  * @param {{ runtime: string, name?: string, agent?: string, version?: string, launcher?: string, launcherModel?: string,
  *   socketPath?: string, answerFirst?: 'auto'|'phone'|'local', log?: (msg: string) => void,
  *   connect?: (path: string) => import('node:net').Socket, pushDelayMs?: number, retryMs?: number,
- *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean }} options -
+ *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean,
+ *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
+ *   token?: string | (() => string) }} options -
  *   assistant: its launcher may run the Jarvis assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
  *   after every hello and whenever the node's hub comes or goes (a runtime fetching the hub's tools does it then).
+ *   listen: be a daemon (docs/daemons.md) — the node dials this runtime's WebSocket endpoint instead of the runtime
+ *   dialing runtime.sock. With a port ({port, host, path, token}; port 0 picks one) start() serves the endpoint
+ *   itself (host 127.0.0.1 and path /jarvis/runtime by default); without one ({token}, or `true` with
+ *   options.token) the runtime's own HTTP server hands upgrades to rt.accept(). The token is what the node's
+ *   daemons.json gives for this daemon (a function: read at every connection).
  */
 export function createRuntime(driver, options) {
   if (!options?.runtime) throw new Error('createRuntime: options.runtime (the runtime id) is required')
+  const listen = options.listen ? (options.listen === true ? {} : options.listen) : undefined
+  const token = options.token ?? listen?.token
+  if (listen && !token) throw new Error('createRuntime: a listening runtime needs a token (options.listen.token)')
+  const dialing = !listen
   const socketPath = options.socketPath ?? defaultSocketPath()
   const answerFirst = options.answerFirst ?? 'auto'
   const pushDelay = options.pushDelayMs ?? 300
@@ -78,6 +94,7 @@ export function createRuntime(driver, options) {
   let retryTimer
   let retryMs = baseRetry
   let refreshTimer
+  let server // the endpoint start() serves in listen mode
   let pushTimer
   let pushing = false
   let pushAgain = false
@@ -181,61 +198,119 @@ export function createRuntime(driver, options) {
       scheduleConnect(backoff())
       return
     }
-    let heldOff = false // left an older node on purpose: awaitNewNode decides when to come back
+    const state = { heldOff: false } // left an older node on purpose: awaitNewNode decides when to come back
     socket.once('error', () => {}) // handled by close
-    socket.once('connect', async () => {
-      const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
-        if (event === 'runtime.hub' && peer === p && setHub(params?.connected !== false)) hubChanged()
-      } })
-      for (const w of watched.values()) clearTimeout(w.timer)
-      watched.clear() // a new node asks again for what the phone watches
-      listed.clear()
-      peer = p // bound before hello: the node may call back the moment it has answered
-      try {
-        const res = await p.call('runtime.hello', hello(), { timeoutMs: 10_000 })
-        setHub(res?.hub !== false)
-        nodeFeatures = Array.isArray(res?.features) ? res.features.filter((f) => typeof f === 'string') : []
-        const missing = requires.filter((f) => !nodeFeatures.includes(f))
-        if (missing.length > 0) {
-          // An older node: stay off it, and look again now and then (an updated node restarts and is found).
-          if (!warnedRequires) log(`jarvis: this jarvisd node lacks ${missing.join(', ')}; update jarvisd (connecting again once it restarts)`)
-          warnedRequires = true
-          if (peer === p) peer = undefined
-          heldOff = true
-          p.close(new Error('node too old'))
-          awaitNewNode()
-          return
-        }
-        warnedRequires = false
-        warnedConflict = false
-      } catch (err) {
+    socket.once('connect', () => void adopt(socket, state))
+    socket.once('close', () => {
+      if (state.heldOff) return
+      if (!peer || peer.socket !== socket) scheduleConnect(backoff())
+    })
+  }
+
+  /**
+   * Speak the protocol on a connection to the node: one dialed to runtime.sock, or one the node opened to this
+   * daemon's endpoint (listen mode: a newer one replaces the last — the node reconnecting). In listen mode there is
+   * nothing to dial again: the node does.
+   */
+  async function adopt(socket, state = {}) {
+    if (peer) {
+      const old = peer
+      peer = undefined
+      old.close(new Error('replaced by a newer connection from the node'))
+    }
+    const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
+      if (event === 'runtime.hub' && peer === p && setHub(params?.connected !== false)) hubChanged()
+    } })
+    for (const w of watched.values()) clearTimeout(w.timer)
+    watched.clear() // a new node asks again for what the phone watches
+    listed.clear()
+    peer = p // bound before hello: the node may call back the moment it has answered
+    try {
+      const res = await p.call('runtime.hello', hello(), { timeoutMs: 10_000 })
+      setHub(res?.hub !== false)
+      nodeFeatures = Array.isArray(res?.features) ? res.features.filter((f) => typeof f === 'string') : []
+      const missing = requires.filter((f) => !nodeFeatures.includes(f))
+      if (missing.length > 0) {
+        // An older node: stay off it, and look again now and then (an updated node restarts and is found).
+        if (!warnedRequires) log(`jarvis: this jarvisd node lacks ${missing.join(', ')}; update jarvisd (connecting again once it restarts)`)
+        warnedRequires = true
         if (peer === p) peer = undefined
-        if (err instanceof RpcError && err.code === 'runtime_conflict') {
-          // Another process is this runtime id on the node (two copies configured alike): do not fight it.
-          if (!warnedConflict) log(`jarvis: ${err.message}; give this one another runtime id (trying again every ${CONFLICT_RETRY / 1000}s)`)
-          warnedConflict = true
-          heldOff = true
-          p.close(err)
-          scheduleConnect(CONFLICT_RETRY)
-          return
-        }
-        log(`jarvis: hello failed: ${err.message}`)
-        p.close(err)
-        scheduleConnect(backoff())
+        state.heldOff = true
+        p.close(new Error('node too old'))
+        if (dialing) awaitNewNode()
         return
       }
-      retryMs = baseRetry
-      log('jarvis: connected to the node')
-      schedulePush(0)
-      hubChanged()
-      const why = await p.done
+      warnedRequires = false
+      warnedConflict = false
+    } catch (err) {
       if (peer === p) peer = undefined
-      log(`jarvis: node connection closed${why?.message ? `: ${why.message}` : ''}`)
-      scheduleConnect(baseRetry)
+      if (err instanceof RpcError && err.code === 'runtime_conflict') {
+        // Another process is this runtime id on the node (two copies configured alike): do not fight it.
+        if (!warnedConflict) log(`jarvis: ${err.message}; give this one another runtime id (trying again every ${CONFLICT_RETRY / 1000}s)`)
+        warnedConflict = true
+        state.heldOff = true
+        p.close(err)
+        if (dialing) scheduleConnect(CONFLICT_RETRY)
+        return
+      }
+      log(`jarvis: hello failed: ${err.message}`)
+      p.close(err)
+      if (dialing) scheduleConnect(backoff())
+      return
+    }
+    retryMs = baseRetry
+    log('jarvis: connected to the node')
+    schedulePush(0)
+    hubChanged()
+    const why = await p.done
+    if (peer === p) peer = undefined
+    log(`jarvis: node connection closed${why?.message ? `: ${why.message}` : ''}`)
+    if (dialing) scheduleConnect(baseRetry)
+  }
+
+  /**
+   * Listen mode: take an HTTP upgrade (an http.Server 'upgrade' event's arguments) as the node's connection. Checks
+   * the token and the handshake; false (the socket closed) when refused.
+   */
+  function accept(req, socket, head) {
+    if (!listen) throw new Error('accept: this runtime dials runtime.sock (no options.listen)')
+    if (stopped) {
+      socket.destroy()
+      return false
+    }
+    const conn = upgrade(req, socket, head, { token: typeof token === 'function' ? token() : token })
+    if (!conn) {
+      log('jarvis: refused a connection (wrong token, or not the runtime protocol)')
+      return false
+    }
+    void adopt(conn)
+    return true
+  }
+
+  function serve() {
+    const path = listen.path ?? DEFAULT_LISTEN_PATH
+    server = createServer((req, res) => {
+      res.writeHead(404, { 'content-type': 'text/plain' })
+      res.end('Not Found')
     })
-    socket.once('close', () => {
-      if (heldOff) return
-      if (!peer || peer.socket !== socket) scheduleConnect(backoff())
+    server.on('upgrade', (req, socket, head) => {
+      let pathname = ''
+      try {
+        pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+      } catch {}
+      if (pathname !== path) {
+        socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+        return
+      }
+      accept(req, socket, head)
+    })
+    return new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(listen.port ?? 0, listen.host ?? '127.0.0.1', () => {
+        server.off('error', reject)
+        server.on('error', (err) => log(`jarvis: endpoint: ${err.message}`))
+        resolve(server.address())
+      })
     })
   }
 
@@ -538,18 +613,28 @@ export function createRuntime(driver, options) {
   }
 
   return {
-    /** Connect (and keep reconnecting) to the node. */
+    /**
+     * Connect (and keep reconnecting) to the node; in listen mode with a port, serve the endpoint the node dials
+     * (resolves to its address once listening).
+     */
     start() {
       stopped = false
       if (options.refreshMs !== 0) {
         refreshTimer = setInterval(() => schedulePush(), options.refreshMs ?? 30_000)
         refreshTimer.unref?.()
       }
+      if (!dialing) return typeof listen.port === 'number' ? serve() : Promise.resolve(undefined)
       open()
+      return Promise.resolve(undefined)
     },
+    accept,
+    /** The endpoint's address while start() serves it (listen mode). */
+    address: () => server?.address() ?? undefined,
     /** Disconnect for good. */
     stop() {
       stopped = true
+      server?.close()
+      server = undefined
       clearTimeout(retryTimer)
       clearTimeout(pushTimer)
       clearInterval(refreshTimer)

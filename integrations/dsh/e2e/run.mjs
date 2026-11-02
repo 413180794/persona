@@ -5,11 +5,15 @@
 //
 //   DSH_CHECKOUT=<dsh source checkout, built> JARVISD=<jarvisd binary> node integrations/dsh/e2e/run.mjs
 //
+// With JARVIS_E2E_DAEMON=1 the plugin is a daemon instead (docs/daemons.md): it serves a WebSocket endpoint and the
+// node dials it from daemons.json, as for a DSH that cannot reach runtime.sock; the same checks run.
+//
 // Nothing outside fresh temp directories is touched: DSH_HOME, the node's HOME and the workspace all live there.
 
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { conformance } from '../../runtime-sdk/testing/conformance.mjs'
@@ -51,8 +55,29 @@ const modelURL = `${model.url}/v1`
 
 // ---- the node (the harness plays the hub) and DSH with the plugin ----
 
-node = await startNode({ jarvisd, keep })
+// Daemon mode: the node's HOME carries daemons.json (the same names as the plugin's, so the checks below hold; the
+// session ids get the daemon's prefix), the plugin listens on a free port with the token from a file.
+const daemon = process.env.JARVIS_E2E_DAEMON === '1'
+let pluginConn = '' // how the plugin reaches the node: its socket, or listening for it
+let home
+if (daemon) {
+  const port = await new Promise((res) => {
+    const s = createServer().listen(0, '127.0.0.1', () => {
+      const p = s.address().port
+      s.close(() => res(p))
+    })
+  })
+  const tokenFile = join(root, 'token')
+  writeFileSync(tokenFile, randomUUID(), { mode: 0o600 })
+  home = join(root, 'home')
+  mkdirSync(join(home, '.jarvis'), { recursive: true })
+  writeFileSync(join(home, '.jarvis', 'daemons.json'), JSON.stringify({ daemons: [{ id: 'dsh', name: 'DSH', launcher: 'dsh',
+    url: `ws://127.0.0.1:${port}/jarvis/runtime`, token_file: tokenFile }] }), { mode: 0o600 })
+  pluginConn = `listen:\n          port: ${port}\n          token_file: ${tokenFile}`
+}
+node = await startNode({ jarvisd, keep, home })
 check('the node starts without herdr', typeof node.info.version === 'string')
+if (!daemon) pluginConn = `socket: ${node.runtimeSocket}`
 // The hub's tools (the phone's): DSH's agents get them through the plugin (docs/dsh.md「手机工具」).
 node.tools = [{ name: 'phone_echo', description: 'Echo a text on the phone (e2e)', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }]
 node.callTool = (params) => ({ content: [{ type: 'text', text: `the phone echoes ${params.args?.text}` }], is_error: false })
@@ -73,7 +98,7 @@ writeFileSync(patch, `- insert:
     - id: jarvis-dsh-runtime
       name: ${join(here, '..', 'index.js')}
       config:
-        socket: ${node.runtimeSocket}
+        ${pluginConn}
         interactions: phone
     - id: e2e-ask
       name: ${askPlugin}
@@ -104,7 +129,8 @@ try {
 
   const { session } = await node.call('session.start', { launcher: 'dsh', cwd: work, async: true })
   const sid = session.session_id
-  check('a session starts from the phone', typeof sid === 'string' && sid !== '', sid)
+  check('a session starts from the phone', typeof sid === 'string' && sid !== '' && (!daemon || sid.startsWith('dsh.session-')), sid)
+  const dshSid = daemon ? sid.slice('dsh.'.length) : sid // DSH's own id (a daemon's sessions carry the node's prefix)
   await until('the new session listed', async () => ((await node.call('sessions.list')).sessions ?? []).some((s) => s.session_id === sid))
   const row = ((await node.call('sessions.list')).sessions ?? []).find((s) => s.session_id === sid)
   check('the session carries the runtime\'s agent and label', row.agent === 'dsh' && row.agent_label === 'DSH' && row.space_kind === 'dsh')
@@ -116,7 +142,7 @@ try {
     node, check, sid, model,
     bashArgs: (command) => ({ command, description: 'e2e' }),
     ask: { tool: 'ask_user_question', args: (question, options) => ({ questions: [{ id: 'db', question, options: options.map((label) => ({ label })) }] }) },
-    history: (h) => h === `dsh:${sid}`,
+    history: (h) => h === `dsh:${dshSid}`,
   })
   check('the card is DSH\'s, with DSH\'s reason beside the command', approval.agent === 'dsh' && approval.agent_label === 'DSH' && approval.reason === 'e2e approval' && approval.summary === 'echo JARVIS_E2E_ASK ran', JSON.stringify({ agent: approval.agent, label: approval.agent_label, reason: approval.reason, summary: approval.summary }))
 
@@ -124,17 +150,23 @@ try {
   await until('the turn after the interrupt ends', async () => node.status(sid) === 'done', 30_000).catch(() => {})
   await model.script({ sequence: ['tool_call_success', 'success'], toolName: 'mcp__jarvis__phone_echo', toolArguments: JSON.stringify({ text: 'JARVIS_E2E_PHONE' }), successText: 'The phone answered' })
   await node.call('session.send', { session_id: sid, text: 'ask the phone', client_msg_id: randomUUID() })
-  await until('the phone tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /the phone echoes JARVIS_E2E_PHONE/.test(i.text ?? '')), 60_000)
-  const call = node.toolCalls.find((c) => c.name === 'phone_echo')
-  check('a phone tool reaches the hub with the calling session, and its result reaches the agent', call?.session_id === sid && call?.args?.text === 'JARVIS_E2E_PHONE', JSON.stringify(call))
-  await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
+  if (daemon) {
+    // A daemon gets no phone tools (docs/daemons.md「隔离」): the agent's call never reaches the hub.
+    await until('the reply after the tool call', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
+    check('a daemon\'s agent gets no phone tools: nothing reaches the hub', !node.toolCalls.some((c) => c.name === 'phone_echo'), JSON.stringify(node.toolCalls))
+  } else {
+    await until('the phone tool result', () => node.items(sid).some((i) => i.kind === 'tool_result' && /the phone echoes JARVIS_E2E_PHONE/.test(i.text ?? '')), 60_000)
+    const call = node.toolCalls.find((c) => c.name === 'phone_echo')
+    check('a phone tool reaches the hub with the calling session, and its result reaches the agent', call?.session_id === sid && call?.args?.text === 'JARVIS_E2E_PHONE', JSON.stringify(call))
+    await until('the reply after the phone tool', () => node.items(sid).some((i) => i.role === 'assistant' && i.text === 'The phone answered'), 60_000)
+  }
 
   // Closing from the phone archives the session in DSH: it leaves the list, and DSH's archive set has it.
   await until('idle before closing', async () => node.status(sid) === 'done', 30_000).catch(() => {})
   await node.call('session.close', { session_id: sid })
   await until('gone from the list', async () => !((await node.call('sessions.list')).sessions ?? []).some((s) => s.session_id === sid), 30_000)
   const workspace = JSON.parse(readFileSync(join(dshHome, 'storages', 'workspace.json'), 'utf8'))
-  check('closing from the phone archives it in DSH and takes it off the list', workspace.global?.archivedSessionIds?.includes(sid), JSON.stringify(workspace.global?.archivedSessionIds))
+  check('closing from the phone archives it in DSH and takes it off the list', workspace.global?.archivedSessionIds?.includes(dshSid), JSON.stringify(workspace.global?.archivedSessionIds))
 } catch (err) {
   check('run', false, err.message)
   console.log('--- node log ---\n' + node.log.join('').slice(-3000))

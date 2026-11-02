@@ -48,9 +48,12 @@ const TOOLS_EVERY = 5 * 60_000 // ms: look at the hub's tools this often (the ph
  * @param {DshDeps} deps
  * @param {{ runtime?: string, name?: string, launcher?: string, socketPath?: string,
  *   interactions?: 'auto'|'phone'|'browser', listDays?: number, maxSessions?: number, pushDelayMs?: number,
- *   retryMs?: number, assistant?: boolean, presets?: Record<string, string> }} [options] - runtime / name / launcher:
+ *   retryMs?: number, assistant?: boolean, presets?: Record<string, string>, listen?: { port: number, host?: string,
+ *   path?: string, token: string | (() => string) } }} [options] - runtime / name / launcher:
  *   how this DSH shows in Jarvis (dsh / DSH / dsh). assistant: it may run the Jarvis assistant (docs/dsh.md「助手」);
- *   presets: the DSH permission preset for each Jarvis permission mode of an assistant conversation.
+ *   presets: the DSH permission preset for each Jarvis permission mode of an assistant conversation. listen: be a
+ *   daemon the node dials (docs/daemons.md) instead of connecting to runtime.sock: DSH running as another user, in a
+ *   container, on another machine (the node's daemons.json names it then, and a daemon does not run the assistant).
  */
 export function createDshRuntime(deps, options = {}) {
   const runtimeID = options.runtime ?? 'dsh'
@@ -411,6 +414,7 @@ export function createDshRuntime(deps, options = {}) {
     retryMs: options.retryMs,
     onHub: (connected) => void refreshTools(connected),
     assistant: options.assistant === true,
+    listen: options.listen,
   })
 
   // ---- DSH's events ----
@@ -610,7 +614,9 @@ export function createDshRuntime(deps, options = {}) {
       listen('approval/request', onApproval, { global: true, prepend: true })
       listen('user-questions/request', onQuestion, { global: true, prepend: true })
       if (options.assistant) listen('tools/pre-execute', onPreExecute, { global: true, prepend: true })
-      rt.start()
+      rt.start().then((addr) => {
+        if (addr) log(`jarvis: daemon endpoint on ${addr.address}:${addr.port}`)
+      }, (err) => log(`jarvis: daemon endpoint: ${err.message}`)) // a port in use must not take DSH down
       if (typeof deps.registerTool === 'function') {
         tools.timer = setInterval(() => void refreshTools(rt.hubConnected), TOOLS_EVERY)
         tools.timer.unref?.()

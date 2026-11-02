@@ -78,6 +78,7 @@ node <Jarvis 仓库>/integrations/dsh/companion.mjs --dsh <DSH 的安装目录�
 | `phoneTools` | `true` | 把 hub 的工具（`phone_*`、`mail_*`）给 DSH 的 Agent；`false` 不给 |
 | `assistant` | `true` | DSH 的启动器能当 Jarvis 的助手（下面「助手」）；`false` 不提供 |
 | `presets` | 见「助手」 | 助手对话里 Jarvis 的权限模式对应 DSH 的哪个权限预设，比如 `{default: workspace-write, plan: read-only}` |
+| `listen` | 不填 | 当 daemon（`docs/daemons.md`）：`{port, host?, path?, token \| token_file}`，不连 `socket`，开一个 WebSocket 端点让 node 来连（默认 `127.0.0.1`、路径 `/jarvis/runtime`）。DSH 跑在别的系统用户下、容器里或别的机器上时用；node 那边在 `daemons.json` 里写同一个地址和 token，名字、启动器以那边为准；当 daemon 时没有手机工具，也不能当助手 |
 
 ## 映射
 
@@ -187,4 +188,7 @@ DSH 委派子 Agent 时把子 Agent 的授权策略钉成 `never`（DSH 的 `cap
 ## 以后
 
 基于 DSH 二次开发、不跑 `dsh web` 的平台，可以在自己那边用同一个 SDK（`integrations/runtime-sdk`）实现 runtime、复用 `integrations/dsh/lib/map.js` 的映射，
-Jarvis 这边不用再加代码。
+当 daemon 接进来（`docs/daemons.md`），Jarvis 这边不用再加代码。
+
+当 daemon 的端到端：`JARVIS_E2E_DAEMON=1` 跑同一个 `e2e/run.mjs`（插件配 `listen`，node 从 `daemons.json` 去连）。检查不变，只有两处不同：会话 id 带 `dsh.` 前缀；手机工具一项换成「daemon 拿不到手机工具，调用到不了 hub」。
+2026-11-02 实测 21/21 通过（socket 方式同样 21/21）。
