@@ -69,6 +69,7 @@
 - 一个会变尺寸的小东西（输入框里的 TextField）和长列表在同一个视图树里：它每变一下，SwiftUI 从根重新排版整页，懒加载列表把可见行重新量一遍
   （打字每个字约 10 ms）。把它放进自己的 hosting controller（`LayoutIsland`）：里面自己量高度报出来，页面只在高度变时排版。
   别用 `sizingOptions = .intrinsicContentSize` 让页面跟着它变高：试过，打字时输入框不长高（2026-11-01，`ComposerGrowTests`）。
+  新外壳的 `ShellComposerBar` 从一行展开成卡片，不用这个隔离：长文字下反复请求 UI 快照超时（新模拟器也复现），保留原视图树，只在旧布局启用。
 - `List` 的行别为了 `Equatable` 包成自定义视图、再把 `.swipeActions` / `.contextMenu` 放进它的 body：试过（2026-11-01），推送和滑动都更慢
   （UIKit 那边每次都要重新配置 cell 的滑动操作）。Agents 列表推送的开销靠合并推送降下来（`AppModel.applyPendingSessions`）。
 

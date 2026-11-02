@@ -63,10 +63,12 @@ private struct IslandHost<Content: View & Equatable>: UIViewControllerRepresenta
 
 extension View where Self: Equatable {
     /// This view laid out apart from the page (`LayoutIsland`).
-    func layoutIsland() -> some View { LayoutIsland(content: self) }
+    @ViewBuilder func layoutIsland(enabled: Bool = true) -> some View {
+        if enabled { LayoutIsland(content: self) } else { self.equatable() }
+    }
 }
 #else
 extension View where Self: Equatable {
-    func layoutIsland() -> some View { self }
+    func layoutIsland(enabled: Bool = true) -> some View { self }
 }
 #endif
