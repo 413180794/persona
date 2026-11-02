@@ -562,14 +562,19 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	p := &pending{ix: ix, done: make(chan proto.Resolution, 1)}
 	h.mu.Lock()
 	// A screen interaction for the same session was a premature guess; the hook knows better.
+	// Tell the app now: the wait below can last until the hook times out.
+	var dropped []string
 	for id, old := range h.interactions {
 		if old.ix.Kind == proto.IxScreen && old.ix.MachineID == ix.MachineID && old.ix.SessionID == ix.SessionID {
 			delete(h.interactions, id)
-			defer h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
+			dropped = append(dropped, id)
 		}
 	}
 	h.interactions[ix.ID] = p
 	h.mu.Unlock()
+	for _, id := range dropped {
+		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
+	}
 	h.record(ix)
 	h.announce(ix)
 	return h.await(ctx, p)
